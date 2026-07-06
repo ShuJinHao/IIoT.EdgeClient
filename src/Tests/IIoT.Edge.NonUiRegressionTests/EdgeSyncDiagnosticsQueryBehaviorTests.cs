@@ -31,7 +31,14 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         deviceService.MarkUploadGateBlocked(EdgeUploadBlockReason.UploadTokenRejected, DateTimeOffset.UtcNow);
 
         var cloudDiagnostics = new FakeCloudDiagnosticsStore();
-        cloudDiagnostics.RecordResult("Capacity", CloudCallResult.Failure(CloudCallOutcome.UnauthorizedAfterRetry, "upload_token_rejected"));
+        cloudDiagnostics.RecordResult(
+            "Capacity",
+            CloudCallResult.Failure(CloudCallOutcome.UnauthorizedAfterRetry, "upload_token_rejected"),
+            new CloudUploadDiagnosticsContext(
+                DeviceName: "PLC-CLOUD-DIAG",
+                ModuleId: "CapacityModule",
+                TaskKey: "Capacity.Sync",
+                Scenario: "产能上传"));
         cloudDiagnostics.SetRuntimeState(CloudRetryRuntimeState.WaitingForRecovery);
 
         var mesRetryDiagnostics = new FakeMesRetryDiagnosticsStore();
@@ -114,6 +121,10 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         Assert.Equal(1, snapshot.Cloud.PendingPassStationCount);
         Assert.Equal(1, snapshot.Cloud.PendingDeviceLogCount);
         Assert.Equal(1, snapshot.Cloud.PendingCapacityCount);
+        Assert.Equal("PLC-CLOUD-DIAG", snapshot.Cloud.LastDeviceName);
+        Assert.Equal("CapacityModule", snapshot.Cloud.LastModuleId);
+        Assert.Equal("Capacity.Sync", snapshot.Cloud.LastTaskKey);
+        Assert.Equal("产能上传", snapshot.Cloud.LastScenario);
         Assert.Equal(MesRetryRuntimeState.Backoff, snapshot.Mes.RuntimeState);
         Assert.Equal(1, snapshot.Mes.PendingRetryCount);
         Assert.Equal("mes timeout", snapshot.Mes.LastFailureReason);
@@ -121,6 +132,96 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         Assert.Equal(2, snapshot.ContextPersistence.CorruptFileCount);
         Assert.False(snapshot.Cloud.IsPersistenceFaulted);
         Assert.False(snapshot.Mes.IsPersistenceFaulted);
+    }
+
+    [Fact]
+    public async Task GetCurrentAsync_WhenMesChannelIsBlocked_ShouldNotTreatBlockedAsFailure()
+    {
+        var deviceService = new FakeDeviceService();
+        deviceService.SetOnline(new DeviceSession
+        {
+            DeviceId = Guid.NewGuid(),
+            DeviceName = "Edge-Blocked",
+            ClientCode = "LINE-BLOCKED",
+            ProcessId = Guid.NewGuid(),
+            UploadAccessToken = "token",
+            UploadAccessTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(30)
+        });
+
+        var mesDiagnostics = new FakeMesUploadDiagnosticsStore();
+        mesDiagnostics.RecordFailure("FailedProcess", "mes timeout");
+        var failedChannel = mesDiagnostics.Get("FailedProcess");
+        mesDiagnostics.RecordBlocked("BlockedProcess", "MES 已启用，请先选择主批计划。");
+
+        var query = new EdgeSyncDiagnosticsQuery(
+            new FakeProductionContextStore(),
+            deviceService,
+            new FakeCloudDiagnosticsStore(),
+            new FakeMesRetryDiagnosticsStore(),
+            mesDiagnostics,
+            new FakeFailedRecordStore(),
+            new FakeFailedRecordStore(),
+            new FakeDeviceLogBufferStore(),
+            new FakeCapacityBufferStore());
+
+        var snapshot = await query.GetCurrentAsync();
+
+        Assert.Equal("mes timeout", snapshot.Mes.LastFailureReason);
+        Assert.Equal(failedChannel!.LastAttemptAt, snapshot.Mes.LastFailureAt);
+        var blockedChannel = Assert.Single(snapshot.Mes.Channels, x => x.ProcessType == "BlockedProcess");
+        Assert.Equal("Blocked", blockedChannel.LastResult);
+        Assert.Null(blockedChannel.LastFailureReason);
+        Assert.Equal("MES 已启用，请先选择主批计划。", blockedChannel.LastBlockedReason);
+        Assert.NotNull(blockedChannel.LastBlockedAt);
+    }
+
+    [Fact]
+    public async Task GetCurrentAsync_WhenCloudIsBlocked_ShouldNotTreatBlockedAsFailure()
+    {
+        var deviceService = new FakeDeviceService();
+        deviceService.SetOnline(new DeviceSession
+        {
+            DeviceId = Guid.NewGuid(),
+            DeviceName = "Edge-Cloud-Blocked",
+            ClientCode = "LINE-CLOUD-BLOCKED",
+            ProcessId = Guid.NewGuid(),
+            UploadAccessToken = "token",
+            UploadAccessTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(30)
+        });
+
+        var cloudDiagnostics = new FakeCloudDiagnosticsStore();
+        cloudDiagnostics.RecordBlocked(
+            "OtherProcess",
+            "missing_upload_token",
+            "缺少上传令牌。",
+            new CloudUploadDiagnosticsContext(
+                DeviceName: "PLC-CLOUD-BLOCKED",
+                ModuleId: "DieCuttingAnode",
+                TaskKey: "DieCutting.RealtimeSampleUpload",
+                Scenario: "生产上传"));
+
+        var query = new EdgeSyncDiagnosticsQuery(
+            new FakeProductionContextStore(),
+            deviceService,
+            cloudDiagnostics,
+            new FakeMesRetryDiagnosticsStore(),
+            new FakeMesUploadDiagnosticsStore(),
+            new FakeFailedRecordStore(),
+            new FakeFailedRecordStore(),
+            new FakeDeviceLogBufferStore(),
+            new FakeCapacityBufferStore());
+
+        var snapshot = await query.GetCurrentAsync();
+
+        Assert.Equal(CloudCallOutcome.SkippedUploadNotReady, snapshot.Cloud.LastOutcome);
+        Assert.Equal("missing_upload_token", snapshot.Cloud.LastReasonCode);
+        Assert.Null(snapshot.Cloud.LastFailureAt);
+        Assert.NotNull(snapshot.Cloud.LastBlockedAt);
+        Assert.Equal("缺少上传令牌。", snapshot.Cloud.LastBlockedReason);
+        Assert.Equal("PLC-CLOUD-BLOCKED", snapshot.Cloud.LastDeviceName);
+        Assert.Equal("DieCuttingAnode", snapshot.Cloud.LastModuleId);
+        Assert.Equal("DieCutting.RealtimeSampleUpload", snapshot.Cloud.LastTaskKey);
+        Assert.Equal("生产上传", snapshot.Cloud.LastScenario);
     }
 
     [Fact]
@@ -358,6 +459,10 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
 
         var mesDiagnostics = new FakeMesUploadDiagnosticsStore();
         mesDiagnostics.RecordFailure("CustomProcess", "mes timeout");
+        mesDiagnostics.RecordFailure(
+            "CustomProcess.Realtime",
+            "realtime timeout",
+            new MesUploadDiagnosticsContext("PLC-A", "CustomProcess", "CustomProcess.Realtime", "生产上传"));
         mesDiagnostics.RecordFailure("UnknownProcess", "unknown timeout");
 
         var cloudDeadLetters = new FakeCloudDeadLetterStore();
@@ -404,6 +509,10 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         Assert.Equal(
             "Custom Display",
             snapshot.Mes.Channels.Single(x => x.ProcessType == "CustomProcess").ProcessDisplayName);
+        var realtimeChannel = snapshot.Mes.Channels.Single(x => x.ProcessType == "CustomProcess.Realtime");
+        Assert.Equal("Custom Display", realtimeChannel.ProcessDisplayName);
+        Assert.Equal("PLC-A", realtimeChannel.DeviceName);
+        Assert.Equal("生产上传", realtimeChannel.Scenario);
         Assert.Null(snapshot.Mes.Channels.Single(x => x.ProcessType == "UnknownProcess").ProcessDisplayName);
         Assert.Equal(
             "Custom Display",
@@ -417,6 +526,9 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         Assert.Equal(
             "Custom Display EN",
             refreshedSnapshot.Mes.Channels.Single(x => x.ProcessType == "CustomProcess").ProcessDisplayName);
+        Assert.Equal(
+            "Custom Display EN",
+            refreshedSnapshot.Mes.Channels.Single(x => x.ProcessType == "CustomProcess.Realtime").ProcessDisplayName);
         Assert.Equal(
             "Custom Display EN",
             refreshedSnapshot.Cloud.DeadLetters?.GroupSummary.Single(x => x.ProcessType == "CustomProcess").ProcessDisplayName);

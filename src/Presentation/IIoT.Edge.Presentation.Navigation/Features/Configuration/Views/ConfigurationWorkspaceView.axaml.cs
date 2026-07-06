@@ -115,5 +115,5 @@ public partial class ConfigurationWorkspaceView : UserControl
     }
 
     private static void Warn(string message)
-        => Debug.WriteLine(message);
+        => Trace.TraceWarning(message);
 }

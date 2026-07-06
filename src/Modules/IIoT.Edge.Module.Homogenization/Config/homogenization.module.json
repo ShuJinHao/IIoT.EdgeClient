@@ -77,15 +77,6 @@
             "SetDispersionTime": { "Code": "gluingSetDispersionTime", "Name": "设定分散时间", "Type": "ushort", "Unit": "min" },
             "RemainingDispersionTime": { "Code": "gluingRemainDispersionTime", "Name": "剩余分散时间", "Type": "ushort", "Unit": "min" }
           }
-        },
-        "Cloud": {
-          "EquipmentStatusLevels": {
-            "-1": "ERROR",
-            "0": "INFO",
-            "1": "INFO",
-            "2": "WARN",
-            "3": "INFO"
-          }
         }
       }
     }

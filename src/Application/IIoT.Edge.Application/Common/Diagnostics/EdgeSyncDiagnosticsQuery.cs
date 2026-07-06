@@ -88,8 +88,10 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
             LastAttemptAt: cloudDiagnostics.LastAttemptAt,
             LastSuccessAt: cloudDiagnostics.LastSuccessAt,
             LastFailureAt: cloudDiagnostics.LastFailureAt,
+            LastBlockedAt: cloudDiagnostics.LastBlockedAt,
             LastOutcome: cloudDiagnostics.LastOutcome,
             LastReasonCode: cloudDiagnostics.LastReasonCode,
+            LastBlockedReason: cloudDiagnostics.LastBlockedReason,
             LastProcessType: cloudDiagnostics.LastProcessType,
             PendingRetryCount: cloudPending.PendingRetryCount,
             PendingDeviceLogCount: cloudPending.PendingDeviceLogCount,
@@ -108,7 +110,11 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
             Heartbeat: GetHeartbeat(ExternalSystemKind.Cloud),
             DeadLetters: cloudDeadLetters,
             LastProcessDisplayName: ResolveProcessDisplayName(cloudDiagnostics.LastProcessType),
-            PendingPassStationCount: cloudPending.PendingRetryCount);
+            PendingPassStationCount: cloudPending.PendingRetryCount,
+            LastDeviceName: cloudDiagnostics.LastDeviceName,
+            LastModuleId: cloudDiagnostics.LastModuleId,
+            LastTaskKey: cloudDiagnostics.LastTaskKey,
+            LastScenario: cloudDiagnostics.LastScenario);
 
         var mes = new MesSyncDiagnosticsSnapshot(
             RuntimeState: mesRuntime.RuntimeState,
@@ -154,7 +160,7 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
 
         foreach (var module in _processModules)
         {
-            if (!string.Equals(module.ProcessType, processType, StringComparison.OrdinalIgnoreCase))
+            if (!IsProcessMatch(module, processType))
             {
                 continue;
             }
@@ -168,6 +174,12 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
 
         return null;
     }
+
+    private static bool IsProcessMatch(IEdgeProcessModule module, string processType)
+        => string.Equals(module.ProcessType, processType, StringComparison.OrdinalIgnoreCase)
+           || string.Equals(module.ModuleId, processType, StringComparison.OrdinalIgnoreCase)
+           || processType.StartsWith($"{module.ModuleId}.", StringComparison.OrdinalIgnoreCase)
+           || processType.StartsWith($"{module.ProcessType}.", StringComparison.OrdinalIgnoreCase);
 
     private MesChannelDiagnostics WithProcessDisplayName(MesChannelDiagnostics diagnostics)
         => diagnostics with { ProcessDisplayName = ResolveProcessDisplayName(diagnostics.ProcessType) };

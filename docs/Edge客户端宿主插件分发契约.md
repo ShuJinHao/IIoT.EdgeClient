@@ -282,7 +282,7 @@ EdgeClient 的交付物是 Windows 安装器、安装素材和 Velopack 更新�
 ```powershell
 pwsh ./scripts/PublishEdgePluginRelease.ps1 `
   -ModuleId <ModuleId> `
-  -CloudApiBaseUrl http://10.98.90.154:81/api/v1 `
+  -CloudApiBaseUrl http://<cloud-gateway-host>:<port>/api/v1 `
   -ReleaseNotesPath ./release-notes.md
 ```
 
@@ -409,9 +409,9 @@ Edge catalog 返回 `Published` 和 `Deprecated` 发布记录，按组件分组�
 
 版本上报不代表设备在线，不写设备在线状态，不参与 Cloud/MES 上传链路。
 
-### 9.6 Phase 2 未完成项
+### 9.6 Phase 2 后续阶段项
 
-以下内容仍属后续阶段：
+以下内容属于发布体系后续阶段，不是本轮客户端安全和 DataPipeline 总收口阻断项：
 
 - Launcher 拉取 catalog 并选择插件。
 - 插件下载、staging、校验、安装到布局级 `plugins/<ModuleId>/`。

@@ -3,6 +3,7 @@ using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Mes;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Shared;
 using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Application.Modules.Mes;
 using System.Text.Json;
@@ -36,6 +37,7 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
         AddDefaultRuntimeServices(services);
         services.AddSingleton<IDeviceService, ContractDeviceService>();
         services.AddSingleton<IMesUploadDiagnosticsStore, ContractMesUploadDiagnosticsStore>();
+        services.AddSingleton<ICloudUploadDiagnosticsStore, ContractCloudUploadDiagnosticsStore>();
         services.AddSingleton<IHomogenizationMesScenarioChannel, ContractHomogenizationMesChannel>();
         services.AddSingleton<HomogenizationCellDataValidator>();
         services.AddSingleton<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>, ContractHomogenizationModuleParamProvider>();
@@ -112,11 +114,52 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
 
         Assert.Equal(500, provider.GetRequiredService<IOptions<HomogenizationModuleOptions>>().Value.Presentation.MaxOutboundRecords);
         Assert.Equal(11, provider.GetRequiredService<IOptions<HomogenizationCodeOptions>>().Value.Plc.SignalTrigger);
-        Assert.Equal("ERROR", provider.GetRequiredService<IOptions<HomogenizationCodeOptions>>().Value.Cloud.EquipmentStatusLevels["-1"]);
+        Assert.Equal("报警", provider.GetRequiredService<IOptions<HomogenizationCodeOptions>>().Value.Mes.EquipmentStatusTexts["-1"]);
         Assert.Contains(
             result.ModuleParamRegistry.GetDescriptors(DependencyInjection.ModuleKey, ModuleParamCategory.Mes),
             descriptor => descriptor.Role == ModuleParamRole.MesSignToken
                           && descriptor.Name == nameof(HomogenizationParams.Mes.签名令牌));
+    }
+
+    [Fact]
+    public void RuntimeFactory_TaskCandidates_ShouldDefaultEnableRealtimeDataAndEquipmentStatus()
+    {
+        var factory = new HomogenizationStationRuntimeFactory();
+        var candidates = factory.GetTaskCandidates();
+
+        var defaultEnabledKeys = candidates
+            .Where(static candidate => candidate.DefaultEnabled)
+            .Select(static candidate => candidate.Key)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        Assert.Equal(
+            ["Homogenization.EquipmentStatus", "Homogenization.Realtime"],
+            defaultEnabledKeys);
+
+        var realtimeCandidate = Assert.Single(candidates, static candidate => candidate.Key == "Homogenization.Realtime");
+        Assert.Contains(
+            realtimeCandidate.RequiredSignals,
+            static signal => signal.SignalKey == "Homogenization.RealtimeStirringSpeed"
+                             && signal.Direction == "Read");
+        Assert.Contains(
+            realtimeCandidate.RequiredSignals,
+            static signal => signal.SignalKey == "Homogenization.RealtimeTemperature"
+                             && signal.Direction == "Read");
+
+        var equipmentStatusCandidate = Assert.Single(candidates, static candidate => candidate.Key == "Homogenization.EquipmentStatus");
+        Assert.Contains(
+            equipmentStatusCandidate.RequiredSignals,
+            static signal => signal.SignalKey == "Homogenization.EquipmentStatusValue"
+                             && signal.Direction == "Read");
+        Assert.Contains(
+            equipmentStatusCandidate.RequiredSignals,
+            static signal => signal.SignalKey == "Homogenization.Interaction.EquipmentStatus"
+                             && signal.Direction == "Read");
+        Assert.Contains(
+            equipmentStatusCandidate.RequiredSignals,
+            static signal => signal.SignalKey == "Homogenization.Interaction.EquipmentStatus"
+                             && signal.Direction == "Write");
     }
 
     [Fact]
@@ -186,8 +229,90 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
     {
         public IReadOnlyList<MesChannelDiagnostics> GetAll() => [];
         public MesChannelDiagnostics? Get(string processType) => null;
-        public void RecordSuccess(string processType) { }
-        public void RecordFailure(string processType, string failureReason) { }
+        public void RecordSuccess(string processType, MesUploadDiagnosticsContext? context = null) { }
+        public void RecordFailure(string processType, string failureReason, MesUploadDiagnosticsContext? context = null) { }
+        public void RecordBlocked(string processType, string blockedReason, MesUploadDiagnosticsContext? context = null) { }
+    }
+
+    private sealed class ContractCloudUploadDiagnosticsStore : ICloudUploadDiagnosticsStore
+    {
+        public CloudUploadDiagnosticsSnapshot Snapshot { get; private set; } = new(
+            LastAttemptAt: null,
+            LastSuccessAt: null,
+            LastFailureAt: null,
+            LastBlockedAt: null,
+            LastOutcome: CloudCallOutcome.Success,
+            LastReasonCode: "none",
+            LastBlockedReason: null,
+            LastProcessType: null,
+            RuntimeState: CloudRetryRuntimeState.Idle,
+            IsCapacityBlocked: false,
+            BlockedChannel: null,
+            BlockedReason: "none",
+            LastCapacityBlockAt: null);
+
+        public void RecordResult(
+            string? processType,
+            CloudCallResult result,
+            CloudUploadDiagnosticsContext? context = null)
+        {
+            Snapshot = Snapshot with
+            {
+                LastAttemptAt = DateTime.UtcNow,
+                LastProcessType = processType,
+                LastOutcome = result.Outcome,
+                LastReasonCode = result.ReasonCode,
+                LastDeviceName = context?.DeviceName,
+                LastModuleId = context?.ModuleId,
+                LastTaskKey = context?.TaskKey,
+                LastScenario = context?.Scenario
+            };
+        }
+
+        public void RecordBlocked(
+            string? processType,
+            string reasonCode,
+            string? blockedReason = null,
+            CloudUploadDiagnosticsContext? context = null)
+        {
+            Snapshot = Snapshot with
+            {
+                LastAttemptAt = DateTime.UtcNow,
+                LastBlockedAt = DateTime.UtcNow,
+                LastProcessType = processType,
+                LastOutcome = CloudCallOutcome.SkippedUploadNotReady,
+                LastReasonCode = reasonCode,
+                LastBlockedReason = blockedReason,
+                LastDeviceName = context?.DeviceName,
+                LastModuleId = context?.ModuleId,
+                LastTaskKey = context?.TaskKey,
+                LastScenario = context?.Scenario
+            };
+        }
+
+        public void SetRuntimeState(CloudRetryRuntimeState state)
+            => Snapshot = Snapshot with { RuntimeState = state };
+
+        public void MarkCapacityBlocked(
+            CapacityBlockedChannel channel,
+            string blockedReason,
+            string? processType = null,
+            DateTime? occurredAt = null)
+            => Snapshot = Snapshot with
+            {
+                IsCapacityBlocked = true,
+                BlockedChannel = channel,
+                BlockedReason = blockedReason,
+                LastCapacityBlockAt = occurredAt ?? DateTime.UtcNow
+            };
+
+        public void ClearCapacityBlocked()
+            => Snapshot = Snapshot with
+            {
+                IsCapacityBlocked = false,
+                BlockedChannel = null,
+                BlockedReason = "none"
+            };
     }
 
     private sealed class ContractHomogenizationModuleParamProvider
@@ -208,8 +333,14 @@ public sealed class HomogenizationModuleContractTests : ModuleContractTestBase<D
                     "Homogenization",
                     ModuleParamCategory.Cloud,
                     new Dictionary<HomogenizationParams.Cloud, string>(),
-                    new Dictionary<HomogenizationParams.Cloud, string?>(),
-                    new Dictionary<HomogenizationParams.Cloud, ParamValueKind>(),
+                    new Dictionary<HomogenizationParams.Cloud, string?>
+                    {
+                        [HomogenizationParams.Cloud.启用] = "false"
+                    },
+                    new Dictionary<HomogenizationParams.Cloud, ParamValueKind>
+                    {
+                        [HomogenizationParams.Cloud.启用] = ParamValueKind.Bool
+                    },
                     warn: null),
                 new ModuleParamGroup<HomogenizationParams.Business>(
                     "Homogenization",

@@ -153,5 +153,5 @@ public partial class OverviewWorkspaceView : UserControl
     }
 
     private static void Warn(string message)
-        => Debug.WriteLine(message);
+        => Trace.TraceWarning(message);
 }

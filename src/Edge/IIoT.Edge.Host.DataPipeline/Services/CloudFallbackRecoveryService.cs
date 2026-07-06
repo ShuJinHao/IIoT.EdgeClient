@@ -10,10 +10,8 @@ namespace IIoT.Edge.Host.DataPipeline.Services;
 internal sealed class CloudFallbackRecoveryService
     : FallbackRecoveryServiceBase<CloudFallbackRecord>, ICloudFallbackRecoveryService
 {
-    private static readonly DataPipelineDeadLetterChannel DeadLetterChannel = new(
-        LogPrefix: "Retry-Cloud",
-        DeadLetterName: "Cloud",
-        CriticalSource: "Retry.CloudDeadLetterPersistFailed");
+    private static readonly DataPipelineDeadLetterChannel DeadLetterChannel =
+        DataPipelineRetryChannelMetadata.CreateDeadLetterChannel(DataPipelineRetryChannel.Cloud);
 
     private readonly DataPipelineCapacityGuard _capacityGuard;
 
@@ -39,7 +37,8 @@ internal sealed class CloudFallbackRecoveryService
 
     protected override string ChannelName => "Cloud";
 
-    protected override string SourceTable => "cloud_fallback_records";
+    protected override string SourceTable =>
+        DataPipelineRetryChannelMetadata.GetFallbackRecordSourceTable(DataPipelineRetryChannel.Cloud);
 
     protected override Task<string?> GetRetryBlockReasonAsync(string processType)
         => _capacityGuard.GetCloudRetryBlockReasonAsync(processType);

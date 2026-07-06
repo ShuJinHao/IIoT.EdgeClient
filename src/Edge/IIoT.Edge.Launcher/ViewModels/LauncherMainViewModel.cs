@@ -27,6 +27,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
     private const string AuthErrorUserNameRequired = "\u8bf7\u8f93\u5165\u8d26\u53f7\u3002";
     private const string AuthErrorPasswordRequired = "\u8bf7\u8f93\u5165\u5bc6\u7801\u3002";
     private const string AuthErrorAccountConfigurationUnavailable = LocalLauncherAuthService.AccountConfigurationUnavailableError;
+    private const string AuthErrorPasswordResetRequired = LocalLauncherAuthService.PasswordResetRequiredError;
     private const string AuthErrorAccountDisabledOrMissing = "\u672c\u5730\u8d26\u53f7\u4e0d\u5b58\u5728\uff0c\u6216\u5df2\u88ab\u7981\u7528\u3002";
     private const string AuthErrorInvalidCredentials = "\u8d26\u53f7\u6216\u5bc6\u7801\u4e0d\u6b63\u786e\u3002";
     private const string AuthErrorNewPasswordRequired = "\u65b0\u5bc6\u7801\u4e0d\u80fd\u4e3a\u7a7a\u3002";
@@ -668,6 +669,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
             AuthErrorUserNameRequired => Text("Launcher_Error_UserNameRequired"),
             AuthErrorPasswordRequired => Text("Launcher_Error_PasswordRequired"),
             AuthErrorAccountConfigurationUnavailable => Text("Launcher_Error_AccountConfigurationUnavailable"),
+            AuthErrorPasswordResetRequired => Text("Launcher_Error_PasswordResetRequired"),
             AuthErrorAccountDisabledOrMissing => Text("Launcher_Error_AccountDisabledOrMissing"),
             AuthErrorInvalidCredentials => Text("Launcher_Error_InvalidCredentials"),
             AuthErrorNewPasswordRequired => Text("Launcher_Error_NewPasswordRequired"),

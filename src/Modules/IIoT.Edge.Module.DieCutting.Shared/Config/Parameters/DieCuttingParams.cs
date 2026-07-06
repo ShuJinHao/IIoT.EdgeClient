@@ -28,10 +28,9 @@ public static class DieCuttingParams
         /// </summary>
         [ModuleParam(
             ParamValueKind.String,
-            DefaultValue = "http://10.98.101.247:8080",
             Role = ModuleParamRole.MesBaseUrl,
             DisplayNameFallback = "MES服务地址",
-            DescriptionFallback = "MES 接口基础地址。")]
+            DescriptionFallback = "MES 接口基础地址，必须由现场配置写入；仓库不提供真实内网默认地址。")]
         服务地址,
 
         /// <summary>
@@ -113,15 +112,35 @@ public static class DieCuttingParams
             DefaultValue = "/dev/dev/realTime/status",
             DisplayNameFallback = "MES设备状态路径",
             DescriptionFallback = "模切 R100 设备状态上传接口相对路径。")]
-        EquipmentStatusPath
+        EquipmentStatusPath,
+
+        /// <summary>
+        /// MES 签名密钥。参数页按角色隐藏明文，只能由受控配置写入。
+        /// </summary>
+        [ModuleParam(
+            ParamValueKind.String,
+            Role = ModuleParamRole.MesSignToken,
+            DisplayNameFallback = "MES签名密钥",
+            DescriptionFallback = "MES HMAC-SHA256 签名密钥；缺失时 MES 上传进入诊断/补偿，不使用默认值。")]
+        签名令牌
     }
 
     /// <summary>
-    /// 模切暂未注册生产数据 Cloud payload，因此本分类暂不声明插件级 Cloud 参数。
-    /// 系统日志、设备识别和 Cloud 补传不受插件参数控制。
+    /// 模切 Cloud 链路参数。
+    /// Cloud PLC 设备状态专用接口未落地前，Cloud consumer 会阻断设备状态进入标准过站上传。
     /// </summary>
     public enum Cloud
     {
+        /// <summary>
+        /// 是否启用模切 Cloud 上传链路。
+        /// </summary>
+        [ModuleParam(
+            ParamValueKind.Bool,
+            DefaultValue = "false",
+            Role = ModuleParamRole.CloudEnabled,
+            DisplayNameFallback = "云端上传启用",
+            DescriptionFallback = "关闭后仅停止该插件生产数据和设备状态 Cloud 上传；系统 bootstrap、设备日志、Cloud 补传和诊断不受该插件参数影响。")]
+        启用
     }
 
     /// <summary>

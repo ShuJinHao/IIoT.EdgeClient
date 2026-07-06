@@ -5,8 +5,9 @@ namespace IIoT.Edge.Application.Abstractions.DataPipeline;
 /// <summary>
 /// 电芯数据消费者接口。
 /// 
-/// ProcessQueueTask 会按顺序依次调用各个消费者。
-/// 任意一步失败都不会阻塞后续消费者。
+/// ProcessQueueTask 会按记录的 UploadTargets 分派到目标消费者。
+/// 本地 BestEffort 消费者按顺序执行；MES/Cloud 等 Durable 出口消费者可并行执行。
+/// Durable 出口按目标通道投递到独立后台队列；目标队列有受控容量，满载或任一目标失败只进入该目标补偿链路，不应阻塞其他目标出口。
 /// 
 /// FailureMode 用于声明失败后的处理语义：
 ///   BestEffort：仅记录日志，不要求补偿

@@ -14,6 +14,7 @@ using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Infrastructure.Integration.Device;
 using IIoT.Edge.Infrastructure.Integration.Device.Cache;
 using IIoT.Edge.Infrastructure.Integration.DeviceLog;
+using IIoT.Edge.Infrastructure.Integration.EdgeHost;
 using IIoT.Edge.Infrastructure.Integration.Export.Excel;
 using IIoT.Edge.Infrastructure.Integration.Http;
 using IIoT.Edge.Infrastructure.Integration.Mes;
@@ -66,6 +67,21 @@ public static class DependencyInjection
                 ?? configuration["LocalAdmin:PasswordHash"]?.Trim()
                 ?? string.Empty
         });
+        services.AddSingleton(new CloudJwtValidationConfig
+        {
+            JwtSigningKey =
+                Environment.GetEnvironmentVariable("CloudApi__Auth__JwtSigningKey")?.Trim()
+                ?? configuration["CloudApi:Auth:JwtSigningKey"]?.Trim()
+                ?? string.Empty,
+            JwtIssuer =
+                Environment.GetEnvironmentVariable("CloudApi__Auth__JwtIssuer")?.Trim()
+                ?? configuration["CloudApi:Auth:JwtIssuer"]?.Trim()
+                ?? string.Empty,
+            JwtAudience =
+                Environment.GetEnvironmentVariable("CloudApi__Auth__JwtAudience")?.Trim()
+                ?? configuration["CloudApi:Auth:JwtAudience"]?.Trim()
+                ?? string.Empty
+        });
 
         services.AddHttpClient(AuthService.HttpClientName, client => client.Timeout = timeout);
         services.AddSingleton<IAuthService, AuthService>();
@@ -109,6 +125,9 @@ public static class DependencyInjection
         services.AddSingleton<IMesUploadGate, MesUploadGate>();
         services.AddSingleton<MesRequestExecutor>();
         services.AddSingleton<MesHeartbeatTask>();
+        services.AddSingleton<IEdgeHostPlcRuntimeStateSnapshotProvider, EdgeHostPlcRuntimeStateSnapshotProvider>();
+        services.AddSingleton<IEdgeHostPlcRuntimeStateReporter, EdgeHostPlcRuntimeStateReporter>();
+        services.AddSingleton<EdgeHostPlcRuntimeStateReportTask>();
 
         services.AddSingleton<StandardPassStationCloudUploader>();
         services.AddSingleton<ICloudConsumer, CloudConsumer>();

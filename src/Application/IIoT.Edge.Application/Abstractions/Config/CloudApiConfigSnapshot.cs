@@ -21,7 +21,8 @@ public sealed record CloudApiConfigSnapshot(
     string ClientReleaseCatalogTemplatePath,
     string ClientVersionReportPath,
     bool Enabled = true,
-    string RuntimeHeartbeatPath = "");
+    string RuntimeHeartbeatPath = "",
+    string EdgeHostPlcRuntimeStatesPath = "");
 
 /// <summary>
 /// 云端 API 配置快照读取入口，由基础设施层从 appsettings/options 映射。

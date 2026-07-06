@@ -290,6 +290,7 @@
     <sys:String x:Key="Navigation_Runtime_LastFailed">最近失败</sys:String>
     <sys:String x:Key="Navigation_Outcome_Success">成功</sys:String>
     <sys:String x:Key="Navigation_Outcome_Failed">失败</sys:String>
+    <sys:String x:Key="Navigation_Outcome_Blocked">已阻塞</sys:String>
     <sys:String x:Key="Navigation_Outcome_SkippedUploadNotReady">未就绪，已跳过</sys:String>
     <sys:String x:Key="Navigation_Outcome_UnauthorizedAfterRetry">重试后仍未授权</sys:String>
     <sys:String x:Key="Navigation_Outcome_HttpFailure">HTTP 失败</sys:String>
@@ -565,6 +566,7 @@
     <sys:String x:Key="Navigation_Diagnostics_SyncCloudPendingFormat">过站={0}，日志={1}，产能={2}</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_SyncMesPendingFormat">重试={0}</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_SyncBlockedReasonFormat">阻塞：{0}</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_SyncCloudLastContextFormat">最近：PLC={0}，场景={1}</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_LabelDevice">设备</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_LabelCloudGate">上传门禁</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_LabelCloudRuntime">云端运行</sys:String>
@@ -581,6 +583,7 @@
     <sys:String x:Key="Navigation_Diagnostics_LabelLastFailure">最近失败</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_ConfigLabel">配置概况</sys:String>
     <sys:String x:Key="Navigation_Column_Process">工序</sys:String>
+    <sys:String x:Key="Navigation_Column_Scenario">场景</sys:String>
     <sys:String x:Key="Navigation_Column_Assembly">程序集</sys:String>
     <sys:String x:Key="Navigation_Column_Enabled">已启用</sys:String>
     <sys:String x:Key="Navigation_Column_Activated">已激活</sys:String>

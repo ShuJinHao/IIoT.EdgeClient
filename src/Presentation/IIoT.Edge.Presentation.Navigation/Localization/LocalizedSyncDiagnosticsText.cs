@@ -205,6 +205,7 @@ internal sealed class LocalizedSyncDiagnosticsText(
         null or "" => "--",
         "Success" => Text("Navigation_Outcome_Success", "成功"),
         "Failed" => Text("Navigation_Outcome_Failed", "失败"),
+        "Blocked" => Text("Navigation_Outcome_Blocked", "已阻塞"),
         _ => lastResult
     };
 

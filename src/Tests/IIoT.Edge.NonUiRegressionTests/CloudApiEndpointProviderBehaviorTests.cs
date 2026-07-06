@@ -19,7 +19,8 @@ public sealed class CloudApiEndpointProviderBehaviorTests
                 new LocalSystemConfigSnapshot(2, CloudApiConfigParamSchema.ClientCode, "LOCAL-CLIENT", null, 2),
                 new LocalSystemConfigSnapshot(3, CloudApiConfigParamSchema.ProcessUploadPath, "/local/process", null, 3),
                 new LocalSystemConfigSnapshot(4, CloudApiConfigParamSchema.PassStationBatchTemplatePath, "/local/pass-stations/{typeKey}/batch", null, 4),
-                new LocalSystemConfigSnapshot(5, CloudApiConfigParamSchema.RecipeByDeviceTemplatePath, "/local/recipes/{deviceId}", null, 5)
+                new LocalSystemConfigSnapshot(5, CloudApiConfigParamSchema.RecipeByDeviceTemplatePath, "/local/recipes/{deviceId}", null, 5),
+                new LocalSystemConfigSnapshot(6, CloudApiConfigParamSchema.EdgeHostPlcRuntimeStatesPath, "/local/plc-runtime-states", null, 6)
             ]));
 
         Assert.Equal("https://local-cloud.test/api/ping", provider.BuildUrl("/api/ping"));
@@ -27,6 +28,7 @@ public sealed class CloudApiEndpointProviderBehaviorTests
         Assert.Equal("/local/process", provider.GetProcessUploadPath());
         Assert.Equal("/local/pass-stations/homogenization/batch", provider.GetPassStationBatchPath("Homogenization"));
         Assert.Equal($"/local/recipes/{deviceId}", provider.BuildRecipeByDevicePath(deviceId));
+        Assert.Equal("/local/plc-runtime-states", provider.GetEdgeHostPlcRuntimeStatesPath());
     }
 
     [Fact]
@@ -40,6 +42,7 @@ public sealed class CloudApiEndpointProviderBehaviorTests
         Assert.Equal("CONFIG-CLIENT", provider.GetClientCode());
         Assert.Equal("/config/process", provider.GetProcessUploadPath());
         Assert.Equal("/config/pass-stations/homogenization/batch", provider.GetPassStationBatchPath("Homogenization"));
+        Assert.Equal("/config/plc-runtime-states", provider.GetEdgeHostPlcRuntimeStatesPath());
     }
 
     private static CloudApiConfig CreateConfig()
@@ -60,7 +63,8 @@ public sealed class CloudApiEndpointProviderBehaviorTests
                 CapacityHourly = "/config/capacity-hourly",
                 CapacitySummary = "/config/capacity-summary",
                 CapacitySummaryRange = "/config/capacity-range",
-                RecipeByDeviceTemplate = "/config/recipes/{deviceId}"
+                RecipeByDeviceTemplate = "/config/recipes/{deviceId}",
+                EdgeHostPlcRuntimeStates = "/config/plc-runtime-states"
             }
         };
 

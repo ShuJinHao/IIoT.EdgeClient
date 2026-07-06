@@ -91,6 +91,11 @@ public sealed class HomogenizationContext : ProductionContext
     public HomogenizationRealtimeSnapshot? LastRealtimeSnapshot { get; set; }
 
     /// <summary>
+    /// 最近一次已被上传队列接收的实时数据数字指纹；采集时间不参与比较。
+    /// </summary>
+    public string? LastRealtimeFingerprint { get; set; }
+
+    /// <summary>
     /// 最近一次设备状态上传完成时间。
     /// </summary>
     public DateTime? LastEquipmentStatusAt { get; set; }

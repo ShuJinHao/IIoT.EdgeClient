@@ -82,6 +82,12 @@ public class CloudApiEndpointProvider : ICloudApiEndpointProvider
             FirstLocalConfigString(CloudApiConfigParamSchema.DeviceLogPath) ?? _cloudApiOptions.CurrentValue.Paths.DeviceLog,
             "CloudApi:Paths:DeviceLog");
 
+    public string GetEdgeHostPlcRuntimeStatesPath()
+        => RequirePath(
+            FirstLocalConfigString(CloudApiConfigParamSchema.EdgeHostPlcRuntimeStatesPath)
+                ?? _cloudApiOptions.CurrentValue.Paths.EdgeHostPlcRuntimeStates,
+            "CloudApi:Paths:EdgeHostPlcRuntimeStates");
+
     public string GetProcessUploadPath()
         => RequirePath(
             FirstLocalConfigString(CloudApiConfigParamSchema.ProcessUploadPath) ?? _cloudApiOptions.CurrentValue.Paths.ProcessUpload,

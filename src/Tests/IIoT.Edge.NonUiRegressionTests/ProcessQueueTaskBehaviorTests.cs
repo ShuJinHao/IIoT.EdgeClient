@@ -49,9 +49,10 @@ public sealed class ProcessQueueTaskBehaviorTests
 
         await task.ExecuteOnceAsync();
 
-        Assert.Single(cloudRetryStore.PendingRecords);
-        Assert.Equal("Cloud", cloudRetryStore.PendingRecords[0].Channel);
-        Assert.Equal("Cloud", cloudRetryStore.PendingRecords[0].FailedTarget);
+        var retry = Assert.Single(cloudRetryStore.PendingRecords);
+        Assert.Equal("Cloud", retry.Channel);
+        Assert.Equal("Cloud", retry.FailedTarget);
+        AssertStoredContext(retry);
         Assert.Empty(mesRetryStore.PendingRecords);
         Assert.Empty(fallbackStore.Records);
     }
@@ -104,6 +105,258 @@ public sealed class ProcessQueueTaskBehaviorTests
         Assert.Equal("Cloud", cloudRetryStore.PendingRecords[0].FailedTarget);
         Assert.Empty(mesRetryStore.PendingRecords);
         Assert.Contains(logger.Entries, x => x.Message.Contains("非关键消费者", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ProcessOneAsync_WhenRecordTargetsCloudOnly_ShouldNotCallMesConsumer()
+    {
+        var pipeline = new FakeDataPipelineService();
+        var record = CreateRecord();
+        record.CellData.UploadTargets = DataPipelineUploadTargets.Cloud;
+        await pipeline.EnqueueAsync(record);
+
+        var mesConsumer = new FakeCellDataConsumer(
+            name: "MES",
+            order: 20,
+            retryChannel: "MES",
+            result: true,
+            failureMode: ConsumerFailureMode.Durable);
+        var cloudConsumer = new FakeCellDataConsumer(
+            name: "Cloud",
+            order: 25,
+            retryChannel: "Cloud",
+            result: true,
+            failureMode: ConsumerFailureMode.Durable);
+
+        var task = new TestableProcessQueueTask(
+            new FakeLogService(),
+            pipeline,
+            [mesConsumer, cloudConsumer],
+            new FakeFailedRecordStore(),
+            new FakeFailedRecordStore(),
+            new FakeCloudFallbackBufferStore(),
+            new FakeMesFallbackBufferStore(),
+            new FakeCloudDeadLetterStore(),
+            new FakeMesDeadLetterStore(),
+            new FakeCriticalPersistenceFallbackWriter());
+
+        await task.ExecuteOnceAsync();
+
+        Assert.Equal(0, mesConsumer.ProcessCallCount);
+        Assert.Equal(1, cloudConsumer.ProcessCallCount);
+    }
+
+    [Fact]
+    public async Task ProcessOneAsync_WhenMesIsBlocked_ShouldStillStartCloudConsumer()
+    {
+        var pipeline = new FakeDataPipelineService();
+        var record = CreateRecord();
+        record.CellData.UploadTargets = DataPipelineUploadTargets.All;
+        await pipeline.EnqueueAsync(record);
+
+        var mesStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseMes = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cloudCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var mesConsumer = new FakeCellDataConsumer(
+            name: "MES",
+            order: 20,
+            retryChannel: "MES",
+            result: true,
+            failureMode: ConsumerFailureMode.Durable,
+            processAsync: async _ =>
+            {
+                mesStarted.SetResult();
+                await releaseMes.Task.WaitAsync(TimeSpan.FromSeconds(2));
+                return true;
+            });
+        var cloudConsumer = new FakeCellDataConsumer(
+            name: "Cloud",
+            order: 25,
+            retryChannel: "Cloud",
+            result: true,
+            failureMode: ConsumerFailureMode.Durable,
+            processAsync: _ =>
+            {
+                cloudCompleted.SetResult();
+                return Task.FromResult(true);
+            });
+
+        var task = new TestableProcessQueueTask(
+            new FakeLogService(),
+            pipeline,
+            [mesConsumer, cloudConsumer],
+            new FakeFailedRecordStore(),
+            new FakeFailedRecordStore(),
+            new FakeCloudFallbackBufferStore(),
+            new FakeMesFallbackBufferStore(),
+            new FakeCloudDeadLetterStore(),
+            new FakeMesDeadLetterStore(),
+            new FakeCriticalPersistenceFallbackWriter());
+
+        var executeTask = task.ExecuteOnceAsync();
+        await mesStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        await cloudCompleted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.False(executeTask.IsCompleted);
+
+        releaseMes.SetResult();
+        await executeTask.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal(1, mesConsumer.ProcessCallCount);
+        Assert.Equal(1, cloudConsumer.ProcessCallCount);
+    }
+
+    [Fact]
+    public async Task ExecuteOnceAsync_WhenPreviousMesRecordIsBlocked_ShouldStillStartLaterCloudOnlyRecord()
+    {
+        var pipeline = new FakeDataPipelineService();
+        var mesOnlyRecord = CreateRecord();
+        ((TestProcessCellData)mesOnlyRecord.CellData).Barcode = "MES-BLOCKED";
+        mesOnlyRecord.CellData.UploadTargets = DataPipelineUploadTargets.Mes;
+        var cloudOnlyRecord = CreateRecord();
+        ((TestProcessCellData)cloudOnlyRecord.CellData).Barcode = "CLOUD-FOLLOWS";
+        cloudOnlyRecord.CellData.UploadTargets = DataPipelineUploadTargets.Cloud;
+        await pipeline.EnqueueAsync(mesOnlyRecord);
+        await pipeline.EnqueueAsync(cloudOnlyRecord);
+
+        var mesStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseMes = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cloudCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var mesConsumer = new FakeCellDataConsumer(
+            name: "MES",
+            order: 20,
+            retryChannel: "MES",
+            result: true,
+            failureMode: ConsumerFailureMode.Durable,
+            processAsync: async _ =>
+            {
+                mesStarted.SetResult();
+                await releaseMes.Task.WaitAsync(TimeSpan.FromSeconds(2));
+                return true;
+            });
+        var cloudConsumer = new FakeCellDataConsumer(
+            name: "Cloud",
+            order: 25,
+            retryChannel: "Cloud",
+            result: true,
+            failureMode: ConsumerFailureMode.Durable,
+            processAsync: _ =>
+            {
+                cloudCompleted.SetResult();
+                return Task.FromResult(true);
+            });
+
+        var task = new TestableProcessQueueTask(
+            new FakeLogService(),
+            pipeline,
+            [mesConsumer, cloudConsumer],
+            new FakeFailedRecordStore(),
+            new FakeFailedRecordStore(),
+            new FakeCloudFallbackBufferStore(),
+            new FakeMesFallbackBufferStore(),
+            new FakeCloudDeadLetterStore(),
+            new FakeMesDeadLetterStore(),
+            new FakeCriticalPersistenceFallbackWriter());
+
+        var executeTask = task.ExecuteOnceAsync();
+        await mesStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        await cloudCompleted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.False(executeTask.IsCompleted);
+
+        releaseMes.SetResult();
+        await executeTask.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal(1, mesConsumer.ProcessCallCount);
+        Assert.Equal(1, cloudConsumer.ProcessCallCount);
+    }
+
+    [Fact]
+    public async Task ExecuteOnceAsync_WhenMesOutletQueueIsFull_ShouldPersistMesRetryWithoutBlockingCloud()
+    {
+        var pipeline = new FakeDataPipelineService();
+        for (var i = 0; i < 99; i++)
+        {
+            var mesRecord = CreateRecord();
+            ((TestProcessCellData)mesRecord.CellData).Barcode = $"MES-QUEUE-{i:D2}";
+            mesRecord.CellData.UploadTargets = DataPipelineUploadTargets.Mes;
+            await pipeline.EnqueueAsync(mesRecord, TestContext.Current.CancellationToken);
+        }
+
+        var cloudOnlyRecord = CreateRecord();
+        ((TestProcessCellData)cloudOnlyRecord.CellData).Barcode = "CLOUD-AFTER-MES-FULL";
+        cloudOnlyRecord.CellData.UploadTargets = DataPipelineUploadTargets.Cloud;
+        await pipeline.EnqueueAsync(cloudOnlyRecord, TestContext.Current.CancellationToken);
+
+        var cloudRetryStore = new FakeFailedRecordStore();
+        var mesRetryStore = new FakeFailedRecordStore();
+        var mesStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseMes = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cloudCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var mesConsumer = new FakeCellDataConsumer(
+            name: "MES",
+            order: 20,
+            retryChannel: "MES",
+            result: true,
+            failureMode: ConsumerFailureMode.Durable,
+            processAsync: async _ =>
+            {
+                mesStarted.TrySetResult();
+                await releaseMes.Task.WaitAsync(
+                    TimeSpan.FromSeconds(5),
+                    TestContext.Current.CancellationToken);
+                return true;
+            });
+        var cloudConsumer = new FakeCellDataConsumer(
+            name: "Cloud",
+            order: 25,
+            retryChannel: "Cloud",
+            result: true,
+            failureMode: ConsumerFailureMode.Durable,
+            processAsync: _ =>
+            {
+                cloudCompleted.SetResult();
+                return Task.FromResult(true);
+            });
+
+        var task = new TestableProcessQueueTask(
+            new FakeLogService(),
+            pipeline,
+            [mesConsumer, cloudConsumer],
+            cloudRetryStore,
+            mesRetryStore,
+            new FakeCloudFallbackBufferStore(),
+            new FakeMesFallbackBufferStore(),
+            new FakeCloudDeadLetterStore(),
+            new FakeMesDeadLetterStore(),
+            new FakeCriticalPersistenceFallbackWriter(),
+            runtimeOptions: new DataPipelineRuntimeOptions
+            {
+                DurableOutletQueueCapacity = 1
+            });
+
+        var executeTask = task.ExecuteOnceAsync();
+        await mesStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+        await cloudCompleted.Task.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+        await WaitUntilAsync(
+            () => mesRetryStore.PendingRecords.Count > 0,
+            TimeSpan.FromSeconds(2),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(executeTask.IsCompleted);
+        Assert.NotEmpty(mesRetryStore.PendingRecords);
+        Assert.All(mesRetryStore.PendingRecords, retry =>
+        {
+            Assert.Equal("MES", retry.Channel);
+            Assert.Equal("MES", retry.FailedTarget);
+            Assert.Equal("目标出口队列已满。", retry.ErrorMessage);
+            AssertStoredContext(retry);
+        });
+        Assert.Empty(cloudRetryStore.PendingRecords);
+        Assert.Equal(1, cloudConsumer.ProcessCallCount);
+
+        releaseMes.SetResult();
+        await executeTask.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        Assert.True(mesConsumer.ProcessCallCount > 0);
+        Assert.Equal(0, pipeline.PendingCount);
     }
 
     [Fact]
@@ -182,8 +435,9 @@ public sealed class ProcessQueueTaskBehaviorTests
         await task.ExecuteOnceAsync();
 
         Assert.Equal(1, cloudRetryStore.SaveCallCount);
-        Assert.Single(fallbackStore.Records);
-        Assert.Equal("Cloud", fallbackStore.Records[0].FailedTarget);
+        var fallback = Assert.Single(fallbackStore.Records);
+        Assert.Equal("Cloud", fallback.FailedTarget);
+        AssertStoredContext(fallback);
         Assert.Contains(logger.Entries, x => x.Message.Contains("云端 兜底缓存", StringComparison.Ordinal));
     }
 
@@ -231,6 +485,7 @@ public sealed class ProcessQueueTaskBehaviorTests
         var deadLetter = Assert.Single(cloudDeadLetterStore.Records);
         Assert.Equal("Cloud", deadLetter.FailedTarget);
         Assert.Equal(nameof(DeadLetterStage.FallbackPersist), deadLetter.FailureStage);
+        AssertStoredContext(deadLetter);
         Assert.Empty(criticalWriter.Writes);
     }
 
@@ -473,8 +728,9 @@ public sealed class ProcessQueueTaskBehaviorTests
         await task.ExecuteOnceAsync();
 
         Assert.Equal(1, mesRetryStore.SaveCallCount);
-        Assert.Single(mesFallbackStore.Records);
-        Assert.Equal("MES", mesFallbackStore.Records[0].FailedTarget);
+        var fallback = Assert.Single(mesFallbackStore.Records);
+        Assert.Equal("MES", fallback.FailedTarget);
+        AssertStoredContext(fallback);
         Assert.Contains(logger.Entries, x => x.Message.Contains("MES 兜底缓存", StringComparison.Ordinal));
     }
 
@@ -521,8 +777,16 @@ public sealed class ProcessQueueTaskBehaviorTests
     private static CellCompletedRecord CreateRecord()
         => new()
         {
+            NetworkDeviceId = 1001,
+            DeviceName = "PLC-A",
+            ModuleId = "DieCuttingCathode",
+            TaskKey = "DieCuttingCathode.Realtime",
+            PlanSessionId = "SESSION-001",
+            MainPlanCode = "PLAN-001",
+            TraceBatchNumber = "TRACE-001",
             CellData = new TestProcessCellData
             {
+                PlcDeviceId = 1001,
                 DeviceName = "PLC-A",
                 DeviceCode = "PLC-A",
                 Barcode = "BC-001",
@@ -531,6 +795,54 @@ public sealed class ProcessQueueTaskBehaviorTests
                 CellResult = true
             }
         };
+
+    private static void AssertStoredContext(FailedCellRecord record)
+    {
+        Assert.Equal(1001, record.NetworkDeviceId);
+        Assert.Equal("PLC-A", record.DeviceName);
+        Assert.Equal("DieCuttingCathode", record.ModuleId);
+        Assert.Equal("DieCuttingCathode.Realtime", record.TaskKey);
+        Assert.Equal("SESSION-001", record.PlanSessionId);
+        Assert.Equal("PLAN-001", record.MainPlanCode);
+        Assert.Equal("TRACE-001", record.TraceBatchNumber);
+    }
+
+    private static void AssertStoredContext(IFallbackRecord record)
+    {
+        Assert.Equal(1001, record.NetworkDeviceId);
+        Assert.Equal("PLC-A", record.DeviceName);
+        Assert.Equal("DieCuttingCathode", record.ModuleId);
+        Assert.Equal("DieCuttingCathode.Realtime", record.TaskKey);
+        Assert.Equal("SESSION-001", record.PlanSessionId);
+        Assert.Equal("PLAN-001", record.MainPlanCode);
+        Assert.Equal("TRACE-001", record.TraceBatchNumber);
+    }
+
+    private static void AssertStoredContext(DeadLetterRecord record)
+    {
+        Assert.Equal(1001, record.NetworkDeviceId);
+        Assert.Equal("PLC-A", record.DeviceName);
+        Assert.Equal("DieCuttingCathode", record.ModuleId);
+        Assert.Equal("DieCuttingCathode.Realtime", record.TaskKey);
+        Assert.Equal("SESSION-001", record.PlanSessionId);
+        Assert.Equal("PLAN-001", record.MainPlanCode);
+        Assert.Equal("TRACE-001", record.TraceBatchNumber);
+    }
+
+    private static async Task WaitUntilAsync(
+        Func<bool> condition,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        using var timeoutCts = new CancellationTokenSource(timeout);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+            timeoutCts.Token,
+            cancellationToken);
+        while (!condition())
+        {
+            await Task.Delay(10, linkedCts.Token);
+        }
+    }
 
     private static CellCompletedRecord CreateTestProcessRecord()
         => new()
@@ -603,7 +915,11 @@ public sealed class ProcessQueueTaskBehaviorTests
             new DefaultDataPipelineConsumerInvoker(),
             runtimeOptions)
     {
-        public Task ExecuteOnceAsync() => base.ExecuteAsync();
+        public async Task ExecuteOnceAsync()
+        {
+            await base.ExecuteAsync();
+            await WaitForDurableQueuesIdleAsync(TimeSpan.FromSeconds(5));
+        }
     }
 
     private static DataPipelineCascadingPersistenceWriter CreatePersistenceWriter(

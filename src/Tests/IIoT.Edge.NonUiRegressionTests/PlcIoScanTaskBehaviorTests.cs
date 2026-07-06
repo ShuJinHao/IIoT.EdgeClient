@@ -344,11 +344,12 @@ public sealed class PlcIoScanTaskBehaviorTests
     }
 
     [Fact]
-    public async Task PlcIoScanTask_WhenSignalAddressesHaveGaps_ShouldReadOneMergedBlockAndBindBySignalKey()
+    public async Task PlcIoScanTask_WhenSignalAddressesHaveGaps_ShouldSplitReadBlocksAndBindBySignalKey()
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
-        plcService.ReadOutcomes.Enqueue(new ushort[] { 10, 0, 0, 13 });
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 10 });
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 13 });
 
         var dataStore = new PlcDataStore();
         dataStore.Register(5, readSize: 0, writeSize: 0);
@@ -366,9 +367,8 @@ public sealed class PlcIoScanTaskBehaviorTests
 
         await interaction.ExecuteOneCycleAsync();
 
-        var request = Assert.Single(plcService.ReadRequests);
-        Assert.Equal("D700", request.Address);
-        Assert.Equal((ushort)4, request.Length);
+        Assert.Equal(["D700", "D703"], plcService.ReadRequests.Select(static x => x.Address));
+        Assert.All(plcService.ReadRequests, request => Assert.Equal((ushort)1, request.Length));
 
         var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(5));
         Assert.True(buffer.TryGetReadWords("Read-D700", out var first));
@@ -436,6 +436,36 @@ public sealed class PlcIoScanTaskBehaviorTests
 
         Assert.Equal(["D700", "D720"], plcService.ReadRequests.Select(static x => x.Address));
         Assert.All(plcService.ReadRequests, request => Assert.Equal((ushort)1, request.Length));
+    }
+
+    [Fact]
+    public async Task PlcIoScanTask_WhenReadMappingsHaveGap_ShouldSplitReadBlocksEvenWhenWriteGapPolicyIsZero()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 1 });
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 2 });
+
+        var dataStore = new PlcDataStore();
+        dataStore.Register(16, readSize: 0, writeSize: 0);
+
+        var interaction = new PlcIoScanTask(
+            plcService,
+            dataStore,
+            CreateDevice(16, "PLC-READ-GAP"),
+            [
+                CreateIoMapping(16, "Read", "D700", 1, sortOrder: 1),
+                CreateIoMapping(16, "Read", "D720", 1, sortOrder: 2)
+            ],
+            new FakeLogService(),
+            SignalBlockPlanner,
+            runtimePolicy: new PlcIoRuntimePolicy(
+                MaxSignalBlockWordCount: 100,
+                WriteGapPolicy: PlcIoWriteGapPolicy.Zero));
+
+        await interaction.ExecuteOneCycleAsync();
+
+        Assert.Equal(["D700", "D720"], plcService.ReadRequests.Select(static x => x.Address));
     }
 
     [Fact]
@@ -535,7 +565,7 @@ public sealed class PlcIoScanTaskBehaviorTests
     }
 
     [Fact]
-    public async Task PlcDataReadScanTask_ShouldOnlyScanReadDataCategoriesAndUpdateFreshness()
+    public async Task PlcDataReadScanTask_ShouldOnlyScanReadDataCategoriesAndUpdateBufferValues()
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
@@ -571,23 +601,23 @@ public sealed class PlcIoScanTaskBehaviorTests
         Assert.True(buffer.TryGetReadWords("Read-D301", out var continuousRead));
         Assert.Equal([(ushort)20, (ushort)21], continuousRead);
         Assert.False(buffer.TryGetReadWords("Read-D700", out _));
-        Assert.True(buffer.TryGetReadSignalUpdatedAt("Read-D300", out var updatedAt));
-        Assert.True(DateTimeOffset.UtcNow - updatedAt < TimeSpan.FromSeconds(2));
     }
 
     [Fact]
-    public async Task PlcDataReadScanTask_WhenLaterReadBlockFails_ShouldDisconnectAndClearLatency()
+    public async Task PlcDataReadScanTask_WhenLaterReadBlockFails_ShouldKeepPlcConnectedAndClearFailedSignals()
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
         plcService.ReadOutcomes.Enqueue(new ushort[] { 1 });
         plcService.ReadOutcomes.Enqueue(new TimeoutException("read-data second block timeout"));
+        plcService.ReadOutcomes.Enqueue(new TimeoutException("read-data signal timeout"));
         await plcService.ConnectAsync();
 
         var dataStore = new PlcDataStore();
         dataStore.Register(17, readSize: 0, writeSize: 0);
         var statusStore = new PlcConnectionStatusStore();
         statusStore.MarkConnected(17, "PLC-DATA-SPLIT-FAIL", 15);
+        var logger = new FakeLogService();
 
         var dataReadScan = new PlcDataReadScanTask(
             plcService,
@@ -597,20 +627,29 @@ public sealed class PlcIoScanTaskBehaviorTests
                 CreateIoMapping(17, "Read", "D300", 1, category: IoMappingOptionCatalog.CategorySingleRead, sortOrder: 1),
                 CreateIoMapping(17, "Read", "D320", 1, category: IoMappingOptionCatalog.CategoryContinuousRead, sortOrder: 2)
             ],
-            new FakeLogService(),
+            logger,
             SignalBlockPlanner,
             statusStore,
             runtimePolicy: new PlcIoRuntimePolicy(MaxSignalBlockWordCount: 10));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => dataReadScan.ExecuteOneCycleAsync(TestContext.Current.CancellationToken));
+        await dataReadScan.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
         var snapshot = statusStore.GetSnapshot(17);
         Assert.NotNull(snapshot);
-        Assert.False(snapshot!.IsConnected);
-        Assert.Equal(PlcConnectionState.Retrying, snapshot.ConnectionState);
-        Assert.Null(snapshot.LatencyMs);
-        Assert.Contains("read-data second block timeout", snapshot.LastError, StringComparison.Ordinal);
+        Assert.True(snapshot!.IsConnected);
+        Assert.Equal(PlcConnectionState.Connected, snapshot.ConnectionState);
+        Assert.Equal(0, plcService.DisconnectCallCount);
+        Assert.Equal(["D300", "D320", "D320"], plcService.ReadRequests.Select(static x => x.Address));
+
+        var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(17));
+        Assert.True(buffer.TryGetReadWords("Read-D300", out var successfulWords));
+        Assert.Equal((ushort)1, Assert.Single(successfulWords));
+        Assert.True(buffer.TryGetReadWords("Read-D320", out var failedWords));
+        Assert.Equal((ushort)0, Assert.Single(failedWords));
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Message.Contains("地址=D320", StringComparison.Ordinal)
+                     && entry.Message.Contains("Read-D320@D320", StringComparison.Ordinal));
     }
 
     [Fact]

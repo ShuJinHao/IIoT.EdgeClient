@@ -290,6 +290,7 @@
     <sys:String x:Key="Navigation_Runtime_LastFailed">Last failed</sys:String>
     <sys:String x:Key="Navigation_Outcome_Success">Success</sys:String>
     <sys:String x:Key="Navigation_Outcome_Failed">Failed</sys:String>
+    <sys:String x:Key="Navigation_Outcome_Blocked">Blocked</sys:String>
     <sys:String x:Key="Navigation_Outcome_SkippedUploadNotReady">Not ready, skipped</sys:String>
     <sys:String x:Key="Navigation_Outcome_UnauthorizedAfterRetry">Unauthorized after retry</sys:String>
     <sys:String x:Key="Navigation_Outcome_HttpFailure">HTTP failure</sys:String>
@@ -565,6 +566,7 @@
     <sys:String x:Key="Navigation_Diagnostics_SyncCloudPendingFormat">Pass={0}, logs={1}, capacity={2}</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_SyncMesPendingFormat">Retry={0}</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_SyncBlockedReasonFormat">Blocked: {0}</sys:String>
+    <sys:String x:Key="Navigation_Diagnostics_SyncCloudLastContextFormat">Latest: PLC={0}, scenario={1}</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_LabelDevice">Device</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_LabelCloudGate">Cloud Gate</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_LabelCloudRuntime">Cloud Runtime</sys:String>
@@ -581,6 +583,7 @@
     <sys:String x:Key="Navigation_Diagnostics_LabelLastFailure">Last Failure</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_ConfigLabel">Configuration Profile</sys:String>
     <sys:String x:Key="Navigation_Column_Process">Process</sys:String>
+    <sys:String x:Key="Navigation_Column_Scenario">Scenario</sys:String>
     <sys:String x:Key="Navigation_Column_Assembly">Assembly</sys:String>
     <sys:String x:Key="Navigation_Column_Enabled">Enabled</sys:String>
     <sys:String x:Key="Navigation_Column_Activated">Activated</sys:String>

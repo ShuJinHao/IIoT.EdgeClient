@@ -31,6 +31,7 @@ public static class CloudApiConfigParamSchema
     public const string ClientReleaseCatalogTemplatePath = "CloudApi:Paths:ClientReleaseCatalogTemplate";
     public const string ClientVersionReportPath = "CloudApi:Paths:ClientVersionReport";
     public const string RuntimeHeartbeatPath = "CloudApi:Paths:RuntimeHeartbeat";
+    public const string EdgeHostPlcRuntimeStatesPath = "CloudApi:Paths:EdgeHostPlcRuntimeStates";
 
     public static IReadOnlyList<CloudApiConfigParamDescriptor> Descriptors { get; } = Enum
         .GetValues<CloudApiConfigParam>()
@@ -77,6 +78,7 @@ public static class CloudApiConfigParamSchema
             ClientReleaseCatalogTemplatePath => snapshot.ClientReleaseCatalogTemplatePath,
             ClientVersionReportPath => snapshot.ClientVersionReportPath,
             RuntimeHeartbeatPath => snapshot.RuntimeHeartbeatPath,
+            EdgeHostPlcRuntimeStatesPath => snapshot.EdgeHostPlcRuntimeStatesPath,
             _ => string.Empty
         };
 
@@ -120,6 +122,7 @@ public static class CloudApiConfigParamSchema
             CloudApiConfigParam.ClientReleaseCatalogTemplatePath => ClientReleaseCatalogTemplatePath,
             CloudApiConfigParam.ClientVersionReportPath => ClientVersionReportPath,
             CloudApiConfigParam.RuntimeHeartbeatPath => RuntimeHeartbeatPath,
+            CloudApiConfigParam.EdgeHostPlcRuntimeStatesPath => EdgeHostPlcRuntimeStatesPath,
             _ => throw new ArgumentOutOfRangeException(nameof(param), param, null)
         };
 }
@@ -251,7 +254,14 @@ public enum CloudApiConfigParam
         DisplayNameResourceKey = "Navigation_Param_CloudApi_RuntimeHeartbeatPath_DisplayName",
         DisplayNameFallback = "RuntimeHeartbeatPath",
         DescriptionResourceKey = "Navigation_Param_CloudApi_RuntimeHeartbeatPath_Description")]
-    RuntimeHeartbeatPath
+    RuntimeHeartbeatPath,
+
+    [ModuleParam(
+        ParamValueKind.String,
+        DisplayNameResourceKey = "Navigation_Param_CloudApi_EdgeHostPlcRuntimeStatesPath_DisplayName",
+        DisplayNameFallback = "EdgeHostPlcRuntimeStatesPath",
+        DescriptionResourceKey = "Navigation_Param_CloudApi_EdgeHostPlcRuntimeStatesPath_Description")]
+    EdgeHostPlcRuntimeStatesPath
 }
 
 public sealed record CloudApiConfigParamDescriptor(

@@ -1,3 +1,5 @@
+using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
@@ -21,6 +23,8 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
 {
     private readonly IDataPipelineService _dataPipelineService;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
+    private readonly ICloudUploadDiagnosticsStore _cloudDiagnosticsStore;
+    private readonly IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> _parameters;
     private readonly IHomogenizationProductionGate _productionGate;
 
     /// <summary>
@@ -33,6 +37,8 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
         HomogenizationContext context,
         IDataPipelineService dataPipelineService,
         IMesUploadDiagnosticsStore diagnosticsStore,
+        ICloudUploadDiagnosticsStore cloudDiagnosticsStore,
+        IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> parameters,
         IHomogenizationProductionGate productionGate,
         ILogService logger,
         IProductionTimeProvider productionTime,
@@ -42,6 +48,8 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
     {
         _dataPipelineService = dataPipelineService;
         _diagnosticsStore = diagnosticsStore;
+        _cloudDiagnosticsStore = cloudDiagnosticsStore;
+        _parameters = parameters;
         _productionGate = productionGate;
     }
 
@@ -54,31 +62,83 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
     {
         const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.工艺参数上传;
 
-        await ExecuteMesSnapshotHandshakeAsync(
+        await ExecuteHandshakeAsync(
             trigger,
             "工艺参数上传已触发。",
             "配方上传复位。",
-            "配方上传处理异常",
-            CodeOptions.Mes.Channels.Recipe,
-            _productionGate,
-            _diagnosticsStore,
-            Codec.CaptureRecipeSnapshot,
-            EnqueueRecipeAsync,
+            ProcessTriggerAsync,
+            static ex => $"配方上传处理异常：{ex.Message}",
             message =>
             {
                 ModuleContext.LastRecipeAt = ProductionTime.BusinessNow;
                 ModuleContext.LastRecipeResult = message;
-            },
-            (snapshot, result) =>
-            {
-                ModuleContext.LastRecipeAt = snapshot.CapturedAt;
-                ModuleContext.LastRecipeResult = result.Message;
-                ModuleContext.LastRecipeSnapshot = snapshot;
+                _diagnosticsStore.RecordFailure(
+                    CodeOptions.Mes.Channels.Recipe,
+                    message,
+                    CreateMesDiagnosticsContext("配方上传"));
             }).ConfigureAwait(false);
+    }
+
+    private async Task ProcessTriggerAsync(CancellationToken cancellationToken)
+    {
+        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.工艺参数上传;
+        var parameterSnapshot = await _parameters.GetAsync(cancellationToken).ConfigureAwait(false);
+        var mesEnabled = parameterSnapshot.Mes<bool>(HomogenizationParams.Mes.启用);
+        var cloudEnabled = parameterSnapshot.Cloud<bool>(HomogenizationParams.Cloud.启用);
+        var uploadTargets = ResolveUploadTargets(mesEnabled, cloudEnabled);
+        if (uploadTargets == DataPipelineUploadTargets.None)
+        {
+            var disabled = MesCallResult.Disabled("MES/Cloud 上传已关闭，配方上传已跳过。");
+            ModuleContext.LastRecipeAt = ProductionTime.BusinessNow;
+            ModuleContext.LastRecipeResult = disabled.Message;
+            Interaction.ReplyResult(trigger, disabled);
+            return;
+        }
+
+        if (mesEnabled)
+        {
+            var gateResult = await _productionGate.EnsureReadyAsync(ModuleContext, cancellationToken).ConfigureAwait(false);
+            if (!gateResult.IsSuccess)
+            {
+                RecordUploadBlockedDiagnostics(
+                    gateResult.Message,
+                    uploadTargets,
+                    _diagnosticsStore,
+                    _cloudDiagnosticsStore,
+                    CodeOptions.Mes.Channels.Recipe,
+                    "plc_recipe_blocked",
+                    "配方上传");
+                ModuleContext.LastRecipeAt = ProductionTime.BusinessNow;
+                ModuleContext.LastRecipeResult = gateResult.Message;
+                Interaction.ReplyResult(trigger, gateResult);
+                return;
+            }
+        }
+
+        var snapshot = Codec.CaptureRecipeSnapshot();
+        var result = await EnqueueRecipeAsync(snapshot, uploadTargets, mesEnabled, cancellationToken).ConfigureAwait(false);
+        if (!result.IsSuccess)
+        {
+            RecordUploadDiagnostics(
+                result,
+                uploadTargets,
+                _diagnosticsStore,
+                _cloudDiagnosticsStore,
+                CodeOptions.Mes.Channels.Recipe,
+                "plc_recipe_enqueue_failed",
+                "配方上传");
+        }
+
+        ModuleContext.LastRecipeAt = snapshot.CapturedAt;
+        ModuleContext.LastRecipeResult = result.Message;
+        ModuleContext.LastRecipeSnapshot = snapshot;
+        Interaction.ReplyResult(trigger, result);
     }
 
     private async Task<MesCallResult> EnqueueRecipeAsync(
         HomogenizationRecipeSnapshot snapshot,
+        DataPipelineUploadTargets uploadTargets,
+        bool includeMesPlanContext,
         CancellationToken cancellationToken)
     {
         var cellData = new HomogenizationCellData
@@ -90,17 +150,20 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
             CompletedTime = snapshot.CapturedAt,
             RuntimeStatus = "配方待上传",
             RecipeSnapshot = snapshot,
-            UploadTargets = DataPipelineUploadTargets.Mes
+            UploadTargets = uploadTargets
         };
 
-        var enqueueResult = await _dataPipelineService
-            .EnqueueAsync(CreatePipelineRecord(cellData), cancellationToken)
-            .ConfigureAwait(false);
+        try
+        {
+            var enqueueResult = await _dataPipelineService
+                .EnqueueAsync(CreatePipelineRecord(cellData, includeMesPlanContext), cancellationToken)
+                .ConfigureAwait(false);
 
-        return ToMesQueueResult(
-            enqueueResult,
-            "配方已进入 MES 上传队列。",
-            "配方已接收，数据已进入溢出持久化。",
-            "配方未接收，数据管道拒绝入队");
+            return ToUploadQueueResult(enqueueResult, "配方", uploadTargets);
+        }
+        catch (Exception ex)
+        {
+            return MesCallResult.TransportFailure($"配方上传处理异常：{ex.Message}");
+        }
     }
 }

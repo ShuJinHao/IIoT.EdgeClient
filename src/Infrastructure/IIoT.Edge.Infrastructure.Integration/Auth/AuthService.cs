@@ -2,9 +2,12 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
+using System.Text;
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Infrastructure.Integration.Http;
+using IIoT.Edge.SharedKernel.Security;
+using Microsoft.IdentityModel.Tokens;
 
 namespace IIoT.Edge.Infrastructure.Integration.Auth;
 
@@ -15,6 +18,7 @@ public class AuthService : IAuthService
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ICloudApiEndpointProvider _endpointProvider;
     private readonly LocalAdminConfig _localAdminConfig;
+    private readonly CloudJwtValidationConfig _jwtValidationConfig;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private UserSession? _currentUser;
     private int _backgroundRefreshStarted;
@@ -26,11 +30,13 @@ public class AuthService : IAuthService
     public AuthService(
         IHttpClientFactory httpClientFactory,
         ICloudApiEndpointProvider endpointProvider,
-        LocalAdminConfig localAdminConfig)
+        LocalAdminConfig localAdminConfig,
+        CloudJwtValidationConfig jwtValidationConfig)
     {
         _httpClientFactory = httpClientFactory;
         _endpointProvider = endpointProvider;
         _localAdminConfig = localAdminConfig;
+        _jwtValidationConfig = jwtValidationConfig;
     }
 
     public bool HasPermission(string permission)
@@ -62,8 +68,13 @@ public class AuthService : IAuthService
             return Task.FromResult(AuthResult.Fail("本地管理员未配置。"));
         }
 
-        var inputHash = ComputeSha256(password);
-        if (!string.Equals(inputHash, configuredHash, StringComparison.Ordinal))
+        var verification = EdgePasswordHasher.Verify(password, configuredHash);
+        if (verification == EdgePasswordVerificationResult.LegacySha256Verified)
+        {
+            return Task.FromResult(AuthResult.Fail("本地管理员密码使用旧哈希格式，请先重置。"));
+        }
+
+        if (verification != EdgePasswordVerificationResult.Verified)
         {
             return Task.FromResult(AuthResult.Fail("密码错误。"));
         }
@@ -100,7 +111,9 @@ public class AuthService : IAuthService
             var session = await TryReadSessionAsync(response).ConfigureAwait(false);
             if (session is null)
             {
-                return AuthResult.Fail(await BuildAuthFailureMessageAsync(response).ConfigureAwait(false));
+                return AuthResult.Fail(response.IsSuccessStatusCode
+                    ? "云端登录令牌无效。"
+                    : await BuildAuthFailureMessageAsync(response).ConfigureAwait(false));
             }
 
             SetSession(session);
@@ -153,6 +166,7 @@ public class AuthService : IAuthService
             }
 
             TriggerBackgroundRefresh();
+            return null;
         }
 
         return _currentUser;
@@ -237,7 +251,7 @@ public class AuthService : IAuthService
         }
     }
 
-    private static async Task<UserSession?> TryReadSessionAsync(HttpResponseMessage response)
+    private async Task<UserSession?> TryReadSessionAsync(HttpResponseMessage response)
     {
         if (!response.IsSuccessStatusCode)
         {
@@ -253,8 +267,7 @@ public class AuthService : IAuthService
         return ParseJwtToken(
             token,
             CloudAuthHeaders.ReadRefreshToken(response),
-            CloudAuthHeaders.ReadRefreshTokenExpiresAtUtc(response),
-            CloudAuthHeaders.ReadAccessTokenExpiresAtUtc(response));
+            CloudAuthHeaders.ReadRefreshTokenExpiresAtUtc(response));
     }
 
     private static async Task<string> BuildAuthFailureMessageAsync(HttpResponseMessage response)
@@ -291,30 +304,34 @@ public class AuthService : IAuthService
     private HttpClient CreateHttpClient()
         => _httpClientFactory.CreateClient(HttpClientName);
 
-    private static UserSession? ParseJwtToken(
+    private UserSession? ParseJwtToken(
         string token,
         string? refreshToken,
-        DateTimeOffset? refreshTokenExpiresAtUtc,
-        DateTimeOffset? accessTokenExpiresAtUtc)
+        DateTimeOffset? refreshTokenExpiresAtUtc)
     {
         try
         {
-            var handler = new JwtSecurityTokenHandler();
-            var jwtToken = handler.ReadJwtToken(token);
+            var principal = ValidateJwtToken(token);
+            if (principal is null)
+            {
+                return null;
+            }
 
-            var displayName = jwtToken.Claims
+            var claims = principal.Claims.ToArray();
+
+            var displayName = claims
                 .FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.UniqueName)
                 ?.Value
-                ?? jwtToken.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value
+                ?? claims.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value
                 ?? "未知用户";
 
-            var employeeNo = jwtToken.Claims
+            var employeeNo = claims
                 .FirstOrDefault(c => string.Equals(c.Type, "employeeNo", StringComparison.OrdinalIgnoreCase))
                 ?.Value
-                ?? jwtToken.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.UniqueName)?.Value
-                ?? jwtToken.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
+                ?? claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.UniqueName)?.Value
+                ?? claims.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
 
-            var permissions = jwtToken.Claims
+            var permissions = claims
                 .Where(c =>
                     string.Equals(c.Type, "Permission", StringComparison.OrdinalIgnoreCase)
                     || string.Equals(c.Type, ClaimTypes.Role, StringComparison.OrdinalIgnoreCase)
@@ -328,7 +345,7 @@ public class AuthService : IAuthService
                 EmployeeNo = employeeNo,
                 IsLocalAdmin = false,
                 Permissions = permissions,
-                ExpiresAtUtc = accessTokenExpiresAtUtc ?? TryGetExpiresAtUtc(jwtToken),
+                ExpiresAtUtc = TryGetExpiresAtUtc(claims),
                 AccessToken = token,
                 RefreshToken = refreshToken,
                 RefreshTokenExpiresAtUtc = refreshTokenExpiresAtUtc
@@ -340,20 +357,47 @@ public class AuthService : IAuthService
         }
     }
 
-    private static DateTimeOffset? TryGetExpiresAtUtc(JwtSecurityToken jwtToken)
+    private ClaimsPrincipal? ValidateJwtToken(string token)
     {
-        var expClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Exp)?.Value;
+        var signingKey = _jwtValidationConfig.JwtSigningKey?.Trim();
+        var issuer = _jwtValidationConfig.JwtIssuer?.Trim();
+        var audience = _jwtValidationConfig.JwtAudience?.Trim();
+        if (string.IsNullOrWhiteSpace(signingKey)
+            || string.IsNullOrWhiteSpace(issuer)
+            || string.IsNullOrWhiteSpace(audience))
+        {
+            return null;
+        }
+
+        var handler = new JwtSecurityTokenHandler
+        {
+            MapInboundClaims = false
+        };
+        var validationParameters = new TokenValidationParameters
+        {
+            RequireSignedTokens = true,
+            RequireExpirationTime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
+            ValidateIssuer = true,
+            ValidIssuer = issuer,
+            ValidateAudience = true,
+            ValidAudience = audience,
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromSeconds(30)
+        };
+
+        return handler.ValidateToken(token, validationParameters, out _);
+    }
+
+    private static DateTimeOffset? TryGetExpiresAtUtc(IEnumerable<Claim> claims)
+    {
+        var expClaim = claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Exp)?.Value;
         if (!long.TryParse(expClaim, out var exp))
         {
             return null;
         }
 
         return DateTimeOffset.FromUnixTimeSeconds(exp);
-    }
-
-    private static string ComputeSha256(string input)
-    {
-        var bytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(input));
-        return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 }

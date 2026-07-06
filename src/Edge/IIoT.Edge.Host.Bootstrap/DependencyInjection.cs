@@ -19,6 +19,7 @@ using IIoT.Edge.Application.Modules.Diagnostics;
 using IIoT.Edge.Host.Bootstrap.Modules;
 using IIoT.Edge.Infrastructure.DeviceComm;
 using IIoT.Edge.Infrastructure.Integration;
+using IIoT.Edge.Infrastructure.Integration.EdgeHost;
 using IIoT.Edge.Infrastructure.Integration.Mes;
 using IIoT.Edge.Infrastructure.Integration.Recipe;
 using IIoT.Edge.Infrastructure.Persistence.Dapper;
@@ -172,6 +173,9 @@ public static class DependencyInjection
         AddManagedBackgroundService(services, "PLC.Runtime",
             (sp, ct) => sp.GetRequiredService<IPlcConnectionManager>().InitializeAsync(ct),
             (sp, ct) => sp.GetRequiredService<IPlcConnectionManager>().StopAsync(ct));
+        AddLongRunningManagedBackgroundTask(
+            services,
+            sp => sp.GetRequiredService<EdgeHostPlcRuntimeStateReportTask>());
         AddLongRunningManagedBackgroundTaskGroup(
             services,
             "Host.DataPipeline",

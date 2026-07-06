@@ -81,6 +81,10 @@ public sealed class RepositoryHygieneTests
         @"\b(?:class|record(?:\s+class|\s+struct)?|struct|interface)\s+([A-Za-z_][A-Za-z0-9_]*(?:Vm|ViewModel))\b",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
+    private static readonly Regex PrivateNetworkAddressPattern = new(
+        @"\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})\b",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     private static readonly Regex BusinessXamlNativeVisibleControlPattern = new(
         @"<\s*(?:Button|DataGrid|ScrollViewer|ListBox|TextBox|ComboBox|CalendarDatePicker|DatePicker|CheckBox|TabControl)\b",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
@@ -384,6 +388,322 @@ public sealed class RepositoryHygieneTests
         Assert.DoesNotContain("\"LicenseKey\"", appsettings, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("MediatR", appsettings, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotMatch(new Regex(@"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", RegexOptions.CultureInvariant), appsettings);
+    }
+
+    [Fact]
+    public void LocalAccounts_ShouldNotCommitDefaultPasswordsOrSha256LoginCompatibility()
+    {
+        var root = FindRepositoryRoot();
+        var shellRoot = Path.Combine(root, "src", "Edge", "IIoT.Edge.Shell");
+        var launcherRoot = Path.Combine(root, "src", "Edge", "IIoT.Edge.Launcher");
+        var configFiles = Directory.GetFiles(shellRoot, "appsettings*.json", SearchOption.TopDirectoryOnly)
+            .Append(Path.Combine(launcherRoot, "launcher.accounts.sample.json"))
+            .Where(File.Exists)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var defaultHashPattern = new Regex(
+            @"""PasswordHash""\s*:\s*""[0-9A-Fa-f]{64}""",
+            RegexOptions.CultureInvariant | RegexOptions.Compiled);
+        var defaultPasswordPattern = new Regex(
+            @"""Password""\s*:\s*""123456""",
+            RegexOptions.CultureInvariant | RegexOptions.Compiled);
+        var defaultCredentialMatches = configFiles
+            .SelectMany(path =>
+            {
+                var text = File.ReadAllText(path);
+                return defaultHashPattern
+                    .Matches(text)
+                    .Select(match => $"{ToRepositoryPath(root, path)} contains committed SHA256 password hash at offset {match.Index}")
+                    .Concat(defaultPasswordPattern
+                        .Matches(text)
+                        .Select(match => $"{ToRepositoryPath(root, path)} contains committed default password at offset {match.Index}"));
+            })
+            .ToArray();
+
+        var authSourceFiles = new[]
+            {
+                Path.Combine(launcherRoot, "Services"),
+                Path.Combine(root, "src", "Infrastructure", "IIoT.Edge.Infrastructure.Integration", "Auth")
+            }
+            .SelectMany(path => EnumerateFiles(path, "*.cs"))
+            .ToArray();
+        var legacyLoginMatches = authSourceFiles
+            .SelectMany(path => FindForbiddenMatches(root, path, ["ComputeSha256"]))
+            .ToArray();
+        var initializer = File.ReadAllText(Path.Combine(
+            launcherRoot,
+            "Services",
+            "LauncherAccountCatalogInitializer.cs"));
+
+        Assert.Empty(defaultCredentialMatches);
+        Assert.Empty(legacyLoginMatches);
+        Assert.DoesNotContain("File.Copy", initializer, StringComparison.Ordinal);
+        Assert.Contains("不能静默复制 sample 账号", initializer, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ClientRules_ShouldDocumentLocalPasswordResetContract()
+    {
+        var root = FindRepositoryRoot();
+        var ruleDoc = File.ReadAllText(Path.Combine(root, "docs", "客户端规则.md"));
+        var requiredText = new[]
+        {
+            "不得提交默认密码",
+            "不得由 Launcher 自动复制样本账号文件",
+            "本地密码 hash 必须使用带版本标识的 PBKDF2 格式",
+            "历史 64 位十六进制 SHA256 只允许作为旧部署识别和强制重置依据"
+        };
+
+        Assert.All(requiredText, text => Assert.Contains(text, ruleDoc, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void CloudJwtAuthorization_ShouldValidateTokensBeforeReadingClaims()
+    {
+        var root = FindRepositoryRoot();
+        var authRoot = Path.Combine(root, "src", "Infrastructure", "IIoT.Edge.Infrastructure.Integration", "Auth");
+        var authFiles = EnumerateFiles(authRoot, "*.cs").ToArray();
+        var readJwtTokenMatches = authFiles
+            .SelectMany(path => FindForbiddenMatches(root, path, ["ReadJwtToken"]))
+            .ToArray();
+        var authService = File.ReadAllText(Path.Combine(authRoot, "AuthService.cs"));
+        var ruleDoc = File.ReadAllText(Path.Combine(root, "docs", "客户端规则.md"));
+
+        Assert.Empty(readJwtTokenMatches);
+        Assert.Contains("ValidateToken", authService, StringComparison.Ordinal);
+        Assert.Contains("CloudJwtValidationConfig", authService, StringComparison.Ordinal);
+        Assert.Contains("ValidateLifetime = true", authService, StringComparison.Ordinal);
+        Assert.Contains("ValidateIssuer = true", authService, StringComparison.Ordinal);
+        Assert.Contains("ValidateAudience = true", authService, StringComparison.Ordinal);
+        Assert.DoesNotContain("ValidateLifetime = false", authService, StringComparison.Ordinal);
+        Assert.DoesNotContain("ValidateIssuer = false", authService, StringComparison.Ordinal);
+        Assert.DoesNotContain("ValidateAudience = false", authService, StringComparison.Ordinal);
+        Assert.Contains("JWT 用于建立客户端授权会话前必须先验签", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("不得降级成未验签登录", ruleDoc, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MesSigning_ShouldUseConfiguredHmacWithoutFixedToken()
+    {
+        var root = FindRepositoryRoot();
+        var files = EnumerateFiles(Path.Combine(root, "src", "Application", "IIoT.Edge.Application", "Modules", "Mes"), "*.cs")
+            .Concat(EnumerateFiles(Path.Combine(root, "src", "Modules"), "*.cs"))
+            .Append(Path.Combine(root, "docs", "模切MES对接口径.md"))
+            .Where(File.Exists)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var matches = files
+            .SelectMany(path => FindForbiddenMatches(root, path,
+            [
+                "hdc2023",
+                "DefaultMesSignToken",
+                "MD5.HashData"
+            ]))
+            .ToArray();
+        var mesBase = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Application",
+            "IIoT.Edge.Application",
+            "Modules",
+            "Mes",
+            "MesScenarioChannelBase.cs"));
+        var ruleDoc = File.ReadAllText(Path.Combine(root, "docs", "客户端规则.md"));
+
+        Assert.Empty(matches);
+        Assert.Contains("HMACSHA256.HashData", mesBase, StringComparison.Ordinal);
+        Assert.Contains("未配置 MES 签名密钥", mesBase, StringComparison.Ordinal);
+        Assert.Contains("MES 请求签名必须使用受控配置注入的密钥执行 HMAC-SHA256", ruleDoc, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ProductionSource_ShouldNotUseDebugWriteLine()
+    {
+        var root = FindRepositoryRoot();
+        var sourceFiles = EnumerateFiles(Path.Combine(root, "src"), "*.cs")
+            .Where(path => !ToRepositoryPath(root, path).StartsWith("src/Tests/", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        var matches = sourceFiles
+            .SelectMany(path => FindForbiddenMatches(root, path, ["Debug.WriteLine", "System.Diagnostics.Debug.WriteLine"]))
+            .ToArray();
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
+    public void CapacitySyncTask_ShouldKeepBoundedConcurrency()
+    {
+        var root = FindRepositoryRoot();
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Infrastructure",
+            "IIoT.Edge.Infrastructure.Integration",
+            "Capacity",
+            "CapacitySyncTask.cs"));
+        var ruleDoc = File.ReadAllText(Path.Combine(root, "docs", "客户端规则.md"));
+
+        Assert.Contains("SemaphoreSlim _syncGate = new(1, 1)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Task.WhenAll", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Parallel.ForEach", source, StringComparison.Ordinal);
+        Assert.Contains("必须有显式并发边界", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("禁止对 PLC、时间片或补传批次无界 `Task.WhenAll`", ruleDoc, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ClientArchitecture_ShouldUseSharedUploadAndRetryHelpers()
+    {
+        var root = FindRepositoryRoot();
+        var cloudConsumer = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Infrastructure",
+            "IIoT.Edge.Infrastructure.Integration",
+            "PassStation",
+            "CloudConsumer.cs"));
+        var mesConsumer = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Infrastructure",
+            "IIoT.Edge.Infrastructure.Integration",
+            "Mes",
+            "MesConsumer.cs"));
+        var processQueueTask = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Edge",
+            "IIoT.Edge.Host.DataPipeline",
+            "Tasks",
+            "ProcessQueueTask.cs"));
+        var productionTaskFiles = EnumerateFiles(Path.Combine(root, "src", "Modules"), "*.cs")
+            .Where(path => ToRepositoryPath(root, path).Contains("/Production/Tasks/", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        var helperFiles = new[]
+        {
+            Path.Combine(root, "src", "Application", "IIoT.Edge.Application", "Common", "DataPipeline", "DataPipelineUploadTargetPolicy.cs"),
+            Path.Combine(root, "src", "Application", "IIoT.Edge.Application", "Common", "DataPipeline", "DataPipelineUploadScenarioResolver.cs"),
+            Path.Combine(root, "src", "Infrastructure", "IIoT.Edge.Infrastructure.Integration", "UploadDiagnosticsContextFactory.cs"),
+            Path.Combine(root, "src", "Edge", "IIoT.Edge.Host.DataPipeline", "Services", "DataPipelineRetryChannelMetadata.cs")
+        };
+
+        Assert.All(helperFiles, path => Assert.True(File.Exists(path), $"缺少客户端架构 helper：{ToRepositoryPath(root, path)}"));
+        Assert.Contains("UploadDiagnosticsContextFactory.CreateCloudContext", cloudConsumer, StringComparison.Ordinal);
+        Assert.Contains("UploadDiagnosticsContextFactory.CreateMesContext", mesConsumer, StringComparison.Ordinal);
+        Assert.Contains("DataPipelineRetryChannelMetadata.ShouldProcess", processQueueTask, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryGetRecordKind", cloudConsumer, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryGetRecordKind", mesConsumer, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"failed_cloud_records\"", processQueueTask, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"failed_mes_records\"", processQueueTask, StringComparison.Ordinal);
+        Assert.Empty(productionTaskFiles.SelectMany(path =>
+            FindForbiddenMatches(root, path, ["var targets = DataPipelineUploadTargets.None", "DataPipelineUploadTargets.Mes => \"MES\""])));
+    }
+
+    [Fact]
+    public void OversizedViewModelsAndServices_ShouldStayOnExplicitGovernanceList()
+    {
+        var root = FindRepositoryRoot();
+        var allowedOversizedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "src/Application/IIoT.Edge.Application/Features/Updates/EdgeReleaseService.cs",
+            "src/Edge/IIoT.Edge.Launcher/ViewModels/LauncherClientReleasePanelViewModel.cs",
+            "src/Edge/IIoT.Edge.Launcher/ViewModels/LauncherMainViewModel.cs",
+            "src/Edge/IIoT.Edge.Launcher/ViewModels/LauncherProfileCardViewModel.cs",
+            "src/Infrastructure/IIoT.Edge.Infrastructure.DeviceComm/Plc/Services/Modbus/ModbusPlcService.cs",
+            "src/Infrastructure/IIoT.Edge.Infrastructure.Integration/Device/DeviceService.cs",
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Hardware/HardwareConfigView/ViewModels/HardwareConfigViewModel.cs",
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Hardware/IOView/ViewModels/IoViewViewModel.cs",
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Production/Monitor/ViewModels/MonitorViewModel.cs",
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Shell/ViewModels/DashboardPreviewPageViewModels.cs",
+            "src/Presentation/IIoT.Edge.Presentation.Panels/Features/Equipment/ViewModels/EquipmentViewModel.cs"
+        };
+
+        var oversizedFiles = EnumerateFiles(Path.Combine(root, "src"), "*.cs")
+            .Where(path => !ToRepositoryPath(root, path).StartsWith("src/Tests/", StringComparison.OrdinalIgnoreCase))
+            .Where(path => File.ReadAllText(path).Contains("class ", StringComparison.Ordinal))
+            .Where(path =>
+            {
+                var fileName = Path.GetFileNameWithoutExtension(path);
+                return fileName.EndsWith("ViewModel", StringComparison.Ordinal)
+                       || fileName.EndsWith("Service", StringComparison.Ordinal);
+            })
+            .Where(path => File.ReadLines(path).Count() > 500)
+            .Select(path => ToRepositoryPath(root, path))
+            .ToArray();
+
+        Assert.Empty(oversizedFiles.Except(allowedOversizedFiles, StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void DeploymentScriptsAndDocs_ShouldNotHardcodeProductionIpOrBypassCertificates()
+    {
+        var root = FindRepositoryRoot();
+        var productionSourceFiles = EnumerateFiles(Path.Combine(root, "src"), "*.cs")
+            .Where(path => !ToRepositoryPath(root, path).StartsWith("src/Tests/", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        var deploymentEntryFiles = EnumerateFiles(Path.Combine(root, "scripts"), "*.ps1")
+            .Concat(
+            [
+                Path.Combine(root, "docs", "客户端部署.md"),
+                Path.Combine(root, "docs", "Edge安装更新验收.md"),
+                Path.Combine(root, "docs", "Edge客户端宿主插件分发契约.md"),
+                Path.Combine(root, "docs", "客户端规则.md"),
+                Path.Combine(root, "docs", "客户端架构治理清单.md"),
+                Path.Combine(root, "docs", "模切MES对接口径.md")
+            ])
+            .Where(File.Exists)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var certificateImplementationFiles = EnumerateFiles(Path.Combine(root, "src"), "*.cs")
+            .Where(path => !ToRepositoryPath(root, path).StartsWith("src/Tests/", StringComparison.OrdinalIgnoreCase))
+            .Concat(EnumerateFiles(Path.Combine(root, "scripts"), "*.ps1"))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var productionIpMatches = productionSourceFiles
+            .Concat(deploymentEntryFiles)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .SelectMany(path => FindForbiddenRegexMatches(root, path, PrivateNetworkAddressPattern, "private network address"))
+            .ToArray();
+        var certificateBypassMatches = certificateImplementationFiles
+            .SelectMany(path => FindForbiddenMatches(root, path,
+            [
+                "DangerousAcceptAnyServerCertificateValidator",
+                "ServerCertificateCustomValidationCallback",
+                "TrustAllCertificates",
+                "SkipCertificateValidation"
+            ]))
+            .ToArray();
+        var explicitTrustAllMatches = certificateImplementationFiles
+            .SelectMany(path => FindForbiddenMatches(root, path,
+            [
+                "忽略证书",
+                "跳过 TLS 校验",
+                "信任所有证书"
+            ]))
+            .ToArray();
+        var matches = productionIpMatches
+            .Concat(certificateBypassMatches)
+            .Concat(explicitTrustAllMatches)
+            .ToArray();
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
+    public void ClientRules_ShouldDocumentHttpAsSupportedFieldPath()
+    {
+        var root = FindRepositoryRoot();
+        var ruleDoc = File.ReadAllText(Path.Combine(root, "docs", "客户端规则.md"));
+        var planDoc = File.ReadAllText(Path.Combine(root, "docs", "客户端架构治理清单.md"));
+        var combinedDocs = string.Join(Environment.NewLine, ruleDoc, planDoc);
+        var requiredText = new[]
+        {
+            "EdgeClient 现场链路必须继续支持 HTTP",
+            "不得在客户端侧强制改成 HTTPS",
+            "不得把证书、HSTS、HTTPS redirection",
+            "HTTP 不等于允许弱凭据"
+        };
+
+        Assert.All(requiredText, text => Assert.Contains(text, combinedDocs, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1382,6 +1702,15 @@ public sealed class RepositoryHygieneTests
             {
                 yield return $"{ToRepositoryPath(root, path)} contains {forbiddenName}";
             }
+        }
+    }
+
+    private static IEnumerable<string> FindForbiddenRegexMatches(string root, string path, Regex pattern, string description)
+    {
+        var text = File.ReadAllText(path);
+        foreach (Match match in pattern.Matches(text))
+        {
+            yield return $"{ToRepositoryPath(root, path)} contains {description} {match.Value}";
         }
     }
 

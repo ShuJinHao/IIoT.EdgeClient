@@ -24,11 +24,13 @@ public sealed class McPlcService : IPlcService, IDisposable
     private int _port;
     private bool _isConnected;
     private readonly SemaphoreSlim _semaphore = new(1, 1);
+    private int _disposed;
 
-    public bool IsConnected => _isConnected && _mcProtocol is not null;
+    public bool IsConnected => Volatile.Read(ref _disposed) == 0 && _isConnected && _mcProtocol is not null;
 
     public void Init(PlcEndpoint endpoint)
     {
+        ThrowIfDisposed();
         _endpoint = endpoint as TcpPlcEndpoint
             ?? throw new ArgumentException("MC PLC 只支持 TCP 端点。", nameof(endpoint));
         _port = _endpoint.Port;
@@ -36,48 +38,64 @@ public sealed class McPlcService : IPlcService, IDisposable
 
     public async Task<bool> ConnectAsync()
     {
-        EnsureInitialized();
-
-        if (IsConnected)
-        {
-            return true;
-        }
-
-        Disconnect();
-
+        ThrowIfDisposed();
+        await _semaphore.WaitAsync().ConfigureAwait(false);
         try
         {
+            EnsureInitialized();
+            if (IsConnected)
+            {
+                return true;
+            }
+
+            DisconnectCore();
             _mcProtocol = await Task.Run(CreateProtocol).ConfigureAwait(false);
             _isConnected = true;
             return true;
         }
         catch (TimeoutException ex)
         {
-            Disconnect();
+            DisconnectCore();
             throw new TimeoutException($"连接 MC PLC {_endpoint!.Host}:{_port} 超时，超时时间 {_endpoint.ConnectTimeout.TotalSeconds:0} 秒。", ex);
         }
         catch
         {
-            Disconnect();
+            DisconnectCore();
             throw;
+        }
+        finally
+        {
+            _semaphore.Release();
         }
     }
 
     public void Disconnect()
     {
-        _isConnected = false;
-        _mcProtocol?.Dispose();
-        _mcProtocol = null;
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return;
+        }
+
+        _semaphore.Wait();
+        try
+        {
+            DisconnectCore();
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
     }
 
     public async Task<List<T>> ReadDataAsync<T>(string address, ushort length)
     {
-        var protocol = EnsureConnected();
+        ThrowIfDisposed();
         var parsedAddress = ParseAddress(address);
 
         await _semaphore.WaitAsync().ConfigureAwait(false);
         try
         {
+            var protocol = EnsureConnected();
             return await ReadSupportedAsync<T>(protocol, parsedAddress, length).ConfigureAwait(false);
         }
         catch (TimeoutException ex)
@@ -96,12 +114,13 @@ public sealed class McPlcService : IPlcService, IDisposable
 
     public async Task WriteDataAsync<T>(string address, List<T> data)
     {
-        var protocol = EnsureConnected();
+        ThrowIfDisposed();
         var parsedAddress = ParseAddress(address);
 
         await _semaphore.WaitAsync().ConfigureAwait(false);
         try
         {
+            var protocol = EnsureConnected();
             await WriteSupportedAsync(protocol, parsedAddress, data).ConfigureAwait(false);
         }
         catch (TimeoutException ex)
@@ -120,8 +139,36 @@ public sealed class McPlcService : IPlcService, IDisposable
 
     public void Dispose()
     {
-        Disconnect();
-        _semaphore.Dispose();
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
+        _semaphore.Wait();
+        try
+        {
+            DisconnectCore();
+        }
+        finally
+        {
+            _semaphore.Release();
+            _semaphore.Dispose();
+        }
+    }
+
+    private void DisconnectCore()
+    {
+        _isConnected = false;
+        _mcProtocol?.Dispose();
+        _mcProtocol = null;
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            throw new ObjectDisposedException(nameof(McPlcService));
+        }
     }
 
     internal static McDeviceAddress ParseAddress(string address)

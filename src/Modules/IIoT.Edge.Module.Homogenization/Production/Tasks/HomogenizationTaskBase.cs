@@ -1,9 +1,11 @@
 using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Time;
+using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Io;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
@@ -11,6 +13,7 @@ using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Production;
 using IIoT.Edge.Module.Sdk.Base;
 using IIoT.Edge.SharedKernel.DataPipeline;
+using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Options;
 
 using IIoT.Edge.Application.Abstractions.Mes;
@@ -52,7 +55,7 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
     protected IProductionTimeProvider ProductionTime { get; }
 
     /// <summary>
-    /// 匀浆 PLC/MES/Cloud code 配置，包含触发码、复位码、应答码、MES 通道和 Cloud 日志映射。
+    /// 匀浆 PLC/MES code 配置，包含触发码、复位码、应答码和 MES 通道。
     /// </summary>
     protected HomogenizationCodeOptions CodeOptions { get; }
 
@@ -96,6 +99,42 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
             CreatedAtUtc = DateTime.UtcNow
         };
 
+    protected CellCompletedRecord CreatePipelineRecord(
+        HomogenizationCellData cellData,
+        bool includeMesPlanContext)
+        => new()
+        {
+            CellData = cellData,
+            NetworkDeviceId = ModuleContext.NetworkDeviceId,
+            DeviceName = ModuleContext.DeviceName,
+            ModuleId = DependencyInjection.ModuleKey,
+            TaskKey = TaskName,
+            PlanSessionId = includeMesPlanContext ? ModuleContext.PlanSessionId ?? string.Empty : string.Empty,
+            MainPlanCode = includeMesPlanContext ? ModuleContext.SelectedProductionPlan?.MainPlanCode ?? string.Empty : string.Empty,
+            TraceBatchNumber = includeMesPlanContext ? ModuleContext.TraceBatchNumber ?? string.Empty : string.Empty,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+
+    protected MesUploadDiagnosticsContext CreateMesDiagnosticsContext(string scenario)
+        => new(
+            DeviceName: ModuleContext.DeviceName,
+            ModuleId: DependencyInjection.ModuleKey,
+            TaskKey: TaskName,
+            Scenario: scenario);
+
+    protected CloudUploadDiagnosticsContext CreateCloudDiagnosticsContext(string scenario)
+        => new(
+            DeviceName: ModuleContext.DeviceName,
+            ModuleId: DependencyInjection.ModuleKey,
+            TaskKey: TaskName,
+            Scenario: scenario);
+
+    protected static DataPipelineUploadTargets ResolveUploadTargets(bool mesEnabled, bool cloudEnabled)
+        => DataPipelineUploadTargetPolicy.Resolve(mesEnabled, cloudEnabled);
+
+    protected static string FormatUploadTargets(DataPipelineUploadTargets uploadTargets)
+        => DataPipelineUploadTargetPolicy.Format(uploadTargets);
+
     protected static MesCallResult ToMesQueueResult(
         DataPipelineEnqueueResult enqueueResult,
         string acceptedMessage,
@@ -111,6 +150,105 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
             ? "unknown"
             : enqueueResult.ReasonCode;
         return MesCallResult.TransportFailure($"{rejectedPrefix}（{reason}）。");
+    }
+
+    protected static MesCallResult ToUploadQueueResult(
+        DataPipelineEnqueueResult enqueueResult,
+        string scenarioName,
+        DataPipelineUploadTargets uploadTargets)
+    {
+        if (enqueueResult.IsDurablyAccepted)
+        {
+            return MesCallResult.Success(enqueueResult.WasOverflow
+                ? $"{scenarioName}已接收，数据已进入溢出持久化。"
+                : $"{scenarioName}已进入 {FormatUploadTargets(uploadTargets)} 上传队列。");
+        }
+
+        var reason = string.IsNullOrWhiteSpace(enqueueResult.ReasonCode)
+            ? "unknown"
+            : enqueueResult.ReasonCode;
+        return MesCallResult.TransportFailure($"{scenarioName}未接收，数据管道拒绝入队（{reason}）。");
+    }
+
+    protected void RecordUploadDiagnostics(
+        MesCallResult result,
+        DataPipelineUploadTargets uploadTargets,
+        IMesUploadDiagnosticsStore mesDiagnosticsStore,
+        ICloudUploadDiagnosticsStore cloudDiagnosticsStore,
+        string mesChannel,
+        string cloudReasonCode,
+        string scenario)
+    {
+        if (result.Outcome is MesCallOutcome.BusinessRejected or MesCallOutcome.InvalidContext)
+        {
+            RecordUploadBlockedDiagnostics(
+                result.Message,
+                uploadTargets,
+                mesDiagnosticsStore,
+                cloudDiagnosticsStore,
+                mesChannel,
+                cloudReasonCode,
+                scenario);
+            return;
+        }
+
+        RecordUploadFailureDiagnostics(
+            result.Message,
+            uploadTargets,
+            mesDiagnosticsStore,
+            cloudDiagnosticsStore,
+            mesChannel,
+            cloudReasonCode,
+            scenario);
+    }
+
+    protected void RecordUploadFailureDiagnostics(
+        string message,
+        DataPipelineUploadTargets uploadTargets,
+        IMesUploadDiagnosticsStore mesDiagnosticsStore,
+        ICloudUploadDiagnosticsStore cloudDiagnosticsStore,
+        string mesChannel,
+        string cloudReasonCode,
+        string scenario)
+    {
+        if (uploadTargets.HasFlag(DataPipelineUploadTargets.Mes))
+        {
+            mesDiagnosticsStore.RecordFailure(mesChannel, message, CreateMesDiagnosticsContext(scenario));
+        }
+
+        if (!uploadTargets.HasFlag(DataPipelineUploadTargets.Cloud))
+        {
+            return;
+        }
+
+        cloudDiagnosticsStore.RecordResult(
+            DependencyInjection.ModuleKey,
+            CloudCallResult.Failure(CloudCallOutcome.Exception, cloudReasonCode),
+            CreateCloudDiagnosticsContext(scenario));
+    }
+
+    protected void RecordUploadBlockedDiagnostics(
+        string message,
+        DataPipelineUploadTargets uploadTargets,
+        IMesUploadDiagnosticsStore mesDiagnosticsStore,
+        ICloudUploadDiagnosticsStore cloudDiagnosticsStore,
+        string mesChannel,
+        string cloudReasonCode,
+        string scenario)
+    {
+        if (uploadTargets.HasFlag(DataPipelineUploadTargets.Mes))
+        {
+            mesDiagnosticsStore.RecordBlocked(mesChannel, message, CreateMesDiagnosticsContext(scenario));
+        }
+
+        if (uploadTargets.HasFlag(DataPipelineUploadTargets.Cloud))
+        {
+            cloudDiagnosticsStore.RecordBlocked(
+                DependencyInjection.ModuleKey,
+                cloudReasonCode,
+                message,
+                CreateCloudDiagnosticsContext(scenario));
+        }
     }
 
     protected async Task<string?> ResolveDuplicateTrayMessageAsync(
@@ -184,6 +322,7 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
         string resetLog,
         string exceptionPrefix,
         string channel,
+        string scenario,
         IHomogenizationProductionGate productionGate,
         IMesUploadDiagnosticsStore diagnosticsStore,
         Func<TSnapshot> captureSnapshot,
@@ -198,6 +337,7 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
             _ => UploadMesSnapshotWithGateAsync(
                 trigger,
                 channel,
+                scenario,
                 productionGate,
                 diagnosticsStore,
                 captureSnapshot,
@@ -208,13 +348,14 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
             ex => $"{exceptionPrefix}：{ex.Message}",
             message =>
             {
-                diagnosticsStore.RecordFailure(channel, message);
+                diagnosticsStore.RecordFailure(channel, message, CreateMesDiagnosticsContext(scenario));
                 recordFailure(message);
             });
 
     protected async Task UploadMesSnapshotWithGateAsync<TSnapshot>(
         HomogenizationPlcSignals.Interaction trigger,
         string channel,
+        string scenario,
         IHomogenizationProductionGate productionGate,
         IMesUploadDiagnosticsStore diagnosticsStore,
         Func<TSnapshot> captureSnapshot,
@@ -226,7 +367,7 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
         var gateResult = await productionGate.EnsureReadyAsync(ModuleContext, TaskCancellationToken).ConfigureAwait(false);
         if (!gateResult.IsSuccess)
         {
-            diagnosticsStore.RecordFailure(channel, gateResult.Message);
+            diagnosticsStore.RecordBlocked(channel, gateResult.Message, CreateMesDiagnosticsContext(scenario));
             recordGateFailure(gateResult.Message);
             Interaction.ReplyResult(trigger, gateResult);
             return;
@@ -237,7 +378,7 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
         var result = await uploadAsync(snapshot, TaskCancellationToken).ConfigureAwait(false);
         if (!result.IsSuccess)
         {
-            diagnosticsStore.RecordFailure(channel, result.Message);
+            diagnosticsStore.RecordFailure(channel, result.Message, CreateMesDiagnosticsContext(scenario));
         }
 
         recordResult(snapshot, result);

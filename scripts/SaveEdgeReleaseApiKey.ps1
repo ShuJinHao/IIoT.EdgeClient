@@ -1,5 +1,5 @@
 param(
-    [string]$CloudApiBaseUrl = 'http://10.98.90.154:81/api/v1',
+    [string]$CloudApiBaseUrl = $env:EDGE_CLOUD_API_BASE_URL,
 
     [securestring]$ApiKey
 )
@@ -8,6 +8,10 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 . (Join-Path $PSScriptRoot 'EdgeReleaseCredential.Common.ps1')
+
+if ([string]::IsNullOrWhiteSpace($CloudApiBaseUrl)) {
+    throw 'CloudApiBaseUrl is required. Pass -CloudApiBaseUrl or set $env:EDGE_CLOUD_API_BASE_URL, for example http://<cloud-gateway-host>:<port>/api/v1.'
+}
 
 if ($null -eq $ApiKey) {
     $ApiKey = Read-Host -Prompt 'Edge Release API key' -AsSecureString

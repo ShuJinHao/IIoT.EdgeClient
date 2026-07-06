@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
@@ -25,6 +26,7 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
     private readonly IDeviceService _deviceService;
     private readonly IDataPipelineService _dataPipelineService;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
+    private readonly ICloudUploadDiagnosticsStore _cloudDiagnosticsStore;
     private readonly IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> _parameters;
     private readonly IHomogenizationProductionGate _productionGate;
 
@@ -39,6 +41,7 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         IDeviceService deviceService,
         IDataPipelineService dataPipelineService,
         IMesUploadDiagnosticsStore diagnosticsStore,
+        ICloudUploadDiagnosticsStore cloudDiagnosticsStore,
         IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> parameters,
         IHomogenizationProductionGate productionGate,
         ILogService logger,
@@ -50,6 +53,7 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         _deviceService = deviceService;
         _dataPipelineService = dataPipelineService;
         _diagnosticsStore = diagnosticsStore;
+        _cloudDiagnosticsStore = cloudDiagnosticsStore;
         _parameters = parameters;
         _productionGate = productionGate;
     }
@@ -71,7 +75,10 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
             static ex => $"进站处理异常：{ex.Message}",
             message =>
             {
-                _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Inbound, message);
+                _diagnosticsStore.RecordFailure(
+                    CodeOptions.Mes.Channels.Inbound,
+                    message,
+                    CreateMesDiagnosticsContext("进站上传"));
                 RecordInboundResult(string.Empty, message);
             }).ConfigureAwait(false);
     }
@@ -80,22 +87,52 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
     {
         const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.扫码进站;
         var trayCode = Codec.ReadTrayCode();
+
+        var parameterSnapshot = await _parameters.GetAsync(cancellationToken).ConfigureAwait(false);
+        var mesEnabled = parameterSnapshot.Mes<bool>(HomogenizationParams.Mes.启用);
+        var cloudEnabled = parameterSnapshot.Cloud<bool>(HomogenizationParams.Cloud.启用);
+        var uploadTargets = ResolveUploadTargets(mesEnabled, cloudEnabled);
+        if (uploadTargets == DataPipelineUploadTargets.None)
+        {
+            var disabled = MesCallResult.Disabled("MES/Cloud 上传已关闭，进站上传已跳过。");
+            RecordInboundResult(trayCode, disabled.Message);
+            Interaction.ReplyResult(trigger, disabled);
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(trayCode))
         {
             var message = HomogenizationText.Get("Homogenization_Error_PalletCodeRequired", "托盘码不能为空。");
-            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Inbound, message);
+            RecordUploadFailureDiagnostics(
+                message,
+                uploadTargets,
+                _diagnosticsStore,
+                _cloudDiagnosticsStore,
+                CodeOptions.Mes.Channels.Inbound,
+                "plc_inbound_invalid_context",
+                "进站上传");
             RecordInboundResult(string.Empty, message);
             Interaction.ReplyException(trigger);
             return;
         }
 
-        var gateResult = await _productionGate.EnsureReadyAsync(ModuleContext, cancellationToken).ConfigureAwait(false);
-        if (!gateResult.IsSuccess)
+        if (mesEnabled)
         {
-            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Inbound, gateResult.Message);
-            RecordInboundResult(trayCode, gateResult.Message);
-            Interaction.ReplyResult(trigger, gateResult);
-            return;
+            var gateResult = await _productionGate.EnsureReadyAsync(ModuleContext, cancellationToken).ConfigureAwait(false);
+            if (!gateResult.IsSuccess)
+            {
+                RecordUploadBlockedDiagnostics(
+                    gateResult.Message,
+                    uploadTargets,
+                    _diagnosticsStore,
+                    _cloudDiagnosticsStore,
+                    CodeOptions.Mes.Channels.Inbound,
+                    "plc_inbound_blocked",
+                    "进站上传");
+                RecordInboundResult(trayCode, gateResult.Message);
+                Interaction.ReplyResult(trigger, gateResult);
+                return;
+            }
         }
 
         var duplicateMessage = await ResolveDuplicateTrayMessageAsync(
@@ -106,7 +143,14 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         if (duplicateMessage is not null)
         {
             Interaction.ReplyMesNg(trigger);
-            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Inbound, duplicateMessage);
+            RecordUploadFailureDiagnostics(
+                duplicateMessage,
+                uploadTargets,
+                _diagnosticsStore,
+                _cloudDiagnosticsStore,
+                CodeOptions.Mes.Channels.Inbound,
+                "plc_inbound_duplicate_tray",
+                "进站上传");
             RecordInboundResult(trayCode, duplicateMessage);
             return;
         }
@@ -120,17 +164,21 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
             PlcDeviceId = ModuleContext.NetworkDeviceId,
             CompletedTime = ProductionTime.BusinessNow,
             RuntimeStatus = "进站待上传",
-            UploadTargets = DataPipelineUploadTargets.Mes
+            UploadTargets = uploadTargets
         };
 
-        var enqueueResult = await _dataPipelineService
-            .EnqueueAsync(CreatePipelineRecord(cellData), cancellationToken)
-            .ConfigureAwait(false);
-        var result = ToMesQueueResult(
-            enqueueResult,
-            "进站已进入 MES 上传队列。",
-            "进站已接收，数据已进入溢出持久化。",
-            "进站未接收，数据管道拒绝入队");
+        MesCallResult result;
+        try
+        {
+            var enqueueResult = await _dataPipelineService
+                .EnqueueAsync(CreatePipelineRecord(cellData, includeMesPlanContext: mesEnabled), cancellationToken)
+                .ConfigureAwait(false);
+            result = ToUploadQueueResult(enqueueResult, "进站", uploadTargets);
+        }
+        catch (Exception ex)
+        {
+            result = MesCallResult.TransportFailure($"进站处理异常：{ex.Message}");
+        }
 
         if (result.IsSuccess)
         {
@@ -142,7 +190,14 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         }
         else
         {
-            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Inbound, result.Message);
+            RecordUploadDiagnostics(
+                result,
+                uploadTargets,
+                _diagnosticsStore,
+                _cloudDiagnosticsStore,
+                CodeOptions.Mes.Channels.Inbound,
+                "plc_inbound_enqueue_failed",
+                "进站上传");
         }
 
         RecordInboundResult(trayCode, result.Message);

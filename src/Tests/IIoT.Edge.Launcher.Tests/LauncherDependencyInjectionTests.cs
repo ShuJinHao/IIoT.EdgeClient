@@ -57,7 +57,7 @@ public sealed class LauncherDependencyInjectionTests
     }
 
     [Fact]
-    public void LauncherAccountCatalogInitializer_ShouldCreateDefaultAdminAccount()
+    public void LauncherAccountCatalogInitializer_ShouldNotCopySampleAccountAsDefaultCatalog()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), $"iiot-launcher-test-{Guid.NewGuid():N}");
 
@@ -82,13 +82,8 @@ public sealed class LauncherDependencyInjectionTests
 
             initializer.EnsureCatalogExists();
 
-            var accounts = catalog.LoadAccounts();
-
-            var account = Assert.Single(accounts);
-            Assert.Equal("admin", account.UserName);
-            Assert.Equal("本地管理员", account.DisplayName);
-            Assert.True(account.IsEnabled);
-            Assert.False(string.IsNullOrWhiteSpace(account.PasswordHash));
+            Assert.False(File.Exists(LauncherAccountCatalog.GetCatalogPath(tempDirectory)));
+            Assert.Throws<FileNotFoundException>(() => catalog.LoadAccounts());
         }
         finally
         {

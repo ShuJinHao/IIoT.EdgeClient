@@ -659,6 +659,7 @@ public sealed class ModuleRuntimeRegistrationTests
             ["CloudApi:Paths:ClientReleaseCatalogTemplate"] = "/api/v1/edge/client-releases/device/{deviceId}/catalog",
             ["CloudApi:Paths:ClientVersionReport"] = "/api/v1/edge/client-releases/version-reports",
             ["CloudApi:Paths:RuntimeHeartbeat"] = "/api/v1/edge/runtime-heartbeats",
+            ["CloudApi:Paths:EdgeHostPlcRuntimeStates"] = "/api/v1/edge/edge-hosts/plc-runtime-states",
             ["Shell:Environment"] = environmentName,
             ["DevelopmentSamples:Enabled"] = developmentSamplesEnabled.ToString(),
             ["DevelopmentSamples:SampleBarcode"] = "ST-DEV-0001",

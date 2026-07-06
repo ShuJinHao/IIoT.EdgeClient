@@ -159,6 +159,7 @@ public sealed class LocalParameterConfigBehaviorTests
         Assert.Contains(cloudParams, param => param.Key == CloudApiConfigParamSchema.BaseUrl);
         Assert.Contains(cloudParams, param => param.Key == CloudApiConfigParamSchema.ProcessUploadPath);
         Assert.Contains(cloudParams, param => param.Key == CloudApiConfigParamSchema.PassStationBatchTemplatePath);
+        Assert.Contains(cloudParams, param => param.Key == CloudApiConfigParamSchema.EdgeHostPlcRuntimeStatesPath);
         Assert.DoesNotContain(cloudParams, param => param.Key == CloudApiConfigParamSchema.ClientCode);
         Assert.DoesNotContain(cloudParams, param => param.Key == CloudApiConfigParamSchema.BootstrapSecret);
     }
@@ -432,7 +433,7 @@ public sealed class LocalParameterConfigBehaviorTests
 
     private enum SensitiveMesParams
     {
-        [ModuleParam(ParamValueKind.String, DefaultValue = "hdc2023", Role = ModuleParamRole.MesSignToken)]
+        [ModuleParam(ParamValueKind.String, Role = ModuleParamRole.MesSignToken)]
         签名令牌
     }
 

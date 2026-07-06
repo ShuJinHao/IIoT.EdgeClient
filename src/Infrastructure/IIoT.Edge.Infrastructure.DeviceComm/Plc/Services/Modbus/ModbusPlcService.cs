@@ -25,6 +25,7 @@ public sealed class ModbusPlcService : IPlcService, IDisposable
     private TcpClient? _tcpClient;
     private SerialPort? _serialPort;
     private PlcEndpoint? _endpoint;
+    private int _disposed;
 
     public ModbusPlcService(
         ModbusTransportKind transportKind,
@@ -35,12 +36,14 @@ public sealed class ModbusPlcService : IPlcService, IDisposable
     }
 
     public bool IsConnected
-        => _transportKind == ModbusTransportKind.Tcp
+        => Volatile.Read(ref _disposed) == 0
+           && (_transportKind == ModbusTransportKind.Tcp
             ? _tcpClient?.Connected == true
-            : _serialPort?.IsOpen == true;
+            : _serialPort?.IsOpen == true);
 
     public void Init(PlcEndpoint endpoint)
     {
+        ThrowIfDisposed();
         _endpoint = _transportKind switch
         {
             ModbusTransportKind.Tcp => endpoint as TcpPlcEndpoint
@@ -53,39 +56,64 @@ public sealed class ModbusPlcService : IPlcService, IDisposable
 
     public async Task<bool> ConnectAsync()
     {
-        EnsureInitialized();
-        if (IsConnected && _master is not null)
+        ThrowIfDisposed();
+        await _semaphore.WaitAsync().ConfigureAwait(false);
+        try
         {
-            return true;
-        }
+            EnsureInitialized();
+            if (IsConnected && _master is not null)
+            {
+                return true;
+            }
 
-        DisposeConnection();
-        if (_endpoint is TcpPlcEndpoint tcpEndpoint)
+            DisposeConnection();
+            if (_endpoint is TcpPlcEndpoint tcpEndpoint)
+            {
+                await ConnectTcpAsync(tcpEndpoint).ConfigureAwait(false);
+                return true;
+            }
+
+            if (_endpoint is SerialPlcEndpoint serialEndpoint)
+            {
+                ConnectRtu(serialEndpoint);
+                return true;
+            }
+
+            throw new InvalidOperationException("Modbus endpoint is not initialized.");
+        }
+        finally
         {
-            await ConnectTcpAsync(tcpEndpoint).ConfigureAwait(false);
-            return true;
+            _semaphore.Release();
         }
-
-        if (_endpoint is SerialPlcEndpoint serialEndpoint)
-        {
-            ConnectRtu(serialEndpoint);
-            return true;
-        }
-
-        throw new InvalidOperationException("Modbus endpoint is not initialized.");
     }
 
     public void Disconnect()
-        => DisposeConnection();
+    {
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return;
+        }
+
+        _semaphore.Wait();
+        try
+        {
+            DisposeConnection();
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
 
     public async Task<List<T>> ReadDataAsync<T>(string address, ushort length)
     {
-        var master = EnsureMaster();
+        ThrowIfDisposed();
         var modbusAddress = _addressParser.Parse(address, GetDefaultSlaveId());
 
         await _semaphore.WaitAsync().ConfigureAwait(false);
         try
         {
+            var master = EnsureMaster();
             return modbusAddress.Kind switch
             {
                 ModbusAddressKind.Coil => ConvertFromBits<T>(
@@ -124,12 +152,13 @@ public sealed class ModbusPlcService : IPlcService, IDisposable
 
     public async Task WriteDataAsync<T>(string address, List<T> data)
     {
-        var master = EnsureMaster();
+        ThrowIfDisposed();
         var modbusAddress = _addressParser.Parse(address, GetDefaultSlaveId());
 
         await _semaphore.WaitAsync().ConfigureAwait(false);
         try
         {
+            var master = EnsureMaster();
             switch (modbusAddress.Kind)
             {
                 case ModbusAddressKind.Coil:
@@ -156,8 +185,21 @@ public sealed class ModbusPlcService : IPlcService, IDisposable
 
     public void Dispose()
     {
-        DisposeConnection();
-        _semaphore.Dispose();
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
+        _semaphore.Wait();
+        try
+        {
+            DisposeConnection();
+        }
+        finally
+        {
+            _semaphore.Release();
+            _semaphore.Dispose();
+        }
     }
 
     private async Task ConnectTcpAsync(TcpPlcEndpoint endpoint)
@@ -254,6 +296,14 @@ public sealed class ModbusPlcService : IPlcService, IDisposable
         if (_endpoint is null)
         {
             throw new InvalidOperationException("Modbus PLC endpoint is not initialized.");
+        }
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            throw new ObjectDisposedException(nameof(ModbusPlcService));
         }
     }
 

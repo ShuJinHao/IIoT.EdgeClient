@@ -44,7 +44,12 @@ public sealed class PlcLifecycleCoordinator
                 x => x.IsEnabled && x.DeviceType == SharedKernel.Enums.DeviceType.PLC,
                 ct).ConfigureAwait(false);
 
-            await Task.WhenAll(devices.Select(device => InitializeDeviceSafelyAsync(device, ct)))
+            var duplicateEndpointFaults = DiagnoseDuplicateEnabledTcpEndpoints(devices);
+            ApplyDuplicateEndpointFaults(devices, duplicateEndpointFaults);
+
+            await Task.WhenAll(devices
+                    .Where(device => !duplicateEndpointFaults.ContainsKey(device.Id))
+                    .Select(device => InitializeDeviceSafelyAsync(device, ct)))
                 .ConfigureAwait(false);
         }
         finally
@@ -68,10 +73,30 @@ public sealed class PlcLifecycleCoordinator
                 return;
             }
 
-            await StopDeviceCoreAsync(device.Id, ct).ConfigureAwait(false);
+            var enabledDevices = await _networkDevices.GetListAsync(
+                x => x.IsEnabled && x.DeviceType == SharedKernel.Enums.DeviceType.PLC,
+                ct).ConfigureAwait(false);
+            var duplicateEndpointFaults = DiagnoseDuplicateEnabledTcpEndpoints(enabledDevices);
+            foreach (var duplicateDeviceId in duplicateEndpointFaults.Keys)
+            {
+                await StopDeviceCoreAsync(duplicateDeviceId, ct).ConfigureAwait(false);
+            }
+
+            if (!duplicateEndpointFaults.ContainsKey(device.Id))
+            {
+                await StopDeviceCoreAsync(device.Id, ct).ConfigureAwait(false);
+            }
+
+            ApplyDuplicateEndpointFaults(enabledDevices, duplicateEndpointFaults);
             if (!device.IsEnabled)
             {
                 _logger.Info($"[{device.DeviceName}] 重载完成：设备未启用。");
+                return;
+            }
+
+            if (duplicateEndpointFaults.ContainsKey(device.Id))
+            {
+                _logger.Warn($"[{device.DeviceName}] 重载完成：PLC 端点重复，运行任务已暂停。");
                 return;
             }
 
@@ -250,6 +275,46 @@ public sealed class PlcLifecycleCoordinator
             }
 
             throw;
+        }
+    }
+
+    private Dictionary<int, string> DiagnoseDuplicateEnabledTcpEndpoints(IReadOnlyCollection<NetworkDeviceEntity> devices)
+    {
+        var faults = new Dictionary<int, string>();
+        foreach (var group in devices
+                     .Where(static device => !string.IsNullOrWhiteSpace(device.IpAddress) && device.Port1 > 0)
+                     .GroupBy(static device => $"{device.IpAddress.Trim()}:{device.Port1}", StringComparer.OrdinalIgnoreCase)
+                     .Where(static group => group.Count() > 1))
+        {
+            var deviceNames = string.Join("、", group.Select(static device => device.DeviceName));
+            var message = $"多个已启用 PLC 指向同一端点 {group.Key}：{deviceNames}。已暂停这些 PLC 的运行任务，请修正为唯一端点或停用重复配置，避免多个 service 并发访问同一物理 PLC。";
+            _logger.Warn($"[PLC配置][诊断] {message}");
+            foreach (var device in group)
+            {
+                faults[device.Id] = message;
+            }
+        }
+
+        return faults;
+    }
+
+    private void ApplyDuplicateEndpointFaults(
+        IReadOnlyCollection<NetworkDeviceEntity> devices,
+        IReadOnlyDictionary<int, string> faults)
+    {
+        if (faults.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var device in devices)
+        {
+            if (!faults.TryGetValue(device.Id, out var message))
+            {
+                continue;
+            }
+
+            _statusStore.MarkRuntimeFault(device.Id, device.DeviceName, message);
         }
     }
 

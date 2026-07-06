@@ -7,7 +7,7 @@ param(
 
     [string]$ModuleId = '',
 
-    [string]$CloudApiBaseUrl = 'http://10.98.90.154:81/api/v1',
+    [string]$CloudApiBaseUrl = $env:EDGE_CLOUD_API_BASE_URL,
 
     [string]$CloudToken = '',
 
@@ -78,6 +78,177 @@ function Read-FileIfExists {
     }
 
     return Get-Content -Raw -Encoding UTF8 -LiteralPath $Path
+}
+
+function Get-TextFiles {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$Roots,
+        [Parameter(Mandatory = $true)][string[]]$Includes
+    )
+
+    $files = [System.Collections.Generic.List[string]]::new()
+    foreach ($rootPath in $Roots) {
+        if (-not (Test-Path -LiteralPath $rootPath -PathType Container)) {
+            continue
+        }
+
+        foreach ($include in $Includes) {
+            Get-ChildItem -LiteralPath $rootPath -Recurse -File -Include $include |
+                Where-Object {
+                    $_.FullName -notmatch '[/\\](bin|obj)[/\\]' -and
+                    $_.FullName -notmatch '[/\\]src[/\\]Tests[/\\]'
+                } |
+                ForEach-Object { $files.Add($_.FullName) | Out-Null }
+        }
+    }
+
+    return $files.ToArray() | Sort-Object -Unique
+}
+
+function Add-ForbiddenTextFailures {
+    param(
+        [Parameter(Mandatory = $true)][string]$Description,
+        [Parameter(Mandatory = $true)][string[]]$Files,
+        [Parameter(Mandatory = $true)][string[]]$Needles
+    )
+
+    foreach ($path in $Files) {
+        $text = Read-FileIfExists $path
+        if ([string]::IsNullOrEmpty($text)) {
+            continue
+        }
+
+        foreach ($needle in $Needles) {
+            if ($text.Contains($needle, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $relative = [System.IO.Path]::GetRelativePath($repoRoot, $path)
+                Add-Failure "$Description found '$needle' in $relative."
+            }
+        }
+    }
+}
+
+function Add-ForbiddenRegexFailures {
+    param(
+        [Parameter(Mandatory = $true)][string]$Description,
+        [Parameter(Mandatory = $true)][string[]]$Files,
+        [Parameter(Mandatory = $true)][string[]]$Patterns
+    )
+
+    foreach ($path in $Files) {
+        $text = Read-FileIfExists $path
+        if ([string]::IsNullOrEmpty($text)) {
+            continue
+        }
+
+        foreach ($pattern in $Patterns) {
+            if ([regex]::IsMatch($text, $pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
+                $relative = [System.IO.Path]::GetRelativePath($repoRoot, $path)
+                Add-Failure "$Description matched pattern '$pattern' in $relative."
+            }
+        }
+    }
+}
+
+function Test-ClientSecurityRedLines {
+    $shellConfigFiles = Get-ChildItem -LiteralPath (Resolve-RepoPath 'src/Edge/IIoT.Edge.Shell') -File -Filter 'appsettings*.json' |
+        Select-Object -ExpandProperty FullName
+    $launcherSample = Resolve-RepoPath 'src/Edge/IIoT.Edge.Launcher/launcher.accounts.sample.json'
+    $accountFiles = @($shellConfigFiles)
+    if (Test-Path -LiteralPath $launcherSample -PathType Leaf) {
+        $accountFiles += $launcherSample
+    }
+    $defaultHashPattern = '"PasswordHash"\s*:\s*"[0-9A-Fa-f]{64}"'
+    $defaultPasswordPattern = '"Password"\s*:\s*"' + '123' + '456' + '"'
+
+    Add-ForbiddenRegexFailures `
+        -Description 'Committed default local account credential' `
+        -Files $accountFiles `
+        -Patterns @($defaultHashPattern, $defaultPasswordPattern)
+
+    $authFiles = Get-TextFiles `
+        -Roots @(
+            (Resolve-RepoPath 'src/Edge/IIoT.Edge.Launcher/Services'),
+            (Resolve-RepoPath 'src/Infrastructure/IIoT.Edge.Infrastructure.Integration/Auth')
+        ) `
+        -Includes @('*.cs')
+    Add-ForbiddenTextFailures `
+        -Description 'Legacy SHA256 password login compatibility' `
+        -Files $authFiles `
+        -Needles @('Compute' + 'Sha256')
+
+    $jwtFiles = Get-TextFiles `
+        -Roots @((Resolve-RepoPath 'src/Infrastructure/IIoT.Edge.Infrastructure.Integration/Auth')) `
+        -Includes @('*.cs')
+    Add-ForbiddenTextFailures `
+        -Description 'Unvalidated JWT claim parsing in auth path' `
+        -Files $jwtFiles `
+        -Needles @('Read' + 'JwtToken')
+
+    $mesFiles = Get-TextFiles `
+        -Roots @(
+            (Resolve-RepoPath 'src/Application/IIoT.Edge.Application/Modules/Mes'),
+            (Resolve-RepoPath 'src/Modules')
+        ) `
+        -Includes @('*.cs')
+    $mesDoc = Resolve-RepoPath 'docs/模切MES对接口径.md'
+    if (Test-Path -LiteralPath $mesDoc -PathType Leaf) {
+        $mesFiles += $mesDoc
+    }
+    Add-ForbiddenTextFailures `
+        -Description 'Legacy MES fixed token or MD5 signature' `
+        -Files $mesFiles `
+        -Needles @(
+            'hdc' + '2023',
+            'Default' + 'MesSignToken',
+            'MD5' + '.HashData'
+        )
+
+    $productionFiles = Get-TextFiles `
+        -Roots @((Resolve-RepoPath 'src')) `
+        -Includes @('*.cs')
+    Add-ForbiddenTextFailures `
+        -Description 'Production debug output' `
+        -Files $productionFiles `
+        -Needles @(
+            'Debug' + '.WriteLine',
+            'System.Diagnostics.Debug' + '.WriteLine'
+        )
+
+    $deploymentFiles = Get-TextFiles `
+        -Roots @((Resolve-RepoPath 'scripts')) `
+        -Includes @('*.ps1')
+    foreach ($docPath in @(
+        'docs/客户端部署.md',
+        'docs/Edge安装更新验收.md',
+        'docs/Edge客户端宿主插件分发契约.md',
+        'docs/客户端规则.md',
+        'docs/客户端架构治理清单.md',
+        'docs/模切MES对接口径.md'
+    )) {
+        $resolved = Resolve-RepoPath $docPath
+        if (Test-Path -LiteralPath $resolved -PathType Leaf) {
+            $deploymentFiles += $resolved
+        }
+    }
+    $privateNetworkAddressPattern = '\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})\b'
+    Add-ForbiddenRegexFailures `
+        -Description 'Hardcoded private network IP in production source or execution docs' `
+        -Files (($productionFiles + $deploymentFiles) | Sort-Object -Unique) `
+        -Patterns @($privateNetworkAddressPattern)
+
+    $certificateFiles = $productionFiles + $deploymentFiles
+    Add-ForbiddenTextFailures `
+        -Description 'Certificate validation bypass' `
+        -Files $certificateFiles `
+        -Needles @(
+            'DangerousAcceptAnyServer' + 'CertificateValidator',
+            'ServerCertificate' + 'CustomValidationCallback',
+            'TrustAll' + 'Certificates',
+            'Skip' + 'CertificateValidation',
+            '忽略' + '证书',
+            '跳过 TLS ' + '校验',
+            '信任所有' + '证书'
+        )
 }
 
 function Resolve-ReleaseNotes {
@@ -189,6 +360,7 @@ function Test-CommonDeploymentInputs {
     Assert-FileExists (Resolve-RepoPath 'docs/客户端部署.md') 'EdgeClient deployment guide'
     Assert-FileExists (Resolve-RepoPath 'docs/Edge安装更新验收.md') 'Edge installer/update acceptance guide'
     Resolve-ReleaseNotes
+    Test-ClientSecurityRedLines
     Test-GitState
     Test-CloudAccess
 }
@@ -265,10 +437,10 @@ function Write-NextCommand {
     Write-Host 'Recommended next command:'
     switch ($Mode) {
         'Host' {
-            Write-Host '  pwsh ./scripts/LocalPublishAndDeploy.ps1 -Channel stable -Transport http -CloudApiBaseUrl http://10.98.90.154:81/api/v1 -ReleaseNotesPath ./release-notes.md -UploadRateLimitMbps 100'
+            Write-Host '  pwsh ./scripts/LocalPublishAndDeploy.ps1 -Channel stable -Transport http -CloudApiBaseUrl http://<cloud-gateway-host>:<port>/api/v1 -ReleaseNotesPath ./release-notes.md -UploadRateLimitMbps 100'
         }
         'Plugin' {
-            Write-Host "  pwsh ./scripts/PublishEdgePluginRelease.ps1 -ModuleId $ModuleId -CloudApiBaseUrl http://10.98.90.154:81/api/v1 -ReleaseNotesPath ./release-notes.md -UploadRateLimitMbps 100"
+            Write-Host "  pwsh ./scripts/PublishEdgePluginRelease.ps1 -ModuleId $ModuleId -CloudApiBaseUrl http://<cloud-gateway-host>:<port>/api/v1 -ReleaseNotesPath ./release-notes.md -UploadRateLimitMbps 100"
         }
         'GitHubHost' {
             Write-Host "  gh workflow run edge-pack-modules.yml -f version=$Version -f release_notes='<manual release notes>'"

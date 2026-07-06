@@ -11,7 +11,7 @@ param(
 
     [string]$PackId = 'IIoT.EdgeClient',
 
-    [string]$DeployHost = '10.98.90.154',
+    [string]$DeployHost = '',
 
     [string]$DeployUser = 'root',
 
@@ -728,3 +728,10 @@ echo "Published Edge Velopack releases to `$velopack_target"
 finally {
     Pop-Location
 }
+    if ([string]::IsNullOrWhiteSpace($DeployHost)) {
+        throw 'DeployHost is required for rsync transport. Stable production releases must use -Transport http.'
+    }
+
+    if ([string]::IsNullOrWhiteSpace($DeployHost)) {
+        throw 'DeployHost is required for scp transport. Stable production releases must use -Transport http.'
+    }

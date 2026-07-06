@@ -371,7 +371,39 @@ internal sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryR
         => GetCountByProcessTypeAsync(processType);
 
     public Task SaveAsync(CellCompletedRecord record, string failedTarget, string errorMessage, string channel)
-        => SaveRawAsync(record.CellData.ProcessType, "{}", failedTarget, errorMessage, channel);
+    {
+        SaveCallCount++;
+
+        if (SaveException is not null)
+        {
+            throw SaveException;
+        }
+
+        if (SaveExceptions.Count > 0)
+        {
+            throw SaveExceptions.Dequeue();
+        }
+
+        PendingRecords.Add(new FailedCellRecord
+        {
+            Id = PendingRecords.Count == 0 ? 1 : PendingRecords.Max(x => x.Id) + 1,
+            Channel = channel,
+            FailedTarget = failedTarget,
+            ErrorMessage = errorMessage,
+            ProcessType = record.CellData.ProcessType,
+            CellDataJson = "{}",
+            NextRetryTime = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow,
+            NetworkDeviceId = record.ResolveNetworkDeviceId(),
+            DeviceName = record.ResolveDeviceName(),
+            ModuleId = record.ModuleId,
+            TaskKey = record.TaskKey,
+            PlanSessionId = record.PlanSessionId,
+            MainPlanCode = record.MainPlanCode,
+            TraceBatchNumber = record.TraceBatchNumber
+        });
+        return Task.CompletedTask;
+    }
 
     public Task SaveRawAsync(string processType, string cellDataJson, string failedTarget, string errorMessage, string channel)
     {
@@ -650,7 +682,14 @@ internal sealed class FakeCloudFallbackBufferStore : ICloudFallbackBufferStore
             CellDataJson = "{}",
             FailedTarget = failedTarget,
             ErrorMessage = errorMessage,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            NetworkDeviceId = record.ResolveNetworkDeviceId(),
+            DeviceName = record.ResolveDeviceName(),
+            ModuleId = record.ModuleId,
+            TaskKey = record.TaskKey,
+            PlanSessionId = record.PlanSessionId,
+            MainPlanCode = record.MainPlanCode,
+            TraceBatchNumber = record.TraceBatchNumber
         });
 
         return Task.CompletedTask;
@@ -684,7 +723,14 @@ internal sealed class FakeCloudFallbackBufferStore : ICloudFallbackBufferStore
                 ErrorMessage = row.ErrorMessage,
                 RetryCount = 0,
                 NextRetryTime = DateTime.UtcNow,
-                CreatedAt = row.CreatedAt
+                CreatedAt = row.CreatedAt,
+                NetworkDeviceId = row.NetworkDeviceId,
+                DeviceName = row.DeviceName,
+                ModuleId = row.ModuleId,
+                TaskKey = row.TaskKey,
+                PlanSessionId = row.PlanSessionId,
+                MainPlanCode = row.MainPlanCode,
+                TraceBatchNumber = row.TraceBatchNumber
             });
         }
 
@@ -729,7 +775,14 @@ internal sealed class FakeMesFallbackBufferStore : IMesFallbackBufferStore
             CellDataJson = "{}",
             FailedTarget = failedTarget,
             ErrorMessage = errorMessage,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            NetworkDeviceId = record.ResolveNetworkDeviceId(),
+            DeviceName = record.ResolveDeviceName(),
+            ModuleId = record.ModuleId,
+            TaskKey = record.TaskKey,
+            PlanSessionId = record.PlanSessionId,
+            MainPlanCode = record.MainPlanCode,
+            TraceBatchNumber = record.TraceBatchNumber
         });
 
         return Task.CompletedTask;
@@ -763,7 +816,14 @@ internal sealed class FakeMesFallbackBufferStore : IMesFallbackBufferStore
                 ErrorMessage = row.ErrorMessage,
                 RetryCount = 0,
                 NextRetryTime = DateTime.UtcNow,
-                CreatedAt = row.CreatedAt
+                CreatedAt = row.CreatedAt,
+                NetworkDeviceId = row.NetworkDeviceId,
+                DeviceName = row.DeviceName,
+                ModuleId = row.ModuleId,
+                TaskKey = row.TaskKey,
+                PlanSessionId = row.PlanSessionId,
+                MainPlanCode = row.MainPlanCode,
+                TraceBatchNumber = row.TraceBatchNumber
             });
         }
 
@@ -1063,9 +1123,11 @@ internal sealed class FakeCloudHttpClient : ICloudHttpClient
     private readonly Queue<CloudCallResult> _postResults = new();
     private readonly Queue<CloudCallResult<string>> _postWithResponseResults = new();
     private readonly Queue<CloudCallResult<string>> _getResults = new();
+    private int _activePostCount;
 
     public int PostCallCount { get; private set; }
     public int GetCallCount { get; private set; }
+    public int MaxConcurrentPostCount { get; private set; }
     public string? LastPostUrl { get; private set; }
     public object? LastPayload { get; private set; }
     public CloudRequestOptions? LastPostOptions { get; private set; }
@@ -1075,6 +1137,8 @@ internal sealed class FakeCloudHttpClient : ICloudHttpClient
     public List<string?> PostIdempotencyKeys { get; } = new();
     public List<string?> GetIdempotencyKeys { get; } = new();
     public List<string> GetUrls { get; } = new();
+    public TaskCompletionSource? PostStarted { get; set; }
+    public Task? PostWait { get; set; }
 
     public void EnqueuePostResult(bool result)
         => _postResults.Enqueue(
@@ -1090,8 +1154,10 @@ internal sealed class FakeCloudHttpClient : ICloudHttpClient
     public void EnqueueGetResult(CloudCallResult<string> result)
         => _getResults.Enqueue(result);
 
-    public Task<CloudCallResult> PostAsync(string url, object payload, CloudRequestOptions? options = null)
+    public async Task<CloudCallResult> PostAsync(string url, object payload, CloudRequestOptions? options = null)
     {
+        var activePostCount = Interlocked.Increment(ref _activePostCount);
+        MaxConcurrentPostCount = Math.Max(MaxConcurrentPostCount, activePostCount);
         PostCallCount++;
         LastPostUrl = url;
         LastPayload = payload;
@@ -1099,13 +1165,26 @@ internal sealed class FakeCloudHttpClient : ICloudHttpClient
         PostUrls.Add(url);
         PostPayloads.Add(payload);
         PostIdempotencyKeys.Add(options?.IdempotencyKey);
+        PostStarted?.TrySetResult();
 
-        if (_postResults.Count > 0)
+        try
         {
-            return Task.FromResult(_postResults.Dequeue());
-        }
+            if (PostWait is not null)
+            {
+                await PostWait.ConfigureAwait(false);
+            }
 
-        return Task.FromResult(CloudCallResult.Success());
+            if (_postResults.Count > 0)
+            {
+                return _postResults.Dequeue();
+            }
+
+            return CloudCallResult.Success();
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _activePostCount);
+        }
     }
 
     public Task<CloudCallResult<string>> PostWithResponseAsync(string url, object payload, CloudRequestOptions? options = null)
@@ -1163,6 +1242,7 @@ internal sealed class FakeCloudApiEndpointProvider : ICloudApiEndpointProvider
     public string GetIdentityDeviceLoginPath() => "/api/v1/bootstrap/edge-login";
     public string GetHumanIdentityRefreshPath() => "/api/v1/human/identity/refresh";
     public string GetDeviceLogPath() => "/api/v1/edge/device-logs";
+    public string GetEdgeHostPlcRuntimeStatesPath() => "/api/v1/edge/edge-hosts/plc-runtime-states";
     public string GetProcessUploadPath() => "/api/v1/edge/process-records";
     public string GetPassStationBatchPath(string typeKey) => $"/api/v1/edge/pass-stations/{typeKey}/batch";
     public string BuildRecipeByDevicePath(Guid deviceId) => $"/api/v1/edge/recipes/device/{deviceId}";
@@ -1184,6 +1264,7 @@ internal sealed class FakeCapacityBufferStore : ICapacityBufferStore
     public List<CapacityRecord> Records { get; } = new();
     public List<BufferHourlySummaryDto> HourlySummaries { get; } = new();
     public List<string> ReleasedClaimTokens { get; } = new();
+    public List<int> ClaimBatchSizes { get; } = new();
     public List<(string ClaimToken, string Date, int Hour, int MinuteBucket, string ShiftCode, string PlcName)> DeletedSummaries { get; } = new();
     public int ClearAllCallCount { get; private set; }
     public Exception? CountException { get; set; }
@@ -1207,6 +1288,7 @@ internal sealed class FakeCapacityBufferStore : ICapacityBufferStore
 
     public Task<ClaimedCapacityBufferBatch?> ClaimHourlySummaryBatchAsync(int batchSize = 200)
     {
+        ClaimBatchSizes.Add(batchSize);
         var rows = HourlySummaries
             .Take(batchSize)
             .Select(CloneHourlySummary)
@@ -1381,8 +1463,10 @@ internal sealed class FakeCloudDiagnosticsStore : ICloudUploadDiagnosticsStore
         LastAttemptAt: null,
         LastSuccessAt: null,
         LastFailureAt: null,
+        LastBlockedAt: null,
         LastOutcome: CloudCallOutcome.Success,
         LastReasonCode: "none",
+        LastBlockedReason: null,
         LastProcessType: null,
         RuntimeState: CloudRetryRuntimeState.Idle,
         IsCapacityBlocked: false,
@@ -1390,17 +1474,55 @@ internal sealed class FakeCloudDiagnosticsStore : ICloudUploadDiagnosticsStore
         BlockedReason: "none",
         LastCapacityBlockAt: null);
 
-    public void RecordResult(string? processType, CloudCallResult result)
+    public void RecordResult(
+        string? processType,
+        CloudCallResult result,
+        CloudUploadDiagnosticsContext? context = null)
     {
         var now = DateTime.UtcNow;
+        var isBlocked = result.Outcome == CloudCallOutcome.SkippedUploadNotReady;
+        var isFailure = !result.IsSuccess && !isBlocked;
+        var normalizedReasonCode = string.IsNullOrWhiteSpace(result.ReasonCode)
+            ? "unknown"
+            : result.ReasonCode.Trim();
         Snapshot = Snapshot with
         {
             LastAttemptAt = now,
             LastSuccessAt = result.IsSuccess ? now : Snapshot.LastSuccessAt,
-            LastFailureAt = result.IsSuccess ? Snapshot.LastFailureAt : now,
+            LastFailureAt = isFailure ? now : Snapshot.LastFailureAt,
+            LastBlockedAt = isBlocked ? now : null,
             LastOutcome = result.Outcome,
-            LastReasonCode = string.IsNullOrWhiteSpace(result.ReasonCode) ? "unknown" : result.ReasonCode,
-            LastProcessType = processType
+            LastReasonCode = normalizedReasonCode,
+            LastBlockedReason = isBlocked ? normalizedReasonCode : null,
+            LastProcessType = processType,
+            LastDeviceName = context?.DeviceName,
+            LastModuleId = context?.ModuleId,
+            LastTaskKey = context?.TaskKey,
+            LastScenario = context?.Scenario
+        };
+    }
+
+    public void RecordBlocked(
+        string? processType,
+        string reasonCode,
+        string? blockedReason = null,
+        CloudUploadDiagnosticsContext? context = null)
+    {
+        var normalizedReasonCode = NormalizeReasonCode(reasonCode);
+        var normalizedReason = NormalizeReason(blockedReason, normalizedReasonCode);
+        var now = DateTime.UtcNow;
+        Snapshot = Snapshot with
+        {
+            LastAttemptAt = now,
+            LastBlockedAt = now,
+            LastOutcome = CloudCallOutcome.SkippedUploadNotReady,
+            LastReasonCode = normalizedReasonCode,
+            LastBlockedReason = normalizedReason,
+            LastProcessType = processType,
+            LastDeviceName = context?.DeviceName,
+            LastModuleId = context?.ModuleId,
+            LastTaskKey = context?.TaskKey,
+            LastScenario = context?.Scenario
         };
     }
 
@@ -1436,6 +1558,12 @@ internal sealed class FakeCloudDiagnosticsStore : ICloudUploadDiagnosticsStore
             BlockedReason = "none"
         };
     }
+
+    private static string NormalizeReasonCode(string? reasonCode)
+        => string.IsNullOrWhiteSpace(reasonCode) ? "cloud_upload_blocked" : reasonCode.Trim();
+
+    private static string NormalizeReason(string? reason, string fallback)
+        => string.IsNullOrWhiteSpace(reason) ? fallback : reason.Trim();
 }
 
 internal sealed class FakeMesRetryDiagnosticsStore : IMesRetryDiagnosticsStore
@@ -1588,33 +1716,100 @@ internal sealed class FakeMesUploadDiagnosticsStore : IMesUploadDiagnosticsStore
         => _entries.Values.OrderBy(x => x.ProcessType, StringComparer.OrdinalIgnoreCase).ToArray();
 
     public MesChannelDiagnostics? Get(string processType)
-        => _entries.TryGetValue(processType, out var diagnostics) ? diagnostics : null;
+    {
+        if (_entries.TryGetValue(processType, out var diagnostics))
+        {
+            return diagnostics;
+        }
 
-    public void RecordSuccess(string processType)
+        var matches = _entries.Values
+            .Where(x => string.Equals(x.ProcessType, processType, StringComparison.OrdinalIgnoreCase))
+            .Take(2)
+            .ToArray();
+        return matches.Length == 1 ? matches[0] : null;
+    }
+
+    public void RecordSuccess(string processType, MesUploadDiagnosticsContext? context = null)
     {
         var now = DateTime.UtcNow;
-        _entries[processType] = new MesChannelDiagnostics(
+        _entries[BuildKey(processType, context)] = CreateDiagnostics(
             processType,
             now,
             now,
             "Success",
-            null);
+            null,
+            context);
     }
 
-    public void RecordFailure(string processType, string failureReason)
+    public void RecordFailure(string processType, string failureReason, MesUploadDiagnosticsContext? context = null)
     {
         var now = DateTime.UtcNow;
-        var lastSuccessAt = _entries.TryGetValue(processType, out var existing)
+        var key = BuildKey(processType, context);
+        var lastSuccessAt = _entries.TryGetValue(key, out var existing)
             ? existing.LastSuccessAt
             : null;
 
-        _entries[processType] = new MesChannelDiagnostics(
+        _entries[key] = CreateDiagnostics(
             processType,
             now,
             lastSuccessAt,
             "Failed",
-            failureReason);
+            failureReason,
+            context);
     }
+
+    public void RecordBlocked(string processType, string blockedReason, MesUploadDiagnosticsContext? context = null)
+    {
+        var now = DateTime.UtcNow;
+        var key = BuildKey(processType, context);
+        var lastSuccessAt = _entries.TryGetValue(key, out var existing)
+            ? existing.LastSuccessAt
+            : null;
+
+        _entries[key] = CreateDiagnostics(
+            processType,
+            now,
+            lastSuccessAt,
+            "Blocked",
+            null,
+            context,
+            LastBlockedAt: now,
+            LastBlockedReason: blockedReason);
+    }
+
+    private static MesChannelDiagnostics CreateDiagnostics(
+        string processType,
+        DateTime? lastAttemptAt,
+        DateTime? lastSuccessAt,
+        string lastResult,
+        string? lastFailureReason,
+        MesUploadDiagnosticsContext? context,
+        DateTime? LastBlockedAt = null,
+        string? LastBlockedReason = null)
+        => new(
+            processType,
+            lastAttemptAt,
+            lastSuccessAt,
+            lastResult,
+            lastFailureReason,
+            LastBlockedAt: LastBlockedAt,
+            LastBlockedReason: LastBlockedReason,
+            DeviceName: Normalize(context?.DeviceName),
+            ModuleId: Normalize(context?.ModuleId),
+            TaskKey: Normalize(context?.TaskKey),
+            Scenario: Normalize(context?.Scenario));
+
+    private static string BuildKey(string processType, MesUploadDiagnosticsContext? context)
+    {
+        var deviceName = Normalize(context?.DeviceName);
+        var taskKey = Normalize(context?.TaskKey);
+        return deviceName is null && taskKey is null
+            ? processType
+            : $"{processType}|{deviceName ?? string.Empty}|{taskKey ?? string.Empty}";
+    }
+
+    private static string? Normalize(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
 internal sealed class FakeMesUploader : IProcessMesUploader
@@ -1633,6 +1828,11 @@ internal sealed class FakeMesUploader : IProcessMesUploader
 
     public int UploadCallCount { get; private set; }
 
+    public List<ProcessUploadContext> UploadedContexts { get; } = new();
+
+    public ProcessUploadContext? LastUploadContext
+        => UploadedContexts.Count == 0 ? null : UploadedContexts[^1];
+
     public List<IReadOnlyList<CellCompletedRecord>> UploadedBatches { get; } = new();
 
     public void EnqueueResult(bool result)
@@ -1646,6 +1846,7 @@ internal sealed class FakeMesUploader : IProcessMesUploader
         CancellationToken cancellationToken = default)
     {
         UploadCallCount++;
+        UploadedContexts.Add(context);
         UploadedBatches.Add(records.ToList());
 
         if (_results.Count > 0)

@@ -6,7 +6,19 @@ public sealed record MesChannelDiagnostics(
     DateTime? LastSuccessAt,
     string LastResult,
     string? LastFailureReason,
-    string? ProcessDisplayName = null);
+    string? ProcessDisplayName = null,
+    DateTime? LastBlockedAt = null,
+    string? LastBlockedReason = null,
+    string? DeviceName = null,
+    string? ModuleId = null,
+    string? TaskKey = null,
+    string? Scenario = null);
+
+public sealed record MesUploadDiagnosticsContext(
+    string? DeviceName = null,
+    string? ModuleId = null,
+    string? TaskKey = null,
+    string? Scenario = null);
 
 public interface IMesUploadDiagnosticsStore
 {
@@ -14,7 +26,9 @@ public interface IMesUploadDiagnosticsStore
 
     MesChannelDiagnostics? Get(string processType);
 
-    void RecordSuccess(string processType);
+    void RecordSuccess(string processType, MesUploadDiagnosticsContext? context = null);
 
-    void RecordFailure(string processType, string failureReason);
+    void RecordFailure(string processType, string failureReason, MesUploadDiagnosticsContext? context = null);
+
+    void RecordBlocked(string processType, string blockedReason, MesUploadDiagnosticsContext? context = null);
 }

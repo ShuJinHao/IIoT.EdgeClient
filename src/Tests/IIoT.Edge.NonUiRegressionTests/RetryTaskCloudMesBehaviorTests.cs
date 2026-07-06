@@ -219,6 +219,44 @@ public sealed class RetryTaskCloudMesBehaviorTests
     }
 
     [Fact]
+    public async Task CloudBatchRetry_WhenSameProcessContainsMultiplePlcs_ShouldSplitBatchesByPlc()
+    {
+        var failedStore = new FakeFailedRecordStore();
+        var cloudBatch = new FakeCloudBatchConsumer();
+        var integrationRegistry = new FakeProcessIntegrationRegistry();
+        integrationRegistry.RegisterCloudUploader("OtherProcess", ProcessUploadMode.Batch);
+
+        var first = CreateFailedRecord(33, "Cloud", "Cloud", 0, "OtherProcess", new TestCellData { Barcode = "ST-33" });
+        first.NetworkDeviceId = 1001;
+        first.DeviceName = "PLC-A";
+        var second = CreateFailedRecord(34, "Cloud", "Cloud", 0, "OtherProcess", new TestCellData { Barcode = "ST-34" });
+        second.NetworkDeviceId = 1002;
+        second.DeviceName = "PLC-B";
+        failedStore.PendingRecords.Add(first);
+        failedStore.PendingRecords.Add(second);
+
+        var task = new TestableCloudRetryTask(
+            new FakeLogService(),
+            failedStore,
+            new FakeCloudFallbackBufferStore(),
+            CreateOnlineDeviceService(),
+            new FakeCloudConsumer(),
+            cloudBatch,
+            new FakeDeviceLogSyncTask(),
+            new FakeCapacitySyncTask(),
+            processIntegrationRegistry: integrationRegistry);
+
+        await task.ExecuteOnceAsync();
+
+        Assert.Equal(2, cloudBatch.ProcessBatchCallCount);
+        Assert.All(cloudBatch.ReceivedBatches, batch => Assert.Single(batch));
+        Assert.Contains(cloudBatch.ReceivedBatches, batch => batch[0].DeviceName == "PLC-A");
+        Assert.Contains(cloudBatch.ReceivedBatches, batch => batch[0].DeviceName == "PLC-B");
+        Assert.Contains(33L, failedStore.DeletedIds);
+        Assert.Contains(34L, failedStore.DeletedIds);
+    }
+
+    [Fact]
     public async Task CloudRetry_WhenRegistryMarksTestProcessAsSingle_ShouldRetryRecordsIndividually()
     {
 
@@ -1050,7 +1088,14 @@ public sealed class RetryTaskCloudMesBehaviorTests
             CellDataJson = "{bad-json",
             FailedTarget = "Cloud",
             ErrorMessage = "cloud-seed",
-            CreatedAt = DateTime.UtcNow.AddMinutes(-2)
+            CreatedAt = DateTime.UtcNow.AddMinutes(-2),
+            NetworkDeviceId = 7010,
+            DeviceName = "PLC-CLOUD-701",
+            ModuleId = "DieCuttingCathode",
+            TaskKey = "DieCuttingCathode.Realtime",
+            PlanSessionId = "SESSION-CLOUD-701",
+            MainPlanCode = "PLAN-CLOUD-701",
+            TraceBatchNumber = "TRACE-CLOUD-701"
         });
         var cloudDeadLetterStore = new FakeCloudDeadLetterStore();
         var cloudTask = new TestableCloudRetryTask(
@@ -1072,7 +1117,14 @@ public sealed class RetryTaskCloudMesBehaviorTests
             CellDataJson = "{bad-json",
             FailedTarget = "MES",
             ErrorMessage = "mes-seed",
-            CreatedAt = DateTime.UtcNow.AddMinutes(-2)
+            CreatedAt = DateTime.UtcNow.AddMinutes(-2),
+            NetworkDeviceId = 8010,
+            DeviceName = "PLC-MES-801",
+            ModuleId = "DieCuttingCathode",
+            TaskKey = "DieCuttingCathode.Realtime",
+            PlanSessionId = "SESSION-MES-801",
+            MainPlanCode = "PLAN-MES-801",
+            TraceBatchNumber = "TRACE-MES-801"
         });
         var mesDeadLetterStore = new FakeMesDeadLetterStore();
         var mesTask = new TestableMesRetryTask(
@@ -1090,6 +1142,13 @@ public sealed class RetryTaskCloudMesBehaviorTests
         Assert.Equal("cloud_fallback_records", cloudDeadLetter.SourceTable);
         Assert.Equal(701L, cloudDeadLetter.SourceRecordId);
         Assert.Equal(nameof(DeadLetterStage.FallbackRecoverDeserialize), cloudDeadLetter.FailureStage);
+        Assert.Equal(7010, cloudDeadLetter.NetworkDeviceId);
+        Assert.Equal("PLC-CLOUD-701", cloudDeadLetter.DeviceName);
+        Assert.Equal("DieCuttingCathode", cloudDeadLetter.ModuleId);
+        Assert.Equal("DieCuttingCathode.Realtime", cloudDeadLetter.TaskKey);
+        Assert.Equal("SESSION-CLOUD-701", cloudDeadLetter.PlanSessionId);
+        Assert.Equal("PLAN-CLOUD-701", cloudDeadLetter.MainPlanCode);
+        Assert.Equal("TRACE-CLOUD-701", cloudDeadLetter.TraceBatchNumber);
         Assert.Contains(701L, cloudFallbackStore.DeletedIds);
 
         var mesDeadLetter = Assert.Single(mesDeadLetterStore.Records);
@@ -1097,6 +1156,13 @@ public sealed class RetryTaskCloudMesBehaviorTests
         Assert.Equal("mes_fallback_records", mesDeadLetter.SourceTable);
         Assert.Equal(801L, mesDeadLetter.SourceRecordId);
         Assert.Equal(nameof(DeadLetterStage.FallbackRecoverDeserialize), mesDeadLetter.FailureStage);
+        Assert.Equal(8010, mesDeadLetter.NetworkDeviceId);
+        Assert.Equal("PLC-MES-801", mesDeadLetter.DeviceName);
+        Assert.Equal("DieCuttingCathode", mesDeadLetter.ModuleId);
+        Assert.Equal("DieCuttingCathode.Realtime", mesDeadLetter.TaskKey);
+        Assert.Equal("SESSION-MES-801", mesDeadLetter.PlanSessionId);
+        Assert.Equal("PLAN-MES-801", mesDeadLetter.MainPlanCode);
+        Assert.Equal("TRACE-MES-801", mesDeadLetter.TraceBatchNumber);
         Assert.Contains(801L, mesFallbackStore.DeletedIds);
     }
 

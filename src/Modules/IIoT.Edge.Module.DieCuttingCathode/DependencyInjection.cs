@@ -14,8 +14,8 @@ public sealed class DependencyInjection : DieCuttingModuleBase
             ModuleKey,
             "正极模切",
             "P2-CP",
-            "10.110.1",
-            "http://10.98.101.247:8080",
+            "plc-cp-",
+            string.Empty,
             "P2-CPUC",
             "CP",
             "正极模切 CP"))

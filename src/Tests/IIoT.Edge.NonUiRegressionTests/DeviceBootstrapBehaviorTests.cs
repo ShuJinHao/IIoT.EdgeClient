@@ -497,6 +497,7 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         public string GetIdentityDeviceLoginPath() => "/api/v1/bootstrap/edge-login";
         public string GetHumanIdentityRefreshPath() => "/api/v1/human/identity/refresh";
         public string GetDeviceLogPath() => "/api/v1/edge/device-logs";
+        public string GetEdgeHostPlcRuntimeStatesPath() => "/api/v1/edge/edge-hosts/plc-runtime-states";
         public string GetProcessUploadPath() => "/api/v1/edge/process-records";
         public string GetPassStationBatchPath(string typeKey) => $"/api/v1/edge/pass-stations/{typeKey}/batch";
         public string GetCapacityHourlyPath() => "/api/v1/edge/capacity/hourly";

@@ -26,4 +26,5 @@ public class CloudApiPaths
     public string ClientReleaseCatalogTemplate { get; set; } = string.Empty;
     public string ClientVersionReport { get; set; } = string.Empty;
     public string RuntimeHeartbeat { get; set; } = string.Empty;
+    public string EdgeHostPlcRuntimeStates { get; set; } = string.Empty;
 }

@@ -290,22 +290,36 @@ public sealed class DieCuttingDevelopmentSampleContributor : DevelopmentSampleCo
         NetworkDeviceEntity device,
         CancellationToken cancellationToken)
     {
-        var existing = await _taskBindings.GetAsync(
-            x => x.NetworkDeviceId == device.Id
-                 && x.TaskKey == _definition.RealtimeSampleUploadTaskKey,
-            cancellationToken: cancellationToken).ConfigureAwait(false);
-        if (existing is not null)
+        var taskKeys = new[]
         {
-            return 0;
+            _definition.RealtimeSampleUploadTaskKey,
+            _definition.DeviceStatusUploadTaskKey
+        };
+        var imported = 0;
+        foreach (var taskKey in taskKeys)
+        {
+            var existing = await _taskBindings.GetAsync(
+                x => x.NetworkDeviceId == device.Id && x.TaskKey == taskKey,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (existing is not null)
+            {
+                continue;
+            }
+
+            _taskBindings.Add(PlcTaskBindingEntity.Create(
+                device.Id,
+                taskKey,
+                enabled: true,
+                DateTimeOffset.UtcNow));
+            imported++;
         }
 
-        _taskBindings.Add(PlcTaskBindingEntity.Create(
-            device.Id,
-            _definition.RealtimeSampleUploadTaskKey,
-            enabled: true,
-            DateTimeOffset.UtcNow));
-        await _taskBindings.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        return 1;
+        if (imported > 0)
+        {
+            await _taskBindings.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        return imported;
     }
 
     private static IoMappingEntity CreateMappingFromTemplate(int networkDeviceId, ModuleIoTemplateEntry template)

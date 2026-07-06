@@ -15,6 +15,7 @@ namespace IIoT.Edge.Infrastructure.DeviceComm.Signals;
 public sealed class PlcDataReadScanTask : IPlcTask
 {
     private const int DisconnectLogIntervalSeconds = 30;
+    private const int ConnectionFailureThreshold = 3;
 
     private readonly IPlcService _plcService;
     private readonly IPlcDataStore _dataStore;
@@ -110,10 +111,10 @@ public sealed class PlcDataReadScanTask : IPlcTask
         }
 
         var stopwatch = Stopwatch.StartNew();
-        await ReadPlcToBufferAsync(buffer).ConfigureAwait(false);
+        var hasSuccessfulRead = await ReadPlcToBufferAsync(buffer).ConfigureAwait(false);
         stopwatch.Stop();
 
-        if (_canPromoteConnectionFromReadData)
+        if (hasSuccessfulRead && _canPromoteConnectionFromReadData)
         {
             _statusStore?.MarkProtocolSuccess(
                 _device.Id,
@@ -148,40 +149,92 @@ public sealed class PlcDataReadScanTask : IPlcTask
         }
     }
 
-    private async Task ReadPlcToBufferAsync(IPlcBufferTransport buffer)
+    private async Task<bool> ReadPlcToBufferAsync(IPlcBufferTransport buffer)
+    {
+        var hasSuccessfulRead = false;
+        var hasFailedRead = false;
+
+        foreach (var block in _readBlocks)
+        {
+            var blockSucceeded = await TryReadBlockToBufferAsync(buffer, block).ConfigureAwait(false);
+            hasSuccessfulRead |= blockSucceeded;
+            hasFailedRead |= !blockSucceeded;
+        }
+
+        if (hasSuccessfulRead)
+        {
+            _retryCount = 0;
+            return true;
+        }
+
+        if (!hasFailedRead)
+        {
+            return false;
+        }
+
+        _retryCount++;
+        if (_retryCount < ConnectionFailureThreshold)
+        {
+            return false;
+        }
+
+        var message = $"PLC 只读数据连续 {_retryCount} 轮未读取到任何成功 block。";
+        if (ShouldLogDisconnect())
+        {
+            _logger.Error($"[PLC-{_device.DeviceName}][采集] {message}");
+        }
+
+        _plcService.Disconnect();
+        _statusStore?.MarkDisconnected(_device.Id, _device.DeviceName, message);
+        throw new InvalidOperationException($"PLC 只读数据读取链路失败，连接已重置：{message}");
+    }
+
+    private async Task<bool> TryReadBlockToBufferAsync(IPlcBufferTransport buffer, PlcSignalBlock block)
     {
         try
         {
-            foreach (var block in _readBlocks)
-            {
-                var data = await _plcService
-                    .ReadDataAsync<ushort>(block.StartAddress, (ushort)block.WordCount)
-                    .ConfigureAwait(false);
-                var words = data.ToArray();
+            var data = await _plcService
+                .ReadDataAsync<ushort>(block.StartAddress, (ushort)block.WordCount)
+                .ConfigureAwait(false);
+            var words = data.ToArray();
 
-                foreach (var item in block.Items)
-                {
-                    buffer.UpdateReadSignal(
-                        item.Mapping.SignalKey,
-                        SliceWords(words, item.Offset, item.Mapping.AddressCount));
-                }
+            foreach (var item in block.Items)
+            {
+                buffer.UpdateReadSignal(
+                    item.Mapping.SignalKey,
+                    SliceWords(words, item.Offset, item.Mapping.AddressCount));
             }
 
-            if (_retryCount > 0)
-            {
-                _retryCount = 0;
-            }
+            return true;
         }
         catch (Exception ex)
         {
             if (ShouldLogDisconnect())
             {
-                _logger.Error($"[{_device.DeviceName}] PLC 只读数据读取失败：{ex.Message}");
+                _logger.Error(
+                    $"[PLC-{_device.DeviceName}][采集] 只读 block 读取失败，地址={block.StartAddress}，长度={block.WordCount}，信号={FormatBlockSignals(block)}，原因={ex.Message}");
             }
 
-            _plcService.Disconnect();
-            _statusStore?.MarkDisconnected(_device.Id, _device.DeviceName, $"PLC 只读数据读取失败：{ex.Message}");
-            throw new InvalidOperationException("PLC 只读数据读取链路失败，连接已重置。", ex);
+            var hasSignalSuccess = false;
+            foreach (var item in block.Items)
+            {
+                try
+                {
+                    var data = await _plcService
+                        .ReadDataAsync<ushort>(item.Mapping.PlcAddress, (ushort)item.Mapping.AddressCount)
+                        .ConfigureAwait(false);
+                    buffer.UpdateReadSignal(
+                        item.Mapping.SignalKey,
+                        SliceWords(data, 0, item.Mapping.AddressCount));
+                    hasSignalSuccess = true;
+                }
+                catch
+                {
+                    ClearReadSignal(buffer, item);
+                }
+            }
+
+            return hasSignalSuccess;
         }
     }
 
@@ -234,6 +287,17 @@ public sealed class PlcDataReadScanTask : IPlcTask
 
         return result;
     }
+
+    private static void ClearReadSignal(IPlcBufferTransport buffer, PlcSignalBlockItem item)
+        => buffer.UpdateReadSignal(
+            item.Mapping.SignalKey,
+            new ushort[Math.Max(1, item.Mapping.AddressCount)]);
+
+    private static string FormatBlockSignals(PlcSignalBlock block)
+        => string.Join(
+            "、",
+            block.Items.Select(static item =>
+                $"{item.Mapping.SignalKey}@{item.Mapping.PlcAddress}[{Math.Max(1, item.Mapping.AddressCount)}]"));
 
     private static int ToLatencyMs(long elapsedMilliseconds)
         => (int)Math.Min(int.MaxValue, Math.Max(0, elapsedMilliseconds));

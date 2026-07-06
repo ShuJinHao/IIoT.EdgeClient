@@ -84,7 +84,8 @@ public sealed class DefaultPlcSignalBlockPlanner : IPlcSignalBlockPlanner
             var hasGap = range.Number > currentEndExclusive;
             var nextEndExclusive = Math.Max(currentEndExclusive, range.EndExclusive);
             var nextWordCount = currentStart!.ToWordCount(nextEndExclusive);
-            var shouldSplitForGap = isWrite && writeGapPolicy == PlcIoWriteGapPolicy.Split && hasGap;
+            var shouldSplitForGap = hasGap
+                                    && (!isWrite || writeGapPolicy == PlcIoWriteGapPolicy.Split);
 
             if (shouldSplitForGap || nextWordCount > maxWords)
             {

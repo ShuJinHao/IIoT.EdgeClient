@@ -204,6 +204,66 @@ public sealed class ArchitectureBoundaryContractTests
     }
 
     [Fact]
+    public void PluginProductionTasks_ShouldOnlyEmitDataPipelineRecordsForExternalUploads()
+    {
+        var repoRoot = ContractTestPathHelper.FindRepoRoot();
+        var taskFiles = Directory
+            .EnumerateFiles(Path.Combine(repoRoot, "src", "Modules"), "*.cs", SearchOption.AllDirectories)
+            .Where(path => path.Contains($"{Path.DirectorySeparatorChar}Production{Path.DirectorySeparatorChar}Tasks{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .Where(path => !IsBuildArtifact(path))
+            .Select(path => new
+            {
+                Path = ToRepositoryPath(repoRoot, path),
+                Text = File.ReadAllText(path)
+            })
+            .ToArray();
+
+        var forbiddenTypePattern = new Regex(
+            @"\b(IProcessMesUploader|IProcessCloudUploader|IMesHttpClient|ICloudHttpClient|MesRequestExecutor|CloudUploadChannelBase|StandardPassStationCloudUploader)\b",
+            RegexOptions.Compiled);
+        var forbiddenCallPattern = new Regex(@"\.(UploadAsync|PostAsync)\s*\(", RegexOptions.Compiled);
+
+        var bypassOffenders = taskFiles
+            .Where(file => forbiddenTypePattern.IsMatch(file.Text) || forbiddenCallPattern.IsMatch(file.Text))
+            .Select(file => file.Path)
+            .ToArray();
+
+        var targetWithoutPipelineOffenders = taskFiles
+            .Where(file => !Regex.IsMatch(file.Text, @"\babstract\s+class\b"))
+            .Where(file => file.Text.Contains("UploadTargets", StringComparison.Ordinal))
+            .Where(file => !file.Text.Contains("IDataPipelineService", StringComparison.Ordinal)
+                           || !file.Text.Contains(".EnqueueAsync(", StringComparison.Ordinal))
+            .Select(file => file.Path)
+            .ToArray();
+
+        Assert.Empty(bypassOffenders);
+        Assert.Empty(targetWithoutPipelineOffenders);
+    }
+
+    [Fact]
+    public void PluginProductionTasks_ShouldHandleDataPipelineEnqueueExceptionsInsideTask()
+    {
+        var repoRoot = ContractTestPathHelper.FindRepoRoot();
+        var taskFiles = Directory
+            .EnumerateFiles(Path.Combine(repoRoot, "src", "Modules"), "*.cs", SearchOption.AllDirectories)
+            .Where(path => path.Contains($"{Path.DirectorySeparatorChar}Production{Path.DirectorySeparatorChar}Tasks{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .Where(path => !IsBuildArtifact(path))
+            .Select(path => new
+            {
+                Path = ToRepositoryPath(repoRoot, path),
+                Text = File.ReadAllText(path)
+            })
+            .ToArray();
+
+        var offenders = taskFiles
+            .SelectMany(file => FindUnprotectedEnqueueCalls(file.Text)
+                .Select(lineNumber => $"{file.Path}:{lineNumber}"))
+            .ToArray();
+
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
     public void Header_ShouldNotReferenceCompanyLogoResource()
     {
         var repoRoot = ContractTestPathHelper.FindRepoRoot();
@@ -333,4 +393,28 @@ public sealed class ArchitectureBoundaryContractTests
     {
         return Path.GetRelativePath(repoRoot, path).Replace('\\', '/');
     }
+
+    private static IEnumerable<int> FindUnprotectedEnqueueCalls(string text)
+    {
+        var protectedRanges = Regex
+            .Matches(
+                text,
+                @"\btry\s*\{.*?\}\s*catch\s*\(\s*Exception(?:\s+\w+)?\s*\)",
+                RegexOptions.Singleline)
+            .Select(match => (Start: match.Index, End: match.Index + match.Length))
+            .ToArray();
+
+        foreach (Match match in Regex.Matches(text, @"\.EnqueueAsync\s*\("))
+        {
+            if (protectedRanges.Any(range => match.Index >= range.Start && match.Index < range.End))
+            {
+                continue;
+            }
+
+            yield return GetLineNumber(text, match.Index);
+        }
+    }
+
+    private static int GetLineNumber(string text, int index)
+        => text.Take(index).Count(static character => character == '\n') + 1;
 }

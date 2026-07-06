@@ -88,7 +88,15 @@ public sealed class DiagnosticsViewModelBehaviorTests
                         "mes timeout",
                         2,
                         [
-                            new MesChannelDiagnostics("Homogenization", TestNow.AddMinutes(-3), TestNow.AddMinutes(-10), "Failed", "mes timeout")
+                            new MesChannelDiagnostics(
+                                "Homogenization.Realtime",
+                                TestNow.AddMinutes(-3),
+                                TestNow.AddMinutes(-10),
+                                "Failed",
+                                "mes timeout",
+                                DeviceName: "PLC-A",
+                                TaskKey: "Homogenization.Realtime",
+                                Scenario: "实时数据上传")
                         ],
                         true,
                         CapacityBlockedChannel.Fallback,
@@ -143,7 +151,9 @@ public sealed class DiagnosticsViewModelBehaviorTests
             viewModel.ToggleModuleReadinessCommand.Execute(null);
             Assert.True(viewModel.IsModuleReadinessExpanded);
             Assert.Equal("收起明细", viewModel.ModuleReadinessToggleText);
-            Assert.Single(viewModel.MesUploadDiagnostics);
+            var mesDiagnosticsRow = Assert.Single(viewModel.MesUploadDiagnostics);
+            Assert.Equal("PLC-A", mesDiagnosticsRow.DeviceName);
+            Assert.Equal("实时数据上传", mesDiagnosticsRow.Scenario);
 
             Assert.Equal(2, viewModel.SyncChannels.Count);
             var cloudRow = Assert.Single(viewModel.SyncChannels, x => x.Channel == "云端");
@@ -181,6 +191,44 @@ public sealed class DiagnosticsViewModelBehaviorTests
                 Assert.DoesNotContain("否", row.LastError, StringComparison.Ordinal);
                 Assert.DoesNotContain("否", row.Note, StringComparison.Ordinal);
             }
+        });
+
+    [Fact]
+    public Task DiagnosticsViewModel_WhenCloudHasRecordContext_ShouldShowLatestPlcAndScenarioInNote()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
+            {
+                Current = CreateReadySyncSnapshot(
+                    cloudLastDeviceName: "PLC-CLOUD-01",
+                    cloudLastScenario: "生产上传")
+            };
+            var viewModel = CreateViewModel(new FakeStartupDiagnosticsStore(), diagnosticsQuery, new TestAppLanguageService());
+
+            await viewModel.RefreshAsync();
+
+            var cloudRow = Assert.Single(viewModel.SyncChannels, x => x.Channel == "云端");
+            Assert.Equal("最近：PLC=PLC-CLOUD-01，场景=生产上传", cloudRow.Note);
+        });
+
+    [Fact]
+    public Task DiagnosticsViewModel_WhenCloudIsBlocked_ShouldNotShowBlockedAsLastError()
+        => RunOnStaThreadAsync(async () =>
+        {
+            var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
+            {
+                Current = CreateReadySyncSnapshot(
+                    cloudLastOutcome: CloudCallOutcome.SkippedUploadNotReady,
+                    cloudLastReasonCode: "missing_upload_token",
+                    cloudLastBlockedReason: "缺少上传令牌。")
+            };
+            var viewModel = CreateViewModel(new FakeStartupDiagnosticsStore(), diagnosticsQuery, new TestAppLanguageService());
+
+            await viewModel.RefreshAsync();
+
+            var cloudRow = Assert.Single(viewModel.SyncChannels, x => x.Channel == "云端");
+            Assert.Equal("--", cloudRow.LastError);
+            Assert.Equal("阻塞：缺少上传令牌。", cloudRow.Note);
         });
 
     [Fact]
@@ -758,7 +806,12 @@ public sealed class DiagnosticsViewModelBehaviorTests
 
     private static EdgeSyncDiagnosticsSnapshot CreateReadySyncSnapshot(
         DeadLetterDiagnosticsSnapshot? cloudDeadLetters = null,
-        DeadLetterDiagnosticsSnapshot? mesDeadLetters = null)
+        DeadLetterDiagnosticsSnapshot? mesDeadLetters = null,
+        string? cloudLastDeviceName = null,
+        string? cloudLastScenario = null,
+        CloudCallOutcome cloudLastOutcome = CloudCallOutcome.Success,
+        string cloudLastReasonCode = "none",
+        string? cloudLastBlockedReason = null)
         => new(
             "PLC-A",
             new CloudSyncDiagnosticsSnapshot(
@@ -768,8 +821,8 @@ public sealed class DiagnosticsViewModelBehaviorTests
                 null,
                 null,
                 null,
-                CloudCallOutcome.Success,
-                "none",
+                cloudLastOutcome,
+                cloudLastReasonCode,
                 null,
                 0,
                 0,
@@ -782,7 +835,11 @@ public sealed class DiagnosticsViewModelBehaviorTests
                 false,
                 null,
                 null,
-                DeadLetters: cloudDeadLetters),
+                DeadLetters: cloudDeadLetters,
+                LastDeviceName: cloudLastDeviceName,
+                LastScenario: cloudLastScenario,
+                LastBlockedAt: string.IsNullOrWhiteSpace(cloudLastBlockedReason) ? null : TestNow,
+                LastBlockedReason: cloudLastBlockedReason),
             new MesSyncDiagnosticsSnapshot(
                 MesRetryRuntimeState.Idle,
                 null,

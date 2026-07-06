@@ -175,8 +175,8 @@ public sealed class DataPipelineCascadingPersistenceWriter
         => channel switch
         {
             DataPipelineRetryChannel.Cloud => new ChannelOperations(
-                "云端",
-                "云端",
+                DataPipelineRetryChannelMetadata.Format(channel),
+                DataPipelineRetryChannelMetadata.Format(channel),
                 processType => _capacityGuard.GetCloudRetryBlockReasonAsync(processType),
                 _cloudRetryStore.SaveAsync,
                 processType => _capacityGuard.GetCloudFallbackBlockReasonAsync(processType),
@@ -184,8 +184,8 @@ public sealed class DataPipelineCascadingPersistenceWriter
                 _cloudDeadLetterStore.SaveAsync,
                 "DataPipeline.CloudDeadLetterPersistFailed"),
             DataPipelineRetryChannel.Mes => new ChannelOperations(
-                "MES",
-                "MES",
+                DataPipelineRetryChannelMetadata.Format(channel),
+                DataPipelineRetryChannelMetadata.Format(channel),
                 processType => _capacityGuard.GetMesRetryBlockReasonAsync(processType),
                 _mesRetryStore.SaveAsync,
                 processType => _capacityGuard.GetMesFallbackBlockReasonAsync(processType),

@@ -146,6 +146,23 @@ public sealed class PlcTaskBindingBehaviorTests
     }
 
     [Fact]
+    public async Task GetEnabledTaskKeys_WhenHomogenizationStandardIoExists_ShouldDefaultEnableRealtimeAndEquipmentStatus()
+    {
+        var harness = CreateService(defaultEnableAllTasks: null, seedIoMappings: false);
+        var factory = new HomogenizationStationRuntimeFactory();
+        var mappings = CreateHomogenizationStandardMappings();
+
+        var enabledKeys = await harness.Service.GetEnabledTaskKeysAsync(
+            1,
+            factory.GetTaskCandidates(),
+            mappings);
+
+        Assert.Equal(
+            ["Homogenization.EquipmentStatus", "Homogenization.Realtime"],
+            enabledKeys.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void ValidateEnabledTasks_WhenWriteSignalMissing_ShouldReportDirectionSpecificIssue()
     {
         var service = CreateService(defaultEnableAllTasks: true).Service;
@@ -235,6 +252,67 @@ public sealed class PlcTaskBindingBehaviorTests
 
         var task = Assert.Single(tasks);
         Assert.Equal("Homogenization.Heartbeat", task.TaskName);
+    }
+
+    [Fact]
+    public async Task PlcDeviceRuntimeBuilder_WhenBuildingTwoPlcs_ShouldCreateIndependentBuffersAndContexts()
+    {
+        var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
+        var ioMappings = new InMemoryRepository<IoMappingEntity>();
+        var plcA = networkDevices.Add(CreateLifecyclePlc("PLC-A", 6000));
+        var plcB = networkDevices.Add(CreateLifecyclePlc("PLC-B", 6001));
+        AddTestIoMappings(ioMappings, plcA.Id);
+        AddTestIoMappings(ioMappings, plcB.Id);
+        var dataStore = new PlcDataStore();
+        var contextStore = new FakeProductionContextStore();
+        var runtimeBuilder = new PlcDeviceRuntimeBuilder(
+            ioMappings,
+            dataStore,
+            new TrackingPlcServiceFactory(),
+            contextStore,
+            new FakeLogService(),
+            new PlcConnectionStatusStore(),
+            new DefaultPlcSignalBlockPlanner(),
+            new StaticPlcEndpointResolver(),
+            new ModuleHardwareProfileResolver([]));
+        var factoryCalls = new List<(string DeviceName, int NetworkDeviceId, IPlcBuffer Buffer, ProductionContext Context)>();
+
+        List<IPlcTask> CreateBusinessTasks(IPlcBuffer buffer, ProductionContext context)
+        {
+            factoryCalls.Add((context.DeviceName, context.NetworkDeviceId, buffer, context));
+            return [new NoopPlcTask($"Business.{context.DeviceName}")];
+        }
+
+        var runtimeA = await runtimeBuilder.BuildAsync(
+            plcA,
+            CreateBusinessTasks,
+            TestContext.Current.CancellationToken);
+        var runtimeB = await runtimeBuilder.BuildAsync(
+            plcB,
+            CreateBusinessTasks,
+            TestContext.Current.CancellationToken);
+
+        Assert.NotSame(dataStore.GetBuffer(plcA.Id), dataStore.GetBuffer(plcB.Id));
+        Assert.Collection(
+            factoryCalls.OrderBy(static call => call.DeviceName, StringComparer.OrdinalIgnoreCase),
+            call =>
+            {
+                Assert.Equal("PLC-A", call.DeviceName);
+                Assert.Equal(plcA.Id, call.NetworkDeviceId);
+                Assert.Same(dataStore.GetBuffer(plcA.Id), call.Buffer);
+            },
+            call =>
+            {
+                Assert.Equal("PLC-B", call.DeviceName);
+                Assert.Equal(plcB.Id, call.NetworkDeviceId);
+                Assert.Same(dataStore.GetBuffer(plcB.Id), call.Buffer);
+            });
+        Assert.Contains(runtimeA.Tasks, task => task.TaskName == "PlcIoScan_PLC-A");
+        Assert.Contains(runtimeA.Tasks, task => task.TaskName == "PlcDataReadScan_PLC-A");
+        Assert.Contains(runtimeA.Tasks, task => task.TaskName == "Business.PLC-A");
+        Assert.Contains(runtimeB.Tasks, task => task.TaskName == "PlcIoScan_PLC-B");
+        Assert.Contains(runtimeB.Tasks, task => task.TaskName == "PlcDataReadScan_PLC-B");
+        Assert.Contains(runtimeB.Tasks, task => task.TaskName == "Business.PLC-B");
     }
 
     [Fact]
@@ -357,6 +435,84 @@ public sealed class PlcTaskBindingBehaviorTests
         }
     }
 
+    [Fact]
+    public async Task PlcLifecycleCoordinator_WhenEnabledDevicesShareEndpoint_ShouldBlockDuplicateEndpointRuntimes()
+    {
+        var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
+        var ioMappings = new InMemoryRepository<IoMappingEntity>();
+        var plcA = networkDevices.Add(CreateLifecyclePlc("PLC-A", 6300));
+        var plcB = networkDevices.Add(CreateLifecyclePlc("PLC-B", 6300));
+        var contextStore = new FakeProductionContextStore();
+        var logger = new FakeLogService();
+        var runtimeRegistry = new PlcRuntimeRegistry();
+        var statusStore = new PlcConnectionStatusStore();
+        var plcServiceFactory = new TrackingPlcServiceFactory();
+        var runtimeBuilder = new PlcDeviceRuntimeBuilder(
+            ioMappings,
+            new PlcDataStore(),
+            plcServiceFactory,
+            contextStore,
+            logger,
+            statusStore,
+            new DefaultPlcSignalBlockPlanner(),
+            new StaticPlcEndpointResolver(),
+            new ModuleHardwareProfileResolver([]));
+        var coordinator = new PlcLifecycleCoordinator(
+            networkDevices,
+            contextStore,
+            logger,
+            runtimeRegistry,
+            runtimeBuilder,
+            statusStore);
+
+        await coordinator.InitializeAsync();
+
+        try
+        {
+            Assert.Contains(logger.Warnings, IsDuplicateEndpointWarning);
+            Assert.Empty(plcServiceFactory.CreatedDeviceNames);
+            Assert.Empty(runtimeRegistry.GetTrackedDeviceIdsSnapshot());
+            AssertDuplicateFault(statusStore.GetSnapshot(plcA.Id));
+            AssertDuplicateFault(statusStore.GetSnapshot(plcB.Id));
+
+            logger.Warnings.Clear();
+            await coordinator.ReloadAsync("PLC-A");
+
+            Assert.Contains(logger.Warnings, IsDuplicateEndpointWarning);
+            Assert.Empty(plcServiceFactory.CreatedDeviceNames);
+            Assert.Empty(runtimeRegistry.GetTrackedDeviceIdsSnapshot());
+            AssertDuplicateFault(statusStore.GetSnapshot(plcA.Id));
+            AssertDuplicateFault(statusStore.GetSnapshot(plcB.Id));
+
+            plcB.UpdateEndpoint(plcB.IpAddress, 6301, plcB.Port2, plcB.ConnectTimeout);
+            plcServiceFactory.CreatedDeviceNames.Clear();
+            logger.Warnings.Clear();
+            await coordinator.ReloadAsync("PLC-A");
+
+            Assert.DoesNotContain(logger.Warnings, IsDuplicateEndpointWarning);
+            Assert.Equal(["PLC-A"], plcServiceFactory.CreatedDeviceNames);
+            Assert.Contains(plcA.Id, runtimeRegistry.GetTrackedDeviceIdsSnapshot());
+        }
+        finally
+        {
+            await coordinator.StopAsync();
+        }
+
+        static bool IsDuplicateEndpointWarning(string message)
+            => message.Contains("同一端点 127.0.0.1:6300", StringComparison.Ordinal)
+               && message.Contains("PLC-A", StringComparison.Ordinal)
+               && message.Contains("PLC-B", StringComparison.Ordinal)
+               && message.Contains("已暂停这些 PLC 的运行任务", StringComparison.Ordinal);
+
+        static void AssertDuplicateFault(PlcConnectionRuntimeSnapshot? snapshot)
+        {
+            Assert.NotNull(snapshot);
+            Assert.False(snapshot!.IsConnected);
+            Assert.Equal(PlcConnectionState.Faulted, snapshot.ConnectionState);
+            Assert.Contains("同一端点 127.0.0.1:6300", snapshot.LastError, StringComparison.Ordinal);
+        }
+    }
+
     private static readonly IReadOnlyCollection<TaskCandidate> TestCandidates =
     [
         new(
@@ -452,6 +608,19 @@ public sealed class PlcTaskBindingBehaviorTests
             "单点读数据",
             "业务信号"));
     }
+
+    private static IReadOnlyCollection<ModuleIoSnapshot> CreateHomogenizationStandardMappings()
+        => HomogenizationSignalTestProfile.Signals
+            .Select(static signal => new ModuleIoSnapshot(
+                signal.SignalKey,
+                signal.DefaultAddress,
+                signal.AddressCount,
+                signal.DataType,
+                signal.DirectionText,
+                signal.SortOrder,
+                signal.Category,
+                signal.BusinessGroup))
+            .ToArray();
 
     private static NetworkDeviceEntity CreateLifecyclePlc(string deviceName, int port, int? connectTimeout = null)
     {
@@ -571,6 +740,14 @@ public sealed class PlcTaskBindingBehaviorTests
         public DateTime ToUtc(DateTime value) => value.Kind == DateTimeKind.Utc ? value : value.ToUniversalTime();
         public DateTime ToBusinessTime(DateTime value) => value.Kind == DateTimeKind.Utc ? value.ToLocalTime() : value;
         public string FormatBusinessTimestamp(DateTime value) => ToBusinessTime(value).ToString("yyyy-MM-dd HH:mm:ss");
+    }
+
+    private sealed class NoopPlcTask(string taskName) : IPlcTask
+    {
+        public string TaskName { get; } = taskName;
+
+        public Task StartAsync(CancellationToken ct)
+            => Task.CompletedTask;
     }
 
     private sealed class TrackingPlcServiceFactory : IPlcServiceFactory

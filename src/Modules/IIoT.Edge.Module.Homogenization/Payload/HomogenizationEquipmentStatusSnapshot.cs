@@ -1,7 +1,7 @@
 namespace IIoT.Edge.Module.Homogenization.Payload;
 
 /// <summary>
-/// 匀浆设备状态快照，由设备状态任务在 PLC 触发时读取，可用于 MES 状态上传和 Cloud 日志映射。
+/// 匀浆设备状态快照，由设备状态任务在 PLC 触发时读取，用于设备状态上传链路。
 /// </summary>
 public sealed class HomogenizationEquipmentStatusSnapshot
 {
@@ -11,7 +11,7 @@ public sealed class HomogenizationEquipmentStatusSnapshot
     public DateTime CapturedAt { get; set; }
 
     /// <summary>
-    /// PLC 原始设备状态码，作为 MES status 字段和 Cloud 日志级别映射的来源。
+    /// PLC 原始设备状态码，作为设备状态上传的 status 字段来源。
     /// </summary>
     public int StatusCode { get; set; }
 
@@ -21,7 +21,7 @@ public sealed class HomogenizationEquipmentStatusSnapshot
     public string StatusText { get; set; } = string.Empty;
 
     /// <summary>
-    /// 状态消息列表，MES 上传和 Cloud 日志映射都只读取插件内生成的文本。
+    /// 状态消息列表，由插件内解码生成并随设备状态记录进入 DataPipeline。
     /// </summary>
     public IReadOnlyList<string> Messages { get; set; } = [];
 }

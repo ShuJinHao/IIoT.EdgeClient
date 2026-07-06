@@ -1,12 +1,13 @@
+using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Time;
+using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
-using IIoT.Edge.Infrastructure.Integration.DeviceLog;
 using IIoT.Edge.Module.Homogenization;
 using IIoT.Edge.Module.Homogenization.Config;
 using IIoT.Edge.Module.Homogenization.Config.Io;
@@ -18,11 +19,9 @@ using IIoT.Edge.Module.Sdk.Signals;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using System.Globalization;
-using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
-using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -106,7 +105,80 @@ public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
         Assert.False(harness.Context.HasProcessedTray(HomogenizationTrayCodeStage.Inbound, "TRAY-NO-PLAN"));
         Assert.Equal(TestCodeOptions.Plc.AckMesNg, harness.ReadWriteWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站)));
         Assert.Contains("请先选择主批计划", harness.Context.LastInboundResult, StringComparison.Ordinal);
-        Assert.Contains("请先选择主批计划", harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Inbound)!.LastFailureReason, StringComparison.Ordinal);
+        var diagnostics = harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Inbound)!;
+        Assert.Equal("Blocked", diagnostics.LastResult);
+        Assert.Null(diagnostics.LastFailureReason);
+        Assert.Contains("请先选择主批计划", diagnostics.LastBlockedReason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Inbound_WhenMesDisabled_ShouldAckOkAndSkipQueue()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create();
+        harness.Parameters.MesEnabled = false;
+        await harness.StartAsync();
+        harness.Pipeline.Records.Clear();
+
+        harness.SetAscii(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.托盘码), "TRAY-MES-OFF", 30);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站), TestCodeOptions.Plc.SignalTrigger);
+
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Inbound") == 30);
+
+        Assert.False(HasRecordOfKind(harness.Pipeline, HomogenizationCellData.RecordKindInbound));
+        Assert.False(harness.Context.HasProcessedTray(HomogenizationTrayCodeStage.Inbound, "TRAY-MES-OFF"));
+        Assert.Equal(TestCodeOptions.Plc.AckOk, harness.ReadWriteWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站)));
+        Assert.Equal("TRAY-MES-OFF", harness.Context.LastInboundTrayCode);
+        Assert.Equal("MES/Cloud 上传已关闭，进站上传已跳过。", harness.Context.LastInboundResult);
+        Assert.Null(harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Inbound));
+    }
+
+    [Fact]
+    public async Task Inbound_WhenMesDisabledAndCloudEnabled_ShouldEnqueueCloudOnlyWithoutMainPlan()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create(
+            productionGate: new RejectingHomogenizationProductionGate("MES 已启用，请先选择主批计划。"));
+        harness.Parameters.MesEnabled = false;
+        harness.Parameters.CloudEnabled = true;
+        harness.Context.PlanSessionId = "PLAN-STALE";
+        harness.Context.TraceBatchNumber = "TRACE-STALE";
+        harness.Context.SelectedProductionPlan = new ProductionPlanOption(
+            "PLAN-STALE",
+            "STALE-MAIN",
+            "STALE-ORDER",
+            "STALE-MATERIAL",
+            "STALE-BATCH",
+            "STALE-PRODUCT",
+            "READY",
+            "CG",
+            "匀浆",
+            "LINE-1",
+            "一线",
+            "100",
+            "0",
+            "pcs",
+            "MODEL",
+            string.Empty,
+            string.Empty,
+            new Dictionary<string, string>());
+        await harness.StartAsync();
+        harness.Pipeline.Records.Clear();
+
+        harness.SetAscii(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.托盘码), "TRAY-IN-CLOUD", 30);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站), TestCodeOptions.Plc.SignalTrigger);
+
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Inbound") == 30);
+
+        var record = SingleRecordOfKind(harness.Pipeline, HomogenizationCellData.RecordKindInbound);
+        var cellData = Assert.IsType<HomogenizationCellData>(record.CellData);
+        Assert.Equal("TRAY-IN-CLOUD", cellData.TrayCode);
+        Assert.Equal(DataPipelineUploadTargets.Cloud, cellData.UploadTargets);
+        Assert.Equal(string.Empty, record.PlanSessionId);
+        Assert.Equal(string.Empty, record.MainPlanCode);
+        Assert.Equal(string.Empty, record.TraceBatchNumber);
+        Assert.True(harness.Context.HasProcessedTray(HomogenizationTrayCodeStage.Inbound, "TRAY-IN-CLOUD"));
+        Assert.Equal(TestCodeOptions.Plc.AckOk, harness.ReadWriteWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站)));
+        Assert.Equal("进站已进入 Cloud 上传队列。", harness.Context.LastInboundResult);
+        Assert.Null(harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Inbound));
     }
 
     [Fact]
@@ -130,6 +202,34 @@ public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
         Assert.Contains("数据管道拒绝入队", harness.Context.LastInboundResult, StringComparison.Ordinal);
         Assert.Contains("capacity_blocked", harness.Context.LastInboundResult, StringComparison.Ordinal);
         Assert.Contains("capacity_blocked", harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Inbound)!.LastFailureReason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Inbound_WhenCloudOnlyDataPipelineThrows_ShouldRecordCloudFailureWithoutMesDiagnostics()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create(
+            pipeline: new CapturingDataPipelineService
+            {
+                ExceptionToThrow = new InvalidOperationException("本地队列异常")
+            });
+        harness.Parameters.MesEnabled = false;
+        harness.Parameters.CloudEnabled = true;
+        await harness.StartAsync();
+        harness.Pipeline.Records.Clear();
+
+        harness.SetAscii(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.托盘码), "TRAY-IN-CLOUD-EX", 30);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站), TestCodeOptions.Plc.SignalTrigger);
+
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Inbound") == 30);
+
+        Assert.Empty(harness.Pipeline.Records);
+        Assert.Equal(TestCodeOptions.Plc.AckException, harness.ReadWriteWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.扫码进站)));
+        Assert.Contains("本地队列异常", harness.Context.LastInboundResult, StringComparison.Ordinal);
+        Assert.Null(harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Inbound));
+        Assert.Equal(CloudCallOutcome.Exception, harness.CloudDiagnostics.Snapshot.LastOutcome);
+        Assert.Equal("plc_inbound_enqueue_failed", harness.CloudDiagnostics.Snapshot.LastReasonCode);
+        Assert.Equal("Homogenization.Inbound", harness.CloudDiagnostics.Snapshot.LastTaskKey);
+        Assert.Equal("进站上传", harness.CloudDiagnostics.Snapshot.LastScenario);
     }
 
     [Fact]
@@ -247,7 +347,80 @@ public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
         Assert.Empty(harness.Context.OutboundRecords);
         Assert.Equal(TestCodeOptions.Plc.AckMesNg, harness.ReadWriteWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.出料上传)));
         Assert.Contains("请先选择主批计划", harness.Context.LastOutboundResult, StringComparison.Ordinal);
-        Assert.Contains("请先选择主批计划", harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Outbound)!.LastFailureReason, StringComparison.Ordinal);
+        var diagnostics = harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Outbound)!;
+        Assert.Equal("Blocked", diagnostics.LastResult);
+        Assert.Null(diagnostics.LastFailureReason);
+        Assert.Contains("请先选择主批计划", diagnostics.LastBlockedReason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Outbound_WhenMesDisabledAndCloudEnabled_ShouldEnqueueCloudOnlyWithoutMainBatchGate()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create(
+            productionGate: new RejectingHomogenizationProductionGate("MES 已启用，请先选择主批计划。"));
+        harness.Parameters.MesEnabled = false;
+        harness.Parameters.CloudEnabled = true;
+        harness.Context.PlanSessionId = "PLAN-STALE";
+        harness.Context.TraceBatchNumber = "TRACE-STALE";
+        harness.Context.SelectedProductionPlan = new ProductionPlanOption(
+            "PLAN-STALE",
+            "STALE-MAIN",
+            "STALE-ORDER",
+            "STALE-MATERIAL",
+            "STALE-BATCH",
+            "STALE-PRODUCT",
+            "READY",
+            "CG",
+            "匀浆",
+            "LINE-1",
+            "一线",
+            "100",
+            "0",
+            "pcs",
+            "MODEL",
+            string.Empty,
+            string.Empty,
+            new Dictionary<string, string>());
+        await harness.StartAsync();
+        harness.Pipeline.Records.Clear();
+
+        harness.SetAscii(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.托盘码), "TRAY-CLOUD-ONLY", 30);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.出料上传), TestCodeOptions.Plc.SignalTrigger);
+
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Outbound") == 30);
+
+        var record = SingleRecordOfKind(harness.Pipeline, HomogenizationCellData.RecordKindOutbound);
+        var cellData = Assert.IsType<HomogenizationCellData>(record.CellData);
+        Assert.Equal(DataPipelineUploadTargets.Cloud, cellData.UploadTargets);
+        Assert.Equal(string.Empty, record.PlanSessionId);
+        Assert.Equal(string.Empty, record.MainPlanCode);
+        Assert.Equal(string.Empty, record.TraceBatchNumber);
+        Assert.Equal(TestCodeOptions.Plc.AckOk, harness.ReadWriteWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.出料上传)));
+        Assert.Equal("出料已接收。", harness.Context.LastOutboundResult);
+        Assert.Null(harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Outbound));
+    }
+
+    [Fact]
+    public async Task Outbound_WhenMesAndCloudDisabled_ShouldRecordLocalOnlyAndSkipQueue()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create();
+        harness.Parameters.MesEnabled = false;
+        harness.Parameters.CloudEnabled = false;
+        await harness.StartAsync();
+        harness.Pipeline.Records.Clear();
+
+        harness.SetAscii(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.托盘码), "TRAY-LOCAL-ONLY", 30);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.出料上传), TestCodeOptions.Plc.SignalTrigger);
+
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Outbound") == 30);
+
+        Assert.False(HasRecordOfKind(harness.Pipeline, HomogenizationCellData.RecordKindOutbound));
+        Assert.NotNull(harness.Context.LastOutboundRecord);
+        Assert.Single(harness.Context.OutboundRecords);
+        Assert.Equal("TRAY-LOCAL-ONLY", harness.Context.LastOutboundTrayCode);
+        Assert.True(harness.Context.HasProcessedTray(HomogenizationTrayCodeStage.Outbound, "TRAY-LOCAL-ONLY"));
+        Assert.Equal(TestCodeOptions.Plc.AckOk, harness.ReadWriteWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.出料上传)));
+        Assert.Equal("MES/Cloud 上传已关闭，出料已本地记录。", harness.Context.LastOutboundResult);
     }
 
     [Fact]
@@ -364,6 +537,36 @@ public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
     }
 
     [Fact]
+    public async Task Outbound_WhenCloudOnlyDataPipelineRejects_ShouldRecordCloudFailureWithoutMesDiagnostics()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create(
+            pipeline: new CapturingDataPipelineService
+            {
+                Result = DataPipelineEnqueueResult.Rejected("capacity_blocked")
+            });
+        harness.Parameters.MesEnabled = false;
+        harness.Parameters.CloudEnabled = true;
+        await harness.StartAsync();
+        harness.Pipeline.Records.Clear();
+
+        harness.SetAscii(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.托盘码), "TRAY-CLOUD-REJECTED", 30);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.出料上传), TestCodeOptions.Plc.SignalTrigger);
+
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Outbound") == 30);
+
+        Assert.Single(RecordsOfKind(harness.Pipeline, HomogenizationCellData.RecordKindOutbound));
+        Assert.Equal(TestCodeOptions.Plc.AckException, harness.ReadWriteWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.出料上传)));
+        Assert.Contains("数据管道拒绝入队", harness.Context.LastOutboundResult, StringComparison.Ordinal);
+        Assert.Null(harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Outbound));
+        Assert.Equal(CloudCallOutcome.Exception, harness.CloudDiagnostics.Snapshot.LastOutcome);
+        Assert.Equal("plc_outbound_enqueue_failed", harness.CloudDiagnostics.Snapshot.LastReasonCode);
+        Assert.Equal("Homogenization", harness.CloudDiagnostics.Snapshot.LastProcessType);
+        Assert.Equal("PLC-H", harness.CloudDiagnostics.Snapshot.LastDeviceName);
+        Assert.Equal("Homogenization.Outbound", harness.CloudDiagnostics.Snapshot.LastTaskKey);
+        Assert.Equal("出站上传", harness.CloudDiagnostics.Snapshot.LastScenario);
+    }
+
+    [Fact]
     public async Task Outbound_WhenOverflowDoesNotPersistDurableTarget_ShouldAckExceptionAndRecordFailure()
     {
         await using var harness = HomogenizationRuntimeHarness.Create(
@@ -443,95 +646,274 @@ public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
     }
 
     [Fact]
-    public async Task EquipmentStatus_ShouldWriteCloudDeviceLogWithMappedLevelBeforeMesResult()
+    public async Task Recipe_WhenMesDisabled_ShouldAckOkAndSkipQueue()
     {
-        await using var normalHarness = HomogenizationRuntimeHarness.Create();
-        normalHarness.Mes.EquipmentStatusResult = MesCallResult.TransportFailure("MES 状态上传失败。");
-        await normalHarness.StartAsync();
+        await using var harness = HomogenizationRuntimeHarness.Create();
+        harness.Parameters.MesEnabled = false;
+        await harness.StartAsync();
+        harness.Pipeline.Records.Clear();
 
-        normalHarness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.设备状态值), 1);
-        normalHarness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传), TestCodeOptions.Plc.SignalTrigger);
-        await WaitUntilAsync(() => normalHarness.Context.GetStep("Homogenization.EquipmentStatus") == 30);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方搅拌转速), 55);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.工艺参数上传), TestCodeOptions.Plc.SignalTrigger);
 
-        Assert.Contains(
-            normalHarness.Logger.Entries,
-            entry => entry.Level == "Info"
-                     && entry.Message.Contains("设备状态采集", StringComparison.Ordinal)
-                     && entry.Message.Contains("状态码=1", StringComparison.Ordinal)
-                     && entry.Message.Contains("PLC/设备=PLC-H", StringComparison.Ordinal));
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Recipe") == 30);
 
-        await using var alarmHarness = HomogenizationRuntimeHarness.Create();
-        await alarmHarness.StartAsync();
-
-        alarmHarness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.设备状态值), unchecked((ushort)-1));
-        alarmHarness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传), TestCodeOptions.Plc.SignalTrigger);
-        await WaitUntilAsync(() => alarmHarness.Context.GetStep("Homogenization.EquipmentStatus") == 30);
-
-        Assert.Contains(
-            alarmHarness.Logger.Entries,
-            entry => entry.Level == "Error"
-                     && entry.Message.Contains("设备状态采集", StringComparison.Ordinal)
-                     && entry.Message.Contains("状态码=-1", StringComparison.Ordinal)
-                     && entry.Message.Contains("PLC 返回报警状态", StringComparison.Ordinal));
+        Assert.False(HasRecordOfKind(harness.Pipeline, HomogenizationCellData.RecordKindRecipe));
+        Assert.Null(harness.Context.LastRecipeSnapshot);
+        Assert.Equal(TestCodeOptions.Plc.AckOk, harness.ReadWriteWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.工艺参数上传)));
+        Assert.Equal("MES/Cloud 上传已关闭，配方上传已跳过。", harness.Context.LastRecipeResult);
+        Assert.Null(harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Recipe));
     }
 
     [Fact]
-    public async Task EquipmentStatusCloudLog_WhenCloudGateBlocked_ShouldBufferAndRetryAfterRecovery()
+    public async Task Recipe_WhenMesDisabledAndCloudEnabled_ShouldEnqueueCloudOnlyWithoutMainPlan()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create(
+            productionGate: new RejectingHomogenizationProductionGate("MES 已启用，请先选择主批计划。"));
+        harness.Parameters.MesEnabled = false;
+        harness.Parameters.CloudEnabled = true;
+        harness.Context.PlanSessionId = "PLAN-STALE";
+        harness.Context.TraceBatchNumber = "TRACE-STALE";
+        harness.Context.SelectedProductionPlan = new ProductionPlanOption(
+            "PLAN-STALE",
+            "STALE-MAIN",
+            "STALE-ORDER",
+            "STALE-MATERIAL",
+            "STALE-BATCH",
+            "STALE-PRODUCT",
+            "READY",
+            "CG",
+            "匀浆",
+            "LINE-1",
+            "一线",
+            "100",
+            "0",
+            "pcs",
+            "MODEL",
+            string.Empty,
+            string.Empty,
+            new Dictionary<string, string>());
+        await harness.StartAsync();
+        harness.Pipeline.Records.Clear();
+
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方搅拌转速), 66);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.工艺参数上传), TestCodeOptions.Plc.SignalTrigger);
+
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Recipe") == 30);
+
+        var recipeRecord = SingleRecordOfKind(harness.Pipeline, HomogenizationCellData.RecordKindRecipe);
+        var recipeData = Assert.IsType<HomogenizationCellData>(recipeRecord.CellData);
+        Assert.Same(harness.Context.LastRecipeSnapshot, recipeData.RecipeSnapshot);
+        Assert.Equal(66, recipeData.RecipeSnapshot!.StirringSpeed[0]);
+        Assert.Equal(DataPipelineUploadTargets.Cloud, recipeData.UploadTargets);
+        Assert.Equal(string.Empty, recipeRecord.PlanSessionId);
+        Assert.Equal(string.Empty, recipeRecord.MainPlanCode);
+        Assert.Equal(string.Empty, recipeRecord.TraceBatchNumber);
+        Assert.Equal(TestCodeOptions.Plc.AckOk, harness.ReadWriteWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.工艺参数上传)));
+        Assert.Equal("配方已进入 Cloud 上传队列。", harness.Context.LastRecipeResult);
+        Assert.Null(harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Recipe));
+    }
+
+    [Fact]
+    public async Task Recipe_WhenMesAndCloudEnabled_ShouldEnqueueAllTargets()
     {
         await using var harness = HomogenizationRuntimeHarness.Create();
-        harness.Mes.EquipmentStatusResult = MesCallResult.TransportFailure("MES 状态上传失败。");
-        harness.DeviceService.MarkUploadGateBlocked(EdgeUploadBlockReason.MissingUploadToken, DateTimeOffset.UtcNow);
+        harness.Parameters.CloudEnabled = true;
+        await harness.StartAsync();
+        harness.Pipeline.Records.Clear();
 
-        var cloudHttp = new FakeCloudHttpClient();
-        var bufferStore = new FakeDeviceLogBufferStore();
-        var logSyncTask = new DeviceLogSyncTask(
-            cloudHttp,
-            new FakeCloudApiEndpointProvider(),
-            harness.DeviceService,
-            new FakeLocalSystemRuntimeConfigService
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方搅拌转速), 77);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.工艺参数上传), TestCodeOptions.Plc.SignalTrigger);
+
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Recipe") == 30);
+
+        var recipeRecord = SingleRecordOfKind(harness.Pipeline, HomogenizationCellData.RecordKindRecipe);
+        var recipeData = Assert.IsType<HomogenizationCellData>(recipeRecord.CellData);
+        Assert.Equal(DataPipelineUploadTargets.All, recipeData.UploadTargets);
+        Assert.Equal(77, recipeData.RecipeSnapshot!.StirringSpeed[0]);
+        Assert.Equal(TestCodeOptions.Plc.AckOk, harness.ReadWriteWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.工艺参数上传)));
+        Assert.Equal("配方已进入 MES/Cloud 上传队列。", harness.Context.LastRecipeResult);
+    }
+
+    [Fact]
+    public async Task Recipe_WhenCloudOnlyDataPipelineThrows_ShouldRecordCloudFailureWithoutMesDiagnostics()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create(
+            pipeline: new CapturingDataPipelineService
             {
-                Current = SystemRuntimeConfigSnapshot.Default with
-                {
-                    CloudSyncInterval = TimeSpan.FromMilliseconds(50)
-                }
-            },
-            bufferStore,
-            harness.Logger,
-            new FakeCloudDiagnosticsStore());
+                ExceptionToThrow = new InvalidOperationException("本地队列异常")
+            });
+        harness.Parameters.MesEnabled = false;
+        harness.Parameters.CloudEnabled = true;
+        await harness.StartAsync();
+        harness.Pipeline.Records.Clear();
 
-        using var logSyncCancellation = new CancellationTokenSource();
-        await logSyncTask.StartAsync(logSyncCancellation.Token);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.ContinuousRead.配方搅拌转速), 88);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.工艺参数上传), TestCodeOptions.Plc.SignalTrigger);
+
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.Recipe") == 30);
+
+        Assert.Empty(harness.Pipeline.Records);
+        Assert.Equal(TestCodeOptions.Plc.AckException, harness.ReadWriteWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.工艺参数上传)));
+        Assert.Contains("本地队列异常", harness.Context.LastRecipeResult, StringComparison.Ordinal);
+        Assert.Null(harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Recipe));
+        Assert.Equal(CloudCallOutcome.Exception, harness.CloudDiagnostics.Snapshot.LastOutcome);
+        Assert.Equal("plc_recipe_enqueue_failed", harness.CloudDiagnostics.Snapshot.LastReasonCode);
+        Assert.Equal("Homogenization.Recipe", harness.CloudDiagnostics.Snapshot.LastTaskKey);
+        Assert.Equal("配方上传", harness.CloudDiagnostics.Snapshot.LastScenario);
+    }
+
+    [Fact]
+    public async Task EquipmentStatus_WhenProductionGateRejects_ShouldStillEnqueueWithoutMainPlan()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create(
+            productionGate: new RejectingHomogenizationProductionGate("MES 已启用，请先选择主批计划。"));
+        await harness.StartAsync();
+        harness.Pipeline.Records.Clear();
+        harness.Context.PlanSessionId = "PLAN-STALE";
+        harness.Context.TraceBatchNumber = "TRACE-STALE";
+        harness.Context.SelectedProductionPlan = new ProductionPlanOption(
+            "PLAN-STALE",
+            "STALE-MAIN",
+            "STALE-ORDER",
+            "STALE-MATERIAL",
+            "STALE-BATCH",
+            "STALE-PRODUCT",
+            "READY",
+            "CG",
+            "匀浆",
+            "LINE-1",
+            "一线",
+            "100",
+            "0",
+            "pcs",
+            "MODEL",
+            string.Empty,
+            string.Empty,
+            new Dictionary<string, string>());
+
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.设备状态值), 1);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传), TestCodeOptions.Plc.SignalTrigger);
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.EquipmentStatus") == 30);
+
+        var statusRecord = SingleRecordOfKind(harness.Pipeline, HomogenizationCellData.RecordKindEquipmentStatus);
+        var statusData = Assert.IsType<HomogenizationCellData>(statusRecord.CellData);
+        Assert.Equal(1, statusData.EquipmentStatusSnapshot!.StatusCode);
+        Assert.Equal(string.Empty, statusRecord.PlanSessionId);
+        Assert.Equal(string.Empty, statusRecord.MainPlanCode);
+        Assert.Equal(string.Empty, statusRecord.TraceBatchNumber);
+        Assert.Equal(TestCodeOptions.Plc.AckOk, harness.ReadWriteWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传)));
+        Assert.Equal("设备状态已进入 MES 上传队列。", harness.Context.LastEquipmentStatusResult);
+    }
+
+    [Fact]
+    public async Task EquipmentStatus_WhenMesDisabledAndCloudEnabled_ShouldEnqueueCloudOnlyWithoutMainPlan()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create();
+        harness.Parameters.MesEnabled = false;
+        harness.Parameters.CloudEnabled = true;
         await harness.StartAsync();
         harness.Pipeline.Records.Clear();
 
         harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.设备状态值), 1);
         harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传), TestCodeOptions.Plc.SignalTrigger);
         await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.EquipmentStatus") == 30);
-        await logSyncTask.StopAsync();
+
+        var statusRecord = SingleRecordOfKind(harness.Pipeline, HomogenizationCellData.RecordKindEquipmentStatus);
+        var statusData = Assert.IsType<HomogenizationCellData>(statusRecord.CellData);
+        Assert.Equal(DataPipelineUploadTargets.Cloud, statusData.UploadTargets);
+        Assert.Equal(string.Empty, statusRecord.PlanSessionId);
+        Assert.Equal(string.Empty, statusRecord.MainPlanCode);
+        Assert.Equal(string.Empty, statusRecord.TraceBatchNumber);
+        Assert.Equal(TestCodeOptions.Plc.AckOk, harness.ReadWriteWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传)));
+        Assert.Equal("设备状态已进入 Cloud 上传队列。", harness.Context.LastEquipmentStatusResult);
+    }
+
+    [Fact]
+    public async Task EquipmentStatus_WhenCloudOnlyDataPipelineThrows_ShouldRecordCloudFailureWithoutMesDiagnostics()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create(
+            pipeline: new CapturingDataPipelineService
+            {
+                ExceptionToThrow = new InvalidOperationException("本地队列异常")
+            });
+        harness.Parameters.MesEnabled = false;
+        harness.Parameters.CloudEnabled = true;
+        await harness.StartAsync();
+        harness.Pipeline.Records.Clear();
+
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.设备状态值), 1);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传), TestCodeOptions.Plc.SignalTrigger);
+        await WaitUntilAsync(() => string.Equals(
+            harness.CloudDiagnostics.Snapshot.LastTaskKey,
+            "Homogenization.EquipmentStatus",
+            StringComparison.Ordinal));
+
+        Assert.Empty(harness.Pipeline.Records);
+        Assert.Equal(TestCodeOptions.Plc.AckException, harness.ReadWriteWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传)));
+        Assert.Contains("本地队列异常", harness.Context.LastEquipmentStatusResult, StringComparison.Ordinal);
+        Assert.Null(harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.EquipmentStatus));
+        Assert.Equal(CloudCallOutcome.Exception, harness.CloudDiagnostics.Snapshot.LastOutcome);
+        Assert.Equal("plc_equipment_status_enqueue_failed", harness.CloudDiagnostics.Snapshot.LastReasonCode);
+        Assert.Equal("Homogenization.EquipmentStatus", harness.CloudDiagnostics.Snapshot.LastTaskKey);
+        Assert.Equal("设备状态上传", harness.CloudDiagnostics.Snapshot.LastScenario);
+    }
+
+    [Fact]
+    public async Task EquipmentStatus_WhenMesAndCloudEnabled_ShouldEnqueueAllTargetsWithoutMainPlan()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create();
+        harness.Parameters.CloudEnabled = true;
+        await harness.StartAsync();
+        harness.Pipeline.Records.Clear();
+
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.设备状态值), 1);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传), TestCodeOptions.Plc.SignalTrigger);
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.EquipmentStatus") == 30);
+
+        var statusRecord = SingleRecordOfKind(harness.Pipeline, HomogenizationCellData.RecordKindEquipmentStatus);
+        var statusData = Assert.IsType<HomogenizationCellData>(statusRecord.CellData);
+        Assert.Equal(DataPipelineUploadTargets.All, statusData.UploadTargets);
+        Assert.Equal(string.Empty, statusRecord.MainPlanCode);
+        Assert.Equal(TestCodeOptions.Plc.AckOk, harness.ReadWriteWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传)));
+        Assert.Equal("设备状态已进入 MES/Cloud 上传队列。", harness.Context.LastEquipmentStatusResult);
+    }
+
+    [Fact]
+    public async Task EquipmentStatus_WhenMesAndCloudDisabled_ShouldAckAndSkipQueue()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create();
+        harness.Parameters.MesEnabled = false;
+        harness.Parameters.CloudEnabled = false;
+        await harness.StartAsync();
+        harness.Pipeline.Records.Clear();
+
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.设备状态值), 1);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传), TestCodeOptions.Plc.SignalTrigger);
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.EquipmentStatus") == 30);
+
+        Assert.Empty(RecordsOfKind(harness.Pipeline, HomogenizationCellData.RecordKindEquipmentStatus));
+        Assert.Equal(TestCodeOptions.Plc.AckOk, harness.ReadWriteWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传)));
+        Assert.Equal("MES/Cloud 上传已关闭，设备状态上传已跳过。", harness.Context.LastEquipmentStatusResult);
+    }
+
+    [Fact]
+    public async Task EquipmentStatus_ShouldNotWriteCloudDeviceLog()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create();
+        await harness.StartAsync();
+        harness.Pipeline.Records.Clear();
+        harness.Logger.Entries.Clear();
+
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.设备状态值), 1);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.Interaction.设备状态上传), TestCodeOptions.Plc.SignalTrigger);
+        await WaitUntilAsync(() => harness.Context.GetStep("Homogenization.EquipmentStatus") == 30);
 
         Assert.True(HasRecordOfKind(harness.Pipeline, HomogenizationCellData.RecordKindEquipmentStatus));
-        Assert.Equal(0, cloudHttp.PostCallCount);
-        Assert.Contains(
-            bufferStore.Records,
-            record => record.Level == "Info"
-                      && record.Message.Contains("设备状态采集", StringComparison.Ordinal)
-                      && record.Message.Contains("状态码=1", StringComparison.Ordinal));
-
-        cloudHttp.EnqueuePostResult(true);
-        harness.DeviceService.SetOnline(harness.DeviceService.CurrentDevice!);
-
-        var retryResult = await logSyncTask.RetryBufferAsync();
-
-        Assert.True(retryResult);
-        Assert.Equal(1, cloudHttp.PostCallCount);
-        Assert.Empty(bufferStore.Records);
-
-        var json = JsonSerializer.SerializeToElement(cloudHttp.LastPayload);
-        Assert.Equal(harness.DeviceService.CurrentDevice!.DeviceId, json.GetProperty("deviceId").GetGuid());
-        Assert.Contains(
-            json.GetProperty("logs").EnumerateArray(),
-            log => log.GetProperty("level").GetString() == "Info"
-                   && log.GetProperty("message").GetString()!.Contains("设备状态采集", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            harness.Logger.Entries,
+            entry => entry.Message.Contains("设备状态采集", StringComparison.Ordinal)
+                     || entry.Message.Contains("PLC/设备=PLC-H", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -553,6 +935,134 @@ public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
         Assert.Same(harness.Context.LastRealtimeSnapshot, realtimeData.RealtimeSnapshot);
         Assert.Equal(DataPipelineUploadTargets.Mes, realtimeData.UploadTargets);
         Assert.Equal("实时数据已进入 MES 上传队列。", harness.Context.LastRealtimeResult);
+    }
+
+    [Fact]
+    public async Task Realtime_WhenMesDisabledAndCloudEnabled_ShouldEnqueueCloudOnlyWithoutMainPlan()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create();
+        harness.Parameters.MesEnabled = false;
+        harness.Parameters.CloudEnabled = true;
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时搅拌转速), 101);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时温度), 27);
+        await harness.StartAsync();
+
+        await WaitUntilAsync(() => HasRecordOfKind(harness.Pipeline, HomogenizationCellData.RecordKindRealtime));
+
+        var realtimeRecord = SingleRecordOfKind(harness.Pipeline, HomogenizationCellData.RecordKindRealtime);
+        var realtimeData = Assert.IsType<HomogenizationCellData>(realtimeRecord.CellData);
+        Assert.Equal(DataPipelineUploadTargets.Cloud, realtimeData.UploadTargets);
+        Assert.Equal(string.Empty, realtimeRecord.PlanSessionId);
+        Assert.Equal(string.Empty, realtimeRecord.MainPlanCode);
+        Assert.Equal(string.Empty, realtimeRecord.TraceBatchNumber);
+        Assert.Equal("实时数据已进入 Cloud 上传队列。", harness.Context.LastRealtimeResult);
+    }
+
+    [Fact]
+    public async Task Realtime_WhenCloudOnlyDataPipelineThrows_ShouldRecordCloudFailureWithoutMesDiagnostics()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create(
+            pipeline: new CapturingDataPipelineService
+            {
+                ExceptionToThrow = new InvalidOperationException("本地队列异常")
+            });
+        harness.Parameters.MesEnabled = false;
+        harness.Parameters.CloudEnabled = true;
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时搅拌转速), 101);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时温度), 27);
+        await harness.StartAsync();
+
+        await WaitUntilAsync(() => harness.Context.LastRealtimeResult?.Contains("本地队列异常", StringComparison.Ordinal) == true);
+
+        Assert.Empty(RecordsOfKind(harness.Pipeline, HomogenizationCellData.RecordKindRealtime));
+        Assert.Null(harness.Context.LastRealtimeFingerprint);
+        Assert.Null(harness.Diagnostics.Get(TestCodeOptions.Mes.Channels.Realtime));
+        Assert.Equal(CloudCallOutcome.Exception, harness.CloudDiagnostics.Snapshot.LastOutcome);
+        Assert.Equal("plc_realtime_enqueue_failed", harness.CloudDiagnostics.Snapshot.LastReasonCode);
+        Assert.Equal("Homogenization.Realtime", harness.CloudDiagnostics.Snapshot.LastTaskKey);
+        Assert.Equal("实时数据上传", harness.CloudDiagnostics.Snapshot.LastScenario);
+    }
+
+    [Fact]
+    public async Task Realtime_WhenMesAndCloudEnabled_ShouldEnqueueAllTargets()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create();
+        harness.Parameters.CloudEnabled = true;
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时搅拌转速), 101);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时温度), 27);
+        await harness.StartAsync();
+
+        await WaitUntilAsync(() => HasRecordOfKind(harness.Pipeline, HomogenizationCellData.RecordKindRealtime));
+
+        var realtimeRecord = SingleRecordOfKind(harness.Pipeline, HomogenizationCellData.RecordKindRealtime);
+        var realtimeData = Assert.IsType<HomogenizationCellData>(realtimeRecord.CellData);
+        Assert.Equal(DataPipelineUploadTargets.All, realtimeData.UploadTargets);
+        Assert.Equal("实时数据已进入 MES/Cloud 上传队列。", harness.Context.LastRealtimeResult);
+    }
+
+    [Fact]
+    public async Task Realtime_WhenMesAndCloudDisabled_ShouldSkipQueueAndKeepFingerprintUnset()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create();
+        harness.Parameters.MesEnabled = false;
+        harness.Parameters.CloudEnabled = false;
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时搅拌转速), 101);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时温度), 27);
+        await harness.StartAsync();
+
+        await WaitUntilAsync(() => string.Equals(
+            harness.Context.LastRealtimeResult,
+            "MES/Cloud 上传已关闭，实时数据上传已跳过。",
+            StringComparison.Ordinal));
+
+        Assert.Empty(RecordsOfKind(harness.Pipeline, HomogenizationCellData.RecordKindRealtime));
+        Assert.Null(harness.Context.LastRealtimeFingerprint);
+    }
+
+    [Fact]
+    public async Task Realtime_WhenSnapshotUnchanged_ShouldSkipQueueUntilBufferValueChanges()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create(realtimeLoopIntervalMs: 20);
+
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时搅拌转速), 101);
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时温度), 27);
+        await harness.StartAsync();
+
+        await WaitUntilAsync(() => RecordsOfKind(harness.Pipeline, HomogenizationCellData.RecordKindRealtime).Count == 1);
+        await WaitUntilAsync(() => string.Equals(
+            harness.Context.LastRealtimeResult,
+            "匀浆实时数据未变化，已跳过实时上传。",
+            StringComparison.Ordinal));
+
+        Assert.Single(RecordsOfKind(harness.Pipeline, HomogenizationCellData.RecordKindRealtime));
+
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时温度), 28);
+
+        await WaitUntilAsync(() =>
+            RecordsOfKind(harness.Pipeline, HomogenizationCellData.RecordKindRealtime).Count == 2
+            && string.Equals(harness.Context.LastRealtimeResult, "实时数据已进入 MES 上传队列。", StringComparison.Ordinal));
+
+        var records = RecordsOfKind(harness.Pipeline, HomogenizationCellData.RecordKindRealtime);
+        var secondData = Assert.IsType<HomogenizationCellData>(records[1].CellData);
+        Assert.Equal(28, secondData.RealtimeSnapshot!.Temperature);
+    }
+
+    [Fact]
+    public async Task Realtime_WhenMesAndCloudDisabledLegacyCase_ShouldSkipQueueAndKeepFingerprintUnset()
+    {
+        await using var harness = HomogenizationRuntimeHarness.Create(realtimeLoopIntervalMs: 20);
+        harness.Parameters.MesEnabled = false;
+
+        harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时搅拌转速), 101);
+        await harness.StartAsync();
+
+        await WaitUntilAsync(() => string.Equals(
+            harness.Context.LastRealtimeResult,
+            "MES/Cloud 上传已关闭，实时数据上传已跳过。",
+            StringComparison.Ordinal));
+
+        Assert.Empty(RecordsOfKind(harness.Pipeline, HomogenizationCellData.RecordKindRealtime));
+        Assert.Null(harness.Context.LastRealtimeFingerprint);
     }
 
     private static HomogenizationCodeOptions TestCodeOptions => new()
@@ -594,7 +1104,8 @@ public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
         CapturingDataPipelineService pipeline,
         string recordKind)
         => pipeline.Records
-            .Where(record => record.CellData is HomogenizationCellData cellData
+            .Where(record => record is not null
+                             && record.CellData is HomogenizationCellData cellData
                              && string.Equals(cellData.RecordKind, recordKind, StringComparison.Ordinal))
             .ToList();
 
@@ -635,6 +1146,7 @@ public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
             CapturingHomogenizationMesChannel mes,
             CapturingDataPipelineService pipeline,
             FakeMesUploadDiagnosticsStore diagnostics,
+            FakeCloudDiagnosticsStore cloudDiagnostics,
             FakeHomogenizationModuleParamProvider parameters,
             FakeProductionTimeProvider productionTime,
             FakeDeviceService deviceService,
@@ -649,6 +1161,7 @@ public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
             Mes = mes;
             Pipeline = pipeline;
             Diagnostics = diagnostics;
+            CloudDiagnostics = cloudDiagnostics;
             Parameters = parameters;
             ProductionTime = productionTime;
             DeviceService = deviceService;
@@ -671,6 +1184,8 @@ public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
 
         public FakeMesUploadDiagnosticsStore Diagnostics { get; }
 
+        public FakeCloudDiagnosticsStore CloudDiagnostics { get; }
+
         public FakeHomogenizationModuleParamProvider Parameters { get; }
 
         public FakeProductionTimeProvider ProductionTime { get; }
@@ -684,7 +1199,8 @@ public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
             CapturingDataPipelineService? pipeline = null,
             bool duplicateCheckEnabled = false,
             FakeProductionTimeProvider? productionTime = null,
-            IHomogenizationProductionGate? productionGate = null)
+            IHomogenizationProductionGate? productionGate = null,
+            int realtimeLoopIntervalMs = 10_000)
         {
             mes ??= new CapturingHomogenizationMesChannel();
             pipeline ??= new CapturingDataPipelineService();
@@ -702,6 +1218,7 @@ public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
             NetworkDeviceId = 7
             };
             var diagnostics = new FakeMesUploadDiagnosticsStore();
+            var cloudDiagnostics = new FakeCloudDiagnosticsStore();
             var logger = new FakeLogService();
             var parameters = new FakeHomogenizationModuleParamProvider
             {
@@ -732,6 +1249,7 @@ public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
             services.AddSingleton<ILogService>(logger);
             services.AddSingleton<IDeviceService>(deviceService);
             services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
+            services.AddSingleton<ICloudUploadDiagnosticsStore>(cloudDiagnostics);
             services.AddSingleton<IHomogenizationMesScenarioChannel>(mes);
             services.AddSingleton<IDataPipelineService>(pipeline);
             services.AddSingleton<IProductionTimeProvider>(productionTime);
@@ -745,7 +1263,7 @@ public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
                 {
                     EventLoopIntervalMs = 20,
                     MinEventLoopIntervalMs = 10,
-                    RealtimeLoopIntervalMs = 10_000,
+                    RealtimeLoopIntervalMs = realtimeLoopIntervalMs,
                     MinRealtimeLoopIntervalMs = 200
                 }
             }));
@@ -761,6 +1279,7 @@ public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
                 mes,
                 pipeline,
                 diagnostics,
+                cloudDiagnostics,
                 parameters,
                 productionTime,
                 deviceService,
@@ -856,6 +1375,10 @@ public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
     private sealed class FakeHomogenizationModuleParamProvider
         : IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>
     {
+        public bool MesEnabled { get; set; } = true;
+
+        public bool CloudEnabled { get; set; }
+
         public bool DuplicateCheckEnabled { get; set; }
 
         public int GetCallCount { get; private set; }
@@ -866,8 +1389,38 @@ public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
             GetCallCount++;
             return Task.FromResult(new ModuleParamSnapshot<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>(
                 "Homogenization",
-                EmptyGroup<HomogenizationParams.Mes>(ModuleParamCategory.Mes),
-                EmptyGroup<HomogenizationParams.Cloud>(ModuleParamCategory.Cloud),
+                new ModuleParamGroup<HomogenizationParams.Mes>(
+                    "Homogenization",
+                    ModuleParamCategory.Mes,
+                    new Dictionary<HomogenizationParams.Mes, string>
+                    {
+                        [HomogenizationParams.Mes.启用] = MesEnabled.ToString()
+                    },
+                    new Dictionary<HomogenizationParams.Mes, string?>
+                    {
+                        [HomogenizationParams.Mes.启用] = "true"
+                    },
+                    new Dictionary<HomogenizationParams.Mes, ParamValueKind>
+                    {
+                        [HomogenizationParams.Mes.启用] = ParamValueKind.Bool
+                    },
+                    warn: null),
+                new ModuleParamGroup<HomogenizationParams.Cloud>(
+                    "Homogenization",
+                    ModuleParamCategory.Cloud,
+                    new Dictionary<HomogenizationParams.Cloud, string>
+                    {
+                        [HomogenizationParams.Cloud.启用] = CloudEnabled.ToString()
+                    },
+                    new Dictionary<HomogenizationParams.Cloud, string?>
+                    {
+                        [HomogenizationParams.Cloud.启用] = "false"
+                    },
+                    new Dictionary<HomogenizationParams.Cloud, ParamValueKind>
+                    {
+                        [HomogenizationParams.Cloud.启用] = ParamValueKind.Bool
+                    },
+                    warn: null),
                 new ModuleParamGroup<HomogenizationParams.Business>(
                     "Homogenization",
                     ModuleParamCategory.Business,
@@ -886,15 +1439,6 @@ public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
                     warn: null)));
         }
 
-        private static ModuleParamGroup<TEnum> EmptyGroup<TEnum>(ModuleParamCategory category)
-            where TEnum : struct, Enum
-            => new(
-                "Homogenization",
-                category,
-                new Dictionary<TEnum, string>(),
-                new Dictionary<TEnum, string?>(),
-                new Dictionary<TEnum, ParamValueKind>(),
-                warn: null);
     }
 
     private sealed class CapturingHomogenizationMesChannel : IHomogenizationMesScenarioChannel

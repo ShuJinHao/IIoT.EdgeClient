@@ -12,10 +12,8 @@ namespace IIoT.Edge.Host.DataPipeline.Services;
 
 internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<CloudRetryRuntimeState>, ICloudRetryRecordProcessor
 {
-    private static readonly DataPipelineDeadLetterChannel DeadLetterChannel = new(
-        LogPrefix: "云端补传",
-        DeadLetterName: "Cloud",
-        CriticalSource: "Retry.CloudDeadLetterPersistFailed");
+    private static readonly DataPipelineDeadLetterChannel DeadLetterChannel =
+        DataPipelineRetryChannelMetadata.CreateDeadLetterChannel(DataPipelineRetryChannel.Cloud);
 
     private const int MaxRetryCount = 20;
     private const int ClaimBatchSize = 100;
@@ -86,17 +84,20 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
         {
             foreach (var processGroup in batchCandidates.GroupBy(x => x.ProcessType, StringComparer.OrdinalIgnoreCase))
             {
-                foreach (var chunk in processGroup.Chunk(CloudBatchSize))
+                foreach (var sourceGroup in processGroup.GroupBy(DataPipelineRetryChannelMetadata.CreateSourceKey))
                 {
-                    var processResult = await ProcessBatchChunkAsync(
-                        claimedBatch.ClaimToken,
-                        processGroup.Key,
-                        chunk,
-                        cancellationToken).ConfigureAwait(false);
-
-                    if (processResult == CloudRetryProcessResult.PauseForRecovery)
+                    foreach (var chunk in sourceGroup.Chunk(CloudBatchSize))
                     {
-                        return processResult;
+                        var processResult = await ProcessBatchChunkAsync(
+                            claimedBatch.ClaimToken,
+                            processGroup.Key,
+                            chunk,
+                            cancellationToken).ConfigureAwait(false);
+
+                        if (processResult == CloudRetryProcessResult.PauseForRecovery)
+                        {
+                            return processResult;
+                        }
                     }
                 }
             }
@@ -145,13 +146,13 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
             {
                 await HandleDeserializeFailureAsync(
                     source,
-                    "failed_cloud_records",
+                    DataPipelineRetryChannelMetadata.GetFailedRecordSourceTable(DataPipelineRetryChannel.Cloud),
                     $"云端补传记录反序列化失败，工序：{source.ProcessType}。",
                     "云端补传记录反序列化失败，且死信持久化也失败。").ConfigureAwait(false);
                 continue;
             }
 
-            completedRecords.Add(CreateCompletedRecord(source, cellData));
+            completedRecords.Add(DataPipelineRetryChannelMetadata.CreateCompletedRecord(source, cellData));
             validSourceRecords.Add(source);
         }
 
@@ -177,7 +178,7 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
                 await HandleRetryFailureAsync(source, "处理超时。").ConfigureAwait(false);
             }
 
-            Logger.Warn($"[PLC-{ResolveLogDeviceName(validSourceRecords)}][云端补传] {processType} 批量补传超时，数量：{validSourceRecords.Count}。");
+            Logger.Warn($"[PLC-{DataPipelineRetryChannelMetadata.ResolveLogDeviceName(validSourceRecords)}][云端补传] {processType} 批量补传超时，数量：{validSourceRecords.Count}。");
             return CloudRetryProcessResult.Continue;
         }
 
@@ -188,14 +189,14 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
                 await RetryStore.DeleteAsync(source.Id).ConfigureAwait(false);
             }
 
-            Logger.Info($"[PLC-{ResolveLogDeviceName(validSourceRecords)}][云端补传] {processType} 批量补传成功，数量：{validSourceRecords.Count}。");
+            Logger.Info($"[PLC-{DataPipelineRetryChannelMetadata.ResolveLogDeviceName(validSourceRecords)}][云端补传] {processType} 批量补传成功，数量：{validSourceRecords.Count}。");
             return CloudRetryProcessResult.Continue;
         }
 
         if (ShouldPauseForRecovery(result))
         {
             await ReleaseClaimAndPauseAsync(claimToken).ConfigureAwait(false);
-            Logger.Warn($"[PLC-{ResolveLogDeviceName(validSourceRecords)}][云端补传] {processType} 批量补传已暂停，结果：{result.Outcome}，原因：{result.ReasonCode}。");
+            Logger.Warn($"[PLC-{DataPipelineRetryChannelMetadata.ResolveLogDeviceName(validSourceRecords)}][云端补传] {processType} 批量补传已暂停，结果：{result.Outcome}，原因：{result.ReasonCode}。");
             return CloudRetryProcessResult.PauseForRecovery;
         }
 
@@ -204,7 +205,7 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
             await HandleRetryFailureAsync(source, $"Cloud 批量补传失败（{result.ReasonCode}）。").ConfigureAwait(false);
         }
 
-        Logger.Warn($"[PLC-{ResolveLogDeviceName(validSourceRecords)}][云端补传] {processType} 批量补传失败，数量：{validSourceRecords.Count}。");
+        Logger.Warn($"[PLC-{DataPipelineRetryChannelMetadata.ResolveLogDeviceName(validSourceRecords)}][云端补传] {processType} 批量补传失败，数量：{validSourceRecords.Count}。");
         return CloudRetryProcessResult.Continue;
     }
 
@@ -230,7 +231,7 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
         {
             await HandleDeserializeFailureAsync(
                 record,
-                "failed_cloud_records",
+                DataPipelineRetryChannelMetadata.GetFailedRecordSourceTable(DataPipelineRetryChannel.Cloud),
                 $"云端补传记录反序列化失败，工序：{record.ProcessType}。",
                 "云端补传记录反序列化失败，且死信持久化也失败。").ConfigureAwait(false);
             return CloudRetryProcessResult.Continue;
@@ -241,7 +242,9 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
         {
             result = await _consumerInvoker
                 .ExecuteAsync(
-                    ct => _cloudConsumer.ProcessWithResultAsync(CreateCompletedRecord(record, cellData), ct),
+                    ct => _cloudConsumer.ProcessWithResultAsync(
+                        DataPipelineRetryChannelMetadata.CreateCompletedRecord(record, cellData),
+                        ct),
                     _consumerCallTimeout,
                     cancellationToken)
                 .ConfigureAwait(false);
@@ -275,31 +278,7 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
         _diagnosticsStore.SetRuntimeState(CloudRetryRuntimeState.WaitingForRecovery);
     }
 
-    private static CellCompletedRecord CreateCompletedRecord(FailedCellRecord record, CellDataBase cellData)
-        => new()
-        {
-            CellData = cellData,
-            NetworkDeviceId = record.NetworkDeviceId,
-            DeviceName = record.DeviceName,
-            ModuleId = record.ModuleId,
-            TaskKey = record.TaskKey,
-            PlanSessionId = record.PlanSessionId,
-            MainPlanCode = record.MainPlanCode,
-            TraceBatchNumber = record.TraceBatchNumber,
-            CreatedAtUtc = DateTime.SpecifyKind(record.CreatedAt, DateTimeKind.Utc)
-        };
-
     private static bool ShouldPauseForRecovery(CloudCallResult result)
         => result.Outcome is CloudCallOutcome.SkippedUploadNotReady or CloudCallOutcome.UnauthorizedAfterRetry;
 
-    private static string ResolveLogDeviceName(IReadOnlyList<FailedCellRecord> records)
-    {
-        var deviceNames = records
-            .Select(record => record.DeviceName)
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        return deviceNames.Count == 1 ? deviceNames[0] : "多PLC";
-    }
 }

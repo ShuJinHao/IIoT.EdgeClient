@@ -28,6 +28,7 @@ public sealed class CloudApiConfigSnapshotProvider(
             paths.ClientReleaseCatalogTemplate ?? string.Empty,
             paths.ClientVersionReport ?? string.Empty,
             current.Enabled,
-            paths.RuntimeHeartbeat ?? string.Empty);
+            paths.RuntimeHeartbeat ?? string.Empty,
+            paths.EdgeHostPlcRuntimeStates ?? string.Empty);
     }
 }

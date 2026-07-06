@@ -12,7 +12,7 @@ public sealed class DieCuttingModuleDefinition
         string moduleId,
         string displayName,
         string deviceNamePrefix,
-        string ipPrefix,
+        string deviceEndpointPrefix,
         string mesBaseUrl,
         string upperComputerNo,
         string operationCode,
@@ -21,8 +21,7 @@ public sealed class DieCuttingModuleDefinition
         ArgumentException.ThrowIfNullOrWhiteSpace(moduleId);
         ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceNamePrefix);
-        ArgumentException.ThrowIfNullOrWhiteSpace(ipPrefix);
-        ArgumentException.ThrowIfNullOrWhiteSpace(mesBaseUrl);
+        ArgumentException.ThrowIfNullOrWhiteSpace(deviceEndpointPrefix);
         ArgumentException.ThrowIfNullOrWhiteSpace(upperComputerNo);
         ArgumentException.ThrowIfNullOrWhiteSpace(operationCode);
         ArgumentException.ThrowIfNullOrWhiteSpace(seedRemark);
@@ -31,8 +30,8 @@ public sealed class DieCuttingModuleDefinition
         ProcessType = moduleId;
         DisplayName = displayName;
         DeviceNamePrefix = deviceNamePrefix;
-        IpPrefix = ipPrefix;
-        MesBaseUrl = mesBaseUrl;
+        DeviceEndpointPrefix = deviceEndpointPrefix;
+        MesBaseUrl = mesBaseUrl?.Trim() ?? string.Empty;
         UpperComputerNo = upperComputerNo;
         OperationCode = operationCode;
         SeedRemark = seedRemark;
@@ -48,7 +47,7 @@ public sealed class DieCuttingModuleDefinition
 
     public string DeviceNamePrefix { get; }
 
-    public string IpPrefix { get; }
+    public string DeviceEndpointPrefix { get; }
 
     public string MesBaseUrl { get; }
 
@@ -68,11 +67,13 @@ public sealed class DieCuttingModuleDefinition
 
     public string RealtimeSampleUploadTaskKey => $"{ModuleId}.RealtimeSampleUpload";
 
+    public string DeviceStatusUploadTaskKey => $"{ModuleId}.DeviceStatusUpload";
+
     private IReadOnlyList<DieCuttingDeviceSeed> BuildLineDevices()
         => Enumerable.Range(1, 12)
             .Select(index => new DieCuttingDeviceSeed(
                 DeviceName: $"{DeviceNamePrefix}{index:D2}",
-                IpAddress: $"{IpPrefix}.{10 + index}",
+                IpAddress: $"{DeviceEndpointPrefix}{index:D2}.local",
                 DeviceCode: $"{DeviceNamePrefix}{index:D2}",
                 DeviceDisplayName: $"{DeviceNamePrefix}{index:D2}",
                 UpperComputerNo: UpperComputerNo,
@@ -85,12 +86,7 @@ public sealed class DieCuttingModuleDefinition
             .ToArray();
 
     private static IReadOnlyCollection<string> ResolveLegacyMesBaseUrls(string moduleId)
-        => moduleId switch
-        {
-            "DieCuttingAnode" => ["http://10.110.0.250:8081"],
-            "DieCuttingCathode" => ["http://10.110.1.250:8081"],
-            _ => []
-        };
+        => [];
 }
 
 /// <summary>

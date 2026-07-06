@@ -10,10 +10,8 @@ namespace IIoT.Edge.Host.DataPipeline.Services;
 
 internal sealed class MesRetryRecordProcessor : RetryRecordProcessorBase<MesRetryRuntimeState>, IMesRetryRecordProcessor
 {
-    private static readonly DataPipelineDeadLetterChannel DeadLetterChannel = new(
-        LogPrefix: "MES补传",
-        DeadLetterName: "MES",
-        CriticalSource: "Retry.MesDeadLetterPersistFailed");
+    private static readonly DataPipelineDeadLetterChannel DeadLetterChannel =
+        DataPipelineRetryChannelMetadata.CreateDeadLetterChannel(DataPipelineRetryChannel.Mes);
 
     private const int MaxRetryCount = 20;
     private const int ClaimBatchSize = 5;
@@ -98,12 +96,12 @@ internal sealed class MesRetryRecordProcessor : RetryRecordProcessorBase<MesRetr
         {
             return await HandleDeserializeFailureAsync(
                 record,
-                "failed_mes_records",
+                DataPipelineRetryChannelMetadata.GetFailedRecordSourceTable(DataPipelineRetryChannel.Mes),
                 $"MES 补传记录反序列化失败，工序：{record.ProcessType}。",
                 "MES 补传记录反序列化失败，且死信持久化也失败。").ConfigureAwait(false);
         }
 
-        var completedRecord = CreateCompletedRecord(record, cellData);
+        var completedRecord = DataPipelineRetryChannelMetadata.CreateCompletedRecord(record, cellData);
         bool success;
         try
         {
@@ -130,19 +128,5 @@ internal sealed class MesRetryRecordProcessor : RetryRecordProcessorBase<MesRetr
         await HandleRetryFailureAsync(record, "消费者返回失败。").ConfigureAwait(false);
         return false;
     }
-
-    private static CellCompletedRecord CreateCompletedRecord(FailedCellRecord record, CellDataBase cellData)
-        => new()
-        {
-            CellData = cellData,
-            NetworkDeviceId = record.NetworkDeviceId,
-            DeviceName = record.DeviceName,
-            ModuleId = record.ModuleId,
-            TaskKey = record.TaskKey,
-            PlanSessionId = record.PlanSessionId,
-            MainPlanCode = record.MainPlanCode,
-            TraceBatchNumber = record.TraceBatchNumber,
-            CreatedAtUtc = DateTime.SpecifyKind(record.CreatedAt, DateTimeKind.Utc)
-        };
 
 }

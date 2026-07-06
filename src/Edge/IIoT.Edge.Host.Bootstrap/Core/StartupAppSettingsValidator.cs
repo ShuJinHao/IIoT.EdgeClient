@@ -24,7 +24,8 @@ internal sealed class StartupAppSettingsValidator(
         "CloudApi:Paths:RecipeByDeviceTemplate",
         "CloudApi:Paths:ClientReleaseCatalogTemplate",
         "CloudApi:Paths:ClientVersionReport",
-        "CloudApi:Paths:RuntimeHeartbeat"
+        "CloudApi:Paths:RuntimeHeartbeat",
+        "CloudApi:Paths:EdgeHostPlcRuntimeStates"
     ];
 
     public void Validate(StartupValidationContext context, List<StartupDiagnosticIssue> issues)

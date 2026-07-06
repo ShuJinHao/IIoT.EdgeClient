@@ -117,6 +117,31 @@ public sealed class CrashLogWriterBehaviorTests
         }
     }
 
+    [Fact]
+    public void Write_WhenAllCrashLogSinksFail_ShouldSurfaceDiagnosticFailure()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var primaryPath = Path.Combine(tempDir, "primary", "crash.log");
+            var fallbackPath = Path.Combine(tempDir, "fallback", "crash.log");
+            var writer = new CrashLogWriter(
+                () => primaryPath,
+                () => fallbackPath,
+                static (_, _) => throw new IOException("file sinks blocked"),
+                static _ => throw new InvalidOperationException("diagnostic sink blocked"));
+
+            var error = Assert.Throws<InvalidOperationException>(() =>
+                writer.Write("fatal-source", new InvalidOperationException("boom"), "details"));
+
+            Assert.Equal("diagnostic sink blocked", error.Message);
+        }
+        finally
+        {
+            DeleteDirectory(tempDir);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var path = Path.Combine(Path.GetTempPath(), "edge-shell-core-tests", Guid.NewGuid().ToString("N"));

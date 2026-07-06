@@ -19,7 +19,6 @@ namespace IIoT.Edge.Application.Modules.Mes;
 public abstract class MesScenarioChannelBase<TCellData> : IProcessMesUploader
     where TCellData : CellDataBase
 {
-    private const string DefaultMesSignToken = "hdc2023";
     private readonly MesRequestExecutor _requestExecutor;
     private readonly IModuleParamRoleProvider _moduleParamRoleProvider;
     private readonly IProductionTimeProvider _productionTime;
@@ -94,7 +93,7 @@ public abstract class MesScenarioChannelBase<TCellData> : IProcessMesUploader
         return MesCallResult.Success();
     }
 
-    protected Task<MesCallResult> ExecuteMesAsync(
+    protected async Task<MesCallResult> ExecuteMesAsync(
         DeviceSession? device,
         string relativePath,
         Func<MesEnvelope, object> payloadFactory,
@@ -102,19 +101,24 @@ public abstract class MesScenarioChannelBase<TCellData> : IProcessMesUploader
     {
         ArgumentNullException.ThrowIfNull(payloadFactory);
 
-        return _requestExecutor.ExecuteAsync(
+        var signToken = await ResolveSignTokenAsync(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(signToken))
+        {
+            return MesCallResult.InvalidContext($"工序 {ProcessType} 未配置 MES 签名密钥。");
+        }
+
+        return await _requestExecutor.ExecuteAsync(
             ProcessType,
             device,
             relativePath,
             async (currentDevice, ct) =>
             {
                 var stationNo = await ResolveStationNoAsync(currentDevice, ct).ConfigureAwait(false);
-                var signToken = await ResolveSignTokenAsync(ct).ConfigureAwait(false);
                 var envelope = CreateEnvelope(currentDevice, stationNo, signToken);
                 // payloadFactory 是插件侧字段映射边界，Application 不知道也不保存具体业务字段。
                 return payloadFactory(envelope);
             },
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
     }
 
     protected async Task<MesCallResult> ExecuteRequiredMesAsync(
@@ -232,18 +236,17 @@ public abstract class MesScenarioChannelBase<TCellData> : IProcessMesUploader
     /// <summary>
     /// MES 签名令牌走模块参数角色读取，避免插件再维护一套平行 Options 配置。
     /// </summary>
-    protected async Task<string> ResolveSignTokenAsync(CancellationToken cancellationToken)
+    protected async Task<string?> ResolveSignTokenAsync(CancellationToken cancellationToken)
     {
         var configuredValue = await _moduleParamRoleProvider
             .GetMesStringAsync(
                 ProcessType,
                 ModuleParamRole.MesSignToken,
-                defaultValue: DefaultMesSignToken,
                 cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
         return string.IsNullOrWhiteSpace(configuredValue)
-            ? DefaultMesSignToken
+            ? null
             : configuredValue.Trim();
     }
 
@@ -308,8 +311,9 @@ public abstract class MesScenarioChannelBase<TCellData> : IProcessMesUploader
 
     private static string BuildSign(string upperComputerNo, string timestamp, string signToken)
     {
-        var bytes = Encoding.UTF8.GetBytes($"{upperComputerNo}{timestamp}{signToken}");
-        var hash = MD5.HashData(bytes);
+        var key = Encoding.UTF8.GetBytes(signToken);
+        var bytes = Encoding.UTF8.GetBytes($"{upperComputerNo}{timestamp}");
+        var hash = HMACSHA256.HashData(key, bytes);
         var builder = new StringBuilder(hash.Length * 2);
 
         foreach (var value in hash)

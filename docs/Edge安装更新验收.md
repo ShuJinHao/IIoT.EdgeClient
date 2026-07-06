@@ -31,7 +31,7 @@ workflow_dispatch / edge-v* tag / v* tag
 - `package-runtime`：只能跑在 `windows-latest`，负责 .NET/Avalonia/Velopack/installer 构建和验证。
 - `publish-edge-updates`：只能跑在 `[self-hosted, iiot-linux-prod]`，负责把 artifact 组装成 release bundle 并调用 Cloud Human API；该 job 不允许 `scp`、`ssh`、Docker、Harbor 或 GHCR。
 
-内网 runner 必须使用非 root 专用用户运行。发布目录使用 `${EDGE_UPDATES_DIR}`，真实生产路径以 Cloud `.env` 为准；标准默认路径可配置为 `/srv/iiot/edge-updates`，当前 `10.98.90.154` 为 `/data/iiot-platform/edge-client/edge-updates`。如需改目录只允许通过 GitHub Actions repository variable `EDGE_UPDATES_DIR` 或 Cloud 生产 `.env` 覆盖。目录结构固定为：
+内网 runner 必须使用非 root 专用用户运行。发布目录使用 `${EDGE_UPDATES_DIR}`，真实生产路径以 Cloud `.env` 为准；标准默认路径可配置为 `/srv/iiot/edge-updates`。如需改目录只允许通过 GitHub Actions repository variable `EDGE_UPDATES_DIR` 或 Cloud 生产 `.env` 覆盖。客户端文档不得固化真实服务器 IP。目录结构固定为：
 
 ```text
 ${EDGE_UPDATES_DIR}/
@@ -58,7 +58,7 @@ ${EDGE_UPDATES_DIR}/
 pwsh ./scripts/LocalPublishAndDeploy.ps1 `
   -Channel stable `
   -Transport http `
-  -CloudApiBaseUrl http://10.98.90.154:81/api/v1 `
+  -CloudApiBaseUrl http://<cloud-gateway-host>:<port>/api/v1 `
   -ReleaseNotesPath ./release-notes.md `
   -UploadRateLimitMbps 100
 ```

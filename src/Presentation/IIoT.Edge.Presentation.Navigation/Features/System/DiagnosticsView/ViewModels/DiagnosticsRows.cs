@@ -62,6 +62,8 @@ public sealed record StartupDiagnosticIssueRow(
 
 public sealed record MesChannelDiagnosticsRow(
     string ProcessType,
+    string DeviceName,
+    string Scenario,
     string LastResult,
     string LastAttemptAt,
     string LastSuccessAt,

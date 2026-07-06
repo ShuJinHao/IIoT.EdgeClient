@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
@@ -6,7 +7,9 @@ using IIoT.Edge.Application.Abstractions.Mes;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Application.Abstractions.Shared;
 using IIoT.Edge.Application.Abstractions.Time;
+using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Application.Modules;
 using IIoT.Edge.Application.Modules.Hardware;
@@ -24,6 +27,7 @@ using IIoT.Edge.Module.DieCutting.Production;
 using IIoT.Edge.Module.DieCutting.Samples;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline;
+using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using IIoT.Edge.SharedKernel.Domain;
 using IIoT.Edge.SharedKernel.Enums;
 using IIoT.Edge.SharedKernel.Repository;
@@ -49,12 +53,11 @@ public sealed class DieCuttingAnodeModuleContractTests : DieCuttingModuleContrac
     protected override string ExpectedMachineProfileFileName => "appsettings.machine.DieCuttingAnodeLine.json";
     protected override string ExpectedFirstDevice => "P1-AP01";
     protected override string ExpectedLastDevice => "P1-AP12";
-    protected override string ExpectedFirstIpAddress => "10.110.0.11";
-    protected override string ExpectedLastIpAddress => "10.110.0.22";
+    protected override string ExpectedFirstIpAddress => "plc-ap-01.local";
+    protected override string ExpectedLastIpAddress => "plc-ap-12.local";
     protected override string ExpectedUpperComputerNo => "P1-APUC";
     protected override string ExpectedOperationCode => "AP";
-    protected override string ExpectedMesBaseUrl => "http://10.98.101.247:8080";
-    protected override string ExpectedLegacyMesBaseUrl => "http://10.110.0.250:8081";
+    protected override string ExpectedMesBaseUrl => string.Empty;
 }
 
 public sealed class DieCuttingCathodeModuleContractTests : DieCuttingModuleContractTestsBase<CathodeModule>
@@ -66,17 +69,19 @@ public sealed class DieCuttingCathodeModuleContractTests : DieCuttingModuleContr
     protected override string ExpectedMachineProfileFileName => "appsettings.machine.DieCuttingCathodeLine.json";
     protected override string ExpectedFirstDevice => "P2-CP01";
     protected override string ExpectedLastDevice => "P2-CP12";
-    protected override string ExpectedFirstIpAddress => "10.110.1.11";
-    protected override string ExpectedLastIpAddress => "10.110.1.22";
+    protected override string ExpectedFirstIpAddress => "plc-cp-01.local";
+    protected override string ExpectedLastIpAddress => "plc-cp-12.local";
     protected override string ExpectedUpperComputerNo => "P2-CPUC";
     protected override string ExpectedOperationCode => "CP";
-    protected override string ExpectedMesBaseUrl => "http://10.98.101.247:8080";
-    protected override string ExpectedLegacyMesBaseUrl => "http://10.110.1.250:8081";
+    protected override string ExpectedMesBaseUrl => string.Empty;
 }
 
 public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContractTestBase<TModule>
     where TModule : IEdgeProcessModule, new()
 {
+    private const string ExpectedMesSignSecret = "test-mes-hmac-secret";
+    private const string TestMesBaseUrl = "http://mes.example.test:8080";
+
     protected abstract string ExpectedModuleId { get; }
     protected abstract string ExpectedDisplayName { get; }
     protected abstract string ExpectedConfigFileName { get; }
@@ -89,11 +94,10 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
     protected abstract string ExpectedUpperComputerNo { get; }
     protected abstract string ExpectedOperationCode { get; }
     protected abstract string ExpectedMesBaseUrl { get; }
-    protected abstract string ExpectedLegacyMesBaseUrl { get; }
 
     protected override bool RequiresHardwareProfile => true;
     protected override bool RequiresMesUploader => true;
-    protected override int ExpectedRuntimeTaskCount => 1;
+    protected override int ExpectedRuntimeTaskCount => 2;
     protected override int MinimumRouteCount => 6;
 
     protected override ProductionContext CreateRuntimeContext()
@@ -103,6 +107,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
     {
         AddDefaultRuntimeServices(services);
         services.AddSingleton<IMesUploadDiagnosticsStore, ContractMesUploadDiagnosticsStore>();
+        services.AddSingleton<ICloudUploadDiagnosticsStore, ContractCloudUploadDiagnosticsStore>();
         services.AddSingleton<IMesHttpClient, CapturingMesHttpClient>();
         services.AddSingleton<IMesEndpointProvider, ContractMesEndpointProvider>();
         services.AddSingleton<IPlcConnectionManager, ContractPlcConnectionManager>();
@@ -187,11 +192,14 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             && mapping.Direction == "Read"
             && mapping.PlcAddress == "R100");
         Assert.Equal(65531, existingDevice.Port1);
+        var definition = serviceProvider.GetRequiredService<DieCuttingModuleDefinition>();
+        Assert.Equal(networkDevices.Items.Count * 2, taskBindings.Items.Count(static binding => binding.Enabled));
         Assert.Equal(
             networkDevices.Items.Count,
-            taskBindings.Items.Count(binding =>
-                binding.TaskKey == serviceProvider.GetRequiredService<DieCuttingModuleDefinition>().RealtimeSampleUploadTaskKey
-                && binding.Enabled));
+            taskBindings.Items.Count(binding => binding.TaskKey == definition.RealtimeSampleUploadTaskKey && binding.Enabled));
+        Assert.Equal(
+            networkDevices.Items.Count,
+            taskBindings.Items.Count(binding => binding.TaskKey == definition.DeviceStatusUploadTaskKey && binding.Enabled));
     }
 
     [Fact]
@@ -383,30 +391,67 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
     }
 
     [Fact]
-    public void RuntimeFactory_TaskCandidate_ShouldRequireDieCuttingSnapshotSignals()
+    public void RuntimeFactory_TaskCandidates_ShouldSeparateRealtimeDataAndDeviceStatus()
     {
         var result = new ModuleContractFixture().RegisterModule(new TModule());
         Assert.True(result.RuntimeRegistry.TryGetFactory(ExpectedModuleId, out var factory));
 
-        var candidate = Assert.Single(factory.GetTaskCandidates());
-        Assert.True(candidate.DefaultEnabled);
-        var requiredSignals = candidate.RequiredSignals
+        using var provider = result.Services.BuildServiceProvider();
+        var definition = provider.GetRequiredService<DieCuttingModuleDefinition>();
+        var candidates = factory.GetTaskCandidates();
+        var realtimeCandidate = Assert.Single(candidates, candidate => candidate.Key == definition.RealtimeSampleUploadTaskKey);
+        var statusCandidate = Assert.Single(candidates, candidate => candidate.Key == definition.DeviceStatusUploadTaskKey);
+        Assert.True(realtimeCandidate.DefaultEnabled);
+        Assert.True(statusCandidate.DefaultEnabled);
+
+        var realtimeRequiredSignals = realtimeCandidate.RequiredSignals
             .Select(static signal => signal.SignalKey)
             .ToArray();
 
-        Assert.Contains("DieCutting.DeviceStatus", requiredSignals);
-        Assert.Contains("DieCutting.PunchingQuantity", requiredSignals);
-        Assert.Contains("DieCutting.PunchingSpeed", requiredSignals);
-        Assert.Contains("DieCutting.BatchNumber", requiredSignals);
-        Assert.Contains("DieCutting.ClipNo.Mg1", requiredSignals);
-        Assert.Contains("DieCutting.ClipNo.Mg2", requiredSignals);
-        Assert.Contains("DieCutting.OperatorCode", requiredSignals);
-        Assert.Contains("DieCutting.MoldCode", requiredSignals);
-        Assert.Contains("DieCutting.CutterCode", requiredSignals);
+        Assert.DoesNotContain("DieCutting.DeviceStatus", realtimeRequiredSignals);
+        Assert.Contains("DieCutting.PunchingQuantity", realtimeRequiredSignals);
+        Assert.Contains("DieCutting.PunchingSpeed", realtimeRequiredSignals);
+        Assert.Contains("DieCutting.BatchNumber", realtimeRequiredSignals);
+        Assert.Contains("DieCutting.ClipNo.Mg1", realtimeRequiredSignals);
+        Assert.Contains("DieCutting.ClipNo.Mg2", realtimeRequiredSignals);
+        Assert.Contains("DieCutting.OperatorCode", realtimeRequiredSignals);
+        Assert.Contains("DieCutting.MoldCode", realtimeRequiredSignals);
+        Assert.Contains("DieCutting.CutterCode", realtimeRequiredSignals);
+
+        var statusRequiredSignal = Assert.Single(statusCandidate.RequiredSignals);
+        Assert.Equal("DieCutting.DeviceStatus", statusRequiredSignal.SignalKey);
+        Assert.Equal("Read", statusRequiredSignal.Direction);
     }
 
     [Fact]
-    public void RuntimeFactory_WhenRealtimeSampleUploadTaskDisabled_ShouldCreateNoTasks()
+    public async Task TaskBindingService_WhenStandardIoExists_ShouldDefaultEnableRealtimeAndDeviceStatus()
+    {
+        var result = new ModuleContractFixture().RegisterModule(new TModule());
+        Assert.True(result.RuntimeRegistry.TryGetFactory(ExpectedModuleId, out var factory));
+        using var provider = result.Services.BuildServiceProvider();
+        var definition = provider.GetRequiredService<DieCuttingModuleDefinition>();
+        var hardwareProfile = provider.GetRequiredService<IModuleHardwareProfileProvider>();
+        var service = new PlcTaskBindingService(
+            new ConfigurationBuilder().Build(),
+            result.RuntimeRegistry,
+            new InMemoryRepository<NetworkDeviceEntity>(),
+            new InMemoryRepository<IoMappingEntity>(),
+            new InMemoryRepository<PlcTaskBindingEntity>(),
+            new ContractLogService());
+
+        var enabledKeys = await service.GetEnabledTaskKeysAsync(
+            networkDeviceId: 1,
+            factory.GetTaskCandidates(),
+            CreateStandardIoSnapshots(hardwareProfile),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            [definition.DeviceStatusUploadTaskKey, definition.RealtimeSampleUploadTaskKey],
+            enabledKeys.OrderBy(static key => key, StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void RuntimeFactory_WhenAllDieCuttingTasksDisabled_ShouldCreateNoTasks()
     {
         var result = new ModuleContractFixture().RegisterModule(new TModule());
         Assert.True(result.RuntimeRegistry.TryGetFactory(ExpectedModuleId, out var factory));
@@ -438,7 +483,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
 
         Assert.Contains(logEntries, entry =>
             entry.Message.Contains("[模切采样] 任务配置", StringComparison.Ordinal)
-            && entry.Message.Contains("MES地址=http://10.98.101.247:8080", StringComparison.Ordinal)
+            && entry.Message.Contains($"MES地址={TestMesBaseUrl}", StringComparison.Ordinal)
             && entry.Message.Contains("采集处理周期=1000ms", StringComparison.Ordinal));
         Assert.Contains(logEntries, entry =>
             entry.Message.Contains("PLC 未连接，模切采样上传暂停", StringComparison.Ordinal));
@@ -446,7 +491,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
     }
 
     [Fact]
-    public async Task RealtimeSampleUploadTask_WhenLegacyMesBaseUrlConfigured_ShouldWarnWithoutCredentialText()
+    public async Task RealtimeSampleUploadTask_WhenMesBaseUrlIsCustom_ShouldNotWarnLegacyOrCredentialText()
     {
         var logEntries = new List<LogEntry>();
         var logService = new ContractLogService();
@@ -459,14 +504,13 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
                 ExpectedModuleId,
                 ExpectedUpperComputerNo,
                 ExpectedOperationCode,
-                mesBaseUrl: ExpectedLegacyMesBaseUrl));
+                mesBaseUrl: "http://legacy-mes.example.test:8081"));
         using var provider = runtime.Provider;
 
         await InvokeTaskCoreOnceAsync(runtime.Task);
 
-        Assert.Contains(logEntries, entry =>
-            entry.Message.Contains("历史默认值", StringComparison.Ordinal)
-            && entry.Message.Contains(ExpectedLegacyMesBaseUrl, StringComparison.Ordinal));
+        Assert.DoesNotContain(logEntries, entry =>
+            entry.Message.Contains("历史默认值", StringComparison.Ordinal));
         Assert.DoesNotContain(logEntries, ContainsSensitiveMesCredentialText);
     }
 
@@ -501,7 +545,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         Assert.Equal(100, record.Quantity);
         Assert.Equal(12.5m, record.PunchingSpeed);
         Assert.Equal(3456, runtime.Context.LastRealtimeSnapshot?.UnwindingLength);
-        Assert.Contains("MES 上传已关闭", runtime.Context.LastRealtimeResult);
+        Assert.Contains("MES/Cloud 上传已关闭", runtime.Context.LastRealtimeResult);
         Assert.Equal(0, mesChannel.RealtimeUploadCount);
         Assert.Equal(0, mesChannel.DeviceStatusUploadCount);
     }
@@ -520,6 +564,9 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             mesChannel: null,
             pipeline);
         using var provider = runtime.Provider;
+        runtime.Context.PlanSessionId = "STALE-SESSION";
+        runtime.Context.SelectedProductionPlan = CreatePlanOption("STALE-MP");
+        runtime.Context.TraceBatchNumber = "STALE-TRACE";
         SeedRealtimeSignals(runtime.Buffer);
 
         await InvokeTaskCoreOnceAsync(runtime.Task);
@@ -572,7 +619,315 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         Assert.Equal("TRACE-PLAN-001", outbound.TraceBatchNumber);
         Assert.Equal(outbound.NetworkDeviceId, cellData.PlcDeviceId);
         Assert.Equal(DieCuttingCellData.RecordKinds.RealtimeOutbound, cellData.RecordKind);
+        Assert.Equal(DataPipelineUploadTargets.Mes, cellData.UploadTargets);
         Assert.Contains("MES 上传队列", runtime.Context.LastRealtimeResult, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RealtimeSampleUploadTask_WhenMesDisabledAndCloudEnabled_ShouldEnqueueCloudOnlyWithoutMainPlan()
+    {
+        var logService = new ContractLogService();
+        var recordStore = new InMemoryDieCuttingProductionRecordStore();
+        var pipeline = new CapturingDataPipelineService();
+        var runtime = CreateRealtimeSampleRuntime(
+            logService,
+            new ContractPlcConnectionManager(),
+            new ContractDieCuttingModuleParamProvider(
+                ExpectedModuleId,
+                ExpectedUpperComputerNo,
+                ExpectedOperationCode,
+                mesEnabled: false,
+                cloudEnabled: true),
+            recordStore,
+            mesChannel: null,
+            pipeline);
+        using var provider = runtime.Provider;
+        runtime.Context.PlanSessionId = "STALE-SESSION";
+        runtime.Context.SelectedProductionPlan = CreatePlanOption("STALE-MP");
+        runtime.Context.TraceBatchNumber = "STALE-TRACE";
+        SeedRealtimeSignals(runtime.Buffer);
+
+        await InvokeTaskCoreOnceAsync(runtime.Task);
+
+        var outbound = Assert.Single(
+            pipeline.Records,
+            record => Assert.IsType<DieCuttingCellData>(record.CellData).RecordKind == DieCuttingCellData.RecordKinds.RealtimeOutbound);
+        var cellData = Assert.IsType<DieCuttingCellData>(outbound.CellData);
+        var definition = provider.GetRequiredService<DieCuttingModuleDefinition>();
+        Assert.Equal(ExpectedModuleId, outbound.ModuleId);
+        Assert.Equal(definition.RealtimeSampleUploadTaskKey, outbound.TaskKey);
+        Assert.Equal(string.Empty, outbound.PlanSessionId);
+        Assert.Equal(string.Empty, outbound.MainPlanCode);
+        Assert.Equal(string.Empty, outbound.TraceBatchNumber);
+        Assert.Equal(DataPipelineUploadTargets.Cloud, cellData.UploadTargets);
+        Assert.Equal(outbound.NetworkDeviceId, cellData.PlcDeviceId);
+        Assert.Contains("Cloud 上传队列", runtime.Context.LastRealtimeResult, StringComparison.Ordinal);
+
+        var records = await recordStore.QueryAsync(
+            ExpectedModuleId,
+            ExpectedFirstDevice,
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Single(records);
+    }
+
+    [Fact]
+    public async Task RealtimeSampleUploadTask_WhenCloudOnlyDataPipelineThrows_ShouldRecordCloudFailure()
+    {
+        var logService = new ContractLogService();
+        var recordStore = new InMemoryDieCuttingProductionRecordStore();
+        var pipeline = new CapturingDataPipelineService
+        {
+            ExceptionToThrow = new InvalidOperationException("本地队列异常")
+        };
+        var runtime = CreateRealtimeSampleRuntime(
+            logService,
+            new ContractPlcConnectionManager(),
+            new ContractDieCuttingModuleParamProvider(
+                ExpectedModuleId,
+                ExpectedUpperComputerNo,
+                ExpectedOperationCode,
+                mesEnabled: false,
+                cloudEnabled: true),
+            recordStore,
+            mesChannel: null,
+            pipeline);
+        using var provider = runtime.Provider;
+        SeedRealtimeSignals(runtime.Buffer);
+
+        await InvokeTaskCoreOnceAsync(runtime.Task);
+
+        var definition = provider.GetRequiredService<DieCuttingModuleDefinition>();
+        var diagnostics = provider.GetRequiredService<ICloudUploadDiagnosticsStore>().Snapshot;
+        Assert.Empty(pipeline.Records);
+        Assert.Contains("本地队列异常", runtime.Context.LastRealtimeResult, StringComparison.Ordinal);
+        Assert.Null(runtime.Context.LastOutboundFingerprint);
+        Assert.Equal(CloudCallOutcome.Exception, diagnostics.LastOutcome);
+        Assert.Equal("plc_realtime_enqueue_failed", diagnostics.LastReasonCode);
+        Assert.Equal(definition.ProcessType, diagnostics.LastProcessType);
+        Assert.Equal(ExpectedModuleId, diagnostics.LastModuleId);
+        Assert.Equal(definition.RealtimeSampleUploadTaskKey, diagnostics.LastTaskKey);
+        Assert.Equal("生产上传", diagnostics.LastScenario);
+    }
+
+    [Fact]
+    public async Task RealtimeSampleUploadTask_WhenMesAndCloudEnabledWithMainPlan_ShouldEnqueueAllTargets()
+    {
+        var logService = new ContractLogService();
+        var recordStore = new InMemoryDieCuttingProductionRecordStore();
+        var pipeline = new CapturingDataPipelineService();
+        var httpClient = new CapturingMesHttpClient
+        {
+            PostResponse = """{"code":200,"msg":"OK","data":{"batchNumber":"TRACE-PLAN-001"}}"""
+        };
+        var runtime = CreateRealtimeSampleRuntime(
+            logService,
+            new ContractPlcConnectionManager(),
+            new ContractDieCuttingModuleParamProvider(
+                ExpectedModuleId,
+                ExpectedUpperComputerNo,
+                ExpectedOperationCode,
+                cloudEnabled: true),
+            recordStore,
+            mesChannel: null,
+            pipeline,
+            httpClient);
+        using var provider = runtime.Provider;
+        var planService = provider.GetRequiredService<DieCuttingProductionPlanService>();
+        await planService.SelectPlanAsync(CreatePlanOption("MP-001"), TestContext.Current.CancellationToken);
+        SeedRealtimeSignals(runtime.Buffer);
+
+        await InvokeTaskCoreOnceAsync(runtime.Task);
+
+        var outbound = Assert.Single(
+            pipeline.Records,
+            record => Assert.IsType<DieCuttingCellData>(record.CellData).RecordKind == DieCuttingCellData.RecordKinds.RealtimeOutbound);
+        var cellData = Assert.IsType<DieCuttingCellData>(outbound.CellData);
+        Assert.Equal(DataPipelineUploadTargets.All, cellData.UploadTargets);
+        Assert.False(string.IsNullOrWhiteSpace(outbound.PlanSessionId));
+        Assert.Equal("MP-001", outbound.MainPlanCode);
+        Assert.Equal("TRACE-PLAN-001", outbound.TraceBatchNumber);
+        Assert.Contains("MES/Cloud 上传队列", runtime.Context.LastRealtimeResult, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DeviceStatusUploadTask_WhenMesEnabledWithoutMainPlan_ShouldEnqueueStatusWithPlcContext()
+    {
+        var logService = new ContractLogService();
+        var pipeline = new CapturingDataPipelineService();
+        var runtime = CreateDeviceStatusRuntime(
+            logService,
+            new ContractPlcConnectionManager(),
+            new ContractDieCuttingModuleParamProvider(ExpectedModuleId, ExpectedUpperComputerNo, ExpectedOperationCode),
+            pipeline);
+        using var provider = runtime.Provider;
+        SeedRealtimeSignals(runtime.Buffer);
+
+        await InvokeTaskCoreOnceAsync(runtime.Task);
+
+        var record = Assert.Single(pipeline.Records);
+        var cellData = Assert.IsType<DieCuttingCellData>(record.CellData);
+        var definition = provider.GetRequiredService<DieCuttingModuleDefinition>();
+        Assert.Equal(1, record.NetworkDeviceId);
+        Assert.Equal(ExpectedFirstDevice, record.DeviceName);
+        Assert.Equal(ExpectedModuleId, record.ModuleId);
+        Assert.Equal(definition.DeviceStatusUploadTaskKey, record.TaskKey);
+        Assert.Equal(string.Empty, record.PlanSessionId);
+        Assert.Equal(string.Empty, record.MainPlanCode);
+        Assert.Equal(string.Empty, record.TraceBatchNumber);
+        Assert.Equal(DataPipelineUploadTargets.Mes, cellData.UploadTargets);
+        Assert.Equal(DieCuttingCellData.RecordKinds.DeviceStatus, cellData.RecordKind);
+        Assert.Equal((short)1, cellData.StatusCode);
+        Assert.Contains("MES 上传队列", runtime.Context.LastDeviceStatusResult, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DeviceStatusUploadTask_WhenMesDisabledAndCloudEnabled_ShouldEnqueueCloudOnlyWithoutMainPlan()
+    {
+        var logService = new ContractLogService();
+        var pipeline = new CapturingDataPipelineService();
+        var runtime = CreateDeviceStatusRuntime(
+            logService,
+            new ContractPlcConnectionManager(),
+            new ContractDieCuttingModuleParamProvider(
+                ExpectedModuleId,
+                ExpectedUpperComputerNo,
+                ExpectedOperationCode,
+                mesEnabled: false,
+                cloudEnabled: true),
+            pipeline);
+        using var provider = runtime.Provider;
+        SeedRealtimeSignals(runtime.Buffer);
+
+        await InvokeTaskCoreOnceAsync(runtime.Task);
+
+        var record = Assert.Single(pipeline.Records);
+        var cellData = Assert.IsType<DieCuttingCellData>(record.CellData);
+        var definition = provider.GetRequiredService<DieCuttingModuleDefinition>();
+        Assert.Equal(1, record.NetworkDeviceId);
+        Assert.Equal(ExpectedFirstDevice, record.DeviceName);
+        Assert.Equal(ExpectedModuleId, record.ModuleId);
+        Assert.Equal(definition.DeviceStatusUploadTaskKey, record.TaskKey);
+        Assert.Equal(string.Empty, record.PlanSessionId);
+        Assert.Equal(string.Empty, record.MainPlanCode);
+        Assert.Equal(string.Empty, record.TraceBatchNumber);
+        Assert.Equal(DataPipelineUploadTargets.Cloud, cellData.UploadTargets);
+        Assert.Equal(DieCuttingCellData.RecordKinds.DeviceStatus, cellData.RecordKind);
+        Assert.Contains("Cloud 上传队列", runtime.Context.LastDeviceStatusResult, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DeviceStatusUploadTask_WhenCloudOnlyDataPipelineThrows_ShouldRecordCloudFailure()
+    {
+        var logService = new ContractLogService();
+        var pipeline = new CapturingDataPipelineService
+        {
+            ExceptionToThrow = new InvalidOperationException("本地队列异常")
+        };
+        var runtime = CreateDeviceStatusRuntime(
+            logService,
+            new ContractPlcConnectionManager(),
+            new ContractDieCuttingModuleParamProvider(
+                ExpectedModuleId,
+                ExpectedUpperComputerNo,
+                ExpectedOperationCode,
+                mesEnabled: false,
+                cloudEnabled: true),
+            pipeline);
+        using var provider = runtime.Provider;
+        SeedRealtimeSignals(runtime.Buffer);
+
+        await InvokeTaskCoreOnceAsync(runtime.Task);
+
+        var definition = provider.GetRequiredService<DieCuttingModuleDefinition>();
+        var diagnostics = provider.GetRequiredService<ICloudUploadDiagnosticsStore>().Snapshot;
+        Assert.Empty(pipeline.Records);
+        Assert.Contains("本地队列异常", runtime.Context.LastDeviceStatusResult, StringComparison.Ordinal);
+        Assert.Null(runtime.Context.LastDeviceStatusFingerprint);
+        Assert.Equal(CloudCallOutcome.Exception, diagnostics.LastOutcome);
+        Assert.Equal("plc_device_status_enqueue_failed", diagnostics.LastReasonCode);
+        Assert.Equal(definition.ProcessType, diagnostics.LastProcessType);
+        Assert.Equal(ExpectedModuleId, diagnostics.LastModuleId);
+        Assert.Equal(definition.DeviceStatusUploadTaskKey, diagnostics.LastTaskKey);
+        Assert.Equal("设备状态上传", diagnostics.LastScenario);
+    }
+
+    [Fact]
+    public async Task DeviceStatusUploadTask_WhenMesAndCloudEnabled_ShouldEnqueueAllTargetsWithoutMainPlan()
+    {
+        var logService = new ContractLogService();
+        var pipeline = new CapturingDataPipelineService();
+        var runtime = CreateDeviceStatusRuntime(
+            logService,
+            new ContractPlcConnectionManager(),
+            new ContractDieCuttingModuleParamProvider(
+                ExpectedModuleId,
+                ExpectedUpperComputerNo,
+                ExpectedOperationCode,
+                cloudEnabled: true),
+            pipeline);
+        using var provider = runtime.Provider;
+        SeedRealtimeSignals(runtime.Buffer);
+
+        await InvokeTaskCoreOnceAsync(runtime.Task);
+
+        var record = Assert.Single(pipeline.Records);
+        var cellData = Assert.IsType<DieCuttingCellData>(record.CellData);
+        Assert.Equal(DataPipelineUploadTargets.All, cellData.UploadTargets);
+        Assert.Equal(string.Empty, record.PlanSessionId);
+        Assert.Equal(string.Empty, record.MainPlanCode);
+        Assert.Equal(string.Empty, record.TraceBatchNumber);
+        Assert.Contains("MES/Cloud 上传队列", runtime.Context.LastDeviceStatusResult, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DeviceStatusUploadTask_WhenMesAndCloudDisabled_ShouldSkipQueueWithoutMainPlan()
+    {
+        var logService = new ContractLogService();
+        var pipeline = new CapturingDataPipelineService();
+        var runtime = CreateDeviceStatusRuntime(
+            logService,
+            new ContractPlcConnectionManager(),
+            new ContractDieCuttingModuleParamProvider(
+                ExpectedModuleId,
+                ExpectedUpperComputerNo,
+                ExpectedOperationCode,
+                mesEnabled: false,
+                cloudEnabled: false),
+            pipeline);
+        using var provider = runtime.Provider;
+        SeedRealtimeSignals(runtime.Buffer);
+
+        await InvokeTaskCoreOnceAsync(runtime.Task);
+
+        Assert.Empty(pipeline.Records);
+        Assert.NotNull(runtime.Context.LastDeviceStatusAt);
+        Assert.Null(runtime.Context.LastDeviceStatusFingerprint);
+        Assert.Contains("MES/Cloud 上传已关闭", runtime.Context.LastDeviceStatusResult, StringComparison.Ordinal);
+        Assert.Equal("Disabled", runtime.Context.Get<string>($"Runtime.Tasks.{provider.GetRequiredService<DieCuttingModuleDefinition>().DeviceStatusUploadTaskKey}.LastUploadOutcome"));
+    }
+
+    [Fact]
+    public async Task DeviceStatusUploadTask_WhenStatusCodeUnknown_ShouldSkipQueueAndKeepFingerprintUnset()
+    {
+        var logService = new ContractLogService();
+        var pipeline = new CapturingDataPipelineService();
+        var runtime = CreateDeviceStatusRuntime(
+            logService,
+            new ContractPlcConnectionManager(),
+            new ContractDieCuttingModuleParamProvider(ExpectedModuleId, ExpectedUpperComputerNo, ExpectedOperationCode),
+            pipeline);
+        using var provider = runtime.Provider;
+        SeedRealtimeSignals(runtime.Buffer);
+        SetReadInt16(runtime.Buffer, DieCuttingPlcSignals.SingleRead.设备状态, 99);
+
+        await InvokeTaskCoreOnceAsync(runtime.Task);
+
+        var definition = provider.GetRequiredService<DieCuttingModuleDefinition>();
+        Assert.Empty(pipeline.Records);
+        Assert.NotNull(runtime.Context.LastDeviceStatusAt);
+        Assert.Null(runtime.Context.LastDeviceStatusFingerprint);
+        Assert.Contains("设备状态码未知", runtime.Context.LastDeviceStatusResult, StringComparison.Ordinal);
+        Assert.Equal("InvalidContext", runtime.Context.Get<string>($"Runtime.Tasks.{definition.DeviceStatusUploadTaskKey}.LastUploadOutcome"));
     }
 
     [Fact]
@@ -596,16 +951,18 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Business),
             descriptor => descriptor.Role == ModuleParamRole.DataReadLoopIntervalMs
                           && descriptor.Name == nameof(DieCuttingParams.Business.采集频率毫秒));
-        Assert.DoesNotContain(
+        Assert.Contains(
             result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Mes),
-            descriptor => descriptor.Role == ModuleParamRole.MesSignToken);
+            descriptor => descriptor.Role == ModuleParamRole.MesSignToken
+                          && descriptor.Name == nameof(DieCuttingParams.Mes.签名令牌)
+                          && string.IsNullOrEmpty(descriptor.DefaultValue));
         Assert.Contains(
             result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Mes),
             descriptor => descriptor.Role == ModuleParamRole.MesBaseUrl
                           && descriptor.Name == nameof(DieCuttingParams.Mes.服务地址)
                           && descriptor.DefaultValue == ExpectedMesBaseUrl
                           && descriptor.LegacyDefaultValues is not null
-                          && descriptor.LegacyDefaultValues.Contains(ExpectedLegacyMesBaseUrl));
+                          && descriptor.LegacyDefaultValues.Count == 0);
         Assert.Contains(
             result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Mes),
             descriptor => descriptor.Role == ModuleParamRole.MesUpperComputerNo
@@ -632,9 +989,11 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Mes),
             descriptor => descriptor.Name == nameof(DieCuttingParams.Mes.EquipmentStatusPath)
                           && descriptor.DefaultValue == "/dev/dev/realTime/status");
-        Assert.DoesNotContain(
+        Assert.Contains(
             result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Cloud),
-            descriptor => descriptor.Role == ModuleParamRole.CloudEnabled);
+            descriptor => descriptor.Role == ModuleParamRole.CloudEnabled
+                          && descriptor.Name == nameof(DieCuttingParams.Cloud.启用)
+                          && descriptor.DefaultValue == "false");
         Assert.Contains(
             result.Services,
             descriptor => descriptor.ServiceType == typeof(IProductionPlanSelectionService)
@@ -759,7 +1118,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         Assert.Equal(ExpectedUpperComputerNo, root.GetProperty("upperComputerNo").GetString());
         var timestamp = root.GetProperty("timestamp").GetString()!;
         Assert.Equal(
-            BuildExpectedSign(ExpectedUpperComputerNo, timestamp, "hdc2023"),
+            BuildExpectedSign(ExpectedUpperComputerNo, timestamp, ExpectedMesSignSecret),
             root.GetProperty("sign").GetString());
         Assert.Equal(ExpectedFirstDevice, root.GetProperty("stationNo").GetString());
         Assert.Equal(ExpectedOperationCode, root.GetProperty("operationCode").GetString());
@@ -777,6 +1136,56 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         Assert.Contains(produce, item =>
             item.GetProperty("code").GetString() == "polePieceLength"
             && item.GetProperty("val").GetString() == string.Empty);
+    }
+
+    [Fact]
+    public async Task MesChannel_WhenSignSecretMissing_ShouldReturnInvalidContextWithoutHttp()
+    {
+        var result = new ModuleContractFixture().RegisterModule(new TModule());
+        using var provider = result.Services.BuildServiceProvider();
+        var definition = provider.GetRequiredService<DieCuttingModuleDefinition>();
+        var httpClient = new CapturingMesHttpClient();
+        var roleProvider = new ContractModuleParamRoleProvider(ExpectedFirstDevice, mesSignSecret: null);
+        var channel = new DieCuttingMesChannel(
+            definition,
+            new MesRequestExecutor(
+                httpClient,
+                new ContractMesEndpointProvider(),
+                roleProvider,
+                new ContractLogService()),
+            roleProvider,
+            new ContractDieCuttingModuleParamProvider(
+                ExpectedModuleId,
+                ExpectedUpperComputerNo,
+                ExpectedOperationCode),
+            new ContractLogService(),
+            new ContractProductionTimeProvider());
+
+        var uploadResult = await channel.UploadRealtimeAsync(
+            new DeviceSession
+            {
+                DeviceId = Guid.NewGuid(),
+                ProcessId = Guid.NewGuid(),
+                DeviceName = ExpectedFirstDevice,
+                ClientCode = ExpectedUpperComputerNo
+            },
+            new DieCuttingRealtimeSnapshot
+            {
+                CapturedAt = new DateTime(2026, 6, 24, 10, 1, 2),
+                WindowStartAt = new DateTime(2026, 6, 24, 10, 0, 0),
+                WindowCompleteAt = new DateTime(2026, 6, 24, 10, 1, 0),
+                ClipNo = "MG-01",
+                PunchingDeviceCode = ExpectedFirstDevice,
+                PunchingDeviceName = ExpectedFirstDevice,
+                PunchingQuantity = 123,
+                PunchingSpeed = 45.6m,
+                PunchingLotNumber = "TRACE-AP-001"
+            },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(MesCallOutcome.InvalidContext, uploadResult.Outcome);
+        Assert.Contains("未配置 MES 签名密钥", uploadResult.Message, StringComparison.Ordinal);
+        Assert.Null(httpClient.LastUrl);
     }
 
     [Fact]
@@ -964,8 +1373,9 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
 
     private static string BuildExpectedSign(string upperComputerNo, string timestamp, string signToken)
     {
-        var bytes = Encoding.UTF8.GetBytes($"{upperComputerNo}{timestamp}{signToken}");
-        var hash = MD5.HashData(bytes);
+        var key = Encoding.UTF8.GetBytes(signToken);
+        var bytes = Encoding.UTF8.GetBytes($"{upperComputerNo}{timestamp}");
+        var hash = HMACSHA256.HashData(key, bytes);
         var builder = new StringBuilder(hash.Length * 2);
 
         foreach (var value in hash)
@@ -1024,6 +1434,39 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         IDieCuttingMesScenarioChannel? mesChannel,
         IDataPipelineService? dataPipelineService = null,
         IMesHttpClient? mesHttpClient = null)
+        => CreateTaskRuntime(
+            static definition => definition.RealtimeSampleUploadTaskKey,
+            logService,
+            plcConnectionManager,
+            parameters,
+            recordStore,
+            mesChannel,
+            dataPipelineService,
+            mesHttpClient);
+
+    private RealtimeSampleRuntime CreateDeviceStatusRuntime(
+        ILogService logService,
+        IPlcConnectionManager plcConnectionManager,
+        IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> parameters,
+        IDataPipelineService dataPipelineService)
+        => CreateTaskRuntime(
+            static definition => definition.DeviceStatusUploadTaskKey,
+            logService,
+            plcConnectionManager,
+            parameters,
+            recordStore: null,
+            mesChannel: null,
+            dataPipelineService: dataPipelineService);
+
+    private RealtimeSampleRuntime CreateTaskRuntime(
+        Func<DieCuttingModuleDefinition, string> resolveTaskKey,
+        ILogService logService,
+        IPlcConnectionManager plcConnectionManager,
+        IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> parameters,
+        IDieCuttingProductionRecordStore? recordStore,
+        IDieCuttingMesScenarioChannel? mesChannel,
+        IDataPipelineService? dataPipelineService = null,
+        IMesHttpClient? mesHttpClient = null)
     {
         var result = new ModuleContractFixture().RegisterModule(new TModule());
         Assert.True(result.RuntimeRegistry.TryGetFactory(ExpectedModuleId, out var factory));
@@ -1070,8 +1513,11 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             buffer,
             context,
             factory.GetTaskCandidates().Select(static x => x.Key).ToHashSet(StringComparer.OrdinalIgnoreCase));
+        var definition = provider.GetRequiredService<DieCuttingModuleDefinition>();
+        var taskKey = resolveTaskKey(definition);
+        var task = Assert.Single(tasks, task => string.Equals(task.TaskName, taskKey, StringComparison.OrdinalIgnoreCase));
 
-        return new RealtimeSampleRuntime(Assert.Single(tasks), provider, buffer, context);
+        return new RealtimeSampleRuntime(task, provider, buffer, context);
     }
 
     private static void SeedRealtimeSignals(PlcBuffer buffer)
@@ -1186,8 +1632,10 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
 
     private string ExpectedIpAddress(int index)
     {
-        var lastDotIndex = ExpectedFirstIpAddress.LastIndexOf('.');
-        return $"{ExpectedFirstIpAddress[..(lastDotIndex + 1)]}{10 + index}";
+        var firstDeviceSuffix = "01.local";
+        return ExpectedFirstIpAddress.EndsWith(firstDeviceSuffix, StringComparison.Ordinal)
+            ? $"{ExpectedFirstIpAddress[..^firstDeviceSuffix.Length]}{index:D2}.local"
+            : ExpectedFirstIpAddress;
     }
 
     private IConfiguration CreateEnabledSeedConfiguration(bool resetBeforeImport)
@@ -1219,6 +1667,22 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         => hardwareProfile
             .GetDefaultIoTemplate()
             .Count(static template => !string.IsNullOrWhiteSpace(template.PlcAddress));
+
+    private static IReadOnlyCollection<ModuleIoSnapshot> CreateStandardIoSnapshots(
+        IModuleHardwareProfileProvider hardwareProfile)
+        => hardwareProfile
+            .GetDefaultIoTemplate()
+            .Where(static template => !string.IsNullOrWhiteSpace(template.PlcAddress))
+            .Select(static template => new ModuleIoSnapshot(
+                template.SignalKey,
+                template.PlcAddress,
+                template.AddressCount,
+                template.DataType,
+                template.Direction,
+                template.SortOrder,
+                template.Category,
+                template.BusinessGroup))
+            .ToArray();
 
     private sealed class InMemoryRepository<T> : IRepository<T>
         where T : class, IEntity<int>, IAggregateRoot
@@ -1317,8 +1781,90 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
     {
         public IReadOnlyList<MesChannelDiagnostics> GetAll() => [];
         public MesChannelDiagnostics? Get(string processType) => null;
-        public void RecordSuccess(string processType) { }
-        public void RecordFailure(string processType, string failureReason) { }
+        public void RecordSuccess(string processType, MesUploadDiagnosticsContext? context = null) { }
+        public void RecordFailure(string processType, string failureReason, MesUploadDiagnosticsContext? context = null) { }
+        public void RecordBlocked(string processType, string blockedReason, MesUploadDiagnosticsContext? context = null) { }
+    }
+
+    private sealed class ContractCloudUploadDiagnosticsStore : ICloudUploadDiagnosticsStore
+    {
+        public CloudUploadDiagnosticsSnapshot Snapshot { get; private set; } = new(
+            LastAttemptAt: null,
+            LastSuccessAt: null,
+            LastFailureAt: null,
+            LastBlockedAt: null,
+            LastOutcome: CloudCallOutcome.Success,
+            LastReasonCode: "none",
+            LastBlockedReason: null,
+            LastProcessType: null,
+            RuntimeState: CloudRetryRuntimeState.Idle,
+            IsCapacityBlocked: false,
+            BlockedChannel: null,
+            BlockedReason: "none",
+            LastCapacityBlockAt: null);
+
+        public void RecordResult(
+            string? processType,
+            CloudCallResult result,
+            CloudUploadDiagnosticsContext? context = null)
+        {
+            Snapshot = Snapshot with
+            {
+                LastAttemptAt = DateTime.UtcNow,
+                LastProcessType = processType,
+                LastOutcome = result.Outcome,
+                LastReasonCode = result.ReasonCode,
+                LastDeviceName = context?.DeviceName,
+                LastModuleId = context?.ModuleId,
+                LastTaskKey = context?.TaskKey,
+                LastScenario = context?.Scenario
+            };
+        }
+
+        public void RecordBlocked(
+            string? processType,
+            string reasonCode,
+            string? blockedReason = null,
+            CloudUploadDiagnosticsContext? context = null)
+        {
+            Snapshot = Snapshot with
+            {
+                LastAttemptAt = DateTime.UtcNow,
+                LastBlockedAt = DateTime.UtcNow,
+                LastProcessType = processType,
+                LastOutcome = CloudCallOutcome.SkippedUploadNotReady,
+                LastReasonCode = reasonCode,
+                LastBlockedReason = blockedReason,
+                LastDeviceName = context?.DeviceName,
+                LastModuleId = context?.ModuleId,
+                LastTaskKey = context?.TaskKey,
+                LastScenario = context?.Scenario
+            };
+        }
+
+        public void SetRuntimeState(CloudRetryRuntimeState state)
+            => Snapshot = Snapshot with { RuntimeState = state };
+
+        public void MarkCapacityBlocked(
+            CapacityBlockedChannel channel,
+            string blockedReason,
+            string? processType = null,
+            DateTime? occurredAt = null)
+            => Snapshot = Snapshot with
+            {
+                IsCapacityBlocked = true,
+                BlockedChannel = channel,
+                BlockedReason = blockedReason,
+                LastCapacityBlockAt = occurredAt ?? DateTime.UtcNow
+            };
+
+        public void ClearCapacityBlocked()
+            => Snapshot = Snapshot with
+            {
+                IsCapacityBlocked = false,
+                BlockedChannel = null,
+                BlockedReason = "none"
+            };
     }
 
     private sealed class InMemoryDieCuttingProductionRecordStore : IDieCuttingProductionRecordStore
@@ -1350,6 +1896,8 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
     private sealed class CapturingDataPipelineService : IDataPipelineService
     {
         public List<CellCompletedRecord> Records { get; } = [];
+        public DataPipelineEnqueueResult Result { get; set; } = DataPipelineEnqueueResult.Accepted();
+        public Exception? ExceptionToThrow { get; set; }
 
         public int PendingCount => Records.Count;
         public int OverflowCount => 0;
@@ -1359,8 +1907,13 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             CellCompletedRecord record,
             CancellationToken cancellationToken = default)
         {
+            if (ExceptionToThrow is not null)
+            {
+                throw ExceptionToThrow;
+            }
+
             Records.Add(record);
-            return ValueTask.FromResult(DataPipelineEnqueueResult.Accepted());
+            return ValueTask.FromResult(Result);
         }
 
         public bool TryDequeue(out CellCompletedRecord? record)
@@ -1441,9 +1994,10 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             string moduleId,
             string upperComputerNo,
             string operationCode,
-            string mesBaseUrl = "http://10.98.101.247:8080",
+            string mesBaseUrl = TestMesBaseUrl,
             string outboundPath = "/dev/dev/electrode/exit/push",
-            bool mesEnabled = true)
+            bool mesEnabled = true,
+            bool cloudEnabled = false)
         {
             _moduleId = moduleId;
             _upperComputerNo = upperComputerNo;
@@ -1451,9 +2005,12 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             _mesBaseUrl = mesBaseUrl;
             _outboundPath = outboundPath;
             MesEnabled = mesEnabled;
+            CloudEnabled = cloudEnabled;
         }
 
         private bool MesEnabled { get; }
+
+        private bool CloudEnabled { get; }
 
         public Task<ModuleParamSnapshot<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business>> GetAsync(
             CancellationToken cancellationToken = default)
@@ -1472,7 +2029,8 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
                         [DieCuttingParams.Mes.OrderPath] = "/dev/dev/get/order",
                         [DieCuttingParams.Mes.BatchNumberPath] = "/dev/dev/get/batchNumber",
                         [DieCuttingParams.Mes.OutboundPath] = _outboundPath,
-                        [DieCuttingParams.Mes.EquipmentStatusPath] = "/dev/dev/realTime/status"
+                        [DieCuttingParams.Mes.EquipmentStatusPath] = "/dev/dev/realTime/status",
+                        [DieCuttingParams.Mes.签名令牌] = ExpectedMesSignSecret
                     },
                     new Dictionary<DieCuttingParams.Mes, ParamValueKind>
                     {
@@ -1483,15 +2041,25 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
                         [DieCuttingParams.Mes.OrderPath] = ParamValueKind.String,
                         [DieCuttingParams.Mes.BatchNumberPath] = ParamValueKind.String,
                         [DieCuttingParams.Mes.OutboundPath] = ParamValueKind.String,
-                        [DieCuttingParams.Mes.EquipmentStatusPath] = ParamValueKind.String
+                        [DieCuttingParams.Mes.EquipmentStatusPath] = ParamValueKind.String,
+                        [DieCuttingParams.Mes.签名令牌] = ParamValueKind.String
                     },
                     warn: null),
                 new ModuleParamGroup<DieCuttingParams.Cloud>(
                     _moduleId,
                     ModuleParamCategory.Cloud,
-                    new Dictionary<DieCuttingParams.Cloud, string>(),
-                    new Dictionary<DieCuttingParams.Cloud, string?>(),
-                    new Dictionary<DieCuttingParams.Cloud, ParamValueKind>(),
+                    new Dictionary<DieCuttingParams.Cloud, string>
+                    {
+                        [DieCuttingParams.Cloud.启用] = CloudEnabled.ToString()
+                    },
+                    new Dictionary<DieCuttingParams.Cloud, string?>
+                    {
+                        [DieCuttingParams.Cloud.启用] = "false"
+                    },
+                    new Dictionary<DieCuttingParams.Cloud, ParamValueKind>
+                    {
+                        [DieCuttingParams.Cloud.启用] = ParamValueKind.Bool
+                    },
                     warn: null),
                 new ModuleParamGroup<DieCuttingParams.Business>(
                     _moduleId,
@@ -1595,18 +2163,20 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             string processType,
             string relativeOrAbsoluteUrl,
             CancellationToken cancellationToken = default)
-            => Task.FromResult($"http://10.98.101.247:8080{relativeOrAbsoluteUrl}");
+            => Task.FromResult($"{TestMesBaseUrl}{relativeOrAbsoluteUrl}");
 
         public Task<string?> TryBuildFirstConfiguredUrlAsync(
             IReadOnlyCollection<string> processTypes,
             string relativeOrAbsoluteUrl,
             CancellationToken cancellationToken = default)
-            => Task.FromResult<string?>($"http://10.98.101.247:8080{relativeOrAbsoluteUrl}");
+            => Task.FromResult<string?>($"{TestMesBaseUrl}{relativeOrAbsoluteUrl}");
 
         public IReadOnlyDictionary<string, string> GetDefaultHeaders() => new Dictionary<string, string>();
     }
 
-    private sealed class ContractModuleParamRoleProvider(string stationNo) : IModuleParamRoleProvider
+    private sealed class ContractModuleParamRoleProvider(
+        string stationNo,
+        string? mesSignSecret = ExpectedMesSignSecret) : IModuleParamRoleProvider
     {
         public Task<ModuleParamRoleValue?> GetAsync(
             string moduleId,
@@ -1674,6 +2244,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             {
                 ModuleParamRole.MesEnabled => Build("启用", "true", ParamValueKind.Bool),
                 ModuleParamRole.StationNo => Build("工站编号", stationNo, ParamValueKind.String),
+                ModuleParamRole.MesSignToken when !string.IsNullOrWhiteSpace(mesSignSecret) => Build("签名令牌", mesSignSecret, ParamValueKind.String),
                 _ => null
             };
 

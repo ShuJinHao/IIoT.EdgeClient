@@ -69,6 +69,13 @@ public class DataPipelineService : IDataPipelineService
             return DataPipelineEnqueueResult.Rejected("null_cell_data");
         }
 
+        var missingContext = ResolveMissingPlcContext(record);
+        if (missingContext.Length > 0)
+        {
+            _logger.Warn($"[数据管道] 入队失败：缺少 PLC 上下文，字段={string.Join(",", missingContext)}。");
+            return DataPipelineEnqueueResult.Rejected("missing_plc_context");
+        }
+
         if (_queue.Writer.TryWrite(record))
         {
             Interlocked.Increment(ref _pendingCount);
@@ -101,5 +108,31 @@ public class DataPipelineService : IDataPipelineService
         }
 
         return overflowResult;
+    }
+
+    private static string[] ResolveMissingPlcContext(CellCompletedRecord record)
+    {
+        var missing = new List<string>(4);
+        if (record.ResolveNetworkDeviceId() is not > 0)
+        {
+            missing.Add(nameof(CellCompletedRecord.NetworkDeviceId));
+        }
+
+        if (string.IsNullOrWhiteSpace(record.ResolveDeviceName()))
+        {
+            missing.Add(nameof(CellCompletedRecord.DeviceName));
+        }
+
+        if (string.IsNullOrWhiteSpace(record.ModuleId))
+        {
+            missing.Add(nameof(CellCompletedRecord.ModuleId));
+        }
+
+        if (string.IsNullOrWhiteSpace(record.TaskKey))
+        {
+            missing.Add(nameof(CellCompletedRecord.TaskKey));
+        }
+
+        return missing.ToArray();
     }
 }

@@ -14,8 +14,10 @@ public sealed class CloudUploadDiagnosticsStore
             LastAttemptAt: null,
             LastSuccessAt: null,
             LastFailureAt: null,
+            LastBlockedAt: null,
             LastOutcome: CloudCallOutcome.Success,
             LastReasonCode: "none",
+            LastBlockedReason: null,
             LastProcessType: null,
             RuntimeState: CloudRetryRuntimeState.Idle,
             IsCapacityBlocked: false,
@@ -27,20 +29,58 @@ public sealed class CloudUploadDiagnosticsStore
 
     public CloudUploadDiagnosticsSnapshot Snapshot => GetSnapshot();
 
-    public void RecordResult(string? processType, CloudCallResult result)
+    public void RecordResult(
+        string? processType,
+        CloudCallResult result,
+        CloudUploadDiagnosticsContext? context = null)
     {
         ArgumentNullException.ThrowIfNull(result);
 
         var now = DateTime.UtcNow;
+        var isBlocked = result.Outcome == CloudCallOutcome.SkippedUploadNotReady;
+        var isFailure = !result.IsSuccess && !isBlocked;
+        var normalizedReasonCode = string.IsNullOrWhiteSpace(result.ReasonCode)
+            ? "unknown"
+            : result.ReasonCode.Trim();
         UpdateSnapshot(snapshot => snapshot with
             {
                 LastAttemptAt = now,
                 LastSuccessAt = result.IsSuccess ? now : snapshot.LastSuccessAt,
-                LastFailureAt = result.IsSuccess ? snapshot.LastFailureAt : now,
+                LastFailureAt = isFailure ? now : snapshot.LastFailureAt,
+                LastBlockedAt = isBlocked ? now : null,
                 LastOutcome = result.Outcome,
-                LastReasonCode = string.IsNullOrWhiteSpace(result.ReasonCode) ? "unknown" : result.ReasonCode,
-                LastProcessType = processType
+                LastReasonCode = normalizedReasonCode,
+                LastBlockedReason = isBlocked ? normalizedReasonCode : null,
+                LastProcessType = processType,
+                LastDeviceName = context?.DeviceName,
+                LastModuleId = context?.ModuleId,
+                LastTaskKey = context?.TaskKey,
+                LastScenario = context?.Scenario
             });
+    }
+
+    public void RecordBlocked(
+        string? processType,
+        string reasonCode,
+        string? blockedReason = null,
+        CloudUploadDiagnosticsContext? context = null)
+    {
+        var normalizedReasonCode = NormalizeReasonCode(reasonCode);
+        var normalizedReason = NormalizeReason(blockedReason, normalizedReasonCode);
+        var now = DateTime.UtcNow;
+        UpdateSnapshot(snapshot => snapshot with
+        {
+            LastAttemptAt = now,
+            LastBlockedAt = now,
+            LastOutcome = CloudCallOutcome.SkippedUploadNotReady,
+            LastReasonCode = normalizedReasonCode,
+            LastBlockedReason = normalizedReason,
+            LastProcessType = processType,
+            LastDeviceName = context?.DeviceName,
+            LastModuleId = context?.ModuleId,
+            LastTaskKey = context?.TaskKey,
+            LastScenario = context?.Scenario
+        });
     }
 
     public void SetRuntimeState(CloudRetryRuntimeState state)
@@ -75,4 +115,10 @@ public sealed class CloudUploadDiagnosticsStore
                 BlockedChannel = null,
                 BlockedReason = "none"
             });
+
+    private static string NormalizeReasonCode(string? reasonCode)
+        => string.IsNullOrWhiteSpace(reasonCode) ? "cloud_upload_blocked" : reasonCode.Trim();
+
+    private static string NormalizeReason(string? reason, string fallback)
+        => string.IsNullOrWhiteSpace(reason) ? fallback : reason.Trim();
 }

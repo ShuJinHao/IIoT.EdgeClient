@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
@@ -94,10 +95,12 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
             .RequiresRead(RecipeSignals)
             .Build(),
         PlcTaskCandidateBuilder.Create(EquipmentStatusTaskKey, "设备状态上传")
+            .DefaultEnabled()
             .RequiresInteraction(HomogenizationPlcSignals.Interaction.设备状态上传)
             .RequiresRead(HomogenizationPlcSignals.SingleRead.设备状态值)
             .Build(),
         PlcTaskCandidateBuilder.Create(RealtimeTaskKey, "实时数据上传")
+            .DefaultEnabled()
             .RequiresRead(RealtimeSignals)
             .Build()
     ];
@@ -163,6 +166,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
         var tasks = new List<IPlcTask>();
         IDeviceService? deviceService = null;
         IMesUploadDiagnosticsStore? diagnosticsStore = null;
+        ICloudUploadDiagnosticsStore? cloudDiagnosticsStore = null;
         IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>? moduleParameters = null;
         IDataPipelineService? dataPipelineService = null;
         IHomogenizationProductionGate? productionGate = null;
@@ -172,6 +176,9 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
 
         IMesUploadDiagnosticsStore GetDiagnosticsStore()
             => diagnosticsStore ??= serviceProvider.GetRequiredService<IMesUploadDiagnosticsStore>();
+
+        ICloudUploadDiagnosticsStore GetCloudDiagnosticsStore()
+            => cloudDiagnosticsStore ??= serviceProvider.GetRequiredService<ICloudUploadDiagnosticsStore>();
 
         IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> GetModuleParameters()
             => moduleParameters ??= serviceProvider.GetRequiredService<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>>();
@@ -192,6 +199,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 GetDeviceService(),
                 GetDataPipelineService(),
                 GetDiagnosticsStore(),
+                GetCloudDiagnosticsStore(),
                 GetModuleParameters(),
                 GetProductionGate(),
                 logger,
@@ -211,6 +219,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 GetDataPipelineService(),
                 validator,
                 GetDiagnosticsStore(),
+                GetCloudDiagnosticsStore(),
                 GetModuleParameters(),
                 GetProductionGate(),
                 logger,
@@ -228,6 +237,8 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 homogenizationContext,
                 GetDataPipelineService(),
                 GetDiagnosticsStore(),
+                GetCloudDiagnosticsStore(),
+                GetModuleParameters(),
                 GetProductionGate(),
                 logger,
                 productionTime,
@@ -244,7 +255,8 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 homogenizationContext,
                 GetDataPipelineService(),
                 GetDiagnosticsStore(),
-                GetProductionGate(),
+                GetCloudDiagnosticsStore(),
+                GetModuleParameters(),
                 logger,
                 productionTime,
                 moduleOptions,
@@ -271,6 +283,8 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 GetDeviceService(),
                 GetDataPipelineService(),
                 GetDiagnosticsStore(),
+                GetCloudDiagnosticsStore(),
+                GetModuleParameters(),
                 GetProductionGate(),
                 logger,
                 moduleOptions,

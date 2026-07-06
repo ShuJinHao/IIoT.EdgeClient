@@ -27,6 +27,16 @@ public sealed class DieCuttingContext : ProductionContext
     public string? LastDeviceStatusFingerprint { get; set; }
 
     /// <summary>
+    /// 最近一次模切设备状态处理时间。
+    /// </summary>
+    public DateTime? LastDeviceStatusAt { get; set; }
+
+    /// <summary>
+    /// 最近一次模切设备状态处理结果。
+    /// </summary>
+    public string? LastDeviceStatusResult { get; set; }
+
+    /// <summary>
     /// 最近一次模切采样上传结果。
     /// </summary>
     public string? LastRealtimeResult { get; set; }

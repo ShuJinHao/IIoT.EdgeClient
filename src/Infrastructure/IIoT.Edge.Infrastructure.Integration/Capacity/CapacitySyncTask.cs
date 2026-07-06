@@ -13,6 +13,9 @@ namespace IIoT.Edge.Infrastructure.Integration.Capacity;
 
 public class CapacitySyncTask : ICapacitySyncTask
 {
+    private const int RetryBatchSize = 200;
+    private const int RetryMaxBatchesPerRound = 3;
+
     private readonly ICloudHttpClient _cloudHttp;
     private readonly ICloudApiEndpointProvider _endpointProvider;
     private readonly IDeviceService _deviceService;
@@ -227,9 +230,9 @@ public class CapacitySyncTask : ICapacitySyncTask
                 return false;
             }
 
-            while (true)
+            for (var batchIndex = 0; batchIndex < RetryMaxBatchesPerRound; batchIndex++)
             {
-                var claimedBatch = await _bufferStore.ClaimHourlySummaryBatchAsync().ConfigureAwait(false);
+                var claimedBatch = await _bufferStore.ClaimHourlySummaryBatchAsync(RetryBatchSize).ConfigureAwait(false);
                 if (claimedBatch is null || claimedBatch.Summaries.Count == 0)
                 {
                     return true;
@@ -283,6 +286,10 @@ public class CapacitySyncTask : ICapacitySyncTask
 
                     _logger.Info(
                         $"[云端补传] 产能补传批次 {claimedBatch.ClaimToken} 已完成，行数：{claimedBatch.Summaries.Count}");
+                    if (claimedBatch.Summaries.Count < RetryBatchSize)
+                    {
+                        return true;
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -303,6 +310,10 @@ public class CapacitySyncTask : ICapacitySyncTask
                     return false;
                 }
             }
+
+            _logger.Info(
+                $"[云端补传] 产能补传本轮已处理 {RetryMaxBatchesPerRound} 批，剩余数据等待下一轮。");
+            return true;
         }
         finally
         {

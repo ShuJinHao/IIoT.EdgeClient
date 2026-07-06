@@ -6,6 +6,8 @@ namespace IIoT.Edge.Launcher.Tests;
 
 public sealed class LocalLauncherAuthServiceTests
 {
+    private const string LegacySha256Password123456 = "8D969EEF6ECAD3C29A3A629280E686CF0C3F5D5A86AFF3CA12020C923ADC6C92";
+
     [Fact]
     public void Authenticate_WhenPasswordMatches_ShouldSucceed()
     {
@@ -14,7 +16,7 @@ public sealed class LocalLauncherAuthServiceTests
             new LauncherAccountRecord(
                 "edge-admin",
                 "本地管理员",
-                LauncherPasswordHasher.ComputeSha256("ChangeMe123!"),
+                LauncherPasswordHasher.HashPassword("ChangeMe123!"),
                 true)
         ]);
         var service = new LocalLauncherAuthService(accounts);
@@ -33,7 +35,7 @@ public sealed class LocalLauncherAuthServiceTests
             new LauncherAccountRecord(
                 "edge-admin",
                 "本地管理员",
-                LauncherPasswordHasher.ComputeSha256("123456"),
+                LauncherPasswordHasher.HashPassword("123456"),
                 true)
         ]);
         var service = new LocalLauncherAuthService(accounts);
@@ -53,7 +55,7 @@ public sealed class LocalLauncherAuthServiceTests
             new LauncherAccountRecord(
                 "edge-admin",
                 "本地管理员",
-                LauncherPasswordHasher.ComputeSha256("123456"),
+                LauncherPasswordHasher.HashPassword("123456"),
                 true)
         ]);
         var service = new LocalLauncherAuthService(accounts);
@@ -72,7 +74,7 @@ public sealed class LocalLauncherAuthServiceTests
             new LauncherAccountRecord(
                 "edge-admin",
                 "本地管理员",
-                LauncherPasswordHasher.ComputeSha256("ChangeMe123!"),
+                LauncherPasswordHasher.HashPassword("ChangeMe123!"),
                 true)
         ]);
         var service = new LocalLauncherAuthService(accounts);
@@ -81,6 +83,46 @@ public sealed class LocalLauncherAuthServiceTests
 
         Assert.False(result.Success);
         Assert.Contains("不正确", result.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Authenticate_WhenStoredHashIsLegacySha256_ShouldRequirePasswordReset()
+    {
+        var accounts = new StubLauncherAccountCatalog(
+        [
+            new LauncherAccountRecord(
+                "edge-admin",
+                "本地管理员",
+                LegacySha256Password123456,
+                true)
+        ]);
+        var service = new LocalLauncherAuthService(accounts);
+
+        var result = service.Authenticate("edge-admin", "123456");
+
+        Assert.False(result.Success);
+        Assert.Equal(LocalLauncherAuthService.PasswordResetRequiredError, result.ErrorMessage);
+    }
+
+    [Fact]
+    public void ChangePassword_WhenStoredHashIsLegacySha256AndOldPasswordMatches_ShouldWritePbkdf2Hash()
+    {
+        var accounts = new StubLauncherAccountCatalog(
+        [
+            new LauncherAccountRecord(
+                "edge-admin",
+                "本地管理员",
+                LegacySha256Password123456,
+                true)
+        ]);
+        var service = new LocalLauncherAuthService(accounts);
+
+        var result = service.ChangePassword("edge-admin", "123456", "new-pass");
+
+        Assert.True(result.Success);
+        Assert.False(string.Equals(LegacySha256Password123456, accounts.LoadAccounts()[0].PasswordHash, StringComparison.OrdinalIgnoreCase));
+        Assert.StartsWith("pbkdf2-sha256$v1$", accounts.LoadAccounts()[0].PasswordHash, StringComparison.Ordinal);
+        Assert.True(service.Authenticate("edge-admin", "new-pass").Success);
     }
 
     [Fact]
@@ -103,7 +145,7 @@ public sealed class LocalLauncherAuthServiceTests
             new LauncherAccountRecord(
                 "edge-admin",
                 "本地管理员",
-                LauncherPasswordHasher.ComputeSha256("123456"),
+                LauncherPasswordHasher.HashPassword("123456"),
                 true)
         ])
         {

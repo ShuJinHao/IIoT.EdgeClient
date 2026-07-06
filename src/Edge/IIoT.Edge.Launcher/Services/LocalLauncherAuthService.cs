@@ -1,11 +1,13 @@
 using System.Text.Json;
 using IIoT.Edge.Launcher.Models;
+using IIoT.Edge.SharedKernel.Security;
 
 namespace IIoT.Edge.Launcher.Services;
 
 public sealed class LocalLauncherAuthService : ILocalLauncherAuthService
 {
     public const string AccountConfigurationUnavailableError = "本地账号配置不可用。";
+    public const string PasswordResetRequiredError = "本地密码使用旧哈希格式，请先修改密码。";
 
     private readonly ILauncherAccountCatalog _accountCatalog;
 
@@ -26,28 +28,29 @@ public sealed class LocalLauncherAuthService : ILocalLauncherAuthService
             return LauncherAuthenticationResult.Failed("请输入密码。");
         }
 
-        LauncherAccountRecord? account;
-        try
-        {
-            account = _accountCatalog.LoadAccounts()
-                .FirstOrDefault(x => string.Equals(x.UserName, userName.Trim(), StringComparison.OrdinalIgnoreCase));
-        }
-        catch (Exception ex) when (IsAccountConfigurationException(ex))
+        var accountResult = LoadAccount(userName);
+        if (accountResult.ConfigurationError)
         {
             return LauncherAuthenticationResult.Failed(AccountConfigurationUnavailableError);
         }
 
-        if (account is null || !account.IsEnabled)
+        if (accountResult.Account is null || !accountResult.Account.IsEnabled)
         {
             return LauncherAuthenticationResult.Failed("本地账号不存在，或已被禁用。");
         }
 
-        if (!LauncherPasswordHasher.Verify(password, account.PasswordHash))
+        var verification = LauncherPasswordHasher.Verify(password, accountResult.Account.PasswordHash);
+        if (verification == EdgePasswordVerificationResult.LegacySha256Verified)
+        {
+            return LauncherAuthenticationResult.Failed(PasswordResetRequiredError);
+        }
+
+        if (verification != EdgePasswordVerificationResult.Verified)
         {
             return LauncherAuthenticationResult.Failed("账号或密码不正确。");
         }
 
-        return LauncherAuthenticationResult.Passed(account);
+        return LauncherAuthenticationResult.Passed(accountResult.Account);
     }
 
     public LauncherPasswordChangeResult ChangePassword(
@@ -65,17 +68,39 @@ public sealed class LocalLauncherAuthService : ILocalLauncherAuthService
             return LauncherPasswordChangeResult.Failed("新密码至少需要 6 位。");
         }
 
-        var authentication = Authenticate(userName, oldPassword);
-        if (!authentication.Success)
+        if (string.IsNullOrWhiteSpace(userName))
         {
-            return LauncherPasswordChangeResult.Failed(authentication.ErrorMessage ?? "旧密码校验失败。");
+            return LauncherPasswordChangeResult.Failed("请输入账号。");
+        }
+
+        if (string.IsNullOrWhiteSpace(oldPassword))
+        {
+            return LauncherPasswordChangeResult.Failed("请输入密码。");
+        }
+
+        var accountResult = LoadAccount(userName);
+        if (accountResult.ConfigurationError)
+        {
+            return LauncherPasswordChangeResult.Failed(AccountConfigurationUnavailableError);
+        }
+
+        if (accountResult.Account is null || !accountResult.Account.IsEnabled)
+        {
+            return LauncherPasswordChangeResult.Failed("本地账号不存在，或已被禁用。");
+        }
+
+        var verification = LauncherPasswordHasher.Verify(oldPassword, accountResult.Account.PasswordHash);
+        if (verification is not EdgePasswordVerificationResult.Verified
+            and not EdgePasswordVerificationResult.LegacySha256Verified)
+        {
+            return LauncherPasswordChangeResult.Failed("旧密码校验失败。");
         }
 
         try
         {
             _accountCatalog.UpdatePasswordHash(
                 userName!.Trim(),
-                LauncherPasswordHasher.ComputeSha256(newPassword));
+                LauncherPasswordHasher.HashPassword(newPassword));
             return LauncherPasswordChangeResult.Passed();
         }
         catch (Exception ex) when (IsAccountConfigurationException(ex))
@@ -91,4 +116,20 @@ public sealed class LocalLauncherAuthService : ILocalLauncherAuthService
             or UnauthorizedAccessException
             or InvalidOperationException
             or JsonException;
+
+    private AccountLoadResult LoadAccount(string userName)
+    {
+        try
+        {
+            var account = _accountCatalog.LoadAccounts()
+                .FirstOrDefault(x => string.Equals(x.UserName, userName.Trim(), StringComparison.OrdinalIgnoreCase));
+            return new AccountLoadResult(account, ConfigurationError: false);
+        }
+        catch (Exception ex) when (IsAccountConfigurationException(ex))
+        {
+            return new AccountLoadResult(null, ConfigurationError: true);
+        }
+    }
+
+    private sealed record AccountLoadResult(LauncherAccountRecord? Account, bool ConfigurationError);
 }

@@ -203,6 +203,7 @@
     <sys:String x:Key="Launcher_Error_UserNameRequired">请输入账号。</sys:String>
     <sys:String x:Key="Launcher_Error_PasswordRequired">请输入密码。</sys:String>
     <sys:String x:Key="Launcher_Error_AccountConfigurationUnavailable">本地账号配置不可用，请检查应用 data 目录中的账号文件。</sys:String>
+    <sys:String x:Key="Launcher_Error_PasswordResetRequired">本地密码仍使用旧哈希格式，请先修改密码。</sys:String>
     <sys:String x:Key="Launcher_Error_AccountDisabledOrMissing">本地账号不存在，或已被禁用。</sys:String>
     <sys:String x:Key="Launcher_Error_InvalidCredentials">账号或密码不正确。</sys:String>
     <sys:String x:Key="Launcher_Error_NewPasswordRequired">新密码不能为空。</sys:String>

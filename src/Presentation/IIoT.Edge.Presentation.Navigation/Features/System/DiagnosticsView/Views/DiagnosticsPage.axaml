@@ -68,13 +68,16 @@
                         EmptyTitle="{DynamicResource Navigation_Diagnostics_NoMesUploadDiagnostics}"
                         EmptyMessage="{DynamicResource Navigation_Diagnostics_NoMesUploadDiagnosticsMessage}">
                         <controls:EdgeDataGrid
+                            x:Name="MesUploadDiagnosticsGrid"
                             Density="Compact"
                             AutoGenerateColumns="False"
                             CanUserSortColumns="False"
                             ItemsSource="{Binding MesUploadDiagnostics}">
                             <controls:EdgeDataGrid.Columns>
+                                <controls:EdgeTextColumn Binding="{Binding DeviceName}" Header="{DynamicResource Navigation_Column_Device}" MinWidth="120" Width="120" />
                                 <controls:EdgeTextColumn Binding="{Binding ProcessType}" Header="{DynamicResource Navigation_Column_Process}" MinWidth="150" Width="150" />
-                                <controls:EdgeTextColumn Binding="{Binding LastResult}" Header="{DynamicResource Navigation_Column_LastResult}" MinWidth="150" Width="150" />
+                                <controls:EdgeTextColumn Binding="{Binding Scenario}" Header="{DynamicResource Navigation_Column_Scenario}" MinWidth="130" Width="130" />
+                                <controls:EdgeTextColumn Binding="{Binding LastResult}" Header="{DynamicResource Navigation_Column_LastResult}" MinWidth="120" Width="120" />
                                 <controls:EdgeTextColumn Binding="{Binding LastAttemptAt}" Header="{DynamicResource Navigation_Column_LastAttempt}" MinWidth="160" Width="160" />
                                 <controls:EdgeTextColumn Binding="{Binding LastSuccessAt}" Header="{DynamicResource Navigation_Column_LastSuccess}" MinWidth="160" Width="160" />
                                 <controls:EdgeTextColumn Binding="{Binding LastFailureReason}" Header="{DynamicResource Navigation_Column_FailureReason}" MinWidth="300" Width="2*" />

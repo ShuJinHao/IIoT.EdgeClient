@@ -6,8 +6,7 @@
           "DataViewRefreshIntervalMs": 1000
         },
         "Runtime": {
-          "DataReadLoopIntervalMs": 1000,
-          "DataFreshnessTimeoutMs": 5000
+          "DataReadLoopIntervalMs": 1000
         },
         "MesIdentity": {
           "UseDeviceNameWhenCodeMissing": false,

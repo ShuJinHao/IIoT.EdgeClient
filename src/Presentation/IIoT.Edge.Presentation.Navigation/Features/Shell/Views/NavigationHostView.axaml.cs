@@ -135,5 +135,5 @@ public partial class NavigationHostView : UserControl
     }
 
     private static void Warn(string message)
-        => Debug.WriteLine(message);
+        => Trace.TraceWarning(message);
 }

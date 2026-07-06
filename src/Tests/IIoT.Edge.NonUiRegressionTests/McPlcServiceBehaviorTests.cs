@@ -50,6 +50,36 @@ public sealed class McPlcServiceBehaviorTests
     }
 
     [Fact]
+    public async Task Disconnect_WhenReadIsInFlight_ShouldWaitForReadOperationGate()
+    {
+        var requestReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseResponse = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var server = new FakeMc3EServer(request =>
+        {
+            requestReceived.SetResult();
+            releaseResponse.Task.GetAwaiter().GetResult();
+            return CreateReadResponse(request, ToBytes((ushort)0x1234));
+        });
+        using var service = CreateConnectedService(server.Port);
+
+        var readTask = service.ReadDataAsync<ushort>("D700", 1);
+        await requestReceived.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var disconnectTask = Task.Run(service.Disconnect);
+
+        var completedBeforeReadReleased = await Task.WhenAny(
+            disconnectTask,
+            Task.Delay(50, TestContext.Current.CancellationToken)) == disconnectTask;
+        Assert.False(completedBeforeReadReleased);
+
+        releaseResponse.SetResult();
+        var values = await readTask;
+        await disconnectTask.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal((ushort)0x1234, Assert.Single(values));
+        Assert.False(service.IsConnected);
+    }
+
+    [Fact]
     public async Task ReadDataAsync_WhenReadingBits_ShouldUseMcpX3EProtocol()
     {
         await using var server = new FakeMc3EServer(

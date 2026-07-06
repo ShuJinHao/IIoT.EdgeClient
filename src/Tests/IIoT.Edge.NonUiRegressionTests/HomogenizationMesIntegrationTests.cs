@@ -43,9 +43,9 @@ public sealed class HomogenizationMesIntegrationTests
         Assert.Equal("ST-H-01", root.GetProperty("stationNo").GetString());
         Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("timestamp").GetString()));
         Assert.Equal("TRAY-001", root.GetProperty("data").GetProperty("productNo").GetString());
-        Assert.Equal(32, root.GetProperty("sign").GetString()!.Length);
+        Assert.Equal(64, root.GetProperty("sign").GetString()!.Length);
         AssertCapturedPayload(
-            """{"upperComputerNo":"CLIENT-H","timestamp":"2026-04-23 08:00:00","sign":"5D76007498C64D3DB38FA6DE3FAF1962","stationNo":"ST-H-01","data":{"stackTrayNo":"TRAY-001","weldTrayNo":"TRAY-001","productNo":"TRAY-001","devices":null,"boms":null}}""",
+            """{"upperComputerNo":"CLIENT-H","timestamp":"2026-04-23 08:00:00","sign":"10078E5C05051DDE9730E4D9F8BA839E648DC264A36E8198DEB07E3D123408D2","stationNo":"ST-H-01","data":{"stackTrayNo":"TRAY-001","weldTrayNo":"TRAY-001","productNo":"TRAY-001","devices":null,"boms":null}}""",
             httpClient);
     }
 
@@ -68,9 +68,9 @@ public sealed class HomogenizationMesIntegrationTests
         var root = document.RootElement;
         Assert.Equal("ST-H-02", root.GetProperty("stationNo").GetString());
         Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("timestamp").GetString()));
-        Assert.Equal(32, root.GetProperty("sign").GetString()!.Length);
+        Assert.Equal(64, root.GetProperty("sign").GetString()!.Length);
         AssertCapturedPayload(
-            """{"upperComputerNo":"CLIENT-H","timestamp":"2026-04-23 08:00:00","sign":"5D76007498C64D3DB38FA6DE3FAF1962","stationNo":"ST-H-02","outboundTime":"2026-04-23 08:30:00","serialNumber":"TRAY-002","data":{"boundNo":"TRAY-002","lastBoundNo":"TRAY-002","produce":[{"code":"gluingDeviceCode","name":"设备编码","val":"CLIENT-H"},{"code":"gluingDeviceName","name":"设备名称","val":"PLC-H"},{"code":"gluingStartTime","name":"开始时间","val":"2026-04-23 08:00:00"},{"code":"gluingCompleteTime","name":"完成时间","val":"2026-04-23 08:30:00"},{"code":"gluingStirSpeed","name":"搅拌转速","val":"120"},{"code":"gluingGlueSolutingTemperature","name":"温度","val":"25"},{"code":"gluingVacuumDegree","name":"真空度","val":"-10"},{"code":"gluingCntActualValue","name":"CNT 实际值","val":"15"},{"code":"gluingNmpActualValue","name":"NMP 实际值","val":"18"}]}}""",
+            """{"upperComputerNo":"CLIENT-H","timestamp":"2026-04-23 08:00:00","sign":"10078E5C05051DDE9730E4D9F8BA839E648DC264A36E8198DEB07E3D123408D2","stationNo":"ST-H-02","outboundTime":"2026-04-23 08:30:00","serialNumber":"TRAY-002","data":{"boundNo":"TRAY-002","lastBoundNo":"TRAY-002","produce":[{"code":"gluingDeviceCode","name":"设备编码","val":"CLIENT-H"},{"code":"gluingDeviceName","name":"设备名称","val":"PLC-H"},{"code":"gluingStartTime","name":"开始时间","val":"2026-04-23 08:00:00"},{"code":"gluingCompleteTime","name":"完成时间","val":"2026-04-23 08:30:00"},{"code":"gluingStirSpeed","name":"搅拌转速","val":"120"},{"code":"gluingGlueSolutingTemperature","name":"温度","val":"25"},{"code":"gluingVacuumDegree","name":"真空度","val":"-10"},{"code":"gluingCntActualValue","name":"CNT 实际值","val":"15"},{"code":"gluingNmpActualValue","name":"NMP 实际值","val":"18"}]}}""",
             httpClient);
     }
 
@@ -99,13 +99,13 @@ public sealed class HomogenizationMesIntegrationTests
         var root = document.RootElement;
         Assert.Equal("ST-H-03", root.GetProperty("stationNo").GetString());
         Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("timestamp").GetString()));
-        Assert.Equal(32, root.GetProperty("sign").GetString()!.Length);
+        Assert.Equal(64, root.GetProperty("sign").GetString()!.Length);
         var device = root.GetProperty("data").GetProperty("devices")[0];
         Assert.Equal("ST-H-03", device.GetProperty("stationNo").GetString());
         Assert.Equal("2026-04-29 08:01:02", device.GetProperty("collectTime").GetString());
         Assert.Equal("rt_stir_speed", device.GetProperty("data")[0].GetProperty("code").GetString());
         AssertCapturedPayload(
-            """{"upperComputerNo":"CLIENT-H","timestamp":"2026-04-23 08:00:00","sign":"5D76007498C64D3DB38FA6DE3FAF1962","stationNo":"ST-H-03","data":{"devices":[{"stationNo":"ST-H-03","collectTime":"2026-04-29 08:01:02","data":[{"code":"rt_stir_speed","name":"搅拌转速","type":"short","unit":"RPM","val":"120"},{"code":"rt_stir_current","name":"搅拌电流","type":"short","unit":"A","val":"11"},{"code":"rt_dispersion_speed","name":"分散转速","type":"short","unit":"RPM","val":"220"},{"code":"rt_dispersion_current","name":"分散电流","type":"short","unit":"A","val":"12"},{"code":"rt_temperature","name":"温度","type":"short","unit":"C","val":"25"},{"code":"rt_vacuum","name":"真空度","type":"short","unit":"Kpa","val":"-9"}]}]}}""",
+            """{"upperComputerNo":"CLIENT-H","timestamp":"2026-04-23 08:00:00","sign":"10078E5C05051DDE9730E4D9F8BA839E648DC264A36E8198DEB07E3D123408D2","stationNo":"ST-H-03","data":{"devices":[{"stationNo":"ST-H-03","collectTime":"2026-04-29 08:01:02","data":[{"code":"rt_stir_speed","name":"搅拌转速","type":"short","unit":"RPM","val":"120"},{"code":"rt_stir_current","name":"搅拌电流","type":"short","unit":"A","val":"11"},{"code":"rt_dispersion_speed","name":"分散转速","type":"short","unit":"RPM","val":"220"},{"code":"rt_dispersion_current","name":"分散电流","type":"short","unit":"A","val":"12"},{"code":"rt_temperature","name":"温度","type":"short","unit":"C","val":"25"},{"code":"rt_vacuum","name":"真空度","type":"short","unit":"Kpa","val":"-9"}]}]}}""",
             httpClient);
     }
 
@@ -138,12 +138,12 @@ public sealed class HomogenizationMesIntegrationTests
         var root = document.RootElement;
         Assert.Equal("ST-H-04", root.GetProperty("stationNo").GetString());
         Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("timestamp").GetString()));
-        Assert.Equal(32, root.GetProperty("sign").GetString()!.Length);
+        Assert.Equal(64, root.GetProperty("sign").GetString()!.Length);
         var items = root.GetProperty("data").GetProperty("devices");
         Assert.Equal("recipe_stir_speed_01", items[0].GetProperty("code").GetString());
         Assert.Equal("10", items[0].GetProperty("val").GetString());
         AssertCapturedPayload(
-            """{"upperComputerNo":"CLIENT-H","timestamp":"2026-04-23 08:00:00","sign":"5D76007498C64D3DB38FA6DE3FAF1962","stationNo":"ST-H-04","data":{"devices":[{"code":"recipe_stir_speed_01","name":"搅拌转速_01","type":"short","unit":"RPM","val":"10"},{"code":"recipe_dispersion_speed_01","name":"分散转速_01","type":"short","unit":"RPM","val":"20"},{"code":"recipe_ncm_01","name":"NCM_01","type":"decimal","unit":"kg","val":"1.1"},{"code":"recipe_sp1_01","name":"SP1_01","type":"decimal","unit":"kg","val":"2.2"},{"code":"recipe_nmp_01","name":"NMP_01","type":"decimal","unit":"kg","val":"3.3"},{"code":"recipe_glue_solution_01","name":"胶液_01","type":"decimal","unit":"kg","val":"4.4"},{"code":"recipe_cnt_01","name":"CNT_01","type":"decimal","unit":"kg","val":"5.5"},{"code":"recipe_vacuum_01","name":"真空_01","type":"bool","unit":"","val":"1"},{"code":"recipe_time_01","name":"时间_01","type":"ushort","unit":"min","val":"30"},{"code":"recipe_temperature_01","name":"温度_01","type":"short","unit":"C","val":"45"},{"code":"recipe_stop_step_01","name":"停止步骤_01","type":"bool","unit":"","val":"0"}]}}""",
+            """{"upperComputerNo":"CLIENT-H","timestamp":"2026-04-23 08:00:00","sign":"10078E5C05051DDE9730E4D9F8BA839E648DC264A36E8198DEB07E3D123408D2","stationNo":"ST-H-04","data":{"devices":[{"code":"recipe_stir_speed_01","name":"搅拌转速_01","type":"short","unit":"RPM","val":"10"},{"code":"recipe_dispersion_speed_01","name":"分散转速_01","type":"short","unit":"RPM","val":"20"},{"code":"recipe_ncm_01","name":"NCM_01","type":"decimal","unit":"kg","val":"1.1"},{"code":"recipe_sp1_01","name":"SP1_01","type":"decimal","unit":"kg","val":"2.2"},{"code":"recipe_nmp_01","name":"NMP_01","type":"decimal","unit":"kg","val":"3.3"},{"code":"recipe_glue_solution_01","name":"胶液_01","type":"decimal","unit":"kg","val":"4.4"},{"code":"recipe_cnt_01","name":"CNT_01","type":"decimal","unit":"kg","val":"5.5"},{"code":"recipe_vacuum_01","name":"真空_01","type":"bool","unit":"","val":"1"},{"code":"recipe_time_01","name":"时间_01","type":"ushort","unit":"min","val":"30"},{"code":"recipe_temperature_01","name":"温度_01","type":"short","unit":"C","val":"45"},{"code":"recipe_stop_step_01","name":"停止步骤_01","type":"bool","unit":"","val":"0"}]}}""",
             httpClient);
     }
 
@@ -167,12 +167,12 @@ public sealed class HomogenizationMesIntegrationTests
         var root = document.RootElement;
         Assert.Equal("ST-H-05", root.GetProperty("stationNo").GetString());
         Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("timestamp").GetString()));
-        Assert.Equal(32, root.GetProperty("sign").GetString()!.Length);
+        Assert.Equal(64, root.GetProperty("sign").GetString()!.Length);
         var device = root.GetProperty("data").GetProperty("devices")[0];
         Assert.Equal("ST-H-05", device.GetProperty("stationNo").GetString());
         Assert.Equal(1, device.GetProperty("status").GetInt32());
         AssertCapturedPayload(
-            """{"upperComputerNo":"CLIENT-H","timestamp":"2026-04-23 08:00:00","sign":"5D76007498C64D3DB38FA6DE3FAF1962","stationNo":"ST-H-05","data":{"devices":[{"stationNo":"ST-H-05","status":1,"msg":["运行"]}]}}""",
+            """{"upperComputerNo":"CLIENT-H","timestamp":"2026-04-23 08:00:00","sign":"10078E5C05051DDE9730E4D9F8BA839E648DC264A36E8198DEB07E3D123408D2","stationNo":"ST-H-05","data":{"devices":[{"stationNo":"ST-H-05","status":1,"msg":["运行"]}]}}""",
             httpClient);
     }
 
@@ -757,7 +757,7 @@ public sealed class HomogenizationMesIntegrationTests
                 [HomogenizationParams.Mes.EquipmentStatusPath] = "/dev/dev/realTime/status",
                 [HomogenizationParams.Mes.OrderPath] = "/dev/dev/get/order",
                 [HomogenizationParams.Mes.BatchNumberPath] = "/dev/dev/get/batchNumber",
-                [HomogenizationParams.Mes.签名令牌] = "hdc2023"
+                [HomogenizationParams.Mes.签名令牌] = "test-mes-hmac-secret"
             };
             var mesKinds = Enum.GetValues<HomogenizationParams.Mes>()
                 .ToDictionary(static key => key, static key => ParamValueKind.String);
@@ -882,7 +882,7 @@ public sealed class HomogenizationMesIntegrationTests
                 ModuleParamRole.StationNo => Build("工站编号", stationNo, ParamValueKind.String),
                 ModuleParamRole.MesUpperComputerNo => Build("UpperComputerNo", upperComputerNo, ParamValueKind.String),
                 ModuleParamRole.MesOperationCode when operationCode is not null => Build("OperationCode", operationCode, ParamValueKind.String),
-                ModuleParamRole.MesSignToken => Build("签名令牌", "hdc2023", ParamValueKind.String),
+                ModuleParamRole.MesSignToken => Build("签名令牌", "test-mes-hmac-secret", ParamValueKind.String),
                 _ => null
             };
 

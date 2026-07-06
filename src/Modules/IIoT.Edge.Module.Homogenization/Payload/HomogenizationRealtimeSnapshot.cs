@@ -1,7 +1,7 @@
 namespace IIoT.Edge.Module.Homogenization.Payload;
 
 /// <summary>
-/// 匀浆实时数据快照，由实时任务按周期从 PLC 连续读取信号采集，并上传到 MES 实时数据接口。
+/// 匀浆实时数据快照，由实时任务按周期从 PLC Buffer 读取业务数字，并按配置进入上传链路。
 /// </summary>
 public sealed class HomogenizationRealtimeSnapshot
 {
@@ -39,4 +39,17 @@ public sealed class HomogenizationRealtimeSnapshot
     /// 真空度，来源于 PLC 实时真空度信号。
     /// </summary>
     public short Vacuum { get; set; }
+
+    /// <summary>
+    /// 生成实时业务数字指纹，采集时间不参与变化判断。
+    /// </summary>
+    public string CreateFingerprint()
+        => string.Join(
+            "\u001f",
+            StirringSpeed,
+            StirringCurrent,
+            DispersionSpeed,
+            DispersionCurrent,
+            Temperature,
+            Vacuum);
 }

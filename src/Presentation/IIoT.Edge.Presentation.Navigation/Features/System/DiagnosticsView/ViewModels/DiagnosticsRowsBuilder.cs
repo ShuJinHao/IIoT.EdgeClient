@@ -1,6 +1,8 @@
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Mes;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.Application.Modules.Diagnostics;
 using IIoT.Edge.Presentation.Navigation.Localization;
@@ -214,13 +216,26 @@ internal sealed class DiagnosticsRowsBuilder(
     private IReadOnlyList<MesChannelDiagnosticsRow> BuildMesUploadDiagnostics(
         EdgeSyncDiagnosticsSnapshot syncDiagnostics)
         => syncDiagnostics.Mes.Channels
+            .Where(x => ShouldIncludeDeviceScopedRow(x.DeviceName))
             .Select(x => new MesChannelDiagnosticsRow(
                 displayNameResolver.ResolveProcessDisplayName(x.ProcessType, x.ProcessDisplayName),
+                DiagnosticsTextNormalizer.Normalize(x.DeviceName),
+                DiagnosticsTextNormalizer.Normalize(ResolveMesScenario(x)),
                 diagnosticsText.FormatMesChannelResult(x.LastResult),
                 diagnosticsText.FormatTimestamp(x.LastAttemptAt),
                 diagnosticsText.FormatTimestamp(x.LastSuccessAt),
-                DiagnosticsTextNormalizer.Normalize(x.LastFailureReason)))
+                DiagnosticsTextNormalizer.Normalize(x.LastFailureReason ?? x.LastBlockedReason)))
             .ToArray();
+
+    private static string? ResolveMesScenario(MesChannelDiagnostics diagnostics)
+    {
+        if (!string.IsNullOrWhiteSpace(diagnostics.Scenario))
+        {
+            return diagnostics.Scenario;
+        }
+
+        return DataPipelineUploadScenarioResolver.Resolve(diagnostics.TaskKey, null, diagnostics.ProcessType);
+    }
 
     private IReadOnlyList<SyncChannelRow> BuildSyncChannels(EdgeSyncDiagnosticsSnapshot syncDiagnostics)
         =>
@@ -293,6 +308,11 @@ internal sealed class DiagnosticsRowsBuilder(
             return "--";
         }
 
+        if (cloud.LastOutcome == CloudCallOutcome.SkippedUploadNotReady)
+        {
+            return "--";
+        }
+
         return diagnosticsText.FormatCloudOutcome(
             cloud.LastOutcome,
             cloud.LastReasonCode,
@@ -332,12 +352,30 @@ internal sealed class DiagnosticsRowsBuilder(
             return GetText("Navigation_Sync_StatusWaitingRecovery", "等待恢复");
         }
 
+        if (!string.IsNullOrWhiteSpace(cloud.LastBlockedReason))
+        {
+            return FormatText(
+                "Navigation_Diagnostics_SyncBlockedReasonFormat",
+                "阻塞：{0}",
+                cloud.LastBlockedReason);
+        }
+
         if (cloud.BlockReason != EdgeUploadBlockReason.None)
         {
             return FormatText(
                 "Navigation_Diagnostics_SyncBlockedReasonFormat",
                 "阻塞：{0}",
                 diagnosticsText.FormatBlockReason(cloud.BlockReason));
+        }
+
+        if (!string.IsNullOrWhiteSpace(cloud.LastDeviceName)
+            || !string.IsNullOrWhiteSpace(cloud.LastScenario))
+        {
+            return FormatText(
+                "Navigation_Diagnostics_SyncCloudLastContextFormat",
+                "最近：PLC={0}，场景={1}",
+                DiagnosticsTextNormalizer.Normalize(cloud.LastDeviceName),
+                DiagnosticsTextNormalizer.Normalize(cloud.LastScenario));
         }
 
         return "--";

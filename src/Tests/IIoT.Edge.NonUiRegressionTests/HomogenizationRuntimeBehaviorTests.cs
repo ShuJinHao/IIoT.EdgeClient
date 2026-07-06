@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Modules.Hardware;
 using System.Linq.Expressions;
+using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
@@ -299,6 +300,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         services.AddSingleton<ILogService>(logger);
         services.AddSingleton<IDeviceService>(deviceService);
         services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
+        services.AddSingleton<ICloudUploadDiagnosticsStore>(new FakeCloudDiagnosticsStore());
         services.AddSingleton<IHomogenizationMesScenarioChannel>(mesApi);
         services.AddSingleton<IDataPipelineService>(pipeline);
         services.AddSingleton<IProductionTimeProvider>(new FakeProductionTimeProvider());
@@ -447,6 +449,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         services.AddSingleton<ILogService>(logger);
         services.AddSingleton<IDeviceService>(deviceService);
         services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
+        services.AddSingleton<ICloudUploadDiagnosticsStore>(new FakeCloudDiagnosticsStore());
         services.AddSingleton<IHomogenizationMesScenarioChannel>(mesApi);
         services.AddSingleton<IDataPipelineService>(pipeline);
         services.AddSingleton<IProductionTimeProvider>(new FakeProductionTimeProvider());
@@ -751,8 +754,32 @@ public sealed class HomogenizationRuntimeBehaviorTests
             CancellationToken cancellationToken = default)
             => Task.FromResult(new ModuleParamSnapshot<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>(
                 "Homogenization",
-                EmptyGroup<HomogenizationParams.Mes>(ModuleParamCategory.Mes),
-                EmptyGroup<HomogenizationParams.Cloud>(ModuleParamCategory.Cloud),
+                new ModuleParamGroup<HomogenizationParams.Mes>(
+                    "Homogenization",
+                    ModuleParamCategory.Mes,
+                    new Dictionary<HomogenizationParams.Mes, string>(),
+                    new Dictionary<HomogenizationParams.Mes, string?>
+                    {
+                        [HomogenizationParams.Mes.启用] = "true"
+                    },
+                    new Dictionary<HomogenizationParams.Mes, ParamValueKind>
+                    {
+                        [HomogenizationParams.Mes.启用] = ParamValueKind.Bool
+                    },
+                    warn: null),
+                new ModuleParamGroup<HomogenizationParams.Cloud>(
+                    "Homogenization",
+                    ModuleParamCategory.Cloud,
+                    new Dictionary<HomogenizationParams.Cloud, string>(),
+                    new Dictionary<HomogenizationParams.Cloud, string?>
+                    {
+                        [HomogenizationParams.Cloud.启用] = "false"
+                    },
+                    new Dictionary<HomogenizationParams.Cloud, ParamValueKind>
+                    {
+                        [HomogenizationParams.Cloud.启用] = ParamValueKind.Bool
+                    },
+                    warn: null),
                 new ModuleParamGroup<HomogenizationParams.Business>(
                     "Homogenization",
                     ModuleParamCategory.Business,
@@ -767,15 +794,6 @@ public sealed class HomogenizationRuntimeBehaviorTests
                     },
                     warn: null)));
 
-        private static ModuleParamGroup<TEnum> EmptyGroup<TEnum>(ModuleParamCategory category)
-            where TEnum : struct, Enum
-            => new(
-                "Homogenization",
-                category,
-                new Dictionary<TEnum, string>(),
-                new Dictionary<TEnum, string?>(),
-                new Dictionary<TEnum, ParamValueKind>(),
-                warn: null);
     }
 
     private sealed class CapturingHomogenizationMesChannel : IHomogenizationMesScenarioChannel

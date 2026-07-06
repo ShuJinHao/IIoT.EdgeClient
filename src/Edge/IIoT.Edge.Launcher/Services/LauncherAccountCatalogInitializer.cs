@@ -23,26 +23,7 @@ public sealed class LauncherAccountCatalogInitializer : ILauncherAccountCatalogI
 
     public void EnsureCatalogExists()
     {
-        if (File.Exists(_paths.CatalogPath) || !File.Exists(_paths.SampleCatalogPath))
-        {
-            return;
-        }
-
-        try
-        {
-            var directory = Path.GetDirectoryName(_paths.CatalogPath);
-            if (!string.IsNullOrWhiteSpace(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            File.Copy(_paths.SampleCatalogPath, _paths.CatalogPath, overwrite: false);
-        }
-        catch (IOException)
-        {
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
+        // 缺账号文件必须进入首次配置/重置流程，不能静默复制 sample 账号。
+        _ = _paths;
     }
 }

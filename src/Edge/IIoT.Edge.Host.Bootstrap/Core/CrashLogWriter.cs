@@ -95,20 +95,14 @@ public sealed class CrashLogWriter : ICrashLogWriter
                 return;
             }
 
-            try
-            {
-                _diagnosticSink(BuildDiagnosticMessage(
-                    source,
-                    exception,
-                    details,
-                    primaryPath,
-                    primaryError!,
-                    fallbackPath,
-                    fallbackError!));
-            }
-            catch
-            {
-            }
+            _diagnosticSink(BuildDiagnosticMessage(
+                source,
+                exception,
+                details,
+                primaryPath,
+                primaryError!,
+                fallbackPath,
+                fallbackError!));
         }
     }
 
@@ -208,20 +202,28 @@ public sealed class CrashLogWriter : ICrashLogWriter
 
     private static void WriteToDiagnosticSinkCore(string message)
     {
+        Exception? consoleError = null;
         try
         {
             Console.Error.WriteLine(message);
         }
-        catch
+        catch (Exception ex)
         {
+            consoleError = ex;
+        }
+
+        if (consoleError is not null)
+        {
+            Trace.WriteLine($"[CrashLogFallback] console_error={consoleError}");
         }
 
         try
         {
             Trace.WriteLine(message);
         }
-        catch
+        catch (Exception ex)
         {
+            throw new InvalidOperationException("Crash log diagnostic sink failed after primary and fallback crash log writes failed.", ex);
         }
     }
 }

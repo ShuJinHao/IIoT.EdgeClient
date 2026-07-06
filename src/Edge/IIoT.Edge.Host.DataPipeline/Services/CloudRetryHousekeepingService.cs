@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
@@ -19,7 +20,7 @@ internal sealed class CloudRetryHousekeepingService
             logger,
             retryStore,
             diagnosticsStore,
-            "Retry-Cloud",
+            DataPipelineRetryChannelMetadata.CreateDeadLetterChannel(DataPipelineRetryChannel.Cloud).LogPrefix,
             "云端上传门控已恢复，弃置记录已重置为可补传。",
             CloudRetryRuntimeState.Idle,
             CloudRetryRuntimeState.Backoff)

@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
@@ -27,6 +28,7 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
     private readonly IDataPipelineService _dataPipelineService;
     private readonly HomogenizationCellDataValidator _validator;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
+    private readonly ICloudUploadDiagnosticsStore _cloudDiagnosticsStore;
     private readonly IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> _parameters;
     private readonly IHomogenizationProductionGate _productionGate;
 
@@ -42,6 +44,7 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
         IDataPipelineService dataPipelineService,
         HomogenizationCellDataValidator validator,
         IMesUploadDiagnosticsStore diagnosticsStore,
+        ICloudUploadDiagnosticsStore cloudDiagnosticsStore,
         IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> parameters,
         IHomogenizationProductionGate productionGate,
         ILogService logger,
@@ -54,6 +57,7 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
         _dataPipelineService = dataPipelineService;
         _validator = validator;
         _diagnosticsStore = diagnosticsStore;
+        _cloudDiagnosticsStore = cloudDiagnosticsStore;
         _parameters = parameters;
         _productionGate = productionGate;
     }
@@ -77,28 +81,53 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
             {
                 ModuleContext.LastOutboundAt = ProductionTime.BusinessNow;
                 ModuleContext.LastOutboundResult = message;
-                _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Outbound, message);
+                _diagnosticsStore.RecordFailure(
+                    CodeOptions.Mes.Channels.Outbound,
+                    message,
+                    CreateMesDiagnosticsContext("出站上传"));
             }).ConfigureAwait(false);
     }
 
     private async Task ProcessTriggerAsync(CancellationToken cancellationToken)
     {
         const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.出料上传;
-        var gateResult = await _productionGate.EnsureReadyAsync(ModuleContext, cancellationToken).ConfigureAwait(false);
-        if (!gateResult.IsSuccess)
+        var parameterSnapshot = await _parameters.GetAsync(cancellationToken).ConfigureAwait(false);
+        var mesEnabled = parameterSnapshot.Mes<bool>(HomogenizationParams.Mes.启用);
+        var cloudEnabled = parameterSnapshot.Cloud<bool>(HomogenizationParams.Cloud.启用);
+        var uploadTargets = ResolveUploadTargets(mesEnabled, cloudEnabled);
+
+        if (mesEnabled)
         {
-            RecordOutboundResult(gateResult.Message);
-            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Outbound, gateResult.Message);
-            Interaction.ReplyResult(trigger, gateResult);
-            return;
+            var gateResult = await _productionGate.EnsureReadyAsync(ModuleContext, cancellationToken).ConfigureAwait(false);
+            if (!gateResult.IsSuccess)
+            {
+                RecordOutboundResult(gateResult.Message);
+                RecordUploadBlockedDiagnostics(
+                    gateResult.Message,
+                    uploadTargets,
+                    _diagnosticsStore,
+                    _cloudDiagnosticsStore,
+                    CodeOptions.Mes.Channels.Outbound,
+                    "plc_outbound_blocked",
+                    "出站上传");
+                Interaction.ReplyResult(trigger, gateResult);
+                return;
+            }
         }
 
-        var cellData = BuildRecord();
+        var cellData = BuildRecord(uploadTargets);
         if (!_validator.TryValidate(cellData, out var error))
         {
             var message = error ?? "出料校验失败。";
             RecordOutbound(cellData, message);
-            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Outbound, message);
+            RecordUploadFailureDiagnostics(
+                message,
+                uploadTargets,
+                _diagnosticsStore,
+                _cloudDiagnosticsStore,
+                CodeOptions.Mes.Channels.Outbound,
+                "plc_outbound_validation_failed",
+                "出站上传");
             Interaction.ReplyException(trigger);
             return;
         }
@@ -112,30 +141,65 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
         {
             Interaction.ReplyMesNg(trigger);
             RecordOutbound(cellData, duplicateMessage);
-            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Outbound, duplicateMessage);
+            RecordUploadFailureDiagnostics(
+                duplicateMessage,
+                uploadTargets,
+                _diagnosticsStore,
+                _cloudDiagnosticsStore,
+                CodeOptions.Mes.Channels.Outbound,
+                "plc_outbound_duplicate_tray",
+                "出站上传");
             return;
         }
 
-        var enqueueResult = await _dataPipelineService
-            .EnqueueAsync(new CellCompletedRecord
-            {
-                CellData = cellData,
-                NetworkDeviceId = ModuleContext.NetworkDeviceId,
-                DeviceName = ModuleContext.DeviceName,
-                ModuleId = DependencyInjection.ModuleKey,
-                TaskKey = TaskName,
-                PlanSessionId = ModuleContext.PlanSessionId ?? string.Empty,
-                MainPlanCode = ModuleContext.SelectedProductionPlan?.MainPlanCode ?? string.Empty,
-                TraceBatchNumber = ModuleContext.TraceBatchNumber ?? string.Empty,
-                CreatedAtUtc = DateTime.UtcNow
-            }, cancellationToken)
-            .ConfigureAwait(false);
+        if (uploadTargets == DataPipelineUploadTargets.None)
+        {
+            var localOnlyResult = "MES/Cloud 上传已关闭，出料已本地记录。";
+            ModuleContext.MarkProcessedTray(
+                HomogenizationTrayCodeStage.Outbound,
+                cellData.TrayCode,
+                "出站已本地记录",
+                cellData.CompletedTime ?? ProductionTime.BusinessNow);
+            RecordOutbound(cellData, localOnlyResult);
+            Interaction.ReplyOk(trigger);
+            return;
+        }
+
+        DataPipelineEnqueueResult enqueueResult;
+        try
+        {
+            enqueueResult = await _dataPipelineService
+                .EnqueueAsync(CreatePipelineRecord(cellData, includeMesPlanContext: mesEnabled), cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            var message = $"出料处理异常：{ex.Message}";
+            RecordOutboundResult(message);
+            RecordUploadFailureDiagnostics(
+                message,
+                uploadTargets,
+                _diagnosticsStore,
+                _cloudDiagnosticsStore,
+                CodeOptions.Mes.Channels.Outbound,
+                "plc_outbound_exception",
+                "出站上传");
+            Interaction.ReplyException(trigger);
+            return;
+        }
 
         if (!enqueueResult.IsDurablyAccepted)
         {
             var failure = FormatRejectedResult(enqueueResult);
             RecordOutbound(cellData, failure);
-            _diagnosticsStore.RecordFailure(CodeOptions.Mes.Channels.Outbound, failure);
+            RecordUploadFailureDiagnostics(
+                failure,
+                uploadTargets,
+                _diagnosticsStore,
+                _cloudDiagnosticsStore,
+                CodeOptions.Mes.Channels.Outbound,
+                "plc_outbound_enqueue_failed",
+                "出站上传");
             Interaction.ReplyException(trigger);
             return;
         }
@@ -155,7 +219,7 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
         Interaction.ReplyOk(trigger);
     }
 
-    private HomogenizationCellData BuildRecord()
+    private HomogenizationCellData BuildRecord(DataPipelineUploadTargets uploadTargets)
     {
         var outbound = Codec.CaptureOutboundReadings();
         return new HomogenizationCellData
@@ -165,7 +229,7 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
             DeviceName = ModuleContext.DeviceName,
             DeviceCode = _deviceService.CurrentDevice?.ClientCode ?? ModuleContext.DeviceName,
             PlcDeviceId = ModuleContext.NetworkDeviceId,
-            UploadTargets = DataPipelineUploadTargets.All,
+            UploadTargets = uploadTargets,
             InboundTime = ModuleContext.LastInboundAt,
             CompletedTime = ProductionTime.BusinessNow,
             RuntimeStatus = HomogenizationText.Get("Homogenization_Outbound_PendingUpload", "出料待上传"),

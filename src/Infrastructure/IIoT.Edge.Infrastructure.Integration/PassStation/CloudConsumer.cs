@@ -6,6 +6,7 @@ using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Common.Device;
+using IIoT.Edge.Infrastructure.Integration;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 
@@ -73,13 +74,24 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
         {
             if (!_processIntegrationRegistry.TryGetCloudUploader(group.Key, out var registration))
             {
-                continue;
+                const string reasonCode = "cloud_uploader_missing";
+                var missingUploaderResult = CloudCallResult.Failure(
+                    CloudCallOutcome.SkippedUploadNotReady,
+                    reasonCode);
+                _logger.Warn(
+                    $"[PLC-{UploadDiagnosticsContextFactory.ResolveLogDeviceName(group)}][云端] 工序 {group.Key} 未注册 Cloud 上传器，{group.Count()} 条记录转入补传队列。");
+                _diagnosticsStore.RecordBlocked(
+                    group.Key,
+                    reasonCode,
+                    "工序未注册 Cloud 上传器。",
+                    UploadDiagnosticsContextFactory.CreateCloudContext(group));
+                return missingUploaderResult;
             }
 
             if (!await IsPluginCloudEnabledAsync(group.Key, cancellationToken).ConfigureAwait(false))
             {
                 var skippedResult = CloudCallResult.Success();
-                _diagnosticsStore.RecordResult(group.Key, skippedResult);
+                _diagnosticsStore.RecordResult(group.Key, skippedResult, UploadDiagnosticsContextFactory.CreateCloudContext(group));
                 continue;
             }
 
@@ -87,45 +99,78 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
             if (!gate.CanUpload && string.Equals(gate.ReasonCode, "cloud_upload_disabled", StringComparison.OrdinalIgnoreCase))
             {
                 var skippedResult = CloudCallResult.Success();
-                _diagnosticsStore.RecordResult(group.Key, skippedResult);
+                _diagnosticsStore.RecordResult(group.Key, skippedResult, UploadDiagnosticsContextFactory.CreateCloudContext(group));
                 continue;
             }
 
             if (!gate.CanUpload)
             {
-                var blockedDevice = ResolveLogDeviceName(group);
+                var blockedDevice = UploadDiagnosticsContextFactory.ResolveLogDeviceName(group);
                 var blockedResult = CloudCallResult.Failure(
                     CloudCallOutcome.SkippedUploadNotReady,
                     gate.ReasonCode);
                 _logger.Warn(
                     $"[PLC-{blockedDevice}][云端] 上传门控已阻塞（{gate.ReasonCode}），{group.Count()} 条记录转入补传队列。");
-                _diagnosticsStore.RecordResult(group.Key, blockedResult);
+                _diagnosticsStore.RecordBlocked(
+                    group.Key,
+                    gate.ReasonCode,
+                    gate.Message,
+                    UploadDiagnosticsContextFactory.CreateCloudContext(group));
                 return blockedResult;
             }
 
-            var groupRecords = group.ToList();
-            var device = ResolveUploadDevice(groupRecords, _deviceService.CurrentDevice);
-            if (device is null)
+            foreach (var sourceGroup in group.GroupBy(UploadDiagnosticsContextFactory.CreateSourceKey))
             {
-                var unidentifiedDevice = ResolveLogDeviceName(groupRecords);
-                var unidentifiedResult = CloudCallResult.Failure(
-                    CloudCallOutcome.SkippedUploadNotReady,
-                    EdgeUploadBlockReason.DeviceUnidentified.ToReasonCode());
-                _logger.Warn($"[PLC-{unidentifiedDevice}][云端] 设备尚未识别，记录转入补传队列。");
-                _diagnosticsStore.RecordResult(group.Key, unidentifiedResult);
-                return unidentifiedResult;
-            }
+                var groupRecords = sourceGroup.ToList();
+                var deviceStatusRecords = groupRecords
+                    .Where(UploadDiagnosticsContextFactory.IsDeviceStatusRecord)
+                    .ToList();
+                if (deviceStatusRecords.Count > 0)
+                {
+                    const string reasonCode = "cloud_plc_device_status_endpoint_missing";
+                    _logger.Warn(
+                        $"[PLC-{UploadDiagnosticsContextFactory.ResolveLogDeviceName(deviceStatusRecords)}][云端] PLC 设备状态专用接口未就绪，{deviceStatusRecords.Count} 条设备状态记录已跳过标准过站上传。");
+                    _diagnosticsStore.RecordBlocked(
+                        group.Key,
+                        reasonCode,
+                        "PLC 设备状态 Cloud 专用接口未就绪，已跳过标准过站上传。",
+                        UploadDiagnosticsContextFactory.CreateCloudContext(deviceStatusRecords));
+                    groupRecords = groupRecords
+                        .Where(static record => !UploadDiagnosticsContextFactory.IsDeviceStatusRecord(record))
+                        .ToList();
+                    if (groupRecords.Count == 0)
+                    {
+                        continue;
+                    }
+                }
 
-            var context = new ProcessUploadContext(device);
-            var result = registration.UploadMode == ProcessUploadMode.Batch
-                ? await _standardUploader.UploadAsync(context, group.Key, groupRecords, cancellationToken).ConfigureAwait(false)
-                : await UploadOneByOneAsync(context, group.Key, groupRecords, cancellationToken).ConfigureAwait(false);
-            _diagnosticsStore.RecordResult(group.Key, result);
-            if (!result.IsSuccess)
-            {
-                _logger.Error(
-                    $"[PLC-{ResolveLogDeviceName(groupRecords)}][云端] 工序 {group.Key} 上传失败，数量：{groupRecords.Count}，结果：{result.Outcome}，原因：{result.ReasonCode}。");
-                return result;
+                var device = ResolveUploadDevice(groupRecords, _deviceService.CurrentDevice);
+                if (device is null)
+                {
+                    var unidentifiedDevice = UploadDiagnosticsContextFactory.ResolveLogDeviceName(groupRecords);
+                    var unidentifiedResult = CloudCallResult.Failure(
+                        CloudCallOutcome.SkippedUploadNotReady,
+                        EdgeUploadBlockReason.DeviceUnidentified.ToReasonCode());
+                    _logger.Warn($"[PLC-{unidentifiedDevice}][云端] 设备尚未识别，记录转入补传队列。");
+                    _diagnosticsStore.RecordBlocked(
+                        group.Key,
+                        EdgeUploadBlockReason.DeviceUnidentified.ToReasonCode(),
+                        "设备尚未识别。",
+                        UploadDiagnosticsContextFactory.CreateCloudContext(groupRecords));
+                    return unidentifiedResult;
+                }
+
+                var context = new ProcessUploadContext(device);
+                var result = registration.UploadMode == ProcessUploadMode.Batch
+                    ? await _standardUploader.UploadAsync(context, group.Key, groupRecords, cancellationToken).ConfigureAwait(false)
+                    : await UploadOneByOneAsync(context, group.Key, groupRecords, cancellationToken).ConfigureAwait(false);
+                _diagnosticsStore.RecordResult(group.Key, result, UploadDiagnosticsContextFactory.CreateCloudContext(groupRecords));
+                if (!result.IsSuccess)
+                {
+                    _logger.Error(
+                        $"[PLC-{UploadDiagnosticsContextFactory.ResolveLogDeviceName(groupRecords)}][云端] 工序 {group.Key} 上传失败，数量：{groupRecords.Count}，结果：{result.Outcome}，原因：{result.ReasonCode}。");
+                    return result;
+                }
             }
         }
 
@@ -184,14 +229,4 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
             : currentDevice;
     }
 
-    private static string ResolveLogDeviceName(IEnumerable<CellCompletedRecord> records)
-    {
-        var deviceNames = records
-            .Select(record => record.ResolveDeviceName())
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        return deviceNames.Count == 1 ? deviceNames[0] : "多PLC";
-    }
 }

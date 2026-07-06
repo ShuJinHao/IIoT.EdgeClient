@@ -33,7 +33,7 @@ public sealed class DieCuttingPresentationOptions
 }
 
 /// <summary>
-/// 模切运行时默认频率和新鲜度保护参数。
+/// 模切运行时默认采集频率参数。
 /// </summary>
 public sealed class DieCuttingRuntimeOptions
 {
@@ -42,10 +42,6 @@ public sealed class DieCuttingRuntimeOptions
     /// </summary>
     public int DataReadLoopIntervalMs { get; set; } = 1000;
 
-    /// <summary>
-    /// PLC 数据超过该时间未刷新则不上报 MES，单位毫秒。
-    /// </summary>
-    public int DataFreshnessTimeoutMs { get; set; } = 5000;
 }
 
 /// <summary>

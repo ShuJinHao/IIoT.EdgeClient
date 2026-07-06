@@ -170,6 +170,84 @@ public sealed class CloudHttpClientBehaviorTests
     }
 
     [Fact]
+    public async Task PostAsync_WhenPayloadContainsNestedIdentityKeys_ShouldRemoveClientIdentityFieldsRecursively()
+    {
+        string? requestBody = null;
+        var deviceService = CreateOnlineDeviceService();
+        var client = new CloudHttpClient(
+            new StubHttpClientFactory(request =>
+            {
+                requestBody = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            }),
+            deviceService,
+            deviceService,
+            new FakeCloudApiEndpointProvider(),
+            new FakeLogService());
+
+        var result = await client.PostAsync(
+            "/api/v1/edge/pass-stations/test-process/batch",
+            new
+            {
+                deviceId = deviceService.CurrentDevice!.DeviceId,
+                processType = "test-process",
+                payload = new
+                {
+                    clientCode = "LINE-NESTED",
+                    mac_address = "AA-BB-CC",
+                    keep = "value"
+                },
+                records = new object[]
+                {
+                    new { barcode = "B001", client_code = "LINE-ARRAY" },
+                    new { barcode = "B002", nested = new { macAddress = "11-22-33", keep = "nested-value" } }
+                }
+            });
+
+        Assert.True(result.IsSuccess);
+        using var doc = JsonDocument.Parse(requestBody!);
+        AssertNoClientIdentityKeys(doc.RootElement);
+        Assert.True(doc.RootElement.GetProperty("payload").TryGetProperty("keep", out _));
+        Assert.Equal("nested-value", doc.RootElement.GetProperty("records")[1].GetProperty("nested").GetProperty("keep").GetString());
+    }
+
+    [Fact]
+    public async Task PostAsync_WhenPayloadIsPlcRuntimeStateReport_ShouldKeepClientCodeForCloudContract()
+    {
+        string? requestBody = null;
+        var deviceService = CreateOnlineDeviceService();
+        var client = new CloudHttpClient(
+            new StubHttpClientFactory(request =>
+            {
+                requestBody = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            }),
+            deviceService,
+            deviceService,
+            new FakeCloudApiEndpointProvider(),
+            new FakeLogService());
+
+        var result = await client.PostAsync(
+            "/api/v1/edge/edge-hosts/plc-runtime-states",
+            new EdgeHostPlcRuntimeStateReport(
+                deviceService.CurrentDevice!.DeviceId,
+                "LINE-01",
+                DateTime.UtcNow,
+                [
+                    new EdgeHostPlcRuntimeStateReportItem("P1-AP01", "P1-AP01", true, "Connected")
+                ]));
+
+        Assert.True(result.IsSuccess);
+        using var doc = JsonDocument.Parse(requestBody!);
+        var root = doc.RootElement;
+        Assert.True(root.TryGetProperty("deviceId", out _));
+        Assert.True(root.TryGetProperty("clientCode", out var clientCode));
+        Assert.Equal("LINE-01", clientCode.GetString());
+        Assert.True(root.TryGetProperty("plcStates", out var plcStates));
+        Assert.Single(plcStates.EnumerateArray());
+    }
+
+    [Fact]
     public async Task GetAsync_WhenProtectedRequestHasNoToken_ShouldSkipRequestAndReturnNull()
     {
         var sendCount = 0;
@@ -515,6 +593,30 @@ public sealed class CloudHttpClientBehaviorTests
             UploadAccessTokenExpiresAtUtc = expiresAtUtc ?? DateTimeOffset.UtcNow.AddMinutes(10)
         });
         return deviceService;
+    }
+
+    private static void AssertNoClientIdentityKeys(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (var property in element.EnumerateObject())
+                {
+                    Assert.DoesNotMatch(
+                        "^(clientCode|client_code|macAddress|mac_address)$",
+                        property.Name);
+                    AssertNoClientIdentityKeys(property.Value);
+                }
+
+                break;
+            case JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
+                {
+                    AssertNoClientIdentityKeys(item);
+                }
+
+                break;
+        }
     }
 
     private sealed class StubHttpClientFactory(Func<HttpRequestMessage, HttpResponseMessage> handlerFactory)

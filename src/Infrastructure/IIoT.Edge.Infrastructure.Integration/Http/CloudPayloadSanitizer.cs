@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using IIoT.Edge.Application.Abstractions.Cloud;
 
 namespace IIoT.Edge.Infrastructure.Integration.Http;
 
@@ -20,21 +21,40 @@ internal sealed class CloudPayloadSanitizer : ICloudPayloadSanitizer
 
     public object Sanitize(object payload)
     {
-        var node = JsonSerializer.SerializeToNode(payload);
-        if (node is JsonObject obj)
+        if (payload is EdgeHostPlcRuntimeStateReport)
         {
-            RemoveIdentityKeys(obj);
-            return obj;
+            return payload;
         }
 
-        return payload;
+        var node = JsonSerializer.SerializeToNode(payload);
+        RemoveIdentityKeys(node);
+
+        return node ?? payload;
     }
 
-    private static void RemoveIdentityKeys(JsonObject obj)
+    private static void RemoveIdentityKeys(JsonNode? node)
     {
-        foreach (var key in BlockedIdentityKeys.ToList())
+        switch (node)
         {
-            obj.Remove(key);
+            case JsonObject obj:
+                foreach (var key in BlockedIdentityKeys.ToList())
+                {
+                    obj.Remove(key);
+                }
+
+                foreach (var child in obj.ToList())
+                {
+                    RemoveIdentityKeys(child.Value);
+                }
+
+                break;
+            case JsonArray array:
+                foreach (var child in array)
+                {
+                    RemoveIdentityKeys(child);
+                }
+
+                break;
         }
     }
 }

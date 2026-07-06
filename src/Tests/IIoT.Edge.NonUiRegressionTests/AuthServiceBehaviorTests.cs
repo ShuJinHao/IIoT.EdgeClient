@@ -2,14 +2,23 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
+using System.Text;
 using IIoT.Edge.Infrastructure.Integration.Auth;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Infrastructure.Integration.Http;
+using IIoT.Edge.SharedKernel.Security;
+using Microsoft.IdentityModel.Tokens;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class AuthServiceBehaviorTests
 {
+    private const string LegacySha256Password123456 = "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92";
+    private const string TestJwtSigningKey = "edge-client-test-signing-key-2026-minimum-32-bytes";
+    private const string OtherJwtSigningKey = "edge-client-other-signing-key-2026-minimum-32-bytes";
+    private const string TestJwtIssuer = "iiot-cloud-test";
+    private const string TestJwtAudience = "iiot-edge-client-test";
+
     [Fact]
     public async Task LoginLocalAsync_WhenHashIsMissing_ShouldFail()
     {
@@ -31,7 +40,7 @@ public sealed class AuthServiceBehaviorTests
             _ => new HttpResponseMessage(HttpStatusCode.OK),
             new LocalAdminConfig
             {
-                PasswordHash = "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92"
+                PasswordHash = EdgePasswordHasher.HashPassword("123456")
             });
 
         var result = await service.LoginLocalAsync("123456");
@@ -41,6 +50,21 @@ public sealed class AuthServiceBehaviorTests
         Assert.NotNull(service.CurrentUser);
         Assert.True(service.CurrentUser!.IsLocalAdmin);
         Assert.Equal("LOCAL_ADMIN", service.CurrentUser.EmployeeNo);
+    }
+
+    [Fact]
+    public async Task LoginLocalAsync_WhenStoredHashIsLegacySha256_ShouldRequireResetWithoutSession()
+    {
+        var service = CreateService(
+            _ => new HttpResponseMessage(HttpStatusCode.OK),
+            new LocalAdminConfig { PasswordHash = LegacySha256Password123456 });
+
+        var result = await service.LoginLocalAsync("123456");
+
+        Assert.False(result.Success);
+        Assert.Equal("本地管理员密码使用旧哈希格式，请先重置。", result.Message);
+        Assert.False(service.IsAuthenticated);
+        Assert.Null(service.CurrentUser);
     }
 
     [Fact]
@@ -81,6 +105,53 @@ public sealed class AuthServiceBehaviorTests
     }
 
     [Fact]
+    public async Task LoginCloudAsync_WhenJwtSignatureDoesNotMatch_ShouldRejectSession()
+    {
+        var token = CreateJwtToken(
+            DateTimeOffset.UtcNow.AddMinutes(10),
+            OtherJwtSigningKey,
+            new Claim(JwtRegisteredClaimNames.UniqueName, "E001"),
+            new Claim("Permission", "HardwareConfig"));
+        var service = CreateService(
+            _ => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(token)
+            },
+            new LocalAdminConfig { PasswordHash = "unused" });
+
+        var result = await service.LoginCloudAsync("E001", "pwd", Guid.NewGuid());
+
+        Assert.False(result.Success);
+        Assert.Equal("云端登录令牌无效。", result.Message);
+        Assert.False(service.IsAuthenticated);
+        Assert.Null(service.CurrentUser);
+    }
+
+    [Fact]
+    public async Task LoginCloudAsync_WhenJwtIssuerOrAudienceIsMissing_ShouldRejectSessionWithoutBlockingStartup()
+    {
+        var token = CreateJwtToken(
+            DateTimeOffset.UtcNow.AddMinutes(10),
+            new Claim(JwtRegisteredClaimNames.UniqueName, "E001"),
+            new Claim("Permission", "HardwareConfig"));
+        var service = CreateService(
+            _ => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(token)
+            },
+            new LocalAdminConfig { PasswordHash = EdgePasswordHasher.HashPassword("123456") },
+            new CloudJwtValidationConfig { JwtSigningKey = TestJwtSigningKey });
+
+        var cloudResult = await service.LoginCloudAsync("E001", "pwd", Guid.NewGuid());
+        var localResult = await service.LoginLocalAsync("123456");
+
+        Assert.False(cloudResult.Success);
+        Assert.Equal("云端登录令牌无效。", cloudResult.Message);
+        Assert.True(localResult.Success);
+        Assert.True(service.CurrentUser?.IsLocalAdmin);
+    }
+
+    [Fact]
     public async Task LoginCloudAsync_WhenServerReturnsErrorEnvelope_ShouldSurfaceFirstError()
     {
         var service = CreateService(
@@ -101,56 +172,32 @@ public sealed class AuthServiceBehaviorTests
     }
 
     [Fact]
-    public async Task IsAuthenticated_WhenCloudSessionIsExpired_ShouldKeepSessionAndRefreshInBackground()
+    public async Task LoginCloudAsync_WhenAccessTokenIsExpired_ShouldRejectSession()
     {
-        var issuedTokens = new Queue<string>(new[]
-        {
-            CreateJwtToken(
-                expiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(-1),
-                new Claim(JwtRegisteredClaimNames.UniqueName, "E002")),
-            CreateJwtToken(
-                expiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(10),
-                new Claim(JwtRegisteredClaimNames.UniqueName, "E002"))
-        });
-        var requestCount = 0;
+        var token = CreateJwtToken(
+            expiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(-1),
+            new Claim(JwtRegisteredClaimNames.UniqueName, "E002"));
 
         var service = CreateService(
-            request =>
+            _ => new HttpResponseMessage(HttpStatusCode.OK)
             {
-                var currentRequest = Interlocked.Increment(ref requestCount);
-                var token = issuedTokens.Dequeue();
-                var response = new HttpResponseMessage(HttpStatusCode.OK)
-                {
-                    Content = JsonContent.Create(token)
-                };
-                response.Headers.Add(CloudAuthHeaders.RefreshToken, currentRequest == 1 ? "refresh-token-1" : "refresh-token-2");
-                response.Headers.Add(CloudAuthHeaders.RefreshTokenExpiresAt, DateTimeOffset.UtcNow.AddDays(7).ToString("O"));
-                response.Headers.Add(CloudAuthHeaders.AccessTokenExpiresAt, currentRequest == 1
-                    ? DateTimeOffset.UtcNow.AddMinutes(-1).ToString("O")
-                    : DateTimeOffset.UtcNow.AddMinutes(10).ToString("O"));
-                return response;
+                Content = JsonContent.Create(token)
             },
             new LocalAdminConfig { PasswordHash = "unused" });
 
         var result = await service.LoginCloudAsync("E002", "pwd", Guid.NewGuid());
 
-        Assert.True(result.Success);
-        Assert.True(service.IsAuthenticated);
-
-        await WaitUntilAsync(() =>
-            Volatile.Read(ref requestCount) == 2
-            && string.Equals(service.CurrentUser?.RefreshToken, "refresh-token-2", StringComparison.Ordinal));
-
-        Assert.True(service.IsAuthenticated);
-        Assert.NotNull(service.CurrentUser);
-        Assert.Equal("refresh-token-2", service.CurrentUser!.RefreshToken);
+        Assert.False(result.Success);
+        Assert.Equal("云端登录令牌无效。", result.Message);
+        Assert.False(service.IsAuthenticated);
+        Assert.Null(service.CurrentUser);
     }
 
     [Fact]
     public async Task IsAuthenticated_WhenCloudRefreshTokenIsExpired_ShouldClearSession()
     {
         var issuedToken = CreateJwtToken(
-            expiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(-1),
+            expiresAtUtc: DateTimeOffset.UtcNow.AddSeconds(1),
             new Claim(JwtRegisteredClaimNames.UniqueName, "E002"));
         var requestCount = 0;
 
@@ -163,8 +210,7 @@ public sealed class AuthServiceBehaviorTests
                     Content = JsonContent.Create(issuedToken)
                 };
                 response.Headers.Add(CloudAuthHeaders.RefreshToken, "refresh-token-1");
-                response.Headers.Add(CloudAuthHeaders.RefreshTokenExpiresAt, DateTimeOffset.UtcNow.AddMinutes(-1).ToString("O"));
-                response.Headers.Add(CloudAuthHeaders.AccessTokenExpiresAt, DateTimeOffset.UtcNow.AddMinutes(-1).ToString("O"));
+                response.Headers.Add(CloudAuthHeaders.RefreshTokenExpiresAt, DateTimeOffset.UtcNow.AddSeconds(1).ToString("O"));
                 return response;
             },
             new LocalAdminConfig { PasswordHash = "unused" });
@@ -172,6 +218,8 @@ public sealed class AuthServiceBehaviorTests
         var result = await service.LoginCloudAsync("E002", "pwd", Guid.NewGuid());
 
         Assert.True(result.Success);
+        await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+
         Assert.False(service.IsAuthenticated);
         Assert.Null(service.CurrentUser);
         Assert.Equal(1, requestCount);
@@ -183,7 +231,7 @@ public sealed class AuthServiceBehaviorTests
         var issuedTokens = new Queue<string>(new[]
         {
             CreateJwtToken(
-                expiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(-1),
+                expiresAtUtc: DateTimeOffset.UtcNow.AddSeconds(1),
                 new Claim(JwtRegisteredClaimNames.UniqueName, "E002")),
             CreateJwtToken(
                 expiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(10),
@@ -202,9 +250,6 @@ public sealed class AuthServiceBehaviorTests
                 };
                 response.Headers.Add(CloudAuthHeaders.RefreshToken, requestPaths.Count == 1 ? "refresh-token-1" : "refresh-token-2");
                 response.Headers.Add(CloudAuthHeaders.RefreshTokenExpiresAt, DateTimeOffset.UtcNow.AddDays(7).ToString("O"));
-                response.Headers.Add(CloudAuthHeaders.AccessTokenExpiresAt, requestPaths.Count == 1
-                    ? DateTimeOffset.UtcNow.AddMinutes(-1).ToString("O")
-                    : DateTimeOffset.UtcNow.AddMinutes(10).ToString("O"));
                 return response;
             },
             new LocalAdminConfig { PasswordHash = "unused" });
@@ -212,6 +257,8 @@ public sealed class AuthServiceBehaviorTests
         var result = await service.LoginCloudAsync("E002", "pwd", Guid.NewGuid());
 
         Assert.True(result.Success);
+        await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+
         Assert.True(await service.EnsureAuthenticatedAsync());
         Assert.True(service.IsAuthenticated);
         Assert.NotNull(service.CurrentUser);
@@ -225,7 +272,7 @@ public sealed class AuthServiceBehaviorTests
     public async Task EnsureAuthenticatedAsync_WhenRefreshFails_ShouldClearCurrentUser()
     {
         var issuedToken = CreateJwtToken(
-            expiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(-1),
+            expiresAtUtc: DateTimeOffset.UtcNow.AddSeconds(1),
             new Claim(JwtRegisteredClaimNames.UniqueName, "E003"));
         var requestCount = 0;
 
@@ -241,7 +288,6 @@ public sealed class AuthServiceBehaviorTests
                     };
                     response.Headers.Add(CloudAuthHeaders.RefreshToken, "refresh-token-3");
                     response.Headers.Add(CloudAuthHeaders.RefreshTokenExpiresAt, DateTimeOffset.UtcNow.AddDays(7).ToString("O"));
-                    response.Headers.Add(CloudAuthHeaders.AccessTokenExpiresAt, DateTimeOffset.UtcNow.AddMinutes(-1).ToString("O"));
                     return response;
                 }
 
@@ -258,6 +304,8 @@ public sealed class AuthServiceBehaviorTests
         var result = await service.LoginCloudAsync("E003", "pwd", Guid.NewGuid());
 
         Assert.True(result.Success);
+        await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+
         Assert.False(await service.EnsureAuthenticatedAsync());
         Assert.False(service.IsAuthenticated);
         Assert.Null(service.CurrentUser);
@@ -266,21 +314,41 @@ public sealed class AuthServiceBehaviorTests
 
     private static AuthService CreateService(
         Func<HttpRequestMessage, HttpResponseMessage> responseFactory,
-        LocalAdminConfig config)
+        LocalAdminConfig config,
+        CloudJwtValidationConfig? jwtValidationConfig = null)
     {
         return new AuthService(
             new TestHttpClientFactory(new HttpClient(new StubMessageHandler(responseFactory))),
             new FakeCloudApiEndpointProvider(),
-            config);
+            config,
+            jwtValidationConfig
+            ?? new CloudJwtValidationConfig
+            {
+                JwtSigningKey = TestJwtSigningKey,
+                JwtIssuer = TestJwtIssuer,
+                JwtAudience = TestJwtAudience
+            });
     }
 
     private static string CreateJwtToken(
         DateTimeOffset expiresAtUtc,
         params Claim[] extraClaims)
+        => CreateJwtToken(expiresAtUtc, TestJwtSigningKey, extraClaims);
+
+    private static string CreateJwtToken(
+        DateTimeOffset expiresAtUtc,
+        string signingKey,
+        params Claim[] extraClaims)
     {
+        var credentials = new SigningCredentials(
+            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
+            SecurityAlgorithms.HmacSha256);
         var token = new JwtSecurityToken(
+            issuer: TestJwtIssuer,
+            audience: TestJwtAudience,
             claims: extraClaims,
-            expires: expiresAtUtc.UtcDateTime);
+            expires: expiresAtUtc.UtcDateTime,
+            signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }

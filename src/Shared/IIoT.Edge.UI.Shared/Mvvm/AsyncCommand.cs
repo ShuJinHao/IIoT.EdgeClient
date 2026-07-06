@@ -1,4 +1,5 @@
 using System.Windows.Input;
+using System.Diagnostics;
 
 namespace IIoT.Edge.UI.Shared.Mvvm
 {
@@ -51,7 +52,7 @@ namespace IIoT.Edge.UI.Shared.Mvvm
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine(ex);
+                Trace.TraceError(ex.ToString());
             }
             finally
             {
@@ -105,7 +106,7 @@ namespace IIoT.Edge.UI.Shared.Mvvm
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine(ex);
+                Trace.TraceError(ex.ToString());
             }
             finally
             {

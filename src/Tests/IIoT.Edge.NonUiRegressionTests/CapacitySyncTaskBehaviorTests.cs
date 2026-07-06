@@ -201,6 +201,108 @@ public sealed class CapacitySyncTaskBehaviorTests
     }
 
     [Fact]
+    public async Task RetryBuffer_WhenCalledConcurrently_ShouldSerializeCloudPosts()
+    {
+        var postStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releasePost = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cloudHttp = new FakeCloudHttpClient
+        {
+            PostStarted = postStarted,
+            PostWait = releasePost.Task
+        };
+        var deviceService = new FakeDeviceService();
+        deviceService.SetOnline(new DeviceSession
+        {
+            DeviceId = Guid.NewGuid(),
+            DeviceName = "PLC-A",
+            ClientCode = "CLIENT-01",
+            ProcessId = Guid.NewGuid()
+        });
+        var bufferStore = new FakeCapacityBufferStore();
+        bufferStore.HourlySummaries.Add(new BufferHourlySummaryDto
+        {
+            Date = "2026-04-15",
+            Hour = 8,
+            MinuteBucket = 0,
+            ShiftCode = "D",
+            Total = 12,
+            OkCount = 11,
+            NgCount = 1,
+            PlcName = "PLC-A"
+        });
+        bufferStore.HourlySummaries.Add(new BufferHourlySummaryDto
+        {
+            Date = "2026-04-15",
+            Hour = 8,
+            MinuteBucket = 30,
+            ShiftCode = "D",
+            Total = 13,
+            OkCount = 13,
+            NgCount = 0,
+            PlcName = "PLC-A"
+        });
+        var task = CreateTask(cloudHttp, deviceService, bufferStore, new FakeLogService());
+
+        var firstRetry = task.RetryBufferAsync();
+        await postStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        var secondRetry = task.RetryBufferAsync();
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, cloudHttp.PostCallCount);
+        Assert.Equal(1, cloudHttp.MaxConcurrentPostCount);
+
+        releasePost.SetResult();
+        var results = await Task.WhenAll(firstRetry, secondRetry);
+
+        Assert.All(results, result => Assert.True(result));
+        Assert.Equal(2, cloudHttp.PostCallCount);
+        Assert.Equal(1, cloudHttp.MaxConcurrentPostCount);
+        Assert.Equal(2, bufferStore.DeletedSummaries.Count);
+    }
+
+    [Fact]
+    public async Task RetryBuffer_WhenMoreThanThreeBatchesRemain_ShouldLeaveRestForNextRound()
+    {
+        var cloudHttp = new FakeCloudHttpClient();
+        var deviceService = new FakeDeviceService();
+        deviceService.SetOnline(new DeviceSession
+        {
+            DeviceId = Guid.NewGuid(),
+            DeviceName = "PLC-A",
+            ClientCode = "CLIENT-01",
+            ProcessId = Guid.NewGuid()
+        });
+        var bufferStore = new FakeCapacityBufferStore();
+        for (var i = 0; i < 601; i++)
+        {
+            bufferStore.HourlySummaries.Add(new BufferHourlySummaryDto
+            {
+                Date = "2026-04-15",
+                Hour = i % 24,
+                MinuteBucket = i % 2 == 0 ? 0 : 30,
+                ShiftCode = i % 24 is >= 8 and < 20 ? "D" : "N",
+                Total = 1,
+                OkCount = 1,
+                NgCount = 0,
+                PlcName = $"PLC-{i:D3}"
+            });
+        }
+        var logger = new FakeLogService();
+        var task = CreateTask(cloudHttp, deviceService, bufferStore, logger);
+
+        var result = await task.RetryBufferAsync();
+
+        Assert.True(result);
+        Assert.Equal(600, cloudHttp.PostCallCount);
+        Assert.Equal([200, 200, 200], bufferStore.ClaimBatchSizes);
+        Assert.Equal(600, bufferStore.DeletedSummaries.Count);
+        Assert.Single(bufferStore.HourlySummaries);
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Message.Contains("本轮已处理 3 批", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task StartAsync_WhenCloudSyncIntervalConfigured_ShouldUseConfiguredLoopInterval()
     {
         var cloudHttp = new FakeCloudHttpClient();

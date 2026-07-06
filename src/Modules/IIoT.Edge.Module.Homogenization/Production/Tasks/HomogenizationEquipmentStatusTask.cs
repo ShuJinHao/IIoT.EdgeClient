@@ -1,6 +1,9 @@
+using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Abstractions.Mes;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Time;
 using IIoT.Edge.Module.Homogenization.Config;
@@ -11,17 +14,17 @@ using IIoT.Edge.Module.Homogenization.Production;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Options;
 
-using IIoT.Edge.Application.Abstractions.Mes;
 namespace IIoT.Edge.Module.Homogenization.Production.Tasks;
 
 /// <summary>
-/// 设备状态握手任务：PLC 触发后读取状态码并上传 MES。
+/// 设备状态握手任务：PLC 触发后读取状态码并按配置进入上传链路。
 /// </summary>
 internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
 {
     private readonly IDataPipelineService _dataPipelineService;
-    private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
-    private readonly IHomogenizationProductionGate _productionGate;
+    private readonly IMesUploadDiagnosticsStore _mesDiagnosticsStore;
+    private readonly ICloudUploadDiagnosticsStore _cloudDiagnosticsStore;
+    private readonly IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> _parameters;
 
     /// <summary>
     /// 创建匀浆设备状态上传握手任务。
@@ -32,8 +35,9 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
         HomogenizationSignalCodec codec,
         HomogenizationContext context,
         IDataPipelineService dataPipelineService,
-        IMesUploadDiagnosticsStore diagnosticsStore,
-        IHomogenizationProductionGate productionGate,
+        IMesUploadDiagnosticsStore mesDiagnosticsStore,
+        ICloudUploadDiagnosticsStore cloudDiagnosticsStore,
+        IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> parameters,
         ILogService logger,
         IProductionTimeProvider productionTime,
         IOptions<HomogenizationModuleOptions> moduleOptions,
@@ -41,8 +45,9 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
         : base(buffer, interaction, codec, context, logger, productionTime, codeOptions, moduleOptions)
     {
         _dataPipelineService = dataPipelineService;
-        _diagnosticsStore = diagnosticsStore;
-        _productionGate = productionGate;
+        _mesDiagnosticsStore = mesDiagnosticsStore;
+        _cloudDiagnosticsStore = cloudDiagnosticsStore;
+        _parameters = parameters;
     }
 
     /// <summary>
@@ -54,34 +59,53 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
     {
         const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.设备状态上传;
 
-        await ExecuteMesSnapshotHandshakeAsync(
+        await ExecuteHandshakeAsync(
             trigger,
             "设备状态上传触发。",
             "设备状态上传复位。",
-            "设备状态上传处理异常",
-            CodeOptions.Mes.Channels.EquipmentStatus,
-            _productionGate,
-            _diagnosticsStore,
-            () => Codec.CaptureEquipmentStatusSnapshot(CodeOptions.Mes),
-            EnqueueEquipmentStatusAsync,
+            ProcessTriggerAsync,
+            static ex => $"设备状态上传处理异常：{ex.Message}",
             message =>
             {
                 ModuleContext.LastEquipmentStatusAt = ProductionTime.BusinessNow;
                 ModuleContext.LastEquipmentStatusResult = message;
-            },
-            (snapshot, result) =>
-            {
-                ModuleContext.LastEquipmentStatusAt = snapshot.CapturedAt;
-                ModuleContext.LastEquipmentStatusResult = result.Message;
-                ModuleContext.LastEquipmentStatusSnapshot = snapshot;
-            },
-            WriteCloudDeviceStatusLog).ConfigureAwait(false);
+                _mesDiagnosticsStore.RecordFailure(
+                    CodeOptions.Mes.Channels.EquipmentStatus,
+                    message,
+                    CreateMesDiagnosticsContext("设备状态上传"));
+            }).ConfigureAwait(false);
     }
 
-    private async Task<MesCallResult> EnqueueEquipmentStatusAsync(
+    private async Task ProcessTriggerAsync(CancellationToken cancellationToken)
+    {
+        const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.设备状态上传;
+        var snapshot = Codec.CaptureEquipmentStatusSnapshot(CodeOptions.Mes);
+
+        var (result, uploadTargets) = await EnqueueEquipmentStatusAsync(snapshot, cancellationToken).ConfigureAwait(false);
+        if (!result.IsSuccess)
+        {
+            RecordUploadDiagnostics(result, uploadTargets);
+        }
+
+        ModuleContext.LastEquipmentStatusAt = snapshot.CapturedAt;
+        ModuleContext.LastEquipmentStatusResult = result.Message;
+        ModuleContext.LastEquipmentStatusSnapshot = snapshot;
+        Interaction.ReplyResult(trigger, result);
+    }
+
+    private async Task<(MesCallResult Result, DataPipelineUploadTargets UploadTargets)> EnqueueEquipmentStatusAsync(
         HomogenizationEquipmentStatusSnapshot snapshot,
         CancellationToken cancellationToken)
     {
+        var parameterSnapshot = await _parameters.GetAsync(cancellationToken).ConfigureAwait(false);
+        var uploadTargets = ResolveUploadTargets(
+            parameterSnapshot.Mes<bool>(HomogenizationParams.Mes.启用),
+            parameterSnapshot.Cloud<bool>(HomogenizationParams.Cloud.启用));
+        if (uploadTargets == DataPipelineUploadTargets.None)
+        {
+            return (MesCallResult.Disabled("MES/Cloud 上传已关闭，设备状态上传已跳过。"), uploadTargets);
+        }
+
         var cellData = new HomogenizationCellData
         {
             RecordKind = HomogenizationCellData.RecordKindEquipmentStatus,
@@ -91,40 +115,37 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
             CompletedTime = snapshot.CapturedAt,
             RuntimeStatus = "设备状态待上传",
             EquipmentStatusSnapshot = snapshot,
-            UploadTargets = DataPipelineUploadTargets.Mes
+            UploadTargets = uploadTargets
         };
 
-        var enqueueResult = await _dataPipelineService
-            .EnqueueAsync(CreatePipelineRecord(cellData), cancellationToken)
-            .ConfigureAwait(false);
-
-        return ToMesQueueResult(
-            enqueueResult,
-            "设备状态已进入 MES 上传队列。",
-            "设备状态已接收，数据已进入溢出持久化。",
-            "设备状态未接收，数据管道拒绝入队");
-    }
-
-    private void WriteCloudDeviceStatusLog(HomogenizationEquipmentStatusSnapshot snapshot)
-    {
-        var level = CodeOptions.Cloud.ResolveEquipmentStatusLevel(snapshot);
-        var extraMessages = snapshot.Messages.Count == 0
-            ? string.Empty
-            : $"，消息={string.Join("；", snapshot.Messages)}";
-        var message =
-            $"设备状态采集：状态码={snapshot.StatusCode}，状态={snapshot.StatusText}，工序={DependencyInjection.ModuleKey}，PLC/设备={ModuleContext.DeviceName}，采集时间={snapshot.CapturedAt:yyyy-MM-dd HH:mm:ss}{extraMessages}。";
-
-        switch (level)
+        try
         {
-            case "ERROR":
-                Logger.Error(message);
-                break;
-            case "WARN":
-                Logger.Warn(message);
-                break;
-            default:
-                Logger.Info(message);
-                break;
+            var enqueueResult = await _dataPipelineService
+                .EnqueueAsync(CreatePipelineRecord(cellData, includeMesPlanContext: false), cancellationToken)
+                .ConfigureAwait(false);
+
+            return (ToMesQueueResult(
+                    enqueueResult,
+                    $"设备状态已进入 {FormatUploadTargets(uploadTargets)} 上传队列。",
+                    "设备状态已接收，数据已进入溢出持久化。",
+                    "设备状态未接收，数据管道拒绝入队"),
+                uploadTargets);
+        }
+        catch (Exception ex)
+        {
+            return (MesCallResult.TransportFailure($"设备状态处理异常：{ex.Message}"), uploadTargets);
         }
     }
+
+    private void RecordUploadDiagnostics(
+        MesCallResult result,
+        DataPipelineUploadTargets uploadTargets)
+        => RecordUploadFailureDiagnostics(
+            result.Message,
+            uploadTargets,
+            _mesDiagnosticsStore,
+            _cloudDiagnosticsStore,
+            CodeOptions.Mes.Channels.EquipmentStatus,
+            "plc_equipment_status_enqueue_failed",
+            "设备状态上传");
 }

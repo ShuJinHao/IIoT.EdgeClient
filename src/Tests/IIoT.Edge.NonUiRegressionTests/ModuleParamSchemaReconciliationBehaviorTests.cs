@@ -73,14 +73,14 @@ namespace IIoT.Edge.NonUiRegressionTests;
             new ModuleParamDefaultOverride(
                 ModuleParamCategory.Mes,
                 nameof(HomogenizationMesParam.服务地址),
-                "http://10.98.101.247:8080",
-                ["http://10.110.0.250:8081"])
+                "http://mes-current.example.test:8080",
+                ["http://mes-legacy.example.test:8081"])
         ]);
         var mesKey = ModuleParamKeys.StorageKey("Homogenization", ModuleParamCategory.Mes, nameof(HomogenizationMesParam.服务地址));
         var customUpperComputerNoKey = ModuleParamKeys.StorageKey("Homogenization", ModuleParamCategory.Mes, nameof(HomogenizationMesParam.UpperComputerNo));
         var configService = new MutableLocalParameterConfigService(
         [
-            new LocalSystemConfigSnapshot(1, mesKey, "http://10.110.0.250:8081", null, 1),
+            new LocalSystemConfigSnapshot(1, mesKey, "http://mes-legacy.example.test:8081", null, 1),
             new LocalSystemConfigSnapshot(2, customUpperComputerNoKey, "CUSTOM-UC", null, 2)
         ]);
         var source = new ModuleParamSchemaSource(
@@ -96,7 +96,7 @@ namespace IIoT.Edge.NonUiRegressionTests;
         await reconciler.ReconcileAsync(TestContext.Current.CancellationToken);
 
         var configs = await configService.GetSystemConfigsAsync(TestContext.Current.CancellationToken);
-        Assert.Equal("http://10.98.101.247:8080", configs.Single(x => x.Key == mesKey).Value);
+        Assert.Equal("http://mes-current.example.test:8080", configs.Single(x => x.Key == mesKey).Value);
         Assert.Equal("CUSTOM-UC", configs.Single(x => x.Key == customUpperComputerNoKey).Value);
     }
 

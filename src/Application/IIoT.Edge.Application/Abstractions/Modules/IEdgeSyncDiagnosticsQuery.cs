@@ -43,7 +43,13 @@ public sealed record CloudSyncDiagnosticsSnapshot(
     ExternalHeartbeatSnapshot? Heartbeat = null,
     DeadLetterDiagnosticsSnapshot? DeadLetters = null,
     string? LastProcessDisplayName = null,
-    int PendingPassStationCount = 0);
+    int PendingPassStationCount = 0,
+    string? LastDeviceName = null,
+    string? LastModuleId = null,
+    string? LastTaskKey = null,
+    string? LastScenario = null,
+    DateTime? LastBlockedAt = null,
+    string? LastBlockedReason = null);
 
 public sealed record MesSyncDiagnosticsSnapshot(
     MesRetryRuntimeState RuntimeState,

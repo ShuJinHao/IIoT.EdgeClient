@@ -85,6 +85,81 @@ public sealed class MesFrameworkBehaviorTests
     }
 
     [Fact]
+    public async Task MesConsumer_WhenRecordCarriesPlcContext_ShouldUploadWithRecordDeviceName()
+    {
+        var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
+        var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
+        var deviceService = CreateOnlineDeviceService();
+        var currentDevice = deviceService.CurrentDevice!;
+        var consumer = new MesConsumer(
+            deviceService,
+            CreateReadyMesGate(),
+            [uploader],
+            CreateMesRegistry(),
+            diagnosticsStore,
+            new FakeLogService());
+        var record = new CellCompletedRecord
+        {
+            DeviceName = "PLC-RECORD-01",
+            ModuleId = "TestModule",
+            TaskKey = "TestModule.Realtime",
+            CellData = new TestProcessCellData
+            {
+                Barcode = "MES-PLC-CONTEXT-01",
+                WorkOrderNo = "MES-WO-PLC",
+                UploadTargets = DataPipelineUploadTargets.Mes
+            }
+        };
+
+        var success = await consumer.ProcessAsync(record);
+
+        Assert.True(success);
+        Assert.Equal(1, uploader.UploadCallCount);
+        var uploadContext = Assert.IsType<ProcessUploadContext>(uploader.LastUploadContext);
+        Assert.Equal("PLC-RECORD-01", uploadContext.Device.DeviceName);
+        Assert.Equal(currentDevice.DeviceId, uploadContext.Device.DeviceId);
+        Assert.Equal(currentDevice.ClientCode, uploadContext.Device.ClientCode);
+        Assert.NotEqual(currentDevice.DeviceName, uploadContext.Device.DeviceName);
+    }
+
+    [Fact]
+    public async Task MesConsumer_WhenRecordTaskIsEquipmentStatus_ShouldRecordDeviceStatusScenario()
+    {
+        var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
+        var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
+        var consumer = new MesConsumer(
+            CreateOnlineDeviceService(),
+            CreateReadyMesGate(),
+            [uploader],
+            CreateMesRegistry(),
+            diagnosticsStore,
+            new FakeLogService());
+        var record = new CellCompletedRecord
+        {
+            DeviceName = "PLC-HM-01",
+            ModuleId = "Homogenization",
+            TaskKey = "Homogenization.EquipmentStatus",
+            CellData = new TestProcessCellData
+            {
+                Barcode = "MES-EQ-01",
+                WorkOrderNo = "MES-WO-01",
+                UploadTargets = DataPipelineUploadTargets.Mes
+            }
+        };
+
+        var success = await consumer.ProcessAsync(record);
+
+        Assert.True(success);
+        var diagnostics = diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey);
+        Assert.NotNull(diagnostics);
+        Assert.Equal("Success", diagnostics!.LastResult);
+        Assert.Equal("PLC-HM-01", diagnostics.DeviceName);
+        Assert.Equal("Homogenization", diagnostics.ModuleId);
+        Assert.Equal("Homogenization.EquipmentStatus", diagnostics.TaskKey);
+        Assert.Equal("设备状态上传", diagnostics.Scenario);
+    }
+
+    [Fact]
     public async Task MesConsumer_WhenRecordTargetsCloudOnly_ShouldSkipMesUploader()
     {
         var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
@@ -209,7 +284,7 @@ public sealed class MesFrameworkBehaviorTests
     }
 
     [Fact]
-    public async Task MesConsumer_WhenHeartbeatIsNotReady_ShouldReturnFalseWithoutCallingUploader()
+    public async Task MesConsumer_WhenHeartbeatIsNotReady_ShouldRecordBlockedWithoutCallingUploader()
     {
         var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
         var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
@@ -230,8 +305,51 @@ public sealed class MesFrameworkBehaviorTests
         Assert.Equal(0, uploader.UploadCallCount);
         var diagnostics = diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey);
         Assert.NotNull(diagnostics);
-        Assert.Equal("Failed", diagnostics!.LastResult);
-        Assert.Equal("mes_heartbeat_timeout", diagnostics.LastFailureReason);
+        Assert.Equal("Blocked", diagnostics!.LastResult);
+        Assert.Null(diagnostics.LastFailureReason);
+        Assert.Equal("mes_heartbeat_timeout", diagnostics.LastBlockedReason);
+        Assert.NotNull(diagnostics.LastBlockedAt);
+    }
+
+    [Fact]
+    public async Task MesConsumer_WhenDeviceIsUnidentified_ShouldRecordBlockedWithoutCallingUploader()
+    {
+        var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
+        var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
+        var consumer = new MesConsumer(
+            new FakeDeviceService(),
+            CreateReadyMesGate(),
+            [uploader],
+            CreateMesRegistry(),
+            diagnosticsStore,
+            new FakeLogService());
+        var record = new CellCompletedRecord
+        {
+            DeviceName = "PLC-MES-BLOCKED",
+            ModuleId = "Homogenization",
+            TaskKey = "Homogenization.Realtime",
+            CellData = new TestProcessCellData
+            {
+                Barcode = "MES-NO-DEVICE",
+                WorkOrderNo = "MES-WO-NO-DEVICE",
+                UploadTargets = DataPipelineUploadTargets.Mes
+            }
+        };
+
+        var success = await consumer.ProcessAsync(record);
+
+        Assert.False(success);
+        Assert.Equal(0, uploader.UploadCallCount);
+        var diagnostics = diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey);
+        Assert.NotNull(diagnostics);
+        Assert.Equal("Blocked", diagnostics!.LastResult);
+        Assert.Null(diagnostics.LastFailureReason);
+        Assert.Equal("尚未识别当前设备。", diagnostics.LastBlockedReason);
+        Assert.NotNull(diagnostics.LastBlockedAt);
+        Assert.Equal("PLC-MES-BLOCKED", diagnostics.DeviceName);
+        Assert.Equal("Homogenization", diagnostics.ModuleId);
+        Assert.Equal("Homogenization.Realtime", diagnostics.TaskKey);
+        Assert.Equal("生产上传", diagnostics.Scenario);
     }
 
     [Fact]
