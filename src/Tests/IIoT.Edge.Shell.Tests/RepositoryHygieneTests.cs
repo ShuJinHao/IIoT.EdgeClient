@@ -430,6 +430,21 @@ public sealed class RepositoryHygieneTests
         var legacyLoginMatches = authSourceFiles
             .SelectMany(path => FindForbiddenMatches(root, path, ["ComputeSha256"]))
             .ToArray();
+        var passwordHashScriptMatches = EnumerateFiles(Path.Combine(root, "scripts"), "*.ps1")
+            .Where(path => !string.Equals(Path.GetFileName(path), "TestEdgeDeploymentPreflight.ps1", StringComparison.Ordinal))
+            .SelectMany(path =>
+            {
+                var text = File.ReadAllText(path);
+                var hasPasswordContext = text.Contains("Password", StringComparison.OrdinalIgnoreCase)
+                    || text.Contains("PasswordHash", StringComparison.OrdinalIgnoreCase);
+                var hasSha256Hashing = text.Contains("SHA256Managed", StringComparison.Ordinal)
+                    || text.Contains(".ComputeHash(", StringComparison.Ordinal);
+
+                return hasPasswordContext && hasSha256Hashing
+                    ? [$"{ToRepositoryPath(root, path)} contains SHA256 password hash generation script content"]
+                    : Array.Empty<string>();
+            })
+            .ToArray();
         var initializer = File.ReadAllText(Path.Combine(
             launcherRoot,
             "Services",
@@ -437,6 +452,7 @@ public sealed class RepositoryHygieneTests
 
         Assert.Empty(defaultCredentialMatches);
         Assert.Empty(legacyLoginMatches);
+        Assert.Empty(passwordHashScriptMatches);
         Assert.DoesNotContain("File.Copy", initializer, StringComparison.Ordinal);
         Assert.Contains("不能静默复制 sample 账号", initializer, StringComparison.Ordinal);
     }

@@ -4,4 +4,6 @@ public sealed record LauncherAccountRecord(
     string UserName,
     string DisplayName,
     string PasswordHash,
-    bool IsEnabled);
+    bool IsEnabled,
+    int AccessFailedCount = 0,
+    DateTimeOffset? LockoutUntilUtc = null);

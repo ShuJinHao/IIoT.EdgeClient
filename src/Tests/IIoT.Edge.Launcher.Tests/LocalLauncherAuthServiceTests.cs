@@ -40,11 +40,11 @@ public sealed class LocalLauncherAuthServiceTests
         ]);
         var service = new LocalLauncherAuthService(accounts);
 
-        var result = service.ChangePassword("edge-admin", "123456", "new-pass");
+        var result = service.ChangePassword("edge-admin", "123456", "NewPass123!");
 
         Assert.True(result.Success);
         Assert.False(service.Authenticate("edge-admin", "123456").Success);
-        Assert.True(service.Authenticate("edge-admin", "new-pass").Success);
+        Assert.True(service.Authenticate("edge-admin", "NewPass123!").Success);
     }
 
     [Fact]
@@ -67,6 +67,25 @@ public sealed class LocalLauncherAuthServiceTests
     }
 
     [Fact]
+    public void ChangePassword_WhenNewPasswordDoesNotMeetPolicy_ShouldFail()
+    {
+        var accounts = new StubLauncherAccountCatalog(
+        [
+            new LauncherAccountRecord(
+                "edge-admin",
+                "本地管理员",
+                LauncherPasswordHasher.HashPassword("123456"),
+                true)
+        ]);
+        var service = new LocalLauncherAuthService(accounts);
+
+        var result = service.ChangePassword("edge-admin", "123456", "new-pass");
+
+        Assert.False(result.Success);
+        Assert.Equal(LauncherPasswordPolicy.RequirementMessage, result.ErrorMessage);
+    }
+
+    [Fact]
     public void Authenticate_WhenPasswordDoesNotMatch_ShouldFail()
     {
         var accounts = new StubLauncherAccountCatalog(
@@ -83,6 +102,87 @@ public sealed class LocalLauncherAuthServiceTests
 
         Assert.False(result.Success);
         Assert.Contains("不正确", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.Equal(1, accounts.LoadAccounts()[0].AccessFailedCount);
+    }
+
+    [Fact]
+    public void Authenticate_WhenPasswordFailsFiveTimes_ShouldLockAccount()
+    {
+        var accounts = new StubLauncherAccountCatalog(
+        [
+            new LauncherAccountRecord(
+                "edge-admin",
+                "本地管理员",
+                LauncherPasswordHasher.HashPassword("ChangeMe123!"),
+                true)
+        ]);
+        var service = new LocalLauncherAuthService(accounts);
+
+        for (var i = 0; i < 4; i++)
+        {
+            var failed = service.Authenticate("edge-admin", "wrong-password");
+            Assert.False(failed.Success);
+            Assert.Contains("不正确", failed.ErrorMessage, StringComparison.Ordinal);
+        }
+
+        var locked = service.Authenticate("edge-admin", "wrong-password");
+        var stillLocked = service.Authenticate("edge-admin", "ChangeMe123!");
+
+        Assert.False(locked.Success);
+        Assert.Equal(LocalLauncherAuthService.AccountLockedError, locked.ErrorMessage);
+        Assert.False(stillLocked.Success);
+        Assert.Equal(LocalLauncherAuthService.AccountLockedError, stillLocked.ErrorMessage);
+        Assert.Equal(5, accounts.LoadAccounts()[0].AccessFailedCount);
+        Assert.NotNull(accounts.LoadAccounts()[0].LockoutUntilUtc);
+    }
+
+    [Fact]
+    public void ChangePassword_WhenOldPasswordFailsFiveTimes_ShouldLockAccount()
+    {
+        var accounts = new StubLauncherAccountCatalog(
+        [
+            new LauncherAccountRecord(
+                "edge-admin",
+                "本地管理员",
+                LauncherPasswordHasher.HashPassword("ChangeMe123!"),
+                true)
+        ]);
+        var service = new LocalLauncherAuthService(accounts);
+
+        for (var i = 0; i < 4; i++)
+        {
+            var failed = service.ChangePassword("edge-admin", "wrong-password", "NewPass123!");
+            Assert.False(failed.Success);
+            Assert.Contains("旧密码", failed.ErrorMessage, StringComparison.Ordinal);
+        }
+
+        var locked = service.ChangePassword("edge-admin", "wrong-password", "NewPass123!");
+
+        Assert.False(locked.Success);
+        Assert.Equal(LocalLauncherAuthService.AccountLockedError, locked.ErrorMessage);
+        Assert.Equal(5, accounts.LoadAccounts()[0].AccessFailedCount);
+        Assert.NotNull(accounts.LoadAccounts()[0].LockoutUntilUtc);
+    }
+
+    [Fact]
+    public void Authenticate_WhenPasswordMatches_ShouldResetFailedAttemptState()
+    {
+        var accounts = new StubLauncherAccountCatalog(
+        [
+            new LauncherAccountRecord(
+                "edge-admin",
+                "本地管理员",
+                LauncherPasswordHasher.HashPassword("ChangeMe123!"),
+                true,
+                AccessFailedCount: 2)
+        ]);
+        var service = new LocalLauncherAuthService(accounts);
+
+        var result = service.Authenticate("edge-admin", "ChangeMe123!");
+
+        Assert.True(result.Success);
+        Assert.Equal(0, accounts.LoadAccounts()[0].AccessFailedCount);
+        Assert.Null(accounts.LoadAccounts()[0].LockoutUntilUtc);
     }
 
     [Fact]
@@ -117,12 +217,12 @@ public sealed class LocalLauncherAuthServiceTests
         ]);
         var service = new LocalLauncherAuthService(accounts);
 
-        var result = service.ChangePassword("edge-admin", "123456", "new-pass");
+        var result = service.ChangePassword("edge-admin", "123456", "NewPass123!");
 
         Assert.True(result.Success);
         Assert.False(string.Equals(LegacySha256Password123456, accounts.LoadAccounts()[0].PasswordHash, StringComparison.OrdinalIgnoreCase));
         Assert.StartsWith("pbkdf2-sha256$v1$", accounts.LoadAccounts()[0].PasswordHash, StringComparison.Ordinal);
-        Assert.True(service.Authenticate("edge-admin", "new-pass").Success);
+        Assert.True(service.Authenticate("edge-admin", "NewPass123!").Success);
     }
 
     [Fact]
@@ -153,7 +253,7 @@ public sealed class LocalLauncherAuthServiceTests
         };
         var service = new LocalLauncherAuthService(accounts);
 
-        var result = service.ChangePassword("edge-admin", "123456", "new-pass");
+        var result = service.ChangePassword("edge-admin", "123456", "NewPass123!");
 
         Assert.False(result.Success);
         Assert.Equal(LocalLauncherAuthService.AccountConfigurationUnavailableError, result.ErrorMessage);
@@ -186,7 +286,28 @@ public sealed class LocalLauncherAuthServiceTests
                 throw new InvalidOperationException("账号不存在。");
             }
 
-            _accounts[index] = _accounts[index] with { PasswordHash = passwordHash };
+            _accounts[index] = _accounts[index] with
+            {
+                PasswordHash = passwordHash,
+                AccessFailedCount = 0,
+                LockoutUntilUtc = null
+            };
+        }
+
+        public void UpdateLoginSecurityState(string userName, int accessFailedCount, DateTimeOffset? lockoutUntilUtc)
+        {
+            var index = _accounts.FindIndex(x =>
+                string.Equals(x.UserName, userName, StringComparison.OrdinalIgnoreCase));
+            if (index < 0)
+            {
+                throw new InvalidOperationException("账号不存在。");
+            }
+
+            _accounts[index] = _accounts[index] with
+            {
+                AccessFailedCount = accessFailedCount,
+                LockoutUntilUtc = lockoutUntilUtc
+            };
         }
     }
 
@@ -196,6 +317,11 @@ public sealed class LocalLauncherAuthServiceTests
             => throw loadException;
 
         public void UpdatePasswordHash(string userName, string passwordHash)
+        {
+            throw new InvalidOperationException("not available");
+        }
+
+        public void UpdateLoginSecurityState(string userName, int accessFailedCount, DateTimeOffset? lockoutUntilUtc)
         {
             throw new InvalidOperationException("not available");
         }

@@ -176,6 +176,29 @@ function Test-ClientSecurityRedLines {
         -Files $authFiles `
         -Needles @('Compute' + 'Sha256')
 
+    $scriptFiles = Get-TextFiles `
+        -Roots @((Resolve-RepoPath 'scripts')) `
+        -Includes @('*.ps1')
+    foreach ($path in $scriptFiles) {
+        if ([string]::Equals([System.IO.Path]::GetFileName($path), 'TestEdgeDeploymentPreflight.ps1', [System.StringComparison]::Ordinal)) {
+            continue
+        }
+
+        $text = Read-FileIfExists $path
+        if ([string]::IsNullOrEmpty($text)) {
+            continue
+        }
+
+        $hasPasswordContext = $text.Contains('Password', [System.StringComparison]::OrdinalIgnoreCase) -or
+            $text.Contains('PasswordHash', [System.StringComparison]::OrdinalIgnoreCase)
+        $hasSha256Hashing = $text.Contains('SHA256Managed', [System.StringComparison]::Ordinal) -or
+            $text.Contains('.ComputeHash(', [System.StringComparison]::Ordinal)
+        if ($hasPasswordContext -and $hasSha256Hashing) {
+            $relative = [System.IO.Path]::GetRelativePath($repoRoot, $path)
+            Add-Failure "SHA256 password hash generation script content found in $relative."
+        }
+    }
+
     $jwtFiles = Get-TextFiles `
         -Roots @((Resolve-RepoPath 'src/Infrastructure/IIoT.Edge.Infrastructure.Integration/Auth')) `
         -Includes @('*.cs')

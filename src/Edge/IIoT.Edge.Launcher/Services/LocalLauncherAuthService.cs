@@ -8,12 +8,17 @@ public sealed class LocalLauncherAuthService : ILocalLauncherAuthService
 {
     public const string AccountConfigurationUnavailableError = "本地账号配置不可用。";
     public const string PasswordResetRequiredError = "本地密码使用旧哈希格式，请先修改密码。";
+    public const string AccountLockedError = "本地账号已临时锁定，请稍后再试。";
+    private const int MaxFailedAccessAttempts = 5;
+    private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(5);
 
     private readonly ILauncherAccountCatalog _accountCatalog;
+    private readonly TimeProvider _timeProvider;
 
-    public LocalLauncherAuthService(ILauncherAccountCatalog accountCatalog)
+    public LocalLauncherAuthService(ILauncherAccountCatalog accountCatalog, TimeProvider? timeProvider = null)
     {
         _accountCatalog = accountCatalog ?? throw new ArgumentNullException(nameof(accountCatalog));
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public LauncherAuthenticationResult Authenticate(string? userName, string? password)
@@ -39,6 +44,12 @@ public sealed class LocalLauncherAuthService : ILocalLauncherAuthService
             return LauncherAuthenticationResult.Failed("本地账号不存在，或已被禁用。");
         }
 
+        var now = _timeProvider.GetUtcNow();
+        if (IsLocked(accountResult.Account, now))
+        {
+            return LauncherAuthenticationResult.Failed(AccountLockedError);
+        }
+
         var verification = LauncherPasswordHasher.Verify(password, accountResult.Account.PasswordHash);
         if (verification == EdgePasswordVerificationResult.LegacySha256Verified)
         {
@@ -47,9 +58,12 @@ public sealed class LocalLauncherAuthService : ILocalLauncherAuthService
 
         if (verification != EdgePasswordVerificationResult.Verified)
         {
-            return LauncherAuthenticationResult.Failed("账号或密码不正确。");
+            return RegisterFailedLogin(accountResult.Account, now)
+                ? LauncherAuthenticationResult.Failed(AccountLockedError)
+                : LauncherAuthenticationResult.Failed("账号或密码不正确。");
         }
 
+        ResetFailedLoginStateIfNeeded(accountResult.Account);
         return LauncherAuthenticationResult.Passed(accountResult.Account);
     }
 
@@ -58,14 +72,10 @@ public sealed class LocalLauncherAuthService : ILocalLauncherAuthService
         string? oldPassword,
         string? newPassword)
     {
-        if (string.IsNullOrWhiteSpace(newPassword))
+        var passwordPolicyError = LauncherPasswordPolicy.Validate(newPassword);
+        if (passwordPolicyError is not null)
         {
-            return LauncherPasswordChangeResult.Failed("新密码不能为空。");
-        }
-
-        if (newPassword.Length < 6)
-        {
-            return LauncherPasswordChangeResult.Failed("新密码至少需要 6 位。");
+            return LauncherPasswordChangeResult.Failed(passwordPolicyError);
         }
 
         if (string.IsNullOrWhiteSpace(userName))
@@ -89,23 +99,73 @@ public sealed class LocalLauncherAuthService : ILocalLauncherAuthService
             return LauncherPasswordChangeResult.Failed("本地账号不存在，或已被禁用。");
         }
 
+        var now = _timeProvider.GetUtcNow();
+        if (IsLocked(accountResult.Account, now))
+        {
+            return LauncherPasswordChangeResult.Failed(AccountLockedError);
+        }
+
         var verification = LauncherPasswordHasher.Verify(oldPassword, accountResult.Account.PasswordHash);
         if (verification is not EdgePasswordVerificationResult.Verified
             and not EdgePasswordVerificationResult.LegacySha256Verified)
         {
-            return LauncherPasswordChangeResult.Failed("旧密码校验失败。");
+            return RegisterFailedLogin(accountResult.Account, now)
+                ? LauncherPasswordChangeResult.Failed(AccountLockedError)
+                : LauncherPasswordChangeResult.Failed("旧密码校验失败。");
         }
 
         try
         {
             _accountCatalog.UpdatePasswordHash(
                 userName!.Trim(),
-                LauncherPasswordHasher.HashPassword(newPassword));
+                LauncherPasswordHasher.HashPassword(newPassword!));
             return LauncherPasswordChangeResult.Passed();
         }
         catch (Exception ex) when (IsAccountConfigurationException(ex))
         {
             return LauncherPasswordChangeResult.Failed(AccountConfigurationUnavailableError);
+        }
+    }
+
+    private static bool IsLocked(LauncherAccountRecord account, DateTimeOffset now)
+        => account.LockoutUntilUtc.HasValue && account.LockoutUntilUtc.Value > now;
+
+    private bool RegisterFailedLogin(LauncherAccountRecord account, DateTimeOffset now)
+    {
+        var currentFailedCount = account.LockoutUntilUtc.HasValue && account.LockoutUntilUtc.Value <= now
+            ? 0
+            : Math.Max(0, account.AccessFailedCount);
+        var nextFailedCount = currentFailedCount + 1;
+        var lockoutUntil = nextFailedCount >= MaxFailedAccessAttempts
+            ? now.Add(LockoutDuration)
+            : (DateTimeOffset?)null;
+
+        try
+        {
+            _accountCatalog.UpdateLoginSecurityState(account.UserName, nextFailedCount, lockoutUntil);
+        }
+        catch (Exception ex) when (IsAccountConfigurationException(ex))
+        {
+            return false;
+        }
+
+        return lockoutUntil.HasValue;
+    }
+
+    private void ResetFailedLoginStateIfNeeded(LauncherAccountRecord account)
+    {
+        if (account.AccessFailedCount <= 0 && account.LockoutUntilUtc is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _accountCatalog.UpdateLoginSecurityState(account.UserName, 0, null);
+        }
+        catch (Exception ex) when (IsAccountConfigurationException(ex))
+        {
+            // Successful login must not be blocked only because clearing stale lockout metadata failed.
         }
     }
 

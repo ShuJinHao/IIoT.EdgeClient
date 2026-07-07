@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.Launcher.ViewModels;
 using IIoT.Edge.UI.Shared.Avalonia.Windowing;
 
@@ -108,7 +109,7 @@ public partial class ChangePasswordWindow : Window
             return false;
         }
 
-        if (NewPasswordInput.Text.Length < 6)
+        if (LauncherPasswordPolicy.Validate(NewPasswordInput.Text) is not null)
         {
             DialogErrorText.Text = Text("Launcher_ChangePassword_NewPasswordMinLength");
             NewPasswordInput.Focus();

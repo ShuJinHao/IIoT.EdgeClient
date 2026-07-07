@@ -66,6 +66,34 @@ public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
         }
 
         entry.PasswordHash = passwordHash.Trim();
+        entry.AccessFailedCount = 0;
+        entry.LockoutUntilUtc = null;
+        WriteFileEntries(entries);
+    }
+
+    public void UpdateLoginSecurityState(string userName, int accessFailedCount, DateTimeOffset? lockoutUntilUtc)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userName);
+        if (accessFailedCount < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(accessFailedCount), "失败次数不能为负数。");
+        }
+
+        var entries = LoadFileEntries();
+        var entry = entries.FirstOrDefault(x =>
+            string.Equals(x.UserName, userName.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (entry is null)
+        {
+            throw new InvalidOperationException($"未找到本地账号：{userName}");
+        }
+
+        entry.AccessFailedCount = accessFailedCount;
+        entry.LockoutUntilUtc = lockoutUntilUtc;
+        WriteFileEntries(entries);
+    }
+
+    private void WriteFileEntries(List<LauncherAccountFileEntry> entries)
+    {
         File.WriteAllText(
             _catalogPath,
             JsonSerializer.Serialize(entries, JsonOptionsIndented()));
@@ -92,7 +120,9 @@ public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
             entry.UserName.Trim(),
             entry.DisplayName.Trim(),
             entry.PasswordHash.Trim(),
-            entry.IsEnabled ?? true);
+            entry.IsEnabled ?? true,
+            Math.Max(0, entry.AccessFailedCount ?? 0),
+            entry.LockoutUntilUtc);
     }
 
     private static JsonSerializerOptions JsonOptions()
@@ -130,5 +160,9 @@ public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
         public string? PasswordHash { get; set; }
 
         public bool? IsEnabled { get; set; }
+
+        public int? AccessFailedCount { get; set; }
+
+        public DateTimeOffset? LockoutUntilUtc { get; set; }
     }
 }
