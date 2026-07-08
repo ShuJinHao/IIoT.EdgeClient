@@ -42,7 +42,7 @@
     <sys:String x:Key="Panels_Label_CurrentProcess">Current Process</sys:String>
     <sys:String x:Key="Panels_Label_MesPlanSelection">Main Plan</sys:String>
     <sys:String x:Key="Panels_Label_TraceBatchNumber">Trace Batch No.</sys:String>
-    <sys:String x:Key="Panels_Status_ProcessNotConfigured">Not configured</sys:String>
+    <sys:String x:Key="Panels_Status_ProcessNotConfigured">Process not configured</sys:String>
     <sys:String x:Key="Panels_Status_ProcessAmbiguous">Undetermined</sys:String>
     <sys:String x:Key="Panels_Status_MesPlanRequired">Main plan required</sys:String>
     <sys:String x:Key="Panels_Status_MesPlanSelected">Selected</sys:String>

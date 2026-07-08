@@ -634,6 +634,8 @@
     <sys:String x:Key="Navigation_Button_Write">Write</sys:String>
     <sys:String x:Key="Navigation_Button_ReadIoData">Read</sys:String>
     <sys:String x:Key="Navigation_Button_ApplyTemplate">Reset Standard Points</sys:String>
+    <sys:String x:Key="Navigation_Table_TotalPrefix">Total </sys:String>
+    <sys:String x:Key="Navigation_Table_TotalSuffix"> rows</sys:String>
     <sys:String x:Key="Navigation_Button_AddInteraction">Add Interaction</sys:String>
     <sys:String x:Key="Navigation_Button_AddDataPoint">Add Data Point</sys:String>
     <sys:String x:Key="Navigation_Button_ConfirmAddIoPoint">Add</sys:String>

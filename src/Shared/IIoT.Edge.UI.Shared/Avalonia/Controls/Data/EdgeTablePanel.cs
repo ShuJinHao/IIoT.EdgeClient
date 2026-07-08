@@ -38,6 +38,9 @@ public class EdgeTablePanel : TemplatedControl
     public static readonly StyledProperty<object?> StatusContentProperty =
         AvaloniaProperty.Register<EdgeTablePanel, object?>(nameof(StatusContent));
 
+    public static readonly StyledProperty<object?> HeaderMetaContentProperty =
+        AvaloniaProperty.Register<EdgeTablePanel, object?>(nameof(HeaderMetaContent));
+
     public static readonly StyledProperty<object?> FilterContentProperty =
         AvaloniaProperty.Register<EdgeTablePanel, object?>(nameof(FilterContent));
 
@@ -87,6 +90,7 @@ public class EdgeTablePanel : TemplatedControl
         DensityProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdateDensityClasses());
         SubtitleProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
         StatusContentProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
+        HeaderMetaContentProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
         FilterContentProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
         ActionContentProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
         ShowContentWhenEmptyProperty.Changed.AddClassHandler<EdgeTablePanel>((panel, _) => panel.UpdatePseudoClasses());
@@ -130,6 +134,12 @@ public class EdgeTablePanel : TemplatedControl
     {
         get => GetValue(StatusContentProperty);
         set => SetValue(StatusContentProperty, value);
+    }
+
+    public object? HeaderMetaContent
+    {
+        get => GetValue(HeaderMetaContentProperty);
+        set => SetValue(HeaderMetaContentProperty, value);
     }
 
     public object? FilterContent
@@ -222,18 +232,21 @@ public class EdgeTablePanel : TemplatedControl
         var hasFilter = HasVisibleContent(FilterContent);
         var hasActions = HasVisibleContent(ActionContent);
         var hasStatus = HasVisibleContent(StatusContent);
+        var hasHeaderMeta = HasVisibleContent(HeaderMetaContent);
 
         SetPseudoClass(":empty", IsEmpty && !ShowContentWhenEmpty && !IsLoading && !HasError);
         SetPseudoClass(":loading", IsLoading && !HasError);
         SetPseudoClass(":error", HasError);
         SetPseudoClass(":has-subtitle", HasVisibleContent(Subtitle));
         SetPseudoClass(":has-status", hasStatus);
+        SetPseudoClass(":has-header-meta", hasHeaderMeta);
         SetPseudoClass(":has-toolbar", hasFilter || hasActions);
         SetPseudoClass(":has-filter", hasFilter);
         SetPseudoClass(":has-actions", hasActions);
         SetPseudoClass(":actions-only", hasActions && !hasFilter && !hasStatus);
         SetClass("has-subtitle", HasVisibleContent(Subtitle));
         SetClass("has-status", hasStatus);
+        SetClass("has-header-meta", hasHeaderMeta);
         SetClass("has-toolbar", hasFilter || hasActions);
         SetClass("has-filter", hasFilter);
         SetClass("has-actions", hasActions);

@@ -5,9 +5,17 @@
         xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
 
     <Grid Margin="0,12,0,0">
-        <edge:EdgeTablePanel Title="{DynamicResource Navigation_Tab_SerialDevice}">
+        <edge:EdgeTablePanel Classes="fill" Title="{DynamicResource Navigation_Tab_SerialDevice}">
+            <edge:EdgeTablePanel.HeaderMetaContent>
+                <TextBlock Classes="edge-table-count">
+                    <Run Text="{DynamicResource Navigation_Table_TotalPrefix}" />
+                    <Run Text="{Binding SerialDevices.Count}" />
+                    <Run Text="{DynamicResource Navigation_Table_TotalSuffix}" />
+                </TextBlock>
+            </edge:EdgeTablePanel.HeaderMetaContent>
+
             <edge:EdgeTablePanel.ActionContent>
-                <StackPanel Orientation="Horizontal" Spacing="8">
+                <edge:EdgeActionToolbar>
                     <edge:EdgeActionButton
                         Command="{Binding AddSerialDeviceCommand}"
                         Content="{DynamicResource Navigation_Button_Add}"
@@ -28,7 +36,7 @@
                         Icon="{StaticResource Edge.Icon.Delete}"
                         Kind="Danger"
                         Size="Compact" />
-                </StackPanel>
+                </edge:EdgeActionToolbar>
             </edge:EdgeTablePanel.ActionContent>
 
             <edge:EdgeDataGrid
@@ -38,6 +46,7 @@
                 CanUserResizeColumns="True"
                 CanUserSortColumns="False"
                 IsReadOnly="True"
+                ViewportMaxHeight="0"
                 ItemsSource="{Binding SerialDevices}">
                 <edge:EdgeDataGrid.Columns>
                     <edge:EdgeTextColumn Binding="{Binding DeviceName}" Header="{DynamicResource Navigation_Column_DeviceName}" MinWidth="180" Width="2*" />

@@ -31,12 +31,14 @@
                         <Run Text="{DynamicResource Navigation_DeviceSelection_CurrentDevicePrefix}" />
                         <Run Text="{Binding SelectedDeviceDisplayName}" />
                     </TextBlock>
-                    <edge:EdgeActionButton
-                        Command="{Binding RefreshDevicesCommand}"
-                        Content="{DynamicResource Navigation_Button_Refresh}"
-                        Icon="{StaticResource Edge.Icon.Refresh}"
-                        Kind="Primary"
-                        Size="Compact" />
+                    <edge:EdgeActionToolbar>
+                        <edge:EdgeActionButton
+                            Command="{Binding RefreshDevicesCommand}"
+                            Content="{DynamicResource Navigation_Button_Refresh}"
+                            Icon="{StaticResource Edge.Icon.Refresh}"
+                            Kind="Primary"
+                            Size="Compact" />
+                    </edge:EdgeActionToolbar>
                 </StackPanel>
             </Grid>
 
@@ -48,13 +50,21 @@
 
             <edge:EdgeTabControl
                 Grid.Row="2"
-                IsVisible="{Binding HasSelectedDevice}">
+                IsVisible="{Binding HasSelectedDevice}"
+                Variant="Secondary">
                 <TabItem Header="{DynamicResource Navigation_IoMapping_TabInteraction}">
-                    <edge:EdgeScrollHost Variant="Panel">
-                    <StackPanel Spacing="12">
+                    <Grid RowDefinitions="*">
                         <edge:EdgeTablePanel
+                            Classes="fill"
                             IsVisible="{Binding HasInteractionRows}"
                             Title="{DynamicResource Navigation_Title_IoInteractionGroup}">
+                            <edge:EdgeTablePanel.HeaderMetaContent>
+                                <TextBlock Classes="edge-table-count">
+                                    <Run Text="{DynamicResource Navigation_Table_TotalPrefix}" />
+                                    <Run Text="{Binding InteractionRows.Count}" />
+                                    <Run Text="{DynamicResource Navigation_Table_TotalSuffix}" />
+                                </TextBlock>
+                            </edge:EdgeTablePanel.HeaderMetaContent>
                             <edge:EdgeDataGrid
                                 AutoGenerateColumns="False"
                                 CanUserReorderColumns="False"
@@ -62,6 +72,7 @@
                                 CanUserSortColumns="False"
                                 HeadersVisibility="Column"
                                 IsReadOnly="False"
+                                ViewportMaxHeight="0"
                                 ItemsSource="{Binding InteractionRows}">
                                 <edge:EdgeDataGrid.Columns>
                                     <edge:EdgeTextColumn Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_InteractionItem}" IsReadOnly="True" MinWidth="90" Width="110" />
@@ -100,13 +111,12 @@
                             IsVisible="{Binding !HasInteractionRows}"
                             Message="{DynamicResource Navigation_Empty_IoInteractionRows}"
                             Title="{DynamicResource Navigation_IoMapping_TabInteraction}" />
-                    </StackPanel>
-                    </edge:EdgeScrollHost>
+                    </Grid>
                 </TabItem>
 
                 <TabItem Header="{DynamicResource Navigation_IoMapping_TabSingleRead}">
                     <edge:EdgeScrollHost Variant="Panel">
-                    <StackPanel Spacing="12">
+                    <Grid>
                         <ItemsControl
                             IsVisible="{Binding HasSingleReadSections}"
                             ItemsSource="{Binding SingleReadSections}">
@@ -115,6 +125,13 @@
                                     <edge:EdgeTablePanel
                                         Margin="0,0,0,14"
                                         Title="{Binding DisplayTitle}">
+                                        <edge:EdgeTablePanel.HeaderMetaContent>
+                                            <TextBlock Classes="edge-table-count">
+                                                <Run Text="{DynamicResource Navigation_Table_TotalPrefix}" />
+                                                <Run Text="{Binding Signals.Count}" />
+                                                <Run Text="{DynamicResource Navigation_Table_TotalSuffix}" />
+                                            </TextBlock>
+                                        </edge:EdgeTablePanel.HeaderMetaContent>
                                         <edge:EdgeTablePanel.ActionContent>
                                             <edge:EdgeActionButton
                                                 Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
@@ -130,6 +147,7 @@
                                             CanUserResizeColumns="True"
                                             CanUserSortColumns="False"
                                             IsReadOnly="True"
+                                            ViewportMaxHeight="0"
                                             ItemsSource="{Binding Signals}">
                                             <edge:EdgeDataGrid.Columns>
                                                 <edge:EdgeTextColumn Binding="{Binding MatrixColumnTitle}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="180" Width="2*" />
@@ -148,13 +166,13 @@
                             IsVisible="{Binding !HasSingleReadSections}"
                             Message="{DynamicResource Navigation_Empty_IoSingleReadSections}"
                             Title="{DynamicResource Navigation_IoMapping_TabSingleRead}" />
-                    </StackPanel>
+                    </Grid>
                     </edge:EdgeScrollHost>
                 </TabItem>
 
                 <TabItem Header="{DynamicResource Navigation_IoMapping_TabContinuousRead}">
                     <edge:EdgeScrollHost Variant="Panel">
-                    <StackPanel Spacing="12">
+                    <Grid>
                         <ItemsControl
                             IsVisible="{Binding HasContinuousReadSections}"
                             ItemsSource="{Binding ContinuousReadSections}">
@@ -163,6 +181,13 @@
                                     <edge:EdgeTablePanel
                                         Margin="0,0,0,14"
                                         Title="{Binding DisplayTitle}">
+                                        <edge:EdgeTablePanel.HeaderMetaContent>
+                                            <TextBlock Classes="edge-table-count">
+                                                <Run Text="{DynamicResource Navigation_Table_TotalPrefix}" />
+                                                <Run Text="{Binding Signals.Count}" />
+                                                <Run Text="{DynamicResource Navigation_Table_TotalSuffix}" />
+                                            </TextBlock>
+                                        </edge:EdgeTablePanel.HeaderMetaContent>
                                         <edge:EdgeTablePanel.ActionContent>
                                             <edge:EdgeActionButton
                                                 Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
@@ -178,6 +203,7 @@
                                             CanUserResizeColumns="True"
                                             CanUserSortColumns="False"
                                             IsReadOnly="True"
+                                            ViewportMaxHeight="0"
                                             ItemsSource="{Binding Signals}">
                                             <edge:EdgeDataGrid.Columns>
                                                 <edge:EdgeTextColumn Binding="{Binding MatrixColumnTitle}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="180" Width="2*" />
@@ -196,13 +222,13 @@
                             IsVisible="{Binding !HasContinuousReadSections}"
                             Message="{DynamicResource Navigation_Empty_IoContinuousReadSections}"
                             Title="{DynamicResource Navigation_IoMapping_TabContinuousRead}" />
-                    </StackPanel>
+                    </Grid>
                     </edge:EdgeScrollHost>
                 </TabItem>
 
                 <TabItem Header="{DynamicResource Navigation_IoMapping_TabSingleWrite}">
                     <edge:EdgeScrollHost Variant="Panel">
-                    <StackPanel Spacing="12">
+                    <Grid>
                         <ItemsControl
                             IsVisible="{Binding HasSingleWriteSections}"
                             ItemsSource="{Binding SingleWriteSections}">
@@ -211,12 +237,20 @@
                                     <edge:EdgeTablePanel
                                         Margin="0,0,0,14"
                                         Title="{Binding DisplayTitle}">
+                                        <edge:EdgeTablePanel.HeaderMetaContent>
+                                            <TextBlock Classes="edge-table-count">
+                                                <Run Text="{DynamicResource Navigation_Table_TotalPrefix}" />
+                                                <Run Text="{Binding Signals.Count}" />
+                                                <Run Text="{DynamicResource Navigation_Table_TotalSuffix}" />
+                                            </TextBlock>
+                                        </edge:EdgeTablePanel.HeaderMetaContent>
                                         <edge:EdgeDataGrid
                                             AutoGenerateColumns="False"
                                             CanUserReorderColumns="False"
                                             CanUserResizeColumns="True"
                                             CanUserSortColumns="False"
                                             IsReadOnly="True"
+                                            ViewportMaxHeight="0"
                                             ItemsSource="{Binding Signals}">
                                             <edge:EdgeDataGrid.Columns>
                                                 <edge:EdgeTextColumn Binding="{Binding MatrixColumnTitle}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="180" Width="2*" />
@@ -235,13 +269,13 @@
                             IsVisible="{Binding !HasSingleWriteSections}"
                             Message="{DynamicResource Navigation_Empty_IoSingleWriteSections}"
                             Title="{DynamicResource Navigation_IoMapping_TabSingleWrite}" />
-                    </StackPanel>
+                    </Grid>
                     </edge:EdgeScrollHost>
                 </TabItem>
 
                 <TabItem Header="{DynamicResource Navigation_IoMapping_TabContinuousWrite}">
                     <edge:EdgeScrollHost Variant="Panel">
-                    <StackPanel Spacing="12">
+                    <Grid>
                         <ItemsControl
                             IsVisible="{Binding HasContinuousWriteSections}"
                             ItemsSource="{Binding ContinuousWriteSections}">
@@ -250,12 +284,20 @@
                                     <edge:EdgeTablePanel
                                         Margin="0,0,0,14"
                                         Title="{Binding DisplayTitle}">
+                                        <edge:EdgeTablePanel.HeaderMetaContent>
+                                            <TextBlock Classes="edge-table-count">
+                                                <Run Text="{DynamicResource Navigation_Table_TotalPrefix}" />
+                                                <Run Text="{Binding Signals.Count}" />
+                                                <Run Text="{DynamicResource Navigation_Table_TotalSuffix}" />
+                                            </TextBlock>
+                                        </edge:EdgeTablePanel.HeaderMetaContent>
                                         <edge:EdgeDataGrid
                                             AutoGenerateColumns="False"
                                             CanUserReorderColumns="False"
                                             CanUserResizeColumns="True"
                                             CanUserSortColumns="False"
                                             IsReadOnly="True"
+                                            ViewportMaxHeight="0"
                                             ItemsSource="{Binding Signals}">
                                             <edge:EdgeDataGrid.Columns>
                                                 <edge:EdgeTextColumn Binding="{Binding MatrixColumnTitle}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="180" Width="2*" />
@@ -274,7 +316,7 @@
                             IsVisible="{Binding !HasContinuousWriteSections}"
                             Message="{DynamicResource Navigation_Empty_IoContinuousWriteSections}"
                             Title="{DynamicResource Navigation_IoMapping_TabContinuousWrite}" />
-                    </StackPanel>
+                    </Grid>
                     </edge:EdgeScrollHost>
                 </TabItem>
             </edge:EdgeTabControl>

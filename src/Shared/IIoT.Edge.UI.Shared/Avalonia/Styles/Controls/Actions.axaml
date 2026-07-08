@@ -329,6 +329,11 @@
         <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Status.Error}" />
     </Style>
 
+    <Style Selector="controls|EdgeActionToolbar">
+        <Setter Property="Orientation" Value="Horizontal" />
+        <Setter Property="Spacing" Value="{DynamicResource Edge.Size.Spacing8}" />
+    </Style>
+
     <Style Selector="controls|EdgeActionButton.ghost">
         <Setter Property="MinHeight" Value="30" />
         <Setter Property="MinWidth" Value="48" />
@@ -383,5 +388,41 @@
     <Style Selector="controls|EdgeActionButton.role-right-rail.log-clear:pointerover">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+    </Style>
+
+    <!--
+        禁用态统一收口。基础 :disabled 定义在 Kind 样式之前，按文档顺序会被
+        .primary/.danger 的实心填充覆盖，导致“按钮已禁用但仍满红/满黑”的假可点状态。
+        此处放在所有 Kind/Role 样式之后，保证任何按钮禁用时都回落到中性弱化外观；
+        危险动作禁用时同样不允许保留红色实心或红色描边。
+    -->
+    <Style Selector="controls|EdgeActionButton.primary:disabled">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Border.Subtle}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Muted}" />
+    </Style>
+
+    <Style Selector="controls|EdgeActionButton.secondary:disabled">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Border.Subtle}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Muted}" />
+    </Style>
+
+    <Style Selector="controls|EdgeActionButton.ghost:disabled">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Border.Subtle}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Muted}" />
+    </Style>
+
+    <Style Selector="controls|EdgeActionButton.danger:disabled">
+        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Border.Subtle}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Muted}" />
+    </Style>
+
+    <Style Selector="controls|EdgeActionButton.role-cell.danger:disabled">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Border.Subtle}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Muted}" />
     </Style>
 </Styles>

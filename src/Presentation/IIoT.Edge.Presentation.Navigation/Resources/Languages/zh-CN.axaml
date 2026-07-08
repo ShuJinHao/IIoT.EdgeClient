@@ -634,6 +634,8 @@
     <sys:String x:Key="Navigation_Button_Write">写入</sys:String>
     <sys:String x:Key="Navigation_Button_ReadIoData">读取</sys:String>
     <sys:String x:Key="Navigation_Button_ApplyTemplate">重置标准点位</sys:String>
+    <sys:String x:Key="Navigation_Table_TotalPrefix">共 </sys:String>
+    <sys:String x:Key="Navigation_Table_TotalSuffix"> 条</sys:String>
     <sys:String x:Key="Navigation_Button_AddInteraction">新增信号交互</sys:String>
     <sys:String x:Key="Navigation_Button_AddDataPoint">新增数据点</sys:String>
     <sys:String x:Key="Navigation_Button_ConfirmAddIoPoint">确认添加</sys:String>

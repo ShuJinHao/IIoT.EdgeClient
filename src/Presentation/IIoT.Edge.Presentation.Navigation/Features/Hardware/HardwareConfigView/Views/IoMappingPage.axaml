@@ -11,12 +11,20 @@
             <edge:EdgeTablePanel
                 Margin="0,0,0,12"
                 Title="{Binding Title}">
+                <edge:EdgeTablePanel.HeaderMetaContent>
+                    <TextBlock Classes="edge-table-count">
+                        <Run Text="{DynamicResource Navigation_Table_TotalPrefix}" />
+                        <Run Text="{Binding Mappings.Count}" />
+                        <Run Text="{DynamicResource Navigation_Table_TotalSuffix}" />
+                    </TextBlock>
+                </edge:EdgeTablePanel.HeaderMetaContent>
                 <edge:EdgeDataGrid
                     AutoGenerateColumns="False"
                     CanUserReorderColumns="False"
                     CanUserResizeColumns="True"
                     CanUserSortColumns="False"
                     IsReadOnly="True"
+                    ViewportMaxHeight="0"
                     ItemsSource="{Binding Mappings}"
                     SelectedItem="{Binding DataContext.SelectedIoMapping, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=TwoWay}">
                     <edge:EdgeDataGrid.Columns>
@@ -31,14 +39,23 @@
 
         <DataTemplate x:Key="IoInteractionPairTableTemplate">
             <edge:EdgeTablePanel
+                Classes="fill"
                 Margin="0,0,0,12"
                 Title="{DynamicResource Navigation_IoMapping_TabInteraction}">
+                <edge:EdgeTablePanel.HeaderMetaContent>
+                    <TextBlock Classes="edge-table-count">
+                        <Run Text="{DynamicResource Navigation_Table_TotalPrefix}" />
+                        <Run Text="{Binding InteractionIoMappingPairs.Count}" />
+                        <Run Text="{DynamicResource Navigation_Table_TotalSuffix}" />
+                    </TextBlock>
+                </edge:EdgeTablePanel.HeaderMetaContent>
                 <edge:EdgeDataGrid
                     AutoGenerateColumns="False"
                     CanUserReorderColumns="False"
                     CanUserResizeColumns="True"
                     CanUserSortColumns="False"
                     IsReadOnly="True"
+                    ViewportMaxHeight="0"
                     ItemsSource="{Binding InteractionIoMappingPairs}"
                     SelectedItem="{Binding SelectedInteractionPair, Mode=TwoWay}">
                     <edge:EdgeDataGrid.Columns>
@@ -56,10 +73,18 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <Grid RowDefinitions="Auto,Auto,*" Margin="0,12,0,0">
-        <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Tab_IoMapping}">
-            <edge:EdgeSectionHeader.ActionContent>
-                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing8}">
+    <Grid Margin="0,12,0,0">
+        <edge:EdgeTablePanel Classes="fill" Title="{DynamicResource Navigation_Tab_IoMapping}">
+            <edge:EdgeTablePanel.HeaderMetaContent>
+                <TextBlock Classes="edge-table-count">
+                    <Run Text="{DynamicResource Navigation_Table_TotalPrefix}" />
+                    <Run Text="{Binding IoMappings.Count}" />
+                    <Run Text="{DynamicResource Navigation_Table_TotalSuffix}" />
+                </TextBlock>
+            </edge:EdgeTablePanel.HeaderMetaContent>
+
+            <edge:EdgeTablePanel.ActionContent>
+                <edge:EdgeActionToolbar>
                     <edge:EdgeActionButton
                         Command="{Binding ApplyModuleTemplateCommand}"
                         Content="{DynamicResource Navigation_Button_ApplyTemplate}"
@@ -73,36 +98,33 @@
                         Icon="{StaticResource Edge.Icon.Write}"
                         Kind="Secondary"
                         Size="Compact" />
-                </StackPanel>
-            </edge:EdgeSectionHeader.ActionContent>
-        </edge:EdgeSectionHeader>
+                </edge:EdgeActionToolbar>
+            </edge:EdgeTablePanel.ActionContent>
 
-        <Grid
-            Grid.Row="1"
-            Margin="0,12,0,0"
-            ColumnDefinitions="Auto,320,*">
-            <TextBlock
-                VerticalAlignment="Center"
-                Classes="edge-text-form-label"
-                Text="{DynamicResource Navigation_Tab_NetworkDevice}" />
-            <TextBlock
-                Grid.Column="1"
-                Margin="12,0,16,0"
-                VerticalAlignment="Center"
-                Classes="edge-text-page-caption"
-                Text="{Binding SelectedNetworkDeviceDisplayName}" />
-            <TextBlock
-                Grid.Column="2"
-                VerticalAlignment="Center"
-                Foreground="{DynamicResource Edge.Text.Muted}"
-                Text="{Binding ModuleTemplateHint}"
-                TextWrapping="Wrap" />
-        </Grid>
+            <Grid RowDefinitions="Auto,*">
+                <Grid
+                    ColumnDefinitions="Auto,320,*">
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        Classes="edge-text-form-label"
+                        Text="{DynamicResource Navigation_Tab_NetworkDevice}" />
+                    <TextBlock
+                        Grid.Column="1"
+                        Margin="12,0,16,0"
+                        VerticalAlignment="Center"
+                        Classes="edge-text-page-caption"
+                        Text="{Binding SelectedNetworkDeviceDisplayName}" />
+                    <TextBlock
+                        Grid.Column="2"
+                        VerticalAlignment="Center"
+                        Foreground="{DynamicResource Edge.Text.Muted}"
+                        Text="{Binding ModuleTemplateHint}"
+                        TextWrapping="Wrap" />
+                </Grid>
 
-        <edge:EdgeTabControl Grid.Row="2" Margin="0,12,0,0">
+        <edge:EdgeTabControl Grid.Row="1" Margin="0,12,0,0" Variant="Secondary">
             <TabItem Header="{DynamicResource Navigation_IoMapping_TabInteraction}">
-                <edge:EdgeScrollHost Variant="Panel">
-                    <StackPanel>
+                <Grid RowDefinitions="*">
                         <ContentControl
                             Content="{Binding}"
                             ContentTemplate="{StaticResource IoInteractionPairTableTemplate}" />
@@ -110,13 +132,12 @@
                             IsVisible="{Binding HasNoInteractionIoMappingGroups}"
                             Message="{DynamicResource Navigation_Empty_IoInteractionRows}"
                             Title="{DynamicResource Navigation_IoMapping_TabInteraction}" />
-                    </StackPanel>
-                </edge:EdgeScrollHost>
+                </Grid>
             </TabItem>
 
             <TabItem Header="{DynamicResource Navigation_IoMapping_TabSingleRead}">
                 <edge:EdgeScrollHost Variant="Panel">
-                    <StackPanel>
+                    <Grid>
                         <ItemsControl
                             ItemTemplate="{StaticResource IoMappingDataPointTableTemplate}"
                             ItemsSource="{Binding SingleReadIoMappingGroups}" />
@@ -124,13 +145,13 @@
                             IsVisible="{Binding HasNoSingleReadIoMappingGroups}"
                             Message="{DynamicResource Navigation_Empty_IoSingleReadSections}"
                             Title="{DynamicResource Navigation_IoMapping_TabSingleRead}" />
-                    </StackPanel>
+                    </Grid>
                 </edge:EdgeScrollHost>
             </TabItem>
 
             <TabItem Header="{DynamicResource Navigation_IoMapping_TabContinuousRead}">
                 <edge:EdgeScrollHost Variant="Panel">
-                    <StackPanel>
+                    <Grid>
                         <ItemsControl
                             ItemTemplate="{StaticResource IoMappingDataPointTableTemplate}"
                             ItemsSource="{Binding ContinuousReadIoMappingGroups}" />
@@ -138,13 +159,13 @@
                             IsVisible="{Binding HasNoContinuousReadIoMappingGroups}"
                             Message="{DynamicResource Navigation_Empty_IoContinuousReadSections}"
                             Title="{DynamicResource Navigation_IoMapping_TabContinuousRead}" />
-                    </StackPanel>
+                    </Grid>
                 </edge:EdgeScrollHost>
             </TabItem>
 
             <TabItem Header="{DynamicResource Navigation_IoMapping_TabSingleWrite}">
                 <edge:EdgeScrollHost Variant="Panel">
-                    <StackPanel>
+                    <Grid>
                         <ItemsControl
                             ItemTemplate="{StaticResource IoMappingDataPointTableTemplate}"
                             ItemsSource="{Binding SingleWriteIoMappingGroups}" />
@@ -152,13 +173,13 @@
                             IsVisible="{Binding HasNoSingleWriteIoMappingGroups}"
                             Message="{DynamicResource Navigation_Empty_IoSingleWriteSections}"
                             Title="{DynamicResource Navigation_IoMapping_TabSingleWrite}" />
-                    </StackPanel>
+                    </Grid>
                 </edge:EdgeScrollHost>
             </TabItem>
 
             <TabItem Header="{DynamicResource Navigation_IoMapping_TabContinuousWrite}">
                 <edge:EdgeScrollHost Variant="Panel">
-                    <StackPanel>
+                    <Grid>
                         <ItemsControl
                             ItemTemplate="{StaticResource IoMappingDataPointTableTemplate}"
                             ItemsSource="{Binding ContinuousWriteIoMappingGroups}" />
@@ -166,13 +187,14 @@
                             IsVisible="{Binding HasNoContinuousWriteIoMappingGroups}"
                             Message="{DynamicResource Navigation_Empty_IoContinuousWriteSections}"
                             Title="{DynamicResource Navigation_IoMapping_TabContinuousWrite}" />
-                    </StackPanel>
+                    </Grid>
                 </edge:EdgeScrollHost>
             </TabItem>
         </edge:EdgeTabControl>
+            </Grid>
+        </edge:EdgeTablePanel>
 
         <Border
-            Grid.RowSpan="3"
             Classes="edge-dialog-overlay"
             IsVisible="{Binding IsEditIoMappingDialogOpen}">
             <edge:EdgeDialogChrome

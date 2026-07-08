@@ -449,7 +449,7 @@ public class EquipmentViewModel : PresentationViewModelBase
             return _languageService.GetString("Panels_Status_ProcessAmbiguous", "未确定");
         }
 
-        return _languageService.GetString("Panels_Status_ProcessNotConfigured", "未配置");
+        return _languageService.GetString("Panels_Status_ProcessNotConfigured", "未配置工序");
     }
 
     private string ResolveMenuTitle(MenuInfo menu)

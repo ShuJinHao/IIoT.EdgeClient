@@ -10,13 +10,13 @@
                 Title="{Binding ViewTitle}"
                 Subtitle="{Binding SourceLabel}">
                 <edge:EdgeSectionHeader.ActionContent>
-                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing8}">
+                    <edge:EdgeActionToolbar>
                         <edge:EdgeActionButton
                             Command="{Binding SwitchSourceCommand}"
                             Content="{DynamicResource Navigation_Button_SwitchDataSource}"
                             Icon="{StaticResource Edge.Icon.Switch}"
                             IsVisible="{Binding IsLocalAdmin}"
-                            Kind="Primary"
+                            Kind="Secondary"
                             Size="Compact" />
                         <edge:EdgeActionButton
                             Command="{Binding SyncCloudCommand}"
@@ -24,7 +24,7 @@
                             Icon="{StaticResource Edge.Icon.Sync}"
                             Kind="Primary"
                             Size="Compact" />
-                    </StackPanel>
+                    </edge:EdgeActionToolbar>
                 </edge:EdgeSectionHeader.ActionContent>
             </edge:EdgeSectionHeader>
 
@@ -37,6 +37,13 @@
                 Title="{Binding RecipeName}" />
 
             <edge:EdgeTablePanel Title="{DynamicResource Navigation_Title_ProductRecipe}">
+                <edge:EdgeTablePanel.HeaderMetaContent>
+                    <TextBlock Classes="edge-table-count">
+                        <Run Text="{DynamicResource Navigation_Table_TotalPrefix}" />
+                        <Run Text="{Binding Params.Count}" />
+                        <Run Text="{DynamicResource Navigation_Table_TotalSuffix}" />
+                    </TextBlock>
+                </edge:EdgeTablePanel.HeaderMetaContent>
                 <edge:EdgeDataGrid
                     AutoGenerateColumns="False"
                     CanUserReorderColumns="False"

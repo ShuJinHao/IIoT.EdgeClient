@@ -56,7 +56,7 @@
                 Title="{Binding ViewTitle}"
                 Subtitle="{DynamicResource Navigation_Tab_PluginBusinessParams}">
                 <edge:EdgeSectionHeader.ActionContent>
-                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing8}">
+                    <edge:EdgeActionToolbar>
                         <edge:EdgeActionButton
                             Command="{Binding ResetCommand}"
                             Content="{DynamicResource Navigation_Button_ResetDefaults}"
@@ -71,11 +71,11 @@
                             IsEnabled="{Binding CanEdit}"
                             Kind="Primary"
                             Size="Compact" />
-                    </StackPanel>
+                    </edge:EdgeActionToolbar>
                 </edge:EdgeSectionHeader.ActionContent>
             </edge:EdgeSectionHeader>
 
-            <edge:EdgeTabControl>
+            <edge:EdgeTabControl Variant="Secondary">
                 <TabItem Header="{DynamicResource Navigation_Tab_MesParams}">
                     <ItemsControl
                         ItemTemplate="{StaticResource ParameterGroupTemplate}"

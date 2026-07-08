@@ -786,11 +786,11 @@
                     VerticalAlignment="Top"
                     PaddingMode="Compact"
                     Surface="Card">
-                    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+                    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
                         <Grid
                             Grid.Row="0"
                             MinHeight="32"
-                            ColumnDefinitions="*,Auto"
+                            ColumnDefinitions="*,Auto,Auto"
                             ColumnSpacing="{DynamicResource Edge.Size.Spacing10}">
                             <StackPanel Grid.Column="0">
                                 <TextBlock
@@ -809,6 +809,13 @@
 
                             <ContentPresenter
                                 Grid.Column="1"
+                                Classes="edge-table-meta"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Content="{TemplateBinding HeaderMetaContent}" />
+
+                            <ContentPresenter
+                                Grid.Column="2"
                                 Classes="edge-table-actions"
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Center"
@@ -879,6 +886,22 @@
         <Setter Property="VerticalAlignment" Value="Top" />
     </Style>
 
+    <Style Selector="controls|EdgeTablePanel.fill">
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel.fill controls|EdgeCard.edge-table-panel-card">
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel.fill ContentPresenter.edge-table-content">
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel.fill Grid.edge-table-content-host">
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+    </Style>
+
     <Style Selector="controls|EdgeTablePanel controls|EdgeCard.edge-table-panel-card /template/ Border#PART_EdgeCardRoot">
         <Setter Property="Padding" Value="16,12" />
         <Setter Property="CornerRadius" Value="{DynamicResource Edge.CornerRadius.Card}" />
@@ -933,8 +956,22 @@
         <Setter Property="IsVisible" Value="False" />
     </Style>
 
+    <Style Selector="controls|EdgeTablePanel ContentPresenter.edge-table-meta">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
     <Style Selector="controls|EdgeTablePanel.has-actions ContentPresenter.edge-table-actions">
         <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel.has-header-meta ContentPresenter.edge-table-meta">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <Style Selector="controls|EdgeTablePanel TextBlock.edge-table-count">
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Muted}" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Caption}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style Selector="controls|EdgeTablePanel TextBlock.edge-table-subtitle">

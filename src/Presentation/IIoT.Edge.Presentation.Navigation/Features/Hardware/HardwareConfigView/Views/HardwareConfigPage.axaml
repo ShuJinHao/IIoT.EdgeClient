@@ -15,7 +15,8 @@
         <edge:EdgeTabControl
             Grid.Row="1"
             Margin="0,16,0,0"
-            SelectedIndex="{Binding SelectedTabIndex}">
+            SelectedIndex="{Binding SelectedTabIndex}"
+            Variant="Secondary">
             <TabItem Header="{DynamicResource Navigation_Tab_NetworkDevice}">
                 <pages:NetworkDevicePage />
             </TabItem>

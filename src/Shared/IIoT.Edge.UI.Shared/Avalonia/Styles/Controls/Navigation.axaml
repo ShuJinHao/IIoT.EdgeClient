@@ -159,6 +159,68 @@
         <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Segmented.ItemSelectedForeground}" />
     </Style>
 
+    <!--
+        二级页签（下划线弱化变体）。
+        视觉层级约定：同一屏黑胶囊选中态只允许出现在一级导航；
+        页面内部的次级页签使用该变体，选中态用下划线表达，避免上下两层黑胶囊互相抢权重。
+    -->
+    <Style Selector="TabControl.edge-tabs.secondary">
+        <Setter Property="ItemsPanel">
+            <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Edge.Size.Spacing8}" />
+            </ItemsPanelTemplate>
+        </Setter>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid RowDefinitions="Auto,*">
+                    <!-- 页签条：无胶囊底色，整行底部一条细分隔线，页签下划线压在分隔线上 -->
+                    <Border
+                        HorizontalAlignment="Stretch"
+                        BorderBrush="{DynamicResource Edge.Brush.Border.Subtle}"
+                        BorderThickness="0,0,0,1">
+                        <ItemsPresenter
+                            Name="PART_ItemsPresenter"
+                            HorizontalAlignment="Left"
+                            ItemsPanel="{TemplateBinding ItemsPanel}" />
+                    </Border>
+
+                    <ContentPresenter
+                        Name="PART_SelectedContentHost"
+                        Grid.Row="1"
+                        Margin="0,12,0,0"
+                        Content="{TemplateBinding SelectedContent}"
+                        ContentTemplate="{TemplateBinding SelectedContentTemplate}" />
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <!-- 二级页签项：复用基础模板的 Border TemplateBinding，用底边框表达选中下划线，选中/未选中不发生布局跳动 -->
+    <Style Selector="TabControl.edge-tabs.secondary TabItem">
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="Padding" Value="14,0" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0,0,0,2" />
+        <Setter Property="CornerRadius" Value="0" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Muted}" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Body}" />
+        <Setter Property="FontWeight" Value="Normal" />
+    </Style>
+
+    <Style Selector="TabControl.edge-tabs.secondary TabItem:pointerover">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+    </Style>
+
+    <Style Selector="TabControl.edge-tabs.secondary TabItem:selected">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
     <Style Selector="controls|EdgeSegmentedNav">
         <Setter Property="Padding" Value="4" />
         <Setter Property="Background" Value="{DynamicResource Edge.Brush.Segmented.Background}" />

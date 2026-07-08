@@ -42,7 +42,7 @@
     <sys:String x:Key="Panels_Label_CurrentProcess">当前工序</sys:String>
     <sys:String x:Key="Panels_Label_MesPlanSelection">主批计划</sys:String>
     <sys:String x:Key="Panels_Label_TraceBatchNumber">追溯批次号</sys:String>
-    <sys:String x:Key="Panels_Status_ProcessNotConfigured">未配置</sys:String>
+    <sys:String x:Key="Panels_Status_ProcessNotConfigured">未配置工序</sys:String>
     <sys:String x:Key="Panels_Status_ProcessAmbiguous">未确定</sys:String>
     <sys:String x:Key="Panels_Status_MesPlanRequired">待选择主批计划</sys:String>
     <sys:String x:Key="Panels_Status_MesPlanSelected">已选择</sys:String>

@@ -1032,11 +1032,13 @@ public sealed class RepositoryHygieneTests
         var ruleDoc = File.ReadAllText(Path.Combine(root, "docs", "客户端规则.md"));
         var retrospectiveDoc = File.ReadAllText(Path.Combine(root, "docs", "改动复盘与规则沉淀.md"));
         var plcSelectionDoc = File.ReadAllText(Path.Combine(root, "docs", "PLC选择与状态展示控制.md"));
+        var uiSecondLayerDoc = File.ReadAllText(Path.Combine(root, "docs", "Edge客户端UI第二层规范.md"));
         var combinedDocs = string.Join(
             Environment.NewLine,
             ruleDoc,
             retrospectiveDoc,
-            plcSelectionDoc);
+            plcSelectionDoc,
+            uiSecondLayerDoc);
 
         Assert.Contains("改动复盘与规则沉淀.md", ruleDoc, StringComparison.Ordinal);
         Assert.Contains("PLC选择与状态展示控制.md", ruleDoc, StringComparison.Ordinal);
@@ -1046,6 +1048,11 @@ public sealed class RepositoryHygieneTests
         Assert.Contains("无新增长期规则", retrospectiveDoc, StringComparison.Ordinal);
 
         Assert.Contains("IDeviceSelectionService", combinedDocs, StringComparison.Ordinal);
+        Assert.Contains("Edge客户端UI第二层规范.md", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("统一的是页面组合规则", uiSecondLayerDoc, StringComparison.Ordinal);
+        Assert.Contains("EdgeActionToolbar", uiSecondLayerDoc, StringComparison.Ordinal);
+        Assert.Contains("EdgeTablePanel.HeaderMetaContent", uiSecondLayerDoc, StringComparison.Ordinal);
+        Assert.Contains("未配置工序", combinedDocs, StringComparison.Ordinal);
         Assert.Contains("IoMappingEntity", combinedDocs, StringComparison.Ordinal);
         Assert.Contains("单点读数据", combinedDocs, StringComparison.Ordinal);
         Assert.Contains("连续读数据", combinedDocs, StringComparison.Ordinal);
@@ -1242,6 +1249,123 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
+    public void EquipmentPanel_CurrentProcessSlot_ShouldStayVisible()
+    {
+        var root = FindRepositoryRoot();
+        var xaml = File.ReadAllText(ToFullPath(
+            root,
+            "src/Presentation/IIoT.Edge.Presentation.Panels/Features/Equipment/Views/EquipmentView.axaml"));
+        var zhResources = File.ReadAllText(ToFullPath(
+            root,
+            "src/Presentation/IIoT.Edge.Presentation.Panels/Resources/Languages/zh-CN.axaml"));
+        var enResources = File.ReadAllText(ToFullPath(
+            root,
+            "src/Presentation/IIoT.Edge.Presentation.Panels/Resources/Languages/en-US.axaml"));
+
+        Assert.Contains("Panels_Label_CurrentProcess", xaml, StringComparison.Ordinal);
+        Assert.Contains("CurrentProcessDisplayName", xaml, StringComparison.Ordinal);
+        Assert.Contains("未配置工序", zhResources, StringComparison.Ordinal);
+        Assert.Contains("Process not configured", enResources, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void HardwareCrudPages_ShouldUseSharedTableToolbarContract()
+    {
+        var root = FindRepositoryRoot();
+        var pagePaths = new[]
+        {
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Hardware/HardwareConfigView/Views/NetworkDevicePage.axaml",
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Hardware/HardwareConfigView/Views/SerialDevicePage.axaml"
+        };
+
+        foreach (var pagePath in pagePaths)
+        {
+            var xaml = File.ReadAllText(ToFullPath(root, pagePath));
+            Assert.Contains("<edge:EdgeTablePanel Classes=\"fill\"", xaml, StringComparison.Ordinal);
+            Assert.Contains("<edge:EdgeTablePanel.HeaderMetaContent>", xaml, StringComparison.Ordinal);
+            Assert.Contains("<edge:EdgeActionToolbar>", xaml, StringComparison.Ordinal);
+            Assert.Contains("ViewportMaxHeight=\"0\"", xaml, StringComparison.Ordinal);
+            AssertActionOrder(
+                xaml,
+                "Navigation_Button_Add",
+                "Kind=\"Primary\"",
+                "Navigation_Button_Edit",
+                "Kind=\"Secondary\"",
+                "Navigation_Button_Delete",
+                "Kind=\"Danger\"");
+        }
+    }
+
+    [Fact]
+    public void IoMappingPage_ShouldUseTemplateEditToolbarContract()
+    {
+        var root = FindRepositoryRoot();
+        var xaml = File.ReadAllText(ToFullPath(
+            root,
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Hardware/HardwareConfigView/Views/IoMappingPage.axaml"));
+        var coordinator = File.ReadAllText(ToFullPath(
+            root,
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Hardware/HardwareConfigView/ViewModels/HardwareConfigLoadSaveCoordinator.cs"));
+        var zhResources = File.ReadAllText(ToFullPath(
+            root,
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Resources/Languages/zh-CN.axaml"));
+
+        Assert.DoesNotContain("<edge:EdgeSectionHeader.ActionContent>", xaml, StringComparison.Ordinal);
+        Assert.Contains("<edge:EdgeTablePanel Classes=\"fill\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<edge:EdgeTablePanel.ActionContent>", xaml, StringComparison.Ordinal);
+        Assert.Contains("<edge:EdgeActionToolbar>", xaml, StringComparison.Ordinal);
+        AssertActionOrder(
+            xaml,
+            "ApplyModuleTemplateCommand",
+            "Navigation_Button_ApplyTemplate",
+            "OpenEditIoMappingDialogCommand",
+            "Navigation_Button_Edit");
+        Assert.Contains("重置标准点位", zhResources, StringComparison.Ordinal);
+        Assert.DoesNotContain(">套用模板<", zhResources, StringComparison.Ordinal);
+        Assert.DoesNotContain(">播种<", zhResources, StringComparison.Ordinal);
+        Assert.Contains("ConfirmResetModuleTemplateAsync", coordinator, StringComparison.Ordinal);
+        Assert.Contains("清空当前 PLC 已有 IO 映射", coordinator, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ConfigAndIoTables_ShouldAvoidUnboundedScrollHostStackPanelLayout()
+    {
+        var root = FindRepositoryRoot();
+        var pagePaths = new[]
+        {
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Hardware/HardwareConfigView/Views/IoMappingPage.axaml",
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Hardware/IOView/Views/IOViewPage.axaml"
+        };
+
+        foreach (var pagePath in pagePaths)
+        {
+            var xaml = File.ReadAllText(ToFullPath(root, pagePath));
+            Assert.DoesNotContain("<edge:EdgeScrollHost Variant=\"Panel\">\r\n                    <StackPanel", xaml, StringComparison.Ordinal);
+            Assert.DoesNotContain("<edge:EdgeScrollHost Variant=\"Panel\">\n                    <StackPanel", xaml, StringComparison.Ordinal);
+            Assert.Contains("ViewportMaxHeight=\"0\"", xaml, StringComparison.Ordinal);
+            Assert.Contains("<edge:EdgeTablePanel.HeaderMetaContent>", xaml, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void RecipePage_ShouldKeepRecipeSpecificLayout()
+    {
+        var root = FindRepositoryRoot();
+        var xaml = File.ReadAllText(ToFullPath(
+            root,
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Formula/RecipeView/Views/RecipeViewPage.axaml"));
+
+        Assert.Contains("EdgeInfoSummaryCard", xaml, StringComparison.Ordinal);
+        Assert.Contains("Navigation_Label_EmergencyEdit", xaml, StringComparison.Ordinal);
+        Assert.Contains("DeleteLocalParamCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("Kind=\"Danger\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Navigation_Button_SwitchDataSource", xaml, StringComparison.Ordinal);
+        Assert.Contains("Kind=\"Secondary\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddRecipe", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DeleteRecipeCommand", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void DeviceSelection_ShouldNotExposeSecondActionableDeviceSelector()
     {
         var root = FindRepositoryRoot();
@@ -1269,6 +1393,18 @@ public sealed class RepositoryHygieneTests
             .ToArray();
 
         Assert.Empty(matches);
+    }
+
+    private static void AssertActionOrder(string source, params string[] fragments)
+    {
+        var previous = -1;
+        foreach (var fragment in fragments)
+        {
+            var index = source.IndexOf(fragment, StringComparison.Ordinal);
+            Assert.True(index >= 0, $"Expected fragment '{fragment}' to exist.");
+            Assert.True(index > previous, $"Expected fragment '{fragment}' to appear after the previous toolbar fragment.");
+            previous = index;
+        }
     }
 
     [Fact]
