@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Presentation.Shell.Services;
 
 namespace IIoT.Edge.Presentation.Shell.Views;
@@ -12,6 +13,7 @@ public partial class ShellLoginDialog : Window
 
     private IShellAuthContext? _authContext;
     private bool _isBusy;
+    private LocalEmergencyMode _localMode;
 
     public ShellLoginDialog()
     {
@@ -41,6 +43,13 @@ public partial class ShellLoginDialog : Window
     }
 
     private bool IsCloudMode => LoginModeTabs.SelectedIndex == 1;
+
+    private enum LocalEmergencyMode
+    {
+        Login,
+        Initialize,
+        Reset
+    }
 
     private void OnModeSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
@@ -79,7 +88,7 @@ public partial class ShellLoginDialog : Window
         {
             var result = IsCloudMode
                 ? await _authContext.LoginCloudEmployeeAsync(EmployeeNoInput.Text, CloudPasswordInput.Text)
-                : await _authContext.LoginLocalEmergencyAsync(LocalPasswordInput.Text);
+                : await SubmitLocalAsync();
 
             if (result.Success)
             {
@@ -98,8 +107,8 @@ public partial class ShellLoginDialog : Window
             }
             else
             {
-                LocalPasswordInput.Text = string.Empty;
-                LocalPasswordInput.Focus();
+                ClearLocalPasswordFields();
+                FocusLocalInput();
             }
         }
         finally
@@ -120,6 +129,7 @@ public partial class ShellLoginDialog : Window
         LocalForm.IsVisible = !IsCloudMode;
         CloudForm.IsVisible = IsCloudMode;
         CloudUnavailableNotice.IsVisible = IsCloudMode && _authContext?.HasCloudDeviceIdentity != true;
+        RefreshLocalMode();
         RefreshSubmitState();
 
         if (IsCloudMode)
@@ -128,7 +138,7 @@ public partial class ShellLoginDialog : Window
         }
         else
         {
-            LocalPasswordInput.Focus();
+            FocusLocalInput();
         }
     }
 
@@ -149,4 +159,133 @@ public partial class ShellLoginDialog : Window
         => this.TryFindResource(key, out var value) && value is string text
             ? text
             : string.Empty;
+
+    private Task<AuthResult> SubmitLocalAsync()
+    {
+        if (_authContext is null)
+        {
+            return Task.FromResult(AuthResult.Fail(ResourceText("Shell_Login_LocalFailed")));
+        }
+
+        return _localMode switch
+        {
+            LocalEmergencyMode.Initialize => SubmitLocalInitializeAsync(),
+            LocalEmergencyMode.Reset => SubmitLocalResetAsync(),
+            _ => _authContext.LoginLocalEmergencyAsync(LocalPasswordInput.Text)
+        };
+    }
+
+    private Task<AuthResult> SubmitLocalInitializeAsync()
+    {
+        if (_authContext is null)
+        {
+            return Task.FromResult(AuthResult.Fail(ResourceText("Shell_Login_LocalFailed")));
+        }
+
+        var validation = ValidateNewPasswordPair(
+            LocalSetupNewPasswordInput.Text,
+            LocalSetupConfirmPasswordInput.Text);
+        return validation is not null
+            ? Task.FromResult(AuthResult.Fail(validation))
+            : _authContext.InitializeLocalEmergencyAdminAsync(LocalSetupNewPasswordInput.Text);
+    }
+
+    private Task<AuthResult> SubmitLocalResetAsync()
+    {
+        if (_authContext is null)
+        {
+            return Task.FromResult(AuthResult.Fail(ResourceText("Shell_Login_LocalFailed")));
+        }
+
+        if (string.IsNullOrWhiteSpace(LocalResetCurrentPasswordInput.Text))
+        {
+            return Task.FromResult(AuthResult.Fail(ResourceText("Shell_Login_CurrentPasswordRequired")));
+        }
+
+        var validation = ValidateNewPasswordPair(
+            LocalResetNewPasswordInput.Text,
+            LocalResetConfirmPasswordInput.Text);
+        return validation is not null
+            ? Task.FromResult(AuthResult.Fail(validation))
+            : _authContext.ResetLocalEmergencyPasswordAsync(
+                LocalResetCurrentPasswordInput.Text,
+                LocalResetNewPasswordInput.Text);
+    }
+
+    private string? ValidateNewPasswordPair(string? newPassword, string? confirmPassword)
+    {
+        if (string.IsNullOrWhiteSpace(newPassword))
+        {
+            return ResourceText("Shell_Login_NewPasswordRequired");
+        }
+
+        if (!string.Equals(newPassword, confirmPassword, StringComparison.Ordinal))
+        {
+            return ResourceText("Shell_Login_ConfirmPasswordMismatch");
+        }
+
+        return null;
+    }
+
+    private void RefreshLocalMode()
+    {
+        if (_authContext is null)
+        {
+            _localMode = LocalEmergencyMode.Login;
+        }
+        else
+        {
+            _localMode = _authContext.LocalAdminCredentialStatus switch
+            {
+                LocalAdminCredentialStatus.NotConfigured or LocalAdminCredentialStatus.Invalid
+                    => LocalEmergencyMode.Initialize,
+                LocalAdminCredentialStatus.RequiresPasswordReset => LocalEmergencyMode.Reset,
+                _ => LocalEmergencyMode.Login
+            };
+        }
+
+        LocalLoginPanel.IsVisible = _localMode == LocalEmergencyMode.Login;
+        LocalSetupPanel.IsVisible = _localMode == LocalEmergencyMode.Initialize;
+        LocalResetPanel.IsVisible = _localMode == LocalEmergencyMode.Reset;
+        LocalDescriptionText.Text = _localMode switch
+        {
+            LocalEmergencyMode.Initialize => ResourceText("Shell_Login_LocalInitializeDescription"),
+            LocalEmergencyMode.Reset => ResourceText("Shell_Login_LocalResetDescription"),
+            _ => ResourceText("Shell_Login_LocalDescription")
+        };
+        LoginButton.Content = IsCloudMode
+            ? ResourceText("Shell_Login_Submit")
+            : _localMode switch
+        {
+            LocalEmergencyMode.Initialize => ResourceText("Shell_Login_InitializeSubmit"),
+            LocalEmergencyMode.Reset => ResourceText("Shell_Login_ResetSubmit"),
+            _ => ResourceText("Shell_Login_Submit")
+        };
+    }
+
+    private void FocusLocalInput()
+    {
+        switch (_localMode)
+        {
+            case LocalEmergencyMode.Initialize:
+                LocalSetupNewPasswordInput.Focus();
+                break;
+            case LocalEmergencyMode.Reset:
+                LocalResetCurrentPasswordInput.Focus();
+                break;
+            default:
+                LocalPasswordInput.Focus();
+                break;
+        }
+    }
+
+    private void ClearLocalPasswordFields()
+    {
+        LocalPasswordInput.Text = string.Empty;
+        LocalSetupNewPasswordInput.Text = string.Empty;
+        LocalSetupConfirmPasswordInput.Text = string.Empty;
+        LocalResetCurrentPasswordInput.Text = string.Empty;
+        LocalResetNewPasswordInput.Text = string.Empty;
+        LocalResetConfirmPasswordInput.Text = string.Empty;
+    }
 }

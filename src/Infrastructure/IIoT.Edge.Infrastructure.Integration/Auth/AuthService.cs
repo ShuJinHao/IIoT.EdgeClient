@@ -18,6 +18,7 @@ public class AuthService : IAuthService
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ICloudApiEndpointProvider _endpointProvider;
     private readonly LocalAdminConfig _localAdminConfig;
+    private readonly ILocalAdminCredentialStore _localAdminCredentialStore;
     private readonly CloudJwtValidationConfig _jwtValidationConfig;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private UserSession? _currentUser;
@@ -25,17 +26,20 @@ public class AuthService : IAuthService
 
     public UserSession? CurrentUser => GetCachedActiveSession();
     public bool IsAuthenticated => GetCachedActiveSession() is not null;
+    public LocalAdminCredentialStatus LocalAdminCredentialStatus => GetLocalAdminCredentialStatus();
     public event Action<UserSession?>? AuthStateChanged;
 
     public AuthService(
         IHttpClientFactory httpClientFactory,
         ICloudApiEndpointProvider endpointProvider,
         LocalAdminConfig localAdminConfig,
+        ILocalAdminCredentialStore localAdminCredentialStore,
         CloudJwtValidationConfig jwtValidationConfig)
     {
         _httpClientFactory = httpClientFactory;
         _endpointProvider = endpointProvider;
         _localAdminConfig = localAdminConfig;
+        _localAdminCredentialStore = localAdminCredentialStore;
         _jwtValidationConfig = jwtValidationConfig;
     }
 
@@ -62,10 +66,10 @@ public class AuthService : IAuthService
 
     public Task<AuthResult> LoginLocalAsync(string password)
     {
-        var configuredHash = _localAdminConfig.PasswordHash?.Trim();
+        var configuredHash = ResolveLocalAdminPasswordHash();
         if (string.IsNullOrWhiteSpace(configuredHash))
         {
-            return Task.FromResult(AuthResult.Fail("本地管理员未配置。"));
+            return Task.FromResult(AuthResult.Fail("本地管理员未配置，请先初始化。"));
         }
 
         var verification = EdgePasswordHasher.Verify(password, configuredHash);
@@ -79,20 +83,54 @@ public class AuthService : IAuthService
             return Task.FromResult(AuthResult.Fail("密码错误。"));
         }
 
-        var session = new UserSession
-        {
-            DisplayName = "本地管理员",
-            EmployeeNo = "LOCAL_ADMIN",
-            IsLocalAdmin = true,
-            Permissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-            ExpiresAtUtc = null,
-            AccessToken = null,
-            RefreshToken = null,
-            RefreshTokenExpiresAtUtc = null
-        };
-
-        SetSession(session);
+        SetSession(CreateLocalAdminSession());
         return Task.FromResult(AuthResult.Ok("本地管理员登录成功。"));
+    }
+
+    public Task<AuthResult> InitializeLocalAdminAsync(string newPassword)
+    {
+        var status = GetLocalAdminCredentialStatus();
+        if (status is LocalAdminCredentialStatus.Ready or LocalAdminCredentialStatus.RequiresPasswordReset)
+        {
+            return Task.FromResult(AuthResult.Fail("本地管理员已配置，请使用登录或重置流程。"));
+        }
+
+        var passwordPolicyError = EdgePasswordPolicy.ValidateNewPassword(newPassword);
+        if (passwordPolicyError is not null)
+        {
+            return Task.FromResult(AuthResult.Fail(passwordPolicyError));
+        }
+
+        return Task.FromResult(SaveLocalAdminPasswordAndLogin(newPassword, "本地紧急管理员初始化成功。"));
+    }
+
+    public Task<AuthResult> ResetLocalAdminPasswordAsync(string currentPassword, string newPassword)
+    {
+        var configuredHash = ResolveLocalAdminPasswordHash();
+        if (string.IsNullOrWhiteSpace(configuredHash))
+        {
+            return Task.FromResult(AuthResult.Fail("本地管理员未配置，请先初始化。"));
+        }
+
+        if (string.IsNullOrWhiteSpace(currentPassword))
+        {
+            return Task.FromResult(AuthResult.Fail("旧密码不能为空。"));
+        }
+
+        var passwordPolicyError = EdgePasswordPolicy.ValidateNewPassword(newPassword);
+        if (passwordPolicyError is not null)
+        {
+            return Task.FromResult(AuthResult.Fail(passwordPolicyError));
+        }
+
+        var verification = EdgePasswordHasher.Verify(currentPassword, configuredHash);
+        if (verification is not EdgePasswordVerificationResult.Verified
+            and not EdgePasswordVerificationResult.LegacySha256Verified)
+        {
+            return Task.FromResult(AuthResult.Fail("旧密码校验失败。"));
+        }
+
+        return Task.FromResult(SaveLocalAdminPasswordAndLogin(newPassword, "本地紧急管理员密码已重置。"));
     }
 
     public async Task<AuthResult> LoginCloudAsync(string employeeNo, string password, Guid deviceId)
@@ -143,6 +181,53 @@ public class AuthService : IAuthService
         _currentUser = session;
         AuthStateChanged?.Invoke(_currentUser);
     }
+
+    private LocalAdminCredentialStatus GetLocalAdminCredentialStatus()
+    {
+        var configuredHash = ResolveLocalAdminPasswordHash();
+        if (string.IsNullOrWhiteSpace(configuredHash))
+        {
+            return LocalAdminCredentialStatus.NotConfigured;
+        }
+
+        if (EdgePasswordHasher.IsLegacySha256Hash(configuredHash))
+        {
+            return LocalAdminCredentialStatus.RequiresPasswordReset;
+        }
+
+        return EdgePasswordHasher.Verify(string.Empty, configuredHash) == EdgePasswordVerificationResult.InvalidHash
+            ? LocalAdminCredentialStatus.Invalid
+            : LocalAdminCredentialStatus.Ready;
+    }
+
+    private string? ResolveLocalAdminPasswordHash()
+    {
+        var storedHash = _localAdminCredentialStore.ReadPasswordHash();
+        return string.IsNullOrWhiteSpace(storedHash)
+            ? _localAdminConfig.PasswordHash?.Trim()
+            : storedHash.Trim();
+    }
+
+    private AuthResult SaveLocalAdminPasswordAndLogin(string newPassword, string successMessage)
+    {
+        var passwordHash = EdgePasswordHasher.HashPassword(newPassword);
+        _localAdminCredentialStore.WritePasswordHash(passwordHash);
+        SetSession(CreateLocalAdminSession());
+        return AuthResult.Ok(successMessage);
+    }
+
+    private static UserSession CreateLocalAdminSession()
+        => new()
+        {
+            DisplayName = "本地管理员",
+            EmployeeNo = "LOCAL_ADMIN",
+            IsLocalAdmin = true,
+            Permissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            ExpiresAtUtc = null,
+            AccessToken = null,
+            RefreshToken = null,
+            RefreshTokenExpiresAtUtc = null
+        };
 
     private UserSession? GetCachedActiveSession()
     {

@@ -66,6 +66,8 @@ public sealed class MainWindowViewModel : BaseNotifyPropertyChanged, IShellAuthC
     public bool HasCloudDeviceIdentity
         => _deviceService.CurrentDevice is not null && _deviceService.CurrentDevice.DeviceId != Guid.Empty;
 
+    public LocalAdminCredentialStatus LocalAdminCredentialStatus => _authService.LocalAdminCredentialStatus;
+
     public string SystemStatusText => _languageService.GetString("Shell_FrameSystemStatus", "系统运行正常");
 
     public string VersionText => _languageService.Format(
@@ -127,6 +129,12 @@ public sealed class MainWindowViewModel : BaseNotifyPropertyChanged, IShellAuthC
 
     public Task<AuthResult> LoginLocalEmergencyAsync(string? password)
         => _authService.LoginLocalAsync(password ?? string.Empty);
+
+    public Task<AuthResult> InitializeLocalEmergencyAdminAsync(string? newPassword)
+        => _authService.InitializeLocalAdminAsync(newPassword ?? string.Empty);
+
+    public Task<AuthResult> ResetLocalEmergencyPasswordAsync(string? currentPassword, string? newPassword)
+        => _authService.ResetLocalAdminPasswordAsync(currentPassword ?? string.Empty, newPassword ?? string.Empty);
 
     public Task<AuthResult> LoginCloudEmployeeAsync(string? employeeNo, string? password)
     {

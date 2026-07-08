@@ -8,6 +8,7 @@ public interface IAuthService
 {
     UserSession? CurrentUser { get; }
     bool IsAuthenticated { get; }
+    LocalAdminCredentialStatus LocalAdminCredentialStatus { get; }
 
     bool HasPermission(string permission);
 
@@ -17,6 +18,10 @@ public interface IAuthService
     Task<bool> EnsureAuthenticatedAsync(CancellationToken cancellationToken = default);
 
     Task<AuthResult> LoginLocalAsync(string password);
+
+    Task<AuthResult> InitializeLocalAdminAsync(string newPassword);
+
+    Task<AuthResult> ResetLocalAdminPasswordAsync(string currentPassword, string newPassword);
 
     /// <summary>
     /// 通过云端完成登录，并返回与当前设备绑定的认证结果。

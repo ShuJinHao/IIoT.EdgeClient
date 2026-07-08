@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
+using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Infrastructure.Integration.Auth;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Infrastructure.Integration.Http;
@@ -22,15 +23,36 @@ public sealed class AuthServiceBehaviorTests
     [Fact]
     public async Task LoginLocalAsync_WhenHashIsMissing_ShouldFail()
     {
+        var store = new FakeLocalAdminCredentialStore();
         var service = CreateService(
             _ => new HttpResponseMessage(HttpStatusCode.OK),
-            new LocalAdminConfig { PasswordHash = string.Empty });
+            new LocalAdminConfig { PasswordHash = string.Empty },
+            store);
 
         var result = await service.LoginLocalAsync("123456");
 
         Assert.False(result.Success);
-        Assert.Equal("本地管理员未配置。", result.Message);
+        Assert.Equal("本地管理员未配置，请先初始化。", result.Message);
+        Assert.Equal(LocalAdminCredentialStatus.NotConfigured, service.LocalAdminCredentialStatus);
         Assert.False(service.IsAuthenticated);
+    }
+
+    [Fact]
+    public async Task InitializeLocalAdminAsync_WhenHashIsMissing_ShouldPersistPbkdf2AndCreateSession()
+    {
+        var store = new FakeLocalAdminCredentialStore();
+        var service = CreateService(
+            _ => new HttpResponseMessage(HttpStatusCode.OK),
+            new LocalAdminConfig { PasswordHash = string.Empty },
+            store);
+
+        var result = await service.InitializeLocalAdminAsync("NewPass123!");
+
+        Assert.True(result.Success);
+        Assert.StartsWith("pbkdf2-sha256$v1$", store.PasswordHash, StringComparison.Ordinal);
+        Assert.Equal(LocalAdminCredentialStatus.Ready, service.LocalAdminCredentialStatus);
+        Assert.True(service.IsAuthenticated);
+        Assert.True(service.CurrentUser?.IsLocalAdmin);
     }
 
     [Fact]
@@ -65,6 +87,39 @@ public sealed class AuthServiceBehaviorTests
         Assert.Equal("本地管理员密码使用旧哈希格式，请先重置。", result.Message);
         Assert.False(service.IsAuthenticated);
         Assert.Null(service.CurrentUser);
+    }
+
+    [Fact]
+    public async Task ResetLocalAdminPasswordAsync_WhenStoredHashIsLegacySha256_ShouldPersistPbkdf2AndCreateSession()
+    {
+        var store = new FakeLocalAdminCredentialStore(LegacySha256Password123456);
+        var service = CreateService(
+            _ => new HttpResponseMessage(HttpStatusCode.OK),
+            new LocalAdminConfig { PasswordHash = string.Empty },
+            store);
+
+        var result = await service.ResetLocalAdminPasswordAsync("123456", "NewPass123!");
+
+        Assert.True(result.Success);
+        Assert.StartsWith("pbkdf2-sha256$v1$", store.PasswordHash, StringComparison.Ordinal);
+        Assert.NotEqual(LegacySha256Password123456, store.PasswordHash);
+        Assert.Equal(LocalAdminCredentialStatus.Ready, service.LocalAdminCredentialStatus);
+        Assert.True(service.CurrentUser?.IsLocalAdmin);
+    }
+
+    [Fact]
+    public async Task LoginLocalAsync_WhenStoreHasHashAndConfigIsEmpty_ShouldCreateSession()
+    {
+        var store = new FakeLocalAdminCredentialStore(EdgePasswordHasher.HashPassword("NewPass123!"));
+        var service = CreateService(
+            _ => new HttpResponseMessage(HttpStatusCode.OK),
+            new LocalAdminConfig { PasswordHash = string.Empty },
+            store);
+
+        var result = await service.LoginLocalAsync("NewPass123!");
+
+        Assert.True(result.Success);
+        Assert.True(service.CurrentUser?.IsLocalAdmin);
     }
 
     [Fact]
@@ -140,7 +195,7 @@ public sealed class AuthServiceBehaviorTests
                 Content = JsonContent.Create(token)
             },
             new LocalAdminConfig { PasswordHash = EdgePasswordHasher.HashPassword("123456") },
-            new CloudJwtValidationConfig { JwtSigningKey = TestJwtSigningKey });
+            jwtValidationConfig: new CloudJwtValidationConfig { JwtSigningKey = TestJwtSigningKey });
 
         var cloudResult = await service.LoginCloudAsync("E001", "pwd", Guid.NewGuid());
         var localResult = await service.LoginLocalAsync("123456");
@@ -315,12 +370,14 @@ public sealed class AuthServiceBehaviorTests
     private static AuthService CreateService(
         Func<HttpRequestMessage, HttpResponseMessage> responseFactory,
         LocalAdminConfig config,
+        ILocalAdminCredentialStore? credentialStore = null,
         CloudJwtValidationConfig? jwtValidationConfig = null)
     {
         return new AuthService(
             new TestHttpClientFactory(new HttpClient(new StubMessageHandler(responseFactory))),
             new FakeCloudApiEndpointProvider(),
             config,
+            credentialStore ?? new FakeLocalAdminCredentialStore(),
             jwtValidationConfig
             ?? new CloudJwtValidationConfig
             {
@@ -368,5 +425,17 @@ public sealed class AuthServiceBehaviorTests
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             => Task.FromResult(responseFactory(request));
+    }
+
+    private sealed class FakeLocalAdminCredentialStore(string? passwordHash = null) : ILocalAdminCredentialStore
+    {
+        public string? PasswordHash { get; private set; } = passwordHash;
+
+        public string? ReadPasswordHash() => PasswordHash;
+
+        public void WritePasswordHash(string passwordHash)
+        {
+            PasswordHash = passwordHash;
+        }
     }
 }

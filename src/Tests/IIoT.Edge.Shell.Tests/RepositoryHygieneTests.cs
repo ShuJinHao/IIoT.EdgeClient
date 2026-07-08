@@ -449,12 +449,28 @@ public sealed class RepositoryHygieneTests
             launcherRoot,
             "Services",
             "LauncherAccountCatalogInitializer.cs"));
+        var authService = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Infrastructure",
+            "IIoT.Edge.Infrastructure.Integration",
+            "Auth",
+            "AuthService.cs"));
+        var integrationRegistration = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Infrastructure",
+            "IIoT.Edge.Infrastructure.Integration",
+            "DependencyInjection.cs"));
 
         Assert.Empty(defaultCredentialMatches);
         Assert.Empty(legacyLoginMatches);
         Assert.Empty(passwordHashScriptMatches);
         Assert.DoesNotContain("File.Copy", initializer, StringComparison.Ordinal);
         Assert.Contains("不能静默复制 sample 账号", initializer, StringComparison.Ordinal);
+        Assert.Contains("InitializeLocalAdminAsync", authService, StringComparison.Ordinal);
+        Assert.Contains("ResetLocalAdminPasswordAsync", authService, StringComparison.Ordinal);
+        Assert.Contains("local-admin.json", integrationRegistration, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -466,11 +482,60 @@ public sealed class RepositoryHygieneTests
         {
             "不得提交默认密码",
             "不得由 Launcher 自动复制样本账号文件",
+            "Shell 本地紧急管理员是现场兜底红线",
+            "登录弹窗必须提供首次初始化入口",
             "本地密码 hash 必须使用带版本标识的 PBKDF2 格式",
             "历史 64 位十六进制 SHA256 只允许作为旧部署识别和强制重置依据"
         };
 
         Assert.All(requiredText, text => Assert.Contains(text, ruleDoc, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ShellLoginDialog_ShouldExposeLocalEmergencyInitializeAndResetFlows()
+    {
+        var root = FindRepositoryRoot();
+        var dialogXaml = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Presentation",
+            "IIoT.Edge.Presentation.Shell",
+            "Views",
+            "ShellLoginDialog.axaml"));
+        var dialogCode = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Presentation",
+            "IIoT.Edge.Presentation.Shell",
+            "Views",
+            "ShellLoginDialog.axaml.cs"));
+        var zhResources = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Presentation",
+            "IIoT.Edge.Presentation.Shell",
+            "Resources",
+            "Languages",
+            "zh-CN.axaml"));
+        var enResources = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Presentation",
+            "IIoT.Edge.Presentation.Shell",
+            "Resources",
+            "Languages",
+            "en-US.axaml"));
+
+        Assert.Contains("x:Name=\"LocalSetupPanel\"", dialogXaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"LocalResetPanel\"", dialogXaml, StringComparison.Ordinal);
+        Assert.Contains("LocalAdminCredentialStatus.NotConfigured", dialogCode, StringComparison.Ordinal);
+        Assert.Contains("LocalAdminCredentialStatus.RequiresPasswordReset", dialogCode, StringComparison.Ordinal);
+        Assert.Contains("InitializeLocalEmergencyAdminAsync", dialogCode, StringComparison.Ordinal);
+        Assert.Contains("ResetLocalEmergencyPasswordAsync", dialogCode, StringComparison.Ordinal);
+        Assert.Contains("Shell_Login_LocalInitializeDescription", zhResources, StringComparison.Ordinal);
+        Assert.Contains("Shell_Login_LocalInitializeDescription", enResources, StringComparison.Ordinal);
+        Assert.Contains("Shell_Login_ResetSubmit", zhResources, StringComparison.Ordinal);
+        Assert.Contains("Shell_Login_ResetSubmit", enResources, StringComparison.Ordinal);
     }
 
     [Fact]

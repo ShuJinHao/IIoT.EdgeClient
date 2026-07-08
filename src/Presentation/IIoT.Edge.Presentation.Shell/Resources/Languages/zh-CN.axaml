@@ -25,7 +25,12 @@
     <sys:String x:Key="Shell_Login_CloudEmployee">云端员工登录</sys:String>
     <sys:String x:Key="Shell_Login_LocalTitle">本地紧急登录</sys:String>
     <sys:String x:Key="Shell_Login_LocalDescription">使用本地紧急密码进行身份验证。</sys:String>
+    <sys:String x:Key="Shell_Login_LocalInitializeDescription">本地紧急管理员未初始化。请设置紧急密码，成功后立即进入管理员会话。</sys:String>
+    <sys:String x:Key="Shell_Login_LocalResetDescription">本地紧急密码仍使用旧哈希格式。请用旧密码校验后设置新密码。</sys:String>
     <sys:String x:Key="Shell_Login_LocalPasswordHint">紧急密码</sys:String>
+    <sys:String x:Key="Shell_Login_CurrentPasswordHint">旧紧急密码</sys:String>
+    <sys:String x:Key="Shell_Login_NewPasswordHint">新紧急密码</sys:String>
+    <sys:String x:Key="Shell_Login_ConfirmPasswordHint">确认新紧急密码</sys:String>
     <sys:String x:Key="Shell_Login_CloudTitle">云端员工登录</sys:String>
     <sys:String x:Key="Shell_Login_CloudDescription">使用工号和密码登录当前设备。</sys:String>
     <sys:String x:Key="Shell_Login_EmployeeNoHint">工号</sys:String>
@@ -35,6 +40,11 @@
     <sys:String x:Key="Shell_Login_CloudFailed">云端员工登录失败。</sys:String>
     <sys:String x:Key="Shell_Login_Cancel">取消</sys:String>
     <sys:String x:Key="Shell_Login_Submit">登录</sys:String>
+    <sys:String x:Key="Shell_Login_InitializeSubmit">初始化并登录</sys:String>
+    <sys:String x:Key="Shell_Login_ResetSubmit">重置并登录</sys:String>
+    <sys:String x:Key="Shell_Login_CurrentPasswordRequired">旧密码不能为空。</sys:String>
+    <sys:String x:Key="Shell_Login_NewPasswordRequired">新密码不能为空。</sys:String>
+    <sys:String x:Key="Shell_Login_ConfirmPasswordMismatch">两次输入的新密码不一致。</sys:String>
     <sys:String x:Key="Shell_Login_Logout">退出登录</sys:String>
     <sys:String x:Key="Shell_Login_LoggedInAs">已登录</sys:String>
 </ResourceDictionary>

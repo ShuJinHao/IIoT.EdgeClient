@@ -10,7 +10,13 @@ public interface IShellAuthContext
 
     bool HasCloudDeviceIdentity { get; }
 
+    LocalAdminCredentialStatus LocalAdminCredentialStatus { get; }
+
     Task<AuthResult> LoginLocalEmergencyAsync(string? password);
+
+    Task<AuthResult> InitializeLocalEmergencyAdminAsync(string? newPassword);
+
+    Task<AuthResult> ResetLocalEmergencyPasswordAsync(string? currentPassword, string? newPassword);
 
     Task<AuthResult> LoginCloudEmployeeAsync(string? employeeNo, string? password);
 

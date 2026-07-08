@@ -25,7 +25,12 @@
     <sys:String x:Key="Shell_Login_CloudEmployee">Cloud Employee Login</sys:String>
     <sys:String x:Key="Shell_Login_LocalTitle">Local Emergency Login</sys:String>
     <sys:String x:Key="Shell_Login_LocalDescription">Verify with local emergency password.</sys:String>
+    <sys:String x:Key="Shell_Login_LocalInitializeDescription">The local emergency administrator is not initialized. Set an emergency password to enter the administrator session.</sys:String>
+    <sys:String x:Key="Shell_Login_LocalResetDescription">The local emergency password still uses the legacy hash format. Verify the old password, then set a new one.</sys:String>
     <sys:String x:Key="Shell_Login_LocalPasswordHint">Emergency Password</sys:String>
+    <sys:String x:Key="Shell_Login_CurrentPasswordHint">Current Emergency Password</sys:String>
+    <sys:String x:Key="Shell_Login_NewPasswordHint">New Emergency Password</sys:String>
+    <sys:String x:Key="Shell_Login_ConfirmPasswordHint">Confirm New Emergency Password</sys:String>
     <sys:String x:Key="Shell_Login_CloudTitle">Cloud Employee Login</sys:String>
     <sys:String x:Key="Shell_Login_CloudDescription">Sign in with employee ID and password.</sys:String>
     <sys:String x:Key="Shell_Login_EmployeeNoHint">Employee No</sys:String>
@@ -35,6 +40,11 @@
     <sys:String x:Key="Shell_Login_CloudFailed">Cloud employee login failed.</sys:String>
     <sys:String x:Key="Shell_Login_Cancel">Cancel</sys:String>
     <sys:String x:Key="Shell_Login_Submit">Sign In</sys:String>
+    <sys:String x:Key="Shell_Login_InitializeSubmit">Initialize and Sign In</sys:String>
+    <sys:String x:Key="Shell_Login_ResetSubmit">Reset and Sign In</sys:String>
+    <sys:String x:Key="Shell_Login_CurrentPasswordRequired">Current password is required.</sys:String>
+    <sys:String x:Key="Shell_Login_NewPasswordRequired">New password is required.</sys:String>
+    <sys:String x:Key="Shell_Login_ConfirmPasswordMismatch">The two new passwords do not match.</sys:String>
     <sys:String x:Key="Shell_Login_Logout">Sign Out</sys:String>
     <sys:String x:Key="Shell_Login_LoggedInAs">Signed In</sys:String>
 </ResourceDictionary>

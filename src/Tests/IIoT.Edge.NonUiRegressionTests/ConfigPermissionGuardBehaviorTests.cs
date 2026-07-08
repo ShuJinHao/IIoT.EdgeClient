@@ -252,6 +252,8 @@ public sealed class ConfigPermissionGuardBehaviorTests
 
         public bool IsAuthenticated => _currentUser is not null;
 
+        public LocalAdminCredentialStatus LocalAdminCredentialStatus => LocalAdminCredentialStatus.Ready;
+
         public event Action<UserSession?>? AuthStateChanged;
 
         public bool HasPermission(string permission)
@@ -273,6 +275,10 @@ public sealed class ConfigPermissionGuardBehaviorTests
             => Task.FromResult(IsAuthenticated);
 
         public Task<AuthResult> LoginLocalAsync(string password) => throw new NotSupportedException();
+
+        public Task<AuthResult> InitializeLocalAdminAsync(string newPassword) => throw new NotSupportedException();
+
+        public Task<AuthResult> ResetLocalAdminPasswordAsync(string currentPassword, string newPassword) => throw new NotSupportedException();
 
         public Task<AuthResult> LoginCloudAsync(string employeeNo, string password, Guid deviceId) => throw new NotSupportedException();
 

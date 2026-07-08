@@ -67,6 +67,11 @@ public static class DependencyInjection
                 ?? configuration["LocalAdmin:PasswordHash"]?.Trim()
                 ?? string.Empty
         });
+        services.AddSingleton<ILocalAdminCredentialStore>(_ =>
+            new FileLocalAdminCredentialStore(Path.Combine(
+                runtimePaths.RuntimeDataRoot,
+                "security",
+                "local-admin.json")));
         services.AddSingleton(new CloudJwtValidationConfig
         {
             JwtSigningKey =

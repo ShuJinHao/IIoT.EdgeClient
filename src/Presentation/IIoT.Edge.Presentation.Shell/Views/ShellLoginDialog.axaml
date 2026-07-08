@@ -62,19 +62,80 @@
                     <Grid
                         x:Name="LocalForm"
                         Grid.Row="2"
-                        RowDefinitions="Auto,10,Auto">
+                        RowDefinitions="Auto,10,Auto,10,Auto,10,Auto">
                         <TextBlock
+                            x:Name="LocalDescriptionText"
                             Grid.Row="0"
                             Classes="shell-login-form-label"
                             Text="{DynamicResource Shell_Login_LocalDescription}" />
-                        <edge:EdgeTextBox
-                            x:Name="LocalPasswordInput"
+
+                        <Grid
+                            x:Name="LocalLoginPanel"
                             Grid.Row="2"
-                            Classes="edge-text-box shell-login-input"
-                            HorizontalAlignment="Left"
-                            PasswordChar="*"
-                            PlaceholderText="{DynamicResource Shell_Login_LocalPasswordHint}"
-                            KeyDown="OnInputKeyDown" />
+                            RowDefinitions="Auto">
+                            <edge:EdgeTextBox
+                                x:Name="LocalPasswordInput"
+                                Grid.Row="0"
+                                Classes="edge-text-box shell-login-input"
+                                HorizontalAlignment="Left"
+                                PasswordChar="*"
+                                PlaceholderText="{DynamicResource Shell_Login_LocalPasswordHint}"
+                                KeyDown="OnInputKeyDown" />
+                        </Grid>
+
+                        <Grid
+                            x:Name="LocalSetupPanel"
+                            Grid.Row="2"
+                            IsVisible="False"
+                            RowDefinitions="Auto,10,Auto">
+                            <edge:EdgeTextBox
+                                x:Name="LocalSetupNewPasswordInput"
+                                Grid.Row="0"
+                                Classes="edge-text-box shell-login-input"
+                                HorizontalAlignment="Left"
+                                PasswordChar="*"
+                                PlaceholderText="{DynamicResource Shell_Login_NewPasswordHint}"
+                                KeyDown="OnInputKeyDown" />
+                            <edge:EdgeTextBox
+                                x:Name="LocalSetupConfirmPasswordInput"
+                                Grid.Row="2"
+                                Classes="edge-text-box shell-login-input"
+                                HorizontalAlignment="Left"
+                                PasswordChar="*"
+                                PlaceholderText="{DynamicResource Shell_Login_ConfirmPasswordHint}"
+                                KeyDown="OnInputKeyDown" />
+                        </Grid>
+
+                        <Grid
+                            x:Name="LocalResetPanel"
+                            Grid.Row="2"
+                            IsVisible="False"
+                            RowDefinitions="Auto,10,Auto,10,Auto">
+                            <edge:EdgeTextBox
+                                x:Name="LocalResetCurrentPasswordInput"
+                                Grid.Row="0"
+                                Classes="edge-text-box shell-login-input"
+                                HorizontalAlignment="Left"
+                                PasswordChar="*"
+                                PlaceholderText="{DynamicResource Shell_Login_CurrentPasswordHint}"
+                                KeyDown="OnInputKeyDown" />
+                            <edge:EdgeTextBox
+                                x:Name="LocalResetNewPasswordInput"
+                                Grid.Row="2"
+                                Classes="edge-text-box shell-login-input"
+                                HorizontalAlignment="Left"
+                                PasswordChar="*"
+                                PlaceholderText="{DynamicResource Shell_Login_NewPasswordHint}"
+                                KeyDown="OnInputKeyDown" />
+                            <edge:EdgeTextBox
+                                x:Name="LocalResetConfirmPasswordInput"
+                                Grid.Row="4"
+                                Classes="edge-text-box shell-login-input"
+                                HorizontalAlignment="Left"
+                                PasswordChar="*"
+                                PlaceholderText="{DynamicResource Shell_Login_ConfirmPasswordHint}"
+                                KeyDown="OnInputKeyDown" />
+                        </Grid>
                     </Grid>
 
                     <Grid
