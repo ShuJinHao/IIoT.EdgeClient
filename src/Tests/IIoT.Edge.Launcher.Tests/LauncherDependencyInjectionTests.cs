@@ -2,6 +2,7 @@ using IIoT.Edge.Application.Abstractions.Updates;
 using IIoT.Edge.Infrastructure.Update.Configuration;
 using IIoT.Edge.Infrastructure.Update.Host;
 using IIoT.Edge.Launcher;
+using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.Launcher.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -83,6 +84,7 @@ public sealed class LauncherDependencyInjectionTests
             initializer.EnsureCatalogExists();
 
             Assert.False(File.Exists(LauncherAccountCatalog.GetCatalogPath(tempDirectory)));
+            Assert.Equal(LauncherAccountCatalogStatus.Missing, catalog.GetCatalogStatus());
             Assert.Throws<FileNotFoundException>(() => catalog.LoadAccounts());
         }
         finally
@@ -95,7 +97,84 @@ public sealed class LauncherDependencyInjectionTests
     }
 
     [Fact]
-    public async Task LauncherAccountCatalog_ShouldRoundTripAccounts()
+    public void LauncherAccountCatalog_WhenCatalogIsMissing_ShouldReportMissing()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), $"iiot-launcher-test-{Guid.NewGuid():N}");
+
+        try
+        {
+            var catalog = new LauncherAccountCatalog(tempDirectory);
+
+            Assert.Equal(LauncherAccountCatalogStatus.Missing, catalog.GetCatalogStatus());
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void LauncherAccountCatalog_WhenCatalogIsEmpty_ShouldReportEmpty()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), $"iiot-launcher-test-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateDirectory(tempDirectory);
+            File.WriteAllText(LauncherAccountCatalog.GetCatalogPath(tempDirectory), "[]");
+
+            var catalog = new LauncherAccountCatalog(tempDirectory);
+
+            Assert.Equal(LauncherAccountCatalogStatus.Empty, catalog.GetCatalogStatus());
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void LauncherAccountCatalog_WhenCatalogOnlyHasEmptyHashSample_ShouldReportNeedsInitialSetup()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), $"iiot-launcher-test-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateDirectory(tempDirectory);
+            File.WriteAllText(
+                LauncherAccountCatalog.GetCatalogPath(tempDirectory),
+                """
+                [
+                  {
+                    "userName": "101650",
+                    "displayName": "现场启动管理员",
+                    "passwordHash": "",
+                    "isEnabled": true
+                  }
+                ]
+                """);
+
+            var catalog = new LauncherAccountCatalog(tempDirectory);
+
+            Assert.Equal(LauncherAccountCatalogStatus.NeedsInitialSetup, catalog.GetCatalogStatus());
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void LauncherAccountCatalog_WhenCatalogHasInvalidHashFormat_ShouldReportCorruptAndRefuseInitialization()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), $"iiot-launcher-test-{Guid.NewGuid():N}");
 
@@ -103,7 +182,78 @@ public sealed class LauncherDependencyInjectionTests
         {
             Directory.CreateDirectory(tempDirectory);
             var path = LauncherAccountCatalog.GetCatalogPath(tempDirectory);
-            await File.WriteAllTextAsync(
+            File.WriteAllText(
+                path,
+                """
+                [
+                  {
+                    "userName": "101650",
+                    "displayName": "现场启动管理员",
+                    "passwordHash": "not-a-hash",
+                    "isEnabled": true
+                  }
+                ]
+                """);
+            var original = File.ReadAllText(path);
+
+            var catalog = new LauncherAccountCatalog(tempDirectory);
+
+            Assert.Equal(LauncherAccountCatalogStatus.Corrupt, catalog.GetCatalogStatus());
+            Assert.Throws<InvalidOperationException>(() => catalog.InitializeAccount(
+                "101650",
+                "现场启动管理员",
+                LauncherPasswordHasher.HashPassword("NewPass123!")));
+            Assert.Equal(original, File.ReadAllText(path));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void LauncherAccountCatalog_WhenCatalogIsInvalidJson_ShouldReportCorruptAndRefuseInitialization()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), $"iiot-launcher-test-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateDirectory(tempDirectory);
+            var path = LauncherAccountCatalog.GetCatalogPath(tempDirectory);
+            File.WriteAllText(path, "{ invalid json");
+            var original = File.ReadAllText(path);
+
+            var catalog = new LauncherAccountCatalog(tempDirectory);
+
+            Assert.Equal(LauncherAccountCatalogStatus.Corrupt, catalog.GetCatalogStatus());
+            Assert.Throws<InvalidOperationException>(() => catalog.InitializeAccount(
+                "101650",
+                "现场启动管理员",
+                LauncherPasswordHasher.HashPassword("NewPass123!")));
+            Assert.Equal(original, File.ReadAllText(path));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void LauncherAccountCatalog_ShouldRoundTripAccounts()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), $"iiot-launcher-test-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateDirectory(tempDirectory);
+            var path = LauncherAccountCatalog.GetCatalogPath(tempDirectory);
+            File.WriteAllText(
                 path,
                 """
                 [

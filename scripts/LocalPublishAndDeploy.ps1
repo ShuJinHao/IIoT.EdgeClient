@@ -11,13 +11,14 @@ param(
 
     [string]$PackId = 'IIoT.EdgeClient',
 
+    # Legacy SSH fallback only. Stable production host releases must use -Transport http.
     [string]$DeployHost = '',
 
-    [string]$DeployUser = 'root',
+    [string]$DeployUser = 'github-runner',
 
     [int]$DeployPort = 22,
 
-    [string]$EdgeUpdatesDir = '/srv/iiot/edge-updates',
+    [string]$EdgeUpdatesDir = '/data/iiot-platform/edge-client/edge-updates',
 
     [ValidateSet('auto', 'rsync', 'scp', 'http')]
     [string]$Transport = 'auto',
@@ -31,7 +32,7 @@ param(
     [string]$ReleaseNotesPath = '',
 
     [ValidateRange(1, 1000)]
-    [int]$UploadRateLimitMbps = 100,
+    [int]$UploadRateLimitMbps = 1000,
 
     [bool]$SkipVeloAppCheck = $true,
 

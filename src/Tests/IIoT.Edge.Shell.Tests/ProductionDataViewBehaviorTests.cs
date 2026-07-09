@@ -118,6 +118,23 @@ public sealed class ProductionDataViewBehaviorTests
         Assert.DoesNotContain("Condition=\"'$(Configuration)' != 'Release'\"", project, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void HomogenizationDataView_ShouldNotInjectVisualTestRowsFromUiConfig()
+    {
+        var root = FindRepositoryRoot();
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Modules",
+            "IIoT.Edge.Module.Homogenization",
+            "Presentation",
+            "HomogenizationNavigationViewModels.cs"));
+
+        Assert.DoesNotContain("UI:VisualTestData:Enabled", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("UI:VisualTestData:BatchCode", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("BuildVisualTestRows", source, StringComparison.Ordinal);
+    }
+
     private static string FindRepositoryRoot()
     {
         var current = AppContext.BaseDirectory;

@@ -4,8 +4,11 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
 
-    <Grid Margin="0,12,0,0">
-        <edge:EdgeTablePanel Classes="fill" Title="{DynamicResource Navigation_Tab_SerialDevice}">
+    <Grid Margin="0,12,0,0" RowDefinitions="*">
+        <edge:EdgeTablePanel Classes="fill" Grid.Row="0" Title="{DynamicResource Navigation_Tab_SerialDevice}"
+                             IsEmpty="{Binding !SerialDevices.Count}"
+                             EmptyTitle="{DynamicResource Navigation_Empty_SerialDevicesTitle}"
+                             EmptyMessage="{DynamicResource Navigation_Empty_SerialDevicesMessage}">
             <edge:EdgeTablePanel.HeaderMetaContent>
                 <TextBlock Classes="edge-table-count">
                     <Run Text="{DynamicResource Navigation_Table_TotalPrefix}" />

@@ -21,6 +21,15 @@
         <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
     </Style>
 
+    <Style Selector="controls|EdgeProgressBar">
+        <Setter Property="Height" Value="4" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="TrackThickness" Value="4" />
+        <Setter Property="Radius" Value="999" />
+        <Setter Property="TrackBrush" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
+        <Setter Property="IndicatorBrush" Value="{DynamicResource Edge.Brush.Accent.Primary}" />
+    </Style>
+
     <Style Selector="controls|EdgeCard.right-rail-equipment Border.edge-equipment-status-row">
         <Setter Property="MinHeight" Value="29" />
         <Setter Property="Padding" Value="10,5" />
@@ -363,7 +372,7 @@
                     Width="{TemplateBinding SegmentWidth}"
                     Height="{TemplateBinding SegmentHeight}"
                     Background="{DynamicResource Edge.Brush.Surface.Wash}"
-                    CornerRadius="{DynamicResource Edge.CornerRadius.Badge}"
+                    CornerRadius="{DynamicResource Edge.CornerRadius.Pill}"
                     ToolTip.Tip="{TemplateBinding Label}" />
             </ControlTemplate>
         </Setter>

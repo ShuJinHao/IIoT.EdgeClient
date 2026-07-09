@@ -4,7 +4,11 @@ namespace IIoT.Edge.Launcher.Services;
 
 public interface ILauncherAccountCatalog
 {
+    LauncherAccountCatalogStatus GetCatalogStatus();
+
     IReadOnlyList<LauncherAccountRecord> LoadAccounts();
+
+    void InitializeAccount(string userName, string displayName, string passwordHash);
 
     void UpdatePasswordHash(string userName, string passwordHash);
 

@@ -275,7 +275,7 @@ Cloud 下载中心、插件选择安装、设备盘点和版本上报属于后�
 
 EdgeClient 的交付物是 Windows 安装器、安装素材和 Velopack 更新包，不是 Docker 镜像。CI/CD 不允许推 Harbor、GHCR，也不允许从 GitHub hosted runner 通过 SSH/SCP 直连内网服务器。
 
-`push main` 只跑 smoke 编译和测试，不生成安装包。完整 GitHub 打包只在 `workflow_dispatch` 或 `edge-v*` / `v*` tag 时执行。日常宿主快发可由操作者本机运行 `scripts/LocalPublishAndDeploy.ps1 -Transport http`，本机完成编译、Velopack 打包和 installer artifact 生成后，通过 Cloud Human API 上传 release bundle 到 `${EDGE_UPDATES_DIR}`；该路径不属于 GitHub CI/CD job。HTTP 上传默认限速 100 Mbps、单并发、服务端审计，并在脚本结束时输出发布摘要。更新内容必须显式填写：本机快发传 `-ReleaseNotes` 或 `-ReleaseNotesPath`，`workflow_dispatch` 填 `release_notes`，tag 发布使用带正文的 annotated tag。生产 `stable` 发布必须走 HTTP API，不允许 `rsync/scp` 绕过 Cloud DB、审计和保留策略。生产服务器只允许 `stable` 渠道，发布脚本必须拒绝并清理非 `stable` 渠道目录。
+`push main` 只跑 smoke 编译和测试，不生成安装包。完整 GitHub 打包只在 `workflow_dispatch` 或 `edge-v*` / `v*` tag 时执行。日常宿主快发可由操作者本机运行 `scripts/LocalPublishAndDeploy.ps1 -Transport http`，本机完成编译、Velopack 打包和 installer artifact 生成后，通过 Cloud Human API 上传 release bundle 到 `${EDGE_UPDATES_DIR}`；该路径不属于 GitHub CI/CD job。HTTP 上传默认限速 1000 Mbps、单并发、服务端审计，并在脚本结束时输出发布摘要。更新内容必须显式填写：本机快发传 `-ReleaseNotes` 或 `-ReleaseNotesPath`，`workflow_dispatch` 填 `release_notes`，tag 发布使用带正文的 annotated tag。生产 `stable` 发布必须走 HTTP API，不允许 `rsync/scp` 绕过 Cloud DB、审计和保留策略。生产服务器只允许 `stable` 渠道，发布脚本必须拒绝并清理非 `stable` 渠道目录。
 
 只改工序插件时走独立插件发布：
 

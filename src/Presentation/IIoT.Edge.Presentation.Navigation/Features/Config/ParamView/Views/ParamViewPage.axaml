@@ -60,9 +60,9 @@
                         <edge:EdgeActionButton
                             Command="{Binding ResetCommand}"
                             Content="{DynamicResource Navigation_Button_ResetDefaults}"
-                            Icon="{StaticResource Edge.Icon.Sync}"
+                            Icon="{StaticResource Edge.Icon.Reset}"
                             IsEnabled="{Binding CanEdit}"
-                            Kind="Ghost"
+                            Kind="Secondary"
                             Size="Compact" />
                         <edge:EdgeActionButton
                             Command="{Binding SaveCommand}"

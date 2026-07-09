@@ -12,7 +12,7 @@ namespace IIoT.Edge.Shell;
 
 public partial class MainWindow : Window
 {
-    private const int WindowCornerRadius = 24;
+    private const int WindowCornerRadius = 16;
     private const int StartupLeftBiasPixels = 80;
 
     public MainWindow()

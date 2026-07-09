@@ -20,6 +20,16 @@
     <sys:String x:Key="Launcher_Button_Login">登录并进入工序选择</sys:String>
     <sys:String x:Key="Launcher_Button_ChangePassword">修改本地密码</sys:String>
     <sys:String x:Key="Launcher_Login_BoundaryNote">Launcher 只负责本地登录、读取 profile 清单并启动 Shell。</sys:String>
+    <sys:String x:Key="Launcher_AccountSetup_DefaultUserName">101650</sys:String>
+    <sys:String x:Key="Launcher_AccountSetup_DefaultDisplayName">现场启动管理员</sys:String>
+    <sys:String x:Key="Launcher_AccountSetup_Title">首次初始化本地账号</sys:String>
+    <sys:String x:Key="Launcher_AccountSetup_Description">当前安装没有可用本地账号。请设置本机 Launcher 管理账号，账号文件会写入本机 data 目录，不进入通用安装包。</sys:String>
+    <sys:String x:Key="Launcher_AccountSetup_DisplayNamePlaceholder">显示名称</sys:String>
+    <sys:String x:Key="Launcher_AccountSetup_NewPasswordPlaceholder">新密码</sys:String>
+    <sys:String x:Key="Launcher_AccountSetup_ConfirmPasswordPlaceholder">确认新密码</sys:String>
+    <sys:String x:Key="Launcher_Button_InitializeAccount">初始化并进入工序选择</sys:String>
+    <sys:String x:Key="Launcher_AccountCatalogCorrupt_Title">本地账号文件需要处理</sys:String>
+    <sys:String x:Key="Launcher_AccountCatalogCorrupt_Description">账号文件存在但内容无效。为避免覆盖现场配置，Launcher 不会自动重写，请检查 data 目录中的账号文件后重启。</sys:String>
 
     <sys:String x:Key="Launcher_Hero_VersionLabel">软件版本</sys:String>
     <sys:String x:Key="Launcher_Hero_Title">标准工序启动平台</sys:String>
@@ -160,6 +170,11 @@
     <sys:String x:Key="Launcher_ChangePassword_ConfirmMismatch">两次输入的新密码不一致。</sys:String>
 
     <sys:String x:Key="Launcher_Status_Initial">请先使用本地账号登录。</sys:String>
+    <sys:String x:Key="Launcher_Status_AccountSetupRequired">请先初始化本机 Launcher 管理账号。</sys:String>
+    <sys:String x:Key="Launcher_Status_AccountSetupSaving">正在写入本地账号...</sys:String>
+    <sys:String x:Key="Launcher_Status_AccountSetupRetry">请修正初始化信息后重试。</sys:String>
+    <sys:String x:Key="Launcher_Status_AccountSetupFailed">本地账号初始化失败。</sys:String>
+    <sys:String x:Key="Launcher_Status_AccountCatalogCorrupt">本地账号文件损坏或不可读取，不能自动覆盖。</sys:String>
     <sys:String x:Key="Launcher_Status_ValidatingLogin">正在验证本地账号...</sys:String>
     <sys:String x:Key="Launcher_Status_LoginRetry">请修正账号信息后重试。</sys:String>
     <sys:String x:Key="Launcher_Status_SelectProfile">请选择要启动的工序客户端。</sys:String>
@@ -203,13 +218,16 @@
     <sys:String x:Key="Launcher_Error_UserNameRequired">请输入账号。</sys:String>
     <sys:String x:Key="Launcher_Error_PasswordRequired">请输入密码。</sys:String>
     <sys:String x:Key="Launcher_Error_AccountConfigurationUnavailable">本地账号配置不可用，请检查应用 data 目录中的账号文件。</sys:String>
+    <sys:String x:Key="Launcher_Error_AccountSetupUnavailable">本地账号当前不可初始化，请检查账号文件状态。</sys:String>
     <sys:String x:Key="Launcher_Error_PasswordResetRequired">本地密码仍使用旧哈希格式，请先修改密码。</sys:String>
     <sys:String x:Key="Launcher_Error_AccountLocked">本地账号已临时锁定，请稍后再试。</sys:String>
     <sys:String x:Key="Launcher_Error_AccountDisabledOrMissing">本地账号不存在，或已被禁用。</sys:String>
     <sys:String x:Key="Launcher_Error_InvalidCredentials">账号或密码不正确。</sys:String>
+    <sys:String x:Key="Launcher_Error_DisplayNameRequired">请输入显示名称。</sys:String>
     <sys:String x:Key="Launcher_Error_NewPasswordRequired">新密码不能为空。</sys:String>
     <sys:String x:Key="Launcher_Error_NewPasswordMinLength">新密码至少需要 10 位，并包含大小写字母、数字和符号。</sys:String>
     <sys:String x:Key="Launcher_Error_OldPasswordInvalid">旧密码校验失败。</sys:String>
+    <sys:String x:Key="Launcher_Error_PasswordConfirmationMismatch">两次输入的新密码不一致。</sys:String>
     <sys:String x:Key="Launcher_Welcome_Anonymous">未登录</sys:String>
     <sys:String x:Key="Launcher_Welcome_Format">已登录：{0}</sys:String>
     <sys:String x:Key="Launcher_ProfileSummary_Zero">共 0 个工序</sys:String>

@@ -42,18 +42,22 @@ public partial class MainWindow : Window
 
     private void OnOpened(object? sender, EventArgs e)
     {
-        UserNameTextBox.Focus();
+        FocusCurrentLoginInput();
     }
 
     private void OnClosed(object? sender, EventArgs e)
     {
         _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
         PasswordInput.Text = string.Empty;
+        AccountSetupPasswordInput.Text = string.Empty;
+        AccountSetupConfirmPasswordInput.Text = string.Empty;
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (string.Equals(e.PropertyName, nameof(LauncherMainViewModel.IsAuthenticated), StringComparison.Ordinal))
+        if (string.Equals(e.PropertyName, nameof(LauncherMainViewModel.IsAuthenticated), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(LauncherMainViewModel.AccountSetupRequired), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(LauncherMainViewModel.AccountCatalogCorrupt), StringComparison.Ordinal))
         {
             UpdateVisualState();
         }
@@ -65,6 +69,22 @@ public partial class MainWindow : Window
         if (_viewModel.IsAuthenticated)
         {
             PasswordInput.Text = string.Empty;
+        }
+
+        UpdateVisualState();
+    }
+
+    private async void InitializeAccountButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var initialized = await _viewModel.InitializeLocalAccountAsync(
+            AccountSetupUserNameTextBox.Text,
+            AccountSetupDisplayNameTextBox.Text,
+            AccountSetupPasswordInput.Text,
+            AccountSetupConfirmPasswordInput.Text);
+        if (initialized)
+        {
+            AccountSetupPasswordInput.Text = string.Empty;
+            AccountSetupConfirmPasswordInput.Text = string.Empty;
         }
 
         UpdateVisualState();
@@ -140,6 +160,20 @@ public partial class MainWindow : Window
         SelectionPageRoot.IsVisible = _viewModel.IsAuthenticated;
 
         if (!_viewModel.IsAuthenticated && IsVisible)
+        {
+            FocusCurrentLoginInput();
+        }
+    }
+
+    private void FocusCurrentLoginInput()
+    {
+        if (_viewModel.AccountSetupRequired)
+        {
+            AccountSetupUserNameTextBox.Focus();
+            return;
+        }
+
+        if (_viewModel.IsLoginMode)
         {
             UserNameTextBox.Focus();
         }

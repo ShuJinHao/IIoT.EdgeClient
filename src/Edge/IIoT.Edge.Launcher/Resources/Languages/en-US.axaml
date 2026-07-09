@@ -20,6 +20,16 @@
     <sys:String x:Key="Launcher_Button_Login">Sign in and select process</sys:String>
     <sys:String x:Key="Launcher_Button_ChangePassword">Change local password</sys:String>
     <sys:String x:Key="Launcher_Login_BoundaryNote">Launcher only handles local login, reads the profile list, and starts Shell.</sys:String>
+    <sys:String x:Key="Launcher_AccountSetup_DefaultUserName">101650</sys:String>
+    <sys:String x:Key="Launcher_AccountSetup_DefaultDisplayName">Local launcher administrator</sys:String>
+    <sys:String x:Key="Launcher_AccountSetup_Title">Initialize local account</sys:String>
+    <sys:String x:Key="Launcher_AccountSetup_Description">This installation has no usable local account. Set up this machine's Launcher administrator account. The account file is written to local data and is not shipped in the generic installer.</sys:String>
+    <sys:String x:Key="Launcher_AccountSetup_DisplayNamePlaceholder">Display name</sys:String>
+    <sys:String x:Key="Launcher_AccountSetup_NewPasswordPlaceholder">New password</sys:String>
+    <sys:String x:Key="Launcher_AccountSetup_ConfirmPasswordPlaceholder">Confirm new password</sys:String>
+    <sys:String x:Key="Launcher_Button_InitializeAccount">Initialize and select process</sys:String>
+    <sys:String x:Key="Launcher_AccountCatalogCorrupt_Title">Local account file needs attention</sys:String>
+    <sys:String x:Key="Launcher_AccountCatalogCorrupt_Description">The account file exists but its content is invalid. To avoid overwriting site configuration, Launcher will not rewrite it automatically. Check the account file under data and restart.</sys:String>
 
     <sys:String x:Key="Launcher_Hero_VersionLabel">Software version</sys:String>
     <sys:String x:Key="Launcher_Hero_Title">Standard process launcher</sys:String>
@@ -160,6 +170,11 @@
     <sys:String x:Key="Launcher_ChangePassword_ConfirmMismatch">The two new passwords do not match.</sys:String>
 
     <sys:String x:Key="Launcher_Status_Initial">Please sign in with a local account first.</sys:String>
+    <sys:String x:Key="Launcher_Status_AccountSetupRequired">Initialize this machine's Launcher administrator account first.</sys:String>
+    <sys:String x:Key="Launcher_Status_AccountSetupSaving">Writing local account...</sys:String>
+    <sys:String x:Key="Launcher_Status_AccountSetupRetry">Fix the setup information and try again.</sys:String>
+    <sys:String x:Key="Launcher_Status_AccountSetupFailed">Local account setup failed.</sys:String>
+    <sys:String x:Key="Launcher_Status_AccountCatalogCorrupt">The local account file is corrupt or unreadable and will not be overwritten automatically.</sys:String>
     <sys:String x:Key="Launcher_Status_ValidatingLogin">Validating local account...</sys:String>
     <sys:String x:Key="Launcher_Status_LoginRetry">Fix the account information and try again.</sys:String>
     <sys:String x:Key="Launcher_Status_SelectProfile">Select the process client to start.</sys:String>
@@ -203,13 +218,16 @@
     <sys:String x:Key="Launcher_Error_UserNameRequired">Enter an account.</sys:String>
     <sys:String x:Key="Launcher_Error_PasswordRequired">Enter a password.</sys:String>
     <sys:String x:Key="Launcher_Error_AccountConfigurationUnavailable">Local account configuration is unavailable. Check the account file under the app data directory.</sys:String>
+    <sys:String x:Key="Launcher_Error_AccountSetupUnavailable">Local account setup is not available. Check the account file state.</sys:String>
     <sys:String x:Key="Launcher_Error_PasswordResetRequired">The local password uses an old hash format. Change it before signing in.</sys:String>
     <sys:String x:Key="Launcher_Error_AccountLocked">The local account is temporarily locked. Try again later.</sys:String>
     <sys:String x:Key="Launcher_Error_AccountDisabledOrMissing">The local account does not exist or is disabled.</sys:String>
     <sys:String x:Key="Launcher_Error_InvalidCredentials">The account or password is incorrect.</sys:String>
+    <sys:String x:Key="Launcher_Error_DisplayNameRequired">Enter a display name.</sys:String>
     <sys:String x:Key="Launcher_Error_NewPasswordRequired">New password is required.</sys:String>
     <sys:String x:Key="Launcher_Error_NewPasswordMinLength">New password must be at least 10 characters and include uppercase, lowercase, digit, and symbol characters.</sys:String>
     <sys:String x:Key="Launcher_Error_OldPasswordInvalid">Old password verification failed.</sys:String>
+    <sys:String x:Key="Launcher_Error_PasswordConfirmationMismatch">The two new passwords do not match.</sys:String>
     <sys:String x:Key="Launcher_Welcome_Anonymous">Not signed in</sys:String>
     <sys:String x:Key="Launcher_Welcome_Format">Signed in: {0}</sys:String>
     <sys:String x:Key="Launcher_ProfileSummary_Zero">0 processes</sys:String>

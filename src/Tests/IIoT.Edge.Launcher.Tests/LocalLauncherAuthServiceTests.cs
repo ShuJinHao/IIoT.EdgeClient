@@ -86,6 +86,150 @@ public sealed class LocalLauncherAuthServiceTests
     }
 
     [Fact]
+    public void InitializeLocalAccount_WhenCatalogIsMissing_ShouldWritePbkdf2HashAndAuthenticate()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), $"iiot-launcher-test-{Guid.NewGuid():N}");
+
+        try
+        {
+            var catalog = new LauncherAccountCatalog(tempDirectory);
+            var service = new LocalLauncherAuthService(catalog);
+
+            var setup = service.InitializeLocalAccount(
+                "101650",
+                "现场启动管理员",
+                "NewPass123!",
+                "NewPass123!");
+
+            Assert.True(setup.Success);
+            Assert.Equal(LauncherAccountCatalogStatus.Ready, catalog.GetCatalogStatus());
+            Assert.True(File.Exists(LauncherAccountCatalog.GetCatalogPath(tempDirectory)));
+            Assert.StartsWith("pbkdf2-sha256$v1$", catalog.LoadAccounts()[0].PasswordHash, StringComparison.Ordinal);
+            Assert.True(service.Authenticate("101650", "NewPass123!").Success);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void Authenticate_WhenCatalogOnlyHasEmptyHashSample_ShouldReturnConfigurationError()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), $"iiot-launcher-test-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateDirectory(tempDirectory);
+            File.WriteAllText(
+                LauncherAccountCatalog.GetCatalogPath(tempDirectory),
+                """
+                [
+                  {
+                    "userName": "101650",
+                    "displayName": "现场启动管理员",
+                    "passwordHash": "",
+                    "isEnabled": true
+                  }
+                ]
+                """);
+            var catalog = new LauncherAccountCatalog(tempDirectory);
+            var service = new LocalLauncherAuthService(catalog);
+
+            var result = service.Authenticate("101650", "NewPass123!");
+
+            Assert.Equal(LauncherAccountCatalogStatus.NeedsInitialSetup, catalog.GetCatalogStatus());
+            Assert.False(result.Success);
+            Assert.Equal(LocalLauncherAuthService.AccountConfigurationUnavailableError, result.ErrorMessage);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void InitializeLocalAccount_WhenCatalogIsReady_ShouldFailWithoutOverwriting()
+    {
+        var accounts = new StubLauncherAccountCatalog(
+        [
+            new LauncherAccountRecord(
+                "edge-admin",
+                "本地管理员",
+                LauncherPasswordHasher.HashPassword("ChangeMe123!"),
+                true)
+        ]);
+        var service = new LocalLauncherAuthService(accounts);
+
+        var setup = service.InitializeLocalAccount(
+            "101650",
+            "现场启动管理员",
+            "NewPass123!",
+            "NewPass123!");
+
+        Assert.False(setup.Success);
+        Assert.Equal(LocalLauncherAuthService.AccountSetupUnavailableError, setup.ErrorMessage);
+        Assert.Equal("edge-admin", Assert.Single(accounts.LoadAccounts()).UserName);
+    }
+
+    [Fact]
+    public void InitializeLocalAccount_WhenCatalogIsCorrupt_ShouldFailWithoutOverwriting()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), $"iiot-launcher-test-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateDirectory(tempDirectory);
+            var path = LauncherAccountCatalog.GetCatalogPath(tempDirectory);
+            File.WriteAllText(path, "{ invalid json");
+            var original = File.ReadAllText(path);
+            var catalog = new LauncherAccountCatalog(tempDirectory);
+            var service = new LocalLauncherAuthService(catalog);
+
+            var setup = service.InitializeLocalAccount(
+                "101650",
+                "现场启动管理员",
+                "NewPass123!",
+                "NewPass123!");
+
+            Assert.Equal(LauncherAccountCatalogStatus.Corrupt, catalog.GetCatalogStatus());
+            Assert.False(setup.Success);
+            Assert.Equal(LocalLauncherAuthService.AccountSetupUnavailableError, setup.ErrorMessage);
+            Assert.Equal(original, File.ReadAllText(path));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void InitializeLocalAccount_WhenPasswordsDoNotMatch_ShouldFail()
+    {
+        var accounts = new StubLauncherAccountCatalog([]);
+        var service = new LocalLauncherAuthService(accounts);
+
+        var setup = service.InitializeLocalAccount(
+            "101650",
+            "现场启动管理员",
+            "NewPass123!",
+            "OtherPass123!");
+
+        Assert.False(setup.Success);
+        Assert.Equal(LocalLauncherAuthService.PasswordConfirmationMismatchError, setup.ErrorMessage);
+        Assert.Empty(accounts.LoadAccounts());
+    }
+
+    [Fact]
     public void Authenticate_WhenPasswordDoesNotMatch_ShouldFail()
     {
         var accounts = new StubLauncherAccountCatalog(
@@ -270,7 +414,18 @@ public sealed class LocalLauncherAuthServiceTests
 
         public Exception? UpdatePasswordException { get; init; }
 
+        public LauncherAccountCatalogStatus GetCatalogStatus()
+            => _accounts.Count == 0
+                ? LauncherAccountCatalogStatus.Empty
+                : LauncherAccountCatalogStatus.Ready;
+
         public IReadOnlyList<LauncherAccountRecord> LoadAccounts() => _accounts;
+
+        public void InitializeAccount(string userName, string displayName, string passwordHash)
+        {
+            _accounts.Clear();
+            _accounts.Add(new LauncherAccountRecord(userName, displayName, passwordHash, true));
+        }
 
         public void UpdatePasswordHash(string userName, string passwordHash)
         {
@@ -313,8 +468,16 @@ public sealed class LocalLauncherAuthServiceTests
 
     private sealed class ThrowingLauncherAccountCatalog(Exception loadException) : ILauncherAccountCatalog
     {
+        public LauncherAccountCatalogStatus GetCatalogStatus()
+            => throw loadException;
+
         public IReadOnlyList<LauncherAccountRecord> LoadAccounts()
             => throw loadException;
+
+        public void InitializeAccount(string userName, string displayName, string passwordHash)
+        {
+            throw new InvalidOperationException("not available");
+        }
 
         public void UpdatePasswordHash(string userName, string passwordHash)
         {

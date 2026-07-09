@@ -261,6 +261,13 @@ public sealed class RepositoryHygieneTests
 
         Assert.DoesNotContain("Navigation_DashboardPreview_PlcLastError", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Text=\"{Binding LastError}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<edge:EdgeTablePanel", xaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"fill\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Title=\"{DynamicResource Navigation_DashboardPreview_PlcStatusTableTitle}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"DashboardPreviewPlcStatusGrid\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ViewportMaxHeight=\"0\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ItemsControl ItemsSource=\"{Binding PlcStatusTableItems}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ColumnDefinitions=\"82,98,70,82,82,56\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Command=\"{Binding DataContext.ShowPlcStatusDetailCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding SelectedPlcStatusDetail.LastErrorDetail}\"", xaml, StringComparison.Ordinal);
     }
@@ -1297,6 +1304,22 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
+    public void ShellWindowRegion_ShouldMatchStageCornerRadiusToken()
+    {
+        var root = FindRepositoryRoot();
+        var xaml = File.ReadAllText(ToFullPath(root, "src/Edge/IIoT.Edge.Shell/MainWindow.axaml"));
+        var code = File.ReadAllText(ToFullPath(root, "src/Edge/IIoT.Edge.Shell/MainWindow.axaml.cs"));
+
+        Assert.Contains("CornerRadius=\"{DynamicResource Edge.CornerRadius.Stage}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("private const int WindowCornerRadius = 16;", code, StringComparison.Ordinal);
+        Assert.Contains("Height=\"{DynamicResource Edge.Size.HeaderHeight}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Height=\"{DynamicResource Edge.Size.FooterHeight}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Width=\"{DynamicResource Edge.Size.RightRailWidth}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("RowDefinitions=\"50,*,30\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ColumnDefinitions=\"56,*,420\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void IoMappingPage_ShouldUseTemplateEditToolbarContract()
     {
         var root = FindRepositoryRoot();
@@ -1345,6 +1368,50 @@ public sealed class RepositoryHygieneTests
             Assert.Contains("ViewportMaxHeight=\"0\"", xaml, StringComparison.Ordinal);
             Assert.Contains("<edge:EdgeTablePanel.HeaderMetaContent>", xaml, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void CapacityView_ShouldUseFillTableLayoutAndSharedToolbar()
+    {
+        var root = FindRepositoryRoot();
+        var xaml = File.ReadAllText(ToFullPath(
+            root,
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Production/CapacityView/Views/CapacityViewPage.axaml"));
+
+        Assert.DoesNotContain("<edge:EdgeScrollHost>", xaml, StringComparison.Ordinal);
+        Assert.Contains("RowDefinitions=\"Auto,Auto,Auto,*,Auto\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<edge:EdgeTablePanel", xaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"fill\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsEmpty=\"{Binding IsDailyRecordsEmpty}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("EmptyTitle=\"{DynamicResource Navigation_Capacity_EmptyTitle}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<edge:EdgeTablePanel.HeaderMetaContent>", xaml, StringComparison.Ordinal);
+        Assert.Contains("<edge:EdgeActionToolbar>", xaml, StringComparison.Ordinal);
+        Assert.Contains("ViewportMaxHeight=\"0\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<sharedViews:EmptyStateView\r\n                        IsVisible=\"{Binding IsDailyRecordsEmpty}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<sharedViews:EmptyStateView\n                        IsVisible=\"{Binding IsDailyRecordsEmpty}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MinHeight=\"180\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding HasChartRecords}\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MonitorView_ShouldUseFillTablesInsteadOfFixedSmallHeights()
+    {
+        var root = FindRepositoryRoot();
+        var xaml = File.ReadAllText(ToFullPath(
+            root,
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Production/Monitor/Views/MonitorView.axaml"));
+
+        Assert.DoesNotContain("<edge:EdgeScrollHost", xaml, StringComparison.Ordinal);
+        Assert.Contains("RowDefinitions=\"Auto,*,*\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Title=\"{DynamicResource Navigation_Monitor_CurrentCellsTableTitle}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Title=\"{DynamicResource Navigation_Monitor_CellFieldsTableTitle}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"fill\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ViewportMaxHeight=\"0\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ViewportMaxHeight=\"220\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Grid MinHeight=\"260\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Grid MinHeight=\"150\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsEmpty=\"{Binding IsCellDebugEmpty}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsEmpty=\"{Binding IsSelectedCellEmpty}\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1860,6 +1927,39 @@ public sealed class RepositoryHygieneTests
         Assert.Contains("controls|EdgeSummaryItemsControl", metricsStyles, StringComparison.Ordinal);
         Assert.Contains("controls|EdgeStatusTimeline", statusStyles, StringComparison.Ordinal);
         Assert.Contains("SegmentWidth", statusStyles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SharedUi_StatusSegment_ShouldUseExistingCornerRadiusToken()
+    {
+        var root = FindRepositoryRoot();
+        var statusStyles = File.ReadAllText(ToFullPath(
+            root,
+            "src/Shared/IIoT.Edge.UI.Shared/Avalonia/Styles/Controls/Status.axaml"));
+
+        Assert.DoesNotContain("Edge.CornerRadius.Badge", statusStyles, StringComparison.Ordinal);
+        Assert.Contains("Edge.CornerRadius.Pill", statusStyles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ModuleDataPages_ShouldUseFillTableLayoutInsteadOfMinHeight()
+    {
+        var root = FindRepositoryRoot();
+        var pagePaths = new[]
+        {
+            "src/Modules/IIoT.Edge.Module.Homogenization/Presentation/Views/HomogenizationDataPage.axaml",
+            "src/Modules/IIoT.Edge.Module.DieCutting.Shared/Presentation/Views/DieCuttingDataPage.axaml"
+        };
+
+        foreach (var pagePath in pagePaths)
+        {
+            var xaml = File.ReadAllText(ToFullPath(root, pagePath));
+            Assert.Contains("<edge:EdgeTablePanel", xaml, StringComparison.Ordinal);
+            Assert.Contains("Classes=\"fill\"", xaml, StringComparison.Ordinal);
+            Assert.Contains("ViewportMaxHeight=\"0\"", xaml, StringComparison.Ordinal);
+            Assert.DoesNotContain("MinHeight=\"620\"", xaml, StringComparison.Ordinal);
+            Assert.DoesNotContain("MinHeight=\"520\"", xaml, StringComparison.Ordinal);
+        }
     }
 
     private static IReadOnlyList<string> GetProjectReferences(string projectPath)

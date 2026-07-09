@@ -4,6 +4,7 @@ using IIoT.Edge.Application.Abstractions.Updates;
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.Launcher.ViewModels;
+using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using Xunit;
 
 namespace IIoT.Edge.Launcher.Tests;
@@ -21,6 +22,27 @@ public sealed class LauncherWindowHeadlessTests
 
             Assert.True(window.FindControl<Control>("LoginPageRoot")?.IsVisible);
             Assert.False(window.FindControl<Control>("SelectionPageRoot")?.IsVisible);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void MainWindow_WhenLocalAccountSetupRequired_ShouldLoadSetupView()
+    {
+        var viewModel = CreateViewModel(LauncherAccountCatalogStatus.Missing);
+        var window = CreateMainWindow(viewModel);
+
+        try
+        {
+            window.Show();
+
+            Assert.True(window.FindControl<Control>("LoginPageRoot")?.IsVisible);
+            Assert.False(window.FindControl<Control>("LoginFormPanel")?.IsVisible);
+            Assert.True(window.FindControl<Control>("AccountSetupPanel")?.IsVisible);
+            Assert.NotNull(window.FindControl<Control>("InitializeAccountButton"));
         }
         finally
         {
@@ -64,7 +86,7 @@ public sealed class LauncherWindowHeadlessTests
             Assert.Null(window.FindControl<Control>("VersionHistoryButton"));
             Assert.NotNull(window.FindControl<Control>("UpdateCenterRowsGrid"));
             Assert.Null(window.FindControl<Control>("ClientReleasePanelRoot"));
-            Assert.Null(window.FindControl<ProgressBar>("ClientReleaseProgressBar"));
+            Assert.NotNull(window.FindControl<EdgeProgressBar>("ClientReleaseProgressBar"));
         }
         finally
         {
@@ -118,6 +140,7 @@ public sealed class LauncherWindowHeadlessTests
 
             Assert.True(window.FindControl<Control>("VersionHistoryWindowRoot")?.IsVisible);
             Assert.NotNull(window.FindControl<Control>("VersionHistoryRowsGrid"));
+            Assert.NotNull(window.FindControl<EdgeProgressBar>("VersionHistoryProgressBar"));
         }
         finally
         {
@@ -178,7 +201,7 @@ public sealed class LauncherWindowHeadlessTests
 
             Assert.Null(window.FindControl<Control>("CheckUpdatesButton"));
             Assert.Null(window.FindControl<Control>("ApplyUpdateButton"));
-            Assert.Null(window.FindControl<ProgressBar>("UpdateProgressBar"));
+            Assert.Null(window.FindControl<Control>("UpdateProgressBar"));
         }
         finally
         {
@@ -197,7 +220,8 @@ public sealed class LauncherWindowHeadlessTests
             Height = 720
         };
 
-    private static LauncherMainViewModel CreateViewModel()
+    private static LauncherMainViewModel CreateViewModel(
+        LauncherAccountCatalogStatus accountCatalogStatus = LauncherAccountCatalogStatus.Ready)
         => new(
             new StubLauncherProfileCatalog(
             [
@@ -212,7 +236,8 @@ public sealed class LauncherWindowHeadlessTests
                     "#000000")
             ]),
             new StubLocalAccountAuthService(LauncherAuthenticationResult.Passed(
-                new LauncherAccountRecord("operator", "operator", "hash", true))),
+                new LauncherAccountRecord("operator", "operator", "hash", true)),
+                accountCatalogStatus),
             new StubShellLaunchService());
 
     private sealed class StubLauncherProfileCatalog(IReadOnlyList<LauncherProfileDefinition> profiles)
@@ -221,10 +246,25 @@ public sealed class LauncherWindowHeadlessTests
         public IReadOnlyList<LauncherProfileDefinition> LoadProfiles() => profiles;
     }
 
-    private sealed class StubLocalAccountAuthService(LauncherAuthenticationResult loginResult)
+    private sealed class StubLocalAccountAuthService(
+        LauncherAuthenticationResult loginResult,
+        LauncherAccountCatalogStatus accountCatalogStatus)
         : ILocalLauncherAuthService
     {
+        public LauncherAccountCatalogStatus AccountCatalogStatus => accountCatalogStatus;
+
         public LauncherAuthenticationResult Authenticate(string? userName, string? password) => loginResult;
+
+        public LauncherAccountSetupResult InitializeLocalAccount(
+            string? userName,
+            string? displayName,
+            string? newPassword,
+            string? confirmPassword)
+            => LauncherAccountSetupResult.Passed(new LauncherAccountRecord(
+                userName ?? "operator",
+                displayName ?? "operator",
+                "hash",
+                true));
 
         public LauncherPasswordChangeResult ChangePassword(
             string? userName,

@@ -27,13 +27,16 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
     private const string AuthErrorUserNameRequired = "\u8bf7\u8f93\u5165\u8d26\u53f7\u3002";
     private const string AuthErrorPasswordRequired = "\u8bf7\u8f93\u5165\u5bc6\u7801\u3002";
     private const string AuthErrorAccountConfigurationUnavailable = LocalLauncherAuthService.AccountConfigurationUnavailableError;
+    private const string AuthErrorAccountSetupUnavailable = LocalLauncherAuthService.AccountSetupUnavailableError;
     private const string AuthErrorPasswordResetRequired = LocalLauncherAuthService.PasswordResetRequiredError;
     private const string AuthErrorAccountLocked = LocalLauncherAuthService.AccountLockedError;
     private const string AuthErrorAccountDisabledOrMissing = "\u672c\u5730\u8d26\u53f7\u4e0d\u5b58\u5728\uff0c\u6216\u5df2\u88ab\u7981\u7528\u3002";
     private const string AuthErrorInvalidCredentials = "\u8d26\u53f7\u6216\u5bc6\u7801\u4e0d\u6b63\u786e\u3002";
+    private const string AuthErrorDisplayNameRequired = LocalLauncherAuthService.DisplayNameRequiredError;
     private const string AuthErrorNewPasswordRequired = "\u65b0\u5bc6\u7801\u4e0d\u80fd\u4e3a\u7a7a\u3002";
     private const string AuthErrorNewPasswordMinLength = LauncherPasswordPolicy.RequirementMessage;
     private const string AuthErrorOldPasswordInvalid = "\u65e7\u5bc6\u7801\u6821\u9a8c\u5931\u8d25\u3002";
+    private const string AuthErrorPasswordConfirmationMismatch = LocalLauncherAuthService.PasswordConfirmationMismatchError;
 
     private string _errorMessage = string.Empty;
     private string _statusKey = "Launcher_Status_Initial";
@@ -46,8 +49,12 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
     private string _profileSummaryKey = "Launcher_ProfileSummary_Zero";
     private object[] _profileSummaryArgs = [];
     private string _profileSummaryText = string.Empty;
+    private string _accountSetupUserName = string.Empty;
+    private string _accountSetupDisplayName = string.Empty;
     private LauncherProfileCardViewModel? _selectedUpdateProfile;
     private bool _isAuthenticated;
+    private bool _accountSetupRequired;
+    private bool _accountCatalogCorrupt;
     private bool _isBusy;
 
     public LauncherMainViewModel(
@@ -87,6 +94,9 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         }
 
         AppVersionText = BuildAppVersionText();
+        _accountSetupUserName = Text("Launcher_AccountSetup_DefaultUserName");
+        _accountSetupDisplayName = Text("Launcher_AccountSetup_DefaultDisplayName");
+        RefreshAccountCatalogState();
         RefreshLocalizedState();
         RebuildUpdateRows();
     }
@@ -95,6 +105,10 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
     // 避免 Launcher 空屏(客户端规则·启动红线：必须能启动到可登录、可诊断、可修配置的 UI)。
     private sealed record LauncherLoginLoadResult(
         LauncherAuthenticationResult Authentication,
+        IReadOnlyList<LauncherProfileDefinition> Profiles);
+
+    private sealed record LauncherSetupLoadResult(
+        LauncherAccountSetupResult Setup,
         IReadOnlyList<LauncherProfileDefinition> Profiles);
 
     private LauncherLoginLoadResult LoadLoginState(string? userName, string? password)
@@ -107,6 +121,22 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
 
         var profiles = SelectVisibleProfiles(_profileCatalog.LoadProfiles()).ToArray();
         return new LauncherLoginLoadResult(authentication, profiles);
+    }
+
+    private LauncherSetupLoadResult LoadSetupState(
+        string? userName,
+        string? displayName,
+        string? newPassword,
+        string? confirmPassword)
+    {
+        var setup = _authService.InitializeLocalAccount(userName, displayName, newPassword, confirmPassword);
+        if (!setup.Success)
+        {
+            return new LauncherSetupLoadResult(setup, []);
+        }
+
+        var profiles = SelectVisibleProfiles(_profileCatalog.LoadProfiles()).ToArray();
+        return new LauncherSetupLoadResult(setup, profiles);
     }
 
     private IReadOnlyList<LauncherProfileDefinition> SelectVisibleProfiles(
@@ -173,6 +203,44 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         private set => SetProperty(ref _profileSummaryText, value);
     }
 
+    public string AccountSetupUserName
+    {
+        get => _accountSetupUserName;
+        set => SetProperty(ref _accountSetupUserName, value);
+    }
+
+    public string AccountSetupDisplayName
+    {
+        get => _accountSetupDisplayName;
+        set => SetProperty(ref _accountSetupDisplayName, value);
+    }
+
+    public bool AccountSetupRequired
+    {
+        get => _accountSetupRequired;
+        private set
+        {
+            if (SetProperty(ref _accountSetupRequired, value))
+            {
+                OnPropertyChanged(nameof(IsLoginMode));
+            }
+        }
+    }
+
+    public bool AccountCatalogCorrupt
+    {
+        get => _accountCatalogCorrupt;
+        private set
+        {
+            if (SetProperty(ref _accountCatalogCorrupt, value))
+            {
+                OnPropertyChanged(nameof(IsLoginMode));
+            }
+        }
+    }
+
+    public bool IsLoginMode => !IsAuthenticated && !AccountSetupRequired && !AccountCatalogCorrupt;
+
     public LauncherProfileCardViewModel? SelectedUpdateProfile
     {
         get => _selectedUpdateProfile;
@@ -198,7 +266,13 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
     public bool IsAuthenticated
     {
         get => _isAuthenticated;
-        private set => SetProperty(ref _isAuthenticated, value);
+        private set
+        {
+            if (SetProperty(ref _isAuthenticated, value))
+            {
+                OnPropertyChanged(nameof(IsLoginMode));
+            }
+        }
     }
 
     public bool IsBusy
@@ -226,32 +300,57 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
                 return;
             }
 
-            _allProfiles.Clear();
-            _allProfiles.AddRange(loginState.Profiles);
-            _allProfileCards.Clear();
-            foreach (var profile in _allProfiles)
-            {
-                var card = new LauncherProfileCardViewModel(profile, _languageService);
-                card.SetReady();
-                _allProfileCards.Add(card);
-            }
-
-            IsAuthenticated = true;
-            SetWelcome(
-                "Launcher_Welcome_Format",
-                result.DisplayName ?? result.UserName ?? string.Empty);
-            ProfileSearchText = string.Empty;
-            ApplyProfileFilter();
-            SelectedUpdateProfile = _allProfileCards.FirstOrDefault();
-            SetStatus("Launcher_Status_SelectProfile");
-            _ = HostUpdatePanel.CheckForUpdatesAsync();
-            _ = ClientReleasePanel.ReportProfilesSilentlyAsync(_allProfiles.ToArray());
+            ApplyAuthenticatedState(
+                result.DisplayName ?? result.UserName ?? string.Empty,
+                loginState.Profiles);
         }
         catch (Exception ex)
         {
             ResetToLoggedOutState();
             ErrorMessage = ex.Message;
             SetStatus("Launcher_Status_ProfileLoadFailed");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    public async Task<bool> InitializeLocalAccountAsync(
+        string? userName,
+        string? displayName,
+        string? newPassword,
+        string? confirmPassword)
+    {
+        ErrorMessage = string.Empty;
+        SetStatus("Launcher_Status_AccountSetupSaving");
+        IsBusy = true;
+
+        try
+        {
+            var setupState = await Task.Run(() => LoadSetupState(
+                userName,
+                displayName,
+                newPassword,
+                confirmPassword));
+            if (!setupState.Setup.Success || setupState.Setup.Account is null)
+            {
+                ErrorMessage = LocalizeAuthenticationError(setupState.Setup.ErrorMessage)
+                    ?? Text("Launcher_Status_AccountSetupFailed");
+                RefreshAccountCatalogState();
+                SetStatus("Launcher_Status_AccountSetupRetry");
+                return false;
+            }
+
+            ApplyAuthenticatedState(setupState.Setup.Account.DisplayName, setupState.Profiles);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ResetToLoggedOutState();
+            ErrorMessage = ex.Message;
+            SetStatus("Launcher_Status_ProfileLoadFailed");
+            return false;
         }
         finally
         {
@@ -388,6 +487,67 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         SelectedUpdateProfile = null;
         ClientReleasePanel.Reset();
         SetProfileSummary("Launcher_ProfileSummary_Zero");
+    }
+
+    private void ApplyAuthenticatedState(
+        string displayName,
+        IReadOnlyList<LauncherProfileDefinition> profiles)
+    {
+        _allProfiles.Clear();
+        _allProfiles.AddRange(profiles);
+        _allProfileCards.Clear();
+        foreach (var profile in _allProfiles)
+        {
+            var card = new LauncherProfileCardViewModel(profile, _languageService);
+            card.SetReady();
+            _allProfileCards.Add(card);
+        }
+
+        AccountSetupRequired = false;
+        AccountCatalogCorrupt = false;
+        IsAuthenticated = true;
+        SetWelcome("Launcher_Welcome_Format", displayName);
+        ProfileSearchText = string.Empty;
+        ApplyProfileFilter();
+        SelectedUpdateProfile = _allProfileCards.FirstOrDefault();
+        SetStatus("Launcher_Status_SelectProfile");
+        _ = HostUpdatePanel.CheckForUpdatesAsync();
+        _ = ClientReleasePanel.ReportProfilesSilentlyAsync(_allProfiles.ToArray());
+    }
+
+    private void RefreshAccountCatalogState()
+    {
+        LauncherAccountCatalogStatus status;
+        try
+        {
+            status = _authService.AccountCatalogStatus;
+        }
+        catch
+        {
+            status = LauncherAccountCatalogStatus.Corrupt;
+        }
+
+        AccountSetupRequired = status is LauncherAccountCatalogStatus.Missing
+            or LauncherAccountCatalogStatus.Empty
+            or LauncherAccountCatalogStatus.NeedsInitialSetup;
+        AccountCatalogCorrupt = status == LauncherAccountCatalogStatus.Corrupt;
+
+        if (AccountSetupRequired)
+        {
+            SetStatus("Launcher_Status_AccountSetupRequired");
+            return;
+        }
+
+        if (AccountCatalogCorrupt)
+        {
+            SetStatus("Launcher_Status_AccountCatalogCorrupt");
+            return;
+        }
+
+        if (!IsAuthenticated)
+        {
+            SetStatus("Launcher_Status_Initial");
+        }
     }
 
     public void Dispose()
@@ -670,13 +830,16 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
             AuthErrorUserNameRequired => Text("Launcher_Error_UserNameRequired"),
             AuthErrorPasswordRequired => Text("Launcher_Error_PasswordRequired"),
             AuthErrorAccountConfigurationUnavailable => Text("Launcher_Error_AccountConfigurationUnavailable"),
+            AuthErrorAccountSetupUnavailable => Text("Launcher_Error_AccountSetupUnavailable"),
             AuthErrorPasswordResetRequired => Text("Launcher_Error_PasswordResetRequired"),
             AuthErrorAccountLocked => Text("Launcher_Error_AccountLocked"),
             AuthErrorAccountDisabledOrMissing => Text("Launcher_Error_AccountDisabledOrMissing"),
             AuthErrorInvalidCredentials => Text("Launcher_Error_InvalidCredentials"),
+            AuthErrorDisplayNameRequired => Text("Launcher_Error_DisplayNameRequired"),
             AuthErrorNewPasswordRequired => Text("Launcher_Error_NewPasswordRequired"),
             AuthErrorNewPasswordMinLength => Text("Launcher_Error_NewPasswordMinLength"),
             AuthErrorOldPasswordInvalid => Text("Launcher_Error_OldPasswordInvalid"),
+            AuthErrorPasswordConfirmationMismatch => Text("Launcher_Error_PasswordConfirmationMismatch"),
             _ => message
         };
     }

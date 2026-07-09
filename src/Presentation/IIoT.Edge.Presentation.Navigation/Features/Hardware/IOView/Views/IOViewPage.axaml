@@ -133,13 +133,15 @@
                                             </TextBlock>
                                         </edge:EdgeTablePanel.HeaderMetaContent>
                                         <edge:EdgeTablePanel.ActionContent>
-                                            <edge:EdgeActionButton
-                                                Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                Content="{DynamicResource Navigation_Button_ReadIoData}"
-                                                Icon="{StaticResource Edge.Icon.Read}"
-                                                IsVisible="{Binding CanManualRead}"
-                                                Kind="Primary"
-                                                Size="Compact" />
+                                            <edge:EdgeActionToolbar>
+                                                <edge:EdgeActionButton
+                                                    Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    Content="{DynamicResource Navigation_Button_ReadIoData}"
+                                                    Icon="{StaticResource Edge.Icon.Read}"
+                                                    IsVisible="{Binding CanManualRead}"
+                                                    Kind="Primary"
+                                                    Size="Compact" />
+                                            </edge:EdgeActionToolbar>
                                         </edge:EdgeTablePanel.ActionContent>
                                         <edge:EdgeDataGrid
                                             AutoGenerateColumns="False"
@@ -189,13 +191,15 @@
                                             </TextBlock>
                                         </edge:EdgeTablePanel.HeaderMetaContent>
                                         <edge:EdgeTablePanel.ActionContent>
-                                            <edge:EdgeActionButton
-                                                Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                Content="{DynamicResource Navigation_Button_ReadIoData}"
-                                                Icon="{StaticResource Edge.Icon.Read}"
-                                                IsVisible="{Binding CanManualRead}"
-                                                Kind="Primary"
-                                                Size="Compact" />
+                                            <edge:EdgeActionToolbar>
+                                                <edge:EdgeActionButton
+                                                    Command="{Binding DataContext.ManualReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    Content="{DynamicResource Navigation_Button_ReadIoData}"
+                                                    Icon="{StaticResource Edge.Icon.Read}"
+                                                    IsVisible="{Binding CanManualRead}"
+                                                    Kind="Primary"
+                                                    Size="Compact" />
+                                            </edge:EdgeActionToolbar>
                                         </edge:EdgeTablePanel.ActionContent>
                                         <edge:EdgeDataGrid
                                             AutoGenerateColumns="False"

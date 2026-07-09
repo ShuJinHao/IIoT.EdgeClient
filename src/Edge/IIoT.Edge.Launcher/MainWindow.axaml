@@ -94,53 +94,137 @@
                                     TextWrapping="Wrap" />
                             </StackPanel>
 
-                            <StackPanel
+                            <Grid
                                 Grid.Row="1"
-                                VerticalAlignment="Center"
-                                Spacing="14">
-                                <edge:EdgeTextBox
-                                    x:Name="UserNameTextBox"
-                                    Classes="edge-text-box dialog-input"
-                                    HorizontalAlignment="Stretch"
-                                    Width="NaN"
-                                    PlaceholderText="{DynamicResource Launcher_Login_UserNamePlaceholder}" />
-                                <edge:EdgeTextBox
-                                    x:Name="PasswordInput"
-                                    Classes="edge-text-box dialog-input"
-                                    HorizontalAlignment="Stretch"
-                                    Width="NaN"
-                                    PasswordChar="●"
-                                    PlaceholderText="{DynamicResource Launcher_Login_PasswordPlaceholder}" />
+                                VerticalAlignment="Center">
+                                <StackPanel
+                                    x:Name="LoginFormPanel"
+                                    IsVisible="{Binding IsLoginMode}"
+                                    Spacing="14">
+                                    <edge:EdgeTextBox
+                                        x:Name="UserNameTextBox"
+                                        Classes="edge-text-box dialog-input"
+                                        HorizontalAlignment="Stretch"
+                                        Width="NaN"
+                                        PlaceholderText="{DynamicResource Launcher_Login_UserNamePlaceholder}" />
+                                    <edge:EdgeTextBox
+                                        x:Name="PasswordInput"
+                                        Classes="edge-text-box dialog-input"
+                                        HorizontalAlignment="Stretch"
+                                        Width="NaN"
+                                        PasswordChar="●"
+                                        PlaceholderText="{DynamicResource Launcher_Login_PasswordPlaceholder}" />
 
-                                <TextBlock
-                                    Classes="launcher-inline-error"
-                                    Text="{Binding ErrorMessage}"
-                                    TextWrapping="Wrap" />
-                                <TextBlock
-                                    Classes="launcher-inline-status"
-                                    Text="{Binding StatusMessage}"
-                                    TextWrapping="Wrap" />
+                                    <TextBlock
+                                        Classes="launcher-inline-error"
+                                        Text="{Binding ErrorMessage}"
+                                        TextWrapping="Wrap" />
+                                    <TextBlock
+                                        Classes="launcher-inline-status"
+                                        Text="{Binding StatusMessage}"
+                                        TextWrapping="Wrap" />
 
-                                <edge:EdgeActionButton
-                                    Click="LoginButton_Click"
-                                    HorizontalContentAlignment="Center"
-                                    HorizontalAlignment="Stretch"
-                                    IsEnabled="{Binding !IsBusy}"
-                                    Kind="Primary"
-                                    MinHeight="44"
-                                    VerticalContentAlignment="Center"
-                                    Content="{DynamicResource Launcher_Button_Login}" />
+                                    <edge:EdgeActionButton
+                                        Click="LoginButton_Click"
+                                        HorizontalContentAlignment="Center"
+                                        HorizontalAlignment="Stretch"
+                                        IsEnabled="{Binding !IsBusy}"
+                                        Kind="Primary"
+                                        MinHeight="44"
+                                        VerticalContentAlignment="Center"
+                                        Content="{DynamicResource Launcher_Button_Login}" />
 
-                                <edge:EdgeActionButton
-                                    Click="ChangePasswordButton_Click"
-                                    HorizontalContentAlignment="Center"
-                                    HorizontalAlignment="Stretch"
-                                    IsEnabled="{Binding !IsBusy}"
-                                    Kind="Secondary"
-                                    MinHeight="44"
-                                    VerticalContentAlignment="Center"
-                                    Content="{DynamicResource Launcher_Button_ChangePassword}" />
-                            </StackPanel>
+                                    <edge:EdgeActionButton
+                                        Click="ChangePasswordButton_Click"
+                                        HorizontalContentAlignment="Center"
+                                        HorizontalAlignment="Stretch"
+                                        IsEnabled="{Binding !IsBusy}"
+                                        Kind="Secondary"
+                                        MinHeight="44"
+                                        VerticalContentAlignment="Center"
+                                        Content="{DynamicResource Launcher_Button_ChangePassword}" />
+                                </StackPanel>
+
+                                <StackPanel
+                                    x:Name="AccountSetupPanel"
+                                    IsVisible="{Binding AccountSetupRequired}"
+                                    Spacing="12">
+                                    <TextBlock
+                                        Classes="launcher-panel-title"
+                                        Text="{DynamicResource Launcher_AccountSetup_Title}"
+                                        TextWrapping="Wrap" />
+                                    <TextBlock
+                                        Classes="launcher-panel-description"
+                                        Text="{DynamicResource Launcher_AccountSetup_Description}"
+                                        TextWrapping="Wrap" />
+                                    <edge:EdgeTextBox
+                                        x:Name="AccountSetupUserNameTextBox"
+                                        Classes="edge-text-box dialog-input"
+                                        HorizontalAlignment="Stretch"
+                                        Width="NaN"
+                                        Text="{Binding AccountSetupUserName, Mode=TwoWay}"
+                                        PlaceholderText="{DynamicResource Launcher_Login_UserNamePlaceholder}" />
+                                    <edge:EdgeTextBox
+                                        x:Name="AccountSetupDisplayNameTextBox"
+                                        Classes="edge-text-box dialog-input"
+                                        HorizontalAlignment="Stretch"
+                                        Width="NaN"
+                                        Text="{Binding AccountSetupDisplayName, Mode=TwoWay}"
+                                        PlaceholderText="{DynamicResource Launcher_AccountSetup_DisplayNamePlaceholder}" />
+                                    <edge:EdgeTextBox
+                                        x:Name="AccountSetupPasswordInput"
+                                        Classes="edge-text-box dialog-input"
+                                        HorizontalAlignment="Stretch"
+                                        Width="NaN"
+                                        PasswordChar="●"
+                                        PlaceholderText="{DynamicResource Launcher_AccountSetup_NewPasswordPlaceholder}" />
+                                    <edge:EdgeTextBox
+                                        x:Name="AccountSetupConfirmPasswordInput"
+                                        Classes="edge-text-box dialog-input"
+                                        HorizontalAlignment="Stretch"
+                                        Width="NaN"
+                                        PasswordChar="●"
+                                        PlaceholderText="{DynamicResource Launcher_AccountSetup_ConfirmPasswordPlaceholder}" />
+
+                                    <TextBlock
+                                        Classes="launcher-inline-error"
+                                        Text="{Binding ErrorMessage}"
+                                        TextWrapping="Wrap" />
+                                    <TextBlock
+                                        Classes="launcher-inline-status"
+                                        Text="{Binding StatusMessage}"
+                                        TextWrapping="Wrap" />
+
+                                    <edge:EdgeActionButton
+                                        x:Name="InitializeAccountButton"
+                                        Click="InitializeAccountButton_Click"
+                                        HorizontalContentAlignment="Center"
+                                        HorizontalAlignment="Stretch"
+                                        IsEnabled="{Binding !IsBusy}"
+                                        Kind="Primary"
+                                        MinHeight="44"
+                                        VerticalContentAlignment="Center"
+                                        Content="{DynamicResource Launcher_Button_InitializeAccount}" />
+                                </StackPanel>
+
+                                <StackPanel
+                                    x:Name="AccountCatalogCorruptPanel"
+                                    IsVisible="{Binding AccountCatalogCorrupt}"
+                                    Spacing="12">
+                                    <TextBlock
+                                        Classes="launcher-panel-title"
+                                        Text="{DynamicResource Launcher_AccountCatalogCorrupt_Title}"
+                                        TextWrapping="Wrap" />
+                                    <TextBlock
+                                        Classes="launcher-panel-description"
+                                        Text="{DynamicResource Launcher_AccountCatalogCorrupt_Description}"
+                                        TextWrapping="Wrap" />
+                                    <TextBlock
+                                        Classes="launcher-inline-error"
+                                        Text="{Binding StatusMessage}"
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Grid>
 
                             <edge:EdgeNoticeBar
                                 Grid.Row="2"
@@ -260,9 +344,9 @@
                 <Grid
                     x:Name="SelectionPageRoot"
                     IsVisible="False"
-                    RowDefinitions="Auto,Auto,Auto,*">
+                    RowDefinitions="Auto,2*,3*"
+                    RowSpacing="14">
                     <edge:EdgeCard
-                        Grid.Row="1"
                         Margin="0,0,0,14"
                         PaddingMode="Compact"
                         Surface="Card">
@@ -303,11 +387,11 @@
 
                     <edge:EdgeCard
                         x:Name="UpdateCenterPanelRoot"
-                        Grid.Row="2"
+                        Grid.Row="1"
                         Margin="0,0,0,14"
                         PaddingMode="Compact"
                         Surface="Card">
-                        <Grid RowDefinitions="Auto,*" RowSpacing="14">
+                        <Grid RowDefinitions="Auto,Auto,Auto,Auto,*" RowSpacing="10">
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                                 <edge:EdgeSectionHeader
                                     Title="{DynamicResource Launcher_UpdateCenter_Title}"
@@ -317,36 +401,38 @@
                                     Grid.Column="1"
                                     Click="RefreshUpdateCenterButton_Click"
                                     Content="{DynamicResource Launcher_UpdateCenter_ButtonRefresh}"
-                                    Icon="{StaticResource Edge.Icon.Sync}"
+                                    Icon="{StaticResource Edge.Icon.Refresh}"
                                     IsEnabled="{Binding HostUpdatePanel.CanCheckUpdates}"
                                     Kind="Secondary"
                                     Size="Compact" />
                             </Grid>
 
-                            <StackPanel Grid.Row="1" Spacing="10">
-                                <TextBlock
-                                    Classes="launcher-inline-status"
-                                    Text="{Binding ClientReleasePanel.StatusMessage}"
-                                    TextWrapping="Wrap" />
-                                <ProgressBar
-                                    Height="4"
-                                    HorizontalAlignment="Stretch"
-                                    IsVisible="{Binding ClientReleasePanel.IsProgressVisible}"
-                                    Maximum="100"
-                                    Minimum="0"
-                                    Value="{Binding ClientReleasePanel.Progress}" />
-                                <TextBlock
-                                    Classes="launcher-inline-status"
-                                    Text="{Binding ClientReleasePanel.DetailText}"
-                                    TextWrapping="Wrap" />
+                            <TextBlock
+                                Grid.Row="1"
+                                Classes="launcher-inline-status"
+                                Text="{Binding ClientReleasePanel.StatusMessage}"
+                                TextWrapping="Wrap" />
+                            <edge:EdgeProgressBar
+                                x:Name="ClientReleaseProgressBar"
+                                Grid.Row="2"
+                                IsVisible="{Binding ClientReleasePanel.IsProgressVisible}"
+                                Maximum="100"
+                                Minimum="0"
+                                Value="{Binding ClientReleasePanel.Progress}" />
+                            <TextBlock
+                                Grid.Row="3"
+                                Classes="launcher-inline-status"
+                                Text="{Binding ClientReleasePanel.DetailText}"
+                                TextWrapping="Wrap" />
 
-                                <edge:EdgeDataGrid
-                                    x:Name="UpdateCenterRowsGrid"
-                                    MaxHeight="260"
-                                    HeadersVisibility="Column"
-                                    IsReadOnly="True"
-                                    ItemsSource="{Binding UpdateRows}">
-                                    <edge:EdgeDataGrid.Columns>
+                            <edge:EdgeDataGrid
+                                x:Name="UpdateCenterRowsGrid"
+                                Grid.Row="4"
+                                HeadersVisibility="Column"
+                                IsReadOnly="True"
+                                ItemsSource="{Binding UpdateRows}"
+                                ViewportMaxHeight="0">
+                                <edge:EdgeDataGrid.Columns>
                                         <edge:EdgeTemplateColumn
                                             Header="{DynamicResource Launcher_UpdateCenter_ColumnComponent}"
                                             MinWidth="150"
@@ -486,14 +572,13 @@
                                                 </DataTemplate>
                                             </edge:EdgeTemplateColumn.CellTemplate>
                                         </edge:EdgeTemplateColumn>
-                                    </edge:EdgeDataGrid.Columns>
-                                </edge:EdgeDataGrid>
-                            </StackPanel>
+                                </edge:EdgeDataGrid.Columns>
+                            </edge:EdgeDataGrid>
                         </Grid>
                     </edge:EdgeCard>
 
                     <edge:EdgeScrollHost
-                        Grid.Row="3"
+                        Grid.Row="2"
                         HorizontalScrollBarVisibility="Disabled"
                         VerticalScrollBarVisibility="Auto">
                         <ItemsControl ItemsSource="{Binding Profiles}">

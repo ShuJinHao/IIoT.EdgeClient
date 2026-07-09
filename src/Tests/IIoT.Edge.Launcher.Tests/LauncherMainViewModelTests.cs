@@ -31,6 +31,68 @@ public sealed class LauncherMainViewModelTests
     }
 
     [Fact]
+    public void Constructor_WhenAccountCatalogIsMissing_ShouldRequireInitialSetup()
+    {
+        var viewModel = new LauncherMainViewModel(
+            new StubLauncherProfileCatalog([Profile("shell", "Shell")]),
+            new StubLocalAccountAuthService(
+                LauncherAuthenticationResult.Failed("not used"),
+                accountCatalogStatus: LauncherAccountCatalogStatus.Missing),
+            new StubShellLaunchService());
+
+        Assert.True(viewModel.AccountSetupRequired);
+        Assert.False(viewModel.AccountCatalogCorrupt);
+        Assert.False(viewModel.IsLoginMode);
+        Assert.Equal("Launcher_Status_AccountSetupRequired", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public void Constructor_WhenAccountCatalogIsCorrupt_ShouldBlockAutoOverwrite()
+    {
+        var viewModel = new LauncherMainViewModel(
+            new StubLauncherProfileCatalog([Profile("shell", "Shell")]),
+            new StubLocalAccountAuthService(
+                LauncherAuthenticationResult.Failed("not used"),
+                accountCatalogStatus: LauncherAccountCatalogStatus.Corrupt),
+            new StubShellLaunchService());
+
+        Assert.False(viewModel.AccountSetupRequired);
+        Assert.True(viewModel.AccountCatalogCorrupt);
+        Assert.False(viewModel.IsLoginMode);
+        Assert.Equal("Launcher_Status_AccountCatalogCorrupt", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public async Task InitializeLocalAccountAsync_WhenSetupSucceeds_ShouldLoadProfilesAndSetState()
+    {
+        var viewModel = new LauncherMainViewModel(
+            new StubLauncherProfileCatalog(
+            [
+                Profile("shell", "Shell"),
+                Profile("simulator", "Simulator")
+            ]),
+            new StubLocalAccountAuthService(
+                LauncherAuthenticationResult.Failed("not used"),
+                accountCatalogStatus: LauncherAccountCatalogStatus.Missing,
+                setupResult: LauncherAccountSetupResult.Passed(Account("101650", "现场启动管理员"))),
+            new StubShellLaunchService());
+
+        var initialized = await viewModel.InitializeLocalAccountAsync(
+            "101650",
+            "现场启动管理员",
+            "NewPass123!",
+            "NewPass123!");
+
+        Assert.True(initialized);
+        Assert.True(viewModel.IsAuthenticated);
+        Assert.False(viewModel.AccountSetupRequired);
+        Assert.False(viewModel.AccountCatalogCorrupt);
+        Assert.False(viewModel.IsLoginMode);
+        Assert.Equal(2, viewModel.Profiles.Count);
+        Assert.Contains("现场启动管理员", viewModel.WelcomeText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task LoginAsync_ShouldOnlyShowProvisionedProfiles()
     {
         var profiles = new[]
@@ -921,11 +983,28 @@ public sealed class LauncherMainViewModelTests
 
     private sealed class StubLocalAccountAuthService(
         LauncherAuthenticationResult loginResult,
-        LauncherPasswordChangeResult? passwordChangeResult = null) : ILocalLauncherAuthService
+        LauncherPasswordChangeResult? passwordChangeResult = null,
+        LauncherAccountCatalogStatus accountCatalogStatus = LauncherAccountCatalogStatus.Ready,
+        LauncherAccountSetupResult? setupResult = null) : ILocalLauncherAuthService
     {
+        public LauncherAccountCatalogStatus AccountCatalogStatus => accountCatalogStatus;
+
         public LauncherAuthenticationResult Authenticate(string? userName, string? password)
         {
             return loginResult;
+        }
+
+        public LauncherAccountSetupResult InitializeLocalAccount(
+            string? userName,
+            string? displayName,
+            string? newPassword,
+            string? confirmPassword)
+        {
+            return setupResult ?? LauncherAccountSetupResult.Passed(new LauncherAccountRecord(
+                userName ?? "operator",
+                displayName ?? "operator",
+                "hash",
+                true));
         }
 
         public LauncherPasswordChangeResult ChangePassword(

@@ -22,9 +22,10 @@
         BoxShadow="{DynamicResource Edge.Shadow.App}"
         ClipToBounds="True"
         CornerRadius="{DynamicResource Edge.CornerRadius.Stage}">
-        <Grid RowDefinitions="50,*,30">
+        <Grid RowDefinitions="Auto,*,Auto">
             <shellViews:ShellHeaderView
                 x:Name="ShellHeader"
+                Height="{DynamicResource Edge.Size.HeaderHeight}"
                 HorizontalAlignment="Stretch"
                 Width="{Binding Bounds.Width, ElementName=ShellFrame}"
                 DataContext="{Binding}" />
@@ -32,7 +33,7 @@
             <Grid
                 Grid.Row="1"
                 ClipToBounds="True"
-                ColumnDefinitions="56,*,420"
+                ColumnDefinitions="56,*,Auto"
                 Margin="0,6,16,0">
                 <ContentControl
                     x:Name="NavigationRailHost"
@@ -51,6 +52,7 @@
                 <Grid
                     Grid.Column="2"
                     ClipToBounds="True"
+                    Width="{DynamicResource Edge.Size.RightRailWidth}"
                     Margin="12,0,0,0"
                     RowDefinitions="Auto,12,*">
                     <ContentControl
@@ -67,6 +69,7 @@
             <shellViews:ShellFooterView
                 x:Name="ShellFooter"
                 Grid.Row="2"
+                Height="{DynamicResource Edge.Size.FooterHeight}"
                 DataContext="{Binding}" />
         </Grid>
     </Border>

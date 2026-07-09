@@ -24,6 +24,10 @@ public sealed class LauncherAccountCatalogInitializer : ILauncherAccountCatalogI
     public void EnsureCatalogExists()
     {
         // 缺账号文件必须进入首次配置/重置流程，不能静默复制 sample 账号。
-        _ = _paths;
+        var directory = Path.GetDirectoryName(_paths.CatalogPath);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
     }
 }

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using IIoT.Edge.Launcher.Models;
+using IIoT.Edge.SharedKernel.Security;
 
 namespace IIoT.Edge.Launcher.Services;
 
@@ -36,6 +37,62 @@ public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
         return Path.Combine(baseDirectory, catalogFileName);
     }
 
+    public LauncherAccountCatalogStatus GetCatalogStatus()
+    {
+        if (!File.Exists(_catalogPath))
+        {
+            return LauncherAccountCatalogStatus.Missing;
+        }
+
+        try
+        {
+            var entries = LoadFileEntries();
+            if (entries.Count == 0)
+            {
+                return LauncherAccountCatalogStatus.Empty;
+            }
+
+            var validPasswordHashCount = 0;
+            var emptyPasswordHashCount = 0;
+            foreach (var entry in entries)
+            {
+                if (string.IsNullOrWhiteSpace(entry.UserName)
+                    || string.IsNullOrWhiteSpace(entry.DisplayName))
+                {
+                    return LauncherAccountCatalogStatus.Corrupt;
+                }
+
+                if (string.IsNullOrWhiteSpace(entry.PasswordHash))
+                {
+                    emptyPasswordHashCount++;
+                    continue;
+                }
+
+                var account = Map(entry);
+                if (LauncherPasswordHasher.Verify(string.Empty, account.PasswordHash)
+                    == EdgePasswordVerificationResult.InvalidHash)
+                {
+                    return LauncherAccountCatalogStatus.Corrupt;
+                }
+
+                validPasswordHashCount++;
+            }
+
+            if (validPasswordHashCount > 0 && emptyPasswordHashCount == 0)
+            {
+                return LauncherAccountCatalogStatus.Ready;
+            }
+
+            return validPasswordHashCount == 0
+                ? LauncherAccountCatalogStatus.NeedsInitialSetup
+                : LauncherAccountCatalogStatus.Corrupt;
+        }
+        catch (Exception ex) when (IsCorruptCatalogException(ex))
+        {
+            return LauncherAccountCatalogStatus.Corrupt;
+        }
+    }
+
     public IReadOnlyList<LauncherAccountRecord> LoadAccounts()
     {
         if (!File.Exists(_catalogPath))
@@ -50,6 +107,34 @@ public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
         }
 
         return entries.Select(Map).ToArray();
+    }
+
+    public void InitializeAccount(string userName, string displayName, string passwordHash)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(passwordHash);
+
+        var status = GetCatalogStatus();
+        if (status is not LauncherAccountCatalogStatus.Missing
+            and not LauncherAccountCatalogStatus.Empty
+            and not LauncherAccountCatalogStatus.NeedsInitialSetup)
+        {
+            throw new InvalidOperationException("本地账号文件已存在或已损坏，不能执行首次初始化。");
+        }
+
+        WriteFileEntries(
+        [
+            new LauncherAccountFileEntry
+            {
+                UserName = userName.Trim(),
+                DisplayName = displayName.Trim(),
+                PasswordHash = passwordHash.Trim(),
+                IsEnabled = true,
+                AccessFailedCount = 0,
+                LockoutUntilUtc = null
+            }
+        ]);
     }
 
     public void UpdatePasswordHash(string userName, string passwordHash)
@@ -94,9 +179,34 @@ public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
 
     private void WriteFileEntries(List<LauncherAccountFileEntry> entries)
     {
-        File.WriteAllText(
-            _catalogPath,
-            JsonSerializer.Serialize(entries, JsonOptionsIndented()));
+        var directory = Path.GetDirectoryName(_catalogPath);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        var tempPath = Path.Combine(
+            string.IsNullOrWhiteSpace(directory) ? "." : directory,
+            $".{Path.GetFileName(_catalogPath)}.{Guid.NewGuid():N}.tmp");
+
+        File.WriteAllText(tempPath, JsonSerializer.Serialize(entries, JsonOptionsIndented()));
+        try
+        {
+            if (File.Exists(_catalogPath))
+            {
+                File.Replace(tempPath, _catalogPath, null);
+                return;
+            }
+
+            File.Move(tempPath, _catalogPath);
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+        }
     }
 
     private static LauncherAccountRecord Map(LauncherAccountFileEntry entry)
@@ -150,6 +260,12 @@ public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
         return JsonSerializer.Deserialize<List<LauncherAccountFileEntry>>(json, JsonOptions())
             ?? [];
     }
+
+    private static bool IsCorruptCatalogException(Exception ex)
+        => ex is IOException
+            or UnauthorizedAccessException
+            or InvalidOperationException
+            or JsonException;
 
     private sealed class LauncherAccountFileEntry
     {

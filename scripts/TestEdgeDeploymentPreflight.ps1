@@ -460,10 +460,10 @@ function Write-NextCommand {
     Write-Host 'Recommended next command:'
     switch ($Mode) {
         'Host' {
-            Write-Host '  pwsh ./scripts/LocalPublishAndDeploy.ps1 -Channel stable -Transport http -CloudApiBaseUrl http://<cloud-gateway-host>:<port>/api/v1 -ReleaseNotesPath ./release-notes.md -UploadRateLimitMbps 100'
+            Write-Host '  pwsh ./scripts/LocalPublishAndDeploy.ps1 -Channel stable -Transport http -CloudApiBaseUrl http://<cloud-gateway-host>:<port>/api/v1 -ReleaseNotesPath ./release-notes.md -UploadRateLimitMbps 1000'
         }
         'Plugin' {
-            Write-Host "  pwsh ./scripts/PublishEdgePluginRelease.ps1 -ModuleId $ModuleId -CloudApiBaseUrl http://<cloud-gateway-host>:<port>/api/v1 -ReleaseNotesPath ./release-notes.md -UploadRateLimitMbps 100"
+            Write-Host "  pwsh ./scripts/PublishEdgePluginRelease.ps1 -ModuleId $ModuleId -CloudApiBaseUrl http://<cloud-gateway-host>:<port>/api/v1 -ReleaseNotesPath ./release-notes.md -UploadRateLimitMbps 1000"
         }
         'GitHubHost' {
             Write-Host "  gh workflow run edge-pack-modules.yml -f version=$Version -f release_notes='<manual release notes>'"

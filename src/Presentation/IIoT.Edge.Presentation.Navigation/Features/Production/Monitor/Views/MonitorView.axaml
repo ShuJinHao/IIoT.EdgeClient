@@ -42,181 +42,178 @@
                 <Run Text="{Binding SelectedDeviceDisplayName}" />
             </TextBlock>
         </Grid>
-        <edge:EdgeScrollHost
+        <Grid
             Grid.Row="1"
-            HorizontalScrollBarVisibility="Disabled"
-            VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="20,12,20,20" Spacing="{DynamicResource Edge.Size.Spacing12}">
-                <edge:EdgeCard
-                    MinHeight="120"
-                    HorizontalAlignment="Stretch"
-                    Elevation="Flat"
-                    IsVisible="{Binding IsDevicesEmpty}"
-                    PaddingMode="Normal"
-                    Surface="Card">
-                    <views:EmptyStateView
-                        Message="{DynamicResource Navigation_Monitor_EmptyMessage}"
-                        Title="{DynamicResource Navigation_Monitor_EmptyTitle}" />
-                </edge:EdgeCard>
-                <StackPanel
-                    IsVisible="{Binding HasDevices}"
-                    Spacing="{DynamicResource Edge.Size.Spacing12}">
-                    <edge:EdgeCard
-                        MinHeight="120"
-                        HorizontalAlignment="Stretch"
-                        Elevation="Flat"
-                        IsVisible="{Binding ShouldShowDeviceSelectionPrompt}"
-                        PaddingMode="Normal"
-                        Surface="Card">
-                        <views:EmptyStateView
-                            Message="{DynamicResource Navigation_DeviceSelection_SelectFromRightMessage}"
-                            Title="{DynamicResource Navigation_Monitor_SelectedPlcPlaceholder}" />
+            Margin="20,12,20,20">
+            <edge:EdgeCard
+                MinHeight="120"
+                HorizontalAlignment="Stretch"
+                Elevation="Flat"
+                IsVisible="{Binding IsDevicesEmpty}"
+                PaddingMode="Normal"
+                Surface="Card">
+                <views:EmptyStateView
+                    Message="{DynamicResource Navigation_Monitor_EmptyMessage}"
+                    Title="{DynamicResource Navigation_Monitor_EmptyTitle}" />
+            </edge:EdgeCard>
+
+            <edge:EdgeCard
+                MinHeight="120"
+                HorizontalAlignment="Stretch"
+                Elevation="Flat"
+                IsVisible="{Binding ShouldShowDeviceSelectionPrompt}"
+                PaddingMode="Normal"
+                Surface="Card">
+                <views:EmptyStateView
+                    Message="{DynamicResource Navigation_DeviceSelection_SelectFromRightMessage}"
+                    Title="{DynamicResource Navigation_Monitor_SelectedPlcPlaceholder}" />
+            </edge:EdgeCard>
+
+            <Grid IsVisible="{Binding HasSelectedDevice}">
+                <Grid
+                    IsVisible="{Binding IsDeviceStatusTabSelected}"
+                    RowDefinitions="Auto,*,*"
+                    RowSpacing="{DynamicResource Edge.Size.Spacing12}">
+                    <edge:EdgeCard PaddingMode="Compact">
+                        <edge:EdgeCard.Header>
+                            <edge:EdgeSectionHeader
+                                Title="{DynamicResource Navigation_Monitor_CellDebugTitle}"
+                                Subtitle="{DynamicResource Navigation_Monitor_CellDebugSubtitle}" />
+                        </edge:EdgeCard.Header>
+                        <Grid ColumnDefinitions="300,*,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing10}">
+                            <edge:EdgeTextBox
+                                MinHeight="38"
+                                PlaceholderText="{DynamicResource Navigation_Monitor_CellQueryWatermark}"
+                                Text="{Binding CellQueryText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock
+                                Classes="edge-text-page-caption"
+                                Grid.Column="1"
+                                VerticalAlignment="Center">
+                                <Run Text="{DynamicResource Navigation_Monitor_CellQueryMatchedPrefix}" />
+                                <Run Text="{Binding FilteredCellCount}" />
+                                <Run Text="{DynamicResource Navigation_Monitor_CellQueryMatchedMiddle}" />
+                                <Run Text="{Binding CellRowCount}" />
+                                <Run Text="{DynamicResource Navigation_Monitor_CellQueryMatchedSuffix}" />
+                            </TextBlock>
+                        </Grid>
                     </edge:EdgeCard>
-                    <StackPanel
-                        IsVisible="{Binding HasSelectedDevice}"
-                        Spacing="{DynamicResource Edge.Size.Spacing12}">
-                    <StackPanel
-                        IsVisible="{Binding IsDeviceStatusTabSelected}"
-                        Spacing="{DynamicResource Edge.Size.Spacing12}">
-                        <edge:EdgeCard PaddingMode="Compact">
-                            <edge:EdgeCard.Header>
-                                <edge:EdgeSectionHeader
-                                    Title="{DynamicResource Navigation_Monitor_CellDebugTitle}"
-                                    Subtitle="{DynamicResource Navigation_Monitor_CellDebugSubtitle}" />
-                            </edge:EdgeCard.Header>
-                            <Grid RowDefinitions="Auto,*" RowSpacing="{DynamicResource Edge.Size.Spacing10}">
-                                <Grid ColumnDefinitions="300,*,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing10}">
-                                    <edge:EdgeTextBox
-                                        MinHeight="38"
-                                        PlaceholderText="{DynamicResource Navigation_Monitor_CellQueryWatermark}"
-                                        Text="{Binding CellQueryText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock
-                                        Classes="edge-text-page-caption"
-                                        Grid.Column="1"
-                                        VerticalAlignment="Center">
-                                        <Run Text="{DynamicResource Navigation_Monitor_CellQueryMatchedPrefix}" />
-                                        <Run Text="{Binding FilteredCellCount}" />
-                                        <Run Text="{DynamicResource Navigation_Monitor_CellQueryMatchedMiddle}" />
-                                        <Run Text="{Binding CellRowCount}" />
-                                        <Run Text="{DynamicResource Navigation_Monitor_CellQueryMatchedSuffix}" />
-                                    </TextBlock>
-                                </Grid>
 
-                                <StackPanel
-                                    Grid.Row="1"
-                                    Spacing="{DynamicResource Edge.Size.Spacing10}">
-                                    <StackPanel Spacing="{DynamicResource Edge.Size.Spacing6}">
-                                        <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Monitor_CurrentCellsTableTitle}" />
-                                        <Grid MinHeight="150">
-                                            <edge:EdgeDataGrid
-                                                AutoGenerateColumns="False"
-                                                CanUserReorderColumns="False"
-                                                CanUserResizeColumns="True"
-                                                CanUserSortColumns="False"
-                                                Density="Compact"
-                                                GridLinesVisibility="Horizontal"
-                                                HeadersVisibility="Column"
-                                                IsReadOnly="True"
-                                                ItemsSource="{Binding CellDebugItems}"
-                                                SelectedItem="{Binding SelectedCell, Mode=TwoWay}"
-                                                ViewportMaxHeight="220">
-                                                <edge:EdgeDataGrid.Columns>
-                                                    <edge:EdgeTextColumn Binding="{Binding InternalKey}" Header="{DynamicResource Navigation_Monitor_ColumnInternalKey}" MinWidth="220" Width="2.2*" />
-                                                    <edge:EdgeTextColumn Binding="{Binding DisplayLabel}" Header="{DynamicResource Navigation_Monitor_ColumnBusinessId}" MinWidth="150" Width="1.2*" />
-                                                    <edge:EdgeTextColumn Binding="{Binding RuntimeStatusText}" Header="{DynamicResource Navigation_Monitor_ColumnRuntimeStatus}" MinWidth="120" Width="1*" />
-                                                    <edge:EdgeTextColumn Binding="{Binding CompletedTimeText}" Header="{DynamicResource Navigation_Monitor_ColumnCompletedAt}" MinWidth="150" Width="1*" />
-                                                </edge:EdgeDataGrid.Columns>
-                                            </edge:EdgeDataGrid>
-                                            <views:EmptyStateView
-                                                MaxWidth="420"
-                                                HorizontalAlignment="Center"
-                                                VerticalAlignment="Center"
-                                                IsVisible="{Binding IsCellDebugEmpty}"
-                                                Message="{DynamicResource Navigation_Monitor_CellDebugEmptyMessage}"
-                                                Title="{DynamicResource Navigation_Monitor_CellDebugEmptyTitle}" />
-                                        </Grid>
-                                    </StackPanel>
+                    <edge:EdgeTablePanel
+                        Grid.Row="1"
+                        Classes="fill"
+                        Title="{DynamicResource Navigation_Monitor_CurrentCellsTableTitle}"
+                        IsEmpty="{Binding IsCellDebugEmpty}"
+                        EmptyTitle="{DynamicResource Navigation_Monitor_CellDebugEmptyTitle}"
+                        EmptyMessage="{DynamicResource Navigation_Monitor_CellDebugEmptyMessage}">
+                        <edge:EdgeTablePanel.HeaderMetaContent>
+                            <TextBlock Classes="edge-table-count">
+                                <Run Text="{DynamicResource Navigation_Table_TotalPrefix}" />
+                                <Run Text="{Binding CellDebugItems.Count}" />
+                                <Run Text="{DynamicResource Navigation_Table_TotalSuffix}" />
+                            </TextBlock>
+                        </edge:EdgeTablePanel.HeaderMetaContent>
+                        <edge:EdgeDataGrid
+                            AutoGenerateColumns="False"
+                            CanUserReorderColumns="False"
+                            CanUserResizeColumns="True"
+                            CanUserSortColumns="False"
+                            Density="Compact"
+                            GridLinesVisibility="Horizontal"
+                            HeadersVisibility="Column"
+                            IsReadOnly="True"
+                            ItemsSource="{Binding CellDebugItems}"
+                            SelectedItem="{Binding SelectedCell, Mode=TwoWay}"
+                            ViewportMaxHeight="0">
+                            <edge:EdgeDataGrid.Columns>
+                                <edge:EdgeTextColumn Binding="{Binding InternalKey}" Header="{DynamicResource Navigation_Monitor_ColumnInternalKey}" MinWidth="220" Width="2.2*" />
+                                <edge:EdgeTextColumn Binding="{Binding DisplayLabel}" Header="{DynamicResource Navigation_Monitor_ColumnBusinessId}" MinWidth="150" Width="1.2*" />
+                                <edge:EdgeTextColumn Binding="{Binding RuntimeStatusText}" Header="{DynamicResource Navigation_Monitor_ColumnRuntimeStatus}" MinWidth="120" Width="1*" />
+                                <edge:EdgeTextColumn Binding="{Binding CompletedTimeText}" Header="{DynamicResource Navigation_Monitor_ColumnCompletedAt}" MinWidth="150" Width="1*" />
+                            </edge:EdgeDataGrid.Columns>
+                        </edge:EdgeDataGrid>
+                    </edge:EdgeTablePanel>
 
-                                    <StackPanel Spacing="{DynamicResource Edge.Size.Spacing6}">
-                                        <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Monitor_CellFieldsTableTitle}" />
-                                        <Grid MinHeight="260">
-                                            <edge:EdgeDataGrid
-                                                AutoGenerateColumns="False"
-                                                CanUserReorderColumns="False"
-                                                CanUserResizeColumns="True"
-                                                CanUserSortColumns="False"
-                                                Density="Compact"
-                                                GridLinesVisibility="Horizontal"
-                                                HeadersVisibility="Column"
-                                                IsReadOnly="True"
-                                                ItemsSource="{Binding SelectedCellFieldRows}">
-                                                <edge:EdgeDataGrid.Columns>
-                                                    <edge:EdgeTextColumn Binding="{Binding Name}" Header="{DynamicResource Navigation_Monitor_ColumnFieldPath}" MinWidth="260" Width="1.1*" />
-                                                    <edge:EdgeTemplateColumn Header="{DynamicResource Navigation_Monitor_ColumnValue}" MinWidth="420" Width="2.4*">
-                                                        <edge:EdgeTemplateColumn.CellTemplate>
-                                                            <DataTemplate>
-                                                                <TextBlock
-                                                                    Text="{Binding Value}"
-                                                                    TextWrapping="Wrap" />
-                                                            </DataTemplate>
-                                                        </edge:EdgeTemplateColumn.CellTemplate>
-                                                    </edge:EdgeTemplateColumn>
-                                                </edge:EdgeDataGrid.Columns>
-                                            </edge:EdgeDataGrid>
-                                            <views:EmptyStateView
-                                                MaxWidth="420"
-                                                HorizontalAlignment="Center"
-                                                VerticalAlignment="Center"
-                                                IsVisible="{Binding IsSelectedCellEmpty}"
-                                                Message="{DynamicResource Navigation_Monitor_SelectedCellEmptyMessage}"
-                                                Title="{DynamicResource Navigation_Monitor_SelectedCellEmptyTitle}" />
-                                        </Grid>
-                                    </StackPanel>
-                                </StackPanel>
-                            </Grid>
-                        </edge:EdgeCard>
-                    </StackPanel>
-                    <StackPanel
-                        IsVisible="{Binding IsStateMachineTabSelected}"
-                        Spacing="{DynamicResource Edge.Size.Spacing12}">
-                        <edge:EdgeInfoSummaryCard
-                            SummaryItemMinWidth="152"
-                            SummaryItems="{Binding StateMachineOverviewItems}"
-                            Title="{DynamicResource Navigation_Monitor_StatusSummary}" />
-                        <edge:EdgeCard PaddingMode="Compact">
-                            <edge:EdgeCard.Header>
-                                <edge:EdgeSectionHeader
-                                    Title="{DynamicResource Navigation_Monitor_StateMachineTasksTitle}"
-                                    Subtitle="{DynamicResource Navigation_Monitor_StateMachineTasksSubtitle}" />
-                            </edge:EdgeCard.Header>
-                            <Grid MinHeight="84">
-                                <StackPanel
-                                    IsVisible="{Binding HasStateMachineTaskItems}"
-                                    Spacing="{DynamicResource Edge.Size.Spacing8}">
-                                    <edge:EdgeStatusTimeline
-                                        IsVisible="{Binding HasStateMachineHeartbeatTaskItems}"
-                                        ItemsSource="{Binding StateMachineHeartbeatTaskItems}"
-                                        Title="{DynamicResource Navigation_Monitor_StateMachineHeartbeatGroup}" />
+                    <edge:EdgeTablePanel
+                        Grid.Row="2"
+                        Classes="fill"
+                        Title="{DynamicResource Navigation_Monitor_CellFieldsTableTitle}"
+                        IsEmpty="{Binding IsSelectedCellEmpty}"
+                        EmptyTitle="{DynamicResource Navigation_Monitor_SelectedCellEmptyTitle}"
+                        EmptyMessage="{DynamicResource Navigation_Monitor_SelectedCellEmptyMessage}">
+                        <edge:EdgeTablePanel.HeaderMetaContent>
+                            <TextBlock Classes="edge-table-count">
+                                <Run Text="{DynamicResource Navigation_Table_TotalPrefix}" />
+                                <Run Text="{Binding SelectedCellFieldRows.Count}" />
+                                <Run Text="{DynamicResource Navigation_Table_TotalSuffix}" />
+                            </TextBlock>
+                        </edge:EdgeTablePanel.HeaderMetaContent>
+                        <edge:EdgeDataGrid
+                            AutoGenerateColumns="False"
+                            CanUserReorderColumns="False"
+                            CanUserResizeColumns="True"
+                            CanUserSortColumns="False"
+                            Density="Compact"
+                            GridLinesVisibility="Horizontal"
+                            HeadersVisibility="Column"
+                            IsReadOnly="True"
+                            ItemsSource="{Binding SelectedCellFieldRows}"
+                            ViewportMaxHeight="0">
+                            <edge:EdgeDataGrid.Columns>
+                                <edge:EdgeTextColumn Binding="{Binding Name}" Header="{DynamicResource Navigation_Monitor_ColumnFieldPath}" MinWidth="260" Width="1.1*" />
+                                <edge:EdgeTemplateColumn Header="{DynamicResource Navigation_Monitor_ColumnValue}" MinWidth="420" Width="2.4*">
+                                    <edge:EdgeTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock
+                                                Text="{Binding Value}"
+                                                TextWrapping="Wrap" />
+                                        </DataTemplate>
+                                    </edge:EdgeTemplateColumn.CellTemplate>
+                                </edge:EdgeTemplateColumn>
+                            </edge:EdgeDataGrid.Columns>
+                        </edge:EdgeDataGrid>
+                    </edge:EdgeTablePanel>
+                </Grid>
 
-                                    <edge:EdgeStatusTimeline
-                                        IsVisible="{Binding HasStateMachineRuntimeTaskItems}"
-                                        ItemsSource="{Binding StateMachineRuntimeTaskItems}"
-                                        Title="{DynamicResource Navigation_Monitor_StateMachineRuntimeGroup}" />
-                                </StackPanel>
+                <Grid
+                    IsVisible="{Binding IsStateMachineTabSelected}"
+                    RowDefinitions="Auto,*"
+                    RowSpacing="{DynamicResource Edge.Size.Spacing12}">
+                    <edge:EdgeInfoSummaryCard
+                        SummaryItemMinWidth="152"
+                        SummaryItems="{Binding StateMachineOverviewItems}"
+                        Title="{DynamicResource Navigation_Monitor_StatusSummary}" />
+                    <edge:EdgeCard Grid.Row="1" PaddingMode="Compact">
+                        <edge:EdgeCard.Header>
+                            <edge:EdgeSectionHeader
+                                Title="{DynamicResource Navigation_Monitor_StateMachineTasksTitle}"
+                                Subtitle="{DynamicResource Navigation_Monitor_StateMachineTasksSubtitle}" />
+                        </edge:EdgeCard.Header>
+                        <Grid>
+                            <StackPanel
+                                IsVisible="{Binding HasStateMachineTaskItems}"
+                                Spacing="{DynamicResource Edge.Size.Spacing8}">
+                                <edge:EdgeStatusTimeline
+                                    IsVisible="{Binding HasStateMachineHeartbeatTaskItems}"
+                                    ItemsSource="{Binding StateMachineHeartbeatTaskItems}"
+                                    Title="{DynamicResource Navigation_Monitor_StateMachineHeartbeatGroup}" />
 
-                                <views:EmptyStateView
-                                    MaxWidth="420"
-                                    HorizontalAlignment="Center"
-                                    VerticalAlignment="Center"
-                                    IsVisible="{Binding IsStateMachineTaskItemsEmpty}"
-                                    Message="{DynamicResource Navigation_Monitor_StateMachineTasksEmptyMessage}"
-                                    Title="{DynamicResource Navigation_Monitor_StateMachineTasksEmptyTitle}" />
-                            </Grid>
-                        </edge:EdgeCard>
-                    </StackPanel>
-                    </StackPanel>
-                </StackPanel>
-            </StackPanel>
-        </edge:EdgeScrollHost>
+                                <edge:EdgeStatusTimeline
+                                    IsVisible="{Binding HasStateMachineRuntimeTaskItems}"
+                                    ItemsSource="{Binding StateMachineRuntimeTaskItems}"
+                                    Title="{DynamicResource Navigation_Monitor_StateMachineRuntimeGroup}" />
+                            </StackPanel>
+
+                            <views:EmptyStateView
+                                MaxWidth="420"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                IsVisible="{Binding IsStateMachineTaskItemsEmpty}"
+                                Message="{DynamicResource Navigation_Monitor_StateMachineTasksEmptyMessage}"
+                                Title="{DynamicResource Navigation_Monitor_StateMachineTasksEmptyTitle}" />
+                        </Grid>
+                    </edge:EdgeCard>
+                </Grid>
+            </Grid>
+        </Grid>
     </Grid>
 </UserControl>

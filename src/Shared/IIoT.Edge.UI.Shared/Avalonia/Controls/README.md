@@ -2,18 +2,18 @@
 
 Phase 8.32 起，`IIoT.Edge.UI.Shared` 以少量基础控件 + 属性、变体、共享 class 调度为基线。公开 namespace 继续保持为 `IIoT.Edge.UI.Shared.Avalonia.Controls`；目录只用于归口和查找，不改变业务 XAML 引用方式。
 
-当前公开 `Edge*` class：38 个，其中可实例化控件 37 个，`EdgeStatusControlBase` 是状态行为抽象基类。废弃控件：0 个。
+当前公开 `Edge*` class：43 个，其中可实例化控件 39 个；`EdgeStatusControlBase` 是状态行为抽象基类，`EdgeChartPoint` / `EdgeChartSeries` / `EdgeSummaryItem` 是共享数据模型。废弃控件：0 个。
 
 公开 class 和 enum 名单是共享 UI 基座契约的一部分。新增、删除、重命名公开 `Edge*` class 或公开 enum，必须先确认不能由现有基础控件 + 属性/变体/shared class 表达，并同步更新基线脚本；不能只靠“数量不变”绕过治理。
 
 ## 控件清单
 
-- `Actions`：`EdgeActionButton`、`EdgeWindowButton`
+- `Actions`：`EdgeActionButton`、`EdgeActionToolbar`、`EdgeWindowButton`
 - `Surfaces`：`EdgeCard`、`EdgeDialogChrome`、`EdgeNoticeBar`、`EdgeSectionHeader`
 - `Inputs`：`EdgeTextBox`、`EdgeCheckBox`、`EdgeFieldRow`、`EdgeFilterComboBox`、`EdgeFilterDatePicker`
 - `Navigation`：`EdgeSegmentedNav`、`EdgeSegmentedNavItem`、`EdgeTabControl`
 - `Data`：`EdgeDataGrid`、`EdgeTablePanel`、`EdgeTextColumn`、`EdgeTemplateColumn`、`EdgeActionColumn`、`EdgeCheckColumn`、`EdgeScrollHost`、`EdgeListBox`、`EdgeLogList`、`EdgeLogListItem`
-- `Status`：`EdgeStatusControlBase`、`EdgeStatusDot`、`EdgeStatusChip`、`EdgeStatusListItem`、`EdgeStatusSegment`、`EdgeStatusSegmentBar`、`EdgeVisualStatus`、`EdgeVisualVariant`
+- `Status`：`EdgeProgressBar`、`EdgeStatusControlBase`、`EdgeStatusDot`、`EdgeStatusChip`、`EdgeStatusListItem`、`EdgeStatusSegment`、`EdgeStatusSegmentBar`、`EdgeVisualStatus`、`EdgeVisualVariant`
 - `Metrics`：`EdgeMetricCard`、`EdgeSummaryItem`
 - `Charts`：`EdgeBarLineChart`
 - `Shell`：`EdgeAccountChip`、`EdgeHeaderBrand`、`EdgeHeaderDivider`
@@ -56,6 +56,7 @@ Phase 8.32 起，`IIoT.Edge.UI.Shared` 以少量基础控件 + 属性、变体�
 - `EdgeVisualStatus` 是状态语义入口，状态色只能表达 `Default / Running / Idle / Stopped / Offline / Info / Cache / Warning / Error`；页面不得用 `Ellipse`、`Rectangle`、hex 色或局部 brush 自己拼状态点。
 - `EdgeStatusDot` 用于单点状态，`EdgeStatusChip` 用于短标签和胶囊状态，`ShowDot="True"` 时显示状态点，`EdgeStatusListItem` 用于状态摘要行；不得新增 `EdgeOnlineBadge`、`EdgeErrorTag` 这类场景状态控件。
 - 连续状态概览使用 `EdgeStatusSegmentBar` 和 `EdgeStatusSegment`；片段颜色仍由 `EdgeVisualStatus` 驱动，页面不得用多个 `Border` 私拼绿/红/灰状态条。
+- 进度指示只使用 `EdgeProgressBar`；业务页面、Launcher、Shell、模块窗口不得直接声明原生 `ProgressBar` 作为可见进度控件入口。
 - 新增提示/告警条使用 `EdgeNoticeBar`，其颜色、图标槽、内容槽、动作槽都由 Shared 控制；页面不得用 `Border + TextBlock` 私拼通知条。
 - `EdgeTablePanel.StatusContent` 里的状态提示必须使用 `EdgeNoticeBar`，消息文字使用 `edge-notice-message` 或 `edge-notice-message prominent`；不得在 status slot 里用 `Border + TextBlock` 写局部背景、圆角、字号或颜色。
 - 新增指标摘要使用 `EdgeMetricCard`；标题、值、单位、说明、图标和状态由它统一承接，不新增 `EdgeKpiCard`、`EdgeMetricStrip`、`EdgeSummaryCard` 这类场景指标控件。

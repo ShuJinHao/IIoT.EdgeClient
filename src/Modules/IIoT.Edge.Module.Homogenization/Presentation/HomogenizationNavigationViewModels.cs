@@ -11,7 +11,6 @@ using IIoT.Edge.Module.Homogenization.Production;
 using IIoT.Edge.Presentation.Navigation.PluginSystem;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.PluginSystem;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.Module.Homogenization.Presentation;
@@ -47,20 +46,15 @@ public sealed class HomogenizationDataViewModel : PresentationViewModelBase
 
     private readonly IProductionContextStore _contextStore;
     private readonly IAppLanguageService _languageService;
-    private readonly bool _visualTestDataEnabled;
-    private readonly string _visualTestBatchCode;
     private readonly DispatcherTimer _timer;
 
     public HomogenizationDataViewModel(
         IProductionContextStore contextStore,
         IAppLanguageService languageService,
-        IConfiguration configuration,
         IOptions<HomogenizationModuleOptions> moduleOptions)
     {
         _contextStore = contextStore;
         _languageService = languageService;
-        _visualTestDataEnabled = configuration.GetValue("UI:VisualTestData:Enabled", false);
-        _visualTestBatchCode = configuration["UI:VisualTestData:BatchCode"] ?? "VT-HG-20260602-01";
         _timer = HomogenizationPresentationHelpers.CreateTimer(
             RefreshAsync,
             moduleOptions.Value.Presentation.DataViewRefreshIntervalMs);
@@ -140,10 +134,7 @@ public sealed class HomogenizationDataViewModel : PresentationViewModelBase
     private Task RefreshAsync()
         => RunViewTaskAsync(() =>
         {
-            var rows = _visualTestDataEnabled
-                ? BuildVisualTestRows(_visualTestBatchCode)
-                : LoadContextRows();
-
+            var rows = LoadContextRows();
             ReplaceItems(Records, rows);
             OnPropertyChanged(nameof(IsRecordsEmpty));
             OnPropertyChanged(nameof(HasRecords));
@@ -182,55 +173,6 @@ public sealed class HomogenizationDataViewModel : PresentationViewModelBase
                 FormatText(x.MainBatchPlan),
                 FormatText(x.BatchNumber)))
             .ToArray();
-
-    private static HomogenizationDataRow[] BuildVisualTestRows(string batchCode)
-    {
-        var baseTime = DateTime.Now.Date.AddHours(8);
-        const string mainPlanCode = "MES-HG-MAIN-20260604-A";
-        return Enumerable.Range(0, 18)
-            .Select(index =>
-            {
-                var inboundTime = baseTime.AddMinutes(index * 18);
-                var completedTime = inboundTime.AddMinutes(42 + index % 4 * 3);
-                var trayIndex = index + 1;
-                var stirringSpeed = 610 + index % 7 * 4;
-                var temperature = 41.8 + index % 6 * 0.3;
-                var vacuum = -88.0 - index % 5 * 0.4;
-                var cntActual = 120.0 + index % 8 * 0.7;
-                var nmpActual = 82.0 + index % 6 * 0.5;
-                var glueActual = 56.0 + index % 5 * 0.4;
-                var status = index % 8 == 0
-                    ? "待复核"
-                    : index % 5 == 0
-                        ? "混料中"
-                        : "已出料";
-
-                return new HomogenizationDataRow(
-                    $"TR-HG-01-{trayIndex:D3}",
-                    "PLC-HG-A01",
-                    "匀浆 A 线 PLC",
-                    FormatDate(inboundTime),
-                    FormatDate(completedTime),
-                    status,
-                    stirringSpeed.ToString(CultureInfo.InvariantCulture),
-                    temperature.ToString("0.0", CultureInfo.InvariantCulture),
-                    vacuum.ToString("0.0", CultureInfo.InvariantCulture),
-                    cntActual.ToString("0.0", CultureInfo.InvariantCulture),
-                    "128.0",
-                    (63.0 + index % 3).ToString("0.0", CultureInfo.InvariantCulture),
-                    (66.0 + index % 4).ToString("0.0", CultureInfo.InvariantCulture),
-                    nmpActual.ToString("0.0", CultureInfo.InvariantCulture),
-                    "88.0",
-                    glueActual.ToString("0.0", CultureInfo.InvariantCulture),
-                    "45",
-                    Math.Max(0, 45 - index % 9 * 4).ToString(CultureInfo.InvariantCulture),
-                    "30",
-                    Math.Max(0, 30 - index % 6 * 5).ToString(CultureInfo.InvariantCulture),
-                    mainPlanCode,
-                    $"{batchCode}-{trayIndex:D2}");
-            })
-            .ToArray();
-    }
 
     private void RefreshLocalizedText()
     {

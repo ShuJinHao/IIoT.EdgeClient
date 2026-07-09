@@ -46,6 +46,31 @@ public sealed class MainWindowBehaviorTests
     }
 
     [Fact]
+    public void MainWindow_UpdateCenter_ShouldUseSharedProgressAndResponsiveTableLayout()
+    {
+        var axaml = File.ReadAllText(ResolveLauncherAxamlPath("MainWindow.axaml"));
+
+        Assert.Contains("x:Name=\"ClientReleaseProgressBar\"", axaml, StringComparison.Ordinal);
+        Assert.Contains("<edge:EdgeProgressBar", axaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<ProgressBar", axaml, StringComparison.Ordinal);
+        Assert.Contains("Icon=\"{StaticResource Edge.Icon.Refresh}\"", axaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MaxHeight=\"260\"", axaml, StringComparison.Ordinal);
+        Assert.Contains("ViewportMaxHeight=\"0\"", axaml, StringComparison.Ordinal);
+        Assert.Contains("RowDefinitions=\"Auto,2*,3*\"", axaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void VersionHistoryWindow_ShouldUseSharedProgressBar()
+    {
+        var axaml = File.ReadAllText(ResolveLauncherAxamlPath("VersionHistoryWindow.axaml"));
+
+        Assert.Contains("x:Name=\"VersionHistoryProgressBar\"", axaml, StringComparison.Ordinal);
+        Assert.Contains("<edge:EdgeProgressBar", axaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<ProgressBar", axaml, StringComparison.Ordinal);
+        Assert.Contains("ViewportMaxHeight=\"0\"", axaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ChangePasswordWindow_ShouldDeclareMaskedPasswordFields()
     {
         var axaml = File.ReadAllText(ResolveLauncherAxamlPath("ChangePasswordWindow.axaml"));

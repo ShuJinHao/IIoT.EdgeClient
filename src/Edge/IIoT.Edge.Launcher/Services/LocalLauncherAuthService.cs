@@ -7,8 +7,11 @@ namespace IIoT.Edge.Launcher.Services;
 public sealed class LocalLauncherAuthService : ILocalLauncherAuthService
 {
     public const string AccountConfigurationUnavailableError = "本地账号配置不可用。";
+    public const string AccountSetupUnavailableError = "本地账号当前不可初始化。";
     public const string PasswordResetRequiredError = "本地密码使用旧哈希格式，请先修改密码。";
     public const string AccountLockedError = "本地账号已临时锁定，请稍后再试。";
+    public const string DisplayNameRequiredError = "请输入显示名称。";
+    public const string PasswordConfirmationMismatchError = "两次输入的新密码不一致。";
     private const int MaxFailedAccessAttempts = 5;
     private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(5);
 
@@ -20,6 +23,8 @@ public sealed class LocalLauncherAuthService : ILocalLauncherAuthService
         _accountCatalog = accountCatalog ?? throw new ArgumentNullException(nameof(accountCatalog));
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
+
+    public LauncherAccountCatalogStatus AccountCatalogStatus => _accountCatalog.GetCatalogStatus();
 
     public LauncherAuthenticationResult Authenticate(string? userName, string? password)
     {
@@ -65,6 +70,57 @@ public sealed class LocalLauncherAuthService : ILocalLauncherAuthService
 
         ResetFailedLoginStateIfNeeded(accountResult.Account);
         return LauncherAuthenticationResult.Passed(accountResult.Account);
+    }
+
+    public LauncherAccountSetupResult InitializeLocalAccount(
+        string? userName,
+        string? displayName,
+        string? newPassword,
+        string? confirmPassword)
+    {
+        if (string.IsNullOrWhiteSpace(userName))
+        {
+            return LauncherAccountSetupResult.Failed("请输入账号。");
+        }
+
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            return LauncherAccountSetupResult.Failed(DisplayNameRequiredError);
+        }
+
+        var passwordPolicyError = LauncherPasswordPolicy.Validate(newPassword);
+        if (passwordPolicyError is not null)
+        {
+            return LauncherAccountSetupResult.Failed(passwordPolicyError);
+        }
+
+        if (!string.Equals(newPassword, confirmPassword, StringComparison.Ordinal))
+        {
+            return LauncherAccountSetupResult.Failed(PasswordConfirmationMismatchError);
+        }
+
+        try
+        {
+            var status = _accountCatalog.GetCatalogStatus();
+            if (status is not LauncherAccountCatalogStatus.Missing
+                and not LauncherAccountCatalogStatus.Empty
+                and not LauncherAccountCatalogStatus.NeedsInitialSetup)
+            {
+                return LauncherAccountSetupResult.Failed(AccountSetupUnavailableError);
+            }
+
+            var account = new LauncherAccountRecord(
+                userName.Trim(),
+                displayName.Trim(),
+                LauncherPasswordHasher.HashPassword(newPassword!),
+                IsEnabled: true);
+            _accountCatalog.InitializeAccount(account.UserName, account.DisplayName, account.PasswordHash);
+            return LauncherAccountSetupResult.Passed(account);
+        }
+        catch (Exception ex) when (IsAccountConfigurationException(ex))
+        {
+            return LauncherAccountSetupResult.Failed(AccountConfigurationUnavailableError);
+        }
     }
 
     public LauncherPasswordChangeResult ChangePassword(

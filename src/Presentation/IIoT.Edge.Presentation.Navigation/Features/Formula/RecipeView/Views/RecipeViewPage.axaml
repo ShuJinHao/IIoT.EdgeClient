@@ -4,115 +4,127 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
 
-    <edge:EdgeScrollHost>
-        <StackPanel Margin="{DynamicResource Edge.Thickness.20}" Spacing="{DynamicResource Edge.Size.Spacing12}">
-            <edge:EdgeSectionHeader
-                Title="{Binding ViewTitle}"
-                Subtitle="{Binding SourceLabel}">
-                <edge:EdgeSectionHeader.ActionContent>
-                    <edge:EdgeActionToolbar>
-                        <edge:EdgeActionButton
-                            Command="{Binding SwitchSourceCommand}"
-                            Content="{DynamicResource Navigation_Button_SwitchDataSource}"
-                            Icon="{StaticResource Edge.Icon.Switch}"
-                            IsVisible="{Binding IsLocalAdmin}"
-                            Kind="Secondary"
-                            Size="Compact" />
-                        <edge:EdgeActionButton
-                            Command="{Binding SyncCloudCommand}"
-                            Content="{DynamicResource Navigation_Button_SyncCloud}"
-                            Icon="{StaticResource Edge.Icon.Sync}"
-                            Kind="Primary"
-                            Size="Compact" />
-                    </edge:EdgeActionToolbar>
-                </edge:EdgeSectionHeader.ActionContent>
-            </edge:EdgeSectionHeader>
-
-            <edge:EdgeInfoSummaryCard
-                NoticeMessage="{Binding ErrorMessage}"
-                NoticeStatus="Error"
-                SummaryItemMinWidth="180"
-                SummaryItems="{Binding RecipeSummaryItems}"
-                Subtitle="{Binding SourceLabel}"
-                Title="{Binding RecipeName}" />
-
-            <edge:EdgeTablePanel Title="{DynamicResource Navigation_Title_ProductRecipe}">
-                <edge:EdgeTablePanel.HeaderMetaContent>
-                    <TextBlock Classes="edge-table-count">
-                        <Run Text="{DynamicResource Navigation_Table_TotalPrefix}" />
-                        <Run Text="{Binding Params.Count}" />
-                        <Run Text="{DynamicResource Navigation_Table_TotalSuffix}" />
-                    </TextBlock>
-                </edge:EdgeTablePanel.HeaderMetaContent>
-                <edge:EdgeDataGrid
-                    AutoGenerateColumns="False"
-                    CanUserReorderColumns="False"
-                    CanUserResizeColumns="True"
-                    CanUserSortColumns="False"
-                    GridLinesVisibility="Horizontal"
-                    HeadersVisibility="Column"
-                    ItemsSource="{Binding Params}">
-                    <edge:EdgeDataGrid.Columns>
-                        <edge:EdgeTextColumn Binding="{Binding Name}" Header="{DynamicResource Navigation_Column_ParamName}" MinWidth="220" Width="2*" />
-                        <edge:EdgeTextColumn Binding="{Binding Min}" Header="{DynamicResource Navigation_Column_LowerLimit}" MinWidth="120" Width="*" />
-                        <edge:EdgeTextColumn Binding="{Binding Max}" Header="{DynamicResource Navigation_Column_UpperLimit}" MinWidth="120" Width="*" />
-                        <edge:EdgeTextColumn Binding="{Binding Unit}" Header="{DynamicResource Navigation_Column_Unit}" MinWidth="100" Width="*" />
-                        <edge:EdgeActionColumn Header="" MinWidth="96" Width="96">
-                            <edge:EdgeActionColumn.CellTemplate>
-                                <DataTemplate>
-                                    <edge:EdgeActionButton
-                                        HorizontalAlignment="Right"
-                                        Command="{Binding $parent[UserControl].DataContext.DeleteLocalParamCommand}"
-                                        CommandParameter="{Binding Name}"
-                                        Content="{DynamicResource Navigation_Button_Delete}"
-                                        Icon="{StaticResource Edge.Icon.Delete}"
-                                        IsVisible="{Binding $parent[UserControl].DataContext.IsLocalAdmin}"
-                                        Kind="Danger"
-                                        Role="Cell"
-                                        Size="Compact"
-                                        ToolTip.Tip="{DynamicResource Navigation_Tooltip_DeleteParam}" />
-                                </DataTemplate>
-                            </edge:EdgeActionColumn.CellTemplate>
-                        </edge:EdgeActionColumn>
-                    </edge:EdgeDataGrid.Columns>
-                </edge:EdgeDataGrid>
-            </edge:EdgeTablePanel>
-
-            <edge:EdgeCard IsVisible="{Binding IsLocalAdmin}">
-                <edge:EdgeCard.Header>
-                    <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Label_EmergencyEdit}" />
-                </edge:EdgeCard.Header>
-
-                <Grid ColumnDefinitions="2*,*,*,*,Auto">
-                    <edge:EdgeTextBox
-                        Grid.Column="0"
-                        Margin="0,0,8,0"
-                        PlaceholderText="{DynamicResource Navigation_Hint_ParamName}"
-                        Text="{Binding EditKey, Mode=TwoWay}" />
-                    <edge:EdgeTextBox
-                        Grid.Column="1"
-                        Margin="0,0,8,0"
-                        PlaceholderText="{DynamicResource Navigation_Hint_LowerLimit}"
-                        Text="{Binding EditMin, Mode=TwoWay}" />
-                    <edge:EdgeTextBox
-                        Grid.Column="2"
-                        Margin="0,0,8,0"
-                        PlaceholderText="{DynamicResource Navigation_Hint_UpperLimit}"
-                        Text="{Binding EditMax, Mode=TwoWay}" />
-                    <edge:EdgeTextBox
-                        Grid.Column="3"
-                        Margin="0,0,8,0"
-                        PlaceholderText="{DynamicResource Navigation_Hint_Unit}"
-                        Text="{Binding EditUnit, Mode=TwoWay}" />
+    <Grid RowDefinitions="Auto,Auto,Auto,*" RowSpacing="{DynamicResource Edge.Size.Spacing12}" Margin="{DynamicResource Edge.Thickness.20}">
+        <edge:EdgeSectionHeader
+            Grid.Row="0"
+            Title="{Binding ViewTitle}"
+            Subtitle="{Binding SourceLabel}">
+            <edge:EdgeSectionHeader.ActionContent>
+                <edge:EdgeActionToolbar>
                     <edge:EdgeActionButton
-                        Grid.Column="4"
+                        Command="{Binding SwitchSourceCommand}"
+                        Content="{DynamicResource Navigation_Button_SwitchDataSource}"
+                        Icon="{StaticResource Edge.Icon.Switch}"
+                        IsVisible="{Binding IsLocalAdmin}"
+                        Kind="Secondary"
+                        Size="Compact" />
+                    <edge:EdgeActionButton
+                        Command="{Binding SyncCloudCommand}"
+                        Content="{DynamicResource Navigation_Button_SyncCloud}"
+                        Icon="{StaticResource Edge.Icon.Sync}"
+                        Kind="Primary"
+                        Size="Compact" />
+                </edge:EdgeActionToolbar>
+            </edge:EdgeSectionHeader.ActionContent>
+        </edge:EdgeSectionHeader>
+
+        <edge:EdgeInfoSummaryCard
+            Grid.Row="1"
+            NoticeMessage="{Binding ErrorMessage}"
+            NoticeStatus="Error"
+            SummaryItemMinWidth="180"
+            SummaryItems="{Binding RecipeSummaryItems}"
+            Subtitle="{Binding SourceLabel}"
+            Title="{Binding RecipeName}" />
+
+        <edge:EdgeTablePanel
+            Grid.Row="3"
+            Classes="fill"
+            Title="{DynamicResource Navigation_Title_ProductRecipe}"
+            IsEmpty="{Binding !Params.Count}"
+            EmptyTitle="{DynamicResource Navigation_Empty_RecipeParamsTitle}"
+            EmptyMessage="{DynamicResource Navigation_Empty_RecipeParamsMessage}">
+            <edge:EdgeTablePanel.HeaderMetaContent>
+                <TextBlock Classes="edge-table-count">
+                    <Run Text="{DynamicResource Navigation_Table_TotalPrefix}" />
+                    <Run Text="{Binding Params.Count}" />
+                    <Run Text="{DynamicResource Navigation_Table_TotalSuffix}" />
+                </TextBlock>
+            </edge:EdgeTablePanel.HeaderMetaContent>
+            <edge:EdgeDataGrid
+                AutoGenerateColumns="False"
+                CanUserReorderColumns="False"
+                CanUserResizeColumns="True"
+                CanUserSortColumns="False"
+                GridLinesVisibility="Horizontal"
+                HeadersVisibility="Column"
+                ViewportMaxHeight="0"
+                ItemsSource="{Binding Params}">
+                <edge:EdgeDataGrid.Columns>
+                    <edge:EdgeTextColumn Binding="{Binding Name}" Header="{DynamicResource Navigation_Column_ParamName}" MinWidth="220" Width="2*" />
+                    <edge:EdgeTextColumn Binding="{Binding Min}" Header="{DynamicResource Navigation_Column_LowerLimit}" MinWidth="120" Width="*" />
+                    <edge:EdgeTextColumn Binding="{Binding Max}" Header="{DynamicResource Navigation_Column_UpperLimit}" MinWidth="120" Width="*" />
+                    <edge:EdgeTextColumn Binding="{Binding Unit}" Header="{DynamicResource Navigation_Column_Unit}" MinWidth="100" Width="*" />
+                    <edge:EdgeActionColumn Header="" MinWidth="96" Width="96">
+                        <edge:EdgeActionColumn.CellTemplate>
+                            <DataTemplate>
+                                <edge:EdgeActionButton
+                                    HorizontalAlignment="Right"
+                                    Command="{Binding $parent[UserControl].DataContext.DeleteLocalParamCommand}"
+                                    CommandParameter="{Binding Name}"
+                                    Content="{DynamicResource Navigation_Button_Delete}"
+                                    Icon="{StaticResource Edge.Icon.Delete}"
+                                    Kind="Danger"
+                                    Role="Cell"
+                                    Size="Compact"
+                                    ToolTip.Tip="{DynamicResource Navigation_Tooltip_DeleteParam}" />
+                            </DataTemplate>
+                        </edge:EdgeActionColumn.CellTemplate>
+                    </edge:EdgeActionColumn>
+                </edge:EdgeDataGrid.Columns>
+            </edge:EdgeDataGrid>
+        </edge:EdgeTablePanel>
+
+        <edge:EdgeCard Grid.Row="2">
+            <edge:EdgeCard.Header>
+                <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Label_EmergencyEdit}" />
+            </edge:EdgeCard.Header>
+
+            <Grid ColumnDefinitions="2*,*,*,*,Auto">
+                <edge:EdgeTextBox
+                    Grid.Column="0"
+                    Margin="0,0,8,0"
+                    IsEnabled="{Binding IsLocalAdmin}"
+                    PlaceholderText="{DynamicResource Navigation_Hint_ParamName}"
+                    Text="{Binding EditKey, Mode=TwoWay}" />
+                <edge:EdgeTextBox
+                    Grid.Column="1"
+                    Margin="0,0,8,0"
+                    IsEnabled="{Binding IsLocalAdmin}"
+                    PlaceholderText="{DynamicResource Navigation_Hint_LowerLimit}"
+                    Text="{Binding EditMin, Mode=TwoWay}" />
+                <edge:EdgeTextBox
+                    Grid.Column="2"
+                    Margin="0,0,8,0"
+                    IsEnabled="{Binding IsLocalAdmin}"
+                    PlaceholderText="{DynamicResource Navigation_Hint_UpperLimit}"
+                    Text="{Binding EditMax, Mode=TwoWay}" />
+                <edge:EdgeTextBox
+                    Grid.Column="3"
+                    Margin="0,0,8,0"
+                    IsEnabled="{Binding IsLocalAdmin}"
+                    PlaceholderText="{DynamicResource Navigation_Hint_Unit}"
+                    Text="{Binding EditUnit, Mode=TwoWay}" />
+                <edge:EdgeActionToolbar Grid.Column="4">
+                    <edge:EdgeActionButton
                         Command="{Binding SaveLocalParamCommand}"
                         Content="{DynamicResource Navigation_Button_Save}"
                         Icon="{StaticResource Edge.Icon.Save}"
+                        IsEnabled="{Binding IsLocalAdmin}"
                         Kind="Primary"
                         Size="Compact" />
-                </Grid>
-            </edge:EdgeCard>
-        </StackPanel>
-    </edge:EdgeScrollHost>
+                </edge:EdgeActionToolbar>
+            </Grid>
+        </edge:EdgeCard>
+    </Grid>
 </UserControl>

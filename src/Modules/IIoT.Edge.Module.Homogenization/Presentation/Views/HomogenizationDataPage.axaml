@@ -4,11 +4,11 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared">
     <edge:EdgeTablePanel
+        Classes="fill"
         Margin="18,14,22,22"
         EmptyMessage="{Binding EmptyMessage}"
         EmptyTitle="{Binding EmptyTitle}"
         IsEmpty="{Binding IsRecordsEmpty}"
-        MinHeight="620"
         ShowContentWhenEmpty="True"
         Title="{Binding ViewTitle}">
         <edge:EdgeTablePanel.StatusContent>
@@ -25,7 +25,7 @@
                 Density="Compact"
                 HorizontalScrollBarVisibility="Auto"
                 ItemsSource="{Binding Records}"
-                MinHeight="520"
+                ViewportMaxHeight="0"
                 VerticalScrollBarVisibility="Auto">
                 <edge:EdgeDataGrid.Columns>
                     <edge:EdgeTextColumn Width="150" MinWidth="150" Binding="{Binding TrayCode}">

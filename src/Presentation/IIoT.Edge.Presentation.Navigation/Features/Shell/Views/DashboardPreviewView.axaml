@@ -150,96 +150,87 @@
             Grid.Row="2"
             ColumnDefinitions="1.85*,*"
             ColumnSpacing="12">
-            <edge:EdgeCard
-                Classes="dashboard-data-panel"
-                MinHeight="0">
-                <Grid RowDefinitions="Auto,Auto,*">
-                    <TextBlock
-                        Classes="edge-dashboard-data-panel-title"
-                        Text="{DynamicResource Navigation_DashboardPreview_PlcStatusTableTitle}" />
-                    <Border Classes="edge-dashboard-alert-header">
-                        <Grid ColumnDefinitions="82,98,70,82,82,56" ColumnSpacing="8">
-                            <TextBlock
-                                Classes="edge-dashboard-alert-header-text"
-                                Text="{DynamicResource Navigation_DashboardPreview_PlcDevice}" />
-                            <TextBlock
-                                Grid.Column="1"
-                                Classes="edge-dashboard-alert-header-text"
-                                Text="{DynamicResource Navigation_DashboardPreview_PlcState}" />
-                            <TextBlock
-                                Grid.Column="2"
-                                Classes="edge-dashboard-alert-header-text"
-                                Text="{DynamicResource Navigation_DashboardPreview_PlcLatency}" />
-                            <TextBlock
-                                Grid.Column="3"
-                                Classes="edge-dashboard-alert-header-text"
-                                Text="{DynamicResource Navigation_DashboardPreview_PlcLastConnected}" />
-                            <TextBlock
-                                Grid.Column="4"
-                                Classes="edge-dashboard-alert-header-text"
-                                Text="{DynamicResource Navigation_DashboardPreview_PlcLastFailure}" />
-                            <TextBlock
-                                Grid.Column="5"
-                                Classes="edge-dashboard-alert-header-text"
-                                Text="{DynamicResource Navigation_DashboardPreview_PlcDetails}" />
-                        </Grid>
-                    </Border>
-                    <Grid Grid.Row="2" Classes="edge-dashboard-data-panel-body">
-                        <edge:EdgeScrollHost
-                            IsVisible="{Binding !IsPlcStatusTableEmpty}"
-                            VerticalScrollBarVisibility="Auto">
-                            <ItemsControl ItemsSource="{Binding PlcStatusTableItems}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border
-                                            Classes="edge-dashboard-alert-row"
-                                            MinHeight="34">
-                                            <Grid ColumnDefinitions="82,98,70,82,82,56" ColumnSpacing="8">
-                                                <TextBlock
-                                                    Classes="edge-dashboard-alert-time"
-                                                    Text="{Binding DeviceName}" />
-                                                <StackPanel
-                                                    Grid.Column="1"
-                                                    Classes="edge-dashboard-alert-level">
-                                                    <edge:EdgeStatusDot Status="{Binding Status}" />
-                                                    <TextBlock
-                                                        Classes="edge-dashboard-alert-level-text"
-                                                        Text="{Binding StateText}" />
-                                                </StackPanel>
-                                                <TextBlock
-                                                    Grid.Column="2"
-                                                    Classes="edge-dashboard-alert-time"
-                                                    Text="{Binding LatencyText}" />
-                                                <TextBlock
-                                                    Grid.Column="3"
-                                                    Classes="edge-dashboard-alert-time"
-                                                    Text="{Binding LastConnectedText}" />
-                                                <TextBlock
-                                                    Grid.Column="4"
-                                                    Classes="edge-dashboard-alert-time"
-                                                    Text="{Binding LastFailureText}" />
-                                                <edge:EdgeActionButton
-                                                    Grid.Column="5"
-                                                    Command="{Binding DataContext.ShowPlcStatusDetailCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding}"
-                                                    Content="{DynamicResource Navigation_DashboardPreview_PlcDetails}"
-                                                    Kind="Ghost"
-                                                    Role="Cell"
-                                                    Size="Compact"
-                                                    VerticalAlignment="Center" />
-                                            </Grid>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </edge:EdgeScrollHost>
-                        <sharedViews:EmptyStateView
-                            IsVisible="{Binding IsPlcStatusTableEmpty}"
-                            Message="{DynamicResource Navigation_DashboardPreview_NoPlcStatusSource}"
-                            Title="{DynamicResource Navigation_DashboardPreview_NoPlcStatusTitle}" />
-                    </Grid>
-                </Grid>
-            </edge:EdgeCard>
+            <edge:EdgeTablePanel
+                Classes="fill"
+                IsEmpty="{Binding IsPlcStatusTableEmpty}"
+                EmptyMessage="{DynamicResource Navigation_DashboardPreview_NoPlcStatusSource}"
+                EmptyTitle="{DynamicResource Navigation_DashboardPreview_NoPlcStatusTitle}"
+                Title="{DynamicResource Navigation_DashboardPreview_PlcStatusTableTitle}">
+                <edge:EdgeTablePanel.HeaderMetaContent>
+                    <TextBlock Classes="edge-table-count">
+                        <Run Text="{DynamicResource Navigation_Table_TotalPrefix}" />
+                        <Run Text="{Binding PlcStatusTableItems.Count}" />
+                        <Run Text="{DynamicResource Navigation_Table_TotalSuffix}" />
+                    </TextBlock>
+                </edge:EdgeTablePanel.HeaderMetaContent>
+
+                <edge:EdgeDataGrid
+                    x:Name="DashboardPreviewPlcStatusGrid"
+                    AutoGenerateColumns="False"
+                    CanUserReorderColumns="False"
+                    CanUserResizeColumns="True"
+                    CanUserSortColumns="False"
+                    IsReadOnly="True"
+                    ItemsSource="{Binding PlcStatusTableItems}"
+                    ViewportMaxHeight="0">
+                    <edge:EdgeDataGrid.Columns>
+                        <edge:EdgeTextColumn
+                            Binding="{Binding DeviceName}"
+                            Header="{DynamicResource Navigation_DashboardPreview_PlcDevice}"
+                            MinWidth="110"
+                            Width="1.4*" />
+                        <edge:EdgeTemplateColumn
+                            Header="{DynamicResource Navigation_DashboardPreview_PlcState}"
+                            MinWidth="136"
+                            Width="1.2*">
+                            <edge:EdgeTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel
+                                        Classes="edge-dashboard-alert-level"
+                                        VerticalAlignment="Center">
+                                        <edge:EdgeStatusDot Status="{Binding Status}" />
+                                        <TextBlock
+                                            Classes="edge-dashboard-alert-level-text"
+                                            Text="{Binding StateText}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </edge:EdgeTemplateColumn.CellTemplate>
+                        </edge:EdgeTemplateColumn>
+                        <edge:EdgeTextColumn
+                            Binding="{Binding LatencyText}"
+                            Header="{DynamicResource Navigation_DashboardPreview_PlcLatency}"
+                            MinWidth="92"
+                            Width="0.9*" />
+                        <edge:EdgeTextColumn
+                            Binding="{Binding LastConnectedText}"
+                            Header="{DynamicResource Navigation_DashboardPreview_PlcLastConnected}"
+                            MinWidth="132"
+                            Width="1.1*" />
+                        <edge:EdgeTextColumn
+                            Binding="{Binding LastFailureText}"
+                            Header="{DynamicResource Navigation_DashboardPreview_PlcLastFailure}"
+                            MinWidth="132"
+                            Width="1.1*" />
+                        <edge:EdgeTemplateColumn
+                            Header="{DynamicResource Navigation_DashboardPreview_PlcDetails}"
+                            MinWidth="118"
+                            Width="118">
+                            <edge:EdgeTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <edge:EdgeActionButton
+                                        Command="{Binding DataContext.ShowPlcStatusDetailCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding}"
+                                        Content="{DynamicResource Navigation_DashboardPreview_PlcDetails}"
+                                        Kind="Ghost"
+                                        Role="Cell"
+                                        Size="Compact"
+                                        VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </edge:EdgeTemplateColumn.CellTemplate>
+                        </edge:EdgeTemplateColumn>
+                    </edge:EdgeDataGrid.Columns>
+                </edge:EdgeDataGrid>
+            </edge:EdgeTablePanel>
 
             <edge:EdgeCard
                 Grid.Column="1"

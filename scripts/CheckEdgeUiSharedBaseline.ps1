@@ -28,19 +28,20 @@ if (Test-Path $edgeControlsDir) {
 }
 
 $controlFiles = @(Get-ChildItem -Path $controlsDir -Filter "*.cs" -Recurse -File)
-if ($controlFiles.Count -ne 41) {
-    Write-Error "Expected 41 shared control .cs files, found $($controlFiles.Count)."
+if ($controlFiles.Count -ne 43) {
+    Write-Error "Expected 43 shared control .cs files, found $($controlFiles.Count)."
 }
 
 $publicEdgeClasses = @(Select-String -Path $controlFiles.FullName -Pattern "^public .*class Edge")
-if ($publicEdgeClasses.Count -ne 41) {
-    Write-Error "Expected 41 public Edge* classes, found $($publicEdgeClasses.Count)."
+if ($publicEdgeClasses.Count -ne 43) {
+    Write-Error "Expected 43 public Edge* classes, found $($publicEdgeClasses.Count)."
 }
 
 $expectedPublicEdgeClasses = @(
     "EdgeAccountChip",
     "EdgeActionButton",
     "EdgeActionColumn",
+    "EdgeActionToolbar",
     "EdgeBarLineChart",
     "EdgeCard",
     "EdgeChartPoint",
@@ -60,6 +61,7 @@ $expectedPublicEdgeClasses = @(
     "EdgeLogListItem",
     "EdgeMetricCard",
     "EdgeNoticeBar",
+    "EdgeProgressBar",
     "EdgeScrollHost",
     "EdgeSectionHeader",
     "EdgeSegmentedNav",
@@ -125,6 +127,7 @@ $expectedPublicEdgeEnums = @(
     "EdgeChartSeriesKind",
     "EdgeDataGridDensity",
     "EdgeScrollHostVariant",
+    "EdgeTabControlVariant",
     "EdgeTablePanelDensity",
     "EdgeTablePanelSurface",
     "EdgeVisualStatus",

@@ -21,7 +21,7 @@ param(
     [string]$ReleaseNotesPath = '',
 
     [ValidateRange(1, 1000)]
-    [int]$UploadRateLimitMbps = 100,
+    [int]$UploadRateLimitMbps = 1000,
 
     [switch]$SkipPackageValidation
 )

@@ -570,6 +570,14 @@
         <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
     </Style>
 
+    <Style Selector="TextBlock.launcher-panel-title">
+        <Setter Property="FontFamily" Value="{DynamicResource Edge.FontFamily.Display}" />
+        <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.Title}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Primary}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
     <Style Selector="TextBlock.launcher-panel-description">
         <Setter Property="FontSize" Value="{DynamicResource Edge.FontSize.BodyStrong}" />
         <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.Secondary}" />

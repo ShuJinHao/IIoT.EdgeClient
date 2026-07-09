@@ -56,7 +56,7 @@
                     ToolTip.Tip="{DynamicResource Launcher_ToolTip_Close}" />
             </Grid>
 
-            <Grid Grid.Row="1" RowDefinitions="Auto,Auto,*" RowSpacing="12">
+            <Grid Grid.Row="1" RowDefinitions="Auto,Auto,Auto,Auto,*" RowSpacing="12">
                 <edge:EdgeCard
                     Elevation="Flat"
                     PaddingMode="Compact"
@@ -88,30 +88,31 @@
                     </Grid>
                 </edge:EdgeCard>
 
-                <StackPanel Grid.Row="1" Spacing="8">
-                    <TextBlock
-                        Classes="launcher-inline-status"
-                        Text="{Binding Panel.StatusMessage}"
-                        TextWrapping="Wrap" />
-                    <ProgressBar
-                        Height="4"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding Panel.IsProgressVisible}"
-                        Maximum="100"
-                        Minimum="0"
-                        Value="{Binding Panel.Progress}" />
-                    <TextBlock
-                        Classes="launcher-inline-status"
-                        Text="{Binding Panel.DetailText}"
-                        TextWrapping="Wrap" />
-                </StackPanel>
+                <TextBlock
+                    Grid.Row="1"
+                    Classes="launcher-inline-status"
+                    Text="{Binding Panel.StatusMessage}"
+                    TextWrapping="Wrap" />
+                <edge:EdgeProgressBar
+                    x:Name="VersionHistoryProgressBar"
+                    Grid.Row="2"
+                    IsVisible="{Binding Panel.IsProgressVisible}"
+                    Maximum="100"
+                    Minimum="0"
+                    Value="{Binding Panel.Progress}" />
+                <TextBlock
+                    Grid.Row="3"
+                    Classes="launcher-inline-status"
+                    Text="{Binding Panel.DetailText}"
+                    TextWrapping="Wrap" />
 
                 <edge:EdgeDataGrid
                     x:Name="VersionHistoryRowsGrid"
-                    Grid.Row="2"
+                    Grid.Row="4"
                     HeadersVisibility="Column"
                     IsReadOnly="True"
-                    ItemsSource="{Binding Component.Versions}">
+                    ItemsSource="{Binding Component.Versions}"
+                    ViewportMaxHeight="0">
                     <edge:EdgeDataGrid.Columns>
                         <edge:EdgeTextColumn
                             Binding="{Binding Version}"

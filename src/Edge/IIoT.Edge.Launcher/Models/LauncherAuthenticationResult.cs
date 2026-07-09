@@ -23,3 +23,15 @@ public sealed record LauncherPasswordChangeResult(
     public static LauncherPasswordChangeResult Failed(string errorMessage)
         => new(false, errorMessage);
 }
+
+public sealed record LauncherAccountSetupResult(
+    bool Success,
+    LauncherAccountRecord? Account,
+    string? ErrorMessage)
+{
+    public static LauncherAccountSetupResult Passed(LauncherAccountRecord account)
+        => new(true, account, null);
+
+    public static LauncherAccountSetupResult Failed(string errorMessage)
+        => new(false, null, errorMessage);
+}

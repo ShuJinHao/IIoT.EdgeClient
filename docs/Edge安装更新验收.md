@@ -1,6 +1,6 @@
 # Edge 安装更新验收
 
-本文档是 EdgeClient 安装、更新和 Windows 分发安全策略的唯一客户端侧验收入口。上传部署总口径见 `../../docs/上传部署总览.md`；云端生成安装包的字段写入规则由 CloudPlatform 单独验收，本文件只约束 EdgeClient 本仓库能验证的内容。
+本文档是 EdgeClient 安装、更新和 Windows 分发安全策略的唯一客户端侧验收入口。上传部署总口径见 `../../docs/上传部署总览.md`；云端生成安装包的字段写入规则由 CloudPlatform 单独验收，本文件只约束 EdgeClient 本仓库能验证的内容。工作区唯一对外标准执行入口是根目录 `deploy/Invoke-WorkspaceDeploy.ps1`；本文件保留项目级验收细节和实现脚本说明。
 
 ## 0. 标准发布链路
 
@@ -31,7 +31,7 @@ workflow_dispatch / edge-v* tag / v* tag
 - `package-runtime`：只能跑在 `windows-latest`，负责 .NET/Avalonia/Velopack/installer 构建和验证。
 - `publish-edge-updates`：只能跑在 `[self-hosted, iiot-linux-prod]`，负责把 artifact 组装成 release bundle 并调用 Cloud Human API；该 job 不允许 `scp`、`ssh`、Docker、Harbor 或 GHCR。
 
-内网 runner 必须使用非 root 专用用户运行。发布目录使用 `${EDGE_UPDATES_DIR}`，真实生产路径以 Cloud `.env` 为准；标准默认路径可配置为 `/srv/iiot/edge-updates`。如需改目录只允许通过 GitHub Actions repository variable `EDGE_UPDATES_DIR` 或 Cloud 生产 `.env` 覆盖。客户端文档不得固化真实服务器 IP。目录结构固定为：
+内网 runner 必须使用非 root 专用用户运行。发布目录使用 `${EDGE_UPDATES_DIR}`，真实生产路径以 Cloud `.env` 为准；当前生产现场口径是 `/data/iiot-platform/edge-client/edge-updates`。历史 `/srv/iiot/edge-updates` 只允许作为旧 `scp/rsync` 或非生产 fallback 说明，不再是标准 HTTP 发布路径。如需改目录只允许通过 GitHub Actions repository variable `EDGE_UPDATES_DIR` 或 Cloud 生产 `.env` 覆盖。客户端文档不得固化真实服务器 IP。目录结构固定为：
 
 ```text
 ${EDGE_UPDATES_DIR}/
@@ -52,7 +52,7 @@ ${EDGE_UPDATES_DIR}/
     IIoT.EdgePlugin.<ModuleId>-<version>-<runtime>.zip
 ```
 
-本机快发命令示例：
+工作区标准入口会调度下面的本机快发实现脚本。项目级命令示例：
 
 ```powershell
 pwsh ./scripts/LocalPublishAndDeploy.ps1 `
@@ -60,7 +60,7 @@ pwsh ./scripts/LocalPublishAndDeploy.ps1 `
   -Transport http `
   -CloudApiBaseUrl http://<cloud-gateway-host>:<port>/api/v1 `
   -ReleaseNotesPath ./release-notes.md `
-  -UploadRateLimitMbps 100
+  -UploadRateLimitMbps 1000
 ```
 
 未传 `-Version` 时，HTTP 发布会读取 Cloud Human catalog 最新 stable 版本并自动递增 patch；需要固定版本时才显式传 `-Version`。本机快发的完整操作入口见 `docs/客户端部署.md`。

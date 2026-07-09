@@ -70,7 +70,13 @@ public class RecipeViewModel : LocalizedCrudPageViewModelBase
     public bool IsLocalAdmin
     {
         get => _isLocalAdmin;
-        set { _isLocalAdmin = value; OnPropertyChanged(); }
+        set
+        {
+            _isLocalAdmin = value;
+            OnPropertyChanged();
+            (DeleteLocalParamCommand as BaseCommand)?.RaiseCanExecuteChanged();
+            (SaveLocalParamCommand as AsyncCommand)?.RaiseCanExecuteChanged();
+        }
     }
 
     private string _editKey = "";
