@@ -261,6 +261,8 @@ public sealed class RepositoryHygieneTests
 
         Assert.DoesNotContain("Navigation_DashboardPreview_PlcLastError", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Text=\"{Binding LastError}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Binding=\"{Binding LastConnectedText}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Binding=\"{Binding LastFailureText}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("<edge:EdgeTablePanel", xaml, StringComparison.Ordinal);
         Assert.Contains("Classes=\"fill\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Title=\"{DynamicResource Navigation_DashboardPreview_PlcStatusTableTitle}\"", xaml, StringComparison.Ordinal);

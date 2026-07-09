@@ -178,11 +178,11 @@
                             Binding="{Binding DeviceName}"
                             Header="{DynamicResource Navigation_DashboardPreview_PlcDevice}"
                             MinWidth="110"
-                            Width="1.4*" />
+                            Width="1.7*" />
                         <edge:EdgeTemplateColumn
                             Header="{DynamicResource Navigation_DashboardPreview_PlcState}"
                             MinWidth="136"
-                            Width="1.2*">
+                            Width="1.35*">
                             <edge:EdgeTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <StackPanel
@@ -200,17 +200,7 @@
                             Binding="{Binding LatencyText}"
                             Header="{DynamicResource Navigation_DashboardPreview_PlcLatency}"
                             MinWidth="92"
-                            Width="0.9*" />
-                        <edge:EdgeTextColumn
-                            Binding="{Binding LastConnectedText}"
-                            Header="{DynamicResource Navigation_DashboardPreview_PlcLastConnected}"
-                            MinWidth="132"
-                            Width="1.1*" />
-                        <edge:EdgeTextColumn
-                            Binding="{Binding LastFailureText}"
-                            Header="{DynamicResource Navigation_DashboardPreview_PlcLastFailure}"
-                            MinWidth="132"
-                            Width="1.1*" />
+                            Width="1*" />
                         <edge:EdgeTemplateColumn
                             Header="{DynamicResource Navigation_DashboardPreview_PlcDetails}"
                             MinWidth="118"
