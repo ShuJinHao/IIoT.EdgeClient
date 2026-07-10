@@ -122,7 +122,7 @@
                                                     Command="{Binding $parent[UserControl].DataContext.RequeueDeadLetterCommand}"
                                                     CommandParameter="{Binding}"
                                                     Content="{DynamicResource Navigation_Button_Requeue}"
-                                                    Icon="{StaticResource Edge.Icon.Sync}"
+                                                    Icon="{StaticResource Edge.Icon.Refresh}"
                                                     Kind="Primary"
                                                     Role="Cell"
                                                     Size="Compact" />
@@ -179,7 +179,7 @@
                                                     Command="{Binding $parent[UserControl].DataContext.RequeueDeadLetterCommand}"
                                                     CommandParameter="{Binding}"
                                                     Content="{DynamicResource Navigation_Button_Requeue}"
-                                                    Icon="{StaticResource Edge.Icon.Sync}"
+                                                    Icon="{StaticResource Edge.Icon.Refresh}"
                                                     Kind="Primary"
                                                     Role="Cell"
                                                     Size="Compact" />

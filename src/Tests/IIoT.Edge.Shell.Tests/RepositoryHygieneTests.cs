@@ -1964,6 +1964,19 @@ public sealed class RepositoryHygieneTests
         }
     }
 
+    [Fact]
+    public void DiagnosticsDeadLetterRequeue_ShouldUseRetrySemanticIcon()
+    {
+        var root = FindRepositoryRoot();
+        var xaml = File.ReadAllText(ToFullPath(
+            root,
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/System/DiagnosticsView/Views/DiagnosticsPage.axaml"));
+
+        Assert.Contains("RequeueDeadLetterCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("Icon=\"{StaticResource Edge.Icon.Refresh}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Icon=\"{StaticResource Edge.Icon.Sync}\"", xaml, StringComparison.Ordinal);
+    }
+
     private static IReadOnlyList<string> GetProjectReferences(string projectPath)
         => XDocument.Load(projectPath)
             .Descendants("ProjectReference")
