@@ -925,7 +925,9 @@ public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
         harness.SetWord(HomogenizationSignalTestProfile.SignalKey(HomogenizationPlcSignals.SingleRead.实时温度), 27);
         await harness.StartAsync();
 
-        await WaitUntilAsync(() => HasRecordOfKind(harness.Pipeline, HomogenizationCellData.RecordKindRealtime));
+        await WaitUntilAsync(() =>
+            HasRecordOfKind(harness.Pipeline, HomogenizationCellData.RecordKindRealtime)
+            && harness.Context.LastRealtimeSnapshot is not null);
 
         Assert.NotNull(harness.Context.LastRealtimeSnapshot);
         Assert.Equal(101, harness.Context.LastRealtimeSnapshot!.StirringSpeed);
