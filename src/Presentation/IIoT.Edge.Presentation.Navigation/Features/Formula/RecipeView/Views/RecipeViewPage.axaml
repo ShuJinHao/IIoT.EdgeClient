@@ -85,7 +85,10 @@
             </edge:EdgeDataGrid>
         </edge:EdgeTablePanel>
 
-        <edge:EdgeCard Grid.Row="2">
+        <edge:EdgeCard
+            x:Name="EmergencyEditCard"
+            Grid.Row="2"
+            IsVisible="{Binding IsLocalAdmin}">
             <edge:EdgeCard.Header>
                 <edge:EdgeSectionHeader Title="{DynamicResource Navigation_Label_EmergencyEdit}" />
             </edge:EdgeCard.Header>

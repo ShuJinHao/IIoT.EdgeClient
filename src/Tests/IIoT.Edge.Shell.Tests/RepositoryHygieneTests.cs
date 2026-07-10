@@ -1026,7 +1026,13 @@ public sealed class RepositoryHygieneTests
         Assert.Contains("/srv/iiot/edge-updates", installDoc, StringComparison.Ordinal);
         Assert.Contains("EdgeClient 不发布 Docker 镜像，不推 Harbor", installDoc, StringComparison.Ordinal);
         Assert.Contains("更新内容必须显式填写", installDoc, StringComparison.Ordinal);
+        Assert.Contains("macOS 是主力开发环境", installDoc, StringComparison.Ordinal);
+        Assert.Contains("Windows 是现场部署目标", installDoc, StringComparison.Ordinal);
+        Assert.Contains("两层证据必须分别记录，互不替代", installDoc, StringComparison.Ordinal);
+        Assert.Contains("Windows 实机部署验收未执行", installDoc, StringComparison.Ordinal);
         Assert.Contains("GitHub hosted Windows runner 只负责构建", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("开发阶段以 macOS 主力开发环境", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("macOS 通过不能替代 Windows 部署验收", ruleDoc, StringComparison.Ordinal);
         Assert.Contains("LocalPublishAndDeploy.ps1", ruleDoc, StringComparison.Ordinal);
         Assert.Contains("内网 Linux self-hosted runner 只负责", ruleDoc, StringComparison.Ordinal);
         Assert.Contains("CI artifact 发布契约", contractDoc, StringComparison.Ordinal);
@@ -1426,8 +1432,23 @@ public sealed class RepositoryHygieneTests
 
         Assert.Contains("EdgeInfoSummaryCard", xaml, StringComparison.Ordinal);
         Assert.Contains("Navigation_Label_EmergencyEdit", xaml, StringComparison.Ordinal);
+        Assert.Contains(
+            "x:Name=\"EmergencyEditCard\"",
+            xaml,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "IsVisible=\"{Binding IsLocalAdmin}\"",
+            xaml,
+            StringComparison.Ordinal);
         Assert.Contains("DeleteLocalParamCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("Kind=\"Danger\"", xaml, StringComparison.Ordinal);
+        var deleteCommandIndex = xaml.IndexOf("DeleteLocalParamCommand", StringComparison.Ordinal);
+        var deleteButtonEndIndex = xaml.IndexOf("/>", deleteCommandIndex, StringComparison.Ordinal);
+        Assert.True(deleteCommandIndex >= 0 && deleteButtonEndIndex > deleteCommandIndex);
+        Assert.DoesNotContain(
+            "IsVisible",
+            xaml[deleteCommandIndex..deleteButtonEndIndex],
+            StringComparison.Ordinal);
         Assert.Contains("Navigation_Button_SwitchDataSource", xaml, StringComparison.Ordinal);
         Assert.Contains("Kind=\"Secondary\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("AddRecipe", xaml, StringComparison.OrdinalIgnoreCase);

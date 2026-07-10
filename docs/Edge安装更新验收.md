@@ -2,6 +2,8 @@
 
 本文档是 EdgeClient 安装、更新和 Windows 分发安全策略的唯一客户端侧验收入口。上传部署总口径见 `../../docs/上传部署总览.md`；云端生成安装包的字段写入规则由 CloudPlatform 单独验收，本文件只约束 EdgeClient 本仓库能验证的内容。工作区唯一对外标准执行入口是根目录 `deploy/Invoke-WorkspaceDeploy.ps1`；本文件保留项目级验收细节和实现脚本说明。
 
+EdgeClient 验收分为开发阶段和实际部署阶段：macOS 是主力开发环境，必须承担真实 Launcher/Shell 启动、登录后 UI、更新进度和隔离安装验证；Windows 是现场部署目标，必须承担 Release runtime、安装器、快捷方式、Velopack 更新和 `targetRuntime` 实机验收。两层证据必须分别记录，互不替代；开发阶段通过不代表已经进入发布或部署。
+
 ## 0. 标准发布链路
 
 EdgeClient 不发布 Docker 镜像，不推 Harbor，也不从 GitHub hosted runner 直连内网服务器。当前链路分为日常 smoke、正式 GitHub 打包和本机快发：
@@ -84,6 +86,14 @@ HTTP 快发会先让文件安全落盘，再由 Cloud 服务端从 manifest 派�
 
 ## 2. 必跑验证
 
+macOS 开发阶段运行态验收：
+
+- 使用当前源码构建的 Launcher/Shell，不用静态截图或 ViewModel stub 冒充真实运行。
+- Launcher 需要登录后验证的页面必须提供合法已登录环境；允许在隔离 `IIOT_EDGE_PROGRAM_DATA_ROOT` 中通过真实首次初始化 UI 创建临时本地账号，但不得读取、复制或覆盖开发者真实账号文件。
+- 更新进度验收必须使用隔离 runtime 和仅监听 loopback 的临时 catalog/package 源触发一次真实下载与安装，确认更新前版本、进度条可见、完成后状态和安装版本；不得修改正式 `publish/Debug`，不得连接生产发布源。
+- macOS 验收结束后必须关闭进程并删除临时账号、临时运行目录和临时更新源；结果记入滚动复盘。
+- 本阶段不得因为验证通过自动触发上传、发布、`stable` 或 Windows 部署。
+
 ```powershell
 dotnet test src/Tests/IIoT.Edge.Installer.Tests/IIoT.Edge.Installer.Tests.csproj -p:BuildInParallel=false --disable-build-servers
 ./scripts/TestEdgeRuntimePublish.ps1 -Configuration Release
@@ -109,7 +119,7 @@ CI 发布验收：
 - 发布失败后优先重跑失败 job 或复用已生成 artifacts；不得未经定位反复全量 CI。Cloud 返回 `400 hash/size` 不一致时，先在下载后的 artifact 目录对比文件列表、manifest 和 Cloud 校验算法，再决定是否修改脚本。
 - 独立插件发布后必须能在 `${EDGE_UPDATES_DIR}/plugins/stable/<ModuleId>/<version>/` 找到插件 zip，且 Cloud catalog 中对应插件 release 的 `downloadUrl` 可 HEAD 成功。
 
-Windows 实机安装验收：
+Windows 实际部署阶段实机验收：
 
 ```powershell
 ./scripts/InvokeEdgeInstallerWindowsAcceptance.ps1 `
@@ -121,6 +131,8 @@ Windows 实机安装验收：
 ```
 
 该脚本会验证安装布局、首装绑定导入、`launcher.update.json` 标准落点与 camelCase 字段、开始菜单快捷方式目标、静默安装默认不创建桌面快捷方式和 Launcher 启动。
+
+Windows 实机验收必须在发布或现场部署前执行；macOS 开发阶段通过、GitHub Windows runner 构建通过或安装包静态检查通过，都不能替代该步骤。未实际进入 Windows 部署阶段时，复盘必须明确写“Windows 实机部署验收未执行”，不得写成全平台验收完成。
 
 ## 3. Defender 策略
 
