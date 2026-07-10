@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using AvaloniaDispatcher = Avalonia.Threading.Dispatcher;
 using AvaloniaDispatcherTimer = Avalonia.Threading.DispatcherTimer;
+using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Application.Features.Production.Equipment;
@@ -24,6 +25,7 @@ public class EquipmentViewModel : PresentationViewModelBase
     private readonly IAppLanguageService _languageService;
     private readonly IDeviceSelectionService _deviceSelectionService;
     private readonly IViewRegistry _viewRegistry;
+    private readonly IReadOnlyDictionary<string, IEdgeProcessModule> _processModulesById;
     private readonly AvaloniaDispatcherTimer _hwRefreshTimer;
     private int _selectedTabIndex;
     private string _recipeName = EmptyDisplayText;
@@ -164,7 +166,8 @@ public class EquipmentViewModel : PresentationViewModelBase
         IProductionPlanSelectionPopupService planSelectionPopupService,
         IAppLanguageService languageService,
         IDeviceSelectionService deviceSelectionService,
-        IViewRegistry viewRegistry)
+        IViewRegistry viewRegistry,
+        IEnumerable<IEdgeProcessModule> processModules)
     {
         _equipmentPanelService = equipmentPanelService;
         _recipeService = recipeService;
@@ -173,6 +176,10 @@ public class EquipmentViewModel : PresentationViewModelBase
         _languageService = languageService;
         _deviceSelectionService = deviceSelectionService;
         _viewRegistry = viewRegistry;
+        _processModulesById = processModules
+            .Where(static module => !string.IsNullOrWhiteSpace(module.ModuleId))
+            .GroupBy(static module => module.ModuleId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.OrdinalIgnoreCase);
         SelectProductionPlanCommand = new AsyncCommand(
             () => RunViewTaskAsync(
                 SelectProductionPlanCoreAsync,
@@ -182,6 +189,7 @@ public class EquipmentViewModel : PresentationViewModelBase
         LayoutColumn = 1;
 
         _recipeService.RecipeChanged += RefreshRecipe;
+        _languageService.LanguageChanged += OnLanguageChanged;
         _deviceSelectionService.SelectionChanged += OnSharedDeviceSelectionChanged;
         SyncDeviceSelectionOptions([]);
 
@@ -299,6 +307,11 @@ public class EquipmentViewModel : PresentationViewModelBase
     private void RefreshRecipe()
     {
         RunViewTaskInBackground(RefreshRecipeAsync, "刷新配方信息失败");
+    }
+
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(CurrentProcessDisplayName));
     }
 
     private async Task RefreshRecipeAsync()
@@ -434,7 +447,7 @@ public class EquipmentViewModel : PresentationViewModelBase
 
         var dataViewTitles = _viewRegistry.GetAllMenus()
             .Where(static menu => menu.ViewId.EndsWith(".DataView", StringComparison.OrdinalIgnoreCase))
-            .Select(ResolveMenuTitle)
+            .Select(ResolveCurrentProcessFallbackTitle)
             .Where(static title => title != EmptyDisplayText)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -452,6 +465,20 @@ public class EquipmentViewModel : PresentationViewModelBase
         return _languageService.GetString("Panels_Status_ProcessNotConfigured", "未配置工序");
     }
 
+    private string ResolveCurrentProcessFallbackTitle(MenuInfo menu)
+    {
+        var title = ResolveMenuTitle(menu);
+        if (!IsGenericDataViewTitle(title, menu.TitleResourceKey))
+        {
+            return title;
+        }
+
+        var moduleDisplayName = ResolveModuleDisplayName(menu.ViewId);
+        return moduleDisplayName == EmptyDisplayText
+            ? title
+            : moduleDisplayName;
+    }
+
     private string ResolveMenuTitle(MenuInfo menu)
     {
         var title = string.IsNullOrWhiteSpace(menu.TitleResourceKey)
@@ -459,6 +486,50 @@ public class EquipmentViewModel : PresentationViewModelBase
             : _languageService.GetString(menu.TitleResourceKey, menu.Title);
 
         return NormalizeDisplayText(title);
+    }
+
+    private string ResolveModuleDisplayName(string viewId)
+    {
+        if (string.IsNullOrWhiteSpace(viewId))
+        {
+            return EmptyDisplayText;
+        }
+
+        var separatorIndex = viewId.IndexOf('.');
+        var moduleId = separatorIndex > 0
+            ? viewId[..separatorIndex]
+            : viewId;
+        if (!_processModulesById.TryGetValue(moduleId, out var module))
+        {
+            return EmptyDisplayText;
+        }
+
+        return NormalizeDisplayText(module.DisplayName);
+    }
+
+    private static bool IsGenericDataViewTitle(string title, string titleResourceKey)
+    {
+        if (string.IsNullOrWhiteSpace(title) || title == EmptyDisplayText)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(titleResourceKey)
+            && titleResourceKey.EndsWith("_Menu_Data", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return title.Trim() switch
+        {
+            "数据" => true,
+            "Data" => true,
+            "生产数据" => true,
+            "Production Data" => true,
+            "实时数据" => true,
+            "Realtime Data" => true,
+            _ => false
+        };
     }
 
     private string ResolveTraceBatchNumber(ProductionPlanSelectionState state)
