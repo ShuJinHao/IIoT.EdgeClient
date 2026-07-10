@@ -1109,6 +1109,19 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
+    public void ClientRules_ShouldDocumentStablePlcRuntimeSnapshotContract()
+    {
+        var root = FindRepositoryRoot();
+        var ruleDoc = File.ReadAllText(Path.Combine(root, "docs", "客户端规则.md"));
+
+        Assert.Contains("持久化的 `PlcCode` 作为稳定身份", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("设备改名不得改变", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("配置全集的完整快照", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("发送合法空列表", ruleDoc, StringComparison.Ordinal);
+        Assert.Contains("`RuntimeStatus` 必须由客户端明确分类", ruleDoc, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SourceTree_ShouldNotReferenceRemovedMapperOrUnusedCentralPackages()
     {
         var root = FindRepositoryRoot();

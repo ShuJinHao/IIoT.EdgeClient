@@ -164,7 +164,7 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                         true,
                         "updated")
                 ]),
-            CancellationToken.None);
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
         Assert.Collection(
@@ -176,7 +176,85 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                 Assert.Equal("192.168.0.11", device.IpAddress);
                 Assert.Equal(5000, device.ConnectTimeout);
                 Assert.Equal("updated", device.Remark);
+                Assert.Equal("PLC-A", device.PlcCode);
             });
+    }
+
+    [Fact]
+    public async Task SaveNetworkDevicesHandler_WhenExistingDeviceRenamed_ShouldPreservePlcCode()
+    {
+        var existing = CreateNetworkDevice(id: 1, name: "PLC-A");
+        var repo = new InMemoryRepository<NetworkDeviceEntity>(existing);
+        var handler = new SaveNetworkDevicesHandler(repo);
+
+        var result = await handler.Handle(
+            new SaveNetworkDevicesCommand(
+                [
+                    new NetworkDeviceDto(
+                        1,
+                        "一号 PLC",
+                        DeviceType.PLC,
+                        "S7",
+                        "192.168.0.11",
+                        102,
+                        null,
+                        null,
+                        null,
+                        3000,
+                        true,
+                        null)
+                ]),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var updated = Assert.Single(repo.Items);
+        Assert.Equal("一号 PLC", updated.DeviceName);
+        Assert.Equal("PLC-A", updated.PlcCode);
+    }
+
+    [Fact]
+    public async Task SaveNetworkDevicesHandler_WhenNewDeviceNamesCollide_ShouldAssignDistinctPlcCodes()
+    {
+        var repo = new InMemoryRepository<NetworkDeviceEntity>();
+        var handler = new SaveNetworkDevicesHandler(repo);
+
+        var result = await handler.Handle(
+            new SaveNetworkDevicesCommand(
+                [
+                    new NetworkDeviceDto(
+                        0,
+                        "PLC-DUP",
+                        DeviceType.PLC,
+                        "S7",
+                        "192.168.0.11",
+                        102,
+                        null,
+                        null,
+                        null,
+                        3000,
+                        true,
+                        null),
+                    new NetworkDeviceDto(
+                        0,
+                        "plc-dup",
+                        DeviceType.PLC,
+                        "S7",
+                        "192.168.0.12",
+                        102,
+                        null,
+                        null,
+                        null,
+                        3000,
+                        true,
+                        null)
+                ]),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, repo.Items.Count);
+        Assert.Equal(2, repo.Items.Select(device => device.PlcCode).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Contains(repo.Items, device => device.PlcCode == "PLC-DUP");
+        Assert.Contains(repo.Items, device => device.PlcCode.StartsWith("PLC-INTERNAL-", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -712,7 +790,12 @@ public sealed class HardwareConfigFullSyncBehaviorTests
 
         private static NetworkDeviceEntity Clone(NetworkDeviceEntity entity)
         {
-            var clone = NetworkDeviceEntity.Create(entity.DeviceName, entity.DeviceType, entity.IpAddress, entity.Port1);
+            var clone = NetworkDeviceEntity.Create(
+                entity.DeviceName,
+                entity.DeviceType,
+                entity.IpAddress,
+                entity.Port1,
+                entity.PlcCode);
             clone.WithId(entity.Id);
             clone.UpdateDeviceModel(entity.DeviceModel);
             clone.UpdateProtocolFrame(entity.ProtocolFrame);

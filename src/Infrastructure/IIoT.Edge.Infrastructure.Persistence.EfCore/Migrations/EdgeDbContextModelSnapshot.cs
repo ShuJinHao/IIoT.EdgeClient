@@ -193,6 +193,12 @@ namespace IIoT.Edge.Infrastructure.Persistence.EfCore.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("device_name");
 
+                    b.Property<string>("PlcCode")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("plc_code");
+
                     b.Property<string>("DeviceType")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -241,6 +247,10 @@ namespace IIoT.Edge.Infrastructure.Persistence.EfCore.Migrations
 
                     b.HasIndex("IpAddress")
                         .HasDatabaseName("ix_hw_network_device_ip");
+
+                    b.HasIndex("PlcCode")
+                        .IsUnique()
+                        .HasDatabaseName("ux_hw_network_device_plc_code");
 
                     b.ToTable("hw_network_device", (string)null);
                 });

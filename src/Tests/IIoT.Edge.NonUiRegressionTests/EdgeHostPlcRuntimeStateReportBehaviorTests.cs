@@ -50,6 +50,73 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
         Assert.Null(uncollected.ObservedAtUtc);
     }
 
+    [Theory]
+    [InlineData(PlcConnectionState.Connecting, false, null, "Unknown")]
+    [InlineData(PlcConnectionState.Retrying, false, "连接超时", "Faulted")]
+    [InlineData(PlcConnectionState.Disconnected, false, null, "Disconnected")]
+    [InlineData(PlcConnectionState.Faulted, false, "配置错误", "Faulted")]
+    [InlineData(PlcConnectionState.Connected, true, null, "Connected")]
+    [InlineData(PlcConnectionState.Faulted, true, "旧错误", "Connected")]
+    public async Task SnapshotProvider_ShouldMapRuntimeStatusWithoutCloudGuessing(
+        PlcConnectionState connectionState,
+        bool isConnected,
+        string? lastError,
+        string expectedRuntimeStatus)
+    {
+        var plc = CreatePlc(1, "P1-AP01", "10.10.1.11", 6000, "MC-3E");
+        var provider = new EdgeHostPlcRuntimeStateSnapshotProvider(
+            new InMemoryRepository<NetworkDeviceEntity>(plc),
+            new FakePlcConnectionManager(
+                new PlcConnectionRuntimeSnapshot
+                {
+                    NetworkDeviceId = plc.Id,
+                    DeviceName = plc.DeviceName,
+                    ConnectionState = connectionState,
+                    IsConnected = isConnected,
+                    LastError = lastError
+                }));
+
+        var item = Assert.Single(await provider.GetCurrentAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(expectedRuntimeStatus, item.RuntimeStatus);
+        Assert.Equal(expectedRuntimeStatus == "Connected", item.IsConnected);
+        Assert.Equal(lastError, item.LastError);
+    }
+
+    [Fact]
+    public async Task SnapshotProvider_WhenConfiguredPlcRenamed_ShouldKeepStableCodeAndReportNewName()
+    {
+        var plc = CreatePlc(1, "P1-AP01", "10.10.1.11", 6000, "MC-3E");
+        plc.Rename("一号 PLC");
+        var provider = new EdgeHostPlcRuntimeStateSnapshotProvider(
+            new InMemoryRepository<NetworkDeviceEntity>(plc),
+            new FakePlcConnectionManager());
+
+        var item = Assert.Single(await provider.GetCurrentAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal("P1-AP01", item.PlcCode);
+        Assert.Equal("一号 PLC", item.ReportedPlcName);
+    }
+
+    [Fact]
+    public async Task SnapshotProvider_WhenNoConfiguredPlcs_ShouldIgnoreStaleRuntimeSnapshots()
+    {
+        var provider = new EdgeHostPlcRuntimeStateSnapshotProvider(
+            new InMemoryRepository<NetworkDeviceEntity>(),
+            new FakePlcConnectionManager(
+                new PlcConnectionRuntimeSnapshot
+                {
+                    NetworkDeviceId = 99,
+                    DeviceName = "STALE-PLC",
+                    ConnectionState = PlcConnectionState.Connected,
+                    IsConnected = true
+                }));
+
+        var items = await provider.GetCurrentAsync(TestContext.Current.CancellationToken);
+
+        Assert.Empty(items);
+    }
+
     [Fact]
     public async Task Reporter_WhenDeviceIsOnline_ShouldPostDedicatedPayload()
     {
@@ -120,6 +187,37 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
         Assert.Equal("device_unidentified", result.ReasonCode);
         Assert.Equal(1, deviceService.RefreshBootstrapCallCount);
         Assert.Equal(0, cloudHttp.PostCallCount);
+    }
+
+    [Fact]
+    public async Task Reporter_WhenSnapshotIsEmpty_ShouldPostEmptyFullSnapshot()
+    {
+        var cloudHttp = new FakeCloudHttpClient();
+        var deviceService = new FakeDeviceService();
+        deviceService.SetOnline(new DeviceSession
+        {
+            DeviceId = Guid.Parse("22222222-2222-2222-2222-222222222222"),
+            ClientCode = "EDGE-EMPTY",
+            DeviceName = "空配置上位机",
+            ProcessId = Guid.NewGuid(),
+            UploadAccessToken = "token",
+            UploadAccessTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(5)
+        });
+        var reporter = new EdgeHostPlcRuntimeStateReporter(
+            new StaticPlcRuntimeStateSnapshotProvider([]),
+            cloudHttp,
+            new FakeCloudApiEndpointProvider(),
+            deviceService,
+            new FakeLocalSystemRuntimeConfigService(),
+            new FakeLogService());
+
+        var result = await reporter.ReportOnceAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success);
+        Assert.Equal(0, result.ReportedCount);
+        Assert.Equal(1, cloudHttp.PostCallCount);
+        var payload = Assert.IsType<EdgeHostPlcRuntimeStateReport>(cloudHttp.LastPayload);
+        Assert.Empty(payload.PlcStates);
     }
 
     private static NetworkDeviceEntity CreatePlc(

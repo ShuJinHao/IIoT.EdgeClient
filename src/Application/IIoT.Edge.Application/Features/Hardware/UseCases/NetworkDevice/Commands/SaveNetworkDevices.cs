@@ -43,15 +43,28 @@ public class SaveNetworkDevicesHandler(
     public async Task<Result> Handle(
         SaveNetworkDevicesCommand request,
         CancellationToken cancellationToken)
-        => await SubmittedEntityListSaveHelper.ReplaceSubmittedAsync(
+    {
+        var existingItems = await repo.GetListAsync(_ => true, cancellationToken).ConfigureAwait(false);
+        var submittedIds = request.Devices
+            .Select(static dto => dto.Id)
+            .Where(static id => id > 0)
+            .ToHashSet();
+        var usedPlcCodes = existingItems
+            .Where(entity => submittedIds.Contains(entity.Id))
+            .Select(static entity => entity.PlcCode)
+            .Where(static code => !string.IsNullOrWhiteSpace(code))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return await SubmittedEntityListSaveHelper.ReplaceSubmittedAsync(
             repo,
             request.Devices,
-            ct => repo.GetListAsync(_ => true, ct),
+            _ => Task.FromResult(existingItems),
             static dto => dto.Id,
             Validate,
-            Create,
+            dto => CreateWithUniquePlcCode(dto, usedPlcCodes),
             Apply,
             cancellationToken).ConfigureAwait(false);
+    }
 
     private static NetworkDeviceEntity Create(NetworkDeviceDto dto)
         => NetworkDeviceEntity.Create(
@@ -59,6 +72,31 @@ public class SaveNetworkDevicesHandler(
             dto.DeviceType,
             dto.IpAddress,
             dto.Port1);
+
+    private static NetworkDeviceEntity CreateWithUniquePlcCode(
+        NetworkDeviceDto dto,
+        ISet<string> usedPlcCodes)
+    {
+        var entity = Create(dto);
+        if (usedPlcCodes.Add(entity.PlcCode))
+        {
+            return entity;
+        }
+
+        string fallbackCode;
+        do
+        {
+            fallbackCode = NetworkDeviceEntity.CreateInternalPlcCode();
+        }
+        while (!usedPlcCodes.Add(fallbackCode));
+
+        return NetworkDeviceEntity.Create(
+            dto.DeviceName,
+            dto.DeviceType,
+            dto.IpAddress,
+            dto.Port1,
+            fallbackCode);
+    }
 
     private static void Apply(NetworkDeviceEntity entity, NetworkDeviceDto dto)
     {

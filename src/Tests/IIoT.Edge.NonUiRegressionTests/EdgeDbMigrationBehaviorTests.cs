@@ -1,6 +1,8 @@
 using IIoT.Edge.Infrastructure.Persistence.EfCore;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.NonUiRegressionTests;
@@ -41,6 +43,73 @@ public sealed class EdgeDbMigrationBehaviorTests
             var networkColumns = await LoadColumnsAsync(connection, "hw_network_device");
             Assert.DoesNotContain("module_id", networkColumns);
             Assert.Contains("protocol_frame", networkColumns);
+            Assert.Contains("plc_code", networkColumns);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Migrate_WhenAddingStablePlcCode_ShouldBackfillWithoutBlockingLegacyRows()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-ef-migration-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var cancellationToken = TestContext.Current.CancellationToken;
+            var dbPath = Path.Combine(tempDir, "edge.db");
+            using var services = CreateServiceProvider(dbPath);
+            var factory = services.GetRequiredService<IDbContextFactory<EdgeDbContext>>();
+            await using var db = await factory.CreateDbContextAsync(cancellationToken);
+            var migrator = db.GetService<IMigrator>();
+
+            await migrator.MigrateAsync("20260701093000_AddNetworkDeviceProtocolFrame", cancellationToken);
+
+            await using (var connection = new SqliteConnection($"Data Source={dbPath}"))
+            {
+                await connection.OpenAsync(cancellationToken);
+                await using var insert = connection.CreateCommand();
+                insert.CommandText = $"""
+                    INSERT INTO hw_network_device
+                        (id, device_name, device_type, ip_address, port1, connect_timeout, is_enabled)
+                    VALUES
+                        (1, 'PLC-PRIMARY', 'PLC', '192.168.0.11', 102, 3000, 1),
+                        (2, 'PLC-DUP', 'PLC', '192.168.0.12', 102, 3000, 1),
+                        (3, 'plc-dup', 'PLC', '192.168.0.13', 102, 3000, 1),
+                        (4, 'PLC-INTERNAL-LEGACY', 'PLC', '192.168.0.14', 102, 3000, 1),
+                        (5, '{new string('X', 70)}', 'PLC', '192.168.0.15', 102, 3000, 1);
+                    """;
+                await insert.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            await migrator.MigrateAsync(cancellationToken: cancellationToken);
+
+            await using var verification = new SqliteConnection($"Data Source={dbPath}");
+            await verification.OpenAsync(cancellationToken);
+            await using var query = verification.CreateCommand();
+            query.CommandText = "SELECT id, plc_code FROM hw_network_device ORDER BY id;";
+
+            var plcCodes = new Dictionary<long, string>();
+            await using var reader = await query.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                plcCodes.Add(reader.GetInt64(0), reader.GetString(1));
+            }
+
+            Assert.Equal("PLC-PRIMARY", plcCodes[1]);
+            Assert.Equal("PLC-INTERNAL-2", plcCodes[2]);
+            Assert.Equal("PLC-INTERNAL-3", plcCodes[3]);
+            Assert.Equal("PLC-INTERNAL-4", plcCodes[4]);
+            Assert.Equal("PLC-INTERNAL-5", plcCodes[5]);
+            Assert.Equal(plcCodes.Count, plcCodes.Values.Distinct(StringComparer.OrdinalIgnoreCase).Count());
         }
         finally
         {

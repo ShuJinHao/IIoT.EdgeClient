@@ -38,11 +38,6 @@ public sealed class EdgeHostPlcRuntimeStateReporter(
             }
 
             var states = await snapshotProvider.GetCurrentAsync(cancellationToken).ConfigureAwait(false);
-            if (states.Count == 0)
-            {
-                return EdgeHostPlcRuntimeStateReportResult.Skipped("no_plc_runtime_states");
-            }
-
             var payload = new EdgeHostPlcRuntimeStateReport(
                 session.DeviceId,
                 session.ClientCode,

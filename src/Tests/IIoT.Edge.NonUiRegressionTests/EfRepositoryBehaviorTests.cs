@@ -34,6 +34,7 @@ public sealed class EfRepositoryBehaviorTests
             var loaded = await repository.GetByIdAsync<int>(id);
             Assert.NotNull(loaded);
             Assert.Equal(id, loaded!.Id);
+            Assert.Equal("PLC-A", loaded.PlcCode);
 
             loaded.Rename("PLC-B");
             loaded.UpdateEndpoint("192.168.0.10", 5001, null, 4500);
@@ -48,6 +49,7 @@ public sealed class EfRepositoryBehaviorTests
             Assert.NotNull(updated);
             Assert.Equal(id, updated!.Id);
             Assert.Equal("PLC-B", updated.DeviceName);
+            Assert.Equal("PLC-A", updated.PlcCode);
             Assert.Equal("192.168.0.10", updated.IpAddress);
             Assert.Equal(5001, updated.Port1);
             Assert.Equal(4500, updated.ConnectTimeout);

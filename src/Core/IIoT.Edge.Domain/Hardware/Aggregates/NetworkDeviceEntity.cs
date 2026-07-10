@@ -6,20 +6,28 @@ namespace IIoT.Edge.Domain.Hardware.Aggregates;
 
 public class NetworkDeviceEntity : BaseEntity<int>, IAggregateRoot, IDeviceIdentifiable
 {
+    public const int PlcCodeMaxLength = 64;
+    private const string InternalPlcCodePrefix = "PLC-INTERNAL-";
+
     protected NetworkDeviceEntity() { }
 
     public NetworkDeviceEntity(
         string deviceName,
         DeviceType deviceType,
         string ipAddress,
-        int port1)
+        int port1,
+        string? plcCode = null)
     {
         Rename(deviceName);
+        PlcCode = plcCode is null
+            ? CreateInitialPlcCode(deviceName)
+            : NormalizeAssignedPlcCode(plcCode);
         ChangeType(deviceType);
         UpdateEndpoint(ipAddress, port1, null, ConnectTimeout);
     }
 
     public string DeviceName { get; private set; } = null!;
+    public string PlcCode { get; private set; } = null!;
     public DeviceType DeviceType { get; private set; }
     public string? DeviceModel { get; private set; }
     public string? ProtocolFrame { get; private set; }
@@ -41,8 +49,12 @@ public class NetworkDeviceEntity : BaseEntity<int>, IAggregateRoot, IDeviceIdent
         string deviceName,
         DeviceType deviceType,
         string ipAddress,
-        int port1)
-        => new(deviceName, deviceType, ipAddress, port1);
+        int port1,
+        string? plcCode = null)
+        => new(deviceName, deviceType, ipAddress, port1, plcCode);
+
+    public static string CreateInternalPlcCode()
+        => $"{InternalPlcCodePrefix}{Guid.NewGuid():N}";
 
     public void Rename(string deviceName)
         => DeviceName = Require(deviceName, "网络设备名称不能为空。");
@@ -102,6 +114,27 @@ public class NetworkDeviceEntity : BaseEntity<int>, IAggregateRoot, IDeviceIdent
 
     private static string? Normalize(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string CreateInitialPlcCode(string? value)
+    {
+        var normalized = value?.Trim().ToUpperInvariant();
+        return !string.IsNullOrWhiteSpace(normalized)
+               && normalized.Length <= PlcCodeMaxLength
+               && !normalized.StartsWith(InternalPlcCodePrefix, StringComparison.Ordinal)
+            ? normalized
+            : CreateInternalPlcCode();
+    }
+
+    private static string NormalizeAssignedPlcCode(string value)
+    {
+        var normalized = Require(value, "PLC 稳定编码不能为空。").ToUpperInvariant();
+        if (normalized.Length > PlcCodeMaxLength)
+        {
+            throw new ArgumentException($"PLC 稳定编码不能超过 {PlcCodeMaxLength} 个字符。", nameof(value));
+        }
+
+        return normalized;
+    }
 
     private static int ValidatePort(int value, string message)
     {

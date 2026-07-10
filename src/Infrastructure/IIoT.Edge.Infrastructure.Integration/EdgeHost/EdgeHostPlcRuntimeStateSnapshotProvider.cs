@@ -43,72 +43,64 @@ public sealed class EdgeHostPlcRuntimeStateSnapshotProvider(
             .GroupBy(static snapshot => snapshot.DeviceName.Trim(), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.OrdinalIgnoreCase);
 
-        if (normalizedConfiguredPlcs.Length > 0)
-        {
-            return normalizedConfiguredPlcs
-                .Select(device =>
+        return normalizedConfiguredPlcs
+            .Select(device =>
+            {
+                snapshotsById.TryGetValue(device.Id, out var snapshot);
+                if (snapshot is null)
                 {
-                    snapshotsById.TryGetValue(device.Id, out var snapshot);
-                    if (snapshot is null)
-                    {
-                        snapshotsByName.TryGetValue(device.DeviceName.Trim(), out snapshot);
-                    }
+                    snapshotsByName.TryGetValue(device.DeviceName.Trim(), out snapshot);
+                }
 
-                    return CreateReportItem(device, snapshot);
-                })
-                .ToArray();
-        }
-
-        return runtimeSnapshots
-            .Where(static snapshot => !string.IsNullOrWhiteSpace(snapshot.DeviceName))
-            .OrderBy(static snapshot => snapshot.DeviceName, StringComparer.OrdinalIgnoreCase)
-            .Select(static snapshot => CreateReportItem(null, snapshot))
+                return CreateReportItem(device, snapshot);
+            })
             .ToArray();
     }
 
     private static EdgeHostPlcRuntimeStateReportItem CreateReportItem(
-        NetworkDeviceEntity? configuredDevice,
+        NetworkDeviceEntity configuredDevice,
         PlcConnectionRuntimeSnapshot? runtimeSnapshot)
     {
-        var plcName = FirstNonEmpty(configuredDevice?.DeviceName, runtimeSnapshot?.DeviceName);
+        var plcName = FirstNonEmpty(configuredDevice.DeviceName, runtimeSnapshot?.DeviceName);
         if (runtimeSnapshot is null)
         {
             return new EdgeHostPlcRuntimeStateReportItem(
-                PlcCode: plcName,
+                PlcCode: configuredDevice.PlcCode,
                 ReportedPlcName: plcName,
                 IsConnected: false,
                 RuntimeStatus: Unknown,
-                Protocol: FirstNonEmpty(configuredDevice?.ProtocolFrame, configuredDevice?.DeviceModel),
+                Protocol: FirstNonEmpty(configuredDevice.ProtocolFrame, configuredDevice.DeviceModel),
                 Address: FormatAddress(configuredDevice));
         }
 
         var runtimeStatus = ResolveRuntimeStatus(runtimeSnapshot);
         return new EdgeHostPlcRuntimeStateReportItem(
-            PlcCode: plcName,
+            PlcCode: configuredDevice.PlcCode,
             ReportedPlcName: plcName,
             IsConnected: string.Equals(runtimeStatus, Connected, StringComparison.Ordinal),
             RuntimeStatus: runtimeStatus,
             ObservedAtUtc: ResolveObservedAtUtc(runtimeSnapshot),
-            Protocol: FirstNonEmpty(configuredDevice?.ProtocolFrame, configuredDevice?.DeviceModel),
+            Protocol: FirstNonEmpty(configuredDevice.ProtocolFrame, configuredDevice.DeviceModel),
             Address: FormatAddress(configuredDevice),
             LastError: Normalize(runtimeSnapshot.LastError));
     }
 
     private static string ResolveRuntimeStatus(PlcConnectionRuntimeSnapshot snapshot)
     {
-        if (snapshot.ConnectionState == PlcConnectionState.Faulted)
-        {
-            return Faulted;
-        }
-
         if (snapshot.IsConnected)
         {
             return Connected;
         }
 
+        if (snapshot.ConnectionState == PlcConnectionState.Faulted
+            || !string.IsNullOrWhiteSpace(snapshot.LastError))
+        {
+            return Faulted;
+        }
+
         return snapshot.ConnectionState switch
         {
-            PlcConnectionState.Unknown => Unknown,
+            PlcConnectionState.Unknown or PlcConnectionState.Connecting => Unknown,
             _ => Disconnected
         };
     }

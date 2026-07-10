@@ -18,6 +18,11 @@ public class NetworkDeviceConfiguration : IEntityTypeConfiguration<NetworkDevice
             .HasMaxLength(100)
             .HasColumnName("device_name");
 
+        builder.Property(x => x.PlcCode)
+            .IsRequired()
+            .HasMaxLength(NetworkDeviceEntity.PlcCodeMaxLength)
+            .HasColumnName("plc_code");
+
         builder.Property(x => x.DeviceType)
             .IsRequired()
             .HasConversion<string>()
@@ -52,5 +57,9 @@ public class NetworkDeviceConfiguration : IEntityTypeConfiguration<NetworkDevice
 
         builder.HasIndex(x => x.IpAddress)
             .HasDatabaseName("ix_hw_network_device_ip");
+
+        builder.HasIndex(x => x.PlcCode)
+            .IsUnique()
+            .HasDatabaseName("ux_hw_network_device_plc_code");
     }
 }
