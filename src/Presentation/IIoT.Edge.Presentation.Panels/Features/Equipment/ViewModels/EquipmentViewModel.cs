@@ -311,7 +311,26 @@ public class EquipmentViewModel : PresentationViewModelBase
 
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
+        RefreshAllDeviceOptionLanguage();
         OnPropertyChanged(nameof(CurrentProcessDisplayName));
+    }
+
+    private void RefreshAllDeviceOptionLanguage()
+    {
+        for (var index = 0; index < DeviceFilters.Count; index++)
+        {
+            if (!string.Equals(
+                    DeviceFilters[index].Key,
+                    IDeviceSelectionService.AllFilterKey,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            DeviceFilters[index] = CreateAllDeviceOption();
+            ApplySelectedDevice(_deviceSelectionService.SelectedDeviceKey);
+            return;
+        }
     }
 
     private async Task RefreshRecipeAsync()

@@ -272,7 +272,8 @@
                     <ContentPresenter
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center"
-                        Content="{TemplateBinding Content}" />
+                        Content="{TemplateBinding Content}"
+                        ContentTemplate="{TemplateBinding ContentTemplate}" />
                 </Border>
             </ControlTemplate>
         </Setter>
@@ -297,7 +298,8 @@
                     <ContentPresenter
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center"
-                        Content="{TemplateBinding Content}" />
+                        Content="{TemplateBinding Content}"
+                        ContentTemplate="{TemplateBinding ContentTemplate}" />
                 </Border>
             </ControlTemplate>
         </Setter>

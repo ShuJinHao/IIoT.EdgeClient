@@ -97,6 +97,22 @@ public sealed class EquipmentViewModelBehaviorTests
         Assert.Equal("Homogenization", viewModel.CurrentProcessDisplayName);
     }
 
+    [Fact]
+    public void DeviceFilter_WhenLanguageChanges_ShouldRefreshAllSummaryDisplayWithoutChangingSelection()
+    {
+        var languageService = new TestAppLanguageService();
+        var viewModel = CreateViewModel([], [], languageService);
+
+        Assert.Equal(IDeviceSelectionService.AllFilterKey, viewModel.SelectedDeviceFilter?.Key);
+        Assert.Equal("全部/汇总", viewModel.SelectedDeviceFilter?.DisplayName);
+
+        languageService.Change(CultureInfo.GetCultureInfo("en-US"));
+
+        Assert.Equal(IDeviceSelectionService.AllFilterKey, viewModel.SelectedDeviceFilter?.Key);
+        Assert.Equal("All / Summary", viewModel.SelectedDeviceFilter?.DisplayName);
+        Assert.Single(viewModel.DeviceFilters);
+    }
+
     private static EquipmentViewModel CreateViewModel(
         IEnumerable<MenuInfo> menus,
         IEnumerable<IEdgeProcessModule> processModules,

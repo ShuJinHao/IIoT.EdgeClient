@@ -1,6 +1,10 @@
 using System.Globalization;
+using Avalonia.Controls;
+using Avalonia.Headless.XUnit;
+using Avalonia.VisualTree;
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Presentation.Navigation.Features.Configuration;
+using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Modularity;
 using IIoT.Edge.UI.Shared.PluginSystem;
@@ -78,6 +82,41 @@ public sealed class ConfigurationWorkspaceViewModelBehaviorTests
         Assert.Equal("Recipe", viewModel.Tabs[1].Title);
     }
 
+    [AvaloniaFact]
+    public void ConfigurationWorkspaceView_ShouldRefreshVisibleTabTitles()
+    {
+        var languageService = new FakeLanguageService();
+        using var viewModel = CreateViewModel(
+            permissionService: new FakeClientPermissionService(Permissions.HardwareConfig, Permissions.ParamConfig),
+            languageService: languageService);
+        var view = new ConfigurationWorkspaceView
+        {
+            DataContext = viewModel
+        };
+        var window = new Window
+        {
+            Width = 800,
+            Height = 600,
+            Content = view
+        };
+
+        try
+        {
+            window.Show();
+
+            Assert.Contains("配方", GetVisibleTabTitles(view));
+
+            languageService.Change(CultureInfo.GetCultureInfo("en-US"));
+
+            Assert.Contains("Recipe", GetVisibleTabTitles(view));
+            Assert.DoesNotContain("配方", GetVisibleTabTitles(view));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     [Fact]
     public void ConfigurationWorkspace_ShouldStopWhenMultiplePluginConfigurationGroupsExist()
     {
@@ -111,6 +150,20 @@ public sealed class ConfigurationWorkspaceViewModelBehaviorTests
             registry,
             permissionService ?? new FakeClientPermissionService(),
             languageService ?? new FakeLanguageService());
+    }
+
+    private static string[] GetVisibleTabTitles(ConfigurationWorkspaceView view)
+    {
+        var tabs = view.FindControl<EdgeSegmentedNav>("ConfigurationTabsHost");
+        Assert.NotNull(tabs);
+
+        return tabs
+            .GetVisualDescendants()
+            .OfType<TextBlock>()
+            .Select(textBlock => textBlock.Text)
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .Cast<string>()
+            .ToArray();
     }
 
     private static MenuInfo CreateMenu(

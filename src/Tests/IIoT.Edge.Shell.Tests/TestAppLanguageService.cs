@@ -27,7 +27,10 @@ internal sealed class TestAppLanguageService : IAppLanguageService
         LanguageChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    public string GetString(string key, string fallback = "") => fallback;
+    public string GetString(string key, string fallback = "")
+        => key == "Panels_Filter_AllOrSummary"
+            ? Current.Name == "en-US" ? "All / Summary" : "全部/汇总"
+            : fallback;
 
     public string Format(string key, string fallback, params object[] args)
         => string.Format(CultureInfo.CurrentCulture, fallback, args);

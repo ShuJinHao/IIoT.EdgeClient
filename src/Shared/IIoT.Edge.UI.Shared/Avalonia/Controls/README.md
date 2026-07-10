@@ -45,6 +45,7 @@ Phase 8.32 起，`IIoT.Edge.UI.Shared` 以少量基础控件 + 属性、变体�
 - 新增表单行只使用 `EdgeFieldRow` 承接 label、说明、输入控件和只读/布尔场景；说明裁切、tooltip、对齐由共享模板负责。
 - 新增参数分组不再使用独立 C# 控件，统一用 `EdgeCard.parameter-panel + EdgeFieldRow`；不得重新新增 `EdgeParameterPanel` 或同类场景容器。
 - 新增分段选择使用 `EdgeSegmentedNav`；它用于二级导航、模式切换和登录方式选择，不得用 `Border + StackPanel` 拼分段按钮。
+- 共享选择控件重写项容器模板时必须转发调用方的 `ContentTemplate`；不得退化为对象初次 `ToString()`，动态语言验收必须覆盖真实可见文本而不只验证 ViewModel 属性。
 - 新增内容页签使用 `EdgeTabControl`；`TabItem` 只允许作为 `EdgeTabControl` 的子项存在，页签视觉由共享样式控制，不新增 `EdgeTabItem` 包壳控件。
 - 新增表格外壳只使用 `EdgeTablePanel`，标题、说明、筛选、动作、状态、内容、页脚和空态都通过它的属性或共享 class 表达。
 - 新增数据表只使用 `EdgeDataGrid` 和共享列控件；`Density="Compact"` 用于高密运行表格，`Normal` 用于常规表格，`Diagnostic` 用于诊断/日志类表格。
