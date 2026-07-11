@@ -3,12 +3,49 @@
 namespace IIoT.Edge.Application.Features.Production.CapacityView;
 
 public record CapacityViewResult(
-    List<DailyCapacitySnapshot> Rows,
+    CapacityQueryState State,
+    IReadOnlyList<DailyCapacitySnapshot> Rows,
     int PeriodTotal,
     int PeriodOk,
     int PeriodNg,
     string PeriodYield,
-    string AvgDaily);
+    string AvgDaily,
+    string ReasonCode)
+{
+    public static CapacityViewResult Success(
+        IReadOnlyList<DailyCapacitySnapshot> rows,
+        int periodTotal,
+        int periodOk,
+        int periodNg,
+        string periodYield,
+        string avgDaily)
+        => new(
+            CapacityQueryState.Success,
+            rows,
+            periodTotal,
+            periodOk,
+            periodNg,
+            periodYield,
+            avgDaily,
+            CapacityQueryReasonCodes.Success);
+
+    public static CapacityViewResult Empty()
+        => new(
+            CapacityQueryState.Empty,
+            [],
+            0,
+            0,
+            0,
+            "0%",
+            "0",
+            CapacityQueryReasonCodes.Empty);
+
+    public static CapacityViewResult Unavailable(string reasonCode)
+        => new(CapacityQueryState.Unavailable, [], 0, 0, 0, "0%", "0", reasonCode);
+
+    public static CapacityViewResult InvalidPayload(string reasonCode)
+        => new(CapacityQueryState.InvalidPayload, [], 0, 0, 0, "0%", "0", reasonCode);
+}
 
 public record LoadTodayCapacityQuery(
     Guid DeviceId,
@@ -39,7 +76,8 @@ public class LoadTodayCapacityHandler(CapacityCloudQueryService service)
         var rows = await service.QueryByProductionDayAsync(
             request.DeviceId,
             productionDate,
-            request.PlcName);
+            request.PlcName,
+            cancellationToken);
 
         return CapacityQueryHelper.ToResult(rows, 1);
     }
@@ -58,34 +96,65 @@ public class QueryCapacityHistoryHandler(CapacityCloudQueryService service)
                 request.DeviceId,
                 request.QueryDate.Year,
                 request.QueryDate.Month,
-                request.PlcName),
+                request.PlcName,
+                cancellationToken),
 
             CapacityQueryModes.Year => await service.QueryByYearAsync(
                 request.DeviceId,
                 request.QueryDate.Year,
-                request.PlcName),
+                request.PlcName,
+                cancellationToken),
 
             _ => await service.QueryByProductionDayAsync(
                 request.DeviceId,
                 request.QueryDate.Date,
-                request.PlcName)
+                request.PlcName,
+                cancellationToken)
         };
 
-        var divisor = request.QueryMode == CapacityQueryModes.Year ? 12 : Math.Max(1, rows.Count);
+        var divisor = request.QueryMode == CapacityQueryModes.Year
+            ? 12
+            : Math.Max(1, rows.Value?.Count ?? 0);
         return CapacityQueryHelper.ToResult(rows, divisor);
     }
 }
 
 internal static class CapacityQueryHelper
 {
-    internal static CapacityViewResult ToResult(List<DailyCapacitySnapshot> rows, int divisor)
+    internal static CapacityViewResult ToResult(
+        CapacityQueryResult<IReadOnlyList<DailyCapacitySnapshot>> queryResult,
+        int divisor)
     {
+        if (queryResult.State != CapacityQueryState.Success)
+        {
+            return queryResult.State switch
+            {
+                CapacityQueryState.Empty => CapacityViewResult.Empty(),
+                CapacityQueryState.Unavailable => CapacityViewResult.Unavailable(queryResult.ReasonCode),
+                CapacityQueryState.InvalidPayload => CapacityViewResult.InvalidPayload(queryResult.ReasonCode),
+                _ => CapacityViewResult.InvalidPayload(
+                    CapacityQueryReasonCodes.CapacityStateInvalid)
+            };
+        }
+
+        var rows = queryResult.Value ?? [];
+        if (rows.Count == 0)
+        {
+            return CapacityViewResult.Empty();
+        }
+
         var total = rows.Sum(item => item.Total);
         var ok = rows.Sum(item => item.OkCount);
         var ng = rows.Sum(item => item.NgCount);
         var yield = total > 0 ? $"{ok * 100.0 / total:F2}%" : "0%";
         var avgDaily = $"{total / Math.Max(1, divisor)}";
 
-        return new CapacityViewResult(rows, total, ok, ng, yield, avgDaily);
+        return CapacityViewResult.Success(
+            rows,
+            total,
+            ok,
+            ng,
+            yield,
+            avgDaily);
     }
 }

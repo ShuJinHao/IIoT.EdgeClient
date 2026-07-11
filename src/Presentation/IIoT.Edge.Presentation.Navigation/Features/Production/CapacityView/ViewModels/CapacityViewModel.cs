@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using Avalonia.Controls;
 using Avalonia.Media;
+using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Features.Production.CapacityView;
 using IIoT.Edge.Presentation.Navigation.Localization;
@@ -10,7 +11,6 @@ using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 
-using IIoT.Edge.Application.Abstractions.Cloud;
 namespace IIoT.Edge.Presentation.Navigation.Features.Production.CapacityView;
 
 public class CapacityViewModel : NavigationViewModelBase
@@ -157,7 +157,6 @@ public class CapacityViewModel : NavigationViewModelBase
     }
 
     public ICommand QueryCommand { get; }
-    public ICommand ExportCommand { get; }
 
     public CapacityViewModel(
         ICapacityQueryFacade capacityQueryFacade,
@@ -186,7 +185,6 @@ public class CapacityViewModel : NavigationViewModelBase
         _deviceSelectionService = deviceSelectionService;
 
         QueryCommand = new AsyncCommand(() => RunViewTaskAsync(QueryHistoryAsync, GetText("Navigation_Capacity_QueryFailed", "产能查询失败。")));
-        ExportCommand = new BaseCommand(_ => { });
         RefreshQueryModes();
         RefreshChartSeries();
         SetSelectedQueryMode(_selectedQueryMode, true);
@@ -217,6 +215,7 @@ public class CapacityViewModel : NavigationViewModelBase
     {
         if (!CanQueryCloud)
         {
+            ClearFeedback();
             SetDailyRecords(Array.Empty<DailyCapacitySnapshot>());
             ClearSummary();
             RefreshChart();
@@ -259,12 +258,41 @@ public class CapacityViewModel : NavigationViewModelBase
 
     private void ApplyResult(CapacityViewResult result)
     {
-        SetDailyRecords(result.Rows);
-        PeriodTotal = result.PeriodTotal;
-        PeriodOk = result.PeriodOk;
-        PeriodNg = result.PeriodNg;
-        PeriodYield = result.PeriodYield;
-        AvgDaily = result.AvgDaily;
+        SetDailyRecords(
+            result.State == CapacityQueryState.Success
+                ? result.Rows
+                : Array.Empty<DailyCapacitySnapshot>());
+
+        if (result.State == CapacityQueryState.Success)
+        {
+            ClearFeedback();
+            PeriodTotal = result.PeriodTotal;
+            PeriodOk = result.PeriodOk;
+            PeriodNg = result.PeriodNg;
+            PeriodYield = result.PeriodYield;
+            AvgDaily = result.AvgDaily;
+        }
+        else
+        {
+            ClearSummary();
+            switch (result.State)
+            {
+                case CapacityQueryState.Empty:
+                    ClearFeedback();
+                    break;
+                case CapacityQueryState.Unavailable:
+                    SetError(GetText(
+                        "Navigation_Capacity_Unavailable",
+                        "云端产能服务暂不可用，请检查 Cloud 连接后重试。"));
+                    break;
+                case CapacityQueryState.InvalidPayload:
+                    SetError(GetText(
+                        "Navigation_Capacity_InvalidPayload",
+                        "云端产能响应格式无效，请检查服务契约后重试。"));
+                    break;
+            }
+        }
+
         RefreshChart();
     }
 

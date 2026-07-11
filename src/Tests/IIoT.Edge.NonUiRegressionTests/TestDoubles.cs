@@ -1142,6 +1142,7 @@ internal sealed class FakeCloudHttpClient : ICloudHttpClient
     public List<string> GetUrls { get; } = new();
     public TaskCompletionSource? PostStarted { get; set; }
     public Task? PostWait { get; set; }
+    public Exception? GetException { get; set; }
 
     public void EnqueuePostResult(bool result)
         => _postResults.Enqueue(
@@ -1210,6 +1211,11 @@ internal sealed class FakeCloudHttpClient : ICloudHttpClient
 
     public Task<CloudCallResult<string>> GetAsync(string url, CloudRequestOptions? options = null)
     {
+        if (GetException is not null)
+        {
+            throw GetException;
+        }
+
         GetCallCount++;
         LastGetOptions = options;
         GetUrls.Add(url);

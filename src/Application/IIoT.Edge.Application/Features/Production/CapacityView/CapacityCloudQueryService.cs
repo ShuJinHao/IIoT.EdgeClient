@@ -1,7 +1,8 @@
-using IIoT.Edge.Application.Abstractions.Cloud;
-﻿using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
-using IIoT.Edge.Application.Abstractions.Device;
+using System.Globalization;
 using System.Text.Json;
+using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
 
 namespace IIoT.Edge.Application.Features.Production.CapacityView;
 
@@ -12,44 +13,73 @@ namespace IIoT.Edge.Application.Features.Production.CapacityView;
 /// </summary>
 public class CapacityCloudQueryService
 {
+    private const string HourlyScene = "hourly";
+    private const string SummaryScene = "summary";
+    private const string SummaryRangeScene = "summary_range";
+
     private readonly ICloudHttpClient _cloudHttpClient;
     private readonly ICloudApiPathProvider _apiPathProvider;
     private readonly ShiftConfig _shiftConfig;
+    private readonly ILogService _logger;
 
     public CapacityCloudQueryService(
         ICloudHttpClient cloudHttpClient,
         ICloudApiPathProvider apiPathProvider,
-        ShiftConfig shiftConfig)
+        ShiftConfig shiftConfig,
+        ILogService logger)
     {
         _cloudHttpClient = cloudHttpClient;
         _apiPathProvider = apiPathProvider;
         _shiftConfig = shiftConfig;
+        _logger = logger;
     }
 
-    // 按生产日查询：优先使用分时明细，缺失时回退到汇总数据。
-
-    public async Task<List<DailyCapacitySnapshot>> QueryByProductionDayAsync(
-        Guid deviceId, DateTime productionDate, string plcName)
-
+    /// <summary>
+    /// 按生产日查询：优先使用分时明细；只有分时接口返回合法空集时才查询汇总。
+    /// </summary>
+    public async Task<CapacityQueryResult<IReadOnlyList<DailyCapacitySnapshot>>> QueryByProductionDayAsync(
+        Guid deviceId,
+        DateTime productionDate,
+        string plcName,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var nextDay = productionDate.AddDays(1);
 
-        var hourlyToday = await QueryHourlyAsync(deviceId, productionDate, plcName);
-        var hourlyNextDay = await QueryHourlyAsync(deviceId, nextDay, plcName);
+        var hourlyToday = await QueryHourlyAsync(deviceId, productionDate, plcName, cancellationToken);
+        if (hourlyToday.State is CapacityQueryState.Unavailable or CapacityQueryState.InvalidPayload)
+        {
+            return ForwardFailure<
+                IReadOnlyList<HourlyCapacitySlotSnapshot>,
+                IReadOnlyList<DailyCapacitySnapshot>>(hourlyToday);
+        }
 
-        var nightSlots = hourlyNextDay
-            .Where(x => x.StartHour < _shiftConfig.DayStartTime.Hours ||
-                        (x.StartHour == _shiftConfig.DayStartTime.Hours &&
-                         x.StartMinute < _shiftConfig.DayStartTime.Minutes))
+        var hourlyNextDay = await QueryHourlyAsync(deviceId, nextDay, plcName, cancellationToken);
+        if (hourlyNextDay.State is CapacityQueryState.Unavailable or CapacityQueryState.InvalidPayload)
+        {
+            return ForwardFailure<
+                IReadOnlyList<HourlyCapacitySlotSnapshot>,
+                IReadOnlyList<DailyCapacitySnapshot>>(hourlyNextDay);
+        }
+
+        var hourlyTodayRows = hourlyToday.Value ?? [];
+        var nightSlots = (hourlyNextDay.Value ?? [])
+            .Where(x => x.StartHour < _shiftConfig.DayStartTime.Hours
+                        || (x.StartHour == _shiftConfig.DayStartTime.Hours
+                            && x.StartMinute < _shiftConfig.DayStartTime.Minutes))
             .ToList();
 
-        if (hourlyToday.Count > 0 || nightSlots.Count > 0)
+        var productionDaySlots = hourlyTodayRows
+            .Concat(nightSlots)
+            .OrderBy(x => x.SlotOrder)
+            .ToList();
+
+        if (productionDaySlots.Count > 0)
         {
-            return hourlyToday.Concat(nightSlots)
-                .OrderBy(x => x.SlotOrder)
+            var rows = productionDaySlots
                 .Select(x => new DailyCapacitySnapshot
                 {
-                    Date = productionDate.ToString("MM-dd"),
+                    Date = productionDate.ToString("MM-dd", CultureInfo.InvariantCulture),
                     DateFull = x.TimeLabel,
                     DayOfWeek = x.ShiftCode,
                     Total = x.TotalCount,
@@ -58,75 +88,115 @@ public class CapacityCloudQueryService
                     Yield = x.TotalCount > 0
                         ? $"{x.OkCount * 100.0 / x.TotalCount:F1}%"
                         : "0%"
-                }).ToList();
+                })
+                .ToList();
+
+            return CapacityQueryResult<IReadOnlyList<DailyCapacitySnapshot>>.Success(rows);
         }
 
-        var summaryToday = await QuerySummaryAsync(deviceId, productionDate, plcName);
-        var summaryNextDay = await QuerySummaryAsync(deviceId, nextDay, plcName);
-
-        if (summaryToday is null && summaryNextDay is null)
-            return new List<DailyCapacitySnapshot>();
-
-        var totalCount = (summaryToday?.TotalCount ?? 0) + (summaryNextDay?.NightShiftTotal ?? 0);
-        var okCount = (summaryToday?.OkCount ?? 0) + (summaryNextDay?.NightShiftOk ?? 0);
-        var ngCount = (summaryToday?.NgCount ?? 0) + (summaryNextDay?.NightShiftNg ?? 0);
-
-        return new List<DailyCapacitySnapshot>
+        var summaryToday = await QuerySummaryAsync(deviceId, productionDate, plcName, cancellationToken);
+        if (summaryToday.State is CapacityQueryState.Unavailable or CapacityQueryState.InvalidPayload)
         {
+            return ForwardFailure<
+                DailyCapacitySummarySnapshot,
+                IReadOnlyList<DailyCapacitySnapshot>>(summaryToday);
+        }
+
+        var summaryNextDay = await QuerySummaryAsync(deviceId, nextDay, plcName, cancellationToken);
+        if (summaryNextDay.State is CapacityQueryState.Unavailable or CapacityQueryState.InvalidPayload)
+        {
+            return ForwardFailure<
+                DailyCapacitySummarySnapshot,
+                IReadOnlyList<DailyCapacitySnapshot>>(summaryNextDay);
+        }
+
+        if (summaryToday.State == CapacityQueryState.Empty
+            && summaryNextDay.State == CapacityQueryState.Empty)
+        {
+            return CapacityQueryResult<IReadOnlyList<DailyCapacitySnapshot>>.Empty();
+        }
+
+        var today = summaryToday.Value;
+        var tomorrow = summaryNextDay.Value;
+        var totalCount = (today?.TotalCount ?? 0) + (tomorrow?.NightShiftTotal ?? 0);
+        var okCount = (today?.OkCount ?? 0) + (tomorrow?.NightShiftOk ?? 0);
+        var ngCount = (today?.NgCount ?? 0) + (tomorrow?.NightShiftNg ?? 0);
+
+        IReadOnlyList<DailyCapacitySnapshot> summaryRows =
+        [
             new()
             {
-                Date            = productionDate.ToString("MM-dd"),
-                DateFull        = productionDate.ToString("yyyy-MM-dd"),
-                DayOfWeek       = productionDate.ToString("ddd"),
-                Total           = totalCount,
-                OkCount         = okCount,
-                NgCount         = ngCount,
-                Yield           = totalCount > 0 ? $"{okCount * 100.0 / totalCount:F1}%" : "0%",
-                DayShiftTotal   = summaryToday?.DayShiftTotal  ?? 0,
-                DayShiftOk      = summaryToday?.DayShiftOk     ?? 0,
-                DayShiftNg      = summaryToday?.DayShiftNg     ?? 0,
-                NightShiftTotal = (summaryToday?.NightShiftTotal ?? 0) + (summaryNextDay?.NightShiftTotal ?? 0),
-                NightShiftOk    = (summaryToday?.NightShiftOk   ?? 0) + (summaryNextDay?.NightShiftOk   ?? 0),
-                NightShiftNg    = (summaryToday?.NightShiftNg   ?? 0) + (summaryNextDay?.NightShiftNg   ?? 0),
+                Date = productionDate.ToString("MM-dd", CultureInfo.InvariantCulture),
+                DateFull = productionDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                DayOfWeek = productionDate.ToString("ddd", CultureInfo.CurrentCulture),
+                Total = totalCount,
+                OkCount = okCount,
+                NgCount = ngCount,
+                Yield = totalCount > 0 ? $"{okCount * 100.0 / totalCount:F1}%" : "0%",
+                DayShiftTotal = today?.DayShiftTotal ?? 0,
+                DayShiftOk = today?.DayShiftOk ?? 0,
+                DayShiftNg = today?.DayShiftNg ?? 0,
+                NightShiftTotal = (today?.NightShiftTotal ?? 0) + (tomorrow?.NightShiftTotal ?? 0),
+                NightShiftOk = (today?.NightShiftOk ?? 0) + (tomorrow?.NightShiftOk ?? 0),
+                NightShiftNg = (today?.NightShiftNg ?? 0) + (tomorrow?.NightShiftNg ?? 0)
             }
-        };
+        ];
+
+        return CapacityQueryResult<IReadOnlyList<DailyCapacitySnapshot>>.Success(summaryRows);
     }
 
-    // 按月查询：返回当月每日汇总。
-
-    public async Task<List<DailyCapacitySnapshot>> QueryByMonthAsync(
-        Guid deviceId, int year, int month, string plcName)
-
+    /// <summary>
+    /// 按月查询：返回当月每日汇总。
+    /// </summary>
+    public async Task<CapacityQueryResult<IReadOnlyList<DailyCapacitySnapshot>>> QueryByMonthAsync(
+        Guid deviceId,
+        int year,
+        int month,
+        string plcName,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var startDate = new DateTime(year, month, 1);
         var endDate = startDate.AddMonths(1).AddDays(-1);
 
-        var rows = await QuerySummaryRangeAsync(deviceId, startDate, endDate, plcName);
-        return rows.Where(r => r.Total > 0).ToList();
+        return await QuerySummaryRangeAsync(
+            deviceId,
+            startDate,
+            endDate,
+            plcName,
+            cancellationToken);
     }
 
-    // 按年查询：按月份聚合全年汇总。
-
-    public async Task<List<DailyCapacitySnapshot>> QueryByYearAsync(
-        Guid deviceId, int year, string plcName)
-
+    /// <summary>
+    /// 按年查询：按月份聚合全年汇总。
+    /// </summary>
+    public async Task<CapacityQueryResult<IReadOnlyList<DailyCapacitySnapshot>>> QueryByYearAsync(
+        Guid deviceId,
+        int year,
+        string plcName,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var startDate = new DateTime(year, 1, 1);
         var endDate = new DateTime(year, 12, 31);
 
-        var rows = await QuerySummaryRangeAsync(deviceId, startDate, endDate, plcName);
+        var result = await QuerySummaryRangeAsync(deviceId, startDate, endDate, plcName, cancellationToken);
+        if (result.State is CapacityQueryState.Unavailable or CapacityQueryState.InvalidPayload)
+        {
+            return result;
+        }
 
-        return rows
-            .GroupBy(r => r.DateFull.Substring(0, 7))
-            .Select(g =>
+        var rows = (result.Value ?? [])
+            .GroupBy(row => row.DateFull[..7])
+            .Select(group =>
             {
-                var total = g.Sum(x => x.Total);
-                var ok = g.Sum(x => x.OkCount);
-                var ng = g.Sum(x => x.NgCount);
+                var total = group.Sum(x => x.Total);
+                var ok = group.Sum(x => x.OkCount);
+                var ng = group.Sum(x => x.NgCount);
                 return new DailyCapacitySnapshot
                 {
-                    Date = g.Key,
-                    DateFull = g.Key,
+                    Date = group.Key,
+                    DateFull = group.Key,
                     DayOfWeek = "--",
                     Total = total,
                     OkCount = ok,
@@ -134,212 +204,246 @@ public class CapacityCloudQueryService
                     Yield = total > 0 ? $"{ok * 100.0 / total:F1}%" : "0%"
                 };
             })
-            .OrderBy(r => r.DateFull)
+            .OrderBy(row => row.DateFull)
             .ToList();
+
+        return rows.Count == 0
+            ? CapacityQueryResult<IReadOnlyList<DailyCapacitySnapshot>>.Empty()
+            : CapacityQueryResult<IReadOnlyList<DailyCapacitySnapshot>>.Success(rows);
     }
 
-    // 私有查询：调用云端接口并解析响应。
-
-    private async Task<List<HourlyCapacitySlotSnapshot>> QueryHourlyAsync(
-        Guid deviceId, DateTime date, string plcName)
-
-    {
-        var path = _apiPathProvider.GetCapacityHourlyPath();
-        var url = string.IsNullOrEmpty(plcName)
-            ? $"{path}?deviceId={deviceId}&date={date:yyyy-MM-dd}"
-            : $"{path}?deviceId={deviceId}&date={date:yyyy-MM-dd}&plcName={Uri.EscapeDataString(plcName)}";
-
-
-        var result = await _cloudHttpClient.GetAsync(url);
-        if (!result.IsSuccess || string.IsNullOrWhiteSpace(result.Payload)) return new();
-
-        try
-        {
-            using var doc = JsonDocument.Parse(result.Payload);
-            var root = doc.RootElement;
-            if (root.ValueKind != JsonValueKind.Array) return new();
-
-            var slots = new List<HourlyCapacitySlotSnapshot>();
-            foreach (var item in root.EnumerateArray())
-            {
-                var hour = ReadInt(item, "hour", "Hour");
-                var minute = ReadInt(item, "minute", "Minute");
-                var total = ReadInt(item, "totalCount", "TotalCount");
-                var ok = ReadInt(item, "okCount", "OkCount");
-                var ng = ReadInt(item, "ngCount", "NgCount");
-                var shift = ReadString(item, "shiftCode", "ShiftCode");
-                var label = ReadString(item, "timeLabel", "TimeLabel");
-
-                if (string.IsNullOrWhiteSpace(label))
-                {
-                    var endMinute = minute == 30 ? 0 : 30;
-                    var endHour = minute == 30 ? (hour + 1) % 24 : hour;
-                    label = $"{hour:D2}:{minute:D2}-{endHour:D2}:{endMinute:D2}";
-                }
-
-                if (string.IsNullOrWhiteSpace(shift))
-                    shift = GetShiftCode(hour, minute);
-
-                slots.Add(new HourlyCapacitySlotSnapshot
-                {
-                    SlotOrder = hour * 2 + (minute >= 30 ? 1 : 0),
-                    Hour = hour,
-                    Minute = minute,
-                    StartHour = hour,
-                    StartMinute = minute,
-                    TimeLabel = label,
-                    ShiftCode = shift,
-                    TotalCount = total,
-                    OkCount = ok,
-                    NgCount = ng
-                });
-            }
-            return slots.OrderBy(x => x.SlotOrder).ToList();
-        }
-        catch { return new(); }
-    }
-
-    private async Task<DailyCapacitySummarySnapshot?> QuerySummaryAsync(
-        Guid deviceId, DateTime date, string plcName)
-
-    {
-        var path = _apiPathProvider.GetCapacitySummaryPath();
-        var url = string.IsNullOrEmpty(plcName)
-            ? $"{path}?deviceId={deviceId}&date={date:yyyy-MM-dd}"
-            : $"{path}?deviceId={deviceId}&date={date:yyyy-MM-dd}&plcName={Uri.EscapeDataString(plcName)}";
-
-
-        var result = await _cloudHttpClient.GetAsync(url);
-        if (!result.IsSuccess || string.IsNullOrWhiteSpace(result.Payload)) return null;
-
-        try
-        {
-            using var doc = JsonDocument.Parse(result.Payload);
-            var root = doc.RootElement;
-            if (root.ValueKind == JsonValueKind.Array)
-            {
-                if (root.GetArrayLength() == 0) return null;
-                root = root[0];
-            }
-
-            var total = ReadInt(root, "totalCount", "TotalCount");
-            var ok = ReadInt(root, "okCount", "OkCount");
-            var ng = ReadInt(root, "ngCount", "NgCount");
-            var dayTotal = ReadInt(root, "dayShiftTotal", "DayShiftTotal");
-            var dayOk = ReadInt(root, "dayShiftOk", "DayShiftOk");
-            var dayNg = ReadInt(root, "dayShiftNg", "DayShiftNg");
-            var nightTotal = ReadInt(root, "nightShiftTotal", "NightShiftTotal");
-            var nightOk = ReadInt(root, "nightShiftOk", "NightShiftOk");
-            var nightNg = ReadInt(root, "nightShiftNg", "NightShiftNg");
-
-            if (total == 0) total = dayTotal + nightTotal;
-            if (ok == 0 && ng == 0) { ok = dayOk + nightOk; ng = dayNg + nightNg; }
-
-            return new DailyCapacitySummarySnapshot
-            {
-                TotalCount = total,
-                OkCount = ok,
-                NgCount = ng,
-                DayShiftTotal = dayTotal,
-                DayShiftOk = dayOk,
-                DayShiftNg = dayNg,
-                NightShiftTotal = nightTotal,
-                NightShiftOk = nightOk,
-                NightShiftNg = nightNg
-            };
-        }
-        catch { return null; }
-    }
-
-    private async Task<List<DailyCapacitySnapshot>> QuerySummaryRangeAsync(
-        Guid deviceId, DateTime startDate, DateTime endDate, string plcName)
-
-    {
-        var path = _apiPathProvider.GetCapacitySummaryRangePath();
-        var url = string.IsNullOrEmpty(plcName)
-            ? $"{path}?deviceId={deviceId}&startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}"
-            : $"{path}?deviceId={deviceId}&startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}&plcName={Uri.EscapeDataString(plcName)}";
-
-
-        var result = await _cloudHttpClient.GetAsync(url);
-        if (!result.IsSuccess || string.IsNullOrWhiteSpace(result.Payload)) return new();
-
-        try
-        {
-            using var doc = JsonDocument.Parse(result.Payload);
-            var root = doc.RootElement;
-            if (root.ValueKind != JsonValueKind.Array) return new();
-
-            var rows = new List<DailyCapacitySnapshot>();
-            foreach (var item in root.EnumerateArray())
-            {
-                var dateStr = ReadString(item, "date", "Date");
-                var total = ReadInt(item, "totalCount", "TotalCount");
-                var ok = ReadInt(item, "okCount", "OkCount");
-                var ng = ReadInt(item, "ngCount", "NgCount");
-                var dayTotal = ReadInt(item, "dayShiftTotal", "DayShiftTotal");
-                var dayOk = ReadInt(item, "dayShiftOk", "DayShiftOk");
-                var dayNg = ReadInt(item, "dayShiftNg", "DayShiftNg");
-                var nightTotal = ReadInt(item, "nightShiftTotal", "NightShiftTotal");
-                var nightOk = ReadInt(item, "nightShiftOk", "NightShiftOk");
-                var nightNg = ReadInt(item, "nightShiftNg", "NightShiftNg");
-
-                if (string.IsNullOrWhiteSpace(dateStr)) continue;
-
-                rows.Add(new DailyCapacitySnapshot
-                {
-                    Date = dateStr.Length >= 10 ? dateStr.Substring(5, 5) : dateStr,
-                    DateFull = dateStr,
-                    DayOfWeek = DateTime.TryParse(dateStr, out var dt) ? dt.ToString("ddd") : "--",
-                    Total = total,
-                    OkCount = ok,
-                    NgCount = ng,
-                    Yield = total > 0 ? $"{ok * 100.0 / total:F1}%" : "0%",
-                    DayShiftTotal = dayTotal,
-                    DayShiftOk = dayOk,
-                    DayShiftNg = dayNg,
-                    NightShiftTotal = nightTotal,
-                    NightShiftOk = nightOk,
-                    NightShiftNg = nightNg
-                });
-            }
-            return rows;
-        }
-        catch { return new(); }
-    }
-
-    // 辅助方法。
-
+    /// <summary>
+    /// 返回当前时间所属的生产日。
+    /// </summary>
     public DateTime GetProductionDate(DateTime now)
         => now.TimeOfDay < _shiftConfig.DayStartTime
             ? now.Date.AddDays(-1)
             : now.Date;
 
-    private string GetShiftCode(int hour, int minute)
+    private async Task<CapacityQueryResult<IReadOnlyList<HourlyCapacitySlotSnapshot>>> QueryHourlyAsync(
+        Guid deviceId,
+        DateTime date,
+        string plcName,
+        CancellationToken cancellationToken)
     {
-        var t = new TimeSpan(hour, minute, 0);
-        var isDay = t >= _shiftConfig.DayStartTime && t < _shiftConfig.DayEndTime;
-        return isDay ? "D" : "N";
+        if (!TryResolvePath(_apiPathProvider.GetCapacityHourlyPath, HourlyScene, out var path))
+        {
+            return CapacityQueryResult<IReadOnlyList<HourlyCapacitySlotSnapshot>>.Unavailable(
+                CapacityQueryReasonCodes.CapacityPathUnavailable);
+        }
+
+        var url = string.IsNullOrEmpty(plcName)
+            ? $"{path}?deviceId={deviceId}&date={date:yyyy-MM-dd}"
+            : $"{path}?deviceId={deviceId}&date={date:yyyy-MM-dd}&plcName={Uri.EscapeDataString(plcName)}";
+
+        var jsonResult = await GetJsonAsync(url, HourlyScene, cancellationToken);
+        if (jsonResult.State is CapacityQueryState.Unavailable or CapacityQueryState.InvalidPayload)
+        {
+            return ForwardFailure<JsonElement, IReadOnlyList<HourlyCapacitySlotSnapshot>>(jsonResult);
+        }
+
+        return ParsePayload(
+            HourlyScene,
+            jsonResult.Value,
+            CapacityCloudPayloadParser.ParseHourly);
     }
 
-    private static int ReadInt(JsonElement root, params string[] keys)
+    private async Task<CapacityQueryResult<DailyCapacitySummarySnapshot>> QuerySummaryAsync(
+        Guid deviceId,
+        DateTime date,
+        string plcName,
+        CancellationToken cancellationToken)
     {
-        foreach (var key in keys)
+        if (!TryResolvePath(_apiPathProvider.GetCapacitySummaryPath, SummaryScene, out var path))
         {
-            if (!root.TryGetProperty(key, out var prop)) continue;
-            if (prop.ValueKind == JsonValueKind.Number && prop.TryGetInt32(out var n)) return n;
-            if (prop.ValueKind == JsonValueKind.String && int.TryParse(prop.GetString(), out var s)) return s;
+            return CapacityQueryResult<DailyCapacitySummarySnapshot>.Unavailable(
+                CapacityQueryReasonCodes.CapacityPathUnavailable);
         }
-        return 0;
+
+        var url = string.IsNullOrEmpty(plcName)
+            ? $"{path}?deviceId={deviceId}&date={date:yyyy-MM-dd}"
+            : $"{path}?deviceId={deviceId}&date={date:yyyy-MM-dd}&plcName={Uri.EscapeDataString(plcName)}";
+
+        var jsonResult = await GetJsonAsync(url, SummaryScene, cancellationToken);
+        if (jsonResult.State is CapacityQueryState.Unavailable or CapacityQueryState.InvalidPayload)
+        {
+            return ForwardFailure<JsonElement, DailyCapacitySummarySnapshot>(jsonResult);
+        }
+
+        return ParsePayload(
+            SummaryScene,
+            jsonResult.Value,
+            CapacityCloudPayloadParser.ParseSummary);
     }
 
-    private static string ReadString(JsonElement root, params string[] keys)
+    private async Task<CapacityQueryResult<IReadOnlyList<DailyCapacitySnapshot>>> QuerySummaryRangeAsync(
+        Guid deviceId,
+        DateTime startDate,
+        DateTime endDate,
+        string plcName,
+        CancellationToken cancellationToken)
     {
-        foreach (var key in keys)
+        if (!TryResolvePath(
+                _apiPathProvider.GetCapacitySummaryRangePath,
+                SummaryRangeScene,
+                out var path))
         {
-            if (!root.TryGetProperty(key, out var prop)) continue;
-            if (prop.ValueKind == JsonValueKind.String) return prop.GetString() ?? "";
+            return CapacityQueryResult<IReadOnlyList<DailyCapacitySnapshot>>.Unavailable(
+                CapacityQueryReasonCodes.CapacityPathUnavailable);
         }
-        return "";
+
+        var url = string.IsNullOrEmpty(plcName)
+            ? $"{path}?deviceId={deviceId}&startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}"
+            : $"{path}?deviceId={deviceId}&startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}&plcName={Uri.EscapeDataString(plcName)}";
+
+        var jsonResult = await GetJsonAsync(url, SummaryRangeScene, cancellationToken);
+        if (jsonResult.State is CapacityQueryState.Unavailable or CapacityQueryState.InvalidPayload)
+        {
+            return ForwardFailure<JsonElement, IReadOnlyList<DailyCapacitySnapshot>>(jsonResult);
+        }
+
+        return ParsePayload(
+            SummaryRangeScene,
+            jsonResult.Value,
+            CapacityCloudPayloadParser.ParseSummaryRange);
+    }
+
+    private async Task<CapacityQueryResult<JsonElement>> GetJsonAsync(
+        string url,
+        string scene,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        CloudCallResult<string> response;
+        try
+        {
+            response = await _cloudHttpClient.GetAsync(url);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            WriteSafeWarning(scene, CapacityQueryReasonCodes.CloudQueryException, ex.GetType().Name);
+            return CapacityQueryResult<JsonElement>.Unavailable(CapacityQueryReasonCodes.CloudQueryException);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!response.IsSuccess)
+        {
+            var reasonCode = GetUnavailableReasonCode(response.Outcome);
+            WriteSafeWarning(scene, reasonCode);
+            return CapacityQueryResult<JsonElement>.Unavailable(reasonCode);
+        }
+
+        if (string.IsNullOrWhiteSpace(response.Payload))
+        {
+            WriteSafeWarning(scene, CapacityQueryReasonCodes.CloudResponseEmpty);
+            return CapacityQueryResult<JsonElement>.Unavailable(CapacityQueryReasonCodes.CloudResponseEmpty);
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(response.Payload);
+            return CapacityQueryResult<JsonElement>.Success(document.RootElement.Clone());
+        }
+        catch (JsonException)
+        {
+            WriteSafeWarning(scene, CapacityQueryReasonCodes.CloudResponseJsonInvalid, nameof(JsonException));
+            return CapacityQueryResult<JsonElement>.InvalidPayload(
+                CapacityQueryReasonCodes.CloudResponseJsonInvalid);
+        }
+    }
+
+    private bool TryResolvePath(Func<string> resolve, string scene, out string path)
+    {
+        try
+        {
+            path = resolve();
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                return true;
+            }
+
+            WriteSafeWarning(scene, CapacityQueryReasonCodes.CapacityPathUnavailable);
+            return false;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            path = string.Empty;
+            WriteSafeWarning(
+                scene,
+                CapacityQueryReasonCodes.CapacityPathUnavailable,
+                ex.GetType().Name);
+            return false;
+        }
+    }
+
+    private static string GetUnavailableReasonCode(CloudCallOutcome outcome)
+        => outcome switch
+        {
+            CloudCallOutcome.SkippedUploadNotReady => CapacityQueryReasonCodes.CloudGateNotReady,
+            CloudCallOutcome.UnauthorizedAfterRetry => CapacityQueryReasonCodes.CloudUnauthorized,
+            CloudCallOutcome.HttpFailure => CapacityQueryReasonCodes.CloudHttpFailure,
+            CloudCallOutcome.NetworkFailure => CapacityQueryReasonCodes.CloudNetworkFailure,
+            CloudCallOutcome.Exception => CapacityQueryReasonCodes.CloudClientFailure,
+            _ => CapacityQueryReasonCodes.CloudUnavailable
+        };
+
+    private static CapacityQueryResult<TTarget> ForwardFailure<TSource, TTarget>(
+        CapacityQueryResult<TSource> source)
+        => source.State switch
+        {
+            CapacityQueryState.Unavailable =>
+                CapacityQueryResult<TTarget>.Unavailable(source.ReasonCode),
+            CapacityQueryState.InvalidPayload =>
+                CapacityQueryResult<TTarget>.InvalidPayload(source.ReasonCode),
+            _ => CapacityQueryResult<TTarget>.InvalidPayload(
+                CapacityQueryReasonCodes.CapacityStateInvalid)
+        };
+
+    private CapacityQueryResult<T> ParsePayload<T>(
+        string scene,
+        JsonElement root,
+        Func<JsonElement, CapacityQueryResult<T>> parse)
+    {
+        try
+        {
+            var result = parse(root);
+            if (result.State == CapacityQueryState.InvalidPayload)
+            {
+                WriteSafeWarning(scene, result.ReasonCode);
+            }
+
+            return result;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            WriteSafeWarning(
+                scene,
+                CapacityQueryReasonCodes.CapacityParserException,
+                ex.GetType().Name);
+            return CapacityQueryResult<T>.InvalidPayload(
+                CapacityQueryReasonCodes.CapacityParserException);
+        }
+    }
+
+    private void WriteSafeWarning(string scene, string reasonCode, string? exceptionType = null)
+    {
+        var exceptionSegment = string.IsNullOrWhiteSpace(exceptionType)
+            ? string.Empty
+            : $"；异常类型={exceptionType}";
+        _logger.Warn($"产能查询未完成；场景={scene}；原因码={reasonCode}{exceptionSegment}。");
     }
 }

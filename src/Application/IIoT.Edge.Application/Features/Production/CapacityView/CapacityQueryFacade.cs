@@ -1,21 +1,18 @@
-using IIoT.Edge.Application.Abstractions.Context;
+using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.Device;
 using MediatR;
 
-using IIoT.Edge.Application.Abstractions.Cloud;
 namespace IIoT.Edge.Application.Features.Production.CapacityView;
 
 /// <summary>
 /// 产能查询 facade 契约。
-/// 提供设备列表、联网状态和产能查询能力。
+/// 提供联网状态和产能查询能力。
 /// </summary>
 public interface ICapacityQueryFacade
 {
     event Action<EdgeUploadGateSnapshot>? UploadGateChanged;
 
     bool IsOnline { get; }
-
-    IReadOnlyList<string> GetDeviceNames();
 
     Task<CapacityViewResult> LoadTodayAsync(string plcName, CancellationToken cancellationToken = default);
 
@@ -28,7 +25,6 @@ public interface ICapacityQueryFacade
 /// </summary>
 public sealed class CapacityQueryFacade(
     ISender sender,
-    IProductionContextStore contextStore,
     IDeviceService deviceService) : ICapacityQueryFacade
 {
     public event Action<EdgeUploadGateSnapshot>? UploadGateChanged
@@ -39,17 +35,19 @@ public sealed class CapacityQueryFacade(
 
     public bool IsOnline => deviceService.CanUploadToCloud;
 
-    public IReadOnlyList<string> GetDeviceNames()
-        => contextStore.GetAll()
-            .Select(context => context.DeviceName)
-            .OrderBy(name => name)
-            .ToList();
-
     public async Task<CapacityViewResult> LoadTodayAsync(string plcName, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!deviceService.CanUploadToCloud)
+        {
+            return CapacityViewResult.Unavailable(CapacityQueryReasonCodes.CloudGateNotReady);
+        }
+
         var deviceId = deviceService.CurrentDevice?.DeviceId;
-        if (!deviceService.CanUploadToCloud || deviceId is null)
-            return new CapacityViewResult(new(), 0, 0, 0, "0%", "0");
+        if (deviceId is null)
+        {
+            return CapacityViewResult.Unavailable(CapacityQueryReasonCodes.DeviceNotIdentified);
+        }
 
         return await sender.Send(
             new LoadTodayCapacityQuery(deviceId.Value, DateTime.Now, plcName),
@@ -62,9 +60,17 @@ public sealed class CapacityQueryFacade(
         string plcName,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!deviceService.CanUploadToCloud)
+        {
+            return CapacityViewResult.Unavailable(CapacityQueryReasonCodes.CloudGateNotReady);
+        }
+
         var deviceId = deviceService.CurrentDevice?.DeviceId;
-        if (!deviceService.CanUploadToCloud || deviceId is null)
-            return new CapacityViewResult(new(), 0, 0, 0, "0%", "0");
+        if (deviceId is null)
+        {
+            return CapacityViewResult.Unavailable(CapacityQueryReasonCodes.DeviceNotIdentified);
+        }
 
         return await sender.Send(
             new QueryCapacityHistoryQuery(deviceId.Value, queryMode, queryDate, plcName),

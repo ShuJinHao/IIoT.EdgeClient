@@ -357,6 +357,8 @@
     <sys:String x:Key="Navigation_Capacity_OfflineHint">设备上传授权尚未就绪，暂时无法查询云端产能。</sys:String>
     <sys:String x:Key="Navigation_Capacity_QueryFailed">产能查询失败。</sys:String>
     <sys:String x:Key="Navigation_Capacity_LoadFailed">加载产能数据失败。</sys:String>
+    <sys:String x:Key="Navigation_Capacity_Unavailable">云端产能服务暂不可用，请检查 Cloud 连接后重试。</sys:String>
+    <sys:String x:Key="Navigation_Capacity_InvalidPayload">云端产能响应格式无效，请检查服务契约后重试。</sys:String>
     <sys:String x:Key="Navigation_Capacity_EmptyTitle">暂无产能数据</sys:String>
     <sys:String x:Key="Navigation_Capacity_EmptyMessage">当前设备和时间范围内没有真实产能记录。</sys:String>
     <sys:String x:Key="Navigation_Capacity_ChartTitle">产能趋势</sys:String>

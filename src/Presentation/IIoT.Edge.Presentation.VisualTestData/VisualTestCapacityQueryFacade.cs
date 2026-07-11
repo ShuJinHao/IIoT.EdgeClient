@@ -7,7 +7,7 @@ namespace IIoT.Edge.Presentation.VisualTestData;
 /// <summary>
 /// 产能查询视觉验收数据源，只服务 UI 截图验收，不调用云端产能接口。
 /// </summary>
-public sealed class VisualTestCapacityQueryFacade(VisualTestDataOptions options) : ICapacityQueryFacade
+public sealed class VisualTestCapacityQueryFacade : ICapacityQueryFacade
 {
     public event Action<EdgeUploadGateSnapshot>? UploadGateChanged
     {
@@ -16,9 +16,6 @@ public sealed class VisualTestCapacityQueryFacade(VisualTestDataOptions options)
     }
 
     public bool IsOnline => true;
-
-    public IReadOnlyList<string> GetDeviceNames()
-        => [options.PrimaryDeviceName, VisualTestScenario.SecondaryDeviceName];
 
     public Task<CapacityViewResult> LoadTodayAsync(
         string plcName,
@@ -136,7 +133,7 @@ public sealed class VisualTestCapacityQueryFacade(VisualTestDataOptions options)
         var total = rows.Sum(static row => row.Total);
         var ok = rows.Sum(static row => row.OkCount);
         var ng = rows.Sum(static row => row.NgCount);
-        return new CapacityViewResult(
+        return CapacityViewResult.Success(
             rows,
             total,
             ok,

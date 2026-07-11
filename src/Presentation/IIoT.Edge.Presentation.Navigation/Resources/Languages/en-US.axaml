@@ -357,6 +357,8 @@
     <sys:String x:Key="Navigation_Capacity_OfflineHint">Device upload authorization is not ready. Cloud capacity cannot be queried yet.</sys:String>
     <sys:String x:Key="Navigation_Capacity_QueryFailed">Capacity query failed.</sys:String>
     <sys:String x:Key="Navigation_Capacity_LoadFailed">Failed to load capacity data.</sys:String>
+    <sys:String x:Key="Navigation_Capacity_Unavailable">The Cloud capacity service is unavailable. Check the Cloud connection and try again.</sys:String>
+    <sys:String x:Key="Navigation_Capacity_InvalidPayload">The Cloud capacity response is invalid. Check the service contract and try again.</sys:String>
     <sys:String x:Key="Navigation_Capacity_EmptyTitle">No capacity data</sys:String>
     <sys:String x:Key="Navigation_Capacity_EmptyMessage">No real capacity records exist for the selected device and range.</sys:String>
     <sys:String x:Key="Navigation_Capacity_ChartTitle">Capacity Trend</sys:String>
