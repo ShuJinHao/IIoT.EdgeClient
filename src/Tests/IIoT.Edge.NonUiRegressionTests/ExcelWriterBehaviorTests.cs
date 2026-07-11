@@ -32,7 +32,7 @@ public sealed class ExcelWriterBehaviorTests
                     CellResult = false,
                     CompletedTime = new DateTime(2026, 5, 8, 0, 0, 0, DateTimeKind.Utc)
                 }
-            });
+            }, TestContext.Current.CancellationToken);
 
             Assert.True(result);
             Assert.Equal(1, writer.CallCount);

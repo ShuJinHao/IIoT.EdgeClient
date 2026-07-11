@@ -314,7 +314,7 @@ public sealed class AuthServiceBehaviorTests
         Assert.True(result.Success);
         await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
 
-        Assert.True(await service.EnsureAuthenticatedAsync());
+        Assert.True(await service.EnsureAuthenticatedAsync(TestContext.Current.CancellationToken));
         Assert.True(service.IsAuthenticated);
         Assert.NotNull(service.CurrentUser);
         Assert.Equal("refresh-token-2", service.CurrentUser!.RefreshToken);
@@ -361,7 +361,7 @@ public sealed class AuthServiceBehaviorTests
         Assert.True(result.Success);
         await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
 
-        Assert.False(await service.EnsureAuthenticatedAsync());
+        Assert.False(await service.EnsureAuthenticatedAsync(TestContext.Current.CancellationToken));
         Assert.False(service.IsAuthenticated);
         Assert.Null(service.CurrentUser);
         Assert.Equal(2, requestCount);

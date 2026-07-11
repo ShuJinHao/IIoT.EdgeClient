@@ -17,7 +17,9 @@ public sealed class RuntimeTaskBaseBehaviorTests
         await WaitUntilAsync(() => task.ExecuteCount >= 2);
 
         await cts.CancelAsync();
-        await runTask.WaitAsync(TimeSpan.FromSeconds(2));
+        await runTask.WaitAsync(
+            TimeSpan.FromSeconds(2),
+            TestContext.Current.CancellationToken);
         var countAfterCancel = task.ExecuteCount;
 
         await AssertCountRemainsAsync(() => task.ExecuteCount, countAfterCancel, TimeSpan.FromMilliseconds(50));
@@ -32,7 +34,9 @@ public sealed class RuntimeTaskBaseBehaviorTests
         var runTask = task.StartAsync(cts.Token);
         await WaitUntilAsync(() => task.ExecuteCount >= 2);
         await cts.CancelAsync();
-        await runTask.WaitAsync(TimeSpan.FromSeconds(2));
+        await runTask.WaitAsync(
+            TimeSpan.FromSeconds(2),
+            TestContext.Current.CancellationToken);
 
         Assert.True(task.ExecuteCount >= 2);
         Assert.Contains(task.CapturedLogger.Entries, entry => entry.Level == "Error" && entry.Message.Contains("planned failure", StringComparison.Ordinal));
@@ -48,7 +52,9 @@ public sealed class RuntimeTaskBaseBehaviorTests
         await WaitUntilAsync(() => task.ExecuteCount >= 2);
 
         await cts.CancelAsync();
-        await runTask.WaitAsync(TimeSpan.FromSeconds(2));
+        await runTask.WaitAsync(
+            TimeSpan.FromSeconds(2),
+            TestContext.Current.CancellationToken);
         var countAfterCancel = task.ExecuteCount;
 
         await AssertCountRemainsAsync(() => task.ExecuteCount, countAfterCancel, TimeSpan.FromMilliseconds(50));
@@ -63,7 +69,9 @@ public sealed class RuntimeTaskBaseBehaviorTests
         var runTask = task.StartAsync(cts.Token);
         await WaitUntilAsync(() => task.ExecuteCount >= 2);
         await cts.CancelAsync();
-        await runTask.WaitAsync(TimeSpan.FromSeconds(2));
+        await runTask.WaitAsync(
+            TimeSpan.FromSeconds(2),
+            TestContext.Current.CancellationToken);
 
         Assert.True(task.ExecuteCount >= 2);
         Assert.Contains(task.CapturedLogger.Entries, entry => entry.Level == "Error" && entry.Message.Contains("planned failure", StringComparison.Ordinal));

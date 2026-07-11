@@ -17,9 +17,11 @@ public sealed class RuntimeHeartbeatServiceBehaviorTests
             new FixedRuntimeConfigService(),
             logger);
 
-        await service.StartAsync(new EdgeUpdateTarget("LineA", AppContext.BaseDirectory, string.Empty));
-        await Task.Delay(50);
-        await service.StopAsync();
+        await service.StartAsync(
+            new EdgeUpdateTarget("LineA", AppContext.BaseDirectory, string.Empty),
+            TestContext.Current.CancellationToken);
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+        await service.StopAsync(TestContext.Current.CancellationToken);
 
         Assert.Contains(logger.Entries, entry =>
             entry.Message.Contains("Bootstrap", StringComparison.Ordinal)

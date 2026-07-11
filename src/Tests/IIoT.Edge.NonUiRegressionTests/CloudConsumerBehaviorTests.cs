@@ -32,7 +32,7 @@ public sealed class CloudConsumerBehaviorTests
             {
                 Barcode = "BAR-CLOUD-DISABLED"
             }
-        });
+        }, TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(CloudCallOutcome.SkippedUploadNotReady, result.Outcome);
@@ -64,7 +64,7 @@ public sealed class CloudConsumerBehaviorTests
             {
                 Barcode = "BAR-CLOUD-BLOCKED"
             }
-        });
+        }, TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(CloudCallOutcome.SkippedUploadNotReady, result.Outcome);
@@ -106,7 +106,7 @@ public sealed class CloudConsumerBehaviorTests
                 CompletedTime = completedTime,
                 RuntimeStatus = "待上传"
             }
-        });
+        }, TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(1, cloudHttp.PostCallCount);
@@ -148,7 +148,7 @@ public sealed class CloudConsumerBehaviorTests
                 Barcode = "BAR-MES-ONLY",
                 UploadTargets = DataPipelineUploadTargets.Mes
             }
-        });
+        }, TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(0, cloudHttp.PostCallCount);
@@ -180,7 +180,7 @@ public sealed class CloudConsumerBehaviorTests
                 Barcode = "STATUS-CLOUD-01",
                 UploadTargets = DataPipelineUploadTargets.Cloud
             }
-        });
+        }, TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(0, cloudHttp.PostCallCount);
@@ -234,7 +234,9 @@ public sealed class CloudConsumerBehaviorTests
             }
         };
 
-        var result = await consumer.ProcessBatchAsync([plcARecord, plcBRecord]);
+        var result = await consumer.ProcessBatchAsync(
+            [plcARecord, plcBRecord],
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(2, cloudHttp.PostCallCount);
@@ -297,7 +299,9 @@ public sealed class CloudConsumerBehaviorTests
             }
         };
 
-        var result = await consumer.ProcessBatchAsync([productionRecord, statusRecord]);
+        var result = await consumer.ProcessBatchAsync(
+            [productionRecord, statusRecord],
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(1, cloudHttp.PostCallCount);
@@ -330,7 +334,7 @@ public sealed class CloudConsumerBehaviorTests
             {
                 Barcode = "BAR-CLOUD-BAD-PATH"
             }
-        });
+        }, TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(CloudCallOutcome.Exception, result.Outcome);
@@ -363,7 +367,7 @@ public sealed class CloudConsumerBehaviorTests
             {
                 Barcode = "BAR-CLOUD-MISSING"
             }
-        });
+        }, TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(CloudCallOutcome.SkippedUploadNotReady, result.Outcome);

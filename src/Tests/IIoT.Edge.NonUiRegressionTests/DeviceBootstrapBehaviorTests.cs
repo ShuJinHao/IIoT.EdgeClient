@@ -125,7 +125,7 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
             RefreshTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(1)
         });
 
-        await service.RefreshBootstrapAsync();
+        await service.RefreshBootstrapAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(1, refreshRequests);
         Assert.NotNull(service.CurrentDevice);
@@ -351,9 +351,13 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         using var cts = new CancellationTokenSource();
 
         await service.StartAsync(cts.Token);
-        await requestStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        await requestStarted.Task.WaitAsync(
+            TimeSpan.FromSeconds(2),
+            TestContext.Current.CancellationToken);
 
-        await service.StopAsync().WaitAsync(TimeSpan.FromSeconds(2));
+        await service.StopAsync().WaitAsync(
+            TimeSpan.FromSeconds(2),
+            TestContext.Current.CancellationToken);
         await AssertRequestCountRemainsAsync(
             () => Volatile.Read(ref requestCount),
             expected: 1,

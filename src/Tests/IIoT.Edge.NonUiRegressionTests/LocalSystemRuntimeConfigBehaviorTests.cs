@@ -25,7 +25,7 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
             registry,
             new FakeLogService());
 
-        await service.EnsureInitializedAsync();
+        await service.EnsureInitializedAsync(TestContext.Current.CancellationToken);
 
         Assert.True(service.Current.MesUploadEnabled);
         Assert.True(service.Current.SystemCloudEnabled);
@@ -43,7 +43,7 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
             new FakeProcessIntegrationRegistry([]),
             new FakeLogService());
 
-        await service.EnsureInitializedAsync();
+        await service.EnsureInitializedAsync(TestContext.Current.CancellationToken);
 
         Assert.False(service.Current.MesUploadEnabled);
     }
@@ -64,7 +64,7 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
             new FakeProcessIntegrationRegistry([]),
             new FakeLogService());
 
-        await service.EnsureInitializedAsync();
+        await service.EnsureInitializedAsync(TestContext.Current.CancellationToken);
 
         Assert.True(service.Current.SystemCloudEnabled);
     }
@@ -85,7 +85,7 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
             new FakeProcessIntegrationRegistry(["Homogenization"]),
             new FakeLogService());
 
-        await service.EnsureInitializedAsync();
+        await service.EnsureInitializedAsync(TestContext.Current.CancellationToken);
 
         Assert.False(service.Current.SystemCloudEnabled);
     }
@@ -106,7 +106,7 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
             new FakeProcessIntegrationRegistry(["Homogenization"]),
             new FakeLogService());
 
-        await service.EnsureInitializedAsync();
+        await service.EnsureInitializedAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(TimeSpan.FromSeconds(15), service.Current.RuntimeHeartbeatInterval);
         Assert.Equal(TimeSpan.FromSeconds(60), service.Current.OnlineHeartbeatInterval);
@@ -123,7 +123,7 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
             new FakeProcessIntegrationRegistry(["Homogenization"]),
             new FakeLogService());
 
-        await service.EnsureInitializedAsync();
+        await service.EnsureInitializedAsync(TestContext.Current.CancellationToken);
         Assert.False(service.Current.MesUploadEnabled);
 
         roleProvider.MesEnabled = true;

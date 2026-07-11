@@ -112,7 +112,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
             deviceLogBufferStore,
             capacityBufferStore);
 
-        var snapshot = await query.GetCurrentAsync();
+        var snapshot = await query.GetCurrentAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal("Edge-01", snapshot.DeviceName);
         Assert.Equal(EdgeUploadBlockReason.UploadTokenRejected, snapshot.Cloud.BlockReason);
@@ -164,7 +164,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
             new FakeDeviceLogBufferStore(),
             new FakeCapacityBufferStore());
 
-        var snapshot = await query.GetCurrentAsync();
+        var snapshot = await query.GetCurrentAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal("mes timeout", snapshot.Mes.LastFailureReason);
         Assert.Equal(failedChannel!.LastAttemptAt, snapshot.Mes.LastFailureAt);
@@ -211,7 +211,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
             new FakeDeviceLogBufferStore(),
             new FakeCapacityBufferStore());
 
-        var snapshot = await query.GetCurrentAsync();
+        var snapshot = await query.GetCurrentAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(CloudCallOutcome.SkippedUploadNotReady, snapshot.Cloud.LastOutcome);
         Assert.Equal("missing_upload_token", snapshot.Cloud.LastReasonCode);
@@ -268,7 +268,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
             deviceLogBufferStore,
             capacityBufferStore);
 
-        var snapshot = await query.GetCurrentAsync();
+        var snapshot = await query.GetCurrentAsync(TestContext.Current.CancellationToken);
 
         Assert.True(snapshot.Cloud.IsPersistenceFaulted);
         Assert.Contains("cloud retry count failed", snapshot.Cloud.PersistenceFaultMessage, StringComparison.Ordinal);
@@ -370,7 +370,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
             deviceLogBufferStore,
             capacityBufferStore);
 
-        var snapshotTask = query.GetCurrentAsync();
+        var snapshotTask = query.GetCurrentAsync(TestContext.Current.CancellationToken);
         await Task.WhenAll(
             cloudRetryCountStarted.Task,
             mesRetryCountStarted.Task,
@@ -441,7 +441,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
             cloudDeadLetterStore: cloudDeadLetters,
             mesDeadLetterStore: mesDeadLetters);
 
-        var snapshot = await query.GetCurrentAsync();
+        var snapshot = await query.GetCurrentAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(1, snapshot.Cloud.DeadLetters?.TotalCount);
         Assert.Equal("TestProcess", snapshot.Cloud.DeadLetters?.GroupSummary.Single().ProcessType);
@@ -503,7 +503,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
             cloudDeadLetterStore: cloudDeadLetters,
             modules: [module]);
 
-        var snapshot = await query.GetCurrentAsync();
+        var snapshot = await query.GetCurrentAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal("Custom Display", snapshot.Cloud.LastProcessDisplayName);
         Assert.Equal(
@@ -520,7 +520,7 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         Assert.Null(snapshot.Cloud.DeadLetters?.GroupSummary.Single(x => x.ProcessType == "UnknownProcess").ProcessDisplayName);
 
         module.DisplayName = "Custom Display EN";
-        var refreshedSnapshot = await query.GetCurrentAsync();
+        var refreshedSnapshot = await query.GetCurrentAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal("Custom Display EN", refreshedSnapshot.Cloud.LastProcessDisplayName);
         Assert.Equal(

@@ -30,7 +30,7 @@ public sealed class PlcBufferConcurrencyTests
             {
                 buffer.UpdateReadBuffer(Enumerable.Repeat((ushort)(i % 10), 16).ToArray());
             }
-        });
+        }, TestContext.Current.CancellationToken);
 
         var reader = Task.Run(() =>
         {
@@ -41,7 +41,7 @@ public sealed class PlcBufferConcurrencyTests
                     _ = buffer.GetReadValue(j);
                 }
             }
-        });
+        }, TestContext.Current.CancellationToken);
 
         await Task.WhenAll(writer, reader);
 

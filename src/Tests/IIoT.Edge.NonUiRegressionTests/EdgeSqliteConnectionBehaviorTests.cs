@@ -36,7 +36,7 @@ public sealed class EdgeSqliteConnectionBehaviorTests
             Assert.True(Directory.Exists(Path.GetDirectoryName(dbPath)));
 
             await using var connection = new SqliteConnection(connectionService.BuildConnectionString(dbPath));
-            await connection.OpenAsync();
+            await connection.OpenAsync(TestContext.Current.CancellationToken);
             Assert.Equal("wal", await GetPragmaTextAsync(connection, "journal_mode"));
         }
         finally

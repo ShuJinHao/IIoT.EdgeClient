@@ -29,7 +29,9 @@ public sealed class MesFrameworkBehaviorTests
             new FakeMesUploadDiagnosticsStore(),
             new FakeLogService());
 
-        var success = await consumer.ProcessAsync(CreateRecord(TestProcessCellData.ProcessTypeKey));
+        var success = await consumer.ProcessAsync(
+            CreateRecord(TestProcessCellData.ProcessTypeKey),
+            TestContext.Current.CancellationToken);
 
         Assert.True(success);
     }
@@ -50,7 +52,9 @@ public sealed class MesFrameworkBehaviorTests
             diagnosticsStore,
             new FakeLogService());
 
-        var success = await consumer.ProcessAsync(CreateRecord(TestProcessCellData.ProcessTypeKey));
+        var success = await consumer.ProcessAsync(
+            CreateRecord(TestProcessCellData.ProcessTypeKey),
+            TestContext.Current.CancellationToken);
 
         Assert.True(success);
         Assert.Equal(1, uploader.UploadCallCount);
@@ -73,7 +77,9 @@ public sealed class MesFrameworkBehaviorTests
             diagnosticsStore,
             new FakeLogService());
 
-        var success = await consumer.ProcessAsync(CreateRecord(TestProcessCellData.ProcessTypeKey));
+        var success = await consumer.ProcessAsync(
+            CreateRecord(TestProcessCellData.ProcessTypeKey),
+            TestContext.Current.CancellationToken);
 
         Assert.True(success);
         Assert.Equal(1, uploader.UploadCallCount);
@@ -111,7 +117,7 @@ public sealed class MesFrameworkBehaviorTests
             }
         };
 
-        var success = await consumer.ProcessAsync(record);
+        var success = await consumer.ProcessAsync(record, TestContext.Current.CancellationToken);
 
         Assert.True(success);
         Assert.Equal(1, uploader.UploadCallCount);
@@ -147,7 +153,7 @@ public sealed class MesFrameworkBehaviorTests
             }
         };
 
-        var success = await consumer.ProcessAsync(record);
+        var success = await consumer.ProcessAsync(record, TestContext.Current.CancellationToken);
 
         Assert.True(success);
         var diagnostics = diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey);
@@ -180,7 +186,7 @@ public sealed class MesFrameworkBehaviorTests
                 WorkOrderNo = "MES-WO-01",
                 UploadTargets = DataPipelineUploadTargets.Cloud
             }
-        });
+        }, TestContext.Current.CancellationToken);
 
         Assert.True(success);
         Assert.Equal(0, uploader.UploadCallCount);
@@ -201,7 +207,9 @@ public sealed class MesFrameworkBehaviorTests
             diagnosticsStore,
             new FakeLogService());
 
-        var success = await consumer.ProcessAsync(CreateRecord(TestProcessCellData.ProcessTypeKey));
+        var success = await consumer.ProcessAsync(
+            CreateRecord(TestProcessCellData.ProcessTypeKey),
+            TestContext.Current.CancellationToken);
 
         Assert.True(success);
         Assert.Equal(1, uploader.UploadCallCount);
@@ -225,7 +233,9 @@ public sealed class MesFrameworkBehaviorTests
             diagnosticsStore,
             new FakeLogService());
 
-        var success = await consumer.ProcessAsync(CreateRecord(TestProcessCellData.ProcessTypeKey));
+        var success = await consumer.ProcessAsync(
+            CreateRecord(TestProcessCellData.ProcessTypeKey),
+            TestContext.Current.CancellationToken);
 
         Assert.False(success);
         Assert.Equal(1, uploader.UploadCallCount);
@@ -247,7 +257,9 @@ public sealed class MesFrameworkBehaviorTests
             diagnosticsStore,
             new FakeLogService());
 
-        var success = await consumer.ProcessAsync(CreateRecord(TestProcessCellData.ProcessTypeKey));
+        var success = await consumer.ProcessAsync(
+            CreateRecord(TestProcessCellData.ProcessTypeKey),
+            TestContext.Current.CancellationToken);
 
         Assert.False(success);
         var diagnostics = diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey);
@@ -276,7 +288,9 @@ public sealed class MesFrameworkBehaviorTests
             diagnosticsStore,
             new FakeLogService());
 
-        var success = await consumer.ProcessAsync(CreateRecord(TestProcessCellData.ProcessTypeKey));
+        var success = await consumer.ProcessAsync(
+            CreateRecord(TestProcessCellData.ProcessTypeKey),
+            TestContext.Current.CancellationToken);
 
         Assert.True(success);
         Assert.Equal(0, uploader.UploadCallCount);
@@ -299,7 +313,9 @@ public sealed class MesFrameworkBehaviorTests
             diagnosticsStore,
             new FakeLogService());
 
-        var success = await consumer.ProcessAsync(CreateRecord(TestProcessCellData.ProcessTypeKey));
+        var success = await consumer.ProcessAsync(
+            CreateRecord(TestProcessCellData.ProcessTypeKey),
+            TestContext.Current.CancellationToken);
 
         Assert.False(success);
         Assert.Equal(0, uploader.UploadCallCount);
@@ -336,7 +352,7 @@ public sealed class MesFrameworkBehaviorTests
             }
         };
 
-        var success = await consumer.ProcessAsync(record);
+        var success = await consumer.ProcessAsync(record, TestContext.Current.CancellationToken);
 
         Assert.False(success);
         Assert.Equal(0, uploader.UploadCallCount);
@@ -368,7 +384,9 @@ public sealed class MesFrameworkBehaviorTests
             diagnosticsStore,
             new FakeLogService());
 
-        var success = await consumer.ProcessAsync(CreateRecord(TestProcessCellData.ProcessTypeKey));
+        var success = await consumer.ProcessAsync(
+            CreateRecord(TestProcessCellData.ProcessTypeKey),
+            TestContext.Current.CancellationToken);
 
         Assert.True(success);
         Assert.Equal(1, uploader.UploadCallCount);
@@ -393,7 +411,8 @@ public sealed class MesFrameworkBehaviorTests
             new Dictionary<string, string>
             {
                 ["X-Request"] = "MES"
-            });
+            },
+            TestContext.Current.CancellationToken);
 
         Assert.True(success);
         Assert.NotNull(handler.LastRequest);
@@ -409,9 +428,14 @@ public sealed class MesFrameworkBehaviorTests
             new FakeModuleParamRoleProvider("https://local-mes.test"),
             new TestOptionsMonitor<MesApiConfig>(new MesApiConfig()));
 
-        var url = await provider.BuildUrlAsync("Homogenization", "/api/mes/outbound");
+        var url = await provider.BuildUrlAsync(
+            "Homogenization",
+            "/api/mes/outbound",
+            TestContext.Current.CancellationToken);
 
-        Assert.True(await provider.IsConfiguredAsync("Homogenization"));
+        Assert.True(await provider.IsConfiguredAsync(
+            "Homogenization",
+            TestContext.Current.CancellationToken));
         Assert.Equal("https://local-mes.test/api/mes/outbound", url);
     }
 
@@ -422,7 +446,10 @@ public sealed class MesFrameworkBehaviorTests
             new FakeModuleParamRoleProvider("https://local-mes.test"),
             new TestOptionsMonitor<MesApiConfig>(new MesApiConfig()));
 
-        var url = await provider.BuildUrlAsync("Homogenization", "https://override-mes.test/api/mes/outbound");
+        var url = await provider.BuildUrlAsync(
+            "Homogenization",
+            "https://override-mes.test/api/mes/outbound",
+            TestContext.Current.CancellationToken);
 
         Assert.Equal("https://override-mes.test/api/mes/outbound", url);
     }
@@ -434,9 +461,14 @@ public sealed class MesFrameworkBehaviorTests
             new FakeModuleParamRoleProvider("ftp://local-mes.test"),
             new TestOptionsMonitor<MesApiConfig>(new MesApiConfig()));
 
-        Assert.False(await provider.IsConfiguredAsync("Homogenization"));
+        Assert.False(await provider.IsConfiguredAsync(
+            "Homogenization",
+            TestContext.Current.CancellationToken));
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => provider.BuildUrlAsync("Homogenization", "/api/mes/outbound"));
+            () => provider.BuildUrlAsync(
+                "Homogenization",
+                "/api/mes/outbound",
+                TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -446,7 +478,9 @@ public sealed class MesFrameworkBehaviorTests
             new FakeModuleParamRoleProvider(null),
             new TestOptionsMonitor<MesApiConfig>(new MesApiConfig()));
 
-        Assert.False(await provider.IsConfiguredAsync("Homogenization"));
+        Assert.False(await provider.IsConfiguredAsync(
+            "Homogenization",
+            TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -460,7 +494,7 @@ public sealed class MesFrameworkBehaviorTests
             new FakeModuleParamRoleProvider("https://local-mes.test", "/heath"),
             new FakeLogService());
 
-        var snapshot = await probe.ProbeAsync();
+        var snapshot = await probe.ProbeAsync(TestContext.Current.CancellationToken);
 
         Assert.True(snapshot.IsReady);
         Assert.NotNull(handler.LastRequest);
@@ -479,7 +513,7 @@ public sealed class MesFrameworkBehaviorTests
             new FakeModuleParamRoleProvider("https://local-mes.test", null),
             new FakeLogService());
 
-        var snapshot = await probe.ProbeAsync();
+        var snapshot = await probe.ProbeAsync(TestContext.Current.CancellationToken);
 
         Assert.False(snapshot.IsReady);
         Assert.Equal("mes_heartbeat_path_missing", snapshot.ReasonCode);
@@ -498,7 +532,7 @@ public sealed class MesFrameworkBehaviorTests
             new FakeModuleParamRoleProvider("https://local-mes.test", "/heath"),
             new FakeLogService());
 
-        var snapshot = await probe.ProbeAsync();
+        var snapshot = await probe.ProbeAsync(TestContext.Current.CancellationToken);
 
         Assert.False(snapshot.IsReady);
         Assert.Equal("mes_heartbeat_timeout", snapshot.ReasonCode);

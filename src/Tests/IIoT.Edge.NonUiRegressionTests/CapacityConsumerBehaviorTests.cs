@@ -36,7 +36,7 @@ public sealed class CapacityConsumerBehaviorTests
                 CompletedTime = DateTime.UtcNow,
                 CellResult = true
             }
-        });
+        }, TestContext.Current.CancellationToken);
 
         Assert.True(result);
         Assert.Equal(1, todayCapacity.IncrementCount);

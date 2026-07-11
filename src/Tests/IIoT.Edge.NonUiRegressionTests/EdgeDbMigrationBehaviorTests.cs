@@ -23,14 +23,14 @@ public sealed class EdgeDbMigrationBehaviorTests
             services.ApplyMigrations();
 
             await using var connection = new SqliteConnection($"Data Source={dbPath}");
-            await connection.OpenAsync();
+            await connection.OpenAsync(TestContext.Current.CancellationToken);
 
             await using var command = connection.CreateCommand();
             command.CommandText = "PRAGMA table_info('hw_io_mapping');";
 
             var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
+            await using var reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+            while (await reader.ReadAsync(TestContext.Current.CancellationToken))
             {
                 columns.Add(reader.GetString(1));
             }
@@ -168,7 +168,7 @@ public sealed class EdgeDbMigrationBehaviorTests
             services.ApplyMigrations();
 
             await using var connection = new SqliteConnection($"Data Source={dbPath}");
-            await connection.OpenAsync();
+            await connection.OpenAsync(TestContext.Current.CancellationToken);
 
             var columns = await LoadColumnsAsync(connection);
             Assert.Contains("signal_key", columns);
@@ -182,8 +182,8 @@ public sealed class EdgeDbMigrationBehaviorTests
                 WHERE id = 1;
                 """;
 
-            await using var reader = await command.ExecuteReaderAsync();
-            Assert.True(await reader.ReadAsync());
+            await using var reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+            Assert.True(await reader.ReadAsync(TestContext.Current.CancellationToken));
             Assert.Equal("Homogenization.Interaction.Inbound", reader.GetString(0));
             Assert.Equal("扫码进站", reader.GetString(1));
         }

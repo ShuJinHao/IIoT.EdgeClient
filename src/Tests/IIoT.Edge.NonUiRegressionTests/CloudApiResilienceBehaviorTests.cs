@@ -43,7 +43,9 @@ public sealed class CloudApiResilienceBehaviorTests
         using var provider = BuildProvider(handler);
         var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient("CloudApi");
 
-        using var response = await client.GetAsync("https://example.test/api/v1/edge/capacity/summary");
+        using var response = await client.GetAsync(
+            "https://example.test/api/v1/edge/capacity/summary",
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(2, handler.SendCount);
@@ -63,7 +65,8 @@ public sealed class CloudApiResilienceBehaviorTests
 
         using var response = await client.PostAsync(
             "https://example.test/api/v1/edge/device-logs",
-            JsonContent.Create(new { deviceId = Guid.NewGuid() }));
+            JsonContent.Create(new { deviceId = Guid.NewGuid() }),
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
         Assert.Equal(1, handler.SendCount);
@@ -85,7 +88,8 @@ public sealed class CloudApiResilienceBehaviorTests
 
         var exception = await Record.ExceptionAsync(() => client.PostAsync(
             "https://example.test/api/v1/edge/device-logs",
-            JsonContent.Create(new { deviceId = Guid.NewGuid() })));
+            JsonContent.Create(new { deviceId = Guid.NewGuid() }),
+            TestContext.Current.CancellationToken));
 
         stopwatch.Stop();
 

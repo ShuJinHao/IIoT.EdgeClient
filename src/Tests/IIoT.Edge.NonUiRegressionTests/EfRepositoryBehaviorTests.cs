@@ -26,12 +26,12 @@ public sealed class EfRepositoryBehaviorTests
             entity.UpdateRemark("old");
 
             repository.Add(entity);
-            await repository.SaveChangesAsync();
+            await repository.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             var id = entity.Id;
             Assert.True(id > 0);
 
-            var loaded = await repository.GetByIdAsync<int>(id);
+            var loaded = await repository.GetByIdAsync<int>(id, TestContext.Current.CancellationToken);
             Assert.NotNull(loaded);
             Assert.Equal(id, loaded!.Id);
             Assert.Equal("PLC-A", loaded.PlcCode);
@@ -42,9 +42,9 @@ public sealed class EfRepositoryBehaviorTests
             loaded.Disable();
 
             repository.Update(loaded);
-            await repository.SaveChangesAsync();
+            await repository.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-            var updated = await repository.GetByIdAsync<int>(id);
+            var updated = await repository.GetByIdAsync<int>(id, TestContext.Current.CancellationToken);
 
             Assert.NotNull(updated);
             Assert.Equal(id, updated!.Id);
@@ -80,7 +80,7 @@ public sealed class EfRepositoryBehaviorTests
             repository.Update(entity);
 
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => repository.SaveChangesAsync());
+                () => repository.SaveChangesAsync(TestContext.Current.CancellationToken));
 
             Assert.Contains("无法更新不存在的实体", exception.Message);
         }

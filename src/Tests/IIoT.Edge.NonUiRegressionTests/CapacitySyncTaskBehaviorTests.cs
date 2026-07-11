@@ -244,7 +244,9 @@ public sealed class CapacitySyncTaskBehaviorTests
         var task = CreateTask(cloudHttp, deviceService, bufferStore, new FakeLogService());
 
         var firstRetry = task.RetryBufferAsync();
-        await postStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        await postStarted.Task.WaitAsync(
+            TimeSpan.FromSeconds(3),
+            TestContext.Current.CancellationToken);
         var secondRetry = task.RetryBufferAsync();
         await Task.Delay(50, TestContext.Current.CancellationToken);
 

@@ -159,17 +159,18 @@ public sealed class PlcIoScanTaskBehaviorTests
 
         var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(1));
         await interaction.ConnectAsync();
-        await Assert.ThrowsAsync<InvalidOperationException>(() => interaction.ExecuteOneCycleAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken));
         Assert.Equal(1, plcService.DisconnectCallCount);
         Assert.False(plcService.IsConnected);
         Assert.False(statusStore.GetSnapshot(1)?.IsConnected);
 
         await interaction.ConnectAsync();
-        await interaction.ExecuteOneCycleAsync();
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
         Assert.False(statusStore.GetSnapshot(1)?.IsConnected);
-        await interaction.ExecuteOneCycleAsync();
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
         Assert.True(statusStore.GetSnapshot(1)?.IsConnected);
-        await interaction.ExecuteOneCycleAsync();
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
         Assert.True(plcService.ConnectAsyncCallCount >= 2);
         Assert.True(plcService.ReadAsyncCallCount >= 4);
@@ -207,7 +208,7 @@ public sealed class PlcIoScanTaskBehaviorTests
         Assert.Equal(PlcConnectionState.Connecting, snapshotAfterConnect.ConnectionState);
         Assert.Null(snapshotAfterConnect.LatencyMs);
 
-        await interaction.ExecuteOneCycleAsync();
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
         var snapshotAfterRead = statusStore.GetSnapshot(15);
         Assert.NotNull(snapshotAfterRead);
@@ -215,7 +216,7 @@ public sealed class PlcIoScanTaskBehaviorTests
         Assert.Equal(PlcConnectionState.Connecting, snapshotAfterRead.ConnectionState);
         Assert.Null(snapshotAfterRead.LatencyMs);
 
-        await interaction.ExecuteOneCycleAsync();
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
         var snapshotAfterSecondRead = statusStore.GetSnapshot(15);
         Assert.NotNull(snapshotAfterSecondRead);
@@ -250,7 +251,8 @@ public sealed class PlcIoScanTaskBehaviorTests
             statusStore,
             runtimePolicy: new PlcIoRuntimePolicy(MaxSignalBlockWordCount: 10));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => interaction.ExecuteOneCycleAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken));
 
         var snapshot = statusStore.GetSnapshot(16);
         Assert.NotNull(snapshot);
@@ -295,17 +297,18 @@ public sealed class PlcIoScanTaskBehaviorTests
             statusStore);
 
         await interaction.ConnectAsync();
-        await interaction.ExecuteOneCycleAsync();
-        await interaction.ExecuteOneCycleAsync();
-        await Assert.ThrowsAsync<InvalidOperationException>(() => interaction.ExecuteOneCycleAsync());
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken));
         Assert.Equal(1, plcService.DisconnectCallCount);
         Assert.False(plcService.IsConnected);
         Assert.False(statusStore.GetSnapshot(2)?.IsConnected);
 
         await interaction.ConnectAsync();
-        await interaction.ExecuteOneCycleAsync();
-        await interaction.ExecuteOneCycleAsync();
-        await interaction.ExecuteOneCycleAsync();
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
         Assert.True(plcService.ConnectAsyncCallCount >= 2);
         Assert.True(plcService.WriteAsyncCallCount >= 2);
@@ -333,7 +336,7 @@ public sealed class PlcIoScanTaskBehaviorTests
             SignalBlockPlanner,
             statusStore);
 
-        await interaction.ExecuteOneCycleAsync();
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
         Assert.Empty(plcService.WriteRequests);
         var snapshot = statusStore.GetSnapshot(18);
@@ -365,7 +368,7 @@ public sealed class PlcIoScanTaskBehaviorTests
             new FakeLogService(),
             SignalBlockPlanner);
 
-        await interaction.ExecuteOneCycleAsync();
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(["D700", "D703"], plcService.ReadRequests.Select(static x => x.Address));
         Assert.All(plcService.ReadRequests, request => Assert.Equal((ushort)1, request.Length));
@@ -396,7 +399,7 @@ public sealed class PlcIoScanTaskBehaviorTests
             new FakeLogService(),
             planner);
 
-        await interaction.ExecuteOneCycleAsync();
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(2, planner.PlanCalls.Count);
         Assert.Contains(planner.PlanCalls, call => !call.IsWrite && call.MappingCount == 1);
@@ -432,7 +435,7 @@ public sealed class PlcIoScanTaskBehaviorTests
             SignalBlockPlanner,
             runtimePolicy: new PlcIoRuntimePolicy(MaxSignalBlockWordCount: 10));
 
-        await interaction.ExecuteOneCycleAsync();
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(["D700", "D720"], plcService.ReadRequests.Select(static x => x.Address));
         Assert.All(plcService.ReadRequests, request => Assert.Equal((ushort)1, request.Length));
@@ -463,7 +466,7 @@ public sealed class PlcIoScanTaskBehaviorTests
                 MaxSignalBlockWordCount: 100,
                 WriteGapPolicy: PlcIoWriteGapPolicy.Zero));
 
-        await interaction.ExecuteOneCycleAsync();
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(["D700", "D720"], plcService.ReadRequests.Select(static x => x.Address));
     }
@@ -493,7 +496,7 @@ public sealed class PlcIoScanTaskBehaviorTests
             SignalBlockPlanner,
             runtimePolicy: new PlcIoRuntimePolicy(WriteGapPolicy: PlcIoWriteGapPolicy.Zero));
 
-        await interaction.ExecuteOneCycleAsync();
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
         var request = Assert.Single(plcService.WriteRequests);
         Assert.Equal("D600", request.Address);
@@ -526,7 +529,7 @@ public sealed class PlcIoScanTaskBehaviorTests
             SignalBlockPlanner,
             runtimePolicy: new PlcIoRuntimePolicy(WriteGapPolicy: PlcIoWriteGapPolicy.Split));
 
-        await interaction.ExecuteOneCycleAsync();
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(["D600", "D603"], plcService.WriteRequests.Select(static x => x.Address));
         Assert.Equal([(ushort)1], plcService.WriteRequests[0].Data);
@@ -557,7 +560,7 @@ public sealed class PlcIoScanTaskBehaviorTests
             new FakeLogService(),
             SignalBlockPlanner);
 
-        await interaction.ExecuteOneCycleAsync();
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
         var request = Assert.Single(plcService.ReadRequests);
         Assert.Equal("D700", request.Address);

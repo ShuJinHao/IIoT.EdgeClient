@@ -26,7 +26,7 @@ public sealed class ProcessQueueTaskBehaviorTests
         var cloudDeadLetterStore = new FakeCloudDeadLetterStore();
         var mesDeadLetterStore = new FakeMesDeadLetterStore();
         var criticalWriter = new FakeCriticalPersistenceFallbackWriter();
-        await pipeline.EnqueueAsync(CreateRecord());
+        await pipeline.EnqueueAsync(CreateRecord(), TestContext.Current.CancellationToken);
 
         var cloudConsumer = new FakeCellDataConsumer(
             name: "Cloud",
@@ -69,7 +69,7 @@ public sealed class ProcessQueueTaskBehaviorTests
         var cloudDeadLetterStore = new FakeCloudDeadLetterStore();
         var mesDeadLetterStore = new FakeMesDeadLetterStore();
         var criticalWriter = new FakeCriticalPersistenceFallbackWriter();
-        await pipeline.EnqueueAsync(CreateRecord());
+        await pipeline.EnqueueAsync(CreateRecord(), TestContext.Current.CancellationToken);
 
         var uiConsumer = new FakeCellDataConsumer(
             name: "UI",
@@ -113,7 +113,7 @@ public sealed class ProcessQueueTaskBehaviorTests
         var pipeline = new FakeDataPipelineService();
         var record = CreateRecord();
         record.CellData.UploadTargets = DataPipelineUploadTargets.Cloud;
-        await pipeline.EnqueueAsync(record);
+        await pipeline.EnqueueAsync(record, TestContext.Current.CancellationToken);
 
         var mesConsumer = new FakeCellDataConsumer(
             name: "MES",
@@ -152,7 +152,7 @@ public sealed class ProcessQueueTaskBehaviorTests
         var pipeline = new FakeDataPipelineService();
         var record = CreateRecord();
         record.CellData.UploadTargets = DataPipelineUploadTargets.All;
-        await pipeline.EnqueueAsync(record);
+        await pipeline.EnqueueAsync(record, TestContext.Current.CancellationToken);
 
         var mesStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseMes = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -163,10 +163,10 @@ public sealed class ProcessQueueTaskBehaviorTests
             retryChannel: "MES",
             result: true,
             failureMode: ConsumerFailureMode.Durable,
-            processAsync: async _ =>
+            processAsync: async (_, cancellationToken) =>
             {
                 mesStarted.SetResult();
-                await releaseMes.Task.WaitAsync(TimeSpan.FromSeconds(2));
+                await releaseMes.Task.WaitAsync(TimeSpan.FromSeconds(2), cancellationToken);
                 return true;
             });
         var cloudConsumer = new FakeCellDataConsumer(
@@ -175,7 +175,7 @@ public sealed class ProcessQueueTaskBehaviorTests
             retryChannel: "Cloud",
             result: true,
             failureMode: ConsumerFailureMode.Durable,
-            processAsync: _ =>
+            processAsync: (_, _) =>
             {
                 cloudCompleted.SetResult();
                 return Task.FromResult(true);
@@ -194,13 +194,19 @@ public sealed class ProcessQueueTaskBehaviorTests
             new FakeCriticalPersistenceFallbackWriter());
 
         var executeTask = task.ExecuteOnceAsync();
-        await mesStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
-        await cloudCompleted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        await mesStarted.Task.WaitAsync(
+            TimeSpan.FromSeconds(2),
+            TestContext.Current.CancellationToken);
+        await cloudCompleted.Task.WaitAsync(
+            TimeSpan.FromSeconds(2),
+            TestContext.Current.CancellationToken);
 
         Assert.False(executeTask.IsCompleted);
 
         releaseMes.SetResult();
-        await executeTask.WaitAsync(TimeSpan.FromSeconds(2));
+        await executeTask.WaitAsync(
+            TimeSpan.FromSeconds(2),
+            TestContext.Current.CancellationToken);
         Assert.Equal(1, mesConsumer.ProcessCallCount);
         Assert.Equal(1, cloudConsumer.ProcessCallCount);
     }
@@ -215,8 +221,8 @@ public sealed class ProcessQueueTaskBehaviorTests
         var cloudOnlyRecord = CreateRecord();
         ((TestProcessCellData)cloudOnlyRecord.CellData).Barcode = "CLOUD-FOLLOWS";
         cloudOnlyRecord.CellData.UploadTargets = DataPipelineUploadTargets.Cloud;
-        await pipeline.EnqueueAsync(mesOnlyRecord);
-        await pipeline.EnqueueAsync(cloudOnlyRecord);
+        await pipeline.EnqueueAsync(mesOnlyRecord, TestContext.Current.CancellationToken);
+        await pipeline.EnqueueAsync(cloudOnlyRecord, TestContext.Current.CancellationToken);
 
         var mesStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseMes = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -227,10 +233,10 @@ public sealed class ProcessQueueTaskBehaviorTests
             retryChannel: "MES",
             result: true,
             failureMode: ConsumerFailureMode.Durable,
-            processAsync: async _ =>
+            processAsync: async (_, cancellationToken) =>
             {
                 mesStarted.SetResult();
-                await releaseMes.Task.WaitAsync(TimeSpan.FromSeconds(2));
+                await releaseMes.Task.WaitAsync(TimeSpan.FromSeconds(2), cancellationToken);
                 return true;
             });
         var cloudConsumer = new FakeCellDataConsumer(
@@ -239,7 +245,7 @@ public sealed class ProcessQueueTaskBehaviorTests
             retryChannel: "Cloud",
             result: true,
             failureMode: ConsumerFailureMode.Durable,
-            processAsync: _ =>
+            processAsync: (_, _) =>
             {
                 cloudCompleted.SetResult();
                 return Task.FromResult(true);
@@ -258,13 +264,19 @@ public sealed class ProcessQueueTaskBehaviorTests
             new FakeCriticalPersistenceFallbackWriter());
 
         var executeTask = task.ExecuteOnceAsync();
-        await mesStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
-        await cloudCompleted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        await mesStarted.Task.WaitAsync(
+            TimeSpan.FromSeconds(2),
+            TestContext.Current.CancellationToken);
+        await cloudCompleted.Task.WaitAsync(
+            TimeSpan.FromSeconds(2),
+            TestContext.Current.CancellationToken);
 
         Assert.False(executeTask.IsCompleted);
 
         releaseMes.SetResult();
-        await executeTask.WaitAsync(TimeSpan.FromSeconds(2));
+        await executeTask.WaitAsync(
+            TimeSpan.FromSeconds(2),
+            TestContext.Current.CancellationToken);
         Assert.Equal(1, mesConsumer.ProcessCallCount);
         Assert.Equal(1, cloudConsumer.ProcessCallCount);
     }
@@ -297,12 +309,12 @@ public sealed class ProcessQueueTaskBehaviorTests
             retryChannel: "MES",
             result: true,
             failureMode: ConsumerFailureMode.Durable,
-            processAsync: async _ =>
+            processAsync: async (_, cancellationToken) =>
             {
                 mesStarted.TrySetResult();
                 await releaseMes.Task.WaitAsync(
                     TimeSpan.FromSeconds(5),
-                    TestContext.Current.CancellationToken);
+                    cancellationToken);
                 return true;
             });
         var cloudConsumer = new FakeCellDataConsumer(
@@ -311,7 +323,7 @@ public sealed class ProcessQueueTaskBehaviorTests
             retryChannel: "Cloud",
             result: true,
             failureMode: ConsumerFailureMode.Durable,
-            processAsync: _ =>
+            processAsync: (_, _) =>
             {
                 cloudCompleted.SetResult();
                 return Task.FromResult(true);
@@ -364,15 +376,16 @@ public sealed class ProcessQueueTaskBehaviorTests
     {
         var pipeline = new FakeDataPipelineService();
         var cloudRetryStore = new FakeFailedRecordStore();
-        await pipeline.EnqueueAsync(CreateRecord());
+        await pipeline.EnqueueAsync(CreateRecord(), TestContext.Current.CancellationToken);
 
+        // Intentionally ignore the consumer token: this case verifies the queue's own per-call timeout.
         var cloudConsumer = new FakeCellDataConsumer(
             name: "Cloud",
             order: 10,
             retryChannel: "Cloud",
             result: true,
             failureMode: ConsumerFailureMode.Durable,
-            processAsync: _ => Task.Delay(TimeSpan.FromSeconds(5)).ContinueWith(_ => true));
+            processAsync: (_, _) => Task.Delay(TimeSpan.FromSeconds(5)).ContinueWith(_ => true));
 
         var task = new TestableProcessQueueTask(
             new FakeLogService(),
@@ -411,7 +424,7 @@ public sealed class ProcessQueueTaskBehaviorTests
         var cloudDeadLetterStore = new FakeCloudDeadLetterStore();
         var mesDeadLetterStore = new FakeMesDeadLetterStore();
         var criticalWriter = new FakeCriticalPersistenceFallbackWriter();
-        await pipeline.EnqueueAsync(CreateRecord());
+        await pipeline.EnqueueAsync(CreateRecord(), TestContext.Current.CancellationToken);
 
         var cloudConsumer = new FakeCellDataConsumer(
             name: "Cloud",
@@ -459,7 +472,7 @@ public sealed class ProcessQueueTaskBehaviorTests
         var cloudDeadLetterStore = new FakeCloudDeadLetterStore();
         var mesDeadLetterStore = new FakeMesDeadLetterStore();
         var criticalWriter = new FakeCriticalPersistenceFallbackWriter();
-        await pipeline.EnqueueAsync(CreateRecord());
+        await pipeline.EnqueueAsync(CreateRecord(), TestContext.Current.CancellationToken);
 
         var cloudConsumer = new FakeCellDataConsumer(
             name: "Cloud",
@@ -518,7 +531,7 @@ public sealed class ProcessQueueTaskBehaviorTests
             configure: options => options.Cloud.RetryTotalLimit = 1);
 
         var cloudDeadLetterStore = new FakeCloudDeadLetterStore();
-        await pipeline.EnqueueAsync(CreateRecord());
+        await pipeline.EnqueueAsync(CreateRecord(), TestContext.Current.CancellationToken);
 
         var task = new TestableProcessQueueTask(
             logger,
@@ -582,9 +595,11 @@ public sealed class ProcessQueueTaskBehaviorTests
             });
 
         var injectionPipeline = new FakeDataPipelineService();
-        await injectionPipeline.EnqueueAsync(CreateRecord());
+        await injectionPipeline.EnqueueAsync(CreateRecord(), TestContext.Current.CancellationToken);
         var testProcessPipeline = new FakeDataPipelineService();
-        await testProcessPipeline.EnqueueAsync(CreateTestProcessRecord());
+        await testProcessPipeline.EnqueueAsync(
+            CreateTestProcessRecord(),
+            TestContext.Current.CancellationToken);
 
         var consumer = new FakeCellDataConsumer(
             name: "Cloud",
@@ -659,7 +674,7 @@ public sealed class ProcessQueueTaskBehaviorTests
             configure: options => options.Cloud.FallbackTotalLimit = 1);
 
         var cloudDeadLetterStore = new FakeCloudDeadLetterStore();
-        await pipeline.EnqueueAsync(CreateRecord());
+        await pipeline.EnqueueAsync(CreateRecord(), TestContext.Current.CancellationToken);
 
         var task = new TestableProcessQueueTask(
             logger,
@@ -704,7 +719,7 @@ public sealed class ProcessQueueTaskBehaviorTests
         var cloudDeadLetterStore = new FakeCloudDeadLetterStore();
         var mesDeadLetterStore = new FakeMesDeadLetterStore();
         var criticalWriter = new FakeCriticalPersistenceFallbackWriter();
-        await pipeline.EnqueueAsync(CreateRecord());
+        await pipeline.EnqueueAsync(CreateRecord(), TestContext.Current.CancellationToken);
 
         var mesConsumer = new FakeCellDataConsumer(
             name: "MES",
@@ -745,9 +760,9 @@ public sealed class ProcessQueueTaskBehaviorTests
         var cloudDeadLetterStore = new FakeCloudDeadLetterStore();
         var mesDeadLetterStore = new FakeMesDeadLetterStore();
         var criticalWriter = new FakeCriticalPersistenceFallbackWriter();
-        await pipeline.EnqueueAsync(CreateRecord());
-        await pipeline.EnqueueAsync(CreateRecord());
-        await pipeline.EnqueueAsync(CreateRecord());
+        await pipeline.EnqueueAsync(CreateRecord(), TestContext.Current.CancellationToken);
+        await pipeline.EnqueueAsync(CreateRecord(), TestContext.Current.CancellationToken);
+        await pipeline.EnqueueAsync(CreateRecord(), TestContext.Current.CancellationToken);
 
         var cloudConsumer = new FakeCellDataConsumer(
             name: "Cloud",

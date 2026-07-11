@@ -12,7 +12,8 @@ public sealed class EdgeMemoryCacheServiceBehaviorTests
 
         var value = await cache.GetOrCreateAsync<string>(
             "demo",
-            _ => Task.FromResult<string?>("factory"));
+            _ => Task.FromResult<string?>("factory"),
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("cached", value);
     }
@@ -26,12 +27,13 @@ public sealed class EdgeMemoryCacheServiceBehaviorTests
         var tasks = Enumerable.Range(0, 12)
             .Select(_ => cache.GetOrCreateAsync<int>(
                 "shared",
-                async _ =>
+                async cancellationToken =>
                 {
                     Interlocked.Increment(ref calls);
-                    await Task.Delay(20);
+                    await Task.Delay(20, cancellationToken);
                     return 7;
-                }))
+                },
+                cancellationToken: TestContext.Current.CancellationToken))
             .ToArray();
 
         var values = await Task.WhenAll(tasks);
@@ -52,14 +54,16 @@ public sealed class EdgeMemoryCacheServiceBehaviorTests
             {
                 calls++;
                 return Task.FromResult<string?>(null);
-            });
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
         var second = await cache.GetOrCreateAsync<string>(
             "missing",
             _ =>
             {
                 calls++;
                 return Task.FromResult<string?>("unexpected");
-            });
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Null(first);
         Assert.Null(second);
@@ -71,7 +75,10 @@ public sealed class EdgeMemoryCacheServiceBehaviorTests
     public async Task RemoveByPrefix_WhenEntryCreatedByGetOrCreate_ShouldRemoveIt()
     {
         var cache = new EdgeMemoryCacheService();
-        await cache.GetOrCreateAsync("Param:Module:Homogenization", _ => Task.FromResult<string?>("value"));
+        await cache.GetOrCreateAsync(
+            "Param:Module:Homogenization",
+            _ => Task.FromResult<string?>("value"),
+            cancellationToken: TestContext.Current.CancellationToken);
 
         cache.RemoveByPrefix("Param:Module:");
 

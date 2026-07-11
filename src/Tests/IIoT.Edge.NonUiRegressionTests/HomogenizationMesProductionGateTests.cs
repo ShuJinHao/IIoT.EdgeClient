@@ -18,7 +18,7 @@ public sealed class HomogenizationMesProductionGateTests
                 Message: string.Empty)));
         var context = new HomogenizationContext();
 
-        var result = await gate.EnsureReadyAsync(context);
+        var result = await gate.EnsureReadyAsync(context, TestContext.Current.CancellationToken);
 
         Assert.Equal(MesCallOutcome.BusinessRejected, result.Outcome);
         Assert.Null(context.SelectedProductionPlan);
@@ -38,7 +38,7 @@ public sealed class HomogenizationMesProductionGateTests
                 TraceBatchError: ProductionPlanSelectionErrorCodes.TraceBatchNumberMissing)));
         var context = new HomogenizationContext();
 
-        var result = await gate.EnsureReadyAsync(context);
+        var result = await gate.EnsureReadyAsync(context, TestContext.Current.CancellationToken);
 
         Assert.Equal(MesCallOutcome.BusinessRejected, result.Outcome);
         Assert.Equal(plan, context.SelectedProductionPlan);
@@ -60,7 +60,7 @@ public sealed class HomogenizationMesProductionGateTests
                 TraceBatchGeneratedAt: generatedAt)));
         var context = new HomogenizationContext();
 
-        var result = await gate.EnsureReadyAsync(context);
+        var result = await gate.EnsureReadyAsync(context, TestContext.Current.CancellationToken);
 
         Assert.Equal(MesCallOutcome.Success, result.Outcome);
         Assert.Equal(plan, context.SelectedProductionPlan);
@@ -80,7 +80,7 @@ public sealed class HomogenizationMesProductionGateTests
                 Message: string.Empty)));
         var context = new HomogenizationContext();
 
-        var result = await gate.EnsureReadyAsync(context);
+        var result = await gate.EnsureReadyAsync(context, TestContext.Current.CancellationToken);
 
         Assert.Equal(MesCallOutcome.Success, result.Outcome);
     }

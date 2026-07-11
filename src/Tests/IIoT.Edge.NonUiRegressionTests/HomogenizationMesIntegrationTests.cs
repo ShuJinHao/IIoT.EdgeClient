@@ -32,7 +32,10 @@ public sealed class HomogenizationMesIntegrationTests
         var httpClient = new CapturingMesHttpClient();
         var channel = CreateChannel(httpClient, stationNo: "ST-H-01");
 
-        var result = await channel.UploadInboundAsync(CreateDevice(), "TRAY-001");
+        var result = await channel.UploadInboundAsync(
+            CreateDevice(),
+            "TRAY-001",
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
         Assert.Equal("/dev/dev/getIn/check", httpClient.LastUrl);
@@ -60,7 +63,8 @@ public sealed class HomogenizationMesIntegrationTests
 
         var result = await channel.UploadOutboundAsync(
             CreateDevice(),
-            CreateCellData("TRAY-002"));
+            CreateCellData("TRAY-002"),
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(MesCallOutcome.BusinessRejected, result.Outcome);
         Assert.Equal("/dev/dev/electrode/exit/push", httpClient.LastUrl);
@@ -91,7 +95,8 @@ public sealed class HomogenizationMesIntegrationTests
                 DispersionCurrent = 12,
                 Temperature = 25,
                 Vacuum = -9
-            });
+            },
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
         Assert.Equal("/dev/dev/run/info", httpClient.LastUrl);
@@ -130,7 +135,8 @@ public sealed class HomogenizationMesIntegrationTests
                 Time = [30],
                 Temperature = [45],
                 StopStep = [false]
-            });
+            },
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
         Assert.Equal("/dev/dev/process/param", httpClient.LastUrl);
@@ -159,7 +165,8 @@ public sealed class HomogenizationMesIntegrationTests
             {
                 StatusCode = 1,
                 Messages = ["运行"]
-            });
+            },
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
         Assert.Equal("/dev/dev/realTime/status", httpClient.LastUrl);
@@ -193,7 +200,8 @@ public sealed class HomogenizationMesIntegrationTests
                 {
                     CellData = CreateCellData("TRAY-02")
                 }
-            ]);
+            ],
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(2, httpClient.Requests.Count);
@@ -212,7 +220,10 @@ public sealed class HomogenizationMesIntegrationTests
                 [HomogenizationParams.Mes.InboundPath] = "/configured/inbound"
             });
 
-        var result = await channel.UploadInboundAsync(CreateDevice(), "TRAY-007");
+        var result = await channel.UploadInboundAsync(
+            CreateDevice(),
+            "TRAY-007",
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
         Assert.Equal("/configured/inbound", httpClient.LastUrl);
@@ -238,7 +249,8 @@ public sealed class HomogenizationMesIntegrationTests
             {
                 CapturedAt = new DateTime(2026, 4, 29, 8, 1, 2),
                 StirringSpeed = 120
-            });
+            },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(MesCallOutcome.Disabled, result.Outcome);
         Assert.True(result.IsSuccess);
@@ -270,7 +282,8 @@ public sealed class HomogenizationMesIntegrationTests
                 {
                     CellData = CreateCellData("TRAY-017")
                 }
-            ]);
+            ],
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(MesCallOutcome.InvalidContext, result.Outcome);
         Assert.False(result.IsSuccess);
@@ -299,7 +312,8 @@ public sealed class HomogenizationMesIntegrationTests
             });
 
         var result = await channel.GetMainPlanAsync(
-            new HomogenizationMainPlanRequest("A1-STUC", new DateTime(2026, 4, 24, 12, 10, 11)));
+            new HomogenizationMainPlanRequest("A1-STUC", new DateTime(2026, 4, 24, 12, 10, 11)),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(
@@ -326,7 +340,8 @@ public sealed class HomogenizationMesIntegrationTests
             });
 
         var result = await channel.GenerateTraceBatchNumberAsync(
-            new HomogenizationTraceBatchRequest("PLAN-001", "CG"));
+            new HomogenizationTraceBatchRequest("PLAN-001", "CG"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
         Assert.Equal("/configured/batch-number", httpClient.LastUrl);
@@ -379,9 +394,9 @@ public sealed class HomogenizationMesIntegrationTests
             EndTime: string.Empty,
             Fields: new Dictionary<string, string>());
 
-        await service.SelectPlanAsync(option);
+        await service.SelectPlanAsync(option, TestContext.Current.CancellationToken);
 
-        var state = await service.GetStateAsync();
+        var state = await service.GetStateAsync(TestContext.Current.CancellationToken);
         Assert.Same(option, state.CurrentPlan);
         Assert.Equal("TRACE-001", state.TraceBatchNumber);
         Assert.True(state.HasTraceBatchNumber);
@@ -428,10 +443,11 @@ public sealed class HomogenizationMesIntegrationTests
             EndTime: string.Empty,
             Fields: new Dictionary<string, string>());
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => service.SelectPlanAsync(option));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.SelectPlanAsync(option, TestContext.Current.CancellationToken));
 
         Assert.Equal(ProductionPlanSelectionErrorCodes.TraceBatchTimeout, error.Message);
-        var state = await service.GetStateAsync();
+        var state = await service.GetStateAsync(TestContext.Current.CancellationToken);
         Assert.Same(option, state.CurrentPlan);
         Assert.False(state.HasTraceBatchNumber);
         Assert.Equal(ProductionPlanSelectionErrorCodes.TraceBatchTimeout, state.TraceBatchError);
@@ -472,10 +488,11 @@ public sealed class HomogenizationMesIntegrationTests
             EndTime: string.Empty,
             Fields: new Dictionary<string, string>());
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => service.SelectPlanAsync(option));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.SelectPlanAsync(option, TestContext.Current.CancellationToken));
 
         Assert.Equal(ProductionPlanSelectionErrorCodes.MissingOperationCode, error.Message);
-        var state = await service.GetStateAsync();
+        var state = await service.GetStateAsync(TestContext.Current.CancellationToken);
         Assert.Same(option, state.CurrentPlan);
         Assert.False(state.HasTraceBatchNumber);
         Assert.Equal(ProductionPlanSelectionErrorCodes.MissingOperationCode, state.TraceBatchError);
@@ -494,7 +511,8 @@ public sealed class HomogenizationMesIntegrationTests
             "Homogenization",
             "/reject",
             new Dictionary<string, string?>(),
-            static data => data.GetRawText());
+            static data => data.GetRawText(),
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(MesCallOutcome.BusinessRejected, result.Outcome);
         Assert.Equal("业务拒绝", result.Message);
@@ -513,7 +531,8 @@ public sealed class HomogenizationMesIntegrationTests
             "Homogenization",
             "/empty",
             new Dictionary<string, string?>(),
-            static data => data.GetRawText());
+            static data => data.GetRawText(),
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(MesCallOutcome.TransportFailure, result.Outcome);
     }
@@ -531,7 +550,8 @@ public sealed class HomogenizationMesIntegrationTests
             "Homogenization",
             "/parse-failure",
             new { value = 1 },
-            static data => data.GetProperty("value").GetInt32());
+            static data => data.GetProperty("value").GetInt32(),
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(MesCallOutcome.TransportFailure, result.Outcome);
     }

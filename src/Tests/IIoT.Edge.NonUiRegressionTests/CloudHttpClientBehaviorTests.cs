@@ -550,7 +550,9 @@ public sealed class CloudHttpClientBehaviorTests
             new FakeLogService());
 
         var first = client.GetAsync("/api/v1/edge/capacity/summary");
-        await refreshStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        await refreshStarted.Task.WaitAsync(
+            TimeSpan.FromSeconds(2),
+            TestContext.Current.CancellationToken);
         var second = client.GetAsync("/api/v1/edge/capacity/summary");
         releaseRefresh.SetResult();
         var results = await Task.WhenAll(first, second);

@@ -33,7 +33,7 @@ public sealed class IngressOverflowPersistenceBehaviorTests
             {
                 Barcode = "BAR-OVERFLOW-DISABLED"
             }
-        });
+        }, TestContext.Current.CancellationToken);
 
         Assert.Equal(0, result.PersistedTargetCount);
     }

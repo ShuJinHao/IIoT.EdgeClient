@@ -55,8 +55,8 @@ public sealed class HomogenizationRuntimeBehaviorTests
             new FakeLogService(),
             [new HomogenizationHardwareProfileProvider()]);
 
-        await contributor.EnsureConfigurationSamplesAsync();
-        await contributor.EnsureConfigurationSamplesAsync();
+        await contributor.EnsureConfigurationSamplesAsync(TestContext.Current.CancellationToken);
+        await contributor.EnsureConfigurationSamplesAsync(TestContext.Current.CancellationToken);
 
         var device = Assert.Single(networkDevices.Items);
         Assert.Equal(DeviceType.PLC, device.DeviceType);
@@ -127,7 +127,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
             new FakeLogService(),
             [new HomogenizationHardwareProfileProvider()]);
 
-        await contributor.EnsureConfigurationSamplesAsync();
+        await contributor.EnsureConfigurationSamplesAsync(TestContext.Current.CancellationToken);
 
         var preserved = Assert.Single(ioMappings.Items);
         Assert.Equal("D999", preserved.PlcAddress);
@@ -172,7 +172,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
                 [new HomogenizationHardwareProfileProvider()],
                 runtimePaths);
 
-            await contributor.EnsureConfigurationSamplesAsync();
+            await contributor.EnsureConfigurationSamplesAsync(TestContext.Current.CancellationToken);
 
             Assert.Equal(2, ioMappings.Items.Count);
             Assert.Contains(ioMappings.Items, static mapping => mapping.SignalKey == "Homogenization.HeartbeatIn");
@@ -209,13 +209,13 @@ public sealed class HomogenizationRuntimeBehaviorTests
                 [new HomogenizationHardwareProfileProvider()],
                 runtimePaths);
 
-            await contributor.EnsureConfigurationSamplesAsync();
+            await contributor.EnsureConfigurationSamplesAsync(TestContext.Current.CancellationToken);
 
             var inboundRead = ioMappings.Items.Single(static mapping =>
                 mapping.SignalKey == "Homogenization.Interaction.Inbound" && mapping.Direction == "Read");
             inboundRead.UpdateAddress("D999", inboundRead.AddressCount);
 
-            await contributor.EnsureConfigurationSamplesAsync();
+            await contributor.EnsureConfigurationSamplesAsync(TestContext.Current.CancellationToken);
 
             var preserved = ioMappings.Items.Single(static mapping =>
                 mapping.SignalKey == "Homogenization.Interaction.Inbound" && mapping.Direction == "Read");
@@ -265,7 +265,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
             new FakeLogService(),
             [new HomogenizationHardwareProfileProvider()]);
 
-        await contributor.EnsureConfigurationSamplesAsync();
+        await contributor.EnsureConfigurationSamplesAsync(TestContext.Current.CancellationToken);
 
         var device = Assert.Single(networkDevices.Items);
         Assert.Equal("PLC-Homogenization-01", device.DeviceName);

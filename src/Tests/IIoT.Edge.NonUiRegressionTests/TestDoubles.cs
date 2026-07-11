@@ -238,7 +238,7 @@ internal sealed class FakeDataPipelineService : IDataPipelineService
 internal sealed class FakeCellDataConsumer : ICellDataConsumer
 {
     private readonly bool _result;
-    private readonly Func<CellCompletedRecord, Task<bool>>? _processAsync;
+    private readonly Func<CellCompletedRecord, CancellationToken, Task<bool>>? _processAsync;
 
     public FakeCellDataConsumer(
         string name,
@@ -246,7 +246,7 @@ internal sealed class FakeCellDataConsumer : ICellDataConsumer
         string? retryChannel,
         bool result,
         ConsumerFailureMode failureMode = ConsumerFailureMode.BestEffort,
-        Func<CellCompletedRecord, Task<bool>>? processAsync = null)
+        Func<CellCompletedRecord, CancellationToken, Task<bool>>? processAsync = null)
     {
         Name = name;
         Order = order;
@@ -270,7 +270,7 @@ internal sealed class FakeCellDataConsumer : ICellDataConsumer
 
         if (_processAsync is not null)
         {
-            return await _processAsync(record);
+            return await _processAsync(record, cancellationToken);
         }
 
         return _result;

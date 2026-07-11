@@ -37,7 +37,11 @@ public sealed class PlcTaskBindingBehaviorTests
     {
         var service = CreateService(defaultEnableAllTasks: true);
 
-        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(1, TestCandidates, AllTestMappings);
+        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(
+            1,
+            TestCandidates,
+            AllTestMappings,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(["Task.A", "Task.B"], enabledKeys.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase));
     }
@@ -47,7 +51,11 @@ public sealed class PlcTaskBindingBehaviorTests
     {
         var service = CreateService(defaultEnableAllTasks: null);
 
-        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(1, TestCandidates, AllTestMappings);
+        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(
+            1,
+            TestCandidates,
+            AllTestMappings,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(enabledKeys);
     }
@@ -65,7 +73,11 @@ public sealed class PlcTaskBindingBehaviorTests
                 DefaultEnabled: true)
         };
 
-        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(1, candidates, AllTestMappings);
+        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(
+            1,
+            candidates,
+            AllTestMappings,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(["Task.Default"], enabledKeys);
     }
@@ -83,7 +95,11 @@ public sealed class PlcTaskBindingBehaviorTests
                 DefaultEnabled: true)
         };
 
-        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(1, candidates, AllTestMappings);
+        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(
+            1,
+            candidates,
+            AllTestMappings,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(enabledKeys);
     }
@@ -102,7 +118,11 @@ public sealed class PlcTaskBindingBehaviorTests
                 DefaultEnabled: true)
         };
 
-        var enabledKeys = await harness.Service.GetEnabledTaskKeysAsync(1, candidates, AllTestMappings);
+        var enabledKeys = await harness.Service.GetEnabledTaskKeysAsync(
+            1,
+            candidates,
+            AllTestMappings,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(enabledKeys);
     }
@@ -116,7 +136,11 @@ public sealed class PlcTaskBindingBehaviorTests
     {
         var service = CreateService(defaultEnableAllTasks: configuredDefault);
 
-        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(1, TestCandidates, AllTestMappings);
+        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(
+            1,
+            TestCandidates,
+            AllTestMappings,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedEnabledCount, enabledKeys.Count);
     }
@@ -127,7 +151,11 @@ public sealed class PlcTaskBindingBehaviorTests
         var harness = CreateService(defaultEnableAllTasks: true);
         harness.Bindings.Add(PlcTaskBindingEntity.Create(1, "Task.A", enabled: false, DateTimeOffset.UtcNow));
 
-        var enabledKeys = await harness.Service.GetEnabledTaskKeysAsync(1, TestCandidates, AllTestMappings);
+        var enabledKeys = await harness.Service.GetEnabledTaskKeysAsync(
+            1,
+            TestCandidates,
+            AllTestMappings,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(["Task.B"], enabledKeys.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase));
     }
@@ -140,7 +168,11 @@ public sealed class PlcTaskBindingBehaviorTests
             .Where(static mapping => !string.Equals(mapping.SignalKey, "Signal.Business", StringComparison.OrdinalIgnoreCase))
             .ToArray();
 
-        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(1, TestCandidates, mappings);
+        var enabledKeys = await service.Service.GetEnabledTaskKeysAsync(
+            1,
+            TestCandidates,
+            mappings,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(["Task.A"], enabledKeys.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase));
     }
@@ -155,7 +187,8 @@ public sealed class PlcTaskBindingBehaviorTests
         var enabledKeys = await harness.Service.GetEnabledTaskKeysAsync(
             1,
             factory.GetTaskCandidates(),
-            mappings);
+            mappings,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(
             ["Homogenization.EquipmentStatus", "Homogenization.Realtime"],
@@ -198,7 +231,8 @@ public sealed class PlcTaskBindingBehaviorTests
             {
                 ["Task.A"] = false,
                 ["Task.B"] = true
-            });
+            },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(2, harness.Bindings.Items.Count);
         Assert.Contains(harness.Bindings.Items, static x => x.TaskKey == "Task.A" && !x.Enabled);
@@ -222,7 +256,8 @@ public sealed class PlcTaskBindingBehaviorTests
             {
                 ["Task.A"] = false,
                 ["Task.B"] = true
-            }));
+            },
+            TestContext.Current.CancellationToken));
 
         Assert.Contains("Signal.Business/Read", error.Message, StringComparison.Ordinal);
     }
@@ -348,7 +383,7 @@ public sealed class PlcTaskBindingBehaviorTests
         runtimeRegistry.BlockRuntime(blockedDevice.DeviceName);
         statusStore.MarkRuntimeFault(blockedDevice.Id, blockedDevice.DeviceName, bindingFault);
 
-        await coordinator.InitializeAsync();
+        await coordinator.InitializeAsync(TestContext.Current.CancellationToken);
 
         try
         {
@@ -374,7 +409,7 @@ public sealed class PlcTaskBindingBehaviorTests
         }
         finally
         {
-            await coordinator.StopAsync();
+            await coordinator.StopAsync(TestContext.Current.CancellationToken);
         }
     }
 
@@ -413,7 +448,7 @@ public sealed class PlcTaskBindingBehaviorTests
             statusStore);
 
         var stopwatch = Stopwatch.StartNew();
-        await coordinator.InitializeAsync();
+        await coordinator.InitializeAsync(TestContext.Current.CancellationToken);
 
         try
         {
@@ -431,7 +466,7 @@ public sealed class PlcTaskBindingBehaviorTests
         }
         finally
         {
-            await coordinator.StopAsync();
+            await coordinator.StopAsync(TestContext.Current.CancellationToken);
         }
     }
 
@@ -465,7 +500,7 @@ public sealed class PlcTaskBindingBehaviorTests
             runtimeBuilder,
             statusStore);
 
-        await coordinator.InitializeAsync();
+        await coordinator.InitializeAsync(TestContext.Current.CancellationToken);
 
         try
         {
@@ -476,7 +511,7 @@ public sealed class PlcTaskBindingBehaviorTests
             AssertDuplicateFault(statusStore.GetSnapshot(plcB.Id));
 
             logger.Warnings.Clear();
-            await coordinator.ReloadAsync("PLC-A");
+            await coordinator.ReloadAsync("PLC-A", TestContext.Current.CancellationToken);
 
             Assert.Contains(logger.Warnings, IsDuplicateEndpointWarning);
             Assert.Empty(plcServiceFactory.CreatedDeviceNames);
@@ -487,7 +522,7 @@ public sealed class PlcTaskBindingBehaviorTests
             plcB.UpdateEndpoint(plcB.IpAddress, 6301, plcB.Port2, plcB.ConnectTimeout);
             plcServiceFactory.CreatedDeviceNames.Clear();
             logger.Warnings.Clear();
-            await coordinator.ReloadAsync("PLC-A");
+            await coordinator.ReloadAsync("PLC-A", TestContext.Current.CancellationToken);
 
             Assert.DoesNotContain(logger.Warnings, IsDuplicateEndpointWarning);
             Assert.Equal(["PLC-A"], plcServiceFactory.CreatedDeviceNames);
@@ -495,7 +530,7 @@ public sealed class PlcTaskBindingBehaviorTests
         }
         finally
         {
-            await coordinator.StopAsync();
+            await coordinator.StopAsync(TestContext.Current.CancellationToken);
         }
 
         static bool IsDuplicateEndpointWarning(string message)

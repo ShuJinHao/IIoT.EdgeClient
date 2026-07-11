@@ -66,7 +66,7 @@ public sealed class ModuleParameterBehaviorTests
             [new StubEdgeProcessModule()],
             new StubCloudApiConfigSnapshotProvider());
 
-        var result = await handler.Handle(new LoadParamViewQuery(), CancellationToken.None);
+        var result = await handler.Handle(new LoadParamViewQuery(), TestContext.Current.CancellationToken);
 
         var mesEnabled = Assert.Single(result.MesParamGroups).Params
             .Single(x => x.Name == nameof(HomogenizationMesParam.启用));
@@ -110,8 +110,8 @@ public sealed class ModuleParameterBehaviorTests
         var config = new CountingLocalParameterConfigService([]);
         var provider = CreateProvider(registry, config);
 
-        var first = await provider.GetAsync();
-        var second = await provider.GetAsync();
+        var first = await provider.GetAsync(TestContext.Current.CancellationToken);
+        var second = await provider.GetAsync(TestContext.Current.CancellationToken);
 
         Assert.True(first.Mes<bool>(HomogenizationMesParam.启用));
         Assert.Equal("/heath", first.Mes<string>(HomogenizationMesParam.MesHealthPath));
@@ -143,7 +143,7 @@ public sealed class ModuleParameterBehaviorTests
         ]);
         var provider = CreateProvider(registry, config);
 
-        var snapshot = await provider.GetAsync();
+        var snapshot = await provider.GetAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal("https://mes.local", snapshot.Mes<string>(HomogenizationMesParam.服务地址));
         Assert.True(snapshot.Business<bool>(HomogenizationBusinessParam.启用托盘码重码验证));
@@ -155,7 +155,7 @@ public sealed class ModuleParameterBehaviorTests
         var provider = CreateProvider(
             CreateHomogenizationRegistry(),
             new CountingLocalParameterConfigService([]));
-        var snapshot = await provider.GetAsync();
+        var snapshot = await provider.GetAsync(TestContext.Current.CancellationToken);
 
         var ex = Assert.Throws<InvalidOperationException>(() =>
             snapshot.Mes<bool>(HomogenizationMesParam.服务地址));
@@ -180,7 +180,7 @@ public sealed class ModuleParameterBehaviorTests
             ]),
             logger);
 
-        var snapshot = await provider.GetAsync();
+        var snapshot = await provider.GetAsync(TestContext.Current.CancellationToken);
 
         Assert.True(snapshot.Mes<bool>(HomogenizationMesParam.启用));
         Assert.Contains(logger.Entries, entry =>
@@ -195,7 +195,8 @@ public sealed class ModuleParameterBehaviorTests
             new ModuleParamRegistry(),
             new CountingLocalParameterConfigService([]));
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetAsync());
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            provider.GetAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains("插件参数枚举未注册", ex.Message);
     }

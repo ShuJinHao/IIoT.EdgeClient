@@ -63,8 +63,10 @@ public sealed class McPlcServiceBehaviorTests
         using var service = CreateConnectedService(server.Port);
 
         var readTask = service.ReadDataAsync<ushort>("D700", 1);
-        await requestReceived.Task.WaitAsync(TimeSpan.FromSeconds(2));
-        var disconnectTask = Task.Run(service.Disconnect);
+        await requestReceived.Task.WaitAsync(
+            TimeSpan.FromSeconds(2),
+            TestContext.Current.CancellationToken);
+        var disconnectTask = Task.Run(service.Disconnect, TestContext.Current.CancellationToken);
 
         var completedBeforeReadReleased = await Task.WhenAny(
             disconnectTask,
@@ -73,7 +75,9 @@ public sealed class McPlcServiceBehaviorTests
 
         releaseResponse.SetResult();
         var values = await readTask;
-        await disconnectTask.WaitAsync(TimeSpan.FromSeconds(2));
+        await disconnectTask.WaitAsync(
+            TimeSpan.FromSeconds(2),
+            TestContext.Current.CancellationToken);
 
         Assert.Equal((ushort)0x1234, Assert.Single(values));
         Assert.False(service.IsConnected);

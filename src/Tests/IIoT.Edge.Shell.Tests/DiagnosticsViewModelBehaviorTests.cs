@@ -1,6 +1,7 @@
 using IIoT.Edge.Application.Context;
 using IIoT.Edge.Application.Modules.Diagnostics;
 using System.Globalization;
+using Avalonia.Headless.XUnit;
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Device;
@@ -24,71 +25,70 @@ public sealed class DiagnosticsViewModelBehaviorTests
 {
     private static readonly DateTime TestNow = new(2026, 4, 18, 10, 30, 0, DateTimeKind.Utc);
 
-    [Fact]
-    public Task DiagnosticsViewModel_ShouldExposeMergedSyncOperationsSection()
-        => RunOnStaThreadAsync(async () =>
-        {
-            var startupStore = new FakeStartupDiagnosticsStore();
-            startupStore.Update(new StartupDiagnosticsReport(
-                GeneratedAt: new DateTime(2026, 4, 18, 10, 0, 0),
-                ConfigurationProfile: new ConfigurationProfileSnapshot(
-                    "Production",
-                    "HomogenizationLine",
-                    "appsettings.machine.HomogenizationLine.json",
-                    true,
-                    @"C:\EdgeRuntime\HomogenizationLine"),
-                DiscoveredModules: ["Homogenization"],
-                EnabledModules: ["Homogenization"],
-                ActivatedModules: ["Homogenization"],
-                PluginStates:
-                [
-                    new PluginLifecycleSnapshot("Homogenization", "Homogenization", "Homogenization", "1.0.0", PluginLifecycleState.Activated, "Plugin is enabled and activated.")
-                ],
-                ModuleRegistrations:
-                [
-                    new ModuleRegistrationSnapshot("Homogenization", "Homogenization", "IIoT.Edge.Module.Homogenization", true, true, true, true, true, true)
-                ],
-                DeviceBindings:
-                [
-                    new DeviceModuleBindingSnapshot("PLC-A", "Homogenization", true, true, true)
-                ],
-                Issues: []));
+    [AvaloniaFact]
+    public async Task DiagnosticsViewModel_ShouldExposeMergedSyncOperationsSection()
+    {
+        var startupStore = new FakeStartupDiagnosticsStore();
+        startupStore.Update(new StartupDiagnosticsReport(
+            GeneratedAt: new DateTime(2026, 4, 18, 10, 0, 0),
+            ConfigurationProfile: new ConfigurationProfileSnapshot(
+                "Production",
+                "HomogenizationLine",
+                "appsettings.machine.HomogenizationLine.json",
+                true,
+                @"C:\EdgeRuntime\HomogenizationLine"),
+            DiscoveredModules: ["Homogenization"],
+            EnabledModules: ["Homogenization"],
+            ActivatedModules: ["Homogenization"],
+            PluginStates:
+            [
+                new PluginLifecycleSnapshot("Homogenization", "Homogenization", "Homogenization", "1.0.0", PluginLifecycleState.Activated, "Plugin is enabled and activated.")
+            ],
+            ModuleRegistrations:
+            [
+                new ModuleRegistrationSnapshot("Homogenization", "Homogenization", "IIoT.Edge.Module.Homogenization", true, true, true, true, true, true)
+            ],
+            DeviceBindings:
+            [
+                new DeviceModuleBindingSnapshot("PLC-A", "Homogenization", true, true, true)
+            ],
+            Issues: []));
 
-            var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
-            {
-                Current = new EdgeSyncDiagnosticsSnapshot(
-                    "PLC-A",
-                    new CloudSyncDiagnosticsSnapshot(
-                        EdgeUploadGateState.Blocked,
-                        EdgeUploadBlockReason.UploadTokenRejected,
-                        CloudRetryRuntimeState.WaitingForRecovery,
-                        TestNow.AddMinutes(-2),
-                        TestNow.AddMinutes(-5),
-                        TestNow.AddMinutes(-2),
-                        CloudCallOutcome.UnauthorizedAfterRetry,
-                        "upload_token_rejected",
-                        "Capacity",
-                        3,
-                        4,
-                        5,
-                        true,
-                        true,
-                        CapacityBlockedChannel.Retry,
-                        "total",
-                        TestNow.AddMinutes(-1),
-                        true,
-                        TestNow.AddSeconds(-30),
-                        "cloud retry count failed",
-                        PendingPassStationCount: 3),
-                    new MesSyncDiagnosticsSnapshot(
-                        MesRetryRuntimeState.Backoff,
-                        TestNow.AddMinutes(-3),
-                        TestNow.AddMinutes(-10),
-                        TestNow.AddMinutes(-3),
-                        "mes timeout",
-                        2,
-                        [
-                            new MesChannelDiagnostics(
+        var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
+        {
+            Current = new EdgeSyncDiagnosticsSnapshot(
+                "PLC-A",
+                new CloudSyncDiagnosticsSnapshot(
+                    EdgeUploadGateState.Blocked,
+                    EdgeUploadBlockReason.UploadTokenRejected,
+                    CloudRetryRuntimeState.WaitingForRecovery,
+                    TestNow.AddMinutes(-2),
+                    TestNow.AddMinutes(-5),
+                    TestNow.AddMinutes(-2),
+                    CloudCallOutcome.UnauthorizedAfterRetry,
+                    "upload_token_rejected",
+                    "Capacity",
+                    3,
+                    4,
+                    5,
+                    true,
+                    true,
+                    CapacityBlockedChannel.Retry,
+                    "total",
+                    TestNow.AddMinutes(-1),
+                    true,
+                    TestNow.AddSeconds(-30),
+                    "cloud retry count failed",
+                    PendingPassStationCount: 3),
+                new MesSyncDiagnosticsSnapshot(
+                    MesRetryRuntimeState.Backoff,
+                    TestNow.AddMinutes(-3),
+                    TestNow.AddMinutes(-10),
+                    TestNow.AddMinutes(-3),
+                    "mes timeout",
+                    2,
+                    [
+                        new MesChannelDiagnostics(
                                 "Homogenization.Realtime",
                                 TestNow.AddMinutes(-3),
                                 TestNow.AddMinutes(-10),
@@ -97,162 +97,158 @@ public sealed class DiagnosticsViewModelBehaviorTests
                                 DeviceName: "PLC-A",
                                 TaskKey: "Homogenization.Realtime",
                                 Scenario: "实时数据上传")
-                        ],
-                        true,
-                        CapacityBlockedChannel.Fallback,
-                        "total",
-                        TestNow.AddMinutes(-2),
-                        true,
-                        TestNow.AddSeconds(-20),
-                        "mes retry count failed"),
-                    new ProductionContextPersistenceDiagnostics(2, TestNow.AddMinutes(-4)))
-            };
-
-            var viewModel = CreateViewModel(startupStore, diagnosticsQuery, new TestAppLanguageService());
-
-            Assert.Collection(
-                viewModel.Tabs,
-                tab => Assert.Equal("Diag.SyncOps", tab.Key),
-                tab => Assert.Equal("Diag.Startup", tab.Key));
-            Assert.True(viewModel.IsSyncOpsTabSelected);
-
-            viewModel.SelectTabCommand.Execute(viewModel.Tabs[1]);
-            Assert.True(viewModel.IsStartupTabSelected);
-
-            await viewModel.RefreshAsync();
-
-            Assert.Equal("上传门禁：存储故障", viewModel.CloudGateSummary);
-            Assert.Equal("云端运行：等待恢复", viewModel.CloudRuntimeSummary);
-            Assert.Equal("待处理：过站=3，日志=4，产能=5，死信=0", viewModel.CloudPendingSummary);
-            Assert.Equal("MES运行：退避中", viewModel.MesRuntimeSummary);
-            Assert.Contains("产能阻塞：是", viewModel.CloudCapacitySummary, StringComparison.Ordinal);
-            Assert.Contains("存储故障：是", viewModel.CloudPersistenceSummary, StringComparison.Ordinal);
-            Assert.Contains("存储故障：是", viewModel.MesPersistenceSummary, StringComparison.Ordinal);
-            Assert.Contains("损坏文件数：2", viewModel.ContextPersistenceSummary, StringComparison.Ordinal);
-            Assert.Equal("2", viewModel.ContextCorruptFileCount);
-            Assert.NotEqual("--", viewModel.ContextLastCorruptDetectedAt);
-            Assert.Contains("机型：HomogenizationLine", viewModel.ConfigurationProfileSummary, StringComparison.Ordinal);
-            Assert.Equal("Production", viewModel.ConfigurationEnvironment);
-            Assert.Equal("HomogenizationLine", viewModel.ConfigurationMachineProfile);
-            Assert.Equal(@"C:\EdgeRuntime\HomogenizationLine", viewModel.ConfigurationRuntimeDataRoot);
-            Assert.Single(viewModel.ModuleRegistrations);
-            Assert.Single(viewModel.PluginStates);
-            Assert.Single(viewModel.DeviceBindings);
-            var readinessRow = Assert.Single(viewModel.ModuleReadinessRows);
-            Assert.Equal("Homogenization", readinessRow.DisplayName);
-            Assert.Equal("PLC-A", readinessRow.DeviceNames);
-            Assert.True(readinessRow.ModuleRegistered);
-            Assert.True(readinessRow.PluginActivated);
-            Assert.True(viewModel.IsStartupHealthy);
-            Assert.False(viewModel.HasStartupIssues);
-            Assert.False(viewModel.IsModuleReadinessExpanded);
-            Assert.True(viewModel.IsModuleReadinessCollapsed);
-            Assert.Equal("展开明细", viewModel.ModuleReadinessToggleText);
-            viewModel.ToggleModuleReadinessCommand.Execute(null);
-            Assert.True(viewModel.IsModuleReadinessExpanded);
-            Assert.Equal("收起明细", viewModel.ModuleReadinessToggleText);
-            var mesDiagnosticsRow = Assert.Single(viewModel.MesUploadDiagnostics);
-            Assert.Equal("PLC-A", mesDiagnosticsRow.DeviceName);
-            Assert.Equal("实时数据上传", mesDiagnosticsRow.Scenario);
-
-            Assert.Equal(2, viewModel.SyncChannels.Count);
-            var cloudRow = Assert.Single(viewModel.SyncChannels, x => x.Channel == "云端");
-            Assert.Equal("存储故障", cloudRow.Status);
-            Assert.Equal("过站=3，日志=4，产能=5", cloudRow.Pending);
-            Assert.Equal(0, cloudRow.DeadLetterCount);
-            Assert.Contains("重试后仍未授权", cloudRow.LastError, StringComparison.Ordinal);
-            Assert.Contains("存储故障：是", cloudRow.Note, StringComparison.Ordinal);
-
-            var mesRow = Assert.Single(viewModel.SyncChannels, x => x.Channel == "MES");
-            Assert.Equal("存储故障", mesRow.Status);
-            Assert.Equal("重试=2", mesRow.Pending);
-            Assert.Equal(0, mesRow.DeadLetterCount);
-            Assert.Equal("mes timeout", mesRow.LastError);
-            Assert.Contains("存储故障：是", mesRow.Note, StringComparison.Ordinal);
-        });
-
-    [Fact]
-    public Task DiagnosticsViewModel_WhenSyncChannelsAreNormal_ShouldNotExposeNormalNoiseInSyncOpsRows()
-        => RunOnStaThreadAsync(async () =>
-        {
-            var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
-            {
-                Current = CreateReadySyncSnapshot()
-            };
-            var viewModel = CreateViewModel(new FakeStartupDiagnosticsStore(), diagnosticsQuery, new TestAppLanguageService());
-
-            await viewModel.RefreshAsync();
-
-            Assert.Equal(2, viewModel.SyncChannels.Count);
-            foreach (var row in viewModel.SyncChannels)
-            {
-                Assert.Equal("--", row.LastError);
-                Assert.Equal("--", row.Note);
-                Assert.DoesNotContain("否", row.LastError, StringComparison.Ordinal);
-                Assert.DoesNotContain("否", row.Note, StringComparison.Ordinal);
-            }
-        });
-
-    [Fact]
-    public Task DiagnosticsViewModel_WhenCloudHasRecordContext_ShouldShowLatestPlcAndScenarioInNote()
-        => RunOnStaThreadAsync(async () =>
-        {
-            var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
-            {
-                Current = CreateReadySyncSnapshot(
-                    cloudLastDeviceName: "PLC-CLOUD-01",
-                    cloudLastScenario: "生产上传")
-            };
-            var viewModel = CreateViewModel(new FakeStartupDiagnosticsStore(), diagnosticsQuery, new TestAppLanguageService());
-
-            await viewModel.RefreshAsync();
-
-            var cloudRow = Assert.Single(viewModel.SyncChannels, x => x.Channel == "云端");
-            Assert.Equal("最近：PLC=PLC-CLOUD-01，场景=生产上传", cloudRow.Note);
-        });
-
-    [Fact]
-    public Task DiagnosticsViewModel_WhenCloudIsBlocked_ShouldNotShowBlockedAsLastError()
-        => RunOnStaThreadAsync(async () =>
-        {
-            var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
-            {
-                Current = CreateReadySyncSnapshot(
-                    cloudLastOutcome: CloudCallOutcome.SkippedUploadNotReady,
-                    cloudLastReasonCode: "missing_upload_token",
-                    cloudLastBlockedReason: "缺少上传令牌。")
-            };
-            var viewModel = CreateViewModel(new FakeStartupDiagnosticsStore(), diagnosticsQuery, new TestAppLanguageService());
-
-            await viewModel.RefreshAsync();
-
-            var cloudRow = Assert.Single(viewModel.SyncChannels, x => x.Channel == "云端");
-            Assert.Equal("--", cloudRow.LastError);
-            Assert.Equal("阻塞：缺少上传令牌。", cloudRow.Note);
-        });
-
-    [Fact]
-    public Task DiagnosticsViewModel_ShouldPresentStartupIssuesAsLogRows()
-        => RunOnStaThreadAsync(async () =>
-        {
-            var startupStore = new FakeStartupDiagnosticsStore();
-            startupStore.Update(new StartupDiagnosticsReport(
-                GeneratedAt: new DateTime(2026, 6, 3, 14, 0, 0),
-                ConfigurationProfile: new ConfigurationProfileSnapshot(
-                    "Production",
-                    "HomogenizationLine",
-                    "appsettings.machine.HomogenizationLine.json",
+                    ],
                     true,
-                    @"C:\EdgeRuntime\HomogenizationLine"),
-                DiscoveredModules: ["Homogenization"],
-                EnabledModules: ["Homogenization"],
-                ActivatedModules: ["Homogenization"],
-                PluginStates: [],
-                ModuleRegistrations: [],
-                DeviceBindings: [],
-                Issues:
-                [
-                    new StartupDiagnosticIssue(
+                    CapacityBlockedChannel.Fallback,
+                    "total",
+                    TestNow.AddMinutes(-2),
+                    true,
+                    TestNow.AddSeconds(-20),
+                    "mes retry count failed"),
+                new ProductionContextPersistenceDiagnostics(2, TestNow.AddMinutes(-4)))
+        };
+
+        var viewModel = CreateViewModel(startupStore, diagnosticsQuery, new TestAppLanguageService());
+
+        Assert.Collection(
+            viewModel.Tabs,
+            tab => Assert.Equal("Diag.SyncOps", tab.Key),
+            tab => Assert.Equal("Diag.Startup", tab.Key));
+        Assert.True(viewModel.IsSyncOpsTabSelected);
+
+        viewModel.SelectTabCommand.Execute(viewModel.Tabs[1]);
+        Assert.True(viewModel.IsStartupTabSelected);
+
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("上传门禁：存储故障", viewModel.CloudGateSummary);
+        Assert.Equal("云端运行：等待恢复", viewModel.CloudRuntimeSummary);
+        Assert.Equal("待处理：过站=3，日志=4，产能=5，死信=0", viewModel.CloudPendingSummary);
+        Assert.Equal("MES运行：退避中", viewModel.MesRuntimeSummary);
+        Assert.Contains("产能阻塞：是", viewModel.CloudCapacitySummary, StringComparison.Ordinal);
+        Assert.Contains("存储故障：是", viewModel.CloudPersistenceSummary, StringComparison.Ordinal);
+        Assert.Contains("存储故障：是", viewModel.MesPersistenceSummary, StringComparison.Ordinal);
+        Assert.Contains("损坏文件数：2", viewModel.ContextPersistenceSummary, StringComparison.Ordinal);
+        Assert.Equal("2", viewModel.ContextCorruptFileCount);
+        Assert.NotEqual("--", viewModel.ContextLastCorruptDetectedAt);
+        Assert.Contains("机型：HomogenizationLine", viewModel.ConfigurationProfileSummary, StringComparison.Ordinal);
+        Assert.Equal("Production", viewModel.ConfigurationEnvironment);
+        Assert.Equal("HomogenizationLine", viewModel.ConfigurationMachineProfile);
+        Assert.Equal(@"C:\EdgeRuntime\HomogenizationLine", viewModel.ConfigurationRuntimeDataRoot);
+        Assert.Single(viewModel.ModuleRegistrations);
+        Assert.Single(viewModel.PluginStates);
+        Assert.Single(viewModel.DeviceBindings);
+        var readinessRow = Assert.Single(viewModel.ModuleReadinessRows);
+        Assert.Equal("Homogenization", readinessRow.DisplayName);
+        Assert.Equal("PLC-A", readinessRow.DeviceNames);
+        Assert.True(readinessRow.ModuleRegistered);
+        Assert.True(readinessRow.PluginActivated);
+        Assert.True(viewModel.IsStartupHealthy);
+        Assert.False(viewModel.HasStartupIssues);
+        Assert.False(viewModel.IsModuleReadinessExpanded);
+        Assert.True(viewModel.IsModuleReadinessCollapsed);
+        Assert.Equal("展开明细", viewModel.ModuleReadinessToggleText);
+        viewModel.ToggleModuleReadinessCommand.Execute(null);
+        Assert.True(viewModel.IsModuleReadinessExpanded);
+        Assert.Equal("收起明细", viewModel.ModuleReadinessToggleText);
+        var mesDiagnosticsRow = Assert.Single(viewModel.MesUploadDiagnostics);
+        Assert.Equal("PLC-A", mesDiagnosticsRow.DeviceName);
+        Assert.Equal("实时数据上传", mesDiagnosticsRow.Scenario);
+
+        Assert.Equal(2, viewModel.SyncChannels.Count);
+        var cloudRow = Assert.Single(viewModel.SyncChannels, x => x.Channel == "云端");
+        Assert.Equal("存储故障", cloudRow.Status);
+        Assert.Equal("过站=3，日志=4，产能=5", cloudRow.Pending);
+        Assert.Equal(0, cloudRow.DeadLetterCount);
+        Assert.Contains("重试后仍未授权", cloudRow.LastError, StringComparison.Ordinal);
+        Assert.Contains("存储故障：是", cloudRow.Note, StringComparison.Ordinal);
+
+        var mesRow = Assert.Single(viewModel.SyncChannels, x => x.Channel == "MES");
+        Assert.Equal("存储故障", mesRow.Status);
+        Assert.Equal("重试=2", mesRow.Pending);
+        Assert.Equal(0, mesRow.DeadLetterCount);
+        Assert.Equal("mes timeout", mesRow.LastError);
+        Assert.Contains("存储故障：是", mesRow.Note, StringComparison.Ordinal);
+    }
+
+    [AvaloniaFact]
+    public async Task DiagnosticsViewModel_WhenSyncChannelsAreNormal_ShouldNotExposeNormalNoiseInSyncOpsRows()
+    {
+        var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
+        {
+            Current = CreateReadySyncSnapshot()
+        };
+        var viewModel = CreateViewModel(new FakeStartupDiagnosticsStore(), diagnosticsQuery, new TestAppLanguageService());
+
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, viewModel.SyncChannels.Count);
+        foreach (var row in viewModel.SyncChannels)
+        {
+            Assert.Equal("--", row.LastError);
+            Assert.Equal("--", row.Note);
+            Assert.DoesNotContain("否", row.LastError, StringComparison.Ordinal);
+            Assert.DoesNotContain("否", row.Note, StringComparison.Ordinal);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task DiagnosticsViewModel_WhenCloudHasRecordContext_ShouldShowLatestPlcAndScenarioInNote()
+    {
+        var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
+        {
+            Current = CreateReadySyncSnapshot(
+                cloudLastDeviceName: "PLC-CLOUD-01",
+                cloudLastScenario: "生产上传")
+        };
+        var viewModel = CreateViewModel(new FakeStartupDiagnosticsStore(), diagnosticsQuery, new TestAppLanguageService());
+
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        var cloudRow = Assert.Single(viewModel.SyncChannels, x => x.Channel == "云端");
+        Assert.Equal("最近：PLC=PLC-CLOUD-01，场景=生产上传", cloudRow.Note);
+    }
+
+    [AvaloniaFact]
+    public async Task DiagnosticsViewModel_WhenCloudIsBlocked_ShouldNotShowBlockedAsLastError()
+    {
+        var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
+        {
+            Current = CreateReadySyncSnapshot(
+                cloudLastOutcome: CloudCallOutcome.SkippedUploadNotReady,
+                cloudLastReasonCode: "missing_upload_token",
+                cloudLastBlockedReason: "缺少上传令牌。")
+        };
+        var viewModel = CreateViewModel(new FakeStartupDiagnosticsStore(), diagnosticsQuery, new TestAppLanguageService());
+
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        var cloudRow = Assert.Single(viewModel.SyncChannels, x => x.Channel == "云端");
+        Assert.Equal("--", cloudRow.LastError);
+        Assert.Equal("阻塞：缺少上传令牌。", cloudRow.Note);
+    }
+
+    [AvaloniaFact]
+    public async Task DiagnosticsViewModel_ShouldPresentStartupIssuesAsLogRows()
+    {
+        var startupStore = new FakeStartupDiagnosticsStore();
+        startupStore.Update(new StartupDiagnosticsReport(
+            GeneratedAt: new DateTime(2026, 6, 3, 14, 0, 0),
+            ConfigurationProfile: new ConfigurationProfileSnapshot(
+                "Production",
+                "HomogenizationLine",
+                "appsettings.machine.HomogenizationLine.json",
+                true,
+                @"C:\EdgeRuntime\HomogenizationLine"),
+            DiscoveredModules: ["Homogenization"],
+            EnabledModules: ["Homogenization"],
+            ActivatedModules: ["Homogenization"],
+            PluginStates: [],
+            ModuleRegistrations: [],
+            DeviceBindings: [],
+            Issues:
+            [
+                new StartupDiagnosticIssue(
                         "DEVICE_MODULE_MISMATCH",
                         "PLC“PLC-Homogenization-01”存在 PlcAddress 为空的 IO 映射。",
                         "Homogenization",
@@ -267,497 +263,516 @@ public sealed class DiagnosticsViewModelBehaviorTests
                         "PLC[PLC-Homogenization-01] 的信号 Test.Interaction.Manual PLC 地址不能为空。",
                         "Homogenization",
                         "PLC-Homogenization-01")
-                ]));
+            ]));
 
-            var viewModel = CreateViewModel(startupStore, new FakeEdgeSyncDiagnosticsQuery(), new TestAppLanguageService());
+        var viewModel = CreateViewModel(startupStore, new FakeEdgeSyncDiagnosticsQuery(), new TestAppLanguageService());
 
-            await viewModel.RefreshAsync();
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
 
-            Assert.True(viewModel.HasStartupIssues);
-            Assert.Equal(3, viewModel.TotalIssueCount);
-            Assert.Equal(2, viewModel.Issues.Count);
+        Assert.True(viewModel.HasStartupIssues);
+        Assert.Equal(3, viewModel.TotalIssueCount);
+        Assert.Equal(2, viewModel.Issues.Count);
 
-            var plcRow = Assert.Single(viewModel.Issues, row => row.Message.Contains("PlcAddress", StringComparison.Ordinal));
-            Assert.Equal("ERROR", plcRow.LevelText);
-            Assert.Equal(EdgeVisualStatus.Error, plcRow.Status);
-            Assert.Equal(plcRow.Message, plcRow.DisplayMessage);
-            Assert.False(plcRow.HasDuplicateCount);
+        var plcRow = Assert.Single(viewModel.Issues, row => row.Message.Contains("PlcAddress", StringComparison.Ordinal));
+        Assert.Equal("ERROR", plcRow.LevelText);
+        Assert.Equal(EdgeVisualStatus.Error, plcRow.Status);
+        Assert.Equal(plcRow.Message, plcRow.DisplayMessage);
+        Assert.False(plcRow.HasDuplicateCount);
 
-            var signalRow = Assert.Single(viewModel.Issues, row => row.Message.Contains("Test.Interaction.Manual", StringComparison.Ordinal));
-            Assert.Equal("信号 Test.Interaction.Manual 地址不能为空。", signalRow.Message);
-            Assert.Equal("ERROR", signalRow.LevelText);
-            Assert.Equal(EdgeVisualStatus.Error, signalRow.Status);
-            Assert.Equal(2, signalRow.DuplicateCount);
-            Assert.True(signalRow.HasDuplicateCount);
-            Assert.Equal("×2", signalRow.DuplicateBadgeText);
-            Assert.Equal("信号 Test.Interaction.Manual 地址不能为空。 ×2", signalRow.DisplayMessage);
-        });
+        var signalRow = Assert.Single(viewModel.Issues, row => row.Message.Contains("Test.Interaction.Manual", StringComparison.Ordinal));
+        Assert.Equal("信号 Test.Interaction.Manual 地址不能为空。", signalRow.Message);
+        Assert.Equal("ERROR", signalRow.LevelText);
+        Assert.Equal(EdgeVisualStatus.Error, signalRow.Status);
+        Assert.Equal(2, signalRow.DuplicateCount);
+        Assert.True(signalRow.HasDuplicateCount);
+        Assert.Equal("×2", signalRow.DuplicateBadgeText);
+        Assert.Equal("信号 Test.Interaction.Manual 地址不能为空。 ×2", signalRow.DisplayMessage);
+    }
 
-    [Fact]
-    public Task DiagnosticsViewModel_ShouldKeepCloudAndMesDeadLettersSeparatedInOperationsTab()
-        => RunOnStaThreadAsync(async () =>
+    [AvaloniaFact]
+    public async Task DiagnosticsViewModel_ShouldKeepCloudAndMesDeadLettersSeparatedInOperationsTab()
+    {
+        var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
         {
-            var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
-            {
-                Current = CreateReadySyncSnapshot(
-                    cloudDeadLetters: new DeadLetterDiagnosticsSnapshot(
-                        1,
-                        [],
-                        [CreateDeadLetterRecord(101, "Cloud")],
-                        false,
-                        null,
-                        null),
-                    mesDeadLetters: new DeadLetterDiagnosticsSnapshot(
-                        1,
-                        [],
-                        [CreateDeadLetterRecord(202, "MES")],
-                        false,
-                        null,
-                        null))
-            };
-            var viewModel = CreateViewModel(new FakeStartupDiagnosticsStore(), diagnosticsQuery, new TestAppLanguageService());
+            Current = CreateReadySyncSnapshot(
+                cloudDeadLetters: new DeadLetterDiagnosticsSnapshot(
+                    1,
+                    [],
+                    [CreateDeadLetterRecord(101, "Cloud")],
+                    false,
+                    null,
+                    null),
+                mesDeadLetters: new DeadLetterDiagnosticsSnapshot(
+                    1,
+                    [],
+                    [CreateDeadLetterRecord(202, "MES")],
+                    false,
+                    null,
+                    null))
+        };
+        var viewModel = CreateViewModel(new FakeStartupDiagnosticsStore(), diagnosticsQuery, new TestAppLanguageService());
 
-            await viewModel.RefreshAsync();
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
 
-            var cloudRow = Assert.Single(viewModel.CloudDeadLetters);
-            Assert.Equal(DataPipelineRetryChannel.Cloud, cloudRow.Channel);
-            Assert.Equal(101, cloudRow.Id);
+        var cloudRow = Assert.Single(viewModel.CloudDeadLetters);
+        Assert.Equal(DataPipelineRetryChannel.Cloud, cloudRow.Channel);
+        Assert.Equal(101, cloudRow.Id);
 
-            var mesRow = Assert.Single(viewModel.MesDeadLetters);
-            Assert.Equal(DataPipelineRetryChannel.Mes, mesRow.Channel);
-            Assert.Equal(202, mesRow.Id);
-        });
+        var mesRow = Assert.Single(viewModel.MesDeadLetters);
+        Assert.Equal(DataPipelineRetryChannel.Mes, mesRow.Channel);
+        Assert.Equal(202, mesRow.Id);
+    }
 
-    [Fact]
-    public Task DiagnosticsViewModel_WhenDeviceSelected_ShouldFilterDeviceRowsAndKeepGlobalDiagnostics()
-        => RunOnStaThreadAsync(async () =>
-        {
-            var startupStore = new FakeStartupDiagnosticsStore();
-            startupStore.Update(new StartupDiagnosticsReport(
-                GeneratedAt: new DateTime(2026, 6, 29, 9, 0, 0),
-                ConfigurationProfile: new ConfigurationProfileSnapshot(
-                    "Production",
-                    "LineA",
-                    "appsettings.machine.LineA.json",
-                    true,
-                    @"C:\EdgeRuntime\LineA"),
-                DiscoveredModules: ["ModuleA"],
-                EnabledModules: ["ModuleA"],
-                ActivatedModules: ["ModuleA"],
-                PluginStates: [],
-                ModuleRegistrations: [],
-                DeviceBindings:
-                [
-                    new DeviceModuleBindingSnapshot("P1-AP01", "ModuleA", true, true, true),
+    [AvaloniaFact]
+    public async Task DiagnosticsViewModel_WhenDeviceSelected_ShouldFilterDeviceRowsAndKeepGlobalDiagnostics()
+    {
+        var startupStore = new FakeStartupDiagnosticsStore();
+        startupStore.Update(new StartupDiagnosticsReport(
+            GeneratedAt: new DateTime(2026, 6, 29, 9, 0, 0),
+            ConfigurationProfile: new ConfigurationProfileSnapshot(
+                "Production",
+                "LineA",
+                "appsettings.machine.LineA.json",
+                true,
+                @"C:\EdgeRuntime\LineA"),
+            DiscoveredModules: ["ModuleA"],
+            EnabledModules: ["ModuleA"],
+            ActivatedModules: ["ModuleA"],
+            PluginStates: [],
+            ModuleRegistrations: [],
+            DeviceBindings:
+            [
+                new DeviceModuleBindingSnapshot("P1-AP01", "ModuleA", true, true, true),
                     new DeviceModuleBindingSnapshot("P1-AP02", "ModuleA", true, true, true)
-                ],
-                Issues:
-                [
-                    new StartupDiagnosticIssue("PLC_A", "P1-AP01 地址缺失", "ModuleA", "P1-AP01"),
+            ],
+            Issues:
+            [
+                new StartupDiagnosticIssue("PLC_A", "P1-AP01 地址缺失", "ModuleA", "P1-AP01"),
                     new StartupDiagnosticIssue("PLC_B", "P1-AP02 地址缺失", "ModuleA", "P1-AP02"),
                     new StartupDiagnosticIssue("GLOBAL", "插件配置缺失", "ModuleA")
-                ]));
-            var selectionService = new DeviceSelectionService();
-            selectionService.SelectDevice("P1-AP01");
-            var viewModel = CreateViewModel(
-                startupStore,
-                new FakeEdgeSyncDiagnosticsQuery(),
-                new TestAppLanguageService(),
-                deviceSelectionService: selectionService);
+            ]));
+        var selectionService = new DeviceSelectionService();
+        selectionService.SelectDevice("P1-AP01");
+        var viewModel = CreateViewModel(
+            startupStore,
+            new FakeEdgeSyncDiagnosticsQuery(),
+            new TestAppLanguageService(),
+            deviceSelectionService: selectionService);
 
-            await viewModel.RefreshAsync();
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
 
-            var binding = Assert.Single(viewModel.DeviceBindings);
-            Assert.Equal("P1-AP01", binding.DeviceName);
-            Assert.Equal(2, viewModel.Issues.Count);
-            Assert.Contains(viewModel.Issues, row => row.Message == "P1-AP01 地址缺失");
-            Assert.Contains(viewModel.Issues, row => row.Message == "插件配置缺失");
-            Assert.DoesNotContain(viewModel.Issues, row => row.Message == "P1-AP02 地址缺失");
-            Assert.Equal(2, viewModel.TotalIssueCount);
-        });
+        var binding = Assert.Single(viewModel.DeviceBindings);
+        Assert.Equal("P1-AP01", binding.DeviceName);
+        Assert.Equal(2, viewModel.Issues.Count);
+        Assert.Contains(viewModel.Issues, row => row.Message == "P1-AP01 地址缺失");
+        Assert.Contains(viewModel.Issues, row => row.Message == "插件配置缺失");
+        Assert.DoesNotContain(viewModel.Issues, row => row.Message == "P1-AP02 地址缺失");
+        Assert.Equal(2, viewModel.TotalIssueCount);
+    }
 
-    [Fact]
-    public Task DiagnosticsViewModel_WhenDeviceSelected_ShouldFilterAttributableDeadLettersAndKeepGlobalChannels()
-        => RunOnStaThreadAsync(async () =>
+    [AvaloniaFact]
+    public async Task DiagnosticsViewModel_WhenDeviceSelected_ShouldFilterAttributableDeadLettersAndKeepGlobalChannels()
+    {
+        var selectionService = new DeviceSelectionService();
+        selectionService.SelectDevice("P1-AP01");
+        var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
         {
-            var selectionService = new DeviceSelectionService();
-            selectionService.SelectDevice("P1-AP01");
-            var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
-            {
-                Current = CreateReadySyncSnapshot(
-                    cloudDeadLetters: new DeadLetterDiagnosticsSnapshot(
-                        2,
-                        [],
-                        [
-                            CreateDeadLetterRecord(101, "Cloud-A", "P1-AP01"),
+            Current = CreateReadySyncSnapshot(
+                cloudDeadLetters: new DeadLetterDiagnosticsSnapshot(
+                    2,
+                    [],
+                    [
+                        CreateDeadLetterRecord(101, "Cloud-A", "P1-AP01"),
                             CreateDeadLetterRecord(102, "Cloud-B", "P1-AP02"),
                             CreateDeadLetterRecord(103, "Cloud-Global")
-                        ],
+                    ],
+                    false,
+                    null,
+                    null),
+                mesDeadLetters: new DeadLetterDiagnosticsSnapshot(
+                    1,
+                    [],
+                    [CreateDeadLetterRecord(202, "MES-B", "P1-AP02")],
+                    false,
+                    null,
+                    null))
+        };
+        var viewModel = CreateViewModel(
+            new FakeStartupDiagnosticsStore(),
+            diagnosticsQuery,
+            new TestAppLanguageService(),
+            deviceSelectionService: selectionService);
+
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, viewModel.SyncChannels.Count);
+        Assert.Equal(2, viewModel.CloudDeadLetters.Count);
+        Assert.Empty(viewModel.MesDeadLetters);
+        Assert.Contains(viewModel.CloudDeadLetters, row => row.FailedTarget == "Cloud-A");
+        Assert.Contains(viewModel.CloudDeadLetters, row => row.FailedTarget == "Cloud-Global");
+        Assert.DoesNotContain(viewModel.CloudDeadLetters, row => row.FailedTarget == "Cloud-B");
+    }
+
+    [AvaloniaFact]
+    public async Task DiagnosticsViewModel_WhenRefreshReenters_ShouldOnlyRunOneDiagnosticsQuery()
+    {
+        var startupStore = new FakeStartupDiagnosticsStore();
+        startupStore.Update(StartupDiagnosticsReport.Empty());
+
+        var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery();
+        var viewModel = CreateViewModel(startupStore, diagnosticsQuery, new TestAppLanguageService());
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(viewModel.HasStartupReport);
+        Assert.False(viewModel.IsStartupHealthy);
+        Assert.False(viewModel.HasStartupIssues);
+
+        diagnosticsQuery.ResetCounters();
+        diagnosticsQuery.BlockUntilReleased();
+
+        var first = viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+        await diagnosticsQuery.WaitUntilEnteredAsync(TestContext.Current.CancellationToken);
+        var second = viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+        diagnosticsQuery.ReleaseBlockedCall();
+        await Task.WhenAll(first, second);
+
+        Assert.Equal(1, diagnosticsQuery.TotalCalls);
+        Assert.Equal(1, diagnosticsQuery.MaxConcurrentCalls);
+    }
+
+    [AvaloniaFact]
+    public async Task DiagnosticsViewModel_WhenLanguageChanges_ShouldRefreshVisibleSummaries()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+
+        try
+        {
+            var languageService = new BilingualDiagnosticsLanguageService();
+
+            var startupStore = new FakeStartupDiagnosticsStore();
+            startupStore.Update(new StartupDiagnosticsReport(
+                GeneratedAt: new DateTime(2026, 4, 18, 10, 0, 0),
+                ConfigurationProfile: new ConfigurationProfileSnapshot(
+                    "Production",
+                    "HomogenizationLine",
+                    "appsettings.machine.HomogenizationLine.json",
+                    true,
+                    @"C:\EdgeRuntime\HomogenizationLine"),
+                DiscoveredModules: ["Homogenization"],
+                EnabledModules: ["Homogenization"],
+                ActivatedModules: ["Homogenization"],
+                PluginStates: [],
+                ModuleRegistrations: [],
+                DeviceBindings: [],
+                Issues: []));
+
+            var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
+            {
+                Current = new EdgeSyncDiagnosticsSnapshot(
+                    "PLC-A",
+                    new CloudSyncDiagnosticsSnapshot(
+                        EdgeUploadGateState.Ready,
+                        EdgeUploadBlockReason.None,
+                        CloudRetryRuntimeState.Idle,
+                        null,
+                        null,
+                        null,
+                        CloudCallOutcome.Success,
+                        "none",
+                        null,
+                        0,
+                        0,
+                        0,
+                        false,
+                        false,
+                        null,
+                        "none",
+                        null,
                         false,
                         null,
                         null),
-                    mesDeadLetters: new DeadLetterDiagnosticsSnapshot(
-                        1,
+                    new MesSyncDiagnosticsSnapshot(
+                        MesRetryRuntimeState.Idle,
+                        null,
+                        null,
+                        null,
+                        null,
+                        0,
                         [],
-                        [CreateDeadLetterRecord(202, "MES-B", "P1-AP02")],
                         false,
                         null,
-                        null))
+                        "none",
+                        null,
+                        false,
+                        null,
+                        null),
+                    new ProductionContextPersistenceDiagnostics(0, null))
             };
-            var viewModel = CreateViewModel(
-                new FakeStartupDiagnosticsStore(),
-                diagnosticsQuery,
-                new TestAppLanguageService(),
-                deviceSelectionService: selectionService);
 
-            await viewModel.RefreshAsync();
+            var viewModel = CreateViewModel(startupStore, diagnosticsQuery, languageService);
+            await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
 
-            Assert.Equal(2, viewModel.SyncChannels.Count);
-            Assert.Equal(2, viewModel.CloudDeadLetters.Count);
-            Assert.Empty(viewModel.MesDeadLetters);
-            Assert.Contains(viewModel.CloudDeadLetters, row => row.FailedTarget == "Cloud-A");
-            Assert.Contains(viewModel.CloudDeadLetters, row => row.FailedTarget == "Cloud-Global");
-            Assert.DoesNotContain(viewModel.CloudDeadLetters, row => row.FailedTarget == "Cloud-B");
-        });
+            Assert.Equal("上传门禁：已就绪", viewModel.CloudGateSummary);
+            Assert.Equal("设备：PLC-A", viewModel.DeviceSummary);
+            Assert.StartsWith("环境：Production", viewModel.ConfigurationProfileSummary, StringComparison.Ordinal);
 
-    [Fact]
-    public Task DiagnosticsViewModel_WhenRefreshReenters_ShouldOnlyRunOneDiagnosticsQuery()
-        => RunOnStaThreadAsync(async () =>
-        {
-            var startupStore = new FakeStartupDiagnosticsStore();
-            startupStore.Update(StartupDiagnosticsReport.Empty());
+            languageService.Change(CultureInfo.GetCultureInfo("en-US"));
+            await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
 
-            var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery();
-            var viewModel = CreateViewModel(startupStore, diagnosticsQuery, new TestAppLanguageService());
-            await viewModel.RefreshAsync();
-
-            Assert.False(viewModel.HasStartupReport);
-            Assert.False(viewModel.IsStartupHealthy);
-            Assert.False(viewModel.HasStartupIssues);
-
-            diagnosticsQuery.ResetCounters();
-            diagnosticsQuery.BlockUntilReleased();
-
-            var first = viewModel.RefreshAsync();
-            await diagnosticsQuery.WaitUntilEnteredAsync();
-            var second = viewModel.RefreshAsync();
-            diagnosticsQuery.ReleaseBlockedCall();
-            await Task.WhenAll(first, second);
-
-            Assert.Equal(1, diagnosticsQuery.TotalCalls);
-            Assert.Equal(1, diagnosticsQuery.MaxConcurrentCalls);
-        });
-
-    [Fact]
-    public async Task DiagnosticsViewModel_WhenLanguageChanges_ShouldRefreshVisibleSummaries()
-        {
-            var originalCulture = CultureInfo.CurrentCulture;
-            var originalUiCulture = CultureInfo.CurrentUICulture;
-
-            try
-            {
-                var languageService = new BilingualDiagnosticsLanguageService();
-
-                var startupStore = new FakeStartupDiagnosticsStore();
-                startupStore.Update(new StartupDiagnosticsReport(
-                    GeneratedAt: new DateTime(2026, 4, 18, 10, 0, 0),
-                    ConfigurationProfile: new ConfigurationProfileSnapshot(
-                        "Production",
-                        "HomogenizationLine",
-                        "appsettings.machine.HomogenizationLine.json",
-                        true,
-                        @"C:\EdgeRuntime\HomogenizationLine"),
-                    DiscoveredModules: ["Homogenization"],
-                    EnabledModules: ["Homogenization"],
-                    ActivatedModules: ["Homogenization"],
-                    PluginStates: [],
-                    ModuleRegistrations: [],
-                    DeviceBindings: [],
-                    Issues: []));
-
-                var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
-                {
-                    Current = new EdgeSyncDiagnosticsSnapshot(
-                        "PLC-A",
-                        new CloudSyncDiagnosticsSnapshot(
-                            EdgeUploadGateState.Ready,
-                            EdgeUploadBlockReason.None,
-                            CloudRetryRuntimeState.Idle,
-                            null,
-                            null,
-                            null,
-                            CloudCallOutcome.Success,
-                            "none",
-                            null,
-                            0,
-                            0,
-                            0,
-                            false,
-                            false,
-                            null,
-                            "none",
-                            null,
-                            false,
-                            null,
-                            null),
-                        new MesSyncDiagnosticsSnapshot(
-                            MesRetryRuntimeState.Idle,
-                            null,
-                            null,
-                            null,
-                            null,
-                            0,
-                            [],
-                            false,
-                            null,
-                            "none",
-                            null,
-                            false,
-                            null,
-                            null),
-                        new ProductionContextPersistenceDiagnostics(0, null))
-                };
-
-                var viewModel = CreateViewModel(startupStore, diagnosticsQuery, languageService);
-                await viewModel.RefreshAsync();
-
-                Assert.Equal("上传门禁：已就绪", viewModel.CloudGateSummary);
-                Assert.Equal("设备：PLC-A", viewModel.DeviceSummary);
-                Assert.StartsWith("环境：Production", viewModel.ConfigurationProfileSummary, StringComparison.Ordinal);
-
-                languageService.Change(CultureInfo.GetCultureInfo("en-US"));
-                await viewModel.RefreshAsync();
-
-                Assert.Equal("Upload gate: Ready", viewModel.CloudGateSummary);
-                Assert.Equal("Device: PLC-A", viewModel.DeviceSummary);
-                Assert.StartsWith("Environment: Production", viewModel.ConfigurationProfileSummary, StringComparison.Ordinal);
-                Assert.DoesNotContain("设备：", viewModel.DeviceSummary, StringComparison.Ordinal);
-            }
-            finally
-            {
-                CultureInfo.CurrentCulture = originalCulture;
-                CultureInfo.CurrentUICulture = originalUiCulture;
-                CultureInfo.DefaultThreadCurrentCulture = originalCulture;
-                CultureInfo.DefaultThreadCurrentUICulture = originalUiCulture;
-            }
+            Assert.Equal("Upload gate: Ready", viewModel.CloudGateSummary);
+            Assert.Equal("Device: PLC-A", viewModel.DeviceSummary);
+            Assert.StartsWith("Environment: Production", viewModel.ConfigurationProfileSummary, StringComparison.Ordinal);
+            Assert.DoesNotContain("设备：", viewModel.DeviceSummary, StringComparison.Ordinal);
         }
-
-    [Fact]
-    public Task RequeueDeadLetterCommand_WhenConfirmationCanceled_ShouldNotCallOperator()
-        => RunOnStaThreadAsync(async () =>
+        finally
         {
-            var confirmation = new FakeDeadLetterConfirmationService
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+            CultureInfo.DefaultThreadCurrentCulture = originalCulture;
+            CultureInfo.DefaultThreadCurrentUICulture = originalUiCulture;
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task RequeueDeadLetterCommand_WhenConfirmationCanceled_ShouldNotCallOperator()
+    {
+        var confirmation = new FakeDeadLetterConfirmationService
+        {
+            RequeueResult = false
+        };
+        var deadLetterOperator = new FakeDiagnosticsDeadLetterOperator();
+        var viewModel = CreateViewModel(
+            new FakeStartupDiagnosticsStore(),
+            new FakeEdgeSyncDiagnosticsQuery(),
+            new TestAppLanguageService(),
+            deadLetterOperator,
+            confirmation);
+
+        viewModel.RequeueDeadLetterCommand.Execute(CreateDeadLetterRow());
+        await WaitUntilAsync(
+            () => confirmation.RequeueCallCount == 1,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, deadLetterOperator.RequeueCallCount);
+        Assert.Equal("已取消死信重新入队。", viewModel.StatusMessage);
+    }
+
+    [AvaloniaFact]
+    public async Task RequeueDeadLetterCommand_WhenConfirmedAndSuccessful_ShouldCallOperatorAndRefresh()
+    {
+        var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery();
+        var deadLetterOperator = new FakeDiagnosticsDeadLetterOperator
+        {
+            RequeueResult = new DiagnosticsDeadLetterOperationResult(true, "重新入队成功")
+        };
+        var viewModel = CreateViewModel(
+            new FakeStartupDiagnosticsStore(),
+            diagnosticsQuery,
+            new TestAppLanguageService(),
+            deadLetterOperator,
+            new FakeDeadLetterConfirmationService());
+
+        viewModel.RequeueDeadLetterCommand.Execute(CreateDeadLetterRow());
+        await WaitUntilAsync(
+            () => deadLetterOperator.RequeueCallCount == 1 && diagnosticsQuery.TotalCalls >= 1,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("重新入队成功", viewModel.StatusMessage);
+        Assert.Equal(1, deadLetterOperator.RequeueCallCount);
+    }
+
+    [AvaloniaFact]
+    public async Task DeleteDeadLetterCommand_WhenConfirmationCanceled_ShouldNotCallOperator()
+    {
+        var confirmation = new FakeDeadLetterConfirmationService
+        {
+            DeleteResult = false
+        };
+        var deadLetterOperator = new FakeDiagnosticsDeadLetterOperator();
+        var viewModel = CreateViewModel(
+            new FakeStartupDiagnosticsStore(),
+            new FakeEdgeSyncDiagnosticsQuery(),
+            new TestAppLanguageService(),
+            deadLetterOperator,
+            confirmation);
+
+        viewModel.DeleteDeadLetterCommand.Execute(CreateDeadLetterRow());
+        await WaitUntilAsync(
+            () => confirmation.DeleteCallCount == 1,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, deadLetterOperator.DeleteCallCount);
+        Assert.Equal("已取消死信删除。", viewModel.StatusMessage);
+    }
+
+    [AvaloniaFact]
+    public void DeadLetterCommands_WhenCurrentUserIsNotLocalAdmin_ShouldNotBeExecutable()
+    {
+        var permissionService = new FakeClientPermissionService(isLocalAdmin: false);
+        var viewModel = CreateViewModel(
+            new FakeStartupDiagnosticsStore(),
+            new FakeEdgeSyncDiagnosticsQuery(),
+            new TestAppLanguageService(),
+            deadLetterOperator: new FakeDiagnosticsDeadLetterOperator(),
+            permissionService: permissionService);
+        var row = CreateDeadLetterRow();
+
+        Assert.False(viewModel.CanOperateDeadLetters);
+        Assert.False(viewModel.RequeueDeadLetterCommand.CanExecute(row));
+        Assert.False(viewModel.DeleteDeadLetterCommand.CanExecute(row));
+    }
+
+    [AvaloniaFact]
+    public async Task DiagnosticsViewModel_WhenActivatedRepeatedly_ShouldObservePermissionStateOnce()
+    {
+        var permissionService = new FakeClientPermissionService(isLocalAdmin: false);
+        var viewModel = CreateViewModel(
+            new FakeStartupDiagnosticsStore(),
+            new FakeEdgeSyncDiagnosticsQuery(),
+            new TestAppLanguageService(),
+            deadLetterOperator: new FakeDiagnosticsDeadLetterOperator(),
+            permissionService: permissionService);
+
+        Assert.Equal(0, permissionService.SubscriberCount);
+
+        await viewModel.OnActivatedAsync();
+        Assert.Equal(1, permissionService.SubscriberCount);
+
+        await viewModel.OnActivatedAsync();
+        Assert.Equal(1, permissionService.SubscriberCount);
+
+        await viewModel.OnDeactivatedAsync();
+        Assert.Equal(0, permissionService.SubscriberCount);
+
+        await viewModel.OnDeactivatedAsync();
+        Assert.Equal(0, permissionService.SubscriberCount);
+    }
+
+    [AvaloniaFact]
+    public async Task DiagnosticsViewModel_WhenSequentialObserversDeactivate_ShouldNotLeakPermissionStateChanges()
+    {
+        var firstPermissionService = new FakeClientPermissionService(isLocalAdmin: false);
+        var firstViewModel = CreateViewModel(
+            new FakeStartupDiagnosticsStore(),
+            new FakeEdgeSyncDiagnosticsQuery(),
+            new TestAppLanguageService(),
+            deadLetterOperator: new FakeDiagnosticsDeadLetterOperator(),
+            permissionService: firstPermissionService);
+        var firstRefreshCount = 0;
+        firstViewModel.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(DiagnosticsViewModel.CanOperateDeadLetters))
             {
-                RequeueResult = false
-            };
-            var deadLetterOperator = new FakeDiagnosticsDeadLetterOperator();
-            var viewModel = CreateViewModel(
-                new FakeStartupDiagnosticsStore(),
-                new FakeEdgeSyncDiagnosticsQuery(),
-                new TestAppLanguageService(),
-                deadLetterOperator,
-                confirmation);
+                firstRefreshCount++;
+            }
+        };
 
-            viewModel.RequeueDeadLetterCommand.Execute(CreateDeadLetterRow());
-            await WaitUntilAsync(() => confirmation.RequeueCallCount == 1);
+        await firstViewModel.OnActivatedAsync();
+        firstPermissionService.SetLocalAdmin(true);
+        Assert.Equal(1, firstRefreshCount);
 
-            Assert.Equal(0, deadLetterOperator.RequeueCallCount);
-            Assert.Equal("已取消死信重新入队。", viewModel.StatusMessage);
-        });
+        await firstViewModel.OnDeactivatedAsync();
+        firstPermissionService.SetLocalAdmin(false);
+        Assert.Equal(1, firstRefreshCount);
+        Assert.Equal(0, firstPermissionService.SubscriberCount);
 
-    [Fact]
-    public Task RequeueDeadLetterCommand_WhenConfirmedAndSuccessful_ShouldCallOperatorAndRefresh()
-        => RunOnStaThreadAsync(async () =>
+        var secondPermissionService = new FakeClientPermissionService(isLocalAdmin: false);
+        var secondViewModel = CreateViewModel(
+            new FakeStartupDiagnosticsStore(),
+            new FakeEdgeSyncDiagnosticsQuery(),
+            new TestAppLanguageService(),
+            deadLetterOperator: new FakeDiagnosticsDeadLetterOperator(),
+            permissionService: secondPermissionService);
+        var secondRefreshCount = 0;
+        secondViewModel.PropertyChanged += (_, args) =>
         {
-            var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery();
-            var deadLetterOperator = new FakeDiagnosticsDeadLetterOperator
+            if (args.PropertyName == nameof(DiagnosticsViewModel.CanOperateDeadLetters))
             {
-                RequeueResult = new DiagnosticsDeadLetterOperationResult(true, "重新入队成功")
-            };
-            var viewModel = CreateViewModel(
-                new FakeStartupDiagnosticsStore(),
-                diagnosticsQuery,
-                new TestAppLanguageService(),
-                deadLetterOperator,
-                new FakeDeadLetterConfirmationService());
+                secondRefreshCount++;
+            }
+        };
 
-            viewModel.RequeueDeadLetterCommand.Execute(CreateDeadLetterRow());
-            await WaitUntilAsync(() => deadLetterOperator.RequeueCallCount == 1 && diagnosticsQuery.TotalCalls >= 1);
+        await secondViewModel.OnActivatedAsync();
+        secondPermissionService.SetLocalAdmin(true);
+        firstPermissionService.SetLocalAdmin(true);
 
-            Assert.Equal("重新入队成功", viewModel.StatusMessage);
-            Assert.Equal(1, deadLetterOperator.RequeueCallCount);
-        });
+        Assert.Equal(1, firstRefreshCount);
+        Assert.Equal(1, secondRefreshCount);
 
-    [Fact]
-    public Task DeleteDeadLetterCommand_WhenConfirmationCanceled_ShouldNotCallOperator()
-        => RunOnStaThreadAsync(async () =>
+        await secondViewModel.OnDeactivatedAsync();
+        secondPermissionService.SetLocalAdmin(false);
+
+        Assert.Equal(1, secondRefreshCount);
+        Assert.Equal(0, secondPermissionService.SubscriberCount);
+    }
+
+    [AvaloniaFact]
+    public async Task DeadLetterCommandEntry_WhenCurrentUserIsNotLocalAdmin_ShouldNotCallConfirmationOrOperator()
+    {
+        var confirmation = new FakeDeadLetterConfirmationService();
+        var deadLetterOperator = new FakeDiagnosticsDeadLetterOperator();
+        var viewModel = CreateViewModel(
+            new FakeStartupDiagnosticsStore(),
+            new FakeEdgeSyncDiagnosticsQuery(),
+            new TestAppLanguageService(),
+            deadLetterOperator,
+            confirmation,
+            new FakeClientPermissionService(isLocalAdmin: false));
+
+        await InvokeDeadLetterCommandEntryAsync(viewModel, "RequeueDeadLetterAsync");
+
+        Assert.Equal(0, confirmation.RequeueCallCount);
+        Assert.Equal(0, deadLetterOperator.RequeueCallCount);
+        Assert.Equal("当前账号不是本地管理员，不能执行死信运维操作。", viewModel.ErrorMessage);
+    }
+
+    [AvaloniaFact]
+    public async Task DeadLetterCommands_WhenPermissionChangesToLocalAdmin_ShouldBecomeExecutable()
+    {
+        var permissionService = new FakeClientPermissionService(isLocalAdmin: false);
+        var viewModel = CreateViewModel(
+            new FakeStartupDiagnosticsStore(),
+            new FakeEdgeSyncDiagnosticsQuery(),
+            new TestAppLanguageService(),
+            deadLetterOperator: new FakeDiagnosticsDeadLetterOperator(),
+            permissionService: permissionService);
+        var row = CreateDeadLetterRow();
+
+        Assert.False(viewModel.RequeueDeadLetterCommand.CanExecute(row));
+        Assert.False(viewModel.DeleteDeadLetterCommand.CanExecute(row));
+
+        await viewModel.OnActivatedAsync();
+        permissionService.SetLocalAdmin(true);
+
+        Assert.True(viewModel.CanOperateDeadLetters);
+        Assert.True(viewModel.RequeueDeadLetterCommand.CanExecute(row));
+        Assert.True(viewModel.DeleteDeadLetterCommand.CanExecute(row));
+        await viewModel.OnDeactivatedAsync();
+    }
+
+    [AvaloniaFact]
+    public async Task RequeueDeadLetterCommand_WhenOperatorFails_ShouldShowError()
+    {
+        var deadLetterOperator = new FakeDiagnosticsDeadLetterOperator
         {
-            var confirmation = new FakeDeadLetterConfirmationService
-            {
-                DeleteResult = false
-            };
-            var deadLetterOperator = new FakeDiagnosticsDeadLetterOperator();
-            var viewModel = CreateViewModel(
-                new FakeStartupDiagnosticsStore(),
-                new FakeEdgeSyncDiagnosticsQuery(),
-                new TestAppLanguageService(),
-                deadLetterOperator,
-                confirmation);
+            RequeueResult = new DiagnosticsDeadLetterOperationResult(false, "重新入队失败")
+        };
+        var viewModel = CreateViewModel(
+            new FakeStartupDiagnosticsStore(),
+            new FakeEdgeSyncDiagnosticsQuery(),
+            new TestAppLanguageService(),
+            deadLetterOperator,
+            new FakeDeadLetterConfirmationService());
 
-            viewModel.DeleteDeadLetterCommand.Execute(CreateDeadLetterRow());
-            await WaitUntilAsync(() => confirmation.DeleteCallCount == 1);
+        viewModel.RequeueDeadLetterCommand.Execute(CreateDeadLetterRow());
+        await WaitUntilAsync(
+            () => deadLetterOperator.RequeueCallCount == 1,
+            TestContext.Current.CancellationToken);
 
-            Assert.Equal(0, deadLetterOperator.DeleteCallCount);
-            Assert.Equal("已取消死信删除。", viewModel.StatusMessage);
-        });
-
-    [Fact]
-    public Task DeadLetterCommands_WhenCurrentUserIsNotLocalAdmin_ShouldNotBeExecutable()
-        => RunOnStaThreadAsync(() =>
-        {
-            var permissionService = new FakeClientPermissionService(isLocalAdmin: false);
-            var viewModel = CreateViewModel(
-                new FakeStartupDiagnosticsStore(),
-                new FakeEdgeSyncDiagnosticsQuery(),
-                new TestAppLanguageService(),
-                deadLetterOperator: new FakeDiagnosticsDeadLetterOperator(),
-                permissionService: permissionService);
-            var row = CreateDeadLetterRow();
-
-            Assert.False(viewModel.CanOperateDeadLetters);
-            Assert.False(viewModel.RequeueDeadLetterCommand.CanExecute(row));
-            Assert.False(viewModel.DeleteDeadLetterCommand.CanExecute(row));
-            return Task.CompletedTask;
-        });
-
-    [Fact]
-    public Task DiagnosticsViewModel_WhenActivatedRepeatedly_ShouldObservePermissionStateOnce()
-        => RunOnStaThreadAsync(async () =>
-        {
-            var permissionService = new FakeClientPermissionService(isLocalAdmin: false);
-            var viewModel = CreateViewModel(
-                new FakeStartupDiagnosticsStore(),
-                new FakeEdgeSyncDiagnosticsQuery(),
-                new TestAppLanguageService(),
-                deadLetterOperator: new FakeDiagnosticsDeadLetterOperator(),
-                permissionService: permissionService);
-
-            Assert.Equal(0, permissionService.SubscriberCount);
-
-            await viewModel.OnActivatedAsync();
-            Assert.Equal(1, permissionService.SubscriberCount);
-
-            await viewModel.OnActivatedAsync();
-            Assert.Equal(1, permissionService.SubscriberCount);
-
-            await viewModel.OnDeactivatedAsync();
-            Assert.Equal(0, permissionService.SubscriberCount);
-
-            await viewModel.OnDeactivatedAsync();
-            Assert.Equal(0, permissionService.SubscriberCount);
-        });
-
-    [Fact]
-    public Task DiagnosticsViewModel_WhenDeactivated_ShouldIgnorePermissionStateChanges()
-        => RunOnStaThreadAsync(async () =>
-        {
-            var permissionService = new FakeClientPermissionService(isLocalAdmin: false);
-            var viewModel = CreateViewModel(
-                new FakeStartupDiagnosticsStore(),
-                new FakeEdgeSyncDiagnosticsQuery(),
-                new TestAppLanguageService(),
-                deadLetterOperator: new FakeDiagnosticsDeadLetterOperator(),
-                permissionService: permissionService);
-            var permissionRefreshCount = 0;
-            viewModel.PropertyChanged += (_, args) =>
-            {
-                if (args.PropertyName == nameof(DiagnosticsViewModel.CanOperateDeadLetters))
-                {
-                    permissionRefreshCount++;
-                }
-            };
-
-            await viewModel.OnActivatedAsync();
-            permissionService.SetLocalAdmin(true);
-            await WaitUntilAsync(() => permissionRefreshCount == 1);
-
-            await viewModel.OnDeactivatedAsync();
-            permissionService.SetLocalAdmin(false);
-            await Task.Delay(50);
-
-            Assert.Equal(1, permissionRefreshCount);
-            Assert.Equal(0, permissionService.SubscriberCount);
-        });
-
-    [Fact]
-    public Task DeadLetterCommandEntry_WhenCurrentUserIsNotLocalAdmin_ShouldNotCallConfirmationOrOperator()
-        => RunOnStaThreadAsync(async () =>
-        {
-            var confirmation = new FakeDeadLetterConfirmationService();
-            var deadLetterOperator = new FakeDiagnosticsDeadLetterOperator();
-            var viewModel = CreateViewModel(
-                new FakeStartupDiagnosticsStore(),
-                new FakeEdgeSyncDiagnosticsQuery(),
-                new TestAppLanguageService(),
-                deadLetterOperator,
-                confirmation,
-                new FakeClientPermissionService(isLocalAdmin: false));
-
-            await InvokeDeadLetterCommandEntryAsync(viewModel, "RequeueDeadLetterAsync");
-
-            Assert.Equal(0, confirmation.RequeueCallCount);
-            Assert.Equal(0, deadLetterOperator.RequeueCallCount);
-            Assert.Equal("当前账号不是本地管理员，不能执行死信运维操作。", viewModel.ErrorMessage);
-        });
-
-    [Fact]
-    public Task DeadLetterCommands_WhenPermissionChangesToLocalAdmin_ShouldBecomeExecutable()
-        => RunOnStaThreadAsync(async () =>
-        {
-            var permissionService = new FakeClientPermissionService(isLocalAdmin: false);
-            var viewModel = CreateViewModel(
-                new FakeStartupDiagnosticsStore(),
-                new FakeEdgeSyncDiagnosticsQuery(),
-                new TestAppLanguageService(),
-                deadLetterOperator: new FakeDiagnosticsDeadLetterOperator(),
-                permissionService: permissionService);
-            var row = CreateDeadLetterRow();
-
-            Assert.False(viewModel.RequeueDeadLetterCommand.CanExecute(row));
-            Assert.False(viewModel.DeleteDeadLetterCommand.CanExecute(row));
-
-            await viewModel.OnActivatedAsync();
-            permissionService.SetLocalAdmin(true);
-
-            Assert.True(viewModel.CanOperateDeadLetters);
-            Assert.True(viewModel.RequeueDeadLetterCommand.CanExecute(row));
-            Assert.True(viewModel.DeleteDeadLetterCommand.CanExecute(row));
-            await viewModel.OnDeactivatedAsync();
-        });
-
-    [Fact]
-    public Task RequeueDeadLetterCommand_WhenOperatorFails_ShouldShowError()
-        => RunOnStaThreadAsync(async () =>
-        {
-            var deadLetterOperator = new FakeDiagnosticsDeadLetterOperator
-            {
-                RequeueResult = new DiagnosticsDeadLetterOperationResult(false, "重新入队失败")
-            };
-            var viewModel = CreateViewModel(
-                new FakeStartupDiagnosticsStore(),
-                new FakeEdgeSyncDiagnosticsQuery(),
-                new TestAppLanguageService(),
-                deadLetterOperator,
-                new FakeDeadLetterConfirmationService());
-
-            viewModel.RequeueDeadLetterCommand.Execute(CreateDeadLetterRow());
-            await WaitUntilAsync(() => deadLetterOperator.RequeueCallCount == 1);
-
-            Assert.Equal("重新入队失败", viewModel.ErrorMessage);
-            Assert.False(viewModel.HasStatus);
-        });
-
-    private static Task RunOnStaThreadAsync(Func<Task> testBody) => testBody();
+        Assert.Equal("重新入队失败", viewModel.ErrorMessage);
+        Assert.False(viewModel.HasStatus);
+    }
 
     private static void TryDeleteDirectory(string? directory)
     {
@@ -898,7 +913,9 @@ public sealed class DiagnosticsViewModelBehaviorTests
         await task;
     }
 
-    private static async Task WaitUntilAsync(Func<bool> predicate)
+    private static async Task WaitUntilAsync(
+        Func<bool> predicate,
+        CancellationToken cancellationToken)
     {
         for (var i = 0; i < 100; i++)
         {
@@ -907,7 +924,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
                 return;
             }
 
-            await Task.Delay(20);
+            await Task.Delay(20, cancellationToken);
         }
 
         Assert.True(predicate());
@@ -1111,8 +1128,8 @@ public sealed class DiagnosticsViewModelBehaviorTests
             _releaseGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         }
 
-        public Task WaitUntilEnteredAsync()
-            => _enteredGate?.Task ?? Task.CompletedTask;
+        public Task WaitUntilEnteredAsync(CancellationToken cancellationToken)
+            => _enteredGate?.Task.WaitAsync(cancellationToken) ?? Task.CompletedTask;
 
         public void ReleaseBlockedCall()
             => _releaseGate?.TrySetResult();

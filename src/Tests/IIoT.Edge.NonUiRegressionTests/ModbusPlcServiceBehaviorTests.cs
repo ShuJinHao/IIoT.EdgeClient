@@ -93,7 +93,10 @@ public sealed class ModbusPlcServiceBehaviorTests
         plc.UpdateCommands("RTU-COM3", null);
         plc.UpdateEndpoint("127.0.0.1", 7, null, 5000);
 
-        var endpoint = await resolver.ResolveAsync(plc, PlcType.ModbusRtu);
+        var endpoint = await resolver.ResolveAsync(
+            plc,
+            PlcType.ModbusRtu,
+            TestContext.Current.CancellationToken);
 
         var serialEndpoint = Assert.IsType<SerialPlcEndpoint>(endpoint);
         Assert.Equal("COM3", serialEndpoint.PortName);
@@ -110,7 +113,10 @@ public sealed class ModbusPlcServiceBehaviorTests
         plc.UpdateDeviceModel(PlcType.ModbusRtu.ToString());
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => resolver.ResolveAsync(plc, PlcType.ModbusRtu));
+            () => resolver.ResolveAsync(
+                plc,
+                PlcType.ModbusRtu,
+                TestContext.Current.CancellationToken));
 
         Assert.Contains("Command1", exception.Message);
     }

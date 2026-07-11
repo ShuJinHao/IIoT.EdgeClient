@@ -34,8 +34,8 @@ public sealed class LocalParameterConfigBehaviorTests
                 CreateSystemConfig(1, key, "http://mes.local")
             ]);
 
-        var first = await host.LocalParameterConfigService.GetSystemConfigsAsync();
-        var second = await host.LocalParameterConfigService.GetSystemConfigsAsync();
+        var first = await host.LocalParameterConfigService.GetSystemConfigsAsync(TestContext.Current.CancellationToken);
+        var second = await host.LocalParameterConfigService.GetSystemConfigsAsync(TestContext.Current.CancellationToken);
 
         Assert.True(host.Cache.Contains(ParameterCacheKeys.SystemAll));
         Assert.Equal(first.Single().Key, second.Single().Key);
@@ -62,7 +62,7 @@ public sealed class LocalParameterConfigBehaviorTests
             [
                 new ModuleParamDto(key, "http://new-mes")
             ]),
-            CancellationToken.None);
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
         Assert.False(host.Cache.Contains(ParameterCacheKeys.SystemAll));
@@ -103,10 +103,12 @@ public sealed class LocalParameterConfigBehaviorTests
         var saveResult = await service.SaveAsync(
             [
                 new ParamViewValueDto(moduleKey, "true")
-            ]);
+            ],
+            TestContext.Current.CancellationToken);
 
         Assert.True(saveResult.IsSuccess);
-        var savedSystemValue = (await host.LocalParameterConfigService.GetSystemConfigsAsync())
+        var savedSystemValue = (await host.LocalParameterConfigService.GetSystemConfigsAsync(
+                TestContext.Current.CancellationToken))
             .Single(x => x.Key == moduleKey)
             .Value;
         Assert.Equal("true", savedSystemValue);
@@ -128,11 +130,13 @@ public sealed class LocalParameterConfigBehaviorTests
         var saveResult = await service.SaveAsync(
             [
                 new ParamViewValueDto(tokenKey, "secret")
-            ]);
+            ],
+            TestContext.Current.CancellationToken);
 
         Assert.False(saveResult.IsSuccess);
         Assert.Contains(tokenKey, saveResult.Message);
-        Assert.Empty(await host.LocalParameterConfigService.GetSystemConfigsAsync());
+        Assert.Empty(await host.LocalParameterConfigService.GetSystemConfigsAsync(
+            TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -147,7 +151,7 @@ public sealed class LocalParameterConfigBehaviorTests
         using var host = new ParameterConfigTestHost(moduleParamRegistry: registry);
         var service = new ParamViewCrudService(host.Sender, host.PermissionService);
 
-        var result = await service.LoadAsync();
+        var result = await service.LoadAsync(TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain(
             result.MesParamGroups.SelectMany(static group => group.Params),
@@ -177,10 +181,12 @@ public sealed class LocalParameterConfigBehaviorTests
             [
                 new ParamViewValueDto(CloudApiConfigParamSchema.BaseUrl, "https://cloud.local"),
                 new ParamViewValueDto(CloudApiConfigParamSchema.ProcessUploadPath, "/edge/process")
-            ]);
+            ],
+            TestContext.Current.CancellationToken);
 
         Assert.True(saveResult.IsSuccess, saveResult.Message);
-        var values = (await host.LocalParameterConfigService.GetSystemConfigsAsync())
+        var values = (await host.LocalParameterConfigService.GetSystemConfigsAsync(
+                TestContext.Current.CancellationToken))
             .ToDictionary(static x => x.Key, static x => x.Value, StringComparer.OrdinalIgnoreCase);
         Assert.Equal("https://cloud.local", values[CloudApiConfigParamSchema.BaseUrl]);
         Assert.Equal("/edge/process", values[CloudApiConfigParamSchema.ProcessUploadPath]);
@@ -196,11 +202,13 @@ public sealed class LocalParameterConfigBehaviorTests
             [
                 new ParamViewValueDto(CloudApiConfigParamSchema.BootstrapSecret, "secret"),
                 new ParamViewValueDto(CloudApiConfigParamSchema.ProcessUploadPath, "/edge/process")
-            ]);
+            ],
+            TestContext.Current.CancellationToken);
 
         Assert.False(saveResult.IsSuccess);
         Assert.Contains(CloudApiConfigParamSchema.BootstrapSecret, saveResult.Message);
-        Assert.Empty(await host.LocalParameterConfigService.GetSystemConfigsAsync());
+        Assert.Empty(await host.LocalParameterConfigService.GetSystemConfigsAsync(
+            TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -223,10 +231,11 @@ public sealed class LocalParameterConfigBehaviorTests
             moduleParamRegistry: registry);
         var service = new ParamViewCrudService(host.Sender, host.PermissionService);
 
-        var resetResult = await service.ResetAsync();
+        var resetResult = await service.ResetAsync(TestContext.Current.CancellationToken);
 
         Assert.True(resetResult.IsSuccess, resetResult.Message);
-        var values = (await host.LocalParameterConfigService.GetSystemConfigsAsync())
+        var values = (await host.LocalParameterConfigService.GetSystemConfigsAsync(
+                TestContext.Current.CancellationToken))
             .ToDictionary(static x => x.Key, static x => x.Value, StringComparer.OrdinalIgnoreCase);
         Assert.Equal("http://localhost:5180", values[cloudKey]);
         Assert.Equal("true", values[businessKey]);

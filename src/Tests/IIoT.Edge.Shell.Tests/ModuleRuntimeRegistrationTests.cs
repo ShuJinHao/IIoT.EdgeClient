@@ -194,7 +194,7 @@ public sealed class ModuleRuntimeRegistrationTests
             enabledModules: ["Homogenization"],
             deviceModuleIds: ["Homogenization"]);
 
-        var result = await harness.Manager.StartAsync();
+        var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Message);
 
@@ -216,7 +216,7 @@ public sealed class ModuleRuntimeRegistrationTests
             deviceModuleIds: ["Homogenization"],
             bootstrapSecret: null);
 
-        var result = await harness.Manager.StartAsync();
+        var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Message);
         Assert.Contains(
@@ -233,7 +233,7 @@ public sealed class ModuleRuntimeRegistrationTests
             deviceModuleIds: ["Homogenization"],
             clientCode: null);
 
-        var result = await harness.Manager.StartAsync();
+        var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Message);
         Assert.Contains(
@@ -269,7 +269,7 @@ public sealed class ModuleRuntimeRegistrationTests
                 .Append(emptyAddressMapping)
                 .ToArray());
 
-        var result = await harness.Manager.StartAsync();
+        var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Message);
         Assert.Contains(
@@ -290,7 +290,7 @@ public sealed class ModuleRuntimeRegistrationTests
             deviceModuleIds: ["Homogenization"],
             omittedCloudPathKey: "CloudApi:Paths:DeviceInstance");
 
-        var result = await harness.Manager.StartAsync();
+        var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Message);
         Assert.Contains(
@@ -307,7 +307,7 @@ public sealed class ModuleRuntimeRegistrationTests
             deviceModuleIds: ["Homogenization"],
             omittedCloudPathKey: "CloudApi:Paths:ProcessUpload");
 
-        var result = await harness.Manager.StartAsync();
+        var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Message);
         Assert.Contains(
@@ -324,7 +324,7 @@ public sealed class ModuleRuntimeRegistrationTests
             deviceModuleIds: ["Homogenization"],
             deviceInstancePath: "/api/v1/bootstrap/device-instance");
 
-        var result = await harness.Manager.StartAsync();
+        var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Message);
         Assert.DoesNotContain(
@@ -343,7 +343,7 @@ public sealed class ModuleRuntimeRegistrationTests
             deviceModuleIds: ["Homogenization"],
             deviceInstancePath: deviceInstancePath);
 
-        var result = await harness.Manager.StartAsync();
+        var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Message);
         Assert.Contains(
@@ -361,7 +361,7 @@ public sealed class ModuleRuntimeRegistrationTests
             deviceModuleIds: ["Homogenization"],
             deviceInstancePath: "//api/v1/bootstrap/device-instance");
 
-        var result = await harness.Manager.StartAsync();
+        var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Message);
         Assert.Contains(
@@ -379,7 +379,7 @@ public sealed class ModuleRuntimeRegistrationTests
             deviceModuleIds: ["Homogenization"],
             recipeByDeviceTemplate: "/api/v1/edge/recipes/device");
 
-        var result = await harness.Manager.StartAsync();
+        var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Message);
         Assert.Contains(
@@ -432,7 +432,7 @@ public sealed class ModuleRuntimeRegistrationTests
             .ToArray();
         await harness.ReplaceIoMappingsAsync(device.Id, incompleteMappings);
 
-        var result = await harness.Manager.StartAsync();
+        var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Message);
         Assert.Empty(harness.PlcManager.RegisteredFactories);
@@ -451,7 +451,7 @@ public sealed class ModuleRuntimeRegistrationTests
             deviceModuleIds: ["Homogenization"],
             backgroundStartException: new InvalidOperationException("cloud task unavailable"));
 
-        var result = await harness.Manager.StartAsync();
+        var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Message);
         Assert.Equal(1, harness.BackgroundCoordinator.StartCallCount);
@@ -470,7 +470,7 @@ public sealed class ModuleRuntimeRegistrationTests
             deviceModuleIds: ["Homogenization"],
             startupDiagnosticException: new InvalidOperationException("legacy signal property missing"));
 
-        var result = await harness.Manager.StartAsync();
+        var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Message);
         var report = harness.StartupDiagnosticsStore.Current;

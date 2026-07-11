@@ -66,7 +66,8 @@ public sealed class ConfigPermissionGuardBehaviorTests
             new StubPermissionService { CanEditParams = false });
 
         var result = await service.SaveAsync(
-            [new ParamViewValueDto("Module:Homogenization:Business:启用托盘码重码验证", "true")]);
+            [new ParamViewValueDto("Module:Homogenization:Business:启用托盘码重码验证", "true")],
+            TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess);
         Assert.Contains("参数配置权限", result.Message);
@@ -85,7 +86,7 @@ public sealed class ConfigPermissionGuardBehaviorTests
         var result = await handler.Handle(
             new SaveParamViewCommand(
                 [new ParamViewValueDto("Module:Homogenization:Business:启用托盘码重码验证", "true")]),
-            CancellationToken.None);
+            TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess);
         Assert.Contains("参数配置权限", result.Message);
@@ -105,7 +106,8 @@ public sealed class ConfigPermissionGuardBehaviorTests
             [CreateNetworkDeviceDto(1, "PLC-A")],
             [],
             1,
-            []);
+            [],
+            TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(0, sender.SendCount);
@@ -120,7 +122,9 @@ public sealed class ConfigPermissionGuardBehaviorTests
             new ModuleHardwareProfileResolver([]),
             new StubPermissionService { CanEditHardware = false });
 
-        var result = await service.ApplyModuleTemplateAsync(CreateNetworkDeviceDto(1, "PLC-A"));
+        var result = await service.ApplyModuleTemplateAsync(
+            CreateNetworkDeviceDto(1, "PLC-A"),
+            TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(0, sender.SendCount);
@@ -140,7 +144,9 @@ public sealed class ConfigPermissionGuardBehaviorTests
             new ModuleHardwareProfileResolver([new ResetTemplateProfile()]),
             new StubPermissionService { CanEditHardware = true });
 
-        var result = await service.ApplyModuleTemplateAsync(CreateNetworkDeviceDto(7, "PLC-A"));
+        var result = await service.ApplyModuleTemplateAsync(
+            CreateNetworkDeviceDto(7, "PLC-A"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess, result.Message);
         Assert.NotNull(savedCommand);
@@ -190,7 +196,7 @@ public sealed class ConfigPermissionGuardBehaviorTests
                 [
                     CreateIoMappingDto(10, 1, "Test.Signal")
                 ]),
-            CancellationToken.None);
+            TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess);
         Assert.Contains("PLC-B", result.Message);
