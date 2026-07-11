@@ -114,11 +114,12 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         services.AddSingleton<IModuleParamRoleProvider>(new ContractModuleParamRoleProvider(ExpectedFirstDevice));
         services.AddSingleton<MesRequestExecutor>();
         services.AddSingleton<IDieCuttingMesScenarioChannel>(new ContractDieCuttingMesChannel(ExpectedModuleId));
-        services.AddSingleton<IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business>>(
-            new ContractDieCuttingModuleParamProvider(
-                ExpectedModuleId,
-                ExpectedUpperComputerNo,
-                ExpectedOperationCode));
+        var parameters = new ContractDieCuttingModuleParamProvider(
+            ExpectedModuleId,
+            ExpectedUpperComputerNo,
+            ExpectedOperationCode);
+        services.AddSingleton<IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business>>(parameters);
+        services.AddSingleton<ICloudExecutionPolicy>(parameters);
         services.AddSingleton(Options.Create(new DieCuttingModuleOptions()));
     }
 
@@ -989,11 +990,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
             result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Mes),
             descriptor => descriptor.Name == nameof(DieCuttingParams.Mes.EquipmentStatusPath)
                           && descriptor.DefaultValue == "/dev/dev/realTime/status");
-        Assert.Contains(
-            result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Cloud),
-            descriptor => descriptor.Role == ModuleParamRole.CloudEnabled
-                          && descriptor.Name == nameof(DieCuttingParams.Cloud.启用)
-                          && descriptor.DefaultValue == "false");
+        Assert.Empty(result.ModuleParamRegistry.GetDescriptors(ExpectedModuleId, ModuleParamCategory.Cloud));
         Assert.Contains(
             result.Services,
             descriptor => descriptor.ServiceType == typeof(IProductionPlanSelectionService)
@@ -1481,6 +1478,7 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         services.AddSingleton(logService);
         services.AddSingleton(plcConnectionManager);
         services.AddSingleton(parameters);
+        services.AddSingleton<ICloudExecutionPolicy>(Assert.IsAssignableFrom<ICloudExecutionPolicy>(parameters));
         if (recordStore is not null)
         {
             services.AddSingleton(recordStore);
@@ -1982,7 +1980,8 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
     }
 
     private sealed class ContractDieCuttingModuleParamProvider
-        : IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business>
+        : IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business>,
+          ICloudExecutionPolicy
     {
         private readonly string _moduleId;
         private readonly string _upperComputerNo;
@@ -2011,6 +2010,8 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         private bool MesEnabled { get; }
 
         private bool CloudEnabled { get; }
+
+        public bool IsEnabled => CloudEnabled;
 
         public Task<ModuleParamSnapshot<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business>> GetAsync(
             CancellationToken cancellationToken = default)
@@ -2048,18 +2049,9 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
                 new ModuleParamGroup<DieCuttingParams.Cloud>(
                     _moduleId,
                     ModuleParamCategory.Cloud,
-                    new Dictionary<DieCuttingParams.Cloud, string>
-                    {
-                        [DieCuttingParams.Cloud.启用] = CloudEnabled.ToString()
-                    },
-                    new Dictionary<DieCuttingParams.Cloud, string?>
-                    {
-                        [DieCuttingParams.Cloud.启用] = "false"
-                    },
-                    new Dictionary<DieCuttingParams.Cloud, ParamValueKind>
-                    {
-                        [DieCuttingParams.Cloud.启用] = ParamValueKind.Bool
-                    },
+                    new Dictionary<DieCuttingParams.Cloud, string>(),
+                    new Dictionary<DieCuttingParams.Cloud, string?>(),
+                    new Dictionary<DieCuttingParams.Cloud, ParamValueKind>(),
                     warn: null),
                 new ModuleParamGroup<DieCuttingParams.Business>(
                     _moduleId,

@@ -33,6 +33,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
     private readonly IDieCuttingProductionRecordStore _productionRecordStore;
     private readonly IMesUploadDiagnosticsStore _mesDiagnosticsStore;
     private readonly ICloudUploadDiagnosticsStore _cloudDiagnosticsStore;
+    private readonly ICloudExecutionPolicy _cloudExecutionPolicy;
     private readonly IPlcConnectionManager _plcConnectionManager;
     private readonly IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> _parameters;
     private readonly DieCuttingModuleOptions _moduleOptions;
@@ -56,6 +57,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         IDieCuttingProductionRecordStore productionRecordStore,
         IMesUploadDiagnosticsStore diagnosticsStore,
         ICloudUploadDiagnosticsStore cloudDiagnosticsStore,
+        ICloudExecutionPolicy cloudExecutionPolicy,
         IPlcConnectionManager plcConnectionManager,
         IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> parameters,
         ILogService logger,
@@ -70,6 +72,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         _productionRecordStore = productionRecordStore;
         _mesDiagnosticsStore = diagnosticsStore;
         _cloudDiagnosticsStore = cloudDiagnosticsStore;
+        _cloudExecutionPolicy = cloudExecutionPolicy;
         _plcConnectionManager = plcConnectionManager;
         _parameters = parameters;
         _moduleOptions = moduleOptions.Value;
@@ -89,7 +92,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         LogConfigurationIfNeeded(parameterSnapshot);
         WarnIfLegacyMesBaseUrl(parameterSnapshot);
         var mesEnabled = parameterSnapshot.Mes<bool>(DieCuttingParams.Mes.启用);
-        var cloudEnabled = parameterSnapshot.Cloud<bool>(DieCuttingParams.Cloud.启用);
+        var cloudEnabled = _cloudExecutionPolicy.IsEnabled;
         var uploadTargets = DataPipelineUploadTargetPolicy.Resolve(mesEnabled, cloudEnabled);
 
         var connectionResult = EnsurePlcConnected();
@@ -402,7 +405,7 @@ internal sealed class DieCuttingRealtimeSampleUploadTask : PlcTaskBase
         var mesBaseUrl = SanitizeMesBaseUrl(parameters.Mes<string>(DieCuttingParams.Mes.服务地址));
         var outboundPath = NormalizeLogText(parameters.Mes<string>(DieCuttingParams.Mes.OutboundPath));
         var mesEnabled = parameters.Mes<bool>(DieCuttingParams.Mes.启用);
-        var cloudEnabled = parameters.Cloud<bool>(DieCuttingParams.Cloud.启用);
+        var cloudEnabled = _cloudExecutionPolicy.IsEnabled;
         Logger.Info(
             $"[PLC-{_context.DeviceName}][模切采样] 任务配置：MES地址={mesBaseUrl}，出站路径={outboundPath}，MES启用={mesEnabled}，Cloud启用={cloudEnabled}，采集处理周期={_taskLoopInterval}ms；采集后关键数据变化才进入配置的上传目标。");
         _configurationLogged = true;

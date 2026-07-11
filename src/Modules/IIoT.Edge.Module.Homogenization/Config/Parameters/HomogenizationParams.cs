@@ -154,21 +154,9 @@ public static class HomogenizationParams
         签名令牌
     }
 
-    /// <summary>
-    /// 匀浆云端上传参数键，云端契约未对齐时默认关闭。
-    /// </summary>
+    /// <summary>保留空类别作为强类型参数快照占位；Cloud 启停只允许使用系统级开关。</summary>
     public enum Cloud
     {
-        /// <summary>是否启用云端上传链路。</summary>
-        [ModuleParam(
-            ParamValueKind.Bool,
-            DefaultValue = "false",
-            Role = ModuleParamRole.CloudEnabled,
-            DisplayNameResourceKey = "Homogenization_Param_CloudEnabled_DisplayName",
-            DisplayNameFallback = "云端上传启用",
-            DescriptionResourceKey = "Homogenization_Param_CloudEnabled_Description",
-            DescriptionFallback = "关闭后仅停止该插件生产数据 Cloud 上传；系统 bootstrap、设备日志、Cloud 补传和诊断不受该插件参数影响。")]
-        启用
     }
 
     /// <summary>

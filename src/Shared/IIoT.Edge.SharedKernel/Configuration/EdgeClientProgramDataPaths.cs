@@ -15,6 +15,7 @@ public static class EdgeClientProgramDataPaths
     public const string LauncherAccountsFileName = "launcher.accounts.json";
     public const string LauncherUpdateConfigFileName = "launcher.update.json";
     public const string LanguageFileName = "language.json";
+    public const string CloudSwitchProjectionFileName = "cloud-switch.projection.json";
 
     public static string ResolveApplicationDataRoot(string? baseDirectory = null)
     {
@@ -84,6 +85,13 @@ public static class EdgeClientProgramDataPaths
 
     public static string ResolveProfileDataRoot(string profileName, string? baseDirectory = null)
         => Path.Combine(ResolveDataRoot(baseDirectory), ProfilesDirectoryName, SanitizePathSegment(profileName));
+
+    public static string ResolveProfileCloudSwitchProjectionPath(
+        string profileName,
+        string? baseDirectory = null)
+        => Path.Combine(
+            ResolveProfileDataRoot(profileName, baseDirectory),
+            CloudSwitchProjectionFileName);
 
     public static string ResolveProfileFallbackCrashLogPath(string profileName, string? baseDirectory = null)
         => Path.Combine(

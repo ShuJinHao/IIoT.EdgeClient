@@ -148,6 +148,8 @@
     <sys:String x:Key="Navigation_DashboardPreview_PlcProtocolFrame">协议帧</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcDetails">详情</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcDetailTitle">PLC 运行详情</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcCommunicationSection">通讯配置</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcActivitySection">运行记录</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcErrorDetail">错误详情</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcNoError">暂无运行错误</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_Close">关闭</sys:String>
@@ -187,7 +189,7 @@
     <sys:String x:Key="Navigation_Tab_PluginBusinessParams">插件业务参数</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_GroupTitle">云端接口配置</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_Enabled_DisplayName">云端启用</sys:String>
-    <sys:String x:Key="Navigation_Param_CloudApi_Enabled_Description">系统级云端上传总开关。关闭后 Cloud 上传、设备日志和补传按离线语义跳过。</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_Enabled_Description">当前 machine profile 的 Cloud 通信唯一总开关。关闭后 bootstrap、登录、上传、日志、补传、心跳、配方与远程更新请求全部停止。</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_BaseUrl_DisplayName">云端服务地址</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_BaseUrl_Description">Cloud API 基地址，用于 bootstrap、上传、日志和产能接口。</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_ClientCode_DisplayName">设备寻址码</sys:String>
@@ -647,6 +649,9 @@
     <sys:String x:Key="Navigation_Button_ConfirmAddIoPoint">确认添加</sys:String>
     <sys:String x:Key="Navigation_Dialog_AddNetworkDevice">新增网络设备</sys:String>
     <sys:String x:Key="Navigation_Dialog_EditNetworkDevice">编辑网络设备</sys:String>
+    <sys:String x:Key="Navigation_NetworkDevice_IdentitySection">设备标识</sys:String>
+    <sys:String x:Key="Navigation_NetworkDevice_ConnectionSection">连接参数</sys:String>
+    <sys:String x:Key="Navigation_NetworkDevice_AdvancedSection">高级参数</sys:String>
     <sys:String x:Key="Navigation_Dialog_AddSerialDevice">新增串口设备</sys:String>
     <sys:String x:Key="Navigation_Dialog_EditSerialDevice">编辑串口设备</sys:String>
     <sys:String x:Key="Navigation_Dialog_AddIoPoint">新增 IO 点位</sys:String>
@@ -758,6 +763,7 @@
     <sys:String x:Key="Navigation_PlcTaskBinding_SaveSuccess">任务绑定已保存并已应用到当前 PLC。</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_SaveFailed">保存 PLC 任务绑定失败。</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_NoDevices">当前模块暂无 PLC 设备。</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_NoTasks">当前 PLC 暂无可绑定任务。</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_DeviceCountFormat">已加载 {0} 台 PLC 的任务绑定。</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_DisableHeartbeatConfirmTitle">确认关闭心跳任务</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_DisableHeartbeatConfirmMessageFormat">即将关闭 PLC“{0}”的心跳类任务：{1}。&#x0a;关闭后该 PLC 不再执行心跳握手，可能影响运行状态判断。是否继续保存？</sys:String>

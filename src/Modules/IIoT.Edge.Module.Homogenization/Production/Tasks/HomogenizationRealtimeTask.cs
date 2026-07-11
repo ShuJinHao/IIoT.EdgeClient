@@ -30,6 +30,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
     private readonly IDataPipelineService _dataPipelineService;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
     private readonly ICloudUploadDiagnosticsStore _cloudDiagnosticsStore;
+    private readonly ICloudExecutionPolicy _cloudExecutionPolicy;
     private readonly IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> _parameters;
     private readonly IHomogenizationProductionGate _productionGate;
     private readonly HomogenizationCodeOptions _codeOptions;
@@ -48,6 +49,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
         IDataPipelineService dataPipelineService,
         IMesUploadDiagnosticsStore diagnosticsStore,
         ICloudUploadDiagnosticsStore cloudDiagnosticsStore,
+        ICloudExecutionPolicy cloudExecutionPolicy,
         IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> parameters,
         IHomogenizationProductionGate productionGate,
         ILogService logger,
@@ -60,6 +62,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
         _dataPipelineService = dataPipelineService;
         _diagnosticsStore = diagnosticsStore;
         _cloudDiagnosticsStore = cloudDiagnosticsStore;
+        _cloudExecutionPolicy = cloudExecutionPolicy;
         _parameters = parameters;
         _productionGate = productionGate;
         _codeOptions = codeOptions.Value;
@@ -92,7 +95,7 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
     {
         var parameterSnapshot = await _parameters.GetAsync(cancellationToken).ConfigureAwait(false);
         var mesEnabled = parameterSnapshot.Mes<bool>(HomogenizationParams.Mes.启用);
-        var cloudEnabled = parameterSnapshot.Cloud<bool>(HomogenizationParams.Cloud.启用);
+        var cloudEnabled = _cloudExecutionPolicy.IsEnabled;
         var uploadTargets = DataPipelineUploadTargetPolicy.Resolve(mesEnabled, cloudEnabled);
         _lastUploadTargets = uploadTargets;
 

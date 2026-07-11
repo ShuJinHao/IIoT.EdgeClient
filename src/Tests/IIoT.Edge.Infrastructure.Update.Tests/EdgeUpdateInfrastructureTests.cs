@@ -62,7 +62,7 @@ public sealed class EdgeUpdateInfrastructureTests
                     }
                     """);
 
-                var provider = new FileEdgeUpdateConfigurationProvider(hostDirectory);
+                var provider = new FileEdgeUpdateConfigurationProvider(hostDirectory, EnabledCloudSwitchReader.Instance);
                 var target = Target(hostDirectory);
 
                 var result = provider.Resolve(target);
@@ -119,12 +119,59 @@ public sealed class EdgeUpdateInfrastructureTests
                     }
                     """);
 
-                var provider = new FileEdgeUpdateConfigurationProvider(hostDirectory);
+                var provider = new FileEdgeUpdateConfigurationProvider(hostDirectory, EnabledCloudSwitchReader.Instance);
 
                 var result = provider.Resolve(Target(hostDirectory));
 
                 Assert.False(result.Success);
                 Assert.Contains("BootstrapSecret", result.ErrorMessage ?? string.Empty, StringComparison.Ordinal);
+            });
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void ConfigurationProvider_WhenProfileCloudSwitchIsDisabled_ShouldFailBeforeCloudConfiguration()
+    {
+        var provider = new FileEdgeUpdateConfigurationProvider(
+            Path.GetTempPath(),
+            new FixedCloudSwitchReader(false));
+
+        var result = provider.Resolve(Target(Path.GetTempPath()));
+
+        Assert.False(result.Success);
+        Assert.Contains("Cloud 通信已关闭", result.ErrorMessage ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FileProfileCloudSwitchReader_ShouldFailClosedAndReadOnlyTheGeneratedProjection()
+    {
+        var tempDirectory = CreateTempDirectory();
+        var dataRoot = Path.Combine(tempDirectory, "program-data");
+        try
+        {
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
+            WithDataRoot(dataRoot, () =>
+            {
+                var reader = new FileProfileCloudSwitchReader(hostDirectory);
+                var target = Target(hostDirectory);
+                Assert.False(reader.IsEnabled(target));
+
+                var projectionPath = EdgeClientProgramDataPaths.ResolveProfileCloudSwitchProjectionPath(
+                    "LineA",
+                    hostDirectory);
+                WriteText(projectionPath, """{"version":1,"enabled":true}""");
+                Assert.True(reader.IsEnabled(target));
+
+                WriteText(projectionPath, """{"version":1,"enabled":false}""");
+                Assert.False(reader.IsEnabled(target));
+
+                WriteText(projectionPath, """{"version":2,"enabled":true}""");
+                Assert.False(reader.IsEnabled(target));
             });
         }
         finally
@@ -844,6 +891,18 @@ public sealed class EdgeUpdateInfrastructureTests
         public void EnableModules(EdgeUpdateTarget target, IReadOnlyList<string> moduleIds)
         {
         }
+    }
+
+    private sealed class FixedCloudSwitchReader(bool enabled) : IEdgeProfileCloudSwitchReader
+    {
+        public bool IsEnabled(EdgeUpdateTarget target) => enabled;
+    }
+
+    private sealed class EnabledCloudSwitchReader : IEdgeProfileCloudSwitchReader
+    {
+        public static EnabledCloudSwitchReader Instance { get; } = new();
+
+        public bool IsEnabled(EdgeUpdateTarget target) => true;
     }
 
     private sealed class NoopPluginPackageInstaller : IEdgePluginPackageInstaller

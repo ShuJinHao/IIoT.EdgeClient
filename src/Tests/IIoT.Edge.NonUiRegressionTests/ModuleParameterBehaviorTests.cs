@@ -34,9 +34,7 @@ public sealed class ModuleParameterBehaviorTests
             x.ModuleId == "Homogenization"
             && x.Name == nameof(HomogenizationMesParam.BatchNumberPath)
             && x.DefaultValue == "/dev/dev/get/batchNumber");
-        Assert.Contains(registry.GetDescriptors(ModuleParamCategory.Cloud), x =>
-            x.Name == nameof(HomogenizationCloudParam.启用)
-            && x.Role == ModuleParamRole.CloudEnabled);
+        Assert.Empty(registry.GetDescriptors(ModuleParamCategory.Cloud));
         Assert.Contains(registry.GetDescriptors(ModuleParamCategory.Business), x =>
             x.Name == nameof(HomogenizationBusinessParam.启用托盘码重码验证));
     }
@@ -48,8 +46,6 @@ public sealed class ModuleParameterBehaviorTests
 
         var mesEnabled = registry.GetDescriptors(ModuleParamCategory.Mes)
             .Single(x => x.ModuleId == "Homogenization" && x.Name == nameof(HomogenizationMesParam.启用));
-        var cloudEnabled = registry.GetDescriptors(ModuleParamCategory.Cloud)
-            .Single(x => x.ModuleId == "Homogenization" && x.Name == nameof(HomogenizationCloudParam.启用));
 
         Assert.Equal("启用", mesEnabled.Name);
         Assert.Equal("Module:Homogenization:Mes:启用", mesEnabled.StorageKey);
@@ -57,11 +53,7 @@ public sealed class ModuleParameterBehaviorTests
         Assert.Equal("MES上传启用", mesEnabled.DisplayNameFallback);
         Assert.Equal("Homogenization_Param_MesEnabled_Description", mesEnabled.DescriptionResourceKey);
 
-        Assert.Equal("启用", cloudEnabled.Name);
-        Assert.Equal("Module:Homogenization:Cloud:启用", cloudEnabled.StorageKey);
-        Assert.Equal("Homogenization_Param_CloudEnabled_DisplayName", cloudEnabled.DisplayNameResourceKey);
-        Assert.Equal("云端上传启用", cloudEnabled.DisplayNameFallback);
-        Assert.Equal("Homogenization_Param_CloudEnabled_Description", cloudEnabled.DescriptionResourceKey);
+        Assert.Empty(registry.GetDescriptors(ModuleParamCategory.Cloud));
     }
 
     [Fact]
@@ -81,7 +73,7 @@ public sealed class ModuleParameterBehaviorTests
         var cloudGroup = Assert.Single(result.CloudParamGroups);
         var cloudParams = cloudGroup.Params;
         var cloudEnabled = cloudParams
-            .Single(x => x.Name == nameof(HomogenizationCloudParam.启用));
+            .Single(x => x.Key == CloudApiConfigParamSchema.Enabled);
 
         Assert.Equal("Module:Homogenization:Mes:启用", mesEnabled.Key);
         Assert.Equal("启用", mesEnabled.Name);
@@ -90,14 +82,13 @@ public sealed class ModuleParameterBehaviorTests
 
         Assert.Equal(CloudApiConfigParamSchema.ModuleId, cloudGroup.ModuleId);
         Assert.Equal("Navigation_Tab_CloudParams", cloudGroup.ModuleDisplayNameResourceKey);
-        Assert.Equal("Module:Homogenization:Cloud:启用", cloudEnabled.Key);
-        Assert.Equal("启用", cloudEnabled.Name);
-        Assert.Equal("云端上传启用", cloudEnabled.DisplayNameFallback);
-        Assert.Contains("仅停止该插件生产数据 Cloud 上传", cloudEnabled.DescriptionFallback, StringComparison.Ordinal);
+        Assert.Equal("Enabled", cloudEnabled.Name);
+        Assert.Equal("云端启用", cloudEnabled.DisplayNameFallback);
+        Assert.Contains("唯一总开关", cloudEnabled.DescriptionFallback, StringComparison.Ordinal);
         var expectedCloudApiParamCount = CloudApiConfigParamSchema.Descriptors
             .Count(static descriptor => CloudApiConfigParamSchema.IsParamViewEditableKey(descriptor.Key));
         Assert.Equal(
-            Enum.GetNames<HomogenizationCloudParam>().Length + expectedCloudApiParamCount,
+            expectedCloudApiParamCount,
             cloudParams.Count);
         Assert.Contains(cloudParams, x =>
             x.Key == CloudApiConfigParamSchema.BaseUrl
@@ -126,7 +117,6 @@ public sealed class ModuleParameterBehaviorTests
         Assert.Equal("/heath", first.Mes<string>(HomogenizationMesParam.MesHealthPath));
         Assert.Equal("/dev/dev/get/order", first.Mes<string>(HomogenizationMesParam.OrderPath));
         Assert.Equal("/dev/dev/get/batchNumber", first.Mes<string>(HomogenizationMesParam.BatchNumberPath));
-        Assert.False(first.Cloud<bool>(HomogenizationCloudParam.启用));
         Assert.False(first.Business<bool>(HomogenizationBusinessParam.启用托盘码重码验证));
         Assert.Equal(first.ModuleId, second.ModuleId);
         Assert.Equal(1, config.SystemQueryCount);

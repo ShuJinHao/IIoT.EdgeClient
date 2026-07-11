@@ -12,16 +12,26 @@ public sealed class FileEdgeUpdateConfigurationProvider : IEdgeUpdateConfigurati
     private const string DefaultChannel = "stable";
     private const string DefaultTargetRuntime = "win-x64";
     private readonly string _baseDirectory;
+    private readonly IEdgeProfileCloudSwitchReader _cloudSwitchReader;
 
-    public FileEdgeUpdateConfigurationProvider(string baseDirectory)
+    public FileEdgeUpdateConfigurationProvider(
+        string baseDirectory,
+        IEdgeProfileCloudSwitchReader? cloudSwitchReader = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
         _baseDirectory = baseDirectory;
+        _cloudSwitchReader = cloudSwitchReader ?? new FileProfileCloudSwitchReader(baseDirectory);
     }
 
     public EdgeUpdateConfigurationResult Resolve(EdgeUpdateTarget target)
     {
         ArgumentNullException.ThrowIfNull(target);
+
+        if (!_cloudSwitchReader.IsEnabled(target))
+        {
+            return EdgeUpdateConfigurationResult.Failed(
+                "当前 machine profile 的 Cloud 通信已关闭。");
+        }
 
         var mutable = new MutableCloudApiOptions();
         ApplyConfigurationFile(mutable, Path.Combine(target.HostDirectory, "appsettings.json"));

@@ -31,7 +31,7 @@
                         <edge:EdgeTextColumn Binding="{Binding PlcAddress}" Header="{DynamicResource Navigation_Column_PlcAddress}" MinWidth="120" Width="120" />
                         <edge:EdgeTextColumn Binding="{Binding AddressCount}" Header="{DynamicResource Navigation_Column_Count}" MinWidth="80" Width="80" />
                         <edge:EdgeTextColumn Binding="{Binding DataType}" Header="{DynamicResource Navigation_Column_DataType}" MinWidth="120" Width="120" />
-                        <edge:EdgeTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="220" Width="220" />
+                        <edge:EdgeTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="240" Width="*" />
                     </edge:EdgeDataGrid.Columns>
                 </edge:EdgeDataGrid>
             </edge:EdgeTablePanel>
@@ -40,6 +40,9 @@
         <DataTemplate x:Key="IoInteractionPairTableTemplate">
             <edge:EdgeTablePanel
                 Classes="fill"
+                EmptyMessage="{DynamicResource Navigation_Empty_IoInteractionRows}"
+                EmptyTitle="{DynamicResource Navigation_IoMapping_TabInteraction}"
+                IsEmpty="{Binding HasNoInteractionIoMappingGroups}"
                 Margin="0,0,0,12"
                 Title="{DynamicResource Navigation_IoMapping_TabInteraction}">
                 <edge:EdgeTablePanel.HeaderMetaContent>
@@ -59,14 +62,14 @@
                     ItemsSource="{Binding InteractionIoMappingPairs}"
                     SelectedItem="{Binding SelectedInteractionPair, Mode=TwoWay}">
                     <edge:EdgeDataGrid.Columns>
-                        <edge:EdgeTextColumn Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_InteractionItem}" MinWidth="150" Width="150" />
-                        <edge:EdgeTextColumn Binding="{Binding ReadPlcAddress}" Header="{DynamicResource Navigation_Column_ReadPlcAddress}" MinWidth="120" Width="120" />
-                        <edge:EdgeTextColumn Binding="{Binding ReadAddressCount}" Header="{DynamicResource Navigation_Column_ReadCount}" MinWidth="80" Width="80" />
-                        <edge:EdgeTextColumn Binding="{Binding ReadDataType}" Header="{DynamicResource Navigation_Column_ReadDataType}" MinWidth="100" Width="100" />
-                        <edge:EdgeTextColumn Binding="{Binding WritePlcAddress}" Header="{DynamicResource Navigation_Column_WritePlcAddress}" MinWidth="120" Width="120" />
-                        <edge:EdgeTextColumn Binding="{Binding WriteAddressCount}" Header="{DynamicResource Navigation_Column_WriteCount}" MinWidth="80" Width="80" />
-                        <edge:EdgeTextColumn Binding="{Binding WriteDataType}" Header="{DynamicResource Navigation_Column_WriteDataType}" MinWidth="100" Width="100" />
-                        <edge:EdgeTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="220" Width="220" />
+                        <edge:EdgeTextColumn Binding="{Binding BusinessGroup}" Header="{DynamicResource Navigation_Column_InteractionItem}" MinWidth="120" Width="1.1*" />
+                        <edge:EdgeTextColumn Binding="{Binding ReadPlcAddress}" Header="{DynamicResource Navigation_Column_ReadPlcAddress}" MinWidth="110" Width="*" />
+                        <edge:EdgeTextColumn Binding="{Binding ReadAddressCount}" Header="{DynamicResource Navigation_Column_ReadCount}" MinWidth="68" Width="68" />
+                        <edge:EdgeTextColumn Binding="{Binding ReadDataType}" Header="{DynamicResource Navigation_Column_ReadDataType}" MinWidth="86" Width="86" />
+                        <edge:EdgeTextColumn Binding="{Binding WritePlcAddress}" Header="{DynamicResource Navigation_Column_WritePlcAddress}" MinWidth="110" Width="*" />
+                        <edge:EdgeTextColumn Binding="{Binding WriteAddressCount}" Header="{DynamicResource Navigation_Column_WriteCount}" MinWidth="68" Width="68" />
+                        <edge:EdgeTextColumn Binding="{Binding WriteDataType}" Header="{DynamicResource Navigation_Column_WriteDataType}" MinWidth="86" Width="86" />
+                        <edge:EdgeTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="160" Width="1.5*" />
                     </edge:EdgeDataGrid.Columns>
                 </edge:EdgeDataGrid>
             </edge:EdgeTablePanel>
@@ -128,10 +131,6 @@
                         <ContentControl
                             Content="{Binding}"
                             ContentTemplate="{StaticResource IoInteractionPairTableTemplate}" />
-                        <sharedViews:EmptyStateView
-                            IsVisible="{Binding HasNoInteractionIoMappingGroups}"
-                            Message="{DynamicResource Navigation_Empty_IoInteractionRows}"
-                            Title="{DynamicResource Navigation_IoMapping_TabInteraction}" />
                 </Grid>
             </TabItem>
 

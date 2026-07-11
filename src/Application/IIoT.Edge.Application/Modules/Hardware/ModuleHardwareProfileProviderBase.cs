@@ -186,6 +186,9 @@ public abstract class ModuleHardwareProfileProviderBase : IModuleHardwareProfile
 
     protected abstract string CreateTemplateRemark(ModuleHardwareSignalTemplate signal);
 
+    protected virtual IReadOnlyList<string> CreateLegacyTemplateRemarks(ModuleHardwareSignalTemplate signal)
+        => [];
+
     protected static string CreateDirectionSignalKey(string signalKey, string direction)
         => $"{direction.Trim().ToUpperInvariant()}:{signalKey.Trim().ToUpperInvariant()}";
 
@@ -199,7 +202,8 @@ public abstract class ModuleHardwareProfileProviderBase : IModuleHardwareProfile
             signal.SortOrder,
             CreateTemplateRemark(signal),
             signal.Category,
-            signal.BusinessGroup);
+            signal.BusinessGroup,
+            CreateLegacyTemplateRemarks(signal));
 
     private static ModuleHardwareSignalRequirement CreateRequirement(ModuleHardwareSignalTemplate signal)
         => new(

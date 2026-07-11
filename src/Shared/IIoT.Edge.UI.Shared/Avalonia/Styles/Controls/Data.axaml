@@ -60,7 +60,7 @@
                                 MinWidth="0"
                                 MinHeight="0"
                                 Background="{DynamicResource Edge.Brush.Scrollbar.Thumb}"
-                                Opacity="0.32">
+                                Opacity="0.28">
                                 <Thumb.Template>
                                     <ControlTemplate>
                                         <Border
@@ -77,7 +77,7 @@
     </Style>
 
     <Style Selector="ScrollViewer.edge-scroll-host ScrollBar:pointerover Thumb">
-        <Setter Property="Opacity" Value="0.55" />
+        <Setter Property="Opacity" Value="0.58" />
     </Style>
 
     <Style Selector="ScrollViewer.edge-scroll-host ScrollBar:vertical /template/ Thumb">
@@ -416,8 +416,8 @@
                             Classes="edge-data-grid-scrollbar"
                             Grid.Row="1"
                             Grid.Column="2"
-                            Margin="4,2,0,2"
-                            Width="6"
+                            Margin="2,2,0,2"
+                            Width="10"
                             Orientation="Vertical" />
 
                         <Grid
@@ -432,8 +432,8 @@
                                 Name="PART_HorizontalScrollbar"
                                 Classes="edge-data-grid-scrollbar"
                                 Grid.Column="1"
-                                Height="3"
-                                Margin="0,0,0,1"
+                                Height="10"
+                                Margin="0"
                                 VerticalAlignment="Center"
                                 Orientation="Horizontal" />
                         </Grid>
@@ -456,11 +456,11 @@
     </Style>
 
     <Style Selector="DataGrid.edge-data-grid ScrollBar.edge-data-grid-scrollbar">
-        <Setter Property="Background" Value="{DynamicResource Edge.Brush.Scrollbar.Track}" />
+        <Setter Property="Background" Value="Transparent" />
         <Setter Property="Template">
             <ControlTemplate>
                 <Border
-                    Padding="0"
+                    Padding="2"
                     Background="{TemplateBinding Background}"
                     CornerRadius="999">
                     <Track
@@ -489,7 +489,7 @@
                                 MinWidth="0"
                                 MinHeight="0"
                                 Background="{DynamicResource Edge.Brush.Scrollbar.Thumb}"
-                                Opacity="0.18">
+                                Opacity="0.28">
                                 <Thumb.Template>
                                     <ControlTemplate>
                                         <Border
@@ -506,7 +506,7 @@
     </Style>
 
     <Style Selector="DataGrid.edge-data-grid ScrollBar.edge-data-grid-scrollbar:pointerover Thumb">
-        <Setter Property="Opacity" Value="0.42" />
+        <Setter Property="Opacity" Value="0.58" />
     </Style>
 
     <Style Selector="DataGrid.edge-data-grid ScrollBar.edge-data-grid-scrollbar:horizontal">

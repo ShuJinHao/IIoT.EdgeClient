@@ -30,8 +30,12 @@ public static class DependencyInjection
         services.TryAddSingleton<IEdgeReleaseService, EdgeReleaseService>();
         services.AddSingleton(updateConfigPaths);
         services.AddSingleton<IEdgeUpdateConfigInitializer, FileEdgeUpdateConfigInitializer>();
+        services.AddSingleton<IEdgeProfileCloudSwitchReader>(
+            _ => new FileProfileCloudSwitchReader(baseDirectory));
         services.AddSingleton<IEdgeUpdateConfigurationProvider>(
-            _ => new FileEdgeUpdateConfigurationProvider(baseDirectory));
+            provider => new FileEdgeUpdateConfigurationProvider(
+                baseDirectory,
+                provider.GetRequiredService<IEdgeProfileCloudSwitchReader>()));
         services.TryAddSingleton(_ => new HttpClient(new SocketsHttpHandler
         {
             PooledConnectionLifetime = TimeSpan.FromMinutes(5)

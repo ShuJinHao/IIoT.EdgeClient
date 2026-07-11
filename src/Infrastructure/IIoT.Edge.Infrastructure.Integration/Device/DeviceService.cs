@@ -180,7 +180,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         await _identifyGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            if (!_runtimeConfig.Current.SystemCloudEnabled && CurrentDevice is not null)
+            if (!_runtimeConfig.Current.SystemCloudEnabled)
             {
                 MarkCloudUploadDisabled(DateTimeOffset.UtcNow);
                 return;

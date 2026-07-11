@@ -9,7 +9,7 @@ namespace IIoT.Edge.Application.Features.Config.SchemaReconciliation;
 public sealed class IoMappingConfigValueStore(
     IRepository<NetworkDeviceEntity> networkDevices,
     IRepository<IoMappingEntity> ioMappings,
-    ModuleHardwareProfileResolver hardwareProfileResolver) : IConfigValueStore
+    ModuleHardwareProfileResolver hardwareProfileResolver) : IConfigValueStore, IRepairableConfigValueStore
 {
     public string SchemaId => IoMappingSchemaIds.Signals;
 
@@ -87,6 +87,51 @@ public sealed class IoMappingConfigValueStore(
         }
 
         await ioMappings.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task RepairExistingAsync(
+        ConfigSchemaItem item,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IoMappingSchemaKey.TryParse(item.Key, out var parsed))
+        {
+            return;
+        }
+
+        var desiredRemark = IoMappingSchemaMetadata.GetRemark(item);
+        var legacyRemarks = IoMappingSchemaMetadata.GetLegacyRemarks(item);
+        if (legacyRemarks.Count == 0)
+        {
+            return;
+        }
+
+        var candidates = await ioMappings
+            .GetListAsync(x => x.NetworkDeviceId == parsed.NetworkDeviceId, cancellationToken)
+            .ConfigureAwait(false);
+        var changed = false;
+        foreach (var mapping in candidates.Where(x => parsed.Matches(x.Direction, x.SignalKey)))
+        {
+            if (mapping.Remark is null
+                || !legacyRemarks.Contains(mapping.Remark, StringComparer.Ordinal))
+            {
+                continue;
+            }
+
+            mapping.UpdateMetadata(
+                mapping.SignalKey,
+                mapping.DataType,
+                mapping.Direction,
+                mapping.Category,
+                mapping.BusinessGroup,
+                desiredRemark);
+            ioMappings.Update(mapping);
+            changed = true;
+        }
+
+        if (changed)
+        {
+            await ioMappings.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
     }
 
     private async Task<IReadOnlyCollection<int>> LoadManagedDeviceIdsAsync(CancellationToken cancellationToken)

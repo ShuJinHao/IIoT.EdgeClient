@@ -20,7 +20,7 @@ public sealed record CloudApiConfigSnapshot(
     string RecipeByDeviceTemplatePath,
     string ClientReleaseCatalogTemplatePath,
     string ClientVersionReportPath,
-    bool Enabled = true,
+    bool Enabled = false,
     string RuntimeHeartbeatPath = "",
     string EdgeHostPlcRuntimeStatesPath = "");
 

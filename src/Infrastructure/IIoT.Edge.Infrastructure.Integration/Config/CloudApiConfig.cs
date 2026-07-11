@@ -2,7 +2,7 @@ namespace IIoT.Edge.Infrastructure.Integration.Config;
 
 public class CloudApiConfig
 {
-    public bool Enabled { get; set; } = true;
+    public bool Enabled { get; set; }
     public string BaseUrl { get; set; } = string.Empty;
     public int TimeoutSecs { get; set; } = 10;
     public string ClientCode { get; set; } = string.Empty;

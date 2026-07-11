@@ -58,7 +58,7 @@ public sealed class LocalSystemRuntimeConfigService(
         }
     }
 
-    private async Task RefreshAsync(CancellationToken cancellationToken)
+    public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
         await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -97,7 +97,7 @@ public sealed class LocalSystemRuntimeConfigService(
         var value = configs.FirstOrDefault(static x =>
             string.Equals(x.Key, CloudApiConfigParamSchema.Enabled, StringComparison.OrdinalIgnoreCase))?.Value;
         return string.IsNullOrWhiteSpace(value) || !bool.TryParse(value.Trim(), out var enabled)
-            ? true
+            ? false
             : enabled;
     }
 

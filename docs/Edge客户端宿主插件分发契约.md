@@ -275,18 +275,18 @@ Cloud 下载中心、插件选择安装、设备盘点和版本上报属于后�
 
 EdgeClient 的交付物是 Windows 安装器、安装素材和 Velopack 更新包，不是 Docker 镜像。CI/CD 不允许推 Harbor、GHCR，也不允许从 GitHub hosted runner 通过 SSH/SCP 直连内网服务器。
 
-`push main` 只跑 smoke 编译和测试，不生成安装包。完整 GitHub 打包只在 `workflow_dispatch` 或 `edge-v*` / `v*` tag 时执行。日常宿主快发可由操作者本机运行 `scripts/LocalPublishAndDeploy.ps1 -Transport http`，本机完成编译、Velopack 打包和 installer artifact 生成后，通过 Cloud Human API 上传 release bundle 到 `${EDGE_UPDATES_DIR}`；该路径不属于 GitHub CI/CD job。HTTP 上传默认限速 1000 Mbps、单并发、服务端审计，并在脚本结束时输出发布摘要。更新内容必须显式填写：本机快发传 `-ReleaseNotes` 或 `-ReleaseNotesPath`，`workflow_dispatch` 填 `release_notes`，tag 发布使用带正文的 annotated tag。生产 `stable` 发布必须走 HTTP API，不允许 `rsync/scp` 绕过 Cloud DB、审计和保留策略。生产服务器只允许 `stable` 渠道，发布脚本必须拒绝并清理非 `stable` 渠道目录。
+`push main` 只跑 smoke 编译和测试，不生成安装包。完整 GitHub 打包只在 `workflow_dispatch` 或 `edge-v*` / `v*` tag 时执行。日常宿主快发由操作者或 AI 从工作区根运行 `deploy/Invoke-WorkspaceDeploy.ps1 -Target EdgeHost`；统一入口生成内部调度标记后才允许 `LocalPublishAndDeploy.ps1 -Transport http` 构建并通过 Cloud Human API 上传 release bundle。正式发布要求 clean + pushed HEAD，Host/Plugin 共用本地互斥锁，catalog/HTTP/HEAD 必须 fail-fast；失败后从统一入口用 `-ResumeReleaseRoot` 复用产物。HTTP 上传默认限速 1000 Mbps、单并发、服务端审计，并在脚本结束时输出发布摘要。更新内容必须显式填写。生产 `stable` 不允许 `rsync/scp` 绕过 Cloud DB、审计和保留策略。
 
 只改工序插件时走独立插件发布：
 
 ```powershell
-pwsh ./scripts/PublishEdgePluginRelease.ps1 `
-  -ModuleId <ModuleId> `
-  -CloudApiBaseUrl http://<cloud-gateway-host>:<port>/api/v1 `
+pwsh ./deploy/Invoke-WorkspaceDeploy.ps1 `
+  -Target EdgePlugin `
+  -ModuleId <真实ModuleId> `
   -ReleaseNotesPath ./release-notes.md
 ```
 
-该脚本只上传 `IIoT.EdgePlugin.<ModuleId>-<version>-<runtime>.zip` 并写插件 release，不生成宿主 Velopack 版本。脚本会先查 Cloud catalog，发现相同 `(moduleId, channel, version, targetRuntime)` 已存在时直接失败，要求提升插件 `plugin.json` 版本。
+内部插件脚本只上传 `IIoT.EdgePlugin.<ModuleId>-<version>-<runtime>.zip` 并写插件 release，不生成宿主 Velopack 版本。统一入口必须显式要求 `ModuleId`；脚本在打包前查 Cloud catalog，发现相同 `(moduleId, channel, version, targetRuntime)` 已存在时直接失败，要求提升插件 `plugin.json` 版本。
 
 正式 GitHub 发布分两段：
 

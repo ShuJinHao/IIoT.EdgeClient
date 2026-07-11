@@ -9,6 +9,7 @@ using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Application.Abstractions.Tasks;
+using IIoT.Edge.Application.Features.Config.CloudApi;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Features.Config.SchemaReconciliation;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
@@ -914,6 +915,7 @@ public sealed class ModuleRuntimeRegistrationTests
             string? omittedCloudPathKey = null,
             string? recipeByDeviceTemplate = null,
             string? deviceInstancePath = null,
+            bool systemCloudEnabled = true,
             Exception? backgroundStartException = null,
             Exception? startupDiagnosticException = null)
         {
@@ -1025,11 +1027,12 @@ public sealed class ModuleRuntimeRegistrationTests
                 asyncValidators,
                 configurationProfileBuilder,
                 new StartupModuleRegistrationSnapshotBuilder(cellDataRegistry, runtimeRegistry, integrationRegistry),
-                serviceProvider.GetService<ILocalSystemRuntimeConfigService>());
+                new FixedRuntimeConfigService(systemCloudEnabled));
             var manager = new AppLifecycleManager(
                 new AppStartupInitializer(
                     serviceProvider,
                     developmentSampleInitializer,
+                    new NoopCloudSystemSwitchMigration(),
                     new NoopConfigSchemaReconciler(),
                     logger),
                 diagnosticsReportBuilder,
@@ -1345,6 +1348,23 @@ public sealed class ModuleRuntimeRegistrationTests
     private sealed class NoopConfigSchemaReconciler : IConfigSchemaReconciler
     {
         public Task ReconcileAsync(CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+    }
+
+    private sealed class NoopCloudSystemSwitchMigration : ICloudSystemSwitchMigration
+    {
+        public Task<bool> MigrateAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(true);
+    }
+
+    private sealed class FixedRuntimeConfigService(bool systemCloudEnabled) : ILocalSystemRuntimeConfigService
+    {
+        public SystemRuntimeConfigSnapshot Current { get; } = SystemRuntimeConfigSnapshot.Default with
+        {
+            SystemCloudEnabled = systemCloudEnabled
+        };
+
+        public Task EnsureInitializedAsync(CancellationToken cancellationToken = default)
             => Task.CompletedTask;
     }
 

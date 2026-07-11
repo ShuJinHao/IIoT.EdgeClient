@@ -167,6 +167,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
         IDeviceService? deviceService = null;
         IMesUploadDiagnosticsStore? diagnosticsStore = null;
         ICloudUploadDiagnosticsStore? cloudDiagnosticsStore = null;
+        ICloudExecutionPolicy? cloudExecutionPolicy = null;
         IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>? moduleParameters = null;
         IDataPipelineService? dataPipelineService = null;
         IHomogenizationProductionGate? productionGate = null;
@@ -179,6 +180,9 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
 
         ICloudUploadDiagnosticsStore GetCloudDiagnosticsStore()
             => cloudDiagnosticsStore ??= serviceProvider.GetRequiredService<ICloudUploadDiagnosticsStore>();
+
+        ICloudExecutionPolicy GetCloudExecutionPolicy()
+            => cloudExecutionPolicy ??= serviceProvider.GetRequiredService<ICloudExecutionPolicy>();
 
         IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> GetModuleParameters()
             => moduleParameters ??= serviceProvider.GetRequiredService<IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business>>();
@@ -200,6 +204,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 GetDataPipelineService(),
                 GetDiagnosticsStore(),
                 GetCloudDiagnosticsStore(),
+                GetCloudExecutionPolicy(),
                 GetModuleParameters(),
                 GetProductionGate(),
                 logger,
@@ -220,6 +225,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 validator,
                 GetDiagnosticsStore(),
                 GetCloudDiagnosticsStore(),
+                GetCloudExecutionPolicy(),
                 GetModuleParameters(),
                 GetProductionGate(),
                 logger,
@@ -238,6 +244,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 GetDataPipelineService(),
                 GetDiagnosticsStore(),
                 GetCloudDiagnosticsStore(),
+                GetCloudExecutionPolicy(),
                 GetModuleParameters(),
                 GetProductionGate(),
                 logger,
@@ -256,6 +263,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 GetDataPipelineService(),
                 GetDiagnosticsStore(),
                 GetCloudDiagnosticsStore(),
+                GetCloudExecutionPolicy(),
                 GetModuleParameters(),
                 logger,
                 productionTime,
@@ -284,6 +292,7 @@ public sealed class HomogenizationStationRuntimeFactory : IStationRuntimeFactory
                 GetDataPipelineService(),
                 GetDiagnosticsStore(),
                 GetCloudDiagnosticsStore(),
+                GetCloudExecutionPolicy(),
                 GetModuleParameters(),
                 GetProductionGate(),
                 logger,

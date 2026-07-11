@@ -97,7 +97,7 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
         var context = new StartupValidationContext
         {
             ConfigurationProfile = configurationProfile,
-            SystemCloudEnabled = _runtimeConfigService?.Current.SystemCloudEnabled ?? true,
+            SystemCloudEnabled = _runtimeConfigService?.Current.SystemCloudEnabled ?? false,
             PlcDevices = plcDevices,
             ModulesById = _modulesById,
             DiscoveredModulesById = _discoveredModulesById,

@@ -11,17 +11,8 @@ param(
 
     [string]$PackId = 'IIoT.EdgeClient',
 
-    # Legacy SSH fallback only. Stable production host releases must use -Transport http.
-    [string]$DeployHost = '',
-
-    [string]$DeployUser = 'github-runner',
-
-    [int]$DeployPort = 22,
-
-    [string]$EdgeUpdatesDir = '/data/iiot-platform/edge-client/edge-updates',
-
-    [ValidateSet('auto', 'rsync', 'scp', 'http')]
-    [string]$Transport = 'auto',
+    [ValidateSet('http')]
+    [string]$Transport = 'http',
 
     [string]$CloudApiBaseUrl = '',
 
@@ -34,6 +25,20 @@ param(
     [ValidateRange(1, 1000)]
     [int]$UploadRateLimitMbps = 1000,
 
+    [string]$ResumeReleaseRoot = $env:IIOT_EDGE_RESUME_RELEASE_ROOT,
+
+    [ValidateRange(1, 300)]
+    [int]$ConnectTimeoutSeconds = 10,
+
+    [ValidateRange(1, 86400)]
+    [int]$UploadTimeoutSeconds = 1800,
+
+    [ValidateRange(1, 3600)]
+    [int]$LowSpeedTimeSeconds = 60,
+
+    [ValidateRange(1, 104857600)]
+    [int]$LowSpeedLimitBytesPerSecond = 1024,
+
     [bool]$SkipVeloAppCheck = $true,
 
     [switch]$SkipVelopackValidation,
@@ -45,8 +50,8 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$remote = "$DeployUser@$DeployHost"
 . (Join-Path $PSScriptRoot 'EdgeReleaseCredential.Common.ps1')
+. (Join-Path $PSScriptRoot 'EdgeDeployment.Common.ps1')
 
 if ($Channel -ne 'stable') {
     throw 'Production Edge releases must use stable channel.'
@@ -95,42 +100,11 @@ function Invoke-EdgeScript {
     }
 }
 
-function Invoke-NativeCommand {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$FilePath,
-
-        [AllowEmptyCollection()]
-        [string[]]$Arguments = @()
-    )
-
-    & $FilePath @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "$FilePath failed with exit code $LASTEXITCODE."
-    }
-}
-
-function ConvertTo-ShellSingleQuoted {
-    param([Parameter(Mandatory = $true)][string]$Value)
-    $quote = "'"
-    $escapedQuote = "'\''"
-    return $quote + $Value.Replace($quote, $escapedQuote) + $quote
-}
-
 function Resolve-Transport {
-    if ($Channel -eq 'stable' -and $Transport -ne 'http' -and $Transport -ne 'auto') {
+    if ($Transport -ne 'http') {
         throw 'Stable Edge host releases must use -Transport http so Cloud can enforce release notes, DB registration, audit and retention.'
     }
-
-    if ($Transport -ne 'auto') {
-        return $Transport
-    }
-
-    if ($Channel -eq 'stable') {
-        return 'http'
-    }
-
-    throw 'Only stable Edge releases are supported by this script.'
+    return 'http'
 }
 
 function Assert-HttpPublishConfiguration {
@@ -153,124 +127,65 @@ function Invoke-CloudJsonGet {
     Assert-HttpPublishConfiguration
     $apiRoot = $CloudApiBaseUrl.TrimEnd('/')
     $uri = "$apiRoot/$($Path.TrimStart('/'))"
-    $headers = @{
-        Authorization = "Bearer $script:CloudToken"
-    }
-    return Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+    return Invoke-EdgeCurlJsonGet `
+        -Uri $uri `
+        -Token $script:CloudToken `
+        -ConnectTimeoutSeconds $ConnectTimeoutSeconds `
+        -RequestTimeoutSeconds 60 `
+        -LowSpeedTimeSeconds 30 `
+        -LowSpeedLimitBytesPerSecond 128
 }
 
-function Try-GetLatestCloudStableRelease {
-    try {
-        $catalog = Invoke-CloudJsonGet -Path "/human/client-releases/catalog?channel=$Channel&targetRuntime=$RuntimeIdentifier&onlyPublished=true"
-        $versions = @($catalog.host.versions | Where-Object {
-            $_.version -match '^\d+\.\d+\.\d+$' -and
-            ($_.status -eq 'Published' -or $_.status -eq 'Deprecated')
-        })
+function Get-CloudStableCatalog {
+    return Invoke-CloudJsonGet -Path "/human/client-releases/catalog?channel=$Channel&targetRuntime=$RuntimeIdentifier&onlyPublished=true"
+}
 
-        if ($versions.Count -eq 0) {
-            return $null
-        }
+function Get-CloudHostVersions {
+    param([Parameter(Mandatory = $true)]$Catalog)
 
-        $latest = $versions |
-            Sort-Object @{ Expression = { [version]$_.version } } |
-            Select-Object -Last 1
-
-        $sourceCommit = ''
-        if (-not [string]::IsNullOrWhiteSpace([string]$latest.downloadUrl)) {
-            try {
-                $downloadBase = Resolve-DownloadBaseUrl
-                $manifestUrl = [string]$latest.downloadUrl
-                if (-not $manifestUrl.StartsWith('http', [System.StringComparison]::OrdinalIgnoreCase)) {
-                    $manifestUrl = "$downloadBase/$($manifestUrl.TrimStart('/'))"
-                }
-
-                $manifest = Invoke-RestMethod -Method Get -Uri $manifestUrl
-                $sourceCommit = [string]$manifest.sourceCommit
-            }
-            catch {
-                Write-Warning "Could not read previous Edge release manifest sourceCommit. $($_.Exception.Message)"
-            }
-        }
-
-        return [PSCustomObject]@{
-            Version = [string]$latest.version
-            SourceCommit = $sourceCommit
-        }
+    if ($null -eq $Catalog.host -or $null -eq $Catalog.host.versions) {
+        throw 'Cloud Edge release catalog did not contain host.versions.'
     }
-    catch {
-        Write-Warning "Could not read latest Cloud Edge release. Falling back to 0.0.1. $($_.Exception.Message)"
+
+    return @($Catalog.host.versions | Where-Object {
+        $_.version -match '^\d+\.\d+\.\d+$' -and
+        ($_.status -eq 'Published' -or $_.status -eq 'Deprecated')
+    })
+}
+
+function Get-CloudReleaseManifestSourceCommit {
+    param([Parameter(Mandatory = $true)]$Release)
+
+    if ([string]::IsNullOrWhiteSpace([string]$Release.downloadUrl)) {
+        return ''
+    }
+
+    $downloadBase = Resolve-DownloadBaseUrl
+    $manifestUrl = [string]$Release.downloadUrl
+    if (-not $manifestUrl.StartsWith('http', [System.StringComparison]::OrdinalIgnoreCase)) {
+        $manifestUrl = "$downloadBase/$($manifestUrl.TrimStart('/'))"
+    }
+
+    $manifest = Invoke-EdgeCurlJsonGet -Uri $manifestUrl `
+        -ConnectTimeoutSeconds $ConnectTimeoutSeconds -RequestTimeoutSeconds 60 `
+        -LowSpeedTimeSeconds 30 -LowSpeedLimitBytesPerSecond 128
+    return [string]$manifest.sourceCommit
+}
+
+function Get-LatestCloudStableRelease {
+    param([Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Versions)
+
+    if ($Versions.Count -eq 0) {
         return $null
     }
-}
 
-function Invoke-RemoteBash {
-    param([Parameter(Mandatory = $true)][string]$Script)
-
-    $sshArgs = @('-p', [string]$DeployPort, $remote, 'bash -s')
-    $Script | & ssh @sshArgs
-    if ($LASTEXITCODE -ne 0) {
-        throw "Remote bash command failed with exit code $LASTEXITCODE."
-    }
-}
-
-function Invoke-RemoteBashCapture {
-    param([Parameter(Mandatory = $true)][string]$Script)
-
-    $sshArgs = @('-p', [string]$DeployPort, $remote, 'bash -s')
-    $output = $Script | & ssh @sshArgs
-    if ($LASTEXITCODE -ne 0) {
-        throw "Remote bash command failed with exit code $LASTEXITCODE."
-    }
-
-    return @($output)
-}
-
-function Try-GetLatestRemoteStableRelease {
-    $script = @"
-set -euo pipefail
-root=$(ConvertTo-ShellSingleQuoted "$EdgeUpdatesDir/installers/stable")
-if [ ! -d "`$root" ]; then
-  exit 0
-fi
-latest_version="`$(find "`$root" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
-if [ -z "`$latest_version" ]; then
-  exit 0
-fi
-source_commit=""
-manifest="`$root/`$latest_version/installer-artifact.json"
-if [ -f "`$manifest" ] && command -v python3 >/dev/null 2>&1; then
-  source_commit="`$(python3 - "`$manifest" <<'PY' 2>/dev/null || true
-import json
-import sys
-with open(sys.argv[1], encoding='utf-8-sig') as f:
-    data = json.load(f)
-print(data.get('sourceCommit') or '')
-PY
-)"
-fi
-printf '%s\t%s\n' "`$latest_version" "`$source_commit"
-"@
-
-    try {
-        $lines = Invoke-RemoteBashCapture $script
-        $line = @($lines | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1)
-        if ($line.Count -eq 0) {
-            return $null
-        }
-
-        $parts = ([string]$line[0]).Split("`t", 2)
-        if ($parts.Count -eq 0 -or [string]::IsNullOrWhiteSpace($parts[0])) {
-            return $null
-        }
-
-        return [PSCustomObject]@{
-            Version = $parts[0]
-            SourceCommit = if ($parts.Count -gt 1) { $parts[1] } else { '' }
-        }
-    }
-    catch {
-        Write-Warning "Could not read latest remote Edge release. Falling back to 0.0.1. $($_.Exception.Message)"
-        return $null
+    $latest = $Versions |
+        Sort-Object @{ Expression = { [version]$_.version } } |
+        Select-Object -Last 1
+    return [PSCustomObject]@{
+        Version = [string]$latest.version
+        SourceCommit = Get-CloudReleaseManifestSourceCommit -Release $latest
+        CatalogEntry = $latest
     }
 }
 
@@ -283,32 +198,10 @@ function Get-NextPatchVersion {
 
     $parts = $CurrentVersion.Split('.')
     if ($parts.Count -ne 3) {
-        return '0.0.1'
+        throw "Verified Cloud catalog returned an invalid stable version: $CurrentVersion"
     }
 
     return '{0}.{1}.{2}' -f ([int]$parts[0]), ([int]$parts[1]), (([int]$parts[2]) + 1)
-}
-
-function Invoke-GitText {
-    param([Parameter(Mandatory = $true)][string[]]$Arguments)
-
-    $output = & git @Arguments 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        return ''
-    }
-
-    return [string]($output -join "`n")
-}
-
-function Test-GitCommitExists {
-    param([string]$Commit)
-
-    if ([string]::IsNullOrWhiteSpace($Commit)) {
-        return $false
-    }
-
-    & git cat-file -e "$Commit^{commit}" 2>$null
-    return $LASTEXITCODE -eq 0
 }
 
 function Resolve-ExplicitReleaseNotes {
@@ -343,41 +236,6 @@ function Resolve-ExplicitReleaseNotes {
     return $resolvedNotes
 }
 
-function Publish-DirectoryWithRsync {
-    param(
-        [Parameter(Mandatory = $true)][string]$SourceDirectory,
-        [Parameter(Mandatory = $true)][string]$RemoteDirectory
-    )
-
-    $source = (Resolve-Path $SourceDirectory).Path.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
-    $remoteSpec = "${remote}:$RemoteDirectory/"
-    Invoke-NativeCommand 'rsync' @(
-        '-az',
-        '--delete',
-        '-e',
-        "ssh -p $DeployPort",
-        $source,
-        $remoteSpec
-    )
-}
-
-function Publish-DirectoryWithScp {
-    param(
-        [Parameter(Mandatory = $true)][string]$SourceDirectory,
-        [Parameter(Mandatory = $true)][string]$RemoteDirectory
-    )
-
-    Invoke-RemoteBash "mkdir -p $(ConvertTo-ShellSingleQuoted $RemoteDirectory)"
-    $source = Join-Path (Resolve-Path $SourceDirectory).Path '.'
-    Invoke-NativeCommand 'scp' @(
-        '-P',
-        [string]$DeployPort,
-        '-r',
-        $source,
-        "${remote}:$RemoteDirectory/"
-    )
-}
-
 function New-EdgeHttpReleaseBundle {
     param(
         [Parameter(Mandatory = $true)][string]$InstallerArtifactRoot,
@@ -408,39 +266,22 @@ function Invoke-EdgeHttpReleaseUpload {
     param([Parameter(Mandatory = $true)][string]$BundleZip)
 
     Assert-HttpPublishConfiguration
-    $curl = Get-Command curl -CommandType Application -ErrorAction SilentlyContinue
-    if ($null -eq $curl) {
-        throw 'curl is required for HTTP Edge release upload with client-side rate limiting.'
-    }
-
     $apiRoot = $CloudApiBaseUrl.TrimEnd('/')
     $uri = "$apiRoot/human/client-releases/edge-release-bundles"
     $responsePath = Join-Path (Split-Path -Parent $BundleZip) 'edge-http-upload-response.json'
     $rateBytesPerSecond = [int64]([math]::Floor($UploadRateLimitMbps * 1024 * 1024 / 8))
 
-    if (Test-Path $responsePath) {
-        Remove-Item -Path $responsePath -Force
-    }
-
-    & $curl.Source `
-        --fail `
-        --show-error `
-        --silent `
-        --request POST `
-        --header "Authorization: Bearer $script:CloudToken" `
-        --header "Content-Type: application/zip" `
-        --limit-rate "$rateBytesPerSecond" `
-        --data-binary "@$BundleZip" `
-        --output "$responsePath" `
-        "$uri"
-
-    if ($LASTEXITCODE -ne 0) {
-        throw "HTTP Edge release upload failed with exit code $LASTEXITCODE."
-    }
-
-    if (-not (Test-Path $responsePath)) {
-        throw 'HTTP Edge release upload did not return a response body.'
-    }
+    Invoke-EdgeCurlRequest `
+        -Method POST `
+        -Uri $uri `
+        -Token $script:CloudToken `
+        -UploadFile $BundleZip `
+        -ResponsePath $responsePath `
+        -RateLimitBytesPerSecond $rateBytesPerSecond `
+        -ConnectTimeoutSeconds $ConnectTimeoutSeconds `
+        -RequestTimeoutSeconds $UploadTimeoutSeconds `
+        -LowSpeedTimeSeconds $LowSpeedTimeSeconds `
+        -LowSpeedLimitBytesPerSecond $LowSpeedLimitBytesPerSecond | Out-Null
 
     return Get-Content -Raw -Encoding UTF8 -Path $responsePath | ConvertFrom-Json
 }
@@ -467,17 +308,9 @@ function Test-EdgeHttpReleaseUrls {
     param([Parameter(Mandatory = $true)]$PublishResult)
 
     $downloadBase = Resolve-DownloadBaseUrl
-    $curl = Get-Command curl -CommandType Application -ErrorAction SilentlyContinue
-    if ($null -eq $curl) {
-        throw 'curl is required for HTTP Edge release verification.'
-    }
-
     foreach ($relativeUrl in @($PublishResult.verificationUrls)) {
         $uri = "$downloadBase/$(([string]$relativeUrl).TrimStart('/'))"
-        & $curl.Source --fail --silent --show-error --head "$uri" | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            throw "HTTP verification failed: $uri"
-        }
+        Test-EdgeCurlUrl -Uri $uri -ConnectTimeoutSeconds $ConnectTimeoutSeconds -RequestTimeoutSeconds 60
     }
 }
 
@@ -511,228 +344,207 @@ function Write-EdgePublishSummary {
     }
 }
 
-Push-Location $repoRoot
+$dispatchInvocationId = Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgeHost
+$gitFacts = Assert-EdgeReleaseGitState -RepoRoot $repoRoot
+$deploymentLock = Enter-EdgeDeploymentLock -RepoRoot $repoRoot -InvocationId $dispatchInvocationId -Target EdgeHost
+$locationPushed = $false
+$attemptReleaseRoot = ''
+$attemptStage = 'initializing'
+
 try {
+    Push-Location $repoRoot
+    $locationPushed = $true
+
     $selectedTransport = Resolve-Transport
-    if ($selectedTransport -eq 'http') {
-        Assert-HttpPublishConfiguration
-        $previousRelease = Try-GetLatestCloudStableRelease
+    if ($selectedTransport -ne 'http') {
+        throw 'Formal stable Edge host releases only support Cloud Human HTTP publication.'
     }
-    else {
-        $previousRelease = Try-GetLatestRemoteStableRelease
-    }
+
+    Assert-HttpPublishConfiguration
+    $catalog = Get-CloudStableCatalog
+    $catalogVersions = @(Get-CloudHostVersions -Catalog $catalog)
+    $previousRelease = Get-LatestCloudStableRelease -Versions $catalogVersions
     $previousVersion = if ($null -ne $previousRelease) { [string]$previousRelease.Version } else { '' }
     $previousSourceCommit = if ($null -ne $previousRelease) { [string]$previousRelease.SourceCommit } else { '' }
+    $sourceCommit = [string]$gitFacts.Head
+    $isResume = -not [string]::IsNullOrWhiteSpace($ResumeReleaseRoot)
 
-    if ([string]::IsNullOrWhiteSpace($Version)) {
-        $Version = Get-NextPatchVersion -CurrentVersion $previousVersion
-        Write-Host "Auto-generated Edge version: $Version"
+    if ($isResume) {
+        $releaseRoot = [System.IO.Path]::GetFullPath($(if ([System.IO.Path]::IsPathRooted($ResumeReleaseRoot)) { $ResumeReleaseRoot } else { Join-Path $repoRoot $ResumeReleaseRoot }))
+        if (-not (Test-Path -LiteralPath $releaseRoot -PathType Container)) {
+            throw "Resume release root was not found: $releaseRoot"
+        }
+
+        $manifestFile = Get-ChildItem -LiteralPath $releaseRoot -Recurse -File -Filter 'installer-artifact.json' | Select-Object -First 1
+        if ($null -eq $manifestFile) {
+            throw "Resume release root does not contain installer-artifact.json: $releaseRoot"
+        }
+
+        $artifactManifest = Get-Content -Raw -Encoding UTF8 -LiteralPath $manifestFile.FullName | ConvertFrom-Json
+        $artifactVersion = [string]$artifactManifest.version
+        if ([string]::IsNullOrWhiteSpace($artifactVersion)) {
+            throw "Resume artifact manifest is missing version: $($manifestFile.FullName)"
+        }
+        if (-not [string]::IsNullOrWhiteSpace($Version) -and $Version -ne $artifactVersion) {
+            throw "Requested version '$Version' does not match resume artifact version '$artifactVersion'."
+        }
+        if ([string]$artifactManifest.channel -ne $Channel) {
+            throw "Resume artifact channel '$($artifactManifest.channel)' does not match '$Channel'."
+        }
+        if ([string]$artifactManifest.sourceCommit -ne $sourceCommit) {
+            throw "Resume artifact sourceCommit '$($artifactManifest.sourceCommit)' does not match pushed HEAD '$sourceCommit'."
+        }
+
+        $Version = $artifactVersion
+        $releaseNotes = Resolve-ExplicitReleaseNotes
+        if ($releaseNotes.Trim() -ne ([string]$artifactManifest.releaseNotes).Trim()) {
+            throw 'Resume release notes do not match the preserved installer artifact.'
+        }
+    }
+    else {
+        if ([string]::IsNullOrWhiteSpace($Version)) {
+            $Version = Get-NextPatchVersion -CurrentVersion $previousVersion
+            Write-Host "Auto-generated Edge version from verified Cloud catalog: $Version"
+        }
+        $releaseNotes = Resolve-ExplicitReleaseNotes
+        $releaseRoot = Join-Path $repoRoot "publish/local-edge-release/$Channel/$Version"
     }
 
     if ($Version -match '[\\/]') {
         throw 'Version must not contain path separators.'
     }
 
-    $sourceCommit = Invoke-GitText -Arguments @('rev-parse', 'HEAD')
-    if ([string]::IsNullOrWhiteSpace($sourceCommit)) {
-        $sourceCommit = 'unknown'
-    }
-    else {
-        $sourceCommit = $sourceCommit.Trim()
+    $existingVersion = @($catalogVersions | Where-Object { [string]$_.version -eq $Version } | Select-Object -First 1)
+    if ($existingVersion.Count -gt 0 -and -not $isResume) {
+        throw "Edge host version '$Version' already exists in the verified Cloud catalog. No build was started."
     }
 
-    $releaseNotes = Resolve-ExplicitReleaseNotes
+    $attemptReleaseRoot = $releaseRoot
+    if ($existingVersion.Count -gt 0) {
+        $existingManifestUrl = [string]$existingVersion[0].downloadUrl
+        if (-not [string]::IsNullOrWhiteSpace($existingManifestUrl)) {
+            if (-not $existingManifestUrl.StartsWith('http', [System.StringComparison]::OrdinalIgnoreCase)) {
+                $existingManifestUrl = "$(Resolve-DownloadBaseUrl)/$($existingManifestUrl.TrimStart('/'))"
+            }
+            Test-EdgeCurlUrl -Uri $existingManifestUrl -ConnectTimeoutSeconds $ConnectTimeoutSeconds -RequestTimeoutSeconds 60
+        }
+        Write-EdgeDeploymentAttemptState -ReleaseRoot $releaseRoot -Target EdgeHost -InvocationId $dispatchInvocationId `
+            -Stage 'reconciled-existing-release' -Status succeeded -Facts @{ version = $Version; sourceCommit = $sourceCommit; alreadyPublished = $true } | Out-Null
+        Write-Host "Edge host resume reconciliation succeeded: version=$Version alreadyPublished=true"
+        return
+    }
 
-    $releaseRoot = Join-Path $repoRoot "publish/local-edge-release/$Channel/$Version"
     $runtimeRoot = Join-Path $releaseRoot 'edge-runtime'
     $velopackRoot = Join-Path $releaseRoot 'edge-velopack'
     $installerOutputRoot = Join-Path $releaseRoot 'edge-installer-artifacts'
     $installerArtifactRoot = Join-Path $installerOutputRoot "$Channel/$Version"
     $velopackSetupPath = Join-Path $velopackRoot "$PackId-$Channel-Setup.exe"
-    $remoteTmp = "$EdgeUpdatesDir/.edge-local-publish-$Channel-$Version-$([Guid]::NewGuid().ToString('N'))"
-    $installerTarget = "$EdgeUpdatesDir/installers/$Channel/$Version"
-    $velopackTarget = "$EdgeUpdatesDir/velopack/$Channel"
+    $bundleZip = Join-Path $releaseRoot "edge-release-bundle-$Channel-$Version.zip"
 
-    Write-Host "Publishing Edge local release: version=$Version channel=$Channel runtime=$RuntimeIdentifier"
-    if (-not [string]::IsNullOrWhiteSpace($previousVersion)) {
-        Write-Host "Previous Edge stable release: $previousVersion"
-    }
-    Write-Host "Source commit: $sourceCommit"
-    if (Test-Path $releaseRoot) {
-        Remove-Item -Path $releaseRoot -Recurse -Force
-    }
-    New-Item -Path $releaseRoot -ItemType Directory -Force | Out-Null
+    if (-not $isResume) {
+        Write-Host "Publishing Edge local release: version=$Version channel=$Channel runtime=$RuntimeIdentifier"
+        if (-not [string]::IsNullOrWhiteSpace($previousVersion)) {
+            Write-Host "Previous Edge stable release: $previousVersion"
+        }
+        Write-Host "Source commit: $sourceCommit upstream=$($gitFacts.Upstream)"
+        if (Test-Path -LiteralPath $releaseRoot) {
+            Remove-Item -LiteralPath $releaseRoot -Recurse -Force
+        }
+        New-Item -Path $releaseRoot -ItemType Directory -Force | Out-Null
+        $attemptStage = 'building-artifacts'
+        Write-EdgeDeploymentAttemptState -ReleaseRoot $releaseRoot -Target EdgeHost -InvocationId $dispatchInvocationId `
+            -Stage $attemptStage -Status running -Facts @{ version = $Version; sourceCommit = $sourceCommit; resumeReleaseRoot = $releaseRoot } | Out-Null
 
-    $releaseNotesFile = Join-Path $releaseRoot 'release-notes.md'
-    Set-Content -Path $releaseNotesFile -Encoding UTF8 -Value $releaseNotes
+        $releaseNotesFile = Join-Path $releaseRoot 'release-notes.md'
+        Set-Content -Path $releaseNotesFile -Encoding UTF8 -Value $releaseNotes
 
-    Invoke-EdgeScript 'PublishEdgeRuntime.ps1' -Arguments @(
-        '-Configuration', $Configuration,
-        '-RuntimeIdentifier', $RuntimeIdentifier,
-        '-Version', $Version,
-        '-OutputRoot', $runtimeRoot,
-        '-CleanOutput'
-    )
-
-    Invoke-EdgeScript 'PackEdgeClientVelopack.ps1' -Arguments @(
-        '-Version', $Version,
-        '-Channel', $Channel,
-        '-Configuration', $Configuration,
-        '-RuntimeIdentifier', $RuntimeIdentifier,
-        '-OutputRoot', $velopackRoot,
-        '-ReleaseNotes', $releaseNotesFile,
-        '-CleanOutput',
-        '-SkipVeloAppCheck', $SkipVeloAppCheck
-    )
-
-    if (-not $SkipVelopackValidation) {
-        Invoke-EdgeScript 'TestEdgeVelopackPackage.ps1' -Arguments @(
-            '-OutputRoot', $velopackRoot,
+        Invoke-EdgeScript 'PublishEdgeRuntime.ps1' -Arguments @(
+            '-Configuration', $Configuration,
+            '-RuntimeIdentifier', $RuntimeIdentifier,
+            '-Version', $Version,
+            '-OutputRoot', $runtimeRoot,
+            '-CleanOutput'
+        )
+        Invoke-EdgeScript 'PackEdgeClientVelopack.ps1' -Arguments @(
+            '-Version', $Version,
             '-Channel', $Channel,
-            '-Version', $Version
+            '-Configuration', $Configuration,
+            '-RuntimeIdentifier', $RuntimeIdentifier,
+            '-OutputRoot', $velopackRoot,
+            '-ReleaseNotes', $releaseNotesFile,
+            '-CleanOutput',
+            '-SkipVeloAppCheck', $SkipVeloAppCheck
+        )
+        Invoke-EdgeScript 'PublishEdgeClientInstallerArtifact.ps1' -Arguments @(
+            '-Version', $Version,
+            '-ReleaseChannel', $Channel,
+            '-Configuration', $Configuration,
+            '-RuntimeIdentifier', $RuntimeIdentifier,
+            '-OutputRoot', $installerOutputRoot,
+            '-RuntimeLayoutRoot', $runtimeRoot,
+            '-VelopackSetupPath', $velopackSetupPath,
+            '-SourceCommit', $sourceCommit,
+            '-PreviousVersion', $previousVersion,
+            '-PreviousSourceCommit', $previousSourceCommit,
+            '-ReleaseNotes', $releaseNotes,
+            '-CleanOutput'
         )
     }
 
-    Invoke-EdgeScript 'PublishEdgeClientInstallerArtifact.ps1' -Arguments @(
-        '-Version', $Version,
-        '-ReleaseChannel', $Channel,
-        '-Configuration', $Configuration,
-        '-RuntimeIdentifier', $RuntimeIdentifier,
-        '-OutputRoot', $installerOutputRoot,
-        '-RuntimeLayoutRoot', $runtimeRoot,
-        '-VelopackSetupPath', $velopackSetupPath,
-        '-SourceCommit', $sourceCommit,
-        '-PreviousVersion', $previousVersion,
-        '-PreviousSourceCommit', $previousSourceCommit,
-        '-ReleaseNotes', $releaseNotes,
-        '-CleanOutput'
-    )
-
+    $attemptStage = 'validating-preserved-artifacts'
+    Write-EdgeDeploymentAttemptState -ReleaseRoot $releaseRoot -Target EdgeHost -InvocationId $dispatchInvocationId `
+        -Stage $attemptStage -Status running -Facts @{ version = $Version; sourceCommit = $sourceCommit; resumed = $isResume } | Out-Null
     if (-not $SkipInstallerValidation) {
-        Invoke-EdgeScript 'TestEdgeClientInstallerArtifact.ps1' -Arguments @(
-            '-ArtifactRoot', $installerArtifactRoot,
-            '-ExpectedChannel', $Channel,
-            '-ExpectedVersion', $Version
-        )
+        Invoke-EdgeScript 'TestEdgeClientInstallerArtifact.ps1' -Arguments @('-ArtifactRoot', $installerArtifactRoot, '-ExpectedChannel', $Channel, '-ExpectedVersion', $Version)
     }
-
-    if (-not (Test-Path (Join-Path $installerArtifactRoot 'installer-artifact.json'))) {
+    if (-not $SkipVelopackValidation) {
+        Invoke-EdgeScript 'TestEdgeVelopackPackage.ps1' -Arguments @('-OutputRoot', $velopackRoot, '-Channel', $Channel, '-Version', $Version)
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $installerArtifactRoot 'installer-artifact.json') -PathType Leaf)) {
         throw "Installer artifact manifest was not generated: $installerArtifactRoot"
     }
-
-    if (-not (Test-Path (Join-Path $velopackRoot "releases.$Channel.json"))) {
+    if (-not (Test-Path -LiteralPath (Join-Path $velopackRoot "releases.$Channel.json") -PathType Leaf)) {
         throw "Velopack releases manifest was not generated: $velopackRoot"
     }
-
-    if ($selectedTransport -eq 'http') {
-        $bundleZip = Join-Path $releaseRoot "edge-release-bundle-$Channel-$Version.zip"
-        New-EdgeHttpReleaseBundle `
-            -InstallerArtifactRoot $installerArtifactRoot `
-            -VelopackRoot $velopackRoot `
-            -OutputZip $bundleZip | Out-Null
-
-        Write-Host "Publishing Edge release bundle over HTTP: $CloudApiBaseUrl (limit=${UploadRateLimitMbps}Mbps)"
-        $publishResult = Invoke-EdgeHttpReleaseUpload -BundleZip $bundleZip
-        Test-EdgeHttpReleaseUrls -PublishResult $publishResult
-        Write-EdgePublishSummary -PublishResult $publishResult
-        return
+    if (-not $isResume -or -not (Test-Path -LiteralPath $bundleZip -PathType Leaf)) {
+        New-EdgeHttpReleaseBundle -InstallerArtifactRoot $installerArtifactRoot -VelopackRoot $velopackRoot -OutputZip $bundleZip | Out-Null
     }
 
-    Write-Host "Publishing to ${remote}:$EdgeUpdatesDir with $selectedTransport"
-    $prepareScript = @"
-set -euo pipefail
-tmp_root=$(ConvertTo-ShellSingleQuoted $remoteTmp)
-rm -rf "`$tmp_root"
-mkdir -p "`$tmp_root/installer" "`$tmp_root/velopack"
-"@
-    Invoke-RemoteBash $prepareScript
-
-    if ($selectedTransport -eq 'rsync') {
-        Publish-DirectoryWithRsync -SourceDirectory $installerArtifactRoot -RemoteDirectory "$remoteTmp/installer"
-        Publish-DirectoryWithRsync -SourceDirectory $velopackRoot -RemoteDirectory "$remoteTmp/velopack"
+    $attemptStage = 'uploading'
+    Write-EdgeDeploymentAttemptState -ReleaseRoot $releaseRoot -Target EdgeHost -InvocationId $dispatchInvocationId `
+        -Stage $attemptStage -Status running -Facts @{ version = $Version; sourceCommit = $sourceCommit; bundle = $bundleZip } | Out-Null
+    Write-Host "Publishing Edge release bundle over HTTP: $CloudApiBaseUrl (limit=${UploadRateLimitMbps}Mbps timeout=${UploadTimeoutSeconds}s)"
+    $publishResult = Invoke-EdgeHttpReleaseUpload -BundleZip $bundleZip
+    $attemptStage = 'verifying-downloads'
+    Test-EdgeHttpReleaseUrls -PublishResult $publishResult
+    Write-EdgePublishSummary -PublishResult $publishResult
+    Write-EdgeDeploymentAttemptState -ReleaseRoot $releaseRoot -Target EdgeHost -InvocationId $dispatchInvocationId `
+        -Stage 'completed' -Status succeeded -Facts @{ version = $Version; sourceCommit = $sourceCommit; resumeReleaseRoot = $releaseRoot } | Out-Null
+}
+catch [System.Management.Automation.PipelineStoppedException] {
+    if (-not [string]::IsNullOrWhiteSpace($attemptReleaseRoot)) {
+        Write-EdgeDeploymentAttemptState -ReleaseRoot $attemptReleaseRoot -Target EdgeHost -InvocationId $dispatchInvocationId `
+            -Stage $attemptStage -Status cancelled -Facts @{ resumeReleaseRoot = $attemptReleaseRoot } | Out-Null
     }
-    else {
-        Publish-DirectoryWithScp -SourceDirectory $installerArtifactRoot -RemoteDirectory "$remoteTmp/installer"
-        Publish-DirectoryWithScp -SourceDirectory $velopackRoot -RemoteDirectory "$remoteTmp/velopack"
+    throw
+}
+catch {
+    $message = $_.Exception.Message
+    if (-not [string]::IsNullOrWhiteSpace($attemptReleaseRoot)) {
+        try {
+            Write-EdgeDeploymentAttemptState -ReleaseRoot $attemptReleaseRoot -Target EdgeHost -InvocationId $dispatchInvocationId `
+                -Stage $attemptStage -Status failed -Facts @{ error = $message; resumeReleaseRoot = $attemptReleaseRoot } | Out-Null
+        }
+        catch {
+            Write-Warning "Could not write Edge host failure state. $($_.Exception.Message)"
+        }
+        throw "Edge host release failed at stage '$attemptStage'. Artifacts were preserved at '$attemptReleaseRoot'. Retry through the workspace entrypoint with ResumeReleaseRoot='$attemptReleaseRoot'. $message"
     }
-
-    $finalizeScript = @"
-set -euo pipefail
-tmp_root=$(ConvertTo-ShellSingleQuoted $remoteTmp)
-installer_target=$(ConvertTo-ShellSingleQuoted $installerTarget)
-velopack_target=$(ConvertTo-ShellSingleQuoted $velopackTarget)
-mkdir -p "`$(dirname "`$installer_target")" "`$velopack_target"
-find $(ConvertTo-ShellSingleQuoted "$EdgeUpdatesDir/installers") -mindepth 1 -maxdepth 1 -type d ! -name stable -exec rm -rf {} + 2>/dev/null || true
-find $(ConvertTo-ShellSingleQuoted "$EdgeUpdatesDir/velopack") -mindepth 1 -maxdepth 1 -type d ! -name stable -exec rm -rf {} + 2>/dev/null || true
-test -f "`$tmp_root/installer/installer-artifact.json"
-test -f "`$tmp_root/installer/IIoT.Edge.Setup.exe"
-test -d "`$tmp_root/installer/launcher"
-test -d "`$tmp_root/installer/host"
-test -d "`$tmp_root/installer/plugins"
-test -f "`$tmp_root/velopack/releases.$Channel.json"
-test -f "`$tmp_root/velopack/assets.$Channel.json"
-rm -rf "`$installer_target"
-mv "`$tmp_root/installer" "`$installer_target"
-cp -a "`$tmp_root/velopack/." "`$velopack_target/"
-installer_channel_root="`$(dirname "`$installer_target")"
-mapfile -t keep_versions < <(find "`$installer_channel_root" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' | sort -V | tail -n 3 || true)
-for version_dir in "`$installer_channel_root"/*
-do
-  [ -d "`$version_dir" ] || continue
-  version_name="`$(basename "`$version_dir")"
-  keep=false
-  for keep_version in "`${keep_versions[@]}"
-  do
-    if [ "`$version_name" = "`$keep_version" ]; then
-      keep=true
-      break
-    fi
-  done
-  [ "`$keep" = "true" ] || rm -rf "`$version_dir"
-done
-for velopack_file in "`$velopack_target"/*
-do
-  [ -f "`$velopack_file" ] || continue
-  file_name="`$(basename "`$velopack_file")"
-  case "`$file_name" in
-    releases.*.json|assets.*.json|RELEASES)
-      continue
-      ;;
-  esac
-  file_version=""
-  if [[ "`$file_name" =~ -([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?)-$Channel- ]]; then
-    file_version="`${BASH_REMATCH[1]}"
-  else
-    file_version="`$(printf '%s\n' "`$file_name" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?' | head -n 1 || true)"
-  fi
-  [ -n "`$file_version" ] || continue
-  keep=false
-  for keep_version in "`${keep_versions[@]}"
-  do
-    if [ "`$file_version" = "`$keep_version" ]; then
-      keep=true
-      break
-    fi
-  done
-  [ "`$keep" = "true" ] || rm -f "`$velopack_file"
-done
-rm -rf "`$tmp_root"
-test -f "`$installer_target/installer-artifact.json"
-test -f "`$installer_target/IIoT.Edge.Setup.exe"
-test -f "`$velopack_target/releases.$Channel.json"
-test -f "`$velopack_target/assets.$Channel.json"
-echo "Published Edge installer artifact to `$installer_target"
-echo "Published Edge Velopack releases to `$velopack_target"
-"@
-    Invoke-RemoteBash $finalizeScript
+    throw
 }
 finally {
-    Pop-Location
+    if ($locationPushed) {
+        Pop-Location
+    }
+    Exit-EdgeDeploymentLock -Lock $deploymentLock
 }
-    if ([string]::IsNullOrWhiteSpace($DeployHost)) {
-        throw 'DeployHost is required for rsync transport. Stable production releases must use -Transport http.'
-    }
-
-    if ([string]::IsNullOrWhiteSpace($DeployHost)) {
-        throw 'DeployHost is required for scp transport. Stable production releases must use -Transport http.'
-    }

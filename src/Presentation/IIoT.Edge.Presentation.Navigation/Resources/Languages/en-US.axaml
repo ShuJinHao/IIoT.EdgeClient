@@ -148,6 +148,8 @@
     <sys:String x:Key="Navigation_DashboardPreview_PlcProtocolFrame">Frame</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcDetails">Details</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcDetailTitle">PLC Runtime Details</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcCommunicationSection">Communication</sys:String>
+    <sys:String x:Key="Navigation_DashboardPreview_PlcActivitySection">Runtime activity</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcErrorDetail">Error Details</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_PlcNoError">No runtime error</sys:String>
     <sys:String x:Key="Navigation_DashboardPreview_Close">Close</sys:String>
@@ -187,7 +189,7 @@
     <sys:String x:Key="Navigation_Tab_PluginBusinessParams">Plugin Business Parameters</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_GroupTitle">Cloud API Configuration</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_Enabled_DisplayName">Cloud Enabled</sys:String>
-    <sys:String x:Key="Navigation_Param_CloudApi_Enabled_Description">System-level cloud upload switch. When disabled, cloud uploads, device logs, and retry gates are skipped as offline.</sys:String>
+    <sys:String x:Key="Navigation_Param_CloudApi_Enabled_Description">The only Cloud communication switch for this machine profile. When disabled, bootstrap, sign-in, uploads, logs, retries, heartbeats, recipes, and remote update requests all stop.</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_BaseUrl_DisplayName">Cloud Service URL</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_BaseUrl_Description">Cloud API base URL used by bootstrap, upload, log, and capacity endpoints.</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_ClientCode_DisplayName">Client Code</sys:String>
@@ -647,6 +649,9 @@
     <sys:String x:Key="Navigation_Button_ConfirmAddIoPoint">Add</sys:String>
     <sys:String x:Key="Navigation_Dialog_AddNetworkDevice">Add Network Device</sys:String>
     <sys:String x:Key="Navigation_Dialog_EditNetworkDevice">Edit Network Device</sys:String>
+    <sys:String x:Key="Navigation_NetworkDevice_IdentitySection">Device identity</sys:String>
+    <sys:String x:Key="Navigation_NetworkDevice_ConnectionSection">Connection</sys:String>
+    <sys:String x:Key="Navigation_NetworkDevice_AdvancedSection">Advanced</sys:String>
     <sys:String x:Key="Navigation_Dialog_AddSerialDevice">Add Serial Device</sys:String>
     <sys:String x:Key="Navigation_Dialog_EditSerialDevice">Edit Serial Device</sys:String>
     <sys:String x:Key="Navigation_Dialog_AddIoPoint">Add IO Point</sys:String>
@@ -758,6 +763,7 @@
     <sys:String x:Key="Navigation_PlcTaskBinding_SaveSuccess">Task bindings saved and applied to the current PLC.</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_SaveFailed">Failed to save PLC task bindings.</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_NoDevices">The current module has no PLC devices.</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_NoTasks">The current PLC has no bindable tasks.</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_DeviceCountFormat">Loaded task bindings for {0} PLC devices.</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_DisableHeartbeatConfirmTitle">Confirm Disable Heartbeat Task</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_DisableHeartbeatConfirmMessageFormat">You are about to disable heartbeat-like tasks for PLC "{0}": {1}.&#x0a;After this, the PLC will no longer execute heartbeat handshakes, which may affect runtime status detection. Continue saving?</sys:String>

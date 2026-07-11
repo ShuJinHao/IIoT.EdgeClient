@@ -13,23 +13,20 @@ namespace IIoT.Edge.NonUiRegressionTests;
 public sealed class CloudConsumerBehaviorTests
 {
     [Fact]
-    public async Task ProcessAsync_WhenCloudUploadDisabled_ShouldSkipUploaderAndReturnSuccess()
+    public async Task ProcessWithResultAsync_WhenSystemCloudDisabled_ShouldKeepRecordPendingWithoutCallingUploader()
     {
         var cloudHttp = new FakeCloudHttpClient();
         var diagnostics = new FakeCloudDiagnosticsStore();
         var consumer = new CloudConsumer(
             CreateOnlineDeviceService(),
-            new FixedCloudUploadGate(UploadGateSnapshot.Blocked(
-                ExternalSystemKind.Cloud,
-                "cloud_upload_disabled",
-                "云端上传已关闭。")),
+            new FixedCloudExecutionPolicy(false),
+            new FixedCloudUploadGate(UploadGateSnapshot.Ready(ExternalSystemKind.Cloud)),
             new StandardPassStationCloudUploader(new FakeCloudApiEndpointProvider(), cloudHttp),
             CreateCloudRegistry(),
-            new FakeModuleParamRoleProvider(),
             diagnostics,
             new FakeLogService());
 
-        var result = await consumer.ProcessAsync(new CellCompletedRecord
+        var result = await consumer.ProcessWithResultAsync(new CellCompletedRecord
         {
             CellData = new TestCellData
             {
@@ -37,9 +34,11 @@ public sealed class CloudConsumerBehaviorTests
             }
         });
 
-        Assert.True(result);
+        Assert.False(result.IsSuccess);
+        Assert.Equal(CloudCallOutcome.SkippedUploadNotReady, result.Outcome);
+        Assert.Equal("cloud_upload_disabled", result.ReasonCode);
         Assert.Equal(0, cloudHttp.PostCallCount);
-        Assert.Equal(CloudCallOutcome.Success, diagnostics.Snapshot.LastOutcome);
+        Assert.Equal(CloudCallOutcome.SkippedUploadNotReady, diagnostics.Snapshot.LastOutcome);
     }
 
     [Fact]
@@ -49,13 +48,13 @@ public sealed class CloudConsumerBehaviorTests
         var diagnostics = new FakeCloudDiagnosticsStore();
         var consumer = new CloudConsumer(
             CreateOnlineDeviceService(),
+            new FixedCloudExecutionPolicy(true),
             new FixedCloudUploadGate(UploadGateSnapshot.Blocked(
                 ExternalSystemKind.Cloud,
                 "missing_upload_token",
                 "缺少上传令牌。")),
             new StandardPassStationCloudUploader(new FakeCloudApiEndpointProvider(), cloudHttp),
             CreateCloudRegistry(),
-            new FakeModuleParamRoleProvider(),
             diagnostics,
             new FakeLogService());
 
@@ -86,10 +85,10 @@ public sealed class CloudConsumerBehaviorTests
         var diagnostics = new FakeCloudDiagnosticsStore();
         var consumer = new CloudConsumer(
             CreateOnlineDeviceService(),
+            new FixedCloudExecutionPolicy(true),
             new FixedCloudUploadGate(UploadGateSnapshot.Ready(ExternalSystemKind.Cloud)),
             new StandardPassStationCloudUploader(new FakeCloudApiEndpointProvider(), cloudHttp),
             CreateCloudRegistry(),
-            new FakeModuleParamRoleProvider(),
             diagnostics,
             new FakeLogService());
         var completedTime = new DateTime(2026, 6, 5, 8, 30, 0, DateTimeKind.Utc);
@@ -135,10 +134,10 @@ public sealed class CloudConsumerBehaviorTests
         var cloudHttp = new FakeCloudHttpClient();
         var consumer = new CloudConsumer(
             CreateOnlineDeviceService(),
+            new FixedCloudExecutionPolicy(true),
             new FixedCloudUploadGate(UploadGateSnapshot.Ready(ExternalSystemKind.Cloud)),
             new StandardPassStationCloudUploader(new FakeCloudApiEndpointProvider(), cloudHttp),
             CreateCloudRegistry(),
-            new FakeModuleParamRoleProvider(),
             new FakeCloudDiagnosticsStore(),
             new FakeLogService());
 
@@ -163,10 +162,10 @@ public sealed class CloudConsumerBehaviorTests
         var logger = new FakeLogService();
         var consumer = new CloudConsumer(
             CreateOnlineDeviceService(),
+            new FixedCloudExecutionPolicy(true),
             new FixedCloudUploadGate(UploadGateSnapshot.Ready(ExternalSystemKind.Cloud)),
             new StandardPassStationCloudUploader(new FakeCloudApiEndpointProvider(), cloudHttp),
             CreateCloudRegistry(),
-            new FakeModuleParamRoleProvider(),
             diagnostics,
             logger);
 
@@ -205,10 +204,10 @@ public sealed class CloudConsumerBehaviorTests
         registry.RegisterCloudUploader("OtherProcess", ProcessUploadMode.Batch);
         var consumer = new CloudConsumer(
             CreateOnlineDeviceService(),
+            new FixedCloudExecutionPolicy(true),
             new FixedCloudUploadGate(UploadGateSnapshot.Ready(ExternalSystemKind.Cloud)),
             new StandardPassStationCloudUploader(new FakeCloudApiEndpointProvider(), cloudHttp),
             registry,
-            new FakeModuleParamRoleProvider(),
             new FakeCloudDiagnosticsStore(),
             new FakeLogService());
 
@@ -267,10 +266,10 @@ public sealed class CloudConsumerBehaviorTests
         var diagnostics = new FakeCloudDiagnosticsStore();
         var consumer = new CloudConsumer(
             CreateOnlineDeviceService(),
+            new FixedCloudExecutionPolicy(true),
             new FixedCloudUploadGate(UploadGateSnapshot.Ready(ExternalSystemKind.Cloud)),
             new StandardPassStationCloudUploader(new FakeCloudApiEndpointProvider(), cloudHttp),
             CreateCloudRegistry(),
-            new FakeModuleParamRoleProvider(),
             diagnostics,
             new FakeLogService());
         var productionRecord = new CellCompletedRecord
@@ -318,10 +317,10 @@ public sealed class CloudConsumerBehaviorTests
         var diagnostics = new FakeCloudDiagnosticsStore();
         var consumer = new CloudConsumer(
             CreateOnlineDeviceService(),
+            new FixedCloudExecutionPolicy(true),
             new FixedCloudUploadGate(UploadGateSnapshot.Ready(ExternalSystemKind.Cloud)),
             new StandardPassStationCloudUploader(new ThrowingCloudApiEndpointProvider(), cloudHttp),
             CreateCloudRegistry(),
-            new FakeModuleParamRoleProvider(),
             diagnostics,
             new FakeLogService());
 
@@ -348,10 +347,10 @@ public sealed class CloudConsumerBehaviorTests
         var logger = new FakeLogService();
         var consumer = new CloudConsumer(
             CreateOnlineDeviceService(),
+            new FixedCloudExecutionPolicy(true),
             new FixedCloudUploadGate(UploadGateSnapshot.Ready(ExternalSystemKind.Cloud)),
             new StandardPassStationCloudUploader(new FakeCloudApiEndpointProvider(), cloudHttp),
             new FakeProcessIntegrationRegistry(),
-            new FakeModuleParamRoleProvider(),
             diagnostics,
             logger);
 
@@ -383,35 +382,6 @@ public sealed class CloudConsumerBehaviorTests
                      && entry.Message.Contains("未注册 Cloud 上传器", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public async Task ProcessWithResultAsync_WhenPluginCloudDisabled_ShouldSkipWithoutDisablingSystemCloud()
-    {
-        var cloudHttp = new FakeCloudHttpClient();
-        var diagnostics = new FakeCloudDiagnosticsStore();
-        var roleProvider = new FakeModuleParamRoleProvider();
-        roleProvider.SetCloudEnabled("OtherProcess", false);
-        var consumer = new CloudConsumer(
-            CreateOnlineDeviceService(),
-            new FixedCloudUploadGate(UploadGateSnapshot.Ready(ExternalSystemKind.Cloud)),
-            new StandardPassStationCloudUploader(new FakeCloudApiEndpointProvider(), cloudHttp),
-            CreateCloudRegistry(),
-            roleProvider,
-            diagnostics,
-            new FakeLogService());
-
-        var result = await consumer.ProcessWithResultAsync(new CellCompletedRecord
-        {
-            CellData = new TestCellData
-            {
-                Barcode = "BAR-PLUGIN-CLOUD-DISABLED"
-            }
-        });
-
-        Assert.True(result.IsSuccess);
-        Assert.Equal(0, cloudHttp.PostCallCount);
-        Assert.Equal(CloudCallOutcome.Success, diagnostics.Snapshot.LastOutcome);
-    }
-
     private static FakeDeviceService CreateOnlineDeviceService()
     {
         var deviceService = new FakeDeviceService();
@@ -437,6 +407,11 @@ public sealed class CloudConsumerBehaviorTests
         public ExternalSystemKind System => ExternalSystemKind.Cloud;
 
         public UploadGateSnapshot GetSnapshot() => snapshot;
+    }
+
+    private sealed class FixedCloudExecutionPolicy(bool isEnabled) : ICloudExecutionPolicy
+    {
+        public bool IsEnabled { get; } = isEnabled;
     }
 
     private sealed class ThrowingCloudApiEndpointProvider : ICloudApiPathProvider

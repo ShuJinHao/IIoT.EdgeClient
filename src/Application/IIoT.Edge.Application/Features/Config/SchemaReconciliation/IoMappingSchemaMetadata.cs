@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.Application.Modules.Hardware;
+using System.Text.Json;
 
 namespace IIoT.Edge.Application.Features.Config.SchemaReconciliation;
 
@@ -14,6 +15,7 @@ internal static class IoMappingSchemaMetadata
     private const string BusinessGroupKey = "BusinessGroup";
     private const string SortOrderKey = "SortOrder";
     private const string RemarkKey = "Remark";
+    private const string LegacyRemarksKey = "LegacyRemarks";
 
     public static IReadOnlyDictionary<string, string> Create(int networkDeviceId, ModuleIoTemplateEntry template)
         => new Dictionary<string, string>(StringComparer.Ordinal)
@@ -30,7 +32,14 @@ internal static class IoMappingSchemaMetadata
             [CategoryKey] = IoMappingOptionCatalog.NormalizeCategory(template.Category, template.AddressCount),
             [BusinessGroupKey] = template.BusinessGroup?.Trim() ?? string.Empty,
             [SortOrderKey] = Math.Max(0, template.SortOrder).ToString(),
-            [RemarkKey] = template.Remark?.Trim() ?? string.Empty
+            [RemarkKey] = template.Remark?.Trim() ?? string.Empty,
+            [LegacyRemarksKey] = JsonSerializer.Serialize(
+                template.LegacyRemarks?
+                    .Where(static value => !string.IsNullOrWhiteSpace(value))
+                    .Select(static value => value.Trim())
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray()
+                ?? [])
         };
 
     public static int GetNetworkDeviceId(ConfigSchemaItem item)
@@ -61,6 +70,29 @@ internal static class IoMappingSchemaMetadata
     {
         var value = GetOptional(item, RemarkKey, string.Empty);
         return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    public static IReadOnlyList<string> GetLegacyRemarks(ConfigSchemaItem item)
+    {
+        var json = GetOptional(item, LegacyRemarksKey, string.Empty);
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return [];
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<string[]>(json)?
+                .Where(static value => !string.IsNullOrWhiteSpace(value))
+                .Select(static value => value.Trim())
+                .Distinct(StringComparer.Ordinal)
+                .ToArray()
+                ?? [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
     }
 
     private static string GetRequired(ConfigSchemaItem item, string key)

@@ -24,6 +24,7 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
     private readonly IDataPipelineService _dataPipelineService;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
     private readonly ICloudUploadDiagnosticsStore _cloudDiagnosticsStore;
+    private readonly ICloudExecutionPolicy _cloudExecutionPolicy;
     private readonly IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> _parameters;
     private readonly IHomogenizationProductionGate _productionGate;
 
@@ -38,6 +39,7 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
         IDataPipelineService dataPipelineService,
         IMesUploadDiagnosticsStore diagnosticsStore,
         ICloudUploadDiagnosticsStore cloudDiagnosticsStore,
+        ICloudExecutionPolicy cloudExecutionPolicy,
         IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> parameters,
         IHomogenizationProductionGate productionGate,
         ILogService logger,
@@ -49,6 +51,7 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
         _dataPipelineService = dataPipelineService;
         _diagnosticsStore = diagnosticsStore;
         _cloudDiagnosticsStore = cloudDiagnosticsStore;
+        _cloudExecutionPolicy = cloudExecutionPolicy;
         _parameters = parameters;
         _productionGate = productionGate;
     }
@@ -84,7 +87,7 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
         const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.工艺参数上传;
         var parameterSnapshot = await _parameters.GetAsync(cancellationToken).ConfigureAwait(false);
         var mesEnabled = parameterSnapshot.Mes<bool>(HomogenizationParams.Mes.启用);
-        var cloudEnabled = parameterSnapshot.Cloud<bool>(HomogenizationParams.Cloud.启用);
+        var cloudEnabled = _cloudExecutionPolicy.IsEnabled;
         var uploadTargets = ResolveUploadTargets(mesEnabled, cloudEnabled);
         if (uploadTargets == DataPipelineUploadTargets.None)
         {

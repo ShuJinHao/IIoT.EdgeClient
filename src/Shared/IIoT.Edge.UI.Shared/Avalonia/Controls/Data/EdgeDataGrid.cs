@@ -26,7 +26,7 @@ public class EdgeDataGrid : DataGrid
     public static readonly StyledProperty<double> HorizontalScrollBarReserveHeightProperty =
         AvaloniaProperty.Register<EdgeDataGrid, double>(
             nameof(HorizontalScrollBarReserveHeight),
-            4d);
+            10d);
 
     static EdgeDataGrid()
     {

@@ -23,8 +23,6 @@ public sealed class IngressOverflowPersistenceBehaviorTests
                     MesUploadEnabled = false
                 }
             },
-            new FakeProcessIntegrationRegistry(),
-            new FakeModuleParamRoleProvider(),
             new FakeCriticalPersistenceFallbackWriter(),
             persistenceWriter: null!,
             logger: new FakeLogService());

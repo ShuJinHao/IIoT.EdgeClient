@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Application.Features.Config.CloudApi;
 using IIoT.Edge.Application.Features.Config.LocalParameterConfig;
 
 namespace IIoT.Edge.NonUiRegressionTests;
@@ -10,6 +11,12 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
     public async Task EnsureInitializedAsync_WhenMesRoleEnabled_ShouldBuildRuntimeSnapshot()
     {
         var parameterConfigService = new MutableLocalParameterConfigService();
+        parameterConfigService.SystemConfigs.Add(new LocalSystemConfigSnapshot(
+            1,
+            CloudApiConfigParamSchema.Enabled,
+            "true",
+            null,
+            1));
         var roleProvider = new MutableModuleParamRoleProvider { MesEnabled = true };
         var registry = new FakeProcessIntegrationRegistry(["Homogenization"]);
         var service = new LocalSystemRuntimeConfigService(
@@ -42,11 +49,18 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
     }
 
     [Fact]
-    public async Task EnsureInitializedAsync_WhenNoCloudUploaderRegistered_ShouldKeepSystemCloudEnabled()
+    public async Task EnsureInitializedAsync_WhenNoCloudUploaderRegistered_ShouldStillUseSystemCloudSwitch()
     {
+        var parameterConfigService = new MutableLocalParameterConfigService();
+        parameterConfigService.SystemConfigs.Add(new LocalSystemConfigSnapshot(
+            1,
+            CloudApiConfigParamSchema.Enabled,
+            "true",
+            null,
+            1));
         var service = new LocalSystemRuntimeConfigService(
-            new MutableLocalParameterConfigService(),
-            new MutableModuleParamRoleProvider { CloudEnabled = false },
+            parameterConfigService,
+            new MutableModuleParamRoleProvider(),
             new FakeProcessIntegrationRegistry([]),
             new FakeLogService());
 
@@ -167,7 +181,6 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
     private sealed class MutableModuleParamRoleProvider : IModuleParamRoleProvider
     {
         public bool MesEnabled { get; set; }
-        public bool CloudEnabled { get; set; }
 
         public Task<ModuleParamRoleValue?> GetAsync(
             string moduleId,
@@ -204,7 +217,7 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
             ModuleParamRole role,
             bool defaultValue = false,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(role == ModuleParamRole.CloudEnabled ? CloudEnabled : MesEnabled);
+            => Task.FromResult(role == ModuleParamRole.MesEnabled ? MesEnabled : defaultValue);
 
         public Task<bool> AnyBoolAsync(
             ModuleParamCategory category,
@@ -213,7 +226,8 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
             bool defaultValue = false,
             CancellationToken cancellationToken = default)
             => Task.FromResult((moduleIds?.Count ?? 0) > 0
-                && (role == ModuleParamRole.CloudEnabled ? CloudEnabled : MesEnabled));
+                && role == ModuleParamRole.MesEnabled
+                && MesEnabled);
     }
 
     private sealed class FakeProcessIntegrationRegistry(

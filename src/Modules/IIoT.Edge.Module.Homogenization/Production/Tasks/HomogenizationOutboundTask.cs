@@ -29,6 +29,7 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
     private readonly HomogenizationCellDataValidator _validator;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
     private readonly ICloudUploadDiagnosticsStore _cloudDiagnosticsStore;
+    private readonly ICloudExecutionPolicy _cloudExecutionPolicy;
     private readonly IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> _parameters;
     private readonly IHomogenizationProductionGate _productionGate;
 
@@ -45,6 +46,7 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
         HomogenizationCellDataValidator validator,
         IMesUploadDiagnosticsStore diagnosticsStore,
         ICloudUploadDiagnosticsStore cloudDiagnosticsStore,
+        ICloudExecutionPolicy cloudExecutionPolicy,
         IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> parameters,
         IHomogenizationProductionGate productionGate,
         ILogService logger,
@@ -58,6 +60,7 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
         _validator = validator;
         _diagnosticsStore = diagnosticsStore;
         _cloudDiagnosticsStore = cloudDiagnosticsStore;
+        _cloudExecutionPolicy = cloudExecutionPolicy;
         _parameters = parameters;
         _productionGate = productionGate;
     }
@@ -93,7 +96,7 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
         const HomogenizationPlcSignals.Interaction trigger = HomogenizationPlcSignals.Interaction.出料上传;
         var parameterSnapshot = await _parameters.GetAsync(cancellationToken).ConfigureAwait(false);
         var mesEnabled = parameterSnapshot.Mes<bool>(HomogenizationParams.Mes.启用);
-        var cloudEnabled = parameterSnapshot.Cloud<bool>(HomogenizationParams.Cloud.启用);
+        var cloudEnabled = _cloudExecutionPolicy.IsEnabled;
         var uploadTargets = ResolveUploadTargets(mesEnabled, cloudEnabled);
 
         if (mesEnabled)

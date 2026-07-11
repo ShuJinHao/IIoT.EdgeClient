@@ -268,6 +268,7 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
             {
                 Current = SystemRuntimeConfigSnapshot.Default with
                 {
+                    SystemCloudEnabled = true,
                     OnlineHeartbeatInterval = TimeSpan.FromSeconds(1)
                 }
             });
@@ -310,6 +311,7 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
             {
                 Current = SystemRuntimeConfigSnapshot.Default with
                 {
+                    SystemCloudEnabled = true,
                     OnlineHeartbeatInterval = TimeSpan.FromSeconds(1)
                 }
             });
@@ -361,10 +363,8 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
     }
 
     [Fact]
-    public async Task StartAsync_WhenCloudUploadDisabled_ShouldIdentifyDeviceButKeepUploadBlocked()
+    public async Task StartAsync_WhenSystemCloudDisabled_ShouldBlockWithoutAnyBootstrapRequest()
     {
-        var deviceId = Guid.NewGuid();
-        var processId = Guid.NewGuid();
         var requestCount = 0;
         var handler = new RecordingHttpMessageHandler(_ =>
         {
@@ -373,10 +373,10 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
             {
                 Content = JsonContent.Create(new
                 {
-                    Id = deviceId,
+                    Id = Guid.NewGuid(),
                     DeviceName = "Disabled Upload Device",
                     ClientCode = "LINE-OFFLINE-01",
-                    ProcessId = processId,
+                    ProcessId = Guid.NewGuid(),
                     UploadAccessToken = "disabled-upload-token",
                     UploadAccessTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(10)
                 })
@@ -397,19 +397,14 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         using var cts = new CancellationTokenSource();
 
         await service.StartAsync(cts.Token);
-        await handler.WaitForRequestUriAsync();
-        await WaitForAsync(() => service.CurrentDevice is not null
-                                  && service.CurrentUploadGate.Reason == EdgeUploadBlockReason.CloudUploadDisabled);
+        await WaitForAsync(() => service.CurrentUploadGate.Reason == EdgeUploadBlockReason.CloudUploadDisabled);
         await AssertRequestCountRemainsAsync(
             () => Volatile.Read(ref requestCount),
-            expected: 1,
+            expected: 0,
             TimeSpan.FromMilliseconds(300));
         await service.StopAsync();
 
-        Assert.NotNull(service.CurrentDevice);
-        Assert.Equal(deviceId, service.CurrentDevice!.DeviceId);
-        Assert.Equal(processId, service.CurrentDevice.ProcessId);
-        Assert.Equal("LINE-OFFLINE-01", service.CurrentDevice.ClientCode);
+        Assert.Null(service.CurrentDevice);
         Assert.Equal(NetworkState.Offline, service.CurrentState);
         Assert.False(service.CanUploadToCloud);
         Assert.Equal(EdgeUploadBlockReason.CloudUploadDisabled, service.CurrentUploadGate.Reason);
@@ -462,7 +457,10 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
     private static FakeLocalSystemRuntimeConfigService CreateRuntimeConfig()
         => new()
         {
-            Current = SystemRuntimeConfigSnapshot.Default
+            Current = SystemRuntimeConfigSnapshot.Default with
+            {
+                SystemCloudEnabled = true
+            }
         };
 
     private static DeviceService CreateDeviceService(

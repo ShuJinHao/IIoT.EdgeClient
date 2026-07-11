@@ -23,6 +23,17 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Setup Python for deployment behavior tests
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Run Edge deployment behavior tests
+        shell: pwsh
+        run: |
+          ./scripts/tests/TestEdgeDeploymentBehavior.ps1
+          ./scripts/tests/TestEdgeReleaseResumeBehavior.ps1
+
       - name: Build shell
         shell: pwsh
         run: dotnet build src/Edge/IIoT.Edge.Shell/IIoT.Edge.Shell.csproj -p:BuildInParallel=false --disable-build-servers

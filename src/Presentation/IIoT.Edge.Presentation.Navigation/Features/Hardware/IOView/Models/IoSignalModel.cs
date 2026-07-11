@@ -19,7 +19,7 @@ public class IoSignalModel : BaseNotifyPropertyChanged
     public string? Remark
     {
         get => _remark;
-        set => _remark = NormalizeRuntimeRemark(value);
+        set => _remark = value;
     }
     public int StartIndex { get; set; }
     public int AddressCount { get; set; } = 1;
@@ -93,32 +93,6 @@ public class IoSignalModel : BaseNotifyPropertyChanged
     private string GetText(string key, string fallback)
         => _textProvider?.Invoke(key, fallback) ?? fallback;
 
-    private static string? NormalizeRuntimeRemark(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        var trimmed = value.Trim();
-        foreach (var separator in new[] { " - ", "－", "—" })
-        {
-            var index = trimmed.IndexOf(separator, StringComparison.Ordinal);
-            if (index <= 0)
-            {
-                continue;
-            }
-
-            var prefix = trimmed[..index].Trim();
-            var suffix = trimmed[(index + separator.Length)..].Trim();
-            if (prefix.EndsWith("模块", StringComparison.Ordinal) && suffix.Length > 0)
-            {
-                return suffix;
-            }
-        }
-
-        return trimmed;
-    }
 }
 
 public sealed class IoSignalValueModel

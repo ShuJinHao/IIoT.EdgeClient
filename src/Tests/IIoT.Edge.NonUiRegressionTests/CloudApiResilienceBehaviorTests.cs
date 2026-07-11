@@ -1,5 +1,6 @@
 ﻿using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Infrastructure.Integration;
+using IIoT.Edge.Application.Abstractions.Cloud;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Polly.Timeout;
@@ -11,6 +12,25 @@ namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class CloudApiResilienceBehaviorTests
 {
+    [Fact]
+    public async Task CloudApiClient_WhenSystemCloudDisabled_ShouldReturnLocallyWithoutTransportRequest()
+    {
+        using var handler = new SequenceMessageHandler(
+        [
+            _ => new HttpResponseMessage(HttpStatusCode.OK)
+        ]);
+
+        using var provider = BuildProvider(handler, cloudEnabled: false);
+        var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient("CloudApi");
+
+        using var response = await client.GetAsync(
+            "https://example.test/api/v1/edge/capacity/summary",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal(0, handler.SendCount);
+    }
+
     [Fact]
     public async Task CloudApiClient_WhenGetReturnsTransientFailure_ShouldRetry()
     {
@@ -79,7 +99,8 @@ public sealed class CloudApiResilienceBehaviorTests
 
     private static ServiceProvider BuildProvider(
         HttpMessageHandler handler,
-        IDictionary<string, string?>? configValues = null)
+        IDictionary<string, string?>? configValues = null,
+        bool cloudEnabled = true)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(configValues)
@@ -101,10 +122,16 @@ public sealed class CloudApiResilienceBehaviorTests
 
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddSingleton<ICloudExecutionPolicy>(new FixedCloudExecutionPolicy(cloudEnabled));
         services.AddIntegrationInfrastructure(configuration, runtimePaths);
         services.AddHttpClient("CloudApi")
             .ConfigurePrimaryHttpMessageHandler(() => handler);
         return services.BuildServiceProvider();
+    }
+
+    private sealed class FixedCloudExecutionPolicy(bool isEnabled) : ICloudExecutionPolicy
+    {
+        public bool IsEnabled { get; } = isEnabled;
     }
 
     private sealed class SequenceMessageHandler(IEnumerable<Func<HttpRequestMessage, HttpResponseMessage>> responses)

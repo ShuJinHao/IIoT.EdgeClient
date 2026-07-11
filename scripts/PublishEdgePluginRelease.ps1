@@ -23,6 +23,20 @@ param(
     [ValidateRange(1, 1000)]
     [int]$UploadRateLimitMbps = 1000,
 
+    [string]$ResumeReleaseRoot = $env:IIOT_EDGE_RESUME_RELEASE_ROOT,
+
+    [ValidateRange(1, 300)]
+    [int]$ConnectTimeoutSeconds = 10,
+
+    [ValidateRange(1, 86400)]
+    [int]$UploadTimeoutSeconds = 900,
+
+    [ValidateRange(1, 3600)]
+    [int]$LowSpeedTimeSeconds = 60,
+
+    [ValidateRange(1, 104857600)]
+    [int]$LowSpeedLimitBytesPerSecond = 1024,
+
     [switch]$SkipPackageValidation
 )
 
@@ -32,6 +46,7 @@ Set-StrictMode -Version Latest
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'EdgeRuntime.Common.ps1')
 . (Join-Path $PSScriptRoot 'EdgeReleaseCredential.Common.ps1')
+. (Join-Path $PSScriptRoot 'EdgeDeployment.Common.ps1')
 
 if ($Channel -ne 'stable') {
     throw 'Production Edge plugin releases must use stable channel.'
@@ -102,19 +117,27 @@ function Invoke-CloudJsonGet {
 
     $apiRoot = $CloudApiBaseUrl.TrimEnd('/')
     $uri = "$apiRoot/$($Path.TrimStart('/'))"
-    return Invoke-RestMethod -Method Get -Uri $uri -Headers @{
-        Authorization = "Bearer $script:CloudToken"
-    }
+    return Invoke-EdgeCurlJsonGet `
+        -Uri $uri `
+        -Token $script:CloudToken `
+        -ConnectTimeoutSeconds $ConnectTimeoutSeconds `
+        -RequestTimeoutSeconds 60 `
+        -LowSpeedTimeSeconds 30 `
+        -LowSpeedLimitBytesPerSecond 128
 }
 
-function Assert-PluginVersionDoesNotExist {
+function Find-PluginCatalogVersion {
     param(
+        [Parameter(Mandatory = $true)]$Catalog,
         [Parameter(Mandatory = $true)][string]$Version,
         [Parameter(Mandatory = $true)][string]$TargetRuntime
     )
 
-    $catalog = Invoke-CloudJsonGet -Path "/human/client-releases/catalog?channel=$Channel&targetRuntime=$TargetRuntime&includeArchived=true"
-    foreach ($plugin in @($catalog.plugins)) {
+    if ($null -eq $Catalog.plugins) {
+        throw 'Cloud Edge release catalog did not contain plugins.'
+    }
+
+    foreach ($plugin in @($Catalog.plugins)) {
         if (-not [string]::Equals([string]$plugin.moduleId, $ModuleId, [System.StringComparison]::OrdinalIgnoreCase)) {
             continue
         }
@@ -122,10 +145,12 @@ function Assert-PluginVersionDoesNotExist {
         foreach ($entry in @($plugin.versions)) {
             if ([string]::Equals([string]$entry.version, $Version, [System.StringComparison]::OrdinalIgnoreCase) -and
                 [string]::Equals([string]$entry.targetRuntime, $TargetRuntime, [System.StringComparison]::OrdinalIgnoreCase)) {
-                throw "Plugin version already exists in Cloud catalog: $ModuleId/$Channel/$Version/$TargetRuntime. Bump plugin.json version before publishing."
+                return $entry
             }
         }
     }
+
+    return $null
 }
 
 function Resolve-DownloadBaseUrl {
@@ -149,17 +174,9 @@ function Test-VerificationUrls {
     param([Parameter(Mandatory = $true)]$PublishResult)
 
     $downloadBase = Resolve-DownloadBaseUrl
-    $curl = Get-Command curl -CommandType Application -ErrorAction SilentlyContinue
-    if ($null -eq $curl) {
-        throw 'curl is required for HTTP Edge plugin release verification.'
-    }
-
     foreach ($relativeUrl in @($PublishResult.verificationUrls)) {
         $uri = "$downloadBase/$(([string]$relativeUrl).TrimStart('/'))"
-        & $curl.Source --fail --silent --show-error --head "$uri" | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            throw "HTTP verification failed: $uri"
-        }
+        Test-EdgeCurlUrl -Uri $uri -ConnectTimeoutSeconds $ConnectTimeoutSeconds -RequestTimeoutSeconds 60
     }
 }
 
@@ -220,71 +237,129 @@ function New-PluginReleaseWrapper {
 function Invoke-PluginPackageUpload {
     param([Parameter(Mandatory = $true)][string]$WrapperZip)
 
-    $curl = Get-Command curl -CommandType Application -ErrorAction SilentlyContinue
-    if ($null -eq $curl) {
-        throw 'curl is required for HTTP Edge plugin release upload with client-side rate limiting.'
-    }
-
     $apiRoot = $CloudApiBaseUrl.TrimEnd('/')
     $uri = "$apiRoot/human/client-releases/plugin-packages"
     $responsePath = Join-Path (Split-Path -Parent $WrapperZip) 'edge-plugin-upload-response.json'
     $rateBytesPerSecond = [int64]([math]::Floor($UploadRateLimitMbps * 1024 * 1024 / 8))
 
-    if (Test-Path $responsePath) {
-        Remove-Item -Path $responsePath -Force
-    }
-
-    & $curl.Source `
-        --fail `
-        --show-error `
-        --silent `
-        --request POST `
-        --header "Authorization: Bearer $script:CloudToken" `
-        --header "Content-Type: application/zip" `
-        --limit-rate "$rateBytesPerSecond" `
-        --data-binary "@$WrapperZip" `
-        --output "$responsePath" `
-        "$uri"
-
-    if ($LASTEXITCODE -ne 0) {
-        throw "HTTP Edge plugin release upload failed with exit code $LASTEXITCODE."
-    }
-
-    if (-not (Test-Path $responsePath)) {
-        throw 'HTTP Edge plugin release upload did not return a response body.'
-    }
+    Invoke-EdgeCurlRequest `
+        -Method POST `
+        -Uri $uri `
+        -Token $script:CloudToken `
+        -UploadFile $WrapperZip `
+        -ResponsePath $responsePath `
+        -RateLimitBytesPerSecond $rateBytesPerSecond `
+        -ConnectTimeoutSeconds $ConnectTimeoutSeconds `
+        -RequestTimeoutSeconds $UploadTimeoutSeconds `
+        -LowSpeedTimeSeconds $LowSpeedTimeSeconds `
+        -LowSpeedLimitBytesPerSecond $LowSpeedLimitBytesPerSecond | Out-Null
 
     return Get-Content -Raw -Encoding UTF8 -Path $responsePath | ConvertFrom-Json
 }
 
-$releaseNotesText = Resolve-ExplicitReleaseNotes
-$resolvedOutputRoot = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $OutputRoot
-$releaseRoot = Join-Path $resolvedOutputRoot "$Channel/$ModuleId/$([Guid]::NewGuid().ToString('N'))"
-$packageOutputRoot = Join-Path $releaseRoot 'package'
-New-Item -Path $packageOutputRoot -ItemType Directory -Force | Out-Null
+$dispatchInvocationId = Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgePlugin
+$gitFacts = Assert-EdgeReleaseGitState -RepoRoot $repoRoot
+$deploymentLock = Enter-EdgeDeploymentLock -RepoRoot $repoRoot -InvocationId $dispatchInvocationId -Target EdgePlugin
+$locationPushed = $false
+$attemptReleaseRoot = ''
+$attemptStage = 'initializing'
 
-Push-Location $repoRoot
 try {
-    Invoke-EdgeScript 'PackEdgePlugin.ps1' @(
-        '-ModuleId', $ModuleId,
-        '-Configuration', $Configuration,
-        '-TargetRuntime', $RuntimeIdentifier,
-        '-OutputRoot', $packageOutputRoot,
-        '-CleanOutput'
-    )
+    Push-Location $repoRoot
+    $locationPushed = $true
+    $releaseNotesText = Resolve-ExplicitReleaseNotes
+    $sourceManifestPath = Join-Path $repoRoot "src/Modules/IIoT.Edge.Module.$ModuleId/plugin.json"
+    if (-not (Test-Path -LiteralPath $sourceManifestPath -PathType Leaf)) {
+        throw "Plugin manifest was not found: $sourceManifestPath"
+    }
+    $sourceManifest = Get-Content -Raw -Encoding UTF8 -LiteralPath $sourceManifestPath | ConvertFrom-Json
+    if (-not [string]::Equals([string]$sourceManifest.moduleId, $ModuleId, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Plugin manifest moduleId '$($sourceManifest.moduleId)' does not match '$ModuleId'."
+    }
 
-    $metadataPath = Get-ChildItem -Path $packageOutputRoot -Filter '*.zip.json' -File |
-        Select-Object -First 1
+    $declaredVersion = [string]$sourceManifest.version
+    if ($declaredVersion -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
+        throw "Plugin manifest version is invalid: $declaredVersion"
+    }
+
+    $catalog = Invoke-CloudJsonGet -Path "/human/client-releases/catalog?channel=$Channel&targetRuntime=$RuntimeIdentifier&includeArchived=true"
+    $existingRelease = Find-PluginCatalogVersion -Catalog $catalog -Version $declaredVersion -TargetRuntime $RuntimeIdentifier
+    $isResume = -not [string]::IsNullOrWhiteSpace($ResumeReleaseRoot)
+    $resolvedOutputRoot = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $OutputRoot
+
+    if ($isResume) {
+        $releaseRoot = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $ResumeReleaseRoot
+        if (-not (Test-Path -LiteralPath $releaseRoot -PathType Container)) {
+            throw "Resume release root was not found: $releaseRoot"
+        }
+        $statePath = Join-Path $releaseRoot 'edge-deployment-attempt.json'
+        if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) {
+            throw "Resume release root is missing edge-deployment-attempt.json: $releaseRoot"
+        }
+        $savedState = Get-Content -Raw -Encoding UTF8 -LiteralPath $statePath | ConvertFrom-Json
+        if ([string]$savedState.facts.sourceCommit -ne [string]$gitFacts.Head) {
+            throw "Resume artifact sourceCommit '$($savedState.facts.sourceCommit)' does not match pushed HEAD '$($gitFacts.Head)'."
+        }
+        if ([string]$savedState.facts.version -ne $declaredVersion) {
+            throw "Resume artifact version '$($savedState.facts.version)' does not match current plugin manifest '$declaredVersion'."
+        }
+    }
+    else {
+        if ($null -ne $existingRelease) {
+            throw "Plugin version already exists in Cloud catalog: $ModuleId/$Channel/$declaredVersion/$RuntimeIdentifier. No package build was started."
+        }
+        $releaseRoot = Join-Path $resolvedOutputRoot "$Channel/$ModuleId/$([Guid]::NewGuid().ToString('N'))"
+    }
+
+    $attemptReleaseRoot = $releaseRoot
+    if ($isResume -and $null -ne $existingRelease) {
+        $downloadUrl = [string]$existingRelease.downloadUrl
+        if (-not [string]::IsNullOrWhiteSpace($downloadUrl)) {
+            if (-not $downloadUrl.StartsWith('http', [System.StringComparison]::OrdinalIgnoreCase)) {
+                $downloadUrl = "$(Resolve-DownloadBaseUrl)/$($downloadUrl.TrimStart('/'))"
+            }
+            Test-EdgeCurlUrl -Uri $downloadUrl -ConnectTimeoutSeconds $ConnectTimeoutSeconds -RequestTimeoutSeconds 60
+        }
+        Write-EdgeDeploymentAttemptState -ReleaseRoot $releaseRoot -Target EdgePlugin -InvocationId $dispatchInvocationId `
+            -Stage 'reconciled-existing-release' -Status succeeded `
+            -Facts @{ moduleId = $ModuleId; version = $declaredVersion; sourceCommit = $gitFacts.Head; alreadyPublished = $true } | Out-Null
+        Write-Host "Edge plugin resume reconciliation succeeded: module=$ModuleId version=$declaredVersion alreadyPublished=true"
+        return
+    }
+
+    $packageOutputRoot = Join-Path $releaseRoot 'package'
+    if (-not $isResume) {
+        New-Item -Path $packageOutputRoot -ItemType Directory -Force | Out-Null
+        $attemptStage = 'building-package'
+        Write-EdgeDeploymentAttemptState -ReleaseRoot $releaseRoot -Target EdgePlugin -InvocationId $dispatchInvocationId `
+            -Stage $attemptStage -Status running `
+            -Facts @{ moduleId = $ModuleId; version = $declaredVersion; sourceCommit = $gitFacts.Head; resumeReleaseRoot = $releaseRoot } | Out-Null
+        Invoke-EdgeScript 'PackEdgePlugin.ps1' @(
+            '-ModuleId', $ModuleId,
+            '-Configuration', $Configuration,
+            '-TargetRuntime', $RuntimeIdentifier,
+            '-OutputRoot', $packageOutputRoot,
+            '-CleanOutput'
+        )
+    }
+
+    $metadataPath = Get-ChildItem -Path $packageOutputRoot -Filter '*.zip.json' -File | Select-Object -First 1
     if ($null -eq $metadataPath) {
         throw "Plugin package metadata was not generated under $packageOutputRoot."
     }
-
     $metadata = Get-Content -Raw -Encoding UTF8 -Path $metadataPath.FullName | ConvertFrom-Json
+    if ([string]$metadata.version -ne $declaredVersion -or [string]$metadata.targetRuntime -ne $RuntimeIdentifier) {
+        throw 'Preserved plugin metadata does not match the current manifest version/runtime.'
+    }
     $packagePath = Join-Path $packageOutputRoot ([string]$metadata.packageFileName)
-    if (-not (Test-Path $packagePath)) {
+    if (-not (Test-Path -LiteralPath $packagePath -PathType Leaf)) {
         throw "Plugin package was not generated: $packagePath"
     }
 
+    $attemptStage = 'validating-preserved-package'
+    Write-EdgeDeploymentAttemptState -ReleaseRoot $releaseRoot -Target EdgePlugin -InvocationId $dispatchInvocationId `
+        -Stage $attemptStage -Status running `
+        -Facts @{ moduleId = $ModuleId; version = $declaredVersion; sourceCommit = $gitFacts.Head; resumed = $isResume } | Out-Null
     if (-not $SkipPackageValidation) {
         Invoke-EdgeScript 'TestEdgePluginPackage.ps1' @(
             '-OutputRoot', $packageOutputRoot,
@@ -294,18 +369,19 @@ try {
         )
     }
 
-    Assert-PluginVersionDoesNotExist -Version ([string]$metadata.version) -TargetRuntime ([string]$metadata.targetRuntime)
-
     $wrapperZip = Join-Path $releaseRoot "edge-plugin-release-$ModuleId-$($metadata.version)-$RuntimeIdentifier.zip"
-    New-PluginReleaseWrapper `
-        -Metadata $metadata `
-        -PackagePath $packagePath `
-        -ReleaseNotesText $releaseNotesText `
-        -OutputZip $wrapperZip | Out-Null
+    if (-not $isResume -or -not (Test-Path -LiteralPath $wrapperZip -PathType Leaf)) {
+        New-PluginReleaseWrapper -Metadata $metadata -PackagePath $packagePath -ReleaseNotesText $releaseNotesText -OutputZip $wrapperZip | Out-Null
+    }
 
-    Write-Host "Publishing Edge plugin release over HTTP: module=$ModuleId version=$($metadata.version) runtime=$RuntimeIdentifier"
+    $attemptStage = 'uploading'
+    Write-EdgeDeploymentAttemptState -ReleaseRoot $releaseRoot -Target EdgePlugin -InvocationId $dispatchInvocationId `
+        -Stage $attemptStage -Status running `
+        -Facts @{ moduleId = $ModuleId; version = $declaredVersion; sourceCommit = $gitFacts.Head; wrapper = $wrapperZip } | Out-Null
+    Write-Host "Publishing Edge plugin release over HTTP: module=$ModuleId version=$($metadata.version) runtime=$RuntimeIdentifier timeout=${UploadTimeoutSeconds}s"
     Write-Host "Compatibility: hostApi=$($metadata.hostApiVersion), hostVersion=$($metadata.minHostVersion)..$($metadata.maxHostVersion)"
     $publishResult = Invoke-PluginPackageUpload -WrapperZip $wrapperZip
+    $attemptStage = 'verifying-downloads'
     Test-VerificationUrls -PublishResult $publishResult
 
     Write-Host ''
@@ -319,12 +395,39 @@ try {
     Write-Host "  sha256: $($publishResult.sha256)"
     Write-Host "  packageSize: $($publishResult.packageSize)"
     Write-Host "  uploadSeconds: $([math]::Round([double]$publishResult.uploadSeconds, 2))"
-    Write-Host "  httpVerification: ok"
+    Write-Host '  httpVerification: ok'
     Write-Host '  releaseNotes:'
     foreach ($line in $releaseNotesText.Split("`n", [System.StringSplitOptions]::RemoveEmptyEntries)) {
         Write-Host "    $($line.Trim())"
     }
+    Write-EdgeDeploymentAttemptState -ReleaseRoot $releaseRoot -Target EdgePlugin -InvocationId $dispatchInvocationId `
+        -Stage 'completed' -Status succeeded `
+        -Facts @{ moduleId = $ModuleId; version = $declaredVersion; sourceCommit = $gitFacts.Head; resumeReleaseRoot = $releaseRoot } | Out-Null
+}
+catch [System.Management.Automation.PipelineStoppedException] {
+    if (-not [string]::IsNullOrWhiteSpace($attemptReleaseRoot)) {
+        Write-EdgeDeploymentAttemptState -ReleaseRoot $attemptReleaseRoot -Target EdgePlugin -InvocationId $dispatchInvocationId `
+            -Stage $attemptStage -Status cancelled -Facts @{ resumeReleaseRoot = $attemptReleaseRoot } | Out-Null
+    }
+    throw
+}
+catch {
+    $message = $_.Exception.Message
+    if (-not [string]::IsNullOrWhiteSpace($attemptReleaseRoot)) {
+        try {
+            Write-EdgeDeploymentAttemptState -ReleaseRoot $attemptReleaseRoot -Target EdgePlugin -InvocationId $dispatchInvocationId `
+                -Stage $attemptStage -Status failed -Facts @{ error = $message; resumeReleaseRoot = $attemptReleaseRoot } | Out-Null
+        }
+        catch {
+            Write-Warning "Could not write Edge plugin failure state. $($_.Exception.Message)"
+        }
+        throw "Edge plugin release failed at stage '$attemptStage'. Artifacts were preserved at '$attemptReleaseRoot'. Retry through the workspace entrypoint with ResumeReleaseRoot='$attemptReleaseRoot'. $message"
+    }
+    throw
 }
 finally {
-    Pop-Location
+    if ($locationPushed) {
+        Pop-Location
+    }
+    Exit-EdgeDeploymentLock -Lock $deploymentLock
 }

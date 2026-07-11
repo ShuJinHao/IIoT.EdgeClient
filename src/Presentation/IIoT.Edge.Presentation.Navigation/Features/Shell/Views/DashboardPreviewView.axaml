@@ -201,11 +201,11 @@
                             Header="{DynamicResource Navigation_DashboardPreview_PlcLatency}"
                             MinWidth="92"
                             Width="1*" />
-                        <edge:EdgeTemplateColumn
+                        <edge:EdgeActionColumn
                             Header="{DynamicResource Navigation_DashboardPreview_PlcDetails}"
                             MinWidth="118"
                             Width="118">
-                            <edge:EdgeTemplateColumn.CellTemplate>
+                            <edge:EdgeActionColumn.CellTemplate>
                                 <DataTemplate>
                                     <edge:EdgeActionButton
                                         Command="{Binding DataContext.ShowPlcStatusDetailCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
@@ -216,8 +216,8 @@
                                         Size="Compact"
                                         VerticalAlignment="Center" />
                                 </DataTemplate>
-                            </edge:EdgeTemplateColumn.CellTemplate>
-                        </edge:EdgeTemplateColumn>
+                            </edge:EdgeActionColumn.CellTemplate>
+                        </edge:EdgeActionColumn>
                     </edge:EdgeDataGrid.Columns>
                 </edge:EdgeDataGrid>
             </edge:EdgeTablePanel>
@@ -361,128 +361,106 @@
                 CloseCommand="{Binding ClosePlcStatusDetailCommand}"
                 CloseTopLevelOnClose="False"
                 HorizontalAlignment="Center"
-                MaxWidth="620"
-                MinWidth="460"
+                MaxWidth="720"
+                MinWidth="600"
                 Title="{DynamicResource Navigation_DashboardPreview_PlcDetailTitle}"
                 VerticalAlignment="Center">
-                <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*" RowSpacing="{DynamicResource Edge.Size.Spacing8}">
-                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
-                        <TextBlock
-                            Classes="edge-summary-card-label"
-                            Text="{DynamicResource Navigation_DashboardPreview_PlcDevice}" />
-                        <TextBlock
-                            Grid.Column="1"
-                            Classes="edge-summary-card-value"
-                            Text="{Binding SelectedPlcStatusDetail.DeviceName}" />
-                    </Grid>
-                    <Grid
+                <Grid RowDefinitions="Auto,Auto,*" RowSpacing="{DynamicResource Edge.Size.Spacing12}">
+                    <edge:EdgeCard
+                        x:Name="PlcDetailSummaryCard"
+                        Elevation="Flat"
+                        PaddingMode="Compact"
+                        Surface="Wash">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Edge.Size.Spacing12}">
+                            <StackPanel Spacing="{DynamicResource Edge.Size.Spacing4}">
+                                <TextBlock
+                                    Classes="edge-summary-card-label"
+                                    Text="{DynamicResource Navigation_DashboardPreview_PlcDevice}" />
+                                <TextBlock
+                                    Classes="edge-summary-card-value"
+                                    Text="{Binding SelectedPlcStatusDetail.DeviceName}" />
+                            </StackPanel>
+                            <edge:EdgeStatusChip
+                                Grid.Column="1"
+                                VerticalAlignment="Center"
+                                Status="{Binding SelectedPlcStatusDetail.Status}"
+                                Text="{Binding SelectedPlcStatusDetail.StateText}" />
+                        </Grid>
+                    </edge:EdgeCard>
+
+                    <edge:EdgeCard
                         Grid.Row="1"
-                        ColumnDefinitions="Auto,*"
-                        ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
-                        <TextBlock
-                            Classes="edge-summary-card-label"
-                            Text="{DynamicResource Navigation_DashboardPreview_PlcState}" />
-                        <TextBlock
-                            Grid.Column="1"
-                            Classes="edge-summary-card-value"
-                            Text="{Binding SelectedPlcStatusDetail.StateText}" />
-                    </Grid>
-                    <Grid
+                        Elevation="Flat"
+                        PaddingMode="Compact"
+                        Surface="Wash">
+                        <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="{DynamicResource Edge.Size.Spacing8}">
+                            <TextBlock
+                                Classes="edge-text-form-section-title"
+                                Text="{DynamicResource Navigation_DashboardPreview_PlcCommunicationSection}" />
+                            <Grid
+                                Grid.Row="1"
+                                ColumnDefinitions="Auto,*,Auto,*"
+                                RowDefinitions="Auto,Auto"
+                                ColumnSpacing="{DynamicResource Edge.Size.Spacing8}"
+                                RowSpacing="{DynamicResource Edge.Size.Spacing6}">
+                                <TextBlock Classes="edge-summary-card-label" Text="{DynamicResource Navigation_DashboardPreview_PlcEndpoint}" />
+                                <TextBlock Grid.Column="1" Grid.ColumnSpan="3" Classes="edge-summary-card-value" Text="{Binding SelectedPlcStatusDetail.EndpointText}" />
+                                <TextBlock Grid.Row="1" Classes="edge-summary-card-label" Text="{DynamicResource Navigation_DashboardPreview_PlcDeviceModel}" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Classes="edge-summary-card-value" Text="{Binding SelectedPlcStatusDetail.DeviceModelText}" />
+                                <TextBlock Grid.Row="1" Grid.Column="2" Classes="edge-summary-card-label" Text="{DynamicResource Navigation_DashboardPreview_PlcProtocolFrame}" />
+                                <TextBlock Grid.Row="1" Grid.Column="3" Classes="edge-summary-card-value" Text="{Binding SelectedPlcStatusDetail.ProtocolFrameText}" />
+                            </Grid>
+
+                            <TextBlock
+                                Grid.Row="2"
+                                Classes="edge-text-form-section-title"
+                                Text="{DynamicResource Navigation_DashboardPreview_PlcActivitySection}" />
+                            <Grid
+                                Grid.Row="3"
+                                ColumnDefinitions="*,*"
+                                RowDefinitions="Auto,Auto"
+                                ColumnSpacing="{DynamicResource Edge.Size.Spacing12}"
+                                RowSpacing="{DynamicResource Edge.Size.Spacing8}">
+                                <StackPanel Spacing="{DynamicResource Edge.Size.Spacing2}">
+                                    <TextBlock Classes="edge-summary-card-label" Text="{DynamicResource Navigation_DashboardPreview_PlcLastAttempt}" />
+                                    <TextBlock Classes="edge-summary-card-value" Text="{Binding SelectedPlcStatusDetail.LastAttemptText}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="{DynamicResource Edge.Size.Spacing2}">
+                                    <TextBlock Classes="edge-summary-card-label" Text="{DynamicResource Navigation_DashboardPreview_PlcLastConnected}" />
+                                    <TextBlock Classes="edge-summary-card-value" Text="{Binding SelectedPlcStatusDetail.LastConnectedText}" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Spacing="{DynamicResource Edge.Size.Spacing2}">
+                                    <TextBlock Classes="edge-summary-card-label" Text="{DynamicResource Navigation_DashboardPreview_PlcLastRead}" />
+                                    <TextBlock Classes="edge-summary-card-value" Text="{Binding SelectedPlcStatusDetail.LastReadText}" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="1" Spacing="{DynamicResource Edge.Size.Spacing2}">
+                                    <TextBlock Classes="edge-summary-card-label" Text="{DynamicResource Navigation_DashboardPreview_PlcLastFailure}" />
+                                    <TextBlock Classes="edge-summary-card-value" Text="{Binding SelectedPlcStatusDetail.LastFailureText}" />
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </edge:EdgeCard>
+
+                    <edge:EdgeCard
                         Grid.Row="2"
-                        ColumnDefinitions="Auto,*"
-                        ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
-                        <TextBlock
-                            Classes="edge-summary-card-label"
-                            Text="{DynamicResource Navigation_DashboardPreview_PlcEndpoint}" />
-                        <TextBlock
-                            Grid.Column="1"
-                            Classes="edge-summary-card-value"
-                            Text="{Binding SelectedPlcStatusDetail.EndpointText}" />
-                    </Grid>
-                    <Grid
-                        Grid.Row="3"
-                        ColumnDefinitions="Auto,*"
-                        ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
-                        <TextBlock
-                            Classes="edge-summary-card-label"
-                            Text="{DynamicResource Navigation_DashboardPreview_PlcDeviceModel}" />
-                        <TextBlock
-                            Grid.Column="1"
-                            Classes="edge-summary-card-value"
-                            Text="{Binding SelectedPlcStatusDetail.DeviceModelText}" />
-                    </Grid>
-                    <Grid
-                        Grid.Row="4"
-                        ColumnDefinitions="Auto,*"
-                        ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
-                        <TextBlock
-                            Classes="edge-summary-card-label"
-                            Text="{DynamicResource Navigation_DashboardPreview_PlcProtocolFrame}" />
-                        <TextBlock
-                            Grid.Column="1"
-                            Classes="edge-summary-card-value"
-                            Text="{Binding SelectedPlcStatusDetail.ProtocolFrameText}" />
-                    </Grid>
-                    <Grid
-                        Grid.Row="5"
-                        ColumnDefinitions="Auto,*"
-                        ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
-                        <TextBlock
-                            Classes="edge-summary-card-label"
-                            Text="{DynamicResource Navigation_DashboardPreview_PlcLastAttempt}" />
-                        <TextBlock
-                            Grid.Column="1"
-                            Classes="edge-summary-card-value"
-                            Text="{Binding SelectedPlcStatusDetail.LastAttemptText}" />
-                    </Grid>
-                    <Grid
-                        Grid.Row="6"
-                        ColumnDefinitions="Auto,*"
-                        ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
-                        <TextBlock
-                            Classes="edge-summary-card-label"
-                            Text="{DynamicResource Navigation_DashboardPreview_PlcLastConnected}" />
-                        <TextBlock
-                            Grid.Column="1"
-                            Classes="edge-summary-card-value"
-                            Text="{Binding SelectedPlcStatusDetail.LastConnectedText}" />
-                    </Grid>
-                    <Grid
-                        Grid.Row="7"
-                        ColumnDefinitions="Auto,*"
-                        ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
-                        <TextBlock
-                            Classes="edge-summary-card-label"
-                            Text="{DynamicResource Navigation_DashboardPreview_PlcLastRead}" />
-                        <TextBlock
-                            Grid.Column="1"
-                            Classes="edge-summary-card-value"
-                            Text="{Binding SelectedPlcStatusDetail.LastReadText}" />
-                    </Grid>
-                    <Grid
-                        Grid.Row="8"
-                        ColumnDefinitions="Auto,*"
-                        ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
-                        <TextBlock
-                            Classes="edge-summary-card-label"
-                            Text="{DynamicResource Navigation_DashboardPreview_PlcLastFailure}" />
-                        <TextBlock
-                            Grid.Column="1"
-                            Classes="edge-summary-card-value"
-                            Text="{Binding SelectedPlcStatusDetail.LastFailureText}" />
-                    </Grid>
-                    <TextBlock
-                        Grid.Row="9"
-                        Classes="edge-summary-card-label"
-                        Text="{DynamicResource Navigation_DashboardPreview_PlcErrorDetail}" />
-                    <edge:EdgeScrollHost
-                        Grid.Row="10"
-                        MaxHeight="220"
-                        VerticalScrollBarVisibility="Auto">
-                        <TextBlock
-                            Text="{Binding SelectedPlcStatusDetail.LastErrorDetail}"
-                            TextWrapping="Wrap" />
-                    </edge:EdgeScrollHost>
+                        Elevation="Flat"
+                        PaddingMode="Compact"
+                        Surface="Wash">
+                        <Grid RowDefinitions="Auto,*" RowSpacing="{DynamicResource Edge.Size.Spacing6}">
+                            <TextBlock
+                                Classes="edge-text-form-section-title"
+                                Text="{DynamicResource Navigation_DashboardPreview_PlcErrorDetail}" />
+                            <edge:EdgeScrollHost
+                                Grid.Row="1"
+                                MaxHeight="160"
+                                Variant="Dialog"
+                                VerticalScrollBarVisibility="Auto">
+                                <TextBlock
+                                    Text="{Binding SelectedPlcStatusDetail.LastErrorDetail}"
+                                    TextWrapping="Wrap" />
+                            </edge:EdgeScrollHost>
+                        </Grid>
+                    </edge:EdgeCard>
                 </Grid>
                 <edge:EdgeDialogChrome.FooterContent>
                     <StackPanel Classes="edge-dialog-actions">

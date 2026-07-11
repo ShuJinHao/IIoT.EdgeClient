@@ -9,7 +9,7 @@ public sealed record SystemRuntimeConfigSnapshot(
 {
     public static SystemRuntimeConfigSnapshot Default { get; } = new(
         MesUploadEnabled: true,
-        SystemCloudEnabled: true,
+        SystemCloudEnabled: false,
         OnlineHeartbeatInterval: TimeSpan.FromSeconds(60),
         CloudSyncInterval: TimeSpan.FromSeconds(60),
         RuntimeHeartbeatInterval: TimeSpan.FromSeconds(60));

@@ -259,6 +259,7 @@ public sealed class DeviceLogSyncTaskBehaviorTests
             {
                 Current = SystemRuntimeConfigSnapshot.Default with
                 {
+                    SystemCloudEnabled = true,
                     CloudSyncInterval = TimeSpan.FromSeconds(1)
                 }
             },
@@ -339,7 +340,10 @@ public sealed class DeviceLogSyncTaskBehaviorTests
     private static FakeLocalSystemRuntimeConfigService CreateRuntimeConfig()
         => new()
         {
-            Current = SystemRuntimeConfigSnapshot.Default
+            Current = SystemRuntimeConfigSnapshot.Default with
+            {
+                SystemCloudEnabled = true
+            }
         };
 
     private static async Task WaitForAsync(Func<bool> predicate)

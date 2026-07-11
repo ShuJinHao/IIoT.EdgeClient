@@ -270,7 +270,13 @@ public sealed class RepositoryHygieneTests
         Assert.Contains("ViewportMaxHeight=\"0\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("ItemsControl ItemsSource=\"{Binding PlcStatusTableItems}\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("ColumnDefinitions=\"82,98,70,82,82,56\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<edge:EdgeActionColumn", xaml, StringComparison.Ordinal);
         Assert.Contains("Command=\"{Binding DataContext.ShowPlcStatusDetailCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"PlcDetailSummaryCard\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Navigation_DashboardPreview_PlcCommunicationSection", xaml, StringComparison.Ordinal);
+        Assert.Contains("Navigation_DashboardPreview_PlcActivitySection", xaml, StringComparison.Ordinal);
+        Assert.Contains("<edge:EdgeStatusChip", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("RowDefinitions=\"Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding SelectedPlcStatusDetail.LastErrorDetail}\"", xaml, StringComparison.Ordinal);
     }
 
@@ -1009,7 +1015,19 @@ public sealed class RepositoryHygieneTests
 
         var localPublisher = File.ReadAllText(Path.Combine(root, "scripts", "LocalPublishAndDeploy.ps1"));
         Assert.Contains("Production Edge release notes are required", localPublisher, StringComparison.Ordinal);
-        Assert.Contains("tail -n 3", localPublisher, StringComparison.Ordinal);
+        Assert.Contains("Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgeHost", localPublisher, StringComparison.Ordinal);
+        Assert.Contains("ResumeReleaseRoot", localPublisher, StringComparison.Ordinal);
+
+        var pluginPublisher = File.ReadAllText(Path.Combine(root, "scripts", "PublishEdgePluginRelease.ps1"));
+        Assert.Contains("Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgePlugin", pluginPublisher, StringComparison.Ordinal);
+        Assert.Contains("No package build was started", pluginPublisher, StringComparison.Ordinal);
+
+        var deploymentCommon = File.ReadAllText(Path.Combine(root, "scripts", "EdgeDeployment.Common.ps1"));
+        Assert.Contains("--fail-with-body", deploymentCommon, StringComparison.Ordinal);
+        Assert.Contains("--connect-timeout", deploymentCommon, StringComparison.Ordinal);
+        Assert.Contains("--max-time", deploymentCommon, StringComparison.Ordinal);
+        Assert.Contains("--speed-time", deploymentCommon, StringComparison.Ordinal);
+        Assert.Contains("Another Edge release is active", deploymentCommon, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1325,6 +1343,24 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
+    public void NetworkDevicePage_ShouldUseResponsiveColumnsAndGroupedSharedDialog()
+    {
+        var root = FindRepositoryRoot();
+        var xaml = File.ReadAllText(ToFullPath(
+            root,
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Hardware/HardwareConfigView/Views/NetworkDevicePage.axaml"));
+
+        Assert.Contains("x:Name=\"NetworkDeviceDialog\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Navigation_NetworkDevice_IdentitySection", xaml, StringComparison.Ordinal);
+        Assert.Contains("Navigation_NetworkDevice_ConnectionSection", xaml, StringComparison.Ordinal);
+        Assert.Contains("Navigation_NetworkDevice_AdvancedSection", xaml, StringComparison.Ordinal);
+        Assert.Contains("<edge:EdgeCard", xaml, StringComparison.Ordinal);
+        Assert.Contains("Binding=\"{Binding IpAddress}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MinWidth=\"134\" Width=\"1.35*\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MinWidth=\"180\" Width=\"2*\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ShellWindowRegion_ShouldMatchStageCornerRadiusToken()
     {
         var root = FindRepositoryRoot();
@@ -1367,6 +1403,10 @@ public sealed class RepositoryHygieneTests
         Assert.Contains("重置标准点位", zhResources, StringComparison.Ordinal);
         Assert.DoesNotContain(">套用模板<", zhResources, StringComparison.Ordinal);
         Assert.DoesNotContain(">播种<", zhResources, StringComparison.Ordinal);
+        Assert.Contains("IsEmpty=\"{Binding HasNoInteractionIoMappingGroups}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Binding=\"{Binding Remark}\" Header=\"{DynamicResource Navigation_Column_Remark}\" MinWidth=\"240\" Width=\"*\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MinWidth=\"220\" Width=\"220\"", xaml, StringComparison.Ordinal);
+        Assert.Equal(1, xaml.Split("Navigation_Empty_IoInteractionRows", StringSplitOptions.None).Length - 1);
         Assert.Contains("ConfirmResetModuleTemplateAsync", coordinator, StringComparison.Ordinal);
         Assert.Contains("清空当前 PLC 已有 IO 映射", coordinator, StringComparison.Ordinal);
     }
@@ -1389,6 +1429,21 @@ public sealed class RepositoryHygieneTests
             Assert.Contains("ViewportMaxHeight=\"0\"", xaml, StringComparison.Ordinal);
             Assert.Contains("<edge:EdgeTablePanel.HeaderMetaContent>", xaml, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void PlcTaskBindingPage_ShouldUseContentDrivenBoundedTable()
+    {
+        var root = FindRepositoryRoot();
+        var xaml = File.ReadAllText(ToFullPath(
+            root,
+            "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Hardware/PlcTaskBindingView/Views/PlcTaskBindingPage.axaml"));
+
+        Assert.Contains("RowDefinitions=\"Auto,Auto,Auto,*\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsEmpty=\"{Binding !SelectedDeviceTasks.Count}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ViewportMaxHeight=\"320\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<edge:EdgeTablePanel\n            Grid.Row=\"2\"\n            Classes=\"fill\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ViewportMaxHeight=\"0\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1963,6 +2018,40 @@ public sealed class RepositoryHygieneTests
         Assert.Contains("controls|EdgeSummaryItemsControl", metricsStyles, StringComparison.Ordinal);
         Assert.Contains("controls|EdgeStatusTimeline", statusStyles, StringComparison.Ordinal);
         Assert.Contains("SegmentWidth", statusStyles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SharedUi_Scrollbars_ShouldUseUnifiedHitAreaAndThumbVisibility()
+    {
+        var root = FindRepositoryRoot();
+        var gridSource = File.ReadAllText(ToFullPath(
+            root,
+            "src/Shared/IIoT.Edge.UI.Shared/Avalonia/Controls/Data/EdgeDataGrid.cs"));
+        var dataStyles = File.ReadAllText(ToFullPath(
+                root,
+                "src/Shared/IIoT.Edge.UI.Shared/Avalonia/Styles/Controls/Data.axaml"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        Assert.Contains("nameof(HorizontalScrollBarReserveHeight),\n            10d", gridSource.Replace("\r\n", "\n", StringComparison.Ordinal), StringComparison.Ordinal);
+        Assert.Contains("""
+                            Name="PART_VerticalScrollbar"
+                            Classes="edge-data-grid-scrollbar"
+                            Grid.Row="1"
+                            Grid.Column="2"
+                            Margin="2,2,0,2"
+                            Width="10"
+""", dataStyles, StringComparison.Ordinal);
+        Assert.Contains("""
+                                Name="PART_HorizontalScrollbar"
+                                Classes="edge-data-grid-scrollbar"
+                                Grid.Column="1"
+                                Height="10"
+                                Margin="0"
+""", dataStyles, StringComparison.Ordinal);
+        Assert.Contains("DataGrid.edge-data-grid ScrollBar.edge-data-grid-scrollbar", dataStyles, StringComparison.Ordinal);
+        Assert.Contains("Padding=\"2\"", dataStyles, StringComparison.Ordinal);
+        Assert.Contains("Opacity=\"0.28\"", dataStyles, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Opacity\" Value=\"0.58\" />", dataStyles, StringComparison.Ordinal);
     }
 
     [Fact]

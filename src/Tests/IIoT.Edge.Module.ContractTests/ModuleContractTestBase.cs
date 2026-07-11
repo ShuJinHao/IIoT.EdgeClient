@@ -143,6 +143,12 @@ public abstract class ModuleContractTestBase<TModule>
         services.AddSingleton<IDataPipelineService, ContractDataPipelineService>();
         services.AddSingleton<IProductionTimeProvider, ContractProductionTimeProvider>();
         services.AddSingleton<IProductionContextSignalBindingStore, ProductionContextSignalBindingStore>();
+        services.AddSingleton<ICloudExecutionPolicy>(new ContractCloudExecutionPolicy(false));
+    }
+
+    private sealed class ContractCloudExecutionPolicy(bool isEnabled) : ICloudExecutionPolicy
+    {
+        public bool IsEnabled { get; } = isEnabled;
     }
 
     private sealed class ContractProductionTimeProvider : IProductionTimeProvider

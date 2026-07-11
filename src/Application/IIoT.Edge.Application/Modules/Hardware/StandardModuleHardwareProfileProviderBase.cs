@@ -80,7 +80,10 @@ public abstract class StandardModuleHardwareProfileProviderBase<TInteraction, TS
     }
 
     protected override string CreateTemplateRemark(ModuleHardwareSignalTemplate signal)
-        => $"{ModuleDisplayName} - {signal.DisplayName}";
+        => signal.DisplayName;
+
+    protected override IReadOnlyList<string> CreateLegacyTemplateRemarks(ModuleHardwareSignalTemplate signal)
+        => [$"{ModuleDisplayName} - {signal.DisplayName}"];
 
     private IReadOnlyList<ModuleHardwareSignalTemplate> BuildAllSignals()
     {

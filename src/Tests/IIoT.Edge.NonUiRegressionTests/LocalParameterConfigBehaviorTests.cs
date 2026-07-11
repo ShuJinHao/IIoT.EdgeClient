@@ -136,7 +136,7 @@ public sealed class LocalParameterConfigBehaviorTests
     }
 
     [Fact]
-    public async Task ParamViewCrudService_LoadAsync_ShouldHideSensitiveFieldsAndPutCloudEnableFirst()
+    public async Task ParamViewCrudService_LoadAsync_ShouldHideSensitiveFieldsAndPutSystemCloudEnableFirst()
     {
         var registry = new ModuleParamRegistry();
         registry.Register(
@@ -154,8 +154,11 @@ public sealed class LocalParameterConfigBehaviorTests
             param => param.Key.EndsWith(":签名令牌", StringComparison.OrdinalIgnoreCase));
         var cloudParams = Assert.Single(result.CloudParamGroups).Params;
         Assert.Equal(
-            ModuleParamKeys.StorageKey(ModuleId, ModuleParamCategory.Cloud, nameof(TestCloudParams.启用)),
+            CloudApiConfigParamSchema.Enabled,
             cloudParams[0].Key);
+        Assert.DoesNotContain(
+            cloudParams,
+            param => param.Key.EndsWith(":Cloud:启用", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(cloudParams, param => param.Key == CloudApiConfigParamSchema.BaseUrl);
         Assert.Contains(cloudParams, param => param.Key == CloudApiConfigParamSchema.ProcessUploadPath);
         Assert.Contains(cloudParams, param => param.Key == CloudApiConfigParamSchema.PassStationBatchTemplatePath);
@@ -267,6 +270,117 @@ public sealed class LocalParameterConfigBehaviorTests
         Assert.False(host.Cache.Contains(ParameterCacheKeys.SystemAll));
         Assert.False(host.Cache.Contains(ParameterCacheKeys.ModuleSnapshot(ModuleId)));
         Assert.Equal(2, events.Count);
+    }
+
+    [Theory]
+    [InlineData(true, true, true, true)]
+    [InlineData(true, true, false, false)]
+    [InlineData(true, false, false, false)]
+    [InlineData(false, true, true, false)]
+    public async Task CloudSystemSwitchMigration_ShouldUseSystemAndAllLegacySwitchesFailClosed(
+        bool systemEnabled,
+        bool hasLegacySwitches,
+        bool allLegacyEnabled,
+        bool expectedEnabled)
+    {
+        var configs = new List<SystemConfigEntity>
+        {
+            CreateSystemConfig(1, CloudApiConfigParamSchema.Enabled, systemEnabled.ToString())
+        };
+        if (hasLegacySwitches)
+        {
+            configs.Add(CreateSystemConfig(2, "Module:Homogenization:Cloud:启用", allLegacyEnabled.ToString()));
+            configs.Add(CreateSystemConfig(3, "Module:DieCuttingAnode:Cloud:启用", "true"));
+        }
+
+        var repository = new InMemoryRepository<SystemConfigEntity>([.. configs]);
+        var projection = new RecordingCloudProfileSwitchProjectionWriter();
+        var migration = new CloudSystemSwitchMigration(repository, new TestEdgeCacheService(), projection);
+
+        var result = await migration.MigrateAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(result);
+        Assert.Equal([expectedEnabled], projection.Values);
+        Assert.Equal(
+            expectedEnabled.ToString(),
+            repository.Items.Single(config => config.Key == CloudApiConfigParamSchema.Enabled).Value,
+            ignoreCase: true);
+        Assert.Single(repository.Items, config => config.Key == CloudSystemSwitchMigration.MigrationMarkerKey);
+    }
+
+    [Fact]
+    public async Task CloudSystemSwitchMigration_WhenMarkerExists_ShouldOnlyRefreshLauncherProjection()
+    {
+        var repository = new InMemoryRepository<SystemConfigEntity>(
+            CreateSystemConfig(1, CloudApiConfigParamSchema.Enabled, "false"),
+            CreateSystemConfig(2, CloudSystemSwitchMigration.MigrationMarkerKey, "true"));
+        var projection = new RecordingCloudProfileSwitchProjectionWriter();
+        var migration = new CloudSystemSwitchMigration(repository, new TestEdgeCacheService(), projection);
+
+        var result = await migration.MigrateAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(result);
+        Assert.Equal([false], projection.Values);
+        Assert.Equal(2, repository.Items.Count);
+    }
+
+    [Fact]
+    public async Task SaveCloudApiConfigParamsHandler_WhenEnabled_ShouldRefreshRuntimeAndWriteProjection()
+    {
+        using var host = new ParameterConfigTestHost();
+        var runtime = new RecordingRuntimeConfigService();
+        var projection = new RecordingCloudProfileSwitchProjectionWriter();
+        var handler = new SaveCloudApiConfigParamsHandler(
+            host.SystemRepo,
+            host.Cache,
+            host.ChangePublisher,
+            runtime,
+            projection);
+
+        var result = await handler.Handle(
+            new SaveCloudApiConfigParamsCommand(
+            [
+                new CloudApiConfigParamDto(CloudApiConfigParamSchema.Enabled, "true")
+            ]),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+        Assert.Equal([true], projection.Values);
+        Assert.Equal(1, runtime.RefreshCount);
+        Assert.Equal(
+            "true",
+            host.SystemRepo.Items.Single(config => config.Key == CloudApiConfigParamSchema.Enabled).Value,
+            ignoreCase: true);
+    }
+
+    [Fact]
+    public async Task SaveCloudApiConfigParamsHandler_WhenEnableProjectionFails_ShouldRollBackSystemSwitch()
+    {
+        using var host = new ParameterConfigTestHost();
+        var runtime = new RecordingRuntimeConfigService();
+        var projection = new RecordingCloudProfileSwitchProjectionWriter { ThrowWhenEnabling = true };
+        var handler = new SaveCloudApiConfigParamsHandler(
+            host.SystemRepo,
+            host.Cache,
+            host.ChangePublisher,
+            runtime,
+            projection);
+
+        var result = await handler.Handle(
+            new SaveCloudApiConfigParamsCommand(
+            [
+                new CloudApiConfigParamDto(CloudApiConfigParamSchema.Enabled, "true")
+            ]),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("已回滚为关闭", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.Equal([true], projection.Values);
+        Assert.Equal(2, runtime.RefreshCount);
+        Assert.Equal(
+            "false",
+            host.SystemRepo.Items.Single(config => config.Key == CloudApiConfigParamSchema.Enabled).Value,
+            ignoreCase: true);
     }
 
     private static SystemConfigEntity CreateSystemConfig(int id, string key, string value)
@@ -401,7 +515,12 @@ public sealed class LocalParameterConfigBehaviorTests
         private async Task<TResponse> HandleSaveCloudApiConfigParams<TResponse>(
             SaveCloudApiConfigParamsCommand command,
             CancellationToken cancellationToken)
-            => (TResponse)(object)await new SaveCloudApiConfigParamsHandler(systemRepo, cache, changePublisher)
+            => (TResponse)(object)await new SaveCloudApiConfigParamsHandler(
+                    systemRepo,
+                    cache,
+                    changePublisher,
+                    new FakeLocalSystemRuntimeConfigService(),
+                    new StubCloudProfileSwitchProjectionWriter())
                 .Handle(command, cancellationToken);
     }
 
@@ -439,11 +558,48 @@ public sealed class LocalParameterConfigBehaviorTests
 
     private enum TestCloudParams
     {
-        [ModuleParam(ParamValueKind.Bool, DefaultValue = "false", Role = ModuleParamRole.CloudEnabled)]
-        启用,
-
         [ModuleParam(ParamValueKind.String, DefaultValue = "http://localhost:5180")]
         服务地址
+    }
+
+    private sealed class StubCloudProfileSwitchProjectionWriter : ICloudProfileSwitchProjectionWriter
+    {
+        public Task WriteAsync(bool enabled, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+    }
+
+    private sealed class RecordingCloudProfileSwitchProjectionWriter : ICloudProfileSwitchProjectionWriter
+    {
+        public List<bool> Values { get; } = [];
+
+        public bool ThrowWhenEnabling { get; init; }
+
+        public Task WriteAsync(bool enabled, CancellationToken cancellationToken = default)
+        {
+            Values.Add(enabled);
+            if (enabled && ThrowWhenEnabling)
+            {
+                throw new IOException("projection unavailable");
+            }
+
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingRuntimeConfigService : ILocalSystemRuntimeConfigService
+    {
+        public SystemRuntimeConfigSnapshot Current { get; } = SystemRuntimeConfigSnapshot.Default;
+
+        public int RefreshCount { get; private set; }
+
+        public Task EnsureInitializedAsync(CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task RefreshAsync(CancellationToken cancellationToken = default)
+        {
+            RefreshCount++;
+            return Task.CompletedTask;
+        }
     }
 
     private enum TestBusinessParams

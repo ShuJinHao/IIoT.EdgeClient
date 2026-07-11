@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Auth;
 using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Tasks;
 using IIoT.Edge.Application.Abstractions.Modules;
@@ -11,6 +12,7 @@ using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Application.Common.Tasks;
 using IIoT.Edge.Application.Features.DataPipeline.DeadLetters;
 using IIoT.Edge.Application.Features.Config.LocalParameterConfig;
+using IIoT.Edge.Application.Features.Config.CloudApi;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Features.Config.ParamView;
 using IIoT.Edge.Application.Features.Config.SchemaReconciliation;
@@ -39,6 +41,8 @@ public static class DependencyInjection
         services.AddSingleton<ILocalParameterConfigChangePublisher>(sp => sp.GetRequiredService<LocalParameterConfigService>());
         services.AddSingleton<LocalSystemRuntimeConfigService>();
         services.AddSingleton<ILocalSystemRuntimeConfigService>(sp => sp.GetRequiredService<LocalSystemRuntimeConfigService>());
+        services.AddSingleton<ICloudExecutionPolicy, CloudExecutionPolicy>();
+        services.AddSingleton<ICloudSystemSwitchMigration, CloudSystemSwitchMigration>();
         services.AddSingleton<ModuleParamValueSnapshotLoader>();
         services.AddSingleton<ModuleHardwareProfileResolver>();
         services.AddSingleton(typeof(IModuleParamProvider<,,>), typeof(ModuleParamProvider<,,>));

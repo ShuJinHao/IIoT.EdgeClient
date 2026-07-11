@@ -301,6 +301,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         services.AddSingleton<IDeviceService>(deviceService);
         services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
         services.AddSingleton<ICloudUploadDiagnosticsStore>(new FakeCloudDiagnosticsStore());
+        services.AddSingleton<ICloudExecutionPolicy>(new FixedCloudExecutionPolicy(true));
         services.AddSingleton<IHomogenizationMesScenarioChannel>(mesApi);
         services.AddSingleton<IDataPipelineService>(pipeline);
         services.AddSingleton<IProductionTimeProvider>(new FakeProductionTimeProvider());
@@ -450,6 +451,7 @@ public sealed class HomogenizationRuntimeBehaviorTests
         services.AddSingleton<IDeviceService>(deviceService);
         services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
         services.AddSingleton<ICloudUploadDiagnosticsStore>(new FakeCloudDiagnosticsStore());
+        services.AddSingleton<ICloudExecutionPolicy>(new FixedCloudExecutionPolicy(true));
         services.AddSingleton<IHomogenizationMesScenarioChannel>(mesApi);
         services.AddSingleton<IDataPipelineService>(pipeline);
         services.AddSingleton<IProductionTimeProvider>(new FakeProductionTimeProvider());
@@ -771,14 +773,8 @@ public sealed class HomogenizationRuntimeBehaviorTests
                     "Homogenization",
                     ModuleParamCategory.Cloud,
                     new Dictionary<HomogenizationParams.Cloud, string>(),
-                    new Dictionary<HomogenizationParams.Cloud, string?>
-                    {
-                        [HomogenizationParams.Cloud.启用] = "false"
-                    },
-                    new Dictionary<HomogenizationParams.Cloud, ParamValueKind>
-                    {
-                        [HomogenizationParams.Cloud.启用] = ParamValueKind.Bool
-                    },
+                    new Dictionary<HomogenizationParams.Cloud, string?>(),
+                    new Dictionary<HomogenizationParams.Cloud, ParamValueKind>(),
                     warn: null),
                 new ModuleParamGroup<HomogenizationParams.Business>(
                     "Homogenization",
@@ -1028,5 +1024,10 @@ public sealed class HomogenizationRuntimeBehaviorTests
             HomogenizationContext context,
             CancellationToken cancellationToken = default)
             => Task.FromResult(MesCallResult.Success("测试门禁通过。"));
+    }
+
+    private sealed class FixedCloudExecutionPolicy(bool isEnabled) : ICloudExecutionPolicy
+    {
+        public bool IsEnabled { get; } = isEnabled;
     }
 }

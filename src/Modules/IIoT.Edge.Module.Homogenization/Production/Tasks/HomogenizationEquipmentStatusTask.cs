@@ -24,6 +24,7 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
     private readonly IDataPipelineService _dataPipelineService;
     private readonly IMesUploadDiagnosticsStore _mesDiagnosticsStore;
     private readonly ICloudUploadDiagnosticsStore _cloudDiagnosticsStore;
+    private readonly ICloudExecutionPolicy _cloudExecutionPolicy;
     private readonly IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> _parameters;
 
     /// <summary>
@@ -37,6 +38,7 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
         IDataPipelineService dataPipelineService,
         IMesUploadDiagnosticsStore mesDiagnosticsStore,
         ICloudUploadDiagnosticsStore cloudDiagnosticsStore,
+        ICloudExecutionPolicy cloudExecutionPolicy,
         IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> parameters,
         ILogService logger,
         IProductionTimeProvider productionTime,
@@ -47,6 +49,7 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
         _dataPipelineService = dataPipelineService;
         _mesDiagnosticsStore = mesDiagnosticsStore;
         _cloudDiagnosticsStore = cloudDiagnosticsStore;
+        _cloudExecutionPolicy = cloudExecutionPolicy;
         _parameters = parameters;
     }
 
@@ -100,7 +103,7 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
         var parameterSnapshot = await _parameters.GetAsync(cancellationToken).ConfigureAwait(false);
         var uploadTargets = ResolveUploadTargets(
             parameterSnapshot.Mes<bool>(HomogenizationParams.Mes.启用),
-            parameterSnapshot.Cloud<bool>(HomogenizationParams.Cloud.启用));
+            _cloudExecutionPolicy.IsEnabled);
         if (uploadTargets == DataPipelineUploadTargets.None)
         {
             return (MesCallResult.Disabled("MES/Cloud 上传已关闭，设备状态上传已跳过。"), uploadTargets);

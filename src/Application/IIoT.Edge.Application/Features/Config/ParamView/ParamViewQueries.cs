@@ -83,9 +83,9 @@ public class LoadParamViewHandler(
         IReadOnlyCollection<LocalSystemConfigSnapshot> systemSnapshots,
         CloudApiConfigSnapshot cloudApiSnapshot)
     {
-        var parameters = BuildModuleGroups(ModuleParamCategory.Cloud, moduleParamRegistry, moduleNames, moduleValues)
-            .SelectMany(static group => group.Params)
-            .Concat(BuildCloudApiGroup(systemSnapshots, cloudApiSnapshot).Params)
+        var parameters = BuildCloudApiGroup(systemSnapshots, cloudApiSnapshot).Params
+            .Concat(BuildModuleGroups(ModuleParamCategory.Cloud, moduleParamRegistry, moduleNames, moduleValues)
+                .SelectMany(static group => group.Params))
             .ToList();
 
         return

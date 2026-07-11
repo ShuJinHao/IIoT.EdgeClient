@@ -83,7 +83,8 @@ public sealed record ModuleIoTemplateEntry(
     int SortOrder,
     string? Remark = null,
     string Category = "单点读数据",
-    string BusinessGroup = "");
+    string BusinessGroup = "",
+    IReadOnlyList<string>? LegacyRemarks = null);
 
 public sealed record ModuleIoSnapshot(
     string SignalKey,

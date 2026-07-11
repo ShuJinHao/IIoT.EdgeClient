@@ -134,7 +134,7 @@ public enum CloudApiConfigParam
         DisplayNameResourceKey = "Navigation_Param_CloudApi_Enabled_DisplayName",
         DisplayNameFallback = "云端启用",
         DescriptionResourceKey = "Navigation_Param_CloudApi_Enabled_Description",
-        DescriptionFallback = "系统级云端上传总开关，关闭后 Cloud 上传、设备日志和补传门控按离线语义跳过。")]
+        DescriptionFallback = "当前 machine profile 的 Cloud 通信唯一总开关。关闭后 bootstrap、登录、上传、日志、补传、心跳、配方与远程更新请求全部停止。")]
     Enabled,
 
     [ModuleParam(

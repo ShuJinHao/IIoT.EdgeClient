@@ -69,7 +69,8 @@ public sealed class HomogenizationHardwareProfileBehaviorTests
         Assert.Equal("Ascii", trayCode.DataType);
         Assert.Equal("连续读数据", trayCode.Category);
         Assert.Equal("托盘数据", trayCode.BusinessGroup);
-        Assert.Equal("匀浆模块 - 托盘码", trayCode.Remark);
+        Assert.Equal("托盘码", trayCode.Remark);
+        Assert.Equal(["匀浆模块 - 托盘码"], trayCode.LegacyRemarks);
     }
 
     [Fact]

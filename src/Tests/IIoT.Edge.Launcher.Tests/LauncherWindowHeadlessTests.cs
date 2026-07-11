@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using IIoT.Edge.Application.Abstractions.Updates;
@@ -43,6 +44,42 @@ public sealed class LauncherWindowHeadlessTests
             Assert.False(window.FindControl<Control>("LoginFormPanel")?.IsVisible);
             Assert.True(window.FindControl<Control>("AccountSetupPanel")?.IsVisible);
             Assert.NotNull(window.FindControl<Control>("InitializeAccountButton"));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void MainWindow_WhenLocalAccountSetupRequiredAtMinimumSize_ShouldKeepActionAboveNotice()
+    {
+        var viewModel = CreateViewModel(LauncherAccountCatalogStatus.Missing);
+        var window = CreateMainWindow(viewModel);
+        window.Width = 1100;
+        window.Height = 700;
+
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+
+            var initializeButton = window.FindControl<Control>("InitializeAccountButton");
+            var boundaryNotice = window.FindControl<Control>("LoginBoundaryNotice");
+            var fieldsScrollHost = window.FindControl<EdgeScrollHost>("AccountSetupFieldsScrollHost");
+            Assert.NotNull(initializeButton);
+            Assert.NotNull(boundaryNotice);
+            Assert.NotNull(fieldsScrollHost);
+
+            var buttonOrigin = initializeButton.TranslatePoint(default, window);
+            var noticeOrigin = boundaryNotice.TranslatePoint(default, window);
+            Assert.NotNull(buttonOrigin);
+            Assert.NotNull(noticeOrigin);
+            Assert.True(initializeButton.Bounds.Height >= 44);
+            Assert.True(fieldsScrollHost.Bounds.Height > 0);
+            Assert.True(
+                buttonOrigin.Value.Y + initializeButton.Bounds.Height + 12 <= noticeOrigin.Value.Y,
+                "初始化按钮必须完整停留在说明条上方，不能再被说明遮挡。");
         }
         finally
         {

@@ -47,8 +47,6 @@
     <sys:String x:Key="Homogenization_Param_MesBatchNumberPath_Description">Relative path for generating MES trace batch numbers after a main plan is confirmed.</sys:String>
     <sys:String x:Key="Homogenization_Param_MesSignToken_DisplayName">MES Sign Token</sys:String>
     <sys:String x:Key="Homogenization_Param_MesSignToken_Description">Sign token used to generate MES request signatures.</sys:String>
-    <sys:String x:Key="Homogenization_Param_CloudEnabled_DisplayName">Cloud Upload Enabled</sys:String>
-    <sys:String x:Key="Homogenization_Param_CloudEnabled_Description">When disabled, only this plugin's production-data Cloud upload stops; system bootstrap, device logs, Cloud retry, and diagnostics are unaffected.</sys:String>
     <sys:String x:Key="Homogenization_Param_DuplicateTrayCheck_DisplayName">Duplicate Pallet Check Enabled</sys:String>
     <sys:String x:Key="Homogenization_Param_DuplicateTrayCheck_Description">When enabled, repeated pallet-code triggers in inbound or outbound stages are blocked.</sys:String>
     <sys:String x:Key="Homogenization_Column_TrayCode">Pallet Code</sys:String>

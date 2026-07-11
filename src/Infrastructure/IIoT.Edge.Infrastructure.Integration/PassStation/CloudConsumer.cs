@@ -1,6 +1,5 @@
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
-using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.Device;
 using IIoT.Edge.Application.Abstractions.Logging;
@@ -15,10 +14,10 @@ namespace IIoT.Edge.Infrastructure.Integration.PassStation;
 public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
 {
     private readonly IDeviceService _deviceService;
+    private readonly ICloudExecutionPolicy _executionPolicy;
     private readonly ICloudUploadGate _uploadGate;
     private readonly StandardPassStationCloudUploader _standardUploader;
     private readonly IProcessIntegrationRegistry _processIntegrationRegistry;
-    private readonly IModuleParamRoleProvider _moduleParamRoleProvider;
     private readonly ICloudUploadDiagnosticsStore _diagnosticsStore;
     private readonly ILogService _logger;
 
@@ -29,18 +28,18 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
 
     public CloudConsumer(
         IDeviceService deviceService,
+        ICloudExecutionPolicy executionPolicy,
         ICloudUploadGate uploadGate,
         StandardPassStationCloudUploader standardUploader,
         IProcessIntegrationRegistry processIntegrationRegistry,
-        IModuleParamRoleProvider moduleParamRoleProvider,
         ICloudUploadDiagnosticsStore diagnosticsStore,
         ILogService logger)
     {
         _deviceService = deviceService;
+        _executionPolicy = executionPolicy;
         _uploadGate = uploadGate;
         _standardUploader = standardUploader;
         _processIntegrationRegistry = processIntegrationRegistry;
-        _moduleParamRoleProvider = moduleParamRoleProvider;
         _diagnosticsStore = diagnosticsStore;
         _logger = logger;
     }
@@ -72,6 +71,20 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
 
         foreach (var group in cloudRecords.GroupBy(x => x.CellData.ProcessType, StringComparer.OrdinalIgnoreCase))
         {
+            if (!_executionPolicy.IsEnabled)
+            {
+                const string reasonCode = "cloud_upload_disabled";
+                var disabledResult = CloudCallResult.Failure(
+                    CloudCallOutcome.SkippedUploadNotReady,
+                    reasonCode);
+                _diagnosticsStore.RecordBlocked(
+                    group.Key,
+                    reasonCode,
+                    "当前 profile 的 Cloud 通信已关闭。",
+                    UploadDiagnosticsContextFactory.CreateCloudContext(group));
+                return disabledResult;
+            }
+
             if (!_processIntegrationRegistry.TryGetCloudUploader(group.Key, out var registration))
             {
                 const string reasonCode = "cloud_uploader_missing";
@@ -88,21 +101,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
                 return missingUploaderResult;
             }
 
-            if (!await IsPluginCloudEnabledAsync(group.Key, cancellationToken).ConfigureAwait(false))
-            {
-                var skippedResult = CloudCallResult.Success();
-                _diagnosticsStore.RecordResult(group.Key, skippedResult, UploadDiagnosticsContextFactory.CreateCloudContext(group));
-                continue;
-            }
-
             var gate = _uploadGate.GetSnapshot();
-            if (!gate.CanUpload && string.Equals(gate.ReasonCode, "cloud_upload_disabled", StringComparison.OrdinalIgnoreCase))
-            {
-                var skippedResult = CloudCallResult.Success();
-                _diagnosticsStore.RecordResult(group.Key, skippedResult, UploadDiagnosticsContextFactory.CreateCloudContext(group));
-                continue;
-            }
-
             if (!gate.CanUpload)
             {
                 var blockedDevice = UploadDiagnosticsContextFactory.ResolveLogDeviceName(group);
@@ -176,14 +175,6 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
 
         return CloudCallResult.Success();
     }
-
-    private Task<bool> IsPluginCloudEnabledAsync(string processType, CancellationToken cancellationToken)
-        => _moduleParamRoleProvider.GetBoolAsync(
-            processType,
-            ModuleParamCategory.Cloud,
-            ModuleParamRole.CloudEnabled,
-            defaultValue: true,
-            cancellationToken);
 
     private async Task<CloudCallResult> UploadOneByOneAsync(
         ProcessUploadContext context,

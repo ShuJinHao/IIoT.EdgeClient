@@ -775,14 +775,8 @@ public sealed class HomogenizationMesIntegrationTests
                 "Homogenization",
                 ModuleParamCategory.Cloud,
                 new Dictionary<HomogenizationParams.Cloud, string>(),
-                new Dictionary<HomogenizationParams.Cloud, string?>
-                {
-                    [HomogenizationParams.Cloud.启用] = "false"
-                },
-                new Dictionary<HomogenizationParams.Cloud, ParamValueKind>
-                {
-                    [HomogenizationParams.Cloud.启用] = ParamValueKind.Bool
-                },
+                new Dictionary<HomogenizationParams.Cloud, string?>(),
+                new Dictionary<HomogenizationParams.Cloud, ParamValueKind>(),
                 warn: null);
 
             var business = new ModuleParamGroup<HomogenizationParams.Business>(

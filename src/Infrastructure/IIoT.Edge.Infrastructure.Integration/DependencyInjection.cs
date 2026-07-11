@@ -49,6 +49,7 @@ public static class DependencyInjection
         var mesTimeout = TimeSpan.FromSeconds(mesTimeoutSecs);
 
         services.AddSingleton<ICloudApiConfigSnapshotProvider, CloudApiConfigSnapshotProvider>();
+        services.AddSingleton<ICloudProfileSwitchProjectionWriter, FileCloudProfileSwitchProjectionWriter>();
         services.AddSingleton<ICloudApiEndpointProvider>(sp => new CloudApiEndpointProvider(
             sp.GetRequiredService<IOptionsMonitor<CloudApiConfig>>(),
             sp.GetService<ILocalParameterConfigService>()));
@@ -88,10 +89,14 @@ public static class DependencyInjection
                 ?? string.Empty
         });
 
-        services.AddHttpClient(AuthService.HttpClientName, client => client.Timeout = timeout);
+        services.AddTransient<CloudExecutionPolicyHandler>();
+
+        services.AddHttpClient(AuthService.HttpClientName, client => client.Timeout = timeout)
+            .AddHttpMessageHandler<CloudExecutionPolicyHandler>();
         services.AddSingleton<IAuthService, AuthService>();
 
-        services.AddHttpClient(DeviceService.HttpClientName, client => client.Timeout = timeout);
+        services.AddHttpClient(DeviceService.HttpClientName, client => client.Timeout = timeout)
+            .AddHttpMessageHandler<CloudExecutionPolicyHandler>();
         services.AddSingleton<ICloudDeviceBootstrapClient, CloudDeviceBootstrapClient>();
         services.AddSingleton<IDeviceUploadGatePolicy, DeviceUploadGatePolicy>();
         services.AddSingleton<IDeviceBootstrapEventLogger, DeviceBootstrapEventLogger>();
@@ -100,6 +105,7 @@ public static class DependencyInjection
         services.AddSingleton<IDeviceAccessTokenProvider>(sp => sp.GetRequiredService<DeviceService>());
 
         services.AddHttpClient("CloudApi", client => client.Timeout = Timeout.InfiniteTimeSpan)
+            .AddHttpMessageHandler<CloudExecutionPolicyHandler>()
             .AddResilienceHandler("cloud-transient", builder =>
             {
                 var retryOptions = new HttpRetryStrategyOptions

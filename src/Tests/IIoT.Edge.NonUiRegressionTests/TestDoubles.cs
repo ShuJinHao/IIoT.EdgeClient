@@ -194,7 +194,10 @@ internal sealed class FakeDeviceService : IDeviceService, IDeviceAccessTokenProv
 
 internal sealed class FakeLocalSystemRuntimeConfigService : ILocalSystemRuntimeConfigService
 {
-    public SystemRuntimeConfigSnapshot Current { get; set; } = SystemRuntimeConfigSnapshot.Default;
+    public SystemRuntimeConfigSnapshot Current { get; set; } = SystemRuntimeConfigSnapshot.Default with
+    {
+        SystemCloudEnabled = true
+    };
 
     public Task EnsureInitializedAsync(CancellationToken cancellationToken = default)
         => Task.CompletedTask;
@@ -1886,13 +1889,7 @@ internal sealed class FakeProcessIntegrationRegistry : IProcessIntegrationRegist
 
 internal sealed class FakeModuleParamRoleProvider : IModuleParamRoleProvider
 {
-    private readonly Dictionary<string, bool> _cloudEnabledByModule = new(StringComparer.OrdinalIgnoreCase);
-
     public bool MesEnabled { get; set; } = true;
-    public bool CloudEnabled { get; set; } = true;
-
-    public void SetCloudEnabled(string moduleId, bool enabled)
-        => _cloudEnabledByModule[moduleId] = enabled;
 
     public Task<ModuleParamRoleValue?> GetAsync(
         string moduleId,
@@ -1929,14 +1926,7 @@ internal sealed class FakeModuleParamRoleProvider : IModuleParamRoleProvider
         ModuleParamRole role,
         bool defaultValue = false,
         CancellationToken cancellationToken = default)
-        => Task.FromResult(role switch
-        {
-            ModuleParamRole.CloudEnabled => _cloudEnabledByModule.TryGetValue(moduleId, out var enabled)
-                ? enabled
-                : CloudEnabled,
-            ModuleParamRole.MesEnabled => MesEnabled,
-            _ => defaultValue
-        });
+        => Task.FromResult(role == ModuleParamRole.MesEnabled ? MesEnabled : defaultValue);
 
     public Task<bool> AnyBoolAsync(
         ModuleParamCategory category,
@@ -1945,5 +1935,6 @@ internal sealed class FakeModuleParamRoleProvider : IModuleParamRoleProvider
         bool defaultValue = false,
         CancellationToken cancellationToken = default)
         => Task.FromResult((moduleIds?.Count ?? 0) > 0
-            && (role == ModuleParamRole.CloudEnabled ? CloudEnabled : MesEnabled));
+            && role == ModuleParamRole.MesEnabled
+            && MesEnabled);
 }

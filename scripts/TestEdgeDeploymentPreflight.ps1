@@ -17,7 +17,9 @@ param(
 
     [switch]$SkipCloud,
 
-    [switch]$AllowDirty
+    [switch]$AllowDirty,
+
+    [switch]$RequirePushedHead
 )
 
 $ErrorActionPreference = 'Stop'
@@ -26,6 +28,7 @@ Set-StrictMode -Version Latest
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $workspaceRoot = Split-Path -Parent $repoRoot
 . (Join-Path $PSScriptRoot 'EdgeReleaseCredential.Common.ps1')
+. (Join-Path $PSScriptRoot 'EdgeDeployment.Common.ps1')
 $failures = [System.Collections.Generic.List[string]]::new()
 $warnings = [System.Collections.Generic.List[string]]::new()
 
@@ -372,6 +375,20 @@ function Test-GitState {
         if ($dirty.Count -gt 0 -and -not $AllowDirty) {
             Add-Failure "EdgeClient work tree has uncommitted changes. Commit/stash them or rerun preflight with -AllowDirty for local dry checks."
         }
+        if ($RequirePushedHead) {
+            if ($dirty.Count -gt 0) {
+                Add-Failure 'Formal Edge release preflight requires a clean work tree; -AllowDirty is only valid for validate/dry-run.'
+            }
+            else {
+                try {
+                    $pushedState = Assert-EdgeReleaseGitState -RepoRoot $repoRoot
+                    Write-Host "Git release state: head=$($pushedState.Head) upstream=$($pushedState.Upstream)"
+                }
+                catch {
+                    Add-Failure $_.Exception.Message
+                }
+            }
+        }
     }
     catch {
         Add-Failure "Git state check failed: $($_.Exception.Message)"
@@ -389,6 +406,7 @@ function Test-CommonDeploymentInputs {
 }
 
 function Test-HostMode {
+    Assert-FileExists (Resolve-RepoPath 'scripts/EdgeDeployment.Common.ps1') 'Shared Edge deployment guard script'
     Assert-FileExists (Resolve-RepoPath 'scripts/LocalPublishAndDeploy.ps1') 'Host HTTP publish script'
     Assert-FileExists (Resolve-RepoPath 'scripts/PublishEdgeClientInstallerArtifact.ps1') 'Installer artifact script'
     Assert-FileExists (Resolve-RepoPath 'scripts/TestEdgeClientInstallerArtifact.ps1') 'Installer artifact validation script'
@@ -398,9 +416,15 @@ function Test-HostMode {
     if ($scriptText -notmatch 'Stable Edge host releases must use -Transport http') {
         Add-Failure 'LocalPublishAndDeploy.ps1 must reject non-HTTP stable host releases.'
     }
+    foreach ($requiredText in @('Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgeHost', 'Enter-EdgeDeploymentLock', 'ResumeReleaseRoot', 'UploadTimeoutSeconds')) {
+        if (-not $scriptText.Contains($requiredText, [System.StringComparison]::Ordinal)) {
+            Add-Failure "LocalPublishAndDeploy.ps1 is missing deployment guard '$requiredText'."
+        }
+    }
 }
 
 function Test-PluginMode {
+    Assert-FileExists (Resolve-RepoPath 'scripts/EdgeDeployment.Common.ps1') 'Shared Edge deployment guard script'
     Assert-FileExists (Resolve-RepoPath 'scripts/PublishEdgePluginRelease.ps1') 'Plugin release script'
     Assert-FileExists (Resolve-RepoPath 'scripts/PackEdgePlugin.ps1') 'Plugin package script'
     Assert-FileExists (Resolve-RepoPath 'scripts/TestEdgePluginPackage.ps1') 'Plugin package validation script'
@@ -412,6 +436,13 @@ function Test-PluginMode {
 
     $pluginManifest = Resolve-RepoPath "src/Modules/IIoT.Edge.Module.$ModuleId/plugin.json"
     Assert-FileExists $pluginManifest "Plugin manifest for $ModuleId"
+
+    $scriptText = Read-FileIfExists (Resolve-RepoPath 'scripts/PublishEdgePluginRelease.ps1')
+    foreach ($requiredText in @('Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgePlugin', 'Enter-EdgeDeploymentLock', 'ResumeReleaseRoot', 'UploadTimeoutSeconds')) {
+        if (-not $scriptText.Contains($requiredText, [System.StringComparison]::Ordinal)) {
+            Add-Failure "PublishEdgePluginRelease.ps1 is missing deployment guard '$requiredText'."
+        }
+    }
 }
 
 function Test-GitHubHostMode {
@@ -460,10 +491,10 @@ function Write-NextCommand {
     Write-Host 'Recommended next command:'
     switch ($Mode) {
         'Host' {
-            Write-Host '  pwsh ./scripts/LocalPublishAndDeploy.ps1 -Channel stable -Transport http -CloudApiBaseUrl http://<cloud-gateway-host>:<port>/api/v1 -ReleaseNotesPath ./release-notes.md -UploadRateLimitMbps 1000'
+            Write-Host '  cd <workspace-root> && pwsh ./deploy/Invoke-WorkspaceDeploy.ps1 -Target EdgeHost -ReleaseNotesPath ./release-notes.md'
         }
         'Plugin' {
-            Write-Host "  pwsh ./scripts/PublishEdgePluginRelease.ps1 -ModuleId $ModuleId -CloudApiBaseUrl http://<cloud-gateway-host>:<port>/api/v1 -ReleaseNotesPath ./release-notes.md -UploadRateLimitMbps 1000"
+            Write-Host "  cd <workspace-root> && pwsh ./deploy/Invoke-WorkspaceDeploy.ps1 -Target EdgePlugin -ModuleId $ModuleId -ReleaseNotesPath ./release-notes.md"
         }
         'GitHubHost' {
             Write-Host "  gh workflow run edge-pack-modules.yml -f version=$Version -f release_notes='<manual release notes>'"
@@ -471,7 +502,7 @@ function Write-NextCommand {
     }
 
     Write-Host ''
-    Write-Host 'Failure handling rule: reuse generated artifacts or rerun the failed job first; for hash/size mismatch compare downloaded artifact layout, manifest and Cloud verification algorithm before changing code.'
+    Write-Host 'Failure handling rule: use the workspace summary and preserved edge-deployment-attempt.json; retry with -ResumeReleaseRoot instead of rebuilding. For hash/size mismatch compare artifact layout, manifest and Cloud verification algorithm first.'
 }
 
 Write-Host "Edge deployment preflight: mode=$Mode"

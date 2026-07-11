@@ -1252,6 +1252,7 @@ public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
             services.AddSingleton<IDeviceService>(deviceService);
             services.AddSingleton<IMesUploadDiagnosticsStore>(diagnostics);
             services.AddSingleton<ICloudUploadDiagnosticsStore>(cloudDiagnostics);
+            services.AddSingleton<ICloudExecutionPolicy>(new ParameterBackedCloudExecutionPolicy(parameters));
             services.AddSingleton<IHomogenizationMesScenarioChannel>(mes);
             services.AddSingleton<IDataPipelineService>(pipeline);
             services.AddSingleton<IProductionTimeProvider>(productionTime);
@@ -1410,18 +1411,9 @@ public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
                 new ModuleParamGroup<HomogenizationParams.Cloud>(
                     "Homogenization",
                     ModuleParamCategory.Cloud,
-                    new Dictionary<HomogenizationParams.Cloud, string>
-                    {
-                        [HomogenizationParams.Cloud.启用] = CloudEnabled.ToString()
-                    },
-                    new Dictionary<HomogenizationParams.Cloud, string?>
-                    {
-                        [HomogenizationParams.Cloud.启用] = "false"
-                    },
-                    new Dictionary<HomogenizationParams.Cloud, ParamValueKind>
-                    {
-                        [HomogenizationParams.Cloud.启用] = ParamValueKind.Bool
-                    },
+                    new Dictionary<HomogenizationParams.Cloud, string>(),
+                    new Dictionary<HomogenizationParams.Cloud, string?>(),
+                    new Dictionary<HomogenizationParams.Cloud, ParamValueKind>(),
                     warn: null),
                 new ModuleParamGroup<HomogenizationParams.Business>(
                     "Homogenization",
@@ -1441,6 +1433,12 @@ public sealed class HomogenizationBusinessChainBehaviorTests : IDisposable
                     warn: null)));
         }
 
+    }
+
+    private sealed class ParameterBackedCloudExecutionPolicy(FakeHomogenizationModuleParamProvider parameters)
+        : ICloudExecutionPolicy
+    {
+        public bool IsEnabled => parameters.CloudEnabled;
     }
 
     private sealed class CapturingHomogenizationMesChannel : IHomogenizationMesScenarioChannel

@@ -52,14 +52,14 @@
                 ViewportMaxHeight="0"
                 ItemsSource="{Binding NetworkDevices}">
                 <edge:EdgeDataGrid.Columns>
-                    <edge:EdgeTextColumn Binding="{Binding DeviceName}" Header="{DynamicResource Navigation_Column_DeviceName}" MinWidth="180" Width="2*" />
-                    <edge:EdgeTextColumn Binding="{Binding DeviceType}" Header="{DynamicResource Navigation_Column_DeviceType}" MinWidth="120" Width="120" />
-                    <edge:EdgeTextColumn Binding="{Binding DeviceModel}" Header="{DynamicResource Navigation_Column_DeviceModel}" MinWidth="130" Width="130" />
-                    <edge:EdgeTextColumn Binding="{Binding ProtocolFrame}" Header="{DynamicResource Navigation_Column_ProtocolFrame}" MinWidth="90" Width="90" />
-                    <edge:EdgeTextColumn Binding="{Binding IpAddress}" Header="{DynamicResource Navigation_Column_IpAddress}" MinWidth="140" Width="140" />
-                    <edge:EdgeTextColumn Binding="{Binding Port1}" Header="{DynamicResource Navigation_Column_Port1}" MinWidth="80" Width="80" />
-                    <edge:EdgeCheckColumn Binding="{Binding IsEnabled}" Header="{DynamicResource Navigation_Column_Enable}" MinWidth="80" Width="80" />
-                    <edge:EdgeTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="180" Width="2*" />
+                    <edge:EdgeTextColumn Binding="{Binding DeviceName}" Header="{DynamicResource Navigation_Column_DeviceName}" MinWidth="138" Width="1.4*" />
+                    <edge:EdgeTextColumn Binding="{Binding DeviceType}" Header="{DynamicResource Navigation_Column_DeviceType}" MinWidth="86" Width="0.85*" />
+                    <edge:EdgeTextColumn Binding="{Binding DeviceModel}" Header="{DynamicResource Navigation_Column_DeviceModel}" MinWidth="96" Width="1*" />
+                    <edge:EdgeTextColumn Binding="{Binding ProtocolFrame}" Header="{DynamicResource Navigation_Column_ProtocolFrame}" MinWidth="76" Width="0.7*" />
+                    <edge:EdgeTextColumn Binding="{Binding IpAddress}" Header="{DynamicResource Navigation_Column_IpAddress}" MinWidth="134" Width="1.35*" />
+                    <edge:EdgeTextColumn Binding="{Binding Port1}" Header="{DynamicResource Navigation_Column_Port1}" MinWidth="64" Width="64" />
+                    <edge:EdgeCheckColumn Binding="{Binding IsEnabled}" Header="{DynamicResource Navigation_Column_Enable}" MinWidth="64" Width="64" />
+                    <edge:EdgeTextColumn Binding="{Binding Remark}" Header="{DynamicResource Navigation_Column_Remark}" MinWidth="140" Width="1.5*" />
                 </edge:EdgeDataGrid.Columns>
             </edge:EdgeDataGrid>
         </edge:EdgeTablePanel>
@@ -68,67 +68,112 @@
             Classes="edge-dialog-overlay"
             IsVisible="{Binding IsNetworkDeviceDialogOpen}">
             <edge:EdgeDialogChrome
+                x:Name="NetworkDeviceDialog"
                 Classes="inline-dialog hardware-form-dialog"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 CloseCommand="{Binding CancelNetworkDeviceDialogCommand}"
                 CloseTopLevelOnClose="False"
                 Title="{Binding NetworkDeviceDialogTitle}">
-                <Grid
-                    ColumnDefinitions="*,*,*"
-                    RowDefinitions="Auto,Auto,Auto,Auto,Auto"
-                    ColumnSpacing="{DynamicResource Edge.Size.Spacing8}"
-                    RowSpacing="{DynamicResource Edge.Size.Spacing6}">
-                    <edge:EdgeFieldRow Classes="dialog-form" Grid.ColumnSpan="3" Label="{DynamicResource Navigation_Column_DeviceName}">
-                        <edge:EdgeTextBox Text="{Binding EditingNetworkDevice.DeviceName}" />
-                    </edge:EdgeFieldRow>
-                    <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="1" Label="{DynamicResource Navigation_Column_DeviceType}">
-                        <edge:EdgeFilterComboBox
-                            ItemsSource="{Binding DeviceTypes}"
-                            SelectedItem="{Binding EditingNetworkDevice.DeviceType, Mode=TwoWay}" />
-                    </edge:EdgeFieldRow>
-                    <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="1" Grid.Column="1" Label="{DynamicResource Navigation_Column_DeviceModel}">
-                        <edge:EdgeFilterComboBox
-                            ItemsSource="{Binding EditingNetworkDevice.AvailableModels}"
-                            SelectedItem="{Binding EditingNetworkDevice.DeviceModel, Mode=TwoWay}" />
-                    </edge:EdgeFieldRow>
-                    <edge:EdgeFieldRow
-                        Classes="dialog-form"
-                        Grid.Row="1"
-                        Grid.Column="2"
-                        IsVisible="{Binding EditingNetworkDevice.IsMcPlc}"
-                        Label="{DynamicResource Navigation_Column_ProtocolFrame}">
-                        <edge:EdgeFilterComboBox
-                            ItemsSource="{Binding EditingNetworkDevice.AvailableProtocolFrames}"
-                            SelectedItem="{Binding EditingNetworkDevice.ProtocolFrame, Mode=TwoWay}" />
-                    </edge:EdgeFieldRow>
-                    <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="2" Label="{DynamicResource Navigation_Column_IpAddress}">
-                        <edge:EdgeTextBox Text="{Binding EditingNetworkDevice.IpAddress}" />
-                    </edge:EdgeFieldRow>
-                    <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="2" Grid.Column="1" Label="{DynamicResource Navigation_Column_Port1}">
-                        <edge:EdgeTextBox Text="{Binding EditingNetworkDevice.Port1}" />
-                    </edge:EdgeFieldRow>
-                    <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="2" Grid.Column="2" Label="{DynamicResource Navigation_Column_Port2}">
-                        <edge:EdgeTextBox Text="{Binding EditingNetworkDevice.Port2}" />
-                    </edge:EdgeFieldRow>
-                    <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="3" Label="{DynamicResource Navigation_Column_TimeoutMs}">
-                        <edge:EdgeTextBox Text="{Binding EditingNetworkDevice.ConnectTimeout}" />
-                    </edge:EdgeFieldRow>
-                    <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="3" Grid.Column="1" Label="{DynamicResource Navigation_Column_Command1}">
-                        <edge:EdgeTextBox Text="{Binding EditingNetworkDevice.SendCmd1}" />
-                    </edge:EdgeFieldRow>
-                    <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="3" Grid.Column="2" Label="{DynamicResource Navigation_Column_Command2}">
-                        <edge:EdgeTextBox Text="{Binding EditingNetworkDevice.SendCmd2}" />
-                    </edge:EdgeFieldRow>
-                    <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="4" Label="{DynamicResource Navigation_Column_Enable}">
-                        <edge:EdgeCheckBox
-                            Classes="boolean"
-                            Content="{DynamicResource Navigation_Column_Enable}"
-                            IsChecked="{Binding EditingNetworkDevice.IsEnabled, Mode=TwoWay}" />
-                    </edge:EdgeFieldRow>
-                    <edge:EdgeFieldRow Classes="dialog-form" Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Label="{DynamicResource Navigation_Column_Remark}">
-                        <edge:EdgeTextBox Text="{Binding EditingNetworkDevice.Remark}" />
-                    </edge:EdgeFieldRow>
+                <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="{DynamicResource Edge.Size.Spacing12}">
+                    <edge:EdgeCard Elevation="Flat" PaddingMode="Compact" Surface="Wash">
+                        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="{DynamicResource Edge.Size.Spacing6}">
+                            <TextBlock
+                                Classes="edge-text-form-section-title"
+                                Text="{DynamicResource Navigation_NetworkDevice_IdentitySection}" />
+                            <edge:EdgeFieldRow
+                                Grid.Row="1"
+                                Classes="dialog-form"
+                                Label="{DynamicResource Navigation_Column_DeviceName}">
+                                <edge:EdgeTextBox Text="{Binding EditingNetworkDevice.DeviceName}" />
+                            </edge:EdgeFieldRow>
+                            <Grid
+                                Grid.Row="2"
+                                ColumnDefinitions="*,*,*"
+                                ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                                <edge:EdgeFieldRow Classes="dialog-form" Label="{DynamicResource Navigation_Column_DeviceType}">
+                                    <edge:EdgeFilterComboBox
+                                        ItemsSource="{Binding DeviceTypes}"
+                                        SelectedItem="{Binding EditingNetworkDevice.DeviceType, Mode=TwoWay}" />
+                                </edge:EdgeFieldRow>
+                                <edge:EdgeFieldRow Classes="dialog-form" Grid.Column="1" Label="{DynamicResource Navigation_Column_DeviceModel}">
+                                    <edge:EdgeFilterComboBox
+                                        ItemsSource="{Binding EditingNetworkDevice.AvailableModels}"
+                                        SelectedItem="{Binding EditingNetworkDevice.DeviceModel, Mode=TwoWay}" />
+                                </edge:EdgeFieldRow>
+                                <edge:EdgeFieldRow
+                                    Classes="dialog-form"
+                                    Grid.Column="2"
+                                    IsVisible="{Binding EditingNetworkDevice.IsMcPlc}"
+                                    Label="{DynamicResource Navigation_Column_ProtocolFrame}">
+                                    <edge:EdgeFilterComboBox
+                                        ItemsSource="{Binding EditingNetworkDevice.AvailableProtocolFrames}"
+                                        SelectedItem="{Binding EditingNetworkDevice.ProtocolFrame, Mode=TwoWay}" />
+                                </edge:EdgeFieldRow>
+                            </Grid>
+                        </Grid>
+                    </edge:EdgeCard>
+
+                    <edge:EdgeCard Grid.Row="1" Elevation="Flat" PaddingMode="Compact" Surface="Wash">
+                        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="{DynamicResource Edge.Size.Spacing6}">
+                            <TextBlock
+                                Classes="edge-text-form-section-title"
+                                Text="{DynamicResource Navigation_NetworkDevice_ConnectionSection}" />
+                            <Grid
+                                Grid.Row="1"
+                                ColumnDefinitions="2*,*,*"
+                                ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                                <edge:EdgeFieldRow Classes="dialog-form" Label="{DynamicResource Navigation_Column_IpAddress}">
+                                    <edge:EdgeTextBox Text="{Binding EditingNetworkDevice.IpAddress}" />
+                                </edge:EdgeFieldRow>
+                                <edge:EdgeFieldRow Classes="dialog-form" Grid.Column="1" Label="{DynamicResource Navigation_Column_Port1}">
+                                    <edge:EdgeTextBox Text="{Binding EditingNetworkDevice.Port1}" />
+                                </edge:EdgeFieldRow>
+                                <edge:EdgeFieldRow Classes="dialog-form" Grid.Column="2" Label="{DynamicResource Navigation_Column_Port2}">
+                                    <edge:EdgeTextBox Text="{Binding EditingNetworkDevice.Port2}" />
+                                </edge:EdgeFieldRow>
+                            </Grid>
+                            <Grid
+                                Grid.Row="2"
+                                ColumnDefinitions="2*,*"
+                                ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                                <edge:EdgeFieldRow Classes="dialog-form" Label="{DynamicResource Navigation_Column_TimeoutMs}">
+                                    <edge:EdgeTextBox Text="{Binding EditingNetworkDevice.ConnectTimeout}" />
+                                </edge:EdgeFieldRow>
+                                <edge:EdgeFieldRow Classes="dialog-form" Grid.Column="1" Label="{DynamicResource Navigation_Column_Enable}">
+                                    <edge:EdgeCheckBox
+                                        Classes="boolean"
+                                        Content="{DynamicResource Navigation_Column_Enable}"
+                                        IsChecked="{Binding EditingNetworkDevice.IsEnabled, Mode=TwoWay}" />
+                                </edge:EdgeFieldRow>
+                            </Grid>
+                        </Grid>
+                    </edge:EdgeCard>
+
+                    <edge:EdgeCard Grid.Row="2" Elevation="Flat" PaddingMode="Compact" Surface="Wash">
+                        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="{DynamicResource Edge.Size.Spacing6}">
+                            <TextBlock
+                                Classes="edge-text-form-section-title"
+                                Text="{DynamicResource Navigation_NetworkDevice_AdvancedSection}" />
+                            <Grid
+                                Grid.Row="1"
+                                ColumnDefinitions="*,*"
+                                ColumnSpacing="{DynamicResource Edge.Size.Spacing8}">
+                                <edge:EdgeFieldRow Classes="dialog-form" Label="{DynamicResource Navigation_Column_Command1}">
+                                    <edge:EdgeTextBox Text="{Binding EditingNetworkDevice.SendCmd1}" />
+                                </edge:EdgeFieldRow>
+                                <edge:EdgeFieldRow Classes="dialog-form" Grid.Column="1" Label="{DynamicResource Navigation_Column_Command2}">
+                                    <edge:EdgeTextBox Text="{Binding EditingNetworkDevice.SendCmd2}" />
+                                </edge:EdgeFieldRow>
+                            </Grid>
+                            <edge:EdgeFieldRow
+                                Grid.Row="2"
+                                Classes="dialog-form"
+                                Label="{DynamicResource Navigation_Column_Remark}">
+                                <edge:EdgeTextBox Text="{Binding EditingNetworkDevice.Remark}" />
+                            </edge:EdgeFieldRow>
+                        </Grid>
+                    </edge:EdgeCard>
                 </Grid>
 
                 <edge:EdgeDialogChrome.FooterContent>

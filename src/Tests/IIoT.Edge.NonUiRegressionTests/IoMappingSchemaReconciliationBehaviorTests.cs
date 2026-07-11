@@ -52,6 +52,48 @@ public sealed class IoMappingSchemaReconciliationBehaviorTests
         Assert.DoesNotContain(ioRepo.Items, x => string.IsNullOrWhiteSpace(x.PlcAddress));
     }
 
+    [Fact]
+    public async Task ReconcileAsync_WhenRemarkMatchesModuleLegacyAlias_ShouldMigrateOnlyThatExactRemark()
+    {
+        var device = CreatePlc(8, "PLC-Homogenization");
+        var networkRepo = new InMemoryRepository<NetworkDeviceEntity>(device);
+        var profile = new HomogenizationHardwareProfileProvider();
+        var candidates = profile.GetIoMappingCandidates();
+        var legacyCandidate = candidates.First(static x => x.LegacyRemarks is { Count: > 0 });
+        var manualCandidate = candidates.First(x =>
+            !string.Equals(x.SignalKey, legacyCandidate.SignalKey, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(x.Direction, legacyCandidate.Direction, StringComparison.OrdinalIgnoreCase));
+        var legacyMapping = CreateMapping(
+            20,
+            device.Id,
+            legacyCandidate.SignalKey,
+            "D999",
+            legacyCandidate.Direction,
+            legacyCandidate.SortOrder,
+            legacyCandidate.LegacyRemarks![0]);
+        var manualMapping = CreateMapping(
+            21,
+            device.Id,
+            manualCandidate.SignalKey,
+            "D998",
+            manualCandidate.Direction,
+            manualCandidate.SortOrder,
+            "现场自定义备注");
+        var ioRepo = new InMemoryRepository<IoMappingEntity>(legacyMapping, manualMapping);
+        var profileResolver = new ModuleHardwareProfileResolver([profile]);
+        var reconciler = new ConfigSchemaReconciler(
+            [new IoMappingSchemaSource(networkRepo, profileResolver)],
+            [new IoMappingConfigValueStore(networkRepo, ioRepo, profileResolver)]);
+
+        await reconciler.ReconcileAsync(TestContext.Current.CancellationToken);
+        await reconciler.ReconcileAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(legacyCandidate.Remark, legacyMapping.Remark);
+        Assert.Equal("D999", legacyMapping.PlcAddress);
+        Assert.Equal("现场自定义备注", manualMapping.Remark);
+        Assert.Equal("D998", manualMapping.PlcAddress);
+    }
+
     private static NetworkDeviceEntity CreatePlc(int id, string deviceName)
     {
         var entity = NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, "127.0.0.1", 6000);
@@ -66,7 +108,8 @@ public sealed class IoMappingSchemaReconciliationBehaviorTests
         string signalKey,
         string plcAddress,
         string direction,
-        int sortOrder)
+        int sortOrder,
+        string? remark = null)
     {
         var entity = IoMappingEntity.Create(
             networkDeviceId,
@@ -79,6 +122,17 @@ public sealed class IoMappingSchemaReconciliationBehaviorTests
             "测试");
         entity.WithId(id);
         entity.UpdateSortOrder(sortOrder);
+        if (remark is not null)
+        {
+            entity.UpdateMetadata(
+                entity.SignalKey,
+                entity.DataType,
+                entity.Direction,
+                entity.Category,
+                entity.BusinessGroup,
+                remark);
+        }
+
         return entity;
     }
 

@@ -20,6 +20,15 @@ namespace IIoT.Edge.NonUiRegressionTests;
 
 public sealed class IoViewViewModelBehaviorTests
 {
+    [Fact]
+    public void IoSignalModel_ShouldDisplayTheStoredRemarkWithoutPageSpecificRewriting()
+    {
+        var model = new IoSignalModel { Remark = "匀浆模块 - 配方时间" };
+
+        Assert.Equal("匀浆模块 - 配方时间", model.Remark);
+        Assert.Equal("匀浆模块 - 配方时间", model.MatrixColumnTitle);
+    }
+
     [AvaloniaFact]
     public Task LoadDevicesAsync_WhenDevicesLoaded_ShouldShowConfiguredPlcs()
         => RunOnStaThreadAsync(async () =>
@@ -144,8 +153,8 @@ public sealed class IoViewViewModelBehaviorTests
             {
                 [device.Id] =
                 [
-                    CreateMapping(device.Id, "Homogenization.Interaction.Inbound", "D701", 1, "Int16", "Read", "信号交互", "扫码进站", 10, "匀浆模块 - 进站触发"),
-                    CreateMapping(device.Id, "Homogenization.Interaction.InboundReply", "D601", 1, "Int16", "Write", "信号交互", "扫码进站", 11, "匀浆模块 - 进站应答"),
+                    CreateMapping(device.Id, "Homogenization.Interaction.Inbound", "D701", 1, "Int16", "Read", "信号交互", "扫码进站", 10, "进站触发"),
+                    CreateMapping(device.Id, "Homogenization.Interaction.InboundReply", "D601", 1, "Int16", "Write", "信号交互", "扫码进站", 11, "进站应答"),
                     CreateMapping(device.Id, "搅拌速度", "D800", 1, "UInt16", "Read", "实时数据", "设备实时", 20)
                 ]
             };
@@ -236,10 +245,10 @@ public sealed class IoViewViewModelBehaviorTests
             {
                 [device.Id] =
                 [
-                    CreateMapping(device.Id, "Signal.TriggerA", "D701", 1, "Int16", "Read", "信号交互", "复合交互", 1, "匀浆模块 - 触发A"),
-                    CreateMapping(device.Id, "Signal.TriggerB", "D702", 1, "Int16", "Read", "信号交互", "复合交互", 2, "匀浆模块 - 触发B"),
-                    CreateMapping(device.Id, "Signal.ReplyA", "D601", 1, "Int16", "Write", "信号交互", "复合交互", 3, "匀浆模块 - 应答A"),
-                    CreateMapping(device.Id, "Signal.ReplyB", "D602", 1, "Int16", "Write", "信号交互", "复合交互", 4, "匀浆模块 - 应答B")
+                    CreateMapping(device.Id, "Signal.TriggerA", "D701", 1, "Int16", "Read", "信号交互", "复合交互", 1, "触发A"),
+                    CreateMapping(device.Id, "Signal.TriggerB", "D702", 1, "Int16", "Read", "信号交互", "复合交互", 2, "触发B"),
+                    CreateMapping(device.Id, "Signal.ReplyA", "D601", 1, "Int16", "Write", "信号交互", "复合交互", 3, "应答A"),
+                    CreateMapping(device.Id, "Signal.ReplyB", "D602", 1, "Int16", "Write", "信号交互", "复合交互", 4, "应答B")
                 ]
             };
             var viewModel = CreateViewModel([device], mappings);
@@ -405,8 +414,8 @@ public sealed class IoViewViewModelBehaviorTests
             {
                 [device.Id] =
                 [
-                    CreateMapping(device.Id, "Homogenization.Recipe.Time", "ZR0", 3, "UInt16", "Read", "连续读数据", "配方数组", 1, "匀浆模块 - 配方时间"),
-                    CreateMapping(device.Id, "Homogenization.Recipe.Temperature", "ZR100", 3, "Int16", "Read", "连续读数据", "配方数组", 2, "匀浆模块 - 配方温度")
+                    CreateMapping(device.Id, "Homogenization.Recipe.Time", "ZR0", 3, "UInt16", "Read", "连续读数据", "配方数组", 1, "配方时间"),
+                    CreateMapping(device.Id, "Homogenization.Recipe.Temperature", "ZR100", 3, "Int16", "Read", "连续读数据", "配方数组", 2, "配方温度")
                 ]
             };
             var dataStore = new PlcDataStore();

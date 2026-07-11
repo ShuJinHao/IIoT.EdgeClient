@@ -11,10 +11,10 @@ namespace IIoT.Edge.NonUiRegressionTests;
     public sealed class ModuleParamSchemaReconciliationBehaviorTests
     {
     [Fact]
-    public async Task ReconcileAsync_WhenCloudSchemaRegistered_ShouldSeedMissingDefaultsDeleteStaleAndPreserveExisting()
+    public async Task ReconcileAsync_WhenPluginCloudSchemaIsEmpty_ShouldDeleteLegacyPluginCloudKeysAndPreserveOtherCategories()
     {
         var registry = CreateHomogenizationRegistry();
-        var cloudEnabledKey = ModuleParamKeys.StorageKey("Homogenization", ModuleParamCategory.Cloud, nameof(HomogenizationCloudParam.启用));
+        var cloudEnabledKey = ModuleParamKeys.StorageKey("Homogenization", ModuleParamCategory.Cloud, "启用");
         var staleCloudKey = ModuleParamKeys.StorageKey("Homogenization", ModuleParamCategory.Cloud, "LegacyOnly");
         var mesKey = ModuleParamKeys.StorageKey("Homogenization", ModuleParamCategory.Mes, nameof(HomogenizationMesParam.服务地址));
         var configService = new MutableLocalParameterConfigService(
@@ -44,9 +44,10 @@ namespace IIoT.Edge.NonUiRegressionTests;
             .Select(static x => x.StorageKey)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        Assert.True(expectedCloudKeys.SetEquals(cloudKeys));
+        Assert.Empty(expectedCloudKeys);
+        Assert.Empty(cloudKeys);
         Assert.DoesNotContain(configs, x => x.Key == staleCloudKey);
-        Assert.Equal("true", configs.Single(x => x.Key == cloudEnabledKey).Value);
+        Assert.DoesNotContain(configs, x => x.Key == cloudEnabledKey);
         Assert.Equal("http://mes.local", configs.Single(x => x.Key == mesKey).Value);
     }
 

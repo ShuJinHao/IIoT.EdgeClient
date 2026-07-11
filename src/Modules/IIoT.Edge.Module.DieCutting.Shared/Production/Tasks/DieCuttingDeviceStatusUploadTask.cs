@@ -29,6 +29,7 @@ internal sealed class DieCuttingDeviceStatusUploadTask : PlcTaskBase
     private readonly IDataPipelineService _dataPipelineService;
     private readonly IMesUploadDiagnosticsStore _mesDiagnosticsStore;
     private readonly ICloudUploadDiagnosticsStore _cloudDiagnosticsStore;
+    private readonly ICloudExecutionPolicy _cloudExecutionPolicy;
     private readonly IPlcConnectionManager _plcConnectionManager;
     private readonly IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> _parameters;
     private readonly DieCuttingModuleOptions _moduleOptions;
@@ -46,6 +47,7 @@ internal sealed class DieCuttingDeviceStatusUploadTask : PlcTaskBase
         IDataPipelineService dataPipelineService,
         IMesUploadDiagnosticsStore mesDiagnosticsStore,
         ICloudUploadDiagnosticsStore cloudDiagnosticsStore,
+        ICloudExecutionPolicy cloudExecutionPolicy,
         IPlcConnectionManager plcConnectionManager,
         IModuleParamProvider<DieCuttingParams.Mes, DieCuttingParams.Cloud, DieCuttingParams.Business> parameters,
         ILogService logger,
@@ -58,6 +60,7 @@ internal sealed class DieCuttingDeviceStatusUploadTask : PlcTaskBase
         _dataPipelineService = dataPipelineService ?? throw new ArgumentNullException(nameof(dataPipelineService));
         _mesDiagnosticsStore = mesDiagnosticsStore ?? throw new ArgumentNullException(nameof(mesDiagnosticsStore));
         _cloudDiagnosticsStore = cloudDiagnosticsStore ?? throw new ArgumentNullException(nameof(cloudDiagnosticsStore));
+        _cloudExecutionPolicy = cloudExecutionPolicy ?? throw new ArgumentNullException(nameof(cloudExecutionPolicy));
         _plcConnectionManager = plcConnectionManager ?? throw new ArgumentNullException(nameof(plcConnectionManager));
         _parameters = parameters ?? throw new ArgumentNullException(nameof(parameters));
         _moduleOptions = moduleOptions?.Value ?? throw new ArgumentNullException(nameof(moduleOptions));
@@ -78,7 +81,7 @@ internal sealed class DieCuttingDeviceStatusUploadTask : PlcTaskBase
         LogConfigurationIfNeeded(parameterSnapshot);
         var uploadTargets = DataPipelineUploadTargetPolicy.Resolve(
             parameterSnapshot.Mes<bool>(DieCuttingParams.Mes.启用),
-            parameterSnapshot.Cloud<bool>(DieCuttingParams.Cloud.启用));
+            _cloudExecutionPolicy.IsEnabled);
 
         var connectionResult = EnsurePlcConnected();
         if (!connectionResult.IsSuccess)
@@ -205,7 +208,7 @@ internal sealed class DieCuttingDeviceStatusUploadTask : PlcTaskBase
 
         var statusPath = NormalizeLogText(parameters.Mes<string>(DieCuttingParams.Mes.EquipmentStatusPath));
         var mesEnabled = parameters.Mes<bool>(DieCuttingParams.Mes.启用);
-        var cloudEnabled = parameters.Cloud<bool>(DieCuttingParams.Cloud.启用);
+        var cloudEnabled = _cloudExecutionPolicy.IsEnabled;
         Logger.Info(
             $"[PLC-{_context.DeviceName}][设备状态] 任务配置：设备状态路径={statusPath}，MES启用={mesEnabled}，Cloud启用={cloudEnabled}，采集处理周期={_taskLoopInterval}ms；设备状态独立上传，不受主批计划门禁控制。");
         _configurationLogged = true;

@@ -2,6 +2,8 @@
 
 本文档是 EdgeClient 安装、更新和 Windows 分发安全策略的唯一客户端侧验收入口。上传部署总口径见 `../../docs/上传部署总览.md`；云端生成安装包的字段写入规则由 CloudPlatform 单独验收，本文件只约束 EdgeClient 本仓库能验证的内容。工作区唯一对外标准执行入口是根目录 `deploy/Invoke-WorkspaceDeploy.ps1`；本文件保留项目级验收细节和实现脚本说明。
 
+> 当前状态（2026-07-10）：隔离提交 `37ec98b` 的部署行为、失败恢复与发布契约回归已通过；本轮没有执行真实 Cloud `stable` 上传/catalog/DB/静态 HEAD，也没有执行 Windows runtime/installer/Velopack/targetRuntime 实机验收，因此本清单不能作为生产已验收证明。
+
 EdgeClient 验收分为开发阶段和实际部署阶段：macOS 是主力开发环境，必须承担真实 Launcher/Shell 启动、登录后 UI、更新进度和隔离安装验证；Windows 是现场部署目标，必须承担 Release runtime、安装器、快捷方式、Velopack 更新和 `targetRuntime` 实机验收。两层证据必须分别记录，互不替代；开发阶段通过不代表已经进入发布或部署。
 
 ## 0. 标准发布链路
@@ -10,11 +12,12 @@ EdgeClient 不发布 Docker 镜像，不推 Harbor，也不从 GitHub hosted run
 
 - `push main`：只跑 smoke 编译和测试，不生成安装包和 Velopack 发布包。
 - `workflow_dispatch` 或 `edge-v*` / `v*` tag：完整 GitHub 打包并发布到内网静态目录，渠道固定为 `stable`。
-- 本机宿主快发：操作者本机运行 `scripts/LocalPublishAndDeploy.ps1 -Transport http`，本机编译、打包、生成 installer artifact 后通过 Cloud Human API 上传 release bundle；这是运维快发路径，不属于 GitHub CI/CD job。生产 `stable` 不允许走 `rsync/scp`。
-- 本机插件快发：只改工序插件时运行 `scripts/PublishEdgePluginRelease.ps1`，只上传独立插件 zip 并登记插件 release，不生成宿主版本。
+- 本机宿主快发：操作者或 AI 从工作区根运行 `deploy/Invoke-WorkspaceDeploy.ps1 -Target EdgeHost`，统一入口内部调度 `LocalPublishAndDeploy.ps1 -Transport http`，本机编译、打包、生成 installer artifact 后通过 Cloud Human API 上传 release bundle；这是运维快发路径，不属于 GitHub CI/CD job。生产 `stable` 不允许走 `rsync/scp`。
+- 本机插件快发：只改工序插件时从工作区根运行 `deploy/Invoke-WorkspaceDeploy.ps1 -Target EdgePlugin -ModuleId <真实ModuleId>`；内部脚本只上传独立插件 zip 并登记插件 release，不生成宿主版本。
 - 本机快发和正式发布上传前，发布凭据必须优先使用 Edge Release API key 换短期发布 JWT；Human refresh token 只作为临时应急 fallback，不得作为稳定发布凭据。
 - 更新内容必须显式填写：本机快发传 `-ReleaseNotes` 或 `-ReleaseNotesPath`；`workflow_dispatch` 填 `release_notes`；tag 发布必须使用带正文的 annotated tag。
-- 本机构建、打包或 HTTP 上传超时必须停止诊断并优先复用已生成 artifact；不得反复从头全量构建或跳过 release notes、DB 登记、审计和保留策略。
+- 本机正式发布必须由工作区统一入口生成内部调度标记；项目实现脚本拒绝直接执行。EdgeHost/EdgePlugin 共用本地互斥锁，且构建前必须确认工作树 clean、HEAD 已推送到 upstream。
+- catalog、HTTP 上传和静态 HEAD 验证必须执行连接、总时限与低速停滞门禁，并把受限长度的 `4xx/5xx` 正文写入错误摘要。失败产物和 `edge-deployment-attempt.json` 必须保留，后续通过统一入口 `-ResumeReleaseRoot` 只做校验、重传或已发布对账；不得反复从头全量构建或跳过 release notes、DB 登记、审计和保留策略。
 - 生产服务器只允许 `stable` 渠道，不保留 `ci`、`dev`、`test` 或其他测试渠道目录。
 
 正式 GitHub 打包链路固定为：
@@ -54,24 +57,22 @@ ${EDGE_UPDATES_DIR}/
     IIoT.EdgePlugin.<ModuleId>-<version>-<runtime>.zip
 ```
 
-工作区标准入口会调度下面的本机快发实现脚本。项目级命令示例：
+工作区标准入口会调度本机快发实现脚本；操作者和 AI 只执行根入口：
 
 ```powershell
-pwsh ./scripts/LocalPublishAndDeploy.ps1 `
-  -Channel stable `
-  -Transport http `
-  -CloudApiBaseUrl http://<cloud-gateway-host>:<port>/api/v1 `
-  -ReleaseNotesPath ./release-notes.md `
-  -UploadRateLimitMbps 1000
+pwsh ./deploy/Invoke-WorkspaceDeploy.ps1 `
+  -Target EdgeHost `
+  -ReleaseNotesPath ./release-notes.md
 ```
 
 未传 `-Version` 时，HTTP 发布会读取 Cloud Human catalog 最新 stable 版本并自动递增 patch；需要固定版本时才显式传 `-Version`。本机快发的完整操作入口见 `docs/客户端部署.md`。
 
-HTTP 快发会先让文件安全落盘，再由 Cloud 服务端从 manifest 派生 DB release 行、写审计、按 SemVer 执行最新 3 个 stable 版本保留策略，并返回部署摘要。GitHub 正式发布路径同样通过 Cloud Human 发布 API 上传 bundle，由服务端清理 `installers/stable`、`velopack/stable` 和独立插件 zip 中超出保留策略的文件。Cloud 负责在 catalog 请求时扫描 `/app/edge-updates/installers/stable/<version>/installer-artifact.json` 和独立插件 zip，并与数据库 release 记录合并；数据库同 key 记录优先，可用 Draft/Archived 抑制文件版本。
+HTTP 快发会先让文件安全落盘，再由 Cloud 服务端从 manifest 派生 DB release 行、写审计、按 SemVer 执行最新 3 个 stable 版本保留策略，并返回部署摘要。GitHub 正式发布路径同样通过 Cloud Human 发布 API 上传 bundle，由服务端清理 `installers/stable`、`velopack/stable` 和独立插件 zip 中超出保留策略的文件。Cloud catalog、下载中心和首装版本集合只读取 Cloud release 记录；文件系统只验证记录中已登记 artifact 的存在性、完整性和可下载性，不得扫描残留目录补出版本。
 
 插件独立发布必须满足：
 
 - `PublishEdgePluginRelease.ps1` 必须显式传 `-ReleaseNotes` 或 `-ReleaseNotesPath`。
+- 根入口必须显式传 `-ModuleId`；缺失时禁止用示例/default 模块继续发布。
 - 发布前查 Cloud catalog；相同 `(moduleId, channel, version, targetRuntime)` 已存在时必须失败。
 - Cloud `plugin-packages` 接口落盘到 `${EDGE_UPDATES_DIR}/plugins/stable/<ModuleId>/<version>/`，DB 插件 release 的 `downloadUrl` 必须指向真实 zip。
 - Launcher 只安装插件时，宿主版本不得递增。
