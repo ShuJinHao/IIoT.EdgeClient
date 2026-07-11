@@ -6,10 +6,11 @@ Set-StrictMode -Version Latest
 $scriptsRoot = Split-Path -Parent $PSScriptRoot
 $repoRoot = Split-Path -Parent $scriptsRoot
 . (Join-Path $scriptsRoot 'EdgeDeployment.Common.ps1')
+. (Join-Path $PSScriptRoot 'EdgeLoopbackFakeCloud.TestSupport.ps1')
 
 $passed = 0
 $temporaryRoots = [System.Collections.Generic.List[string]]::new()
-$fakeCloudProcess = $null
+$fakeCloudServer = $null
 
 function Assert-True {
     param([Parameter(Mandatory = $true)][bool]$Condition, [Parameter(Mandatory = $true)][string]$Message)
@@ -117,22 +118,8 @@ try {
     $cloudRoot = New-TestDirectory
     $portFile = Join-Path $cloudRoot 'port.txt'
     $requestLog = Join-Path $cloudRoot 'requests.jsonl'
-    $serverScript = Join-Path $PSScriptRoot 'fake_edge_release_cloud.py'
-    $python = Get-Command python3 -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($null -eq $python) {
-        $python = Get-Command python -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    }
-    if ($null -eq $python) {
-        throw 'Python 3 is required for the loopback fake Cloud behavior test.'
-    }
-    $fakeCloudProcess = Start-Process -FilePath $python.Source -ArgumentList @($serverScript, '--port-file', $portFile, '--request-log', $requestLog) -PassThru
-    $deadline = [DateTimeOffset]::UtcNow.AddSeconds(10)
-    while (-not (Test-Path -LiteralPath $portFile -PathType Leaf)) {
-        if ([DateTimeOffset]::UtcNow -ge $deadline) { throw 'Fake Cloud did not start.' }
-        Start-Sleep -Milliseconds 50
-    }
-    $port = [int](Get-Content -Raw -LiteralPath $portFile)
-    $baseUrl = "http://127.0.0.1:$port"
+    $fakeCloudServer = Start-EdgeLoopbackFakeCloud -PortFile $portFile -RequestLog $requestLog
+    $baseUrl = $fakeCloudServer.BaseUrl
 
     $json = Invoke-EdgeCurlJsonGet -Uri "$baseUrl/ok-json" -Token 'fake-token' -RequestTimeoutSeconds 5
     Assert-True -Condition ($null -ne $json.host) -Message 'Fake Cloud JSON success was not parsed.'
@@ -188,10 +175,7 @@ try {
     $global:LASTEXITCODE = 0
 }
 finally {
-    if ($null -ne $fakeCloudProcess -and -not $fakeCloudProcess.HasExited) {
-        Stop-Process -Id $fakeCloudProcess.Id -Force -ErrorAction SilentlyContinue
-        $fakeCloudProcess.WaitForExit(5000) | Out-Null
-    }
+    Stop-EdgeLoopbackFakeCloud -Server $fakeCloudServer
     foreach ($path in $temporaryRoots) {
         Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue
     }

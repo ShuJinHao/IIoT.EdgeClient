@@ -3,12 +3,14 @@ param()
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+. (Join-Path $PSScriptRoot 'EdgeLoopbackFakeCloud.TestSupport.ps1')
+
 $scriptsRoot = Split-Path -Parent $PSScriptRoot
 $sourceRepoRoot = Split-Path -Parent $scriptsRoot
 $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("edge-resume-test-{0}" -f ([Guid]::NewGuid().ToString('N')))
 $cloneRoot = Join-Path $testRoot 'repo'
 $remoteRoot = Join-Path $testRoot 'remote.git'
-$fakeCloudProcess = $null
+$fakeCloudServer = $null
 $oldEnvironment = @{
     Dispatch = $env:IIOT_EDGE_WORKSPACE_DISPATCH
     Target = $env:IIOT_EDGE_WORKSPACE_TARGET
@@ -77,17 +79,8 @@ try {
 
     $portFile = Join-Path $testRoot 'port.txt'
     $requestLog = Join-Path $testRoot 'requests.jsonl'
-    $serverScript = Join-Path $PSScriptRoot 'fake_edge_release_cloud.py'
-    $python = Get-Command python3 -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($null -eq $python) { $python = Get-Command python -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1 }
-    if ($null -eq $python) { throw 'Python 3 is required for the loopback fake Cloud resume test.' }
-    $fakeCloudProcess = Start-Process -FilePath $python.Source -ArgumentList @($serverScript, '--port-file', $portFile, '--request-log', $requestLog, '--plugin-version', $pluginVersion) -PassThru
-    $deadline = [DateTimeOffset]::UtcNow.AddSeconds(10)
-    while (-not (Test-Path -LiteralPath $portFile -PathType Leaf)) {
-        if ([DateTimeOffset]::UtcNow -ge $deadline) { throw 'Fake Cloud did not start.' }
-        Start-Sleep -Milliseconds 50
-    }
-    $baseUrl = "http://127.0.0.1:$([int](Get-Content -Raw -LiteralPath $portFile))"
+    $fakeCloudServer = Start-EdgeLoopbackFakeCloud -PortFile $portFile -RequestLog $requestLog -PluginVersion $pluginVersion
+    $baseUrl = $fakeCloudServer.BaseUrl
 
     $hostReleaseRoot = Join-Path $testRoot 'host-release'
     $hostArtifactRoot = Join-Path $hostReleaseRoot 'edge-installer-artifacts/stable/9.9.9'
@@ -209,10 +202,7 @@ try {
     $global:LASTEXITCODE = 0
 }
 finally {
-    if ($null -ne $fakeCloudProcess -and -not $fakeCloudProcess.HasExited) {
-        Stop-Process -Id $fakeCloudProcess.Id -Force -ErrorAction SilentlyContinue
-        $fakeCloudProcess.WaitForExit(5000) | Out-Null
-    }
+    Stop-EdgeLoopbackFakeCloud -Server $fakeCloudServer
     Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
     if ($null -eq $oldEnvironment.Dispatch) { Remove-Item Env:IIOT_EDGE_WORKSPACE_DISPATCH -ErrorAction SilentlyContinue } else { $env:IIOT_EDGE_WORKSPACE_DISPATCH = $oldEnvironment.Dispatch }
     if ($null -eq $oldEnvironment.Target) { Remove-Item Env:IIOT_EDGE_WORKSPACE_TARGET -ErrorAction SilentlyContinue } else { $env:IIOT_EDGE_WORKSPACE_TARGET = $oldEnvironment.Target }

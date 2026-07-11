@@ -1,10 +1,34 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import os
 import signal
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
+
+def publish_bound_port(port_file, server):
+    port = int(server.socket.getsockname()[1])
+    if not 1 <= port <= 65535:
+        raise RuntimeError(f"fake Cloud bound an invalid loopback port: {port}")
+
+    port_path = Path(port_file)
+    port_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = port_path.with_name(
+        f".{port_path.name}.{os.getpid()}.tmp"
+    )
+    try:
+        with temporary_path.open("w", encoding="ascii", newline="\n") as stream:
+            stream.write(str(port))
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary_path, port_path)
+    finally:
+        try:
+            temporary_path.unlink()
+        except FileNotFoundError:
+            pass
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -154,7 +178,7 @@ def main():
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     server.request_log = args.request_log
     server.plugin_version = args.plugin_version
-    Path(args.port_file).write_text(str(server.server_port), encoding="ascii")
+    publish_bound_port(args.port_file, server)
 
     def stop(_signum, _frame):
         raise KeyboardInterrupt
