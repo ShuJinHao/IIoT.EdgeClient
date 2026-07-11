@@ -9,6 +9,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>IIoT.Edge.UI.Shared.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
     <None Remove="Assets\fonts\iconfont.ttf" />
     <None Remove="Assets\images\icon.ico" />
     <None Remove="Assets\images\login1.png" />

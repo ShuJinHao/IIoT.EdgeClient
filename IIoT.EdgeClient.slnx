@@ -8,6 +8,7 @@
   </Folder>
   <Folder Name="/src/Edge/">
     <Project Path="src/Edge/IIoT.Edge.Host.Bootstrap/IIoT.Edge.Host.Bootstrap.csproj" />
+    <Project Path="src/Edge/IIoT.Edge.Installer/IIoT.Edge.Installer.csproj" />
     <Project Path="src/Edge/IIoT.Edge.Launcher/IIoT.Edge.Launcher.csproj" />
     <Project Path="src/Edge/IIoT.Edge.Shell/IIoT.Edge.Shell.csproj" Id="18446b65-38e5-4acb-a229-ba0f9d8a83cf" />
   </Folder>
@@ -40,11 +41,13 @@
     <Project Path="src/Edge/IIoT.Edge.Host.DataPipeline/IIoT.Edge.Host.DataPipeline.csproj" />
   </Folder>
   <Folder Name="/src/Tests/">
-    <Project Path="src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj" />
     <Project Path="src/Tests/IIoT.Edge.Infrastructure.Update.Tests/IIoT.Edge.Infrastructure.Update.Tests.csproj" />
+    <Project Path="src/Tests/IIoT.Edge.Installer.Tests/IIoT.Edge.Installer.Tests.csproj" />
+    <Project Path="src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj" />
     <Project Path="src/Tests/IIoT.Edge.Module.ContractTests/IIoT.Edge.Module.ContractTests.csproj" />
     <Project Path="src/Tests/IIoT.Edge.NonUiRegressionTests/IIoT.Edge.NonUiRegressionTests.csproj" />
     <Project Path="src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj" />
+    <Project Path="src/Tests/IIoT.Edge.UI.Shared.Tests/IIoT.Edge.UI.Shared.Tests.csproj" />
   </Folder>
   <Folder Name="/src/Tools/">
     <Project Path="src/Tools/IIoT.Edge.RuntimeLayoutSync/IIoT.Edge.RuntimeLayoutSync.csproj" />

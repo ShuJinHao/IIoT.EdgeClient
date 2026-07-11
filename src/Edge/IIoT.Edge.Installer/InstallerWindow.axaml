@@ -48,12 +48,12 @@
                         Margin="0,8,0,0"
                         FontSize="{DynamicResource Edge.FontSize.Title24}"
                         FontWeight="Bold"
-                        Foreground="{DynamicResource Edge.Brush.Gray900}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
                         HorizontalAlignment="Center"
                         Text="{StaticResource Installer_ProductName}" />
                     <TextBlock
                         FontSize="{DynamicResource Edge.FontSize.BodyStrong}"
-                        Foreground="{DynamicResource Edge.Brush.Gray500}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
                         HorizontalAlignment="Center"
                         Text="{StaticResource Installer_ProductSubtitle}" />
                 </StackPanel>
@@ -79,13 +79,13 @@
                         MinHeight="40" />
                     <TextBlock
                         FontSize="{DynamicResource Edge.FontSize.Small}"
-                        Foreground="{DynamicResource Edge.Brush.Gray500}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
                         HorizontalAlignment="Center"
                         TextWrapping="Wrap">
                         <Run Text="{StaticResource Installer_DefaultPathPrefix}" />
                         <Run
                             x:Name="DefaultPathRun"
-                            Foreground="{DynamicResource Edge.Brush.Gray700}"
+                            Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
                             Text="" />
                     </TextBlock>
                 </StackPanel>
@@ -103,11 +103,11 @@
                     <TextBlock
                         FontSize="{DynamicResource Edge.FontSize.Title}"
                         FontWeight="SemiBold"
-                        Foreground="{DynamicResource Edge.Brush.Gray900}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
                         Text="{StaticResource Installer_Custom_Title}" />
                     <TextBlock
                         FontSize="{DynamicResource Edge.FontSize.Body}"
-                        Foreground="{DynamicResource Edge.Brush.Gray500}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
                         Text="{StaticResource Installer_Custom_Subtitle}" />
                 </StackPanel>
 
@@ -121,7 +121,7 @@
                         <TextBlock
                             FontSize="{DynamicResource Edge.FontSize.Body}"
                             FontWeight="Medium"
-                            Foreground="{DynamicResource Edge.Brush.Gray700}"
+                            Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
                             Text="{StaticResource Installer_Field_InstallDirectory}" />
                         <Grid ColumnDefinitions="*,10,Auto">
                             <edge:EdgeTextBox
@@ -145,7 +145,7 @@
                         <TextBlock
                             FontSize="{DynamicResource Edge.FontSize.Body}"
                             FontWeight="Medium"
-                            Foreground="{DynamicResource Edge.Brush.Gray700}"
+                            Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
                             Text="{StaticResource Installer_Field_InstallOptions}" />
                         <edge:EdgeCheckBox
                             x:Name="DesktopShortcutCheckBox"
@@ -184,11 +184,11 @@
                     <TextBlock
                         FontSize="{DynamicResource Edge.FontSize.Title}"
                         FontWeight="SemiBold"
-                        Foreground="{DynamicResource Edge.Brush.Gray900}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
                         Text="{StaticResource Installer_Installing_Title}" />
                     <TextBlock
                         FontSize="{DynamicResource Edge.FontSize.Body}"
-                        Foreground="{DynamicResource Edge.Brush.Gray500}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
                         Text="{StaticResource Installer_Installing_Subtitle}" />
                 </StackPanel>
 
@@ -202,7 +202,7 @@
                         HorizontalAlignment="Center"
                         Opacity="0.6"
                         Source="avares://IIoT.Edge.UI.Shared/Assets/images/icon.ico" />
-                    <ProgressBar
+                    <edge:EdgeProgressBar
                         x:Name="InstallProgressBar"
                         Height="6"
                         Margin="40,0"
@@ -216,12 +216,12 @@
                         <TextBlock
                             x:Name="ProgressStatusText"
                             FontSize="{DynamicResource Edge.FontSize.Body}"
-                            Foreground="{DynamicResource Edge.Brush.Gray500}"
+                            Foreground="{DynamicResource Edge.Brush.Text.Muted}"
                             Text="{StaticResource Installer_Progress_Preparing}" />
                         <TextBlock
                             x:Name="ProgressPercentText"
                             FontSize="{DynamicResource Edge.FontSize.Body}"
-                            Foreground="{DynamicResource Edge.Brush.Gray700}"
+                            Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
                             FontWeight="Medium"
                             Text="0%" />
                     </StackPanel>
@@ -243,25 +243,25 @@
                         Width="64"
                         Height="64"
                         HorizontalAlignment="Center"
-                        Background="{DynamicResource Edge.Brush.Green100}"
+                        Background="{DynamicResource Edge.Brush.Status.RunningSurface}"
                         CornerRadius="{DynamicResource Edge.CornerRadius.Circle}">
                         <PathIcon
                             Width="28"
                             Height="28"
-                            Foreground="{DynamicResource Edge.Brush.Green500}"
+                            Foreground="{DynamicResource Edge.Brush.Status.Running}"
                             Data="{StaticResource Edge.Icon.Check}" />
                     </Border>
                     <TextBlock
                         Margin="0,8,0,0"
                         FontSize="{DynamicResource Edge.FontSize.Title22}"
                         FontWeight="SemiBold"
-                        Foreground="{DynamicResource Edge.Brush.Gray900}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Primary}"
                         HorizontalAlignment="Center"
                         Text="{StaticResource Installer_Complete_Title}" />
                     <TextBlock
                         x:Name="CompleteMessageText"
                         FontSize="{DynamicResource Edge.FontSize.Body}"
-                        Foreground="{DynamicResource Edge.Brush.Gray500}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Muted}"
                         HorizontalAlignment="Center"
                         TextWrapping="Wrap" />
                 </StackPanel>
@@ -317,7 +317,7 @@
                     <TextBlock
                         x:Name="ErrorMessageText"
                         FontSize="{DynamicResource Edge.FontSize.Body}"
-                        Foreground="{DynamicResource Edge.Brush.Gray700}"
+                        Foreground="{DynamicResource Edge.Brush.Text.Secondary}"
                         HorizontalAlignment="Center"
                         MaxWidth="360"
                         TextAlignment="Center"

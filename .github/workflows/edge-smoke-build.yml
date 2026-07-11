@@ -37,6 +37,10 @@ jobs:
           ./scripts/tests/TestEdgeDeploymentBehavior.ps1
           ./scripts/tests/TestEdgeReleaseResumeBehavior.ps1
 
+      - name: Enforce shared UI baseline
+        shell: pwsh
+        run: ./scripts/CheckEdgeUiSharedBaseline.ps1
+
       - name: Build shell
         shell: pwsh
         run: dotnet build src/Edge/IIoT.Edge.Shell/IIoT.Edge.Shell.csproj -p:BuildInParallel=false --disable-build-servers
@@ -44,6 +48,14 @@ jobs:
       - name: Run shell smoke tests
         shell: pwsh
         run: dotnet test src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj -p:BuildInParallel=false --disable-build-servers
+
+      - name: Run shared UI behavior tests
+        shell: pwsh
+        run: dotnet test src/Tests/IIoT.Edge.UI.Shared.Tests/IIoT.Edge.UI.Shared.Tests.csproj -p:BuildInParallel=false --disable-build-servers
+
+      - name: Run launcher tests
+        shell: pwsh
+        run: dotnet test src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj -p:BuildInParallel=false --disable-build-servers
 
       - name: Run installer tests
         shell: pwsh

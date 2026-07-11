@@ -325,10 +325,108 @@ foreach ($include in $requiredThemeIncludes) {
     }
 }
 
+$axamlFiles = @(
+    Get-ChildItem -Path $srcDir -Recurse -File -Filter "*.axaml" |
+        Where-Object { $_.FullName -notmatch "[/\\](bin|obj)[/\\]" }
+)
+
 $sharedAxamlFiles = @(
     Get-ChildItem -Path (Join-Path $sharedRoot "Avalonia") -Recurse -File -Filter "*.axaml" |
         Where-Object { $_.FullName -notmatch "[/\\](bin|obj)[/\\]" }
 )
+
+$xamlNamespace = "http://schemas.microsoft.com/winfx/2006/xaml"
+$sharedAvaloniaRoot = [System.IO.Path]::GetFullPath((Join-Path $sharedRoot "Avalonia"))
+$sharedAvaloniaPrefix = $sharedAvaloniaRoot + [System.IO.Path]::DirectorySeparatorChar
+$edgeResourceKeys = [System.Collections.Generic.HashSet[string]]::new(
+    [System.StringComparer]::Ordinal)
+$edgeResourceDefinitions = [System.Collections.Generic.List[object]]::new()
+$edgeResourceReferences = [System.Collections.Generic.List[object]]::new()
+
+foreach ($axamlFile in $axamlFiles) {
+    try {
+        $document = [System.Xml.XmlDocument]::new()
+        $document.PreserveWhitespace = $true
+        $document.Load($axamlFile.FullName)
+    }
+    catch {
+        Write-Error "Invalid XAML XML in $($axamlFile.FullName): $($_.Exception.Message)"
+    }
+
+    $namespaceManager = [System.Xml.XmlNamespaceManager]::new($document.NameTable)
+    $namespaceManager.AddNamespace("x", $xamlNamespace)
+
+    $relativePath = [System.IO.Path]::GetRelativePath($repoRoot, $axamlFile.FullName)
+    $fullAxamlPath = [System.IO.Path]::GetFullPath($axamlFile.FullName)
+    $isSharedResourceFile = $fullAxamlPath.StartsWith(
+        $sharedAvaloniaPrefix,
+        [System.StringComparison]::OrdinalIgnoreCase)
+
+    foreach ($definition in @($document.SelectNodes("//*[@x:Key]", $namespaceManager))) {
+        $key = $definition.GetAttribute("Key", $xamlNamespace)
+        if ($key.StartsWith("Edge.", [System.StringComparison]::Ordinal)) {
+            $edgeResourceDefinitions.Add([pscustomobject]@{
+                Key = $key
+                Path = $relativePath
+                IsShared = $isSharedResourceFile
+            })
+            if ($isSharedResourceFile) {
+                [void]$edgeResourceKeys.Add($key)
+            }
+        }
+    }
+
+    foreach ($attribute in @($document.SelectNodes("//@*"))) {
+        $matches = [regex]::Matches(
+            $attribute.Value,
+            '\{\s*(?:DynamicResource|StaticResource)\s+(?<Key>Edge\.[A-Za-z0-9_.-]+)')
+        foreach ($match in $matches) {
+            $edgeResourceReferences.Add([pscustomobject]@{
+                Key = $match.Groups["Key"].Value
+                Path = $relativePath
+            })
+        }
+    }
+}
+
+$externalEdgeResourceDefinitions = @(
+    $edgeResourceDefinitions |
+        Where-Object { -not $_.IsShared } |
+        Sort-Object Key, Path -Unique
+)
+
+if ($externalEdgeResourceDefinitions.Count -ne 0) {
+    $details = $externalEdgeResourceDefinitions |
+        ForEach-Object { "$($_.Key) <- $($_.Path)" }
+    Write-Error ("Edge.* XAML resource keys must be defined only in IIoT.Edge.UI.Shared/Avalonia:`n" + ($details -join "`n"))
+}
+
+$duplicateSharedEdgeResourceDefinitions = @(
+    $edgeResourceDefinitions |
+        Where-Object { $_.IsShared } |
+        Group-Object Key |
+        Where-Object { $_.Count -gt 1 }
+)
+
+if ($duplicateSharedEdgeResourceDefinitions.Count -ne 0) {
+    $details = $duplicateSharedEdgeResourceDefinitions |
+        ForEach-Object {
+            "$($_.Name) <- $(($_.Group.Path | Sort-Object -Unique) -join ', ')"
+        }
+    Write-Error ("Duplicate Edge.* XAML resource key definitions found in UI.Shared:`n" + ($details -join "`n"))
+}
+
+$missingEdgeResourceReferences = @(
+    $edgeResourceReferences |
+        Where-Object { -not $edgeResourceKeys.Contains($_.Key) } |
+        Sort-Object Key, Path -Unique
+)
+
+if ($missingEdgeResourceReferences.Count -ne 0) {
+    $details = $missingEdgeResourceReferences |
+        ForEach-Object { "$($_.Key) <- $($_.Path)" }
+    Write-Error ("Undefined Edge.* XAML resource references found:`n" + ($details -join "`n"))
+}
 
 $edgeThemePath = [System.IO.Path]::GetFullPath($edgeTheme)
 $hexOutsideThemeHits = @(
@@ -416,7 +514,7 @@ $businessAxamlFiles = @(
     }
 )
 
-$rawBusinessControlHits = @($businessAxamlFiles | Select-String -Pattern '<(Button|DataGrid|ScrollViewer|ListBox|TextBox|ComboBox|CalendarDatePicker|DatePicker|CheckBox|TabControl)\b')
+$rawBusinessControlHits = @($businessAxamlFiles | Select-String -Pattern '<(?:[A-Za-z_][\w.-]*:)?(Button|DataGrid|ProgressBar|ScrollViewer|ListBox|TextBox|ComboBox|CalendarDatePicker|DatePicker|CheckBox|TabControl)\b')
 if ($rawBusinessControlHits.Count -ne 0) {
     Write-Error 'Raw interactive control usage remains in business XAML. Use IIoT.Edge.UI.Shared controls.'
 }
@@ -648,14 +746,6 @@ foreach ($hit in $converterHits) {
         Write-Error "Converter implementation outside shared UI converters directory: $hitPath"
     }
 }
-
-$axamlFiles = @(
-    Get-ChildItem -Path $srcDir -Recurse -File |
-        Where-Object {
-            $_.Extension -eq ".axaml" -and
-            $_.FullName -notmatch "[/\\](bin|obj)[/\\]"
-        }
-)
 
 $edgeConvertersPath = [System.IO.Path]::GetFullPath($edgeConverters)
 $converterResourceHits = @($axamlFiles | Select-String -Pattern 'x:Key="Edge\.Converter\.')

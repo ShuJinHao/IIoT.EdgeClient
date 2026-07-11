@@ -160,6 +160,7 @@
         <Thickness x:Key="Edge.Thickness.RightRail">0,12,12,12</Thickness>
         <Thickness x:Key="Edge.Thickness.Border.Subtle">1</Thickness>
 
+        <x:Double x:Key="Edge.Size.Spacing2">2</x:Double>
         <x:Double x:Key="Edge.Size.Spacing4">4</x:Double>
         <x:Double x:Key="Edge.Size.Spacing6">6</x:Double>
         <x:Double x:Key="Edge.Size.Spacing8">8</x:Double>
