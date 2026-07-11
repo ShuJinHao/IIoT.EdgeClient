@@ -185,6 +185,7 @@ try {
     $passed++
 
     Write-Host "Edge deployment behavior tests passed: $passed"
+    $global:LASTEXITCODE = 0
 }
 finally {
     if ($null -ne $fakeCloudProcess -and -not $fakeCloudProcess.HasExited) {

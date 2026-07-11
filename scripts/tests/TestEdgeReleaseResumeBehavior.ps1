@@ -206,6 +206,7 @@ try {
     } -Needles @('httpStatus=500', 'catalog_unavailable', 'injected failure')
 
     Write-Host "Edge full release resume behavior tests passed: $passed"
+    $global:LASTEXITCODE = 0
 }
 finally {
     if ($null -ne $fakeCloudProcess -and -not $fakeCloudProcess.HasExited) {
