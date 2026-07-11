@@ -1,5 +1,11 @@
 <Project>
 
+  <Target Name="ValidateEdgeDeploymentPolicy"
+          BeforeTargets="PrepareForBuild"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(MSBuildProjectName)' == 'IIoT.Edge.Shell'">
+    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)scripts/tests/TestEdgeDeploymentPolicy.ps1&quot;" />
+  </Target>
+
   <Target Name="ValidateEdgePluginProjectReferences"
           BeforeTargets="ResolveProjectReferences"
           Condition="'$(IsEdgePluginModule)' == 'true'">

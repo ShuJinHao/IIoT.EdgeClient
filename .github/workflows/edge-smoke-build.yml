@@ -33,6 +33,7 @@ jobs:
       - name: Run Edge deployment behavior tests
         shell: pwsh
         run: |
+          ./scripts/tests/TestEdgeDeploymentPolicy.ps1
           ./scripts/tests/TestEdgeDeploymentBehavior.ps1
           ./scripts/tests/TestEdgeReleaseResumeBehavior.ps1
 

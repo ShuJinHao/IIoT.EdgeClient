@@ -275,7 +275,7 @@ Cloud 下载中心、插件选择安装、设备盘点和版本上报属于后�
 
 EdgeClient 的交付物是 Windows 安装器、安装素材和 Velopack 更新包，不是 Docker 镜像。CI/CD 不允许推 Harbor、GHCR，也不允许从 GitHub hosted runner 通过 SSH/SCP 直连内网服务器。
 
-`push main` 只跑 smoke 编译和测试，不生成安装包。完整 GitHub 打包只在 `workflow_dispatch` 或 `edge-v*` / `v*` tag 时执行。日常宿主快发由操作者或 AI 从工作区根运行 `deploy/Invoke-WorkspaceDeploy.ps1 -Target EdgeHost`；统一入口生成内部调度标记后才允许 `LocalPublishAndDeploy.ps1 -Transport http` 构建并通过 Cloud Human API 上传 release bundle。正式发布要求 clean + pushed HEAD，Host/Plugin 共用本地互斥锁，catalog/HTTP/HEAD 必须 fail-fast；失败后从统一入口用 `-ResumeReleaseRoot` 复用产物。HTTP 上传默认限速 1000 Mbps、单并发、服务端审计，并在脚本结束时输出发布摘要。更新内容必须显式填写。生产 `stable` 不允许 `rsync/scp` 绕过 Cloud DB、审计和保留策略。
+`push main` 只跑 smoke 编译和测试，不生成安装包。完整 GitHub 打包只在 `workflow_dispatch` 或 `edge-v*` / `v*` tag 时执行。日常自动发布由工作区 `deploy/Deploy-Changed.ps1` 先 push 已提交的 main、读取已发布宿主基线并按改动自动选择 EdgeHost 或具体 EdgePlugin；内部才允许 `Invoke-WorkspaceDeploy.ps1` 调度 `LocalPublishAndDeploy.ps1 -Transport http` 或插件实现。部署结果是服务器提供 Windows 安装器/Velopack/插件下载，不是远程安装 Windows，也不走 Harbor。正式发布要求 clean + pushed HEAD，Host/Plugin 共用本地互斥锁，catalog/HTTP/HEAD 必须 fail-fast；失败后从统一入口用 `-ResumeReleaseRoot` 复用产物。更新内容必须显式填写。生产 `stable` 不允许 `rsync/scp` 绕过 Cloud DB、审计和保留策略。
 
 只改工序插件时走独立插件发布：
 
