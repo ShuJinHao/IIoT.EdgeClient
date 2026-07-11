@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [string]$CloudApiBaseUrl = 'http://10.98.90.154:81/api/v1',
+    [Parameter(Mandatory = $true)]
+    [string]$CloudApiBaseUrl,
     [string]$CloudToken = '',
     [string]$Channel = 'stable',
     [string]$RuntimeIdentifier = 'win-x64'
