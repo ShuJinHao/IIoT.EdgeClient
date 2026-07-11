@@ -51,7 +51,7 @@ class Handler(BaseHTTPRequestHandler):
                                 "moduleId": "Homogenization",
                                 "versions": [
                                     {
-                                        "version": "1.0.0",
+                                        "version": self.server.plugin_version,
                                         "targetRuntime": "win-x64",
                                         "downloadUrl": "/download",
                                     }
@@ -129,7 +129,7 @@ class Handler(BaseHTTPRequestHandler):
                     "moduleId": "Homogenization",
                     "displayName": "Fake Homogenization",
                     "channel": "stable",
-                    "version": "1.0.0",
+                    "version": self.server.plugin_version,
                     "targetRuntime": "win-x64",
                     "downloadUrl": "/download",
                     "sha256": "FAKE",
@@ -149,9 +149,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port-file", required=True)
     parser.add_argument("--request-log", required=True)
+    parser.add_argument("--plugin-version", default="1.0.0")
     args = parser.parse_args()
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     server.request_log = args.request_log
+    server.plugin_version = args.plugin_version
     Path(args.port_file).write_text(str(server.server_port), encoding="ascii")
 
     def stop(_signum, _frame):

@@ -71,6 +71,9 @@ try {
     Invoke-GitChecked -Directory $cloneRoot -Arguments @('remote', 'add', 'origin', $remoteRoot)
     Invoke-GitChecked -Directory $cloneRoot -Arguments @('push', '-q', '-u', 'origin', 'edge-resume-test')
     $head = (& git -C $cloneRoot rev-parse HEAD).Trim()
+    $pluginManifestPath = Join-Path $cloneRoot 'src/Modules/IIoT.Edge.Module.Homogenization/plugin.json'
+    $pluginVersion = [string]((Get-Content -Raw -Encoding UTF8 -LiteralPath $pluginManifestPath | ConvertFrom-Json).version)
+    if ([string]::IsNullOrWhiteSpace($pluginVersion)) { throw 'Homogenization plugin manifest version is required.' }
 
     $portFile = Join-Path $testRoot 'port.txt'
     $requestLog = Join-Path $testRoot 'requests.jsonl'
@@ -78,7 +81,7 @@ try {
     $python = Get-Command python3 -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($null -eq $python) { $python = Get-Command python -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1 }
     if ($null -eq $python) { throw 'Python 3 is required for the loopback fake Cloud resume test.' }
-    $fakeCloudProcess = Start-Process -FilePath $python.Source -ArgumentList @($serverScript, '--port-file', $portFile, '--request-log', $requestLog) -PassThru
+    $fakeCloudProcess = Start-Process -FilePath $python.Source -ArgumentList @($serverScript, '--port-file', $portFile, '--request-log', $requestLog, '--plugin-version', $pluginVersion) -PassThru
     $deadline = [DateTimeOffset]::UtcNow.AddSeconds(10)
     while (-not (Test-Path -LiteralPath $portFile -PathType Leaf)) {
         if ([DateTimeOffset]::UtcNow -ge $deadline) { throw 'Fake Cloud did not start.' }
@@ -103,14 +106,14 @@ try {
     $pluginReleaseRoot = Join-Path $testRoot 'plugin-release'
     $pluginPackageRoot = Join-Path $pluginReleaseRoot 'package'
     New-Item -ItemType Directory -Force -Path $pluginPackageRoot | Out-Null
-    $pluginFileName = 'IIoT.EdgePlugin.Homogenization-1.0.0-win-x64.zip'
+    $pluginFileName = "IIoT.EdgePlugin.Homogenization-$pluginVersion-win-x64.zip"
     'preserved plugin package' | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $pluginPackageRoot $pluginFileName)
     @{
         packageSchemaVersion = 1
         moduleId = 'Homogenization'
         processType = 'Homogenization'
         displayName = 'Homogenization'
-        version = '1.0.0'
+        version = $pluginVersion
         hostApiVersion = '1.0.0'
         minHostVersion = '1.0.0'
         maxHostVersion = '99.0.0'
@@ -123,14 +126,14 @@ try {
         signature = ''
         publisher = 'IIoT'
     } | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $pluginPackageRoot "$pluginFileName.json")
-    'preserved plugin wrapper' | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $pluginReleaseRoot 'edge-plugin-release-Homogenization-1.0.0-win-x64.zip')
+    'preserved plugin wrapper' | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $pluginReleaseRoot "edge-plugin-release-Homogenization-$pluginVersion-win-x64.zip")
     @{
         schemaVersion = 1
         target = 'EdgePlugin'
         invocationId = [Guid]::NewGuid().ToString('D')
         stage = 'uploading'
         status = 'failed'
-        facts = @{ moduleId = 'Homogenization'; version = '1.0.0'; sourceCommit = $head }
+        facts = @{ moduleId = 'Homogenization'; version = $pluginVersion; sourceCommit = $head }
     } | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $pluginReleaseRoot 'edge-deployment-attempt.json')
 
     Set-Dispatch -Target EdgeHost
