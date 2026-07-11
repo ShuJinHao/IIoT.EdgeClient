@@ -1,6 +1,6 @@
 # Edge 安装更新验收
 
-本文档是 EdgeClient 安装、更新和 Windows 分发安全策略的唯一客户端侧验收入口。上传部署总口径见 `../../docs/上传部署总览.md`；云端生成安装包的字段写入规则由 CloudPlatform 单独验收，本文件只约束 EdgeClient 本仓库能验证的内容。工作区唯一对外标准执行入口是根目录 `deploy/Invoke-WorkspaceDeploy.ps1`；本文件保留项目级验收细节和实现脚本说明。
+本文档是 EdgeClient 安装、更新和 Windows 分发安全策略的唯一客户端侧验收入口。上传部署总口径见 `../../docs/上传部署总览.md`；云端生成安装包的字段写入规则由 CloudPlatform 单独验收，本文件只约束 EdgeClient 本仓库能验证的内容。工作区日常唯一对外入口是根目录 `deploy/Deploy-Changed.ps1`；`deploy/Invoke-WorkspaceDeploy.ps1` 只作为宿主/插件内部执行器和显式恢复入口。本文件保留项目级验收细节。
 
 > 当前状态（2026-07-10）：隔离提交 `37ec98b` 的部署行为、失败恢复与发布契约回归已通过；本轮没有执行真实 Cloud `stable` 上传/catalog/DB/静态 HEAD，也没有执行 Windows runtime/installer/Velopack/targetRuntime 实机验收，因此本清单不能作为生产已验收证明。
 
