@@ -15,17 +15,20 @@ public enum ModbusTransportKind
 /// <summary>
 /// 基于 NModbus 的 Modbus TCP/RTU PLC 通信服务，只做端点适配和数据类型转换，不手写 Modbus 协议栈。
 /// </summary>
-public sealed class ModbusPlcService : IPlcService, IDisposable
+public sealed class ModbusPlcService : IPlcService
 {
+    private static readonly TimeSpan DefaultOperationTimeout = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan OperationSettleTimeout = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan DisposeTimeout = TimeSpan.FromSeconds(5);
     private readonly ModbusTransportKind _transportKind;
     private readonly IModbusAddressParser _addressParser;
     private readonly ModbusFactory _factory = new();
-    private readonly SemaphoreSlim _semaphore = new(1, 1);
-    private IModbusMaster? _master;
-    private TcpClient? _tcpClient;
-    private SerialPort? _serialPort;
+    private readonly PlcOperationGate _operationGate = new(
+        nameof(ModbusPlcService),
+        OperationSettleTimeout,
+        DisposeTimeout);
+    private ModbusConnection? _connection;
     private PlcEndpoint? _endpoint;
-    private int _disposed;
 
     public ModbusPlcService(
         ModbusTransportKind transportKind,
@@ -36,14 +39,11 @@ public sealed class ModbusPlcService : IPlcService, IDisposable
     }
 
     public bool IsConnected
-        => Volatile.Read(ref _disposed) == 0
-           && (_transportKind == ModbusTransportKind.Tcp
-            ? _tcpClient?.Connected == true
-            : _serialPort?.IsOpen == true);
+        => _operationGate.IsOpen && _connection?.IsConnected == true;
 
     public void Init(PlcEndpoint endpoint)
     {
-        ThrowIfDisposed();
+        _operationGate.ThrowIfNotOpen(nameof(Init));
         _endpoint = _transportKind switch
         {
             ModbusTransportKind.Tcp => endpoint as TcpPlcEndpoint
@@ -54,232 +54,234 @@ public sealed class ModbusPlcService : IPlcService, IDisposable
         };
     }
 
-    public async Task<bool> ConnectAsync()
+    public Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
-        await _semaphore.WaitAsync().ConfigureAwait(false);
-        try
-        {
-            EnsureInitialized();
-            if (IsConnected && _master is not null)
-            {
-                return true;
-            }
-
-            DisposeConnection();
-            if (_endpoint is TcpPlcEndpoint tcpEndpoint)
-            {
-                await ConnectTcpAsync(tcpEndpoint).ConfigureAwait(false);
-                return true;
-            }
-
-            if (_endpoint is SerialPlcEndpoint serialEndpoint)
-            {
-                ConnectRtu(serialEndpoint);
-                return true;
-            }
-
-            throw new InvalidOperationException("Modbus endpoint is not initialized.");
-        }
-        finally
-        {
-            _semaphore.Release();
-        }
+        var context = new ConnectionOperationContext();
+        return _operationGate.ExecuteAsync(
+            nameof(ConnectAsync),
+            token => Task.Run(() => ConnectCoreAsync(context, token), CancellationToken.None),
+            GetOperationTimeout(),
+            () => AbortConnectionAsync(context.Connection ?? _connection),
+            _ => ReleaseConnectionAsync(context.Connection ?? _connection),
+            cancellationToken);
     }
 
-    public void Disconnect()
+    public Task DisconnectAsync(CancellationToken cancellationToken = default)
     {
-        if (Volatile.Read(ref _disposed) != 0)
-        {
-            return;
-        }
-
-        _semaphore.Wait();
-        try
-        {
-            DisposeConnection();
-        }
-        finally
-        {
-            _semaphore.Release();
-        }
+        var context = new ConnectionOperationContext();
+        return _operationGate.ExecuteAsync(
+            nameof(DisconnectAsync),
+            token => Task.Run(() =>
+            {
+                token.ThrowIfCancellationRequested();
+                context.Connection = _connection;
+                DisposeConnection();
+            }, CancellationToken.None),
+            GetOperationTimeout(),
+            () => AbortConnectionAsync(context.Connection ?? _connection),
+            _ => ReleaseConnectionAsync(context.Connection ?? _connection),
+            cancellationToken);
     }
 
-    public async Task<List<T>> ReadDataAsync<T>(string address, ushort length)
+    public async Task<List<T>> ReadDataAsync<T>(
+        string address,
+        ushort length,
+        CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
         var modbusAddress = _addressParser.Parse(address, GetDefaultSlaveId());
+        var context = new ConnectionOperationContext();
 
-        await _semaphore.WaitAsync().ConfigureAwait(false);
         try
         {
-            var master = EnsureMaster();
-            return modbusAddress.Kind switch
-            {
-                ModbusAddressKind.Coil => ConvertFromBits<T>(
-                    await master
-                        .ReadCoilsAsync(modbusAddress.SlaveId, modbusAddress.Offset, length)
-                        .WaitAsync(GetOperationTimeout())
-                        .ConfigureAwait(false)),
-                ModbusAddressKind.DiscreteInput => ConvertFromBits<T>(
-                    await master
-                        .ReadInputsAsync(modbusAddress.SlaveId, modbusAddress.Offset, length)
-                        .WaitAsync(GetOperationTimeout())
-                        .ConfigureAwait(false)),
-                ModbusAddressKind.InputRegister => ConvertFromRegisters<T>(
-                    await master
-                        .ReadInputRegistersAsync(modbusAddress.SlaveId, modbusAddress.Offset, GetRegisterWordCount<T>(length))
-                        .WaitAsync(GetOperationTimeout())
-                        .ConfigureAwait(false),
-                    length),
-                _ => ConvertFromRegisters<T>(
-                    await master
-                        .ReadHoldingRegistersAsync(modbusAddress.SlaveId, modbusAddress.Offset, GetRegisterWordCount<T>(length))
-                        .WaitAsync(GetOperationTimeout())
-                        .ConfigureAwait(false),
-                    length)
-            };
+            return await _operationGate.ExecuteAsync(
+                    $"Read {address}",
+                    _ =>
+                    {
+                        context.Connection = EnsureConnection();
+                        return Task.Run(
+                            () => ReadCoreAsync<T>(context.Connection.Master, modbusAddress, length),
+                            CancellationToken.None);
+                    },
+                    GetOperationTimeout(),
+                    () => AbortConnectionAsync(context.Connection),
+                    _ => ReleaseConnectionAsync(context.Connection),
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is not TimeoutException)
+        catch (Exception ex) when (PlcOperationGate.ShouldWrapOperationException(ex))
         {
             throw new InvalidOperationException($"Read Modbus address {address} failed.", ex);
         }
-        finally
-        {
-            _semaphore.Release();
-        }
     }
 
-    public async Task WriteDataAsync<T>(string address, List<T> data)
+    public async Task WriteDataAsync<T>(
+        string address,
+        List<T> data,
+        CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
         var modbusAddress = _addressParser.Parse(address, GetDefaultSlaveId());
+        var context = new ConnectionOperationContext();
 
-        await _semaphore.WaitAsync().ConfigureAwait(false);
         try
         {
-            var master = EnsureMaster();
-            switch (modbusAddress.Kind)
-            {
-                case ModbusAddressKind.Coil:
-                    await WriteCoilsAsync(master, modbusAddress, data).ConfigureAwait(false);
-                    return;
-
-                case ModbusAddressKind.HoldingRegister:
-                    await WriteRegistersAsync(master, modbusAddress, data).ConfigureAwait(false);
-                    return;
-
-                default:
-                    throw new NotSupportedException($"Modbus 地址 {address} 是只读区，不能写入。");
-            }
+            await _operationGate.ExecuteAsync(
+                    $"Write {address}",
+                    _ =>
+                    {
+                        context.Connection = EnsureConnection();
+                        return Task.Run(
+                            () => WriteCoreAsync(context.Connection.Master, modbusAddress, data, address),
+                            CancellationToken.None);
+                    },
+                    GetOperationTimeout(),
+                    () => AbortConnectionAsync(context.Connection),
+                    _ => ReleaseConnectionAsync(context.Connection),
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is not TimeoutException and not NotSupportedException)
+        catch (Exception ex) when (
+            PlcOperationGate.ShouldWrapOperationException(ex)
+            && ex is not NotSupportedException)
         {
             throw new InvalidOperationException($"Write Modbus address {address} failed.", ex);
         }
-        finally
-        {
-            _semaphore.Release();
-        }
     }
 
-    public void Dispose()
+    public ValueTask DisposeAsync()
+        => _operationGate.DisposeAsync(() => Task.Run(DisposeConnection));
+
+    private async Task<bool> ConnectCoreAsync(
+        ConnectionOperationContext context,
+        CancellationToken cancellationToken)
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        cancellationToken.ThrowIfCancellationRequested();
+        EnsureInitialized();
+        if (IsConnected && _connection is not null)
         {
-            return;
+            return true;
         }
 
-        _semaphore.Wait();
-        try
-        {
-            DisposeConnection();
-        }
-        finally
-        {
-            _semaphore.Release();
-            _semaphore.Dispose();
-        }
-    }
+        context.Connection = _connection;
+        DisposeConnection();
+        context.Connection = CreateConnectionCandidate();
 
-    private async Task ConnectTcpAsync(TcpPlcEndpoint endpoint)
-    {
-        var client = new TcpClient();
         try
         {
-            await client
-                .ConnectAsync(endpoint.Host, endpoint.Port)
-                .WaitAsync(endpoint.ConnectTimeout)
-                .ConfigureAwait(false);
-            _tcpClient = client;
-            _master = _factory.CreateMaster(client);
+            switch (_endpoint)
+            {
+                case TcpPlcEndpoint tcpEndpoint:
+                    await context.Connection.TcpClient!
+                        .ConnectAsync(tcpEndpoint.Host, tcpEndpoint.Port, cancellationToken)
+                        .ConfigureAwait(false);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    context.Connection.AttachMaster(_factory.CreateMaster(context.Connection.TcpClient));
+                    break;
+
+                case SerialPlcEndpoint:
+                    cancellationToken.ThrowIfCancellationRequested();
+                    context.Connection.SerialPort!.Open();
+                    cancellationToken.ThrowIfCancellationRequested();
+                    context.Connection.AttachMaster(
+                        _factory.CreateRtuMaster(new SerialPortAdapter(context.Connection.SerialPort)));
+                    break;
+
+                default:
+                    throw new InvalidOperationException("Modbus endpoint is not initialized.");
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            _connection = context.Connection;
+            return true;
         }
-        catch
+        catch when (!cancellationToken.IsCancellationRequested)
         {
-            client.Dispose();
+            ReleaseConnection(context.Connection);
             throw;
         }
     }
 
-    private void ConnectRtu(SerialPlcEndpoint endpoint)
-    {
-        var serialPort = new SerialPort(
-            endpoint.PortName,
-            endpoint.BaudRate,
-            ParseParity(endpoint.Parity),
-            endpoint.DataBits,
-            ParseStopBits(endpoint.StopBits))
+    private ModbusConnection CreateConnectionCandidate()
+        => _endpoint switch
         {
-            ReadTimeout = (int)endpoint.ConnectTimeout.TotalMilliseconds,
-            WriteTimeout = (int)endpoint.ConnectTimeout.TotalMilliseconds
+            TcpPlcEndpoint => new ModbusConnection(new TcpClient(), null),
+            SerialPlcEndpoint serialEndpoint => new ModbusConnection(
+                null,
+                new SerialPort(
+                    serialEndpoint.PortName,
+                    serialEndpoint.BaudRate,
+                    ParseParity(serialEndpoint.Parity),
+                    serialEndpoint.DataBits,
+                    ParseStopBits(serialEndpoint.StopBits))
+                {
+                    ReadTimeout = ResolveTimeoutMilliseconds(serialEndpoint.ConnectTimeout),
+                    WriteTimeout = ResolveTimeoutMilliseconds(serialEndpoint.ConnectTimeout)
+                }),
+            _ => throw new InvalidOperationException("Modbus endpoint is not initialized.")
         };
 
-        try
+    private static async Task<List<T>> ReadCoreAsync<T>(
+        IModbusMaster master,
+        ModbusAddress address,
+        ushort length)
+        => address.Kind switch
         {
-            serialPort.Open();
-            _serialPort = serialPort;
-            _master = _factory.CreateRtuMaster(new SerialPortAdapter(serialPort));
-        }
-        catch
-        {
-            serialPort.Dispose();
-            throw;
-        }
-    }
+            ModbusAddressKind.Coil => ConvertFromBits<T>(
+                await master.ReadCoilsAsync(address.SlaveId, address.Offset, length).ConfigureAwait(false)),
+            ModbusAddressKind.DiscreteInput => ConvertFromBits<T>(
+                await master.ReadInputsAsync(address.SlaveId, address.Offset, length).ConfigureAwait(false)),
+            ModbusAddressKind.InputRegister => ConvertFromRegisters<T>(
+                await master
+                    .ReadInputRegistersAsync(address.SlaveId, address.Offset, GetRegisterWordCount<T>(length))
+                    .ConfigureAwait(false),
+                length),
+            _ => ConvertFromRegisters<T>(
+                await master
+                    .ReadHoldingRegistersAsync(address.SlaveId, address.Offset, GetRegisterWordCount<T>(length))
+                    .ConfigureAwait(false),
+                length)
+        };
 
-    private async Task WriteCoilsAsync<T>(IModbusMaster master, ModbusAddress address, IReadOnlyCollection<T> data)
+    private static Task WriteCoreAsync<T>(
+        IModbusMaster master,
+        ModbusAddress modbusAddress,
+        IReadOnlyCollection<T> data,
+        string displayAddress)
+        => modbusAddress.Kind switch
+        {
+            ModbusAddressKind.Coil => WriteCoilsAsync(master, modbusAddress, data),
+            ModbusAddressKind.HoldingRegister => WriteRegistersAsync(master, modbusAddress, data),
+            _ => throw new NotSupportedException($"Modbus 地址 {displayAddress} 是只读区，不能写入。")
+        };
+
+    private static async Task WriteCoilsAsync<T>(IModbusMaster master, ModbusAddress address, IReadOnlyCollection<T> data)
     {
         var values = data.Select(ToBoolean).ToArray();
         if (values.Length == 1)
         {
             await master
                 .WriteSingleCoilAsync(address.SlaveId, address.Offset, values[0])
-                .WaitAsync(GetOperationTimeout())
                 .ConfigureAwait(false);
             return;
         }
 
         await master
             .WriteMultipleCoilsAsync(address.SlaveId, address.Offset, values)
-            .WaitAsync(GetOperationTimeout())
             .ConfigureAwait(false);
     }
 
-    private async Task WriteRegistersAsync<T>(IModbusMaster master, ModbusAddress address, IReadOnlyCollection<T> data)
+    private static async Task WriteRegistersAsync<T>(IModbusMaster master, ModbusAddress address, IReadOnlyCollection<T> data)
     {
         var words = ConvertToRegisters(data).ToArray();
         if (words.Length == 1)
         {
             await master
                 .WriteSingleRegisterAsync(address.SlaveId, address.Offset, words[0])
-                .WaitAsync(GetOperationTimeout())
                 .ConfigureAwait(false);
             return;
         }
 
         await master
             .WriteMultipleRegistersAsync(address.SlaveId, address.Offset, words)
-            .WaitAsync(GetOperationTimeout())
             .ConfigureAwait(false);
     }
 
@@ -289,7 +291,9 @@ public sealed class ModbusPlcService : IPlcService, IDisposable
             : (byte)1;
 
     private TimeSpan GetOperationTimeout()
-        => _endpoint?.ConnectTimeout ?? TimeSpan.FromSeconds(3);
+        => _endpoint?.ConnectTimeout > TimeSpan.Zero
+            ? _endpoint.ConnectTimeout
+            : DefaultOperationTimeout;
 
     private void EnsureInitialized()
     {
@@ -299,49 +303,52 @@ public sealed class ModbusPlcService : IPlcService, IDisposable
         }
     }
 
-    private void ThrowIfDisposed()
+    private ModbusConnection EnsureConnection()
     {
-        if (Volatile.Read(ref _disposed) != 0)
-        {
-            throw new ObjectDisposedException(nameof(ModbusPlcService));
-        }
-    }
-
-    private IModbusMaster EnsureMaster()
-    {
-        if (_master is null || !IsConnected)
+        if (!IsConnected || _connection is null)
         {
             throw new InvalidOperationException("PLC is not connected.");
         }
 
-        return _master;
+        return _connection;
+    }
+
+    private Task AbortConnectionAsync(ModbusConnection? connection)
+        => connection is null
+            ? Task.CompletedTask
+            : Task.Run(connection.AbortTransport);
+
+    private Task ReleaseConnectionAsync(ModbusConnection? connection)
+        => connection is null
+            ? Task.CompletedTask
+            : Task.Run(() => ReleaseConnection(connection));
+
+    private void ReleaseConnection(ModbusConnection? connection)
+    {
+        if (connection is null)
+        {
+            return;
+        }
+
+        if (ReferenceEquals(_connection, connection))
+        {
+            _connection = null;
+        }
+
+        connection.Dispose();
     }
 
     private void DisposeConnection()
     {
-        try
-        {
-            (_master as IDisposable)?.Dispose();
-        }
-        catch
-        {
-        }
-
-        _master = null;
-        _tcpClient?.Dispose();
-        _tcpClient = null;
-
-        if (_serialPort is not null)
-        {
-            if (_serialPort.IsOpen)
-            {
-                _serialPort.Close();
-            }
-
-            _serialPort.Dispose();
-            _serialPort = null;
-        }
+        var connection = _connection;
+        _connection = null;
+        connection?.Dispose();
     }
+
+    private static int ResolveTimeoutMilliseconds(TimeSpan timeout)
+        => timeout <= TimeSpan.Zero
+            ? (int)DefaultOperationTimeout.TotalMilliseconds
+            : (int)Math.Min(timeout.TotalMilliseconds, int.MaxValue);
 
     private static ushort GetRegisterWordCount<T>(ushort elementCount)
         => checked((ushort)(elementCount * GetWordSize(typeof(T))));
@@ -523,4 +530,103 @@ public sealed class ModbusPlcService : IPlcService, IDisposable
         => Enum.TryParse<Parity>(value, ignoreCase: true, out var result)
             ? result
             : throw new ArgumentException($"校验位配置无效：{value}");
+
+    private sealed class ConnectionOperationContext
+    {
+        public ModbusConnection? Connection { get; set; }
+    }
+
+    private sealed class ModbusConnection : IDisposable
+    {
+        private PlcTransportOwner<IModbusMaster>? _masterOwner;
+        private readonly PlcTransportOwner<TcpClient>? _tcpClientOwner;
+        private readonly PlcTransportOwner<SerialPort>? _serialPortOwner;
+        private int _released;
+
+        public ModbusConnection(TcpClient? tcpClient, SerialPort? serialPort)
+        {
+            _tcpClientOwner = tcpClient is null
+                ? null
+                : new PlcTransportOwner<TcpClient>(tcpClient, static value => value.Dispose());
+            _serialPortOwner = serialPort is null
+                ? null
+                : new PlcTransportOwner<SerialPort>(serialPort, static value => value.Dispose());
+        }
+
+        public bool IsConnected
+            => _tcpClientOwner?.ValueOrDefault?.Connected == true
+               || _serialPortOwner?.ValueOrDefault?.IsOpen == true;
+
+        public IModbusMaster Master
+            => Volatile.Read(ref _masterOwner)?.Value
+               ?? throw new ObjectDisposedException(nameof(IModbusMaster));
+
+        public TcpClient? TcpClient => _tcpClientOwner?.ValueOrDefault;
+
+        public SerialPort? SerialPort => _serialPortOwner?.ValueOrDefault;
+
+        public void AttachMaster(IModbusMaster master)
+        {
+            ArgumentNullException.ThrowIfNull(master);
+            var owner = new PlcTransportOwner<IModbusMaster>(
+                master,
+                static value => (value as IDisposable)?.Dispose());
+            if (Volatile.Read(ref _released) != 0
+                || Interlocked.CompareExchange(ref _masterOwner, owner, null) is not null)
+            {
+                owner.Release();
+                throw new InvalidOperationException("Modbus master ownership is no longer available.");
+            }
+        }
+
+        public void AbortTransport()
+        {
+            var errors = new List<Exception>();
+            ReleaseOwner(_tcpClientOwner, errors);
+            ReleaseOwner(_serialPortOwner, errors);
+            ThrowIfReleaseFailed(errors);
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _released, 1) != 0)
+            {
+                return;
+            }
+
+            var errors = new List<Exception>();
+            ReleaseOwner(Interlocked.Exchange(ref _masterOwner, null), errors);
+            ReleaseOwner(_tcpClientOwner, errors);
+            ReleaseOwner(_serialPortOwner, errors);
+            ThrowIfReleaseFailed(errors);
+        }
+
+        private static void ReleaseOwner<T>(
+            PlcTransportOwner<T>? owner,
+            ICollection<Exception> errors)
+            where T : class
+        {
+            if (owner is null)
+            {
+                return;
+            }
+
+            try
+            {
+                owner.Release();
+            }
+            catch (Exception ex)
+            {
+                errors.Add(ex);
+            }
+        }
+
+        private static void ThrowIfReleaseFailed(IReadOnlyCollection<Exception> errors)
+        {
+            if (errors.Count != 0)
+            {
+                throw new AggregateException("Modbus connection release failed.", errors);
+            }
+        }
+    }
 }

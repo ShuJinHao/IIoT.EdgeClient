@@ -20,52 +20,68 @@ public sealed class PlcServiceProxy : IPlcService
 
     public void Init(PlcEndpoint endpoint) => _target.Init(endpoint);
 
-    public async Task<bool> ConnectAsync()
+    public async Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
+    {
+        var result = await ExecuteLoggedAsync(
+                "连接异常",
+                () => _target.ConnectAsync(cancellationToken))
+            .ConfigureAwait(false);
+        if (!result)
+        {
+            _logger.Warn($"[{_deviceName}] 连接失败");
+        }
+
+        return result;
+    }
+
+    public Task DisconnectAsync(CancellationToken cancellationToken = default)
+        => _target.DisconnectAsync(cancellationToken);
+
+    public async Task<List<T>> ReadDataAsync<T>(
+        string address,
+        ushort length,
+        CancellationToken cancellationToken = default)
+        => await ExecuteLoggedAsync(
+                $"读取 {address} 失败",
+                () => _target.ReadDataAsync<T>(address, length, cancellationToken))
+            .ConfigureAwait(false);
+
+    public async Task WriteDataAsync<T>(
+        string address,
+        List<T> data,
+        CancellationToken cancellationToken = default)
+        => await ExecuteLoggedAsync(
+                $"写入 {address} 失败",
+                async () =>
+                {
+                    await _target.WriteDataAsync(address, data, cancellationToken).ConfigureAwait(false);
+                    return true;
+                })
+            .ConfigureAwait(false);
+
+    public ValueTask DisposeAsync() => _target.DisposeAsync();
+
+    private async Task<TResult> ExecuteLoggedAsync<TResult>(
+        string failureMessage,
+        Func<Task<TResult>> operation)
     {
         try
         {
-            var result = await _target.ConnectAsync().ConfigureAwait(false);
-            if (!result)
-            {
-                _logger.Warn($"[{_deviceName}] 连接失败");
-            }
-
-            return result;
+            return await operation().ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (PlcServiceQuarantinedException ex)
+        {
+            _logger.Error($"[{_deviceName}] PLC service 已隔离: {ex.Message}");
+            throw;
         }
         catch (Exception ex)
         {
-            _logger.Error($"[{_deviceName}] 连接异常: {ex.Message}");
+            _logger.Error($"[{_deviceName}] {failureMessage}: {ex.Message}");
             throw;
         }
     }
-
-    public void Disconnect() => _target.Disconnect();
-
-    public async Task<List<T>> ReadDataAsync<T>(string address, ushort length)
-    {
-        try
-        {
-            return await _target.ReadDataAsync<T>(address, length).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger.Error($"[{_deviceName}] 读取 {address} 失败: {ex.Message}");
-            throw;
-        }
-    }
-
-    public async Task WriteDataAsync<T>(string address, List<T> data)
-    {
-        try
-        {
-            await _target.WriteDataAsync(address, data).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger.Error($"[{_deviceName}] 写入 {address} 失败: {ex.Message}");
-            throw;
-        }
-    }
-
-    public void Dispose() => _target.Dispose();
 }

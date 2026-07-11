@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.SharedKernel.Repository;
 
@@ -14,8 +15,9 @@ public sealed class PlcLifecycleCoordinator
     private readonly PlcDeviceRuntimeBuilder _runtimeBuilder;
     private readonly PlcConnectionStatusStore _statusStore;
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
+    private readonly object _disposeLock = new();
     private int _shutdownRequested;
-    private int _disposeState;
+    private Task? _disposeTask;
 
     public PlcLifecycleCoordinator(
         IRepository<NetworkDeviceEntity> networkDevices,
@@ -84,7 +86,12 @@ public sealed class PlcLifecycleCoordinator
 
             if (!duplicateEndpointFaults.ContainsKey(device.Id))
             {
-                await StopDeviceCoreAsync(device.Id, ct).ConfigureAwait(false);
+                var stopped = await StopDeviceCoreAsync(device.Id, ct).ConfigureAwait(false);
+                if (!stopped)
+                {
+                    _logger.Warn($"[{device.DeviceName}] 重载已停止：旧 PLC runtime 未安全退出，禁止创建替代 runtime。");
+                    return;
+                }
             }
 
             ApplyDuplicateEndpointFaults(enabledDevices, duplicateEndpointFaults);
@@ -115,8 +122,15 @@ public sealed class PlcLifecycleCoordinator
         try
         {
             ThrowIfDisposed();
-            await StopDeviceCoreAsync(networkDeviceId, ct).ConfigureAwait(false);
-            _logger.Info($"[DeviceId={networkDeviceId}] 停止完成。");
+            var stopped = await StopDeviceCoreAsync(networkDeviceId, ct).ConfigureAwait(false);
+            if (stopped)
+            {
+                _logger.Info($"[DeviceId={networkDeviceId}] 停止完成。");
+            }
+            else
+            {
+                _logger.Warn($"[DeviceId={networkDeviceId}] PLC runtime 未在硬上限内退出，已隔离但未阻断客户端。");
+            }
         }
         finally
         {
@@ -145,53 +159,49 @@ public sealed class PlcLifecycleCoordinator
 
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposeState, 1) != 0)
-        {
-            return;
-        }
-
         RequestShutdown();
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await DisposeCoreAsync().ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"PLC 生命周期释放清理失败：{ex.Message}");
-            }
-        });
+        _ = ObserveDisposeAsync(EnsureDisposeTask());
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposeState, 1) != 0)
-        {
-            return;
-        }
-
         RequestShutdown();
-        await DisposeCoreAsync().ConfigureAwait(false);
+        await EnsureDisposeTask().ConfigureAwait(false);
+    }
+
+    private Task EnsureDisposeTask()
+    {
+        lock (_disposeLock)
+        {
+            return _disposeTask ??= DisposeCoreAsync();
+        }
+    }
+
+    private async Task ObserveDisposeAsync(Task disposeTask)
+    {
+        try
+        {
+            await disposeTask.ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"PLC 生命周期释放清理失败：{ex.Message}");
+        }
     }
 
     private async Task DisposeCoreAsync()
     {
-        PlcDeviceRuntimeHandle[] runtimes;
-
         await _lifecycleGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            runtimes = _runtimeRegistry.Drain();
+            foreach (var runtime in _runtimeRegistry.GetRuntimesSnapshot())
+            {
+                await CleanupRegisteredRuntimeAsync(runtime).ConfigureAwait(false);
+            }
         }
         finally
         {
             _lifecycleGate.Release();
-        }
-
-        foreach (var runtime in runtimes)
-        {
-            await CleanupDeviceRuntimeAsync(runtime, CancellationToken.None).ConfigureAwait(false);
         }
     }
 
@@ -200,6 +210,11 @@ public sealed class PlcLifecycleCoordinator
         try
         {
             await InitializeDeviceAsync(device, ct).ConfigureAwait(false);
+        }
+        catch (PlcServiceQuarantinedException ex)
+        {
+            _statusStore.MarkRuntimeFault(device.Id, device.DeviceName, ex.Message);
+            _logger.Error($"[{device.DeviceName}] PLC service 已隔离，客户端继续启动：{ex.Message}");
         }
         catch (Exception ex)
         {
@@ -243,6 +258,14 @@ public sealed class PlcLifecycleCoordinator
                     catch (OperationCanceledException) when (runtime.CancellationTokenSource.IsCancellationRequested)
                     {
                     }
+                    catch (ObjectDisposedException) when (runtime.CancellationTokenSource.IsCancellationRequested)
+                    {
+                    }
+                    catch (PlcServiceQuarantinedException ex)
+                    {
+                        _statusStore.MarkRuntimeFault(runtime.DeviceId, runtime.DeviceName, ex.Message);
+                        _logger.Error($"[{runtime.DeviceName}] PLC service 已隔离，运行任务已停止：{ex.Message}");
+                    }
                     catch (Exception ex)
                     {
                         _statusStore.MarkDisconnected(runtime.DeviceId, runtime.DeviceName, ex.Message);
@@ -253,7 +276,7 @@ public sealed class PlcLifecycleCoordinator
 
             if (IsShutdownRequested || IsDisposed || !_runtimeRegistry.TryAddRuntime(runtime))
             {
-                await CleanupDeviceRuntimeAsync(runtime, CancellationToken.None).ConfigureAwait(false);
+                await CleanupDeviceRuntimeAsync(runtime).ConfigureAwait(false);
                 _logger.Warn($"[{device.DeviceName}] 初始化已取消：任务句柄尚未完成登记。");
                 return;
             }
@@ -271,7 +294,7 @@ public sealed class PlcLifecycleCoordinator
         {
             if (runtime is not null)
             {
-                await CleanupDeviceRuntimeAsync(runtime, CancellationToken.None).ConfigureAwait(false);
+                await CleanupDeviceRuntimeAsync(runtime).ConfigureAwait(false);
             }
 
             throw;
@@ -318,12 +341,12 @@ public sealed class PlcLifecycleCoordinator
         }
     }
 
-    private async Task StopDeviceCoreAsync(int deviceId, CancellationToken ct)
+    private async Task<bool> StopDeviceCoreAsync(int deviceId, CancellationToken ct)
     {
-        if (_runtimeRegistry.TryRemoveRuntime(deviceId, out var runtime) && runtime is not null)
+        var runtime = _runtimeRegistry.GetRuntime(deviceId);
+        if (runtime is not null)
         {
-            await CleanupDeviceRuntimeAsync(runtime, ct).ConfigureAwait(false);
-            return;
+            return await CleanupRegisteredRuntimeAsync(runtime).ConfigureAwait(false);
         }
 
         var device = (await _networkDevices.GetListAsync(x => x.Id == deviceId, ct).ConfigureAwait(false)).FirstOrDefault();
@@ -331,6 +354,27 @@ public sealed class PlcLifecycleCoordinator
         {
             _statusStore.MarkDisconnected(device.Id, device.DeviceName);
         }
+
+        return true;
+    }
+
+    private async Task<bool> CleanupRegisteredRuntimeAsync(PlcDeviceRuntimeHandle runtime)
+    {
+        var cleaned = await CleanupDeviceRuntimeAsync(runtime).ConfigureAwait(false);
+        if (!cleaned)
+        {
+            return false;
+        }
+
+        if (_runtimeRegistry.TryRemoveRuntime(runtime.DeviceId, runtime))
+        {
+            return true;
+        }
+
+        const string reason = "PLC runtime 已释放，但 registry reservation 不再指向原 runtime，禁止继续自动替换。";
+        _statusStore.MarkRuntimeFault(runtime.DeviceId, runtime.DeviceName, reason);
+        _logger.Error($"[{runtime.DeviceName}] {reason}");
+        return false;
     }
 
     private static bool IsBasePlcTask(string taskName)
@@ -357,49 +401,88 @@ public sealed class PlcLifecycleCoordinator
         return taskName;
     }
 
-    private async Task CleanupDeviceRuntimeAsync(PlcDeviceRuntimeHandle runtime, CancellationToken ct)
+    private async Task<bool> CleanupDeviceRuntimeAsync(PlcDeviceRuntimeHandle runtime)
     {
         try
         {
-            runtime.CancellationTokenSource.Cancel();
+            await runtime.RequestStopAsync().ConfigureAwait(false);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.Warn($"[{runtime.DeviceName}] 取消 PLC 运行任务时发生异常：{ex.Message}");
         }
 
-        await AwaitRunningHandlesAsync(runtime.DeviceName, runtime.RunningHandles, ct).ConfigureAwait(false);
+        var runningHandlesStopped = await AwaitRunningHandlesAsync(
+                runtime.DeviceName,
+                runtime.RunningHandles,
+                CancellationToken.None)
+            .ConfigureAwait(false);
 
-        runtime.CancellationTokenSource.Dispose();
+        if (runningHandlesStopped)
+        {
+            runtime.DisposeCancellation();
+        }
 
         try
         {
-            runtime.PlcService.Disconnect();
+            await runtime.PlcService.DisposeAsync().ConfigureAwait(false);
         }
-        catch
+        catch (PlcServiceQuarantinedException ex)
         {
+            RetainQuarantinedRuntime(runtime, ex.Message);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            RetainQuarantinedRuntime(
+                runtime,
+                $"PLC service 释放失败，禁止创建替代 runtime：{ex.Message}");
+            return false;
         }
 
-        runtime.PlcService.Dispose();
+        if (!runningHandlesStopped)
+        {
+            RetainQuarantinedRuntime(
+                runtime,
+                "PLC 运行任务未在 5 秒硬上限内退出，禁止创建替代 runtime。");
+            return false;
+        }
+
         _statusStore.MarkDisconnected(runtime.DeviceId, runtime.DeviceName);
+        return true;
     }
 
-    private async Task AwaitRunningHandlesAsync(
+    private void RetainQuarantinedRuntime(PlcDeviceRuntimeHandle runtime, string reason)
+    {
+        var retained = _runtimeRegistry.TryAddRuntime(runtime)
+                       || ReferenceEquals(_runtimeRegistry.GetRuntime(runtime.DeviceId), runtime);
+        var diagnostic = retained
+            ? reason
+            : $"{reason} 隔离 runtime 未能重新登记，但同 DeviceId 已有 runtime 占位。";
+        _statusStore.MarkRuntimeFault(runtime.DeviceId, runtime.DeviceName, diagnostic);
+        _logger.Error($"[{runtime.DeviceName}] PLC runtime 已隔离：{diagnostic}");
+    }
+
+    private async Task<bool> AwaitRunningHandlesAsync(
         string deviceName,
         IReadOnlyCollection<Task> runningHandles,
         CancellationToken ct)
     {
         if (runningHandles.Count == 0)
         {
-            return;
+            return true;
         }
 
+        var completion = Task.WhenAll(runningHandles);
         try
         {
-            await Task.WhenAll(runningHandles).WaitAsync(TimeSpan.FromSeconds(5), ct).ConfigureAwait(false);
+            await completion.WaitAsync(TimeSpan.FromSeconds(5), ct).ConfigureAwait(false);
+            return true;
         }
-        catch (TimeoutException)
+        catch (TimeoutException) when (!completion.IsCompleted)
         {
             _logger.Warn($"[{deviceName}] 等待 PLC 任务停止超时：5 秒内未完成。");
+            return false;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -408,6 +491,7 @@ public sealed class PlcLifecycleCoordinator
         catch (Exception ex)
         {
             _logger.Error($"[{deviceName}] 等待 PLC 任务停止时发生异常：{ex.Message}");
+            return true;
         }
     }
 
@@ -426,5 +510,5 @@ public sealed class PlcLifecycleCoordinator
 
     private bool IsShutdownRequested => Volatile.Read(ref _shutdownRequested) != 0;
 
-    private bool IsDisposed => Volatile.Read(ref _disposeState) != 0;
+    private bool IsDisposed => Volatile.Read(ref _disposeTask) is not null;
 }

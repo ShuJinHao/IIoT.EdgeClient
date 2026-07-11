@@ -81,17 +81,8 @@ public sealed class PlcDataReadScanTask : IPlcTask
 
     public string TaskName => $"PlcDataReadScan_{_device.DeviceName}";
 
-    public async Task StartAsync(CancellationToken ct)
-    {
-        await Task.Factory.StartNew(
-            () => TaskCoreAsync(ct),
-            ct,
-            TaskCreationOptions.LongRunning,
-            TaskScheduler.Default).Unwrap().ConfigureAwait(false);
-    }
-
-    public Task ExecuteOneCycleAsync()
-        => ExecuteOneCycleAsync(CancellationToken.None);
+    public Task StartAsync(CancellationToken ct)
+        => TaskCoreAsync(ct);
 
     public async Task ExecuteOneCycleAsync(CancellationToken ct)
     {
@@ -111,7 +102,7 @@ public sealed class PlcDataReadScanTask : IPlcTask
         }
 
         var stopwatch = Stopwatch.StartNew();
-        var hasSuccessfulRead = await ReadPlcToBufferAsync(buffer).ConfigureAwait(false);
+        var hasSuccessfulRead = await ReadPlcToBufferAsync(buffer, ct).ConfigureAwait(false);
         stopwatch.Stop();
 
         if (hasSuccessfulRead && _canPromoteConnectionFromReadData)
@@ -132,8 +123,14 @@ public sealed class PlcDataReadScanTask : IPlcTask
                 await ExecuteOneCycleAsync(ct).ConfigureAwait(false);
                 await Task.Delay(await ResolveDataReadLoopIntervalAsync(ct).ConfigureAwait(false), ct).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
+                break;
+            }
+            catch (PlcServiceQuarantinedException ex)
+            {
+                _statusStore?.MarkRuntimeFault(_device.Id, _device.DeviceName, ex.Message);
+                _logger.Error($"[PLC-{_device.DeviceName}][采集] PLC service 已隔离，只读任务已停止：{ex.Message}");
                 break;
             }
             catch (Exception ex)
@@ -149,14 +146,16 @@ public sealed class PlcDataReadScanTask : IPlcTask
         }
     }
 
-    private async Task<bool> ReadPlcToBufferAsync(IPlcBufferTransport buffer)
+    private async Task<bool> ReadPlcToBufferAsync(
+        IPlcBufferTransport buffer,
+        CancellationToken cancellationToken)
     {
         var hasSuccessfulRead = false;
         var hasFailedRead = false;
 
         foreach (var block in _readBlocks)
         {
-            var blockSucceeded = await TryReadBlockToBufferAsync(buffer, block).ConfigureAwait(false);
+            var blockSucceeded = await TryReadBlockToBufferAsync(buffer, block, cancellationToken).ConfigureAwait(false);
             hasSuccessfulRead |= blockSucceeded;
             hasFailedRead |= !blockSucceeded;
         }
@@ -184,17 +183,20 @@ public sealed class PlcDataReadScanTask : IPlcTask
             _logger.Error($"[PLC-{_device.DeviceName}][采集] {message}");
         }
 
-        _plcService.Disconnect();
+        await _plcService.DisconnectAsync(CancellationToken.None).ConfigureAwait(false);
         _statusStore?.MarkDisconnected(_device.Id, _device.DeviceName, message);
         throw new InvalidOperationException($"PLC 只读数据读取链路失败，连接已重置：{message}");
     }
 
-    private async Task<bool> TryReadBlockToBufferAsync(IPlcBufferTransport buffer, PlcSignalBlock block)
+    private async Task<bool> TryReadBlockToBufferAsync(
+        IPlcBufferTransport buffer,
+        PlcSignalBlock block,
+        CancellationToken cancellationToken)
     {
         try
         {
             var data = await _plcService
-                .ReadDataAsync<ushort>(block.StartAddress, (ushort)block.WordCount)
+                .ReadDataAsync<ushort>(block.StartAddress, (ushort)block.WordCount, cancellationToken)
                 .ConfigureAwait(false);
             var words = data.ToArray();
 
@@ -206,6 +208,14 @@ public sealed class PlcDataReadScanTask : IPlcTask
             }
 
             return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (PlcServiceQuarantinedException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -221,12 +231,23 @@ public sealed class PlcDataReadScanTask : IPlcTask
                 try
                 {
                     var data = await _plcService
-                        .ReadDataAsync<ushort>(item.Mapping.PlcAddress, (ushort)item.Mapping.AddressCount)
+                        .ReadDataAsync<ushort>(
+                            item.Mapping.PlcAddress,
+                            (ushort)item.Mapping.AddressCount,
+                            cancellationToken)
                         .ConfigureAwait(false);
                     buffer.UpdateReadSignal(
                         item.Mapping.SignalKey,
                         SliceWords(data, 0, item.Mapping.AddressCount));
                     hasSignalSuccess = true;
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (PlcServiceQuarantinedException)
+                {
+                    throw;
                 }
                 catch
                 {

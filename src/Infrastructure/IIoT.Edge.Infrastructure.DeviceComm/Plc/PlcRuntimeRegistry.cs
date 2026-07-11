@@ -69,17 +69,17 @@ public sealed class PlcRuntimeRegistry
         }
     }
 
-    public bool TryRemoveRuntime(int deviceId, out PlcDeviceRuntimeHandle? runtime)
+    public bool TryRemoveRuntime(int deviceId, PlcDeviceRuntimeHandle expectedRuntime)
     {
         lock (_stateLock)
         {
-            if (_runtimes.TryGetValue(deviceId, out runtime))
+            if (_runtimes.TryGetValue(deviceId, out var currentRuntime)
+                && ReferenceEquals(currentRuntime, expectedRuntime))
             {
                 _runtimes.Remove(deviceId);
                 return true;
             }
 
-            runtime = null;
             return false;
         }
     }
@@ -104,13 +104,11 @@ public sealed class PlcRuntimeRegistry
         }
     }
 
-    public PlcDeviceRuntimeHandle[] Drain()
+    public PlcDeviceRuntimeHandle[] GetRuntimesSnapshot()
     {
         lock (_stateLock)
         {
-            var snapshot = _runtimes.Values.ToArray();
-            _runtimes.Clear();
-            return snapshot;
+            return _runtimes.Values.ToArray();
         }
     }
 }

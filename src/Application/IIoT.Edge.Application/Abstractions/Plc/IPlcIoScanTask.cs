@@ -13,5 +13,5 @@ public interface IPlcIoScanTask : IPlcTask
     /// <summary>
     /// 建立或恢复 PLC 连接。
     /// </summary>
-    Task ConnectAsync();
+    Task ConnectAsync(CancellationToken cancellationToken = default);
 }

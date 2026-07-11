@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
@@ -11,6 +12,7 @@ using IIoT.Edge.Module.Sdk.Signals;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.Enums;
 using System.Diagnostics;
+using System.Reflection;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -70,7 +72,7 @@ public sealed class PlcIoScanTaskBehaviorTests
             SignalBlockPlanner,
             statusStore);
 
-        await interaction.ConnectAsync();
+        await interaction.ConnectAsync(TestContext.Current.CancellationToken);
 
         Assert.False(plcService.IsConnected);
         Assert.Equal(1, plcService.ConnectAsyncCallCount);
@@ -95,7 +97,7 @@ public sealed class PlcIoScanTaskBehaviorTests
             new FakeLogService(),
             SignalBlockPlanner);
 
-        await interaction.ConnectAsync();
+        await interaction.ConnectAsync(TestContext.Current.CancellationToken);
 
         var endpoint = Assert.IsType<TcpPlcEndpoint>(plcService.Endpoint);
         Assert.Equal("10.1.2.3", endpoint.Host);
@@ -121,7 +123,7 @@ public sealed class PlcIoScanTaskBehaviorTests
             statusStore);
 
         var stopwatch = Stopwatch.StartNew();
-        await interaction.ConnectAsync();
+        await interaction.ConnectAsync(TestContext.Current.CancellationToken);
 
         Assert.True(stopwatch.ElapsedMilliseconds < 5000);
         Assert.Equal(1, plcService.ConnectAsyncCallCount);
@@ -158,14 +160,14 @@ public sealed class PlcIoScanTaskBehaviorTests
             statusStore);
 
         var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(1));
-        await interaction.ConnectAsync();
+        await interaction.ConnectAsync(TestContext.Current.CancellationToken);
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken));
         Assert.Equal(1, plcService.DisconnectCallCount);
         Assert.False(plcService.IsConnected);
         Assert.False(statusStore.GetSnapshot(1)?.IsConnected);
 
-        await interaction.ConnectAsync();
+        await interaction.ConnectAsync(TestContext.Current.CancellationToken);
         await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
         Assert.False(statusStore.GetSnapshot(1)?.IsConnected);
         await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
@@ -200,7 +202,7 @@ public sealed class PlcIoScanTaskBehaviorTests
             SignalBlockPlanner,
             statusStore);
 
-        await interaction.ConnectAsync();
+        await interaction.ConnectAsync(TestContext.Current.CancellationToken);
 
         var snapshotAfterConnect = statusStore.GetSnapshot(15);
         Assert.NotNull(snapshotAfterConnect);
@@ -296,7 +298,7 @@ public sealed class PlcIoScanTaskBehaviorTests
             SignalBlockPlanner,
             statusStore);
 
-        await interaction.ConnectAsync();
+        await interaction.ConnectAsync(TestContext.Current.CancellationToken);
         await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
         await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -305,7 +307,7 @@ public sealed class PlcIoScanTaskBehaviorTests
         Assert.False(plcService.IsConnected);
         Assert.False(statusStore.GetSnapshot(2)?.IsConnected);
 
-        await interaction.ConnectAsync();
+        await interaction.ConnectAsync(TestContext.Current.CancellationToken);
         await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
         await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
         await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
@@ -573,7 +575,7 @@ public sealed class PlcIoScanTaskBehaviorTests
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
         plcService.ReadOutcomes.Enqueue(new ushort[] { 10, 20, 21 });
-        await plcService.ConnectAsync();
+        await plcService.ConnectAsync(TestContext.Current.CancellationToken);
 
         var dataStore = new PlcDataStore();
         dataStore.Register(13, readSize: 0, writeSize: 0);
@@ -614,7 +616,7 @@ public sealed class PlcIoScanTaskBehaviorTests
         plcService.ReadOutcomes.Enqueue(new ushort[] { 1 });
         plcService.ReadOutcomes.Enqueue(new TimeoutException("read-data second block timeout"));
         plcService.ReadOutcomes.Enqueue(new TimeoutException("read-data signal timeout"));
-        await plcService.ConnectAsync();
+        await plcService.ConnectAsync(TestContext.Current.CancellationToken);
 
         var dataStore = new PlcDataStore();
         dataStore.Register(17, readSize: 0, writeSize: 0);
@@ -685,7 +687,7 @@ public sealed class PlcIoScanTaskBehaviorTests
         plcService.ConnectOutcomes.Enqueue(true);
         plcService.ReadOutcomes.Enqueue(new ushort[] { 11 });
         plcService.ReadOutcomes.Enqueue(new ushort[] { 12 });
-        await plcService.ConnectAsync();
+        await plcService.ConnectAsync(TestContext.Current.CancellationToken);
 
         var dataStore = new PlcDataStore();
         dataStore.Register(19, readSize: 0, writeSize: 0);
@@ -730,7 +732,7 @@ public sealed class PlcIoScanTaskBehaviorTests
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
-        await plcService.ConnectAsync();
+        await plcService.ConnectAsync(TestContext.Current.CancellationToken);
 
         var dataStore = new PlcDataStore();
         dataStore.Register(20, readSize: 0, writeSize: 0);
@@ -784,6 +786,68 @@ public sealed class PlcIoScanTaskBehaviorTests
         await AssertReadCountRemainsAsync(plcService, readCountAfterStop, TimeSpan.FromMilliseconds(80));
 
         Assert.Equal(readCountAfterStop, plcService.ReadAsyncCallCount);
+    }
+
+    [Fact]
+    public async Task PlcIoScanTask_StartAsync_WhenProtocolCancelsWithoutRuntimeCancellation_ShouldEnterErrorPath()
+    {
+        var plcService = new ScriptedPlcService();
+        await plcService.ConnectAsync(TestContext.Current.CancellationToken);
+        var dataStore = new PlcDataStore();
+        dataStore.Register(21, readSize: 1, writeSize: 0);
+        var logger = new FakeLogService();
+        var interaction = new IndependentlyCancelingIoScanTask(
+            plcService,
+            dataStore,
+            logger);
+        using var cts = new CancellationTokenSource();
+
+        var runTask = interaction.StartAsync(cts.Token);
+        await WaitUntilAsync(() => logger.Entries.Any(entry =>
+            entry.Message.Contains("PLC 信号交互循环异常", StringComparison.Ordinal)));
+
+        Assert.False(cts.IsCancellationRequested);
+        Assert.False(runTask.IsCompleted);
+
+        await StopInteractionAsync(runTask, cts);
+    }
+
+    [Fact]
+    public async Task PlcDataReadScanTask_StartAsync_WhenResolverCancelsWithoutRuntimeCancellation_ShouldEnterErrorPath()
+    {
+        var logger = new FakeLogService();
+        var dataReadScan = new PlcDataReadScanTask(
+            new ScriptedPlcService(),
+            new PlcDataStore(),
+            CreateDevice(22, "PLC-RESOLVER-CANCEL"),
+            [],
+            logger,
+            SignalBlockPlanner,
+            dataReadLoopIntervalResolver: _ => Task.FromException<int>(
+                new OperationCanceledException("resolver canceled independently")));
+        using var cts = new CancellationTokenSource();
+
+        var runTask = dataReadScan.StartAsync(cts.Token);
+        await WaitUntilAsync(() => logger.Entries.Any(entry =>
+            entry.Message.Contains("PLC 只读数据扫描异常", StringComparison.Ordinal)));
+
+        Assert.False(cts.IsCancellationRequested);
+        Assert.False(runTask.IsCompleted);
+
+        await StopInteractionAsync(runTask, cts);
+    }
+
+    [Fact]
+    public void PlcScanTaskApi_ShouldExposeOnlyCancellationAwareCycleEntryPoint()
+    {
+        foreach (var taskType in new[] { typeof(PlcIoScanTaskBase), typeof(PlcDataReadScanTask) })
+        {
+            var cycleMethod = Assert.Single(
+                taskType.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly),
+                static method => method.Name == "ExecuteOneCycleAsync");
+            var parameter = Assert.Single(cycleMethod.GetParameters());
+            Assert.Equal(typeof(CancellationToken), parameter.ParameterType);
+        }
     }
 
     [Fact]
@@ -880,31 +944,51 @@ public sealed class PlcIoScanTaskBehaviorTests
         }
     }
 
-    private sealed class BlockingPlcService : IPlcService
+    private sealed class BlockingPlcService : PlcServiceTestDouble
     {
-        public bool IsConnected => true;
+        public override bool IsConnected => true;
 
-        public void Init(PlcEndpoint endpoint)
+        public override async Task<List<T>> ReadDataAsync<T>(
+            string address,
+            ushort length,
+            CancellationToken cancellationToken = default)
         {
-        }
-
-        public Task<bool> ConnectAsync() => Task.FromResult(true);
-
-        public void Disconnect()
-        {
-        }
-
-        public async Task<List<T>> ReadDataAsync<T>(string address, ushort length)
-        {
-            await Task.Delay(Timeout.InfiniteTimeSpan).ConfigureAwait(false);
+            var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            await completion.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
             return [];
         }
+    }
 
-        public Task WriteDataAsync<T>(string address, List<T> data) => Task.CompletedTask;
-
-        public void Dispose()
+    private sealed class IndependentlyCancelingIoScanTask : PlcIoScanTaskBase
+    {
+        public IndependentlyCancelingIoScanTask(
+            IPlcService plcService,
+            IPlcDataStore dataStore,
+            ILogService logger)
+            : base(
+                plcService,
+                dataStore,
+                new PlcIoScanDevice(
+                    21,
+                    "PLC-INDEPENDENT-CANCEL",
+                    new TcpPlcEndpoint("127.0.0.1", 102, 3000)),
+                [
+                    new PlcIoScanMapping(
+                        "Read-D300",
+                        "D300",
+                        1,
+                        "UInt16",
+                        "Read",
+                        IoMappingOptionCatalog.CategoryInteraction,
+                        1)
+                ],
+                logger,
+                SignalBlockPlanner)
         {
         }
+
+        protected override bool IsStableOnline()
+            => throw new OperationCanceledException("protocol canceled independently");
     }
 
     private sealed class SpySignalBlockPlanner : IPlcSignalBlockPlanner
@@ -928,7 +1012,7 @@ public sealed class PlcIoScanTaskBehaviorTests
         }
     }
 
-    private sealed class ScriptedPlcService : IPlcService
+    private sealed class ScriptedPlcService : PlcServiceTestDouble
     {
         public Queue<object?> ConnectOutcomes { get; } = new();
         public Queue<object?> ReadOutcomes { get; } = new();
@@ -936,19 +1020,19 @@ public sealed class PlcIoScanTaskBehaviorTests
         public List<(string Address, ushort Length)> ReadRequests { get; } = [];
         public List<(string Address, ushort[] Data)> WriteRequests { get; } = [];
 
-        public bool IsConnected { get; private set; }
+        public override bool IsConnected { get; protected set; }
         public PlcEndpoint? Endpoint { get; private set; }
         public int ConnectAsyncCallCount { get; private set; }
         public int DisconnectCallCount { get; private set; }
         public int ReadAsyncCallCount { get; private set; }
         public int WriteAsyncCallCount { get; private set; }
 
-        public void Init(PlcEndpoint endpoint)
+        public override void Init(PlcEndpoint endpoint)
         {
             Endpoint = endpoint;
         }
 
-        public Task<bool> ConnectAsync()
+        public override Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
         {
             ConnectAsyncCallCount++;
 
@@ -968,13 +1052,17 @@ public sealed class PlcIoScanTaskBehaviorTests
             return Task.FromResult(true);
         }
 
-        public void Disconnect()
+        public override Task DisconnectAsync(CancellationToken cancellationToken = default)
         {
             DisconnectCallCount++;
             IsConnected = false;
+            return Task.CompletedTask;
         }
 
-        public Task<List<T>> ReadDataAsync<T>(string address, ushort length)
+        public override Task<List<T>> ReadDataAsync<T>(
+            string address,
+            ushort length,
+            CancellationToken cancellationToken = default)
         {
             ReadAsyncCallCount++;
             ReadRequests.Add((address, length));
@@ -996,7 +1084,10 @@ public sealed class PlcIoScanTaskBehaviorTests
             return Task.FromResult(Enumerable.Repeat((T)(object)(ushort)1, length).ToList());
         }
 
-        public Task WriteDataAsync<T>(string address, List<T> data)
+        public override Task WriteDataAsync<T>(
+            string address,
+            List<T> data,
+            CancellationToken cancellationToken = default)
         {
             WriteAsyncCallCount++;
             if (typeof(T) == typeof(ushort))
@@ -1015,15 +1106,11 @@ public sealed class PlcIoScanTaskBehaviorTests
 
             return Task.CompletedTask;
         }
-
-        public void Dispose()
-        {
-        }
     }
 
-    private sealed class NeverCompletingConnectPlcService : IPlcService
+    private sealed class NeverCompletingConnectPlcService : PlcServiceTestDouble
     {
-        public bool IsConnected => false;
+        public override bool IsConnected => false;
 
         public PlcEndpoint? Endpoint { get; private set; }
 
@@ -1031,30 +1118,24 @@ public sealed class PlcIoScanTaskBehaviorTests
 
         public int DisconnectCallCount { get; private set; }
 
-        public void Init(PlcEndpoint endpoint)
+        public override void Init(PlcEndpoint endpoint)
         {
             Endpoint = endpoint;
         }
 
-        public Task<bool> ConnectAsync()
+        public override async Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
         {
             ConnectAsyncCallCount++;
-            return new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously).Task;
+            var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            return await completion.Task
+                .WaitAsync(Endpoint!.ConnectTimeout, cancellationToken)
+                .ConfigureAwait(false);
         }
 
-        public void Disconnect()
+        public override Task DisconnectAsync(CancellationToken cancellationToken = default)
         {
             DisconnectCallCount++;
-        }
-
-        public Task<List<T>> ReadDataAsync<T>(string address, ushort length)
-            => throw new NotSupportedException();
-
-        public Task WriteDataAsync<T>(string address, List<T> data)
-            => throw new NotSupportedException();
-
-        public void Dispose()
-        {
+            return Task.CompletedTask;
         }
     }
 }

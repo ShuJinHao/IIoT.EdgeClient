@@ -72,15 +72,14 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
 
     protected string DeviceName => _device.DeviceName;
 
-    public async Task ConnectAsync()
+    public async Task ConnectAsync(CancellationToken cancellationToken = default)
     {
         var endpoint = ClampConnectTimeout(_device.Endpoint);
         try
         {
             _plcService.Init(endpoint);
             MarkConnecting();
-            var connected = await _plcService.ConnectAsync()
-                .WaitAsync(endpoint.ConnectTimeout)
+            var connected = await _plcService.ConnectAsync(cancellationToken)
                 .ConfigureAwait(false);
             if (connected)
             {
@@ -94,9 +93,19 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
                 _logger.Warn($"[{_device.DeviceName}] PLC 连接失败，进入退避重试。");
             }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (PlcServiceQuarantinedException ex)
+        {
+            MarkRuntimeFault(ex.Message);
+            _logger.Error($"[{_device.DeviceName}] PLC service 已隔离：{ex.Message}");
+            throw;
+        }
         catch (Exception ex)
         {
-            CloseHangingConnection();
+            await CloseHangingConnectionAsync(CancellationToken.None).ConfigureAwait(false);
             _retryCount++;
             MarkDisconnected(ex.Message);
             if (ShouldLogDisconnect())
@@ -106,23 +115,14 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         }
     }
 
-    public async Task StartAsync(CancellationToken ct)
-    {
-        await Task.Factory.StartNew(
-            () => TaskCoreAsync(ct),
-            ct,
-            TaskCreationOptions.LongRunning,
-            TaskScheduler.Default).Unwrap().ConfigureAwait(false);
-    }
-
-    public Task ExecuteOneCycleAsync()
-        => ExecuteOneCycleAsync(CancellationToken.None);
+    public Task StartAsync(CancellationToken ct)
+        => TaskCoreAsync(ct);
 
     public async Task ExecuteOneCycleAsync(CancellationToken ct)
     {
         if (!_plcService.IsConnected)
         {
-            await ConnectAsync().ConfigureAwait(false);
+            await ConnectAsync(ct).ConfigureAwait(false);
             if (!_plcService.IsConnected)
             {
                 await Task.Delay(GetBackoffDelay(), ct).ConfigureAwait(false);
@@ -153,7 +153,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
 
         var wasStableOnline = IsStableOnline();
         var cycleStopwatch = Stopwatch.StartNew();
-        await ReadPlcToBufferAsync(buffer, updateBuffer: wasStableOnline).ConfigureAwait(false);
+        await ReadPlcToBufferAsync(buffer, updateBuffer: wasStableOnline, ct).ConfigureAwait(false);
         var isStableOnline = MarkProtocolSuccess(ToLatencyMs(cycleStopwatch.ElapsedMilliseconds));
         if (!wasStableOnline)
         {
@@ -161,7 +161,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
             return;
         }
 
-        await WriteBufferToPlcAsync(buffer).ConfigureAwait(false);
+        await WriteBufferToPlcAsync(buffer, ct).ConfigureAwait(false);
         LogRecoveredIfNeeded(isStableOnline);
     }
 
@@ -196,8 +196,14 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
                 await ExecuteOneCycleAsync(ct).ConfigureAwait(false);
                 await Task.Delay(_loopIntervalMs, ct).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
+                break;
+            }
+            catch (PlcServiceQuarantinedException ex)
+            {
+                MarkRuntimeFault(ex.Message);
+                _logger.Error($"[{_device.DeviceName}] PLC service 已隔离，扫描任务已停止：{ex.Message}");
                 break;
             }
             catch (Exception ex)
@@ -213,14 +219,17 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         }
     }
 
-    private async Task ReadPlcToBufferAsync(IPlcBufferTransport buffer, bool updateBuffer)
+    private async Task ReadPlcToBufferAsync(
+        IPlcBufferTransport buffer,
+        bool updateBuffer,
+        CancellationToken cancellationToken)
     {
         try
         {
             foreach (var block in _readBlocks)
             {
                 var data = await _plcService
-                    .ReadDataAsync<ushort>(block.StartAddress, (ushort)block.WordCount)
+                    .ReadDataAsync<ushort>(block.StartAddress, (ushort)block.WordCount, cancellationToken)
                     .ConfigureAwait(false);
                 var words = data.ToArray();
 
@@ -235,6 +244,14 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
                 }
             }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (PlcServiceQuarantinedException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             if (ShouldLogDisconnect())
@@ -242,7 +259,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
                 _logger.Error($"[{_device.DeviceName}] PLC 读取失败：{ex.Message}");
             }
 
-            _plcService.Disconnect();
+            await _plcService.DisconnectAsync(CancellationToken.None).ConfigureAwait(false);
             MarkDisconnected($"PLC 读取失败：{ex.Message}");
             throw new InvalidOperationException("PLC 读取链路失败，连接已重置。", ex);
         }
@@ -260,7 +277,9 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         _retryCount = 0;
     }
 
-    private async Task WriteBufferToPlcAsync(IPlcBufferTransport buffer)
+    private async Task WriteBufferToPlcAsync(
+        IPlcBufferTransport buffer,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -284,8 +303,18 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
                     }
                 }
 
-                await _plcService.WriteDataAsync(block.StartAddress, blockWords.ToList()).ConfigureAwait(false);
+                await _plcService
+                    .WriteDataAsync(block.StartAddress, blockWords.ToList(), cancellationToken)
+                    .ConfigureAwait(false);
             }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (PlcServiceQuarantinedException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -294,7 +323,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
                 _logger.Error($"[{_device.DeviceName}] PLC 写入失败：{ex.Message}");
             }
 
-            _plcService.Disconnect();
+            await _plcService.DisconnectAsync(CancellationToken.None).ConfigureAwait(false);
             MarkDisconnected($"PLC 写入失败：{ex.Message}");
             throw new InvalidOperationException("PLC 写入链路失败，连接已重置。", ex);
         }
@@ -346,11 +375,15 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         };
     }
 
-    private void CloseHangingConnection()
+    private async Task CloseHangingConnectionAsync(CancellationToken cancellationToken)
     {
         try
         {
-            _plcService.Disconnect();
+            await _plcService.DisconnectAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (PlcServiceQuarantinedException)
+        {
+            throw;
         }
         catch
         {

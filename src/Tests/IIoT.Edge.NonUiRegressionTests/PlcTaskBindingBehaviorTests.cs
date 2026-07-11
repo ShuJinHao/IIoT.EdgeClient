@@ -548,6 +548,225 @@ public sealed class PlcTaskBindingBehaviorTests
         }
     }
 
+    [Fact]
+    public async Task PlcLifecycleCoordinator_DisposeAsyncAfterDispose_ShouldJoinSingleCleanupTask()
+    {
+        var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
+        var ioMappings = new InMemoryRepository<IoMappingEntity>();
+        var contextStore = new FakeProductionContextStore();
+        var logger = new FakeLogService();
+        var runtimeRegistry = new PlcRuntimeRegistry();
+        var statusStore = new PlcConnectionStatusStore();
+        var service = new ControlledDisposePlcService();
+        var runtime = new PlcDeviceRuntimeHandle
+        {
+            DeviceId = 701,
+            DeviceName = "PLC-DISPOSE-JOIN",
+            PlcService = service,
+            CancellationTokenSource = new CancellationTokenSource(),
+            Tasks = []
+        };
+        Assert.True(runtimeRegistry.TryAddRuntime(runtime));
+        var coordinator = CreateLifecycleCoordinator(
+            networkDevices,
+            ioMappings,
+            new TrackingPlcServiceFactory(),
+            contextStore,
+            logger,
+            runtimeRegistry,
+            statusStore);
+
+        coordinator.Dispose();
+        await service.DisposeStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+        var joinedDispose = coordinator.DisposeAsync().AsTask();
+
+        Assert.False(joinedDispose.IsCompleted);
+        Assert.Equal(1, service.DisposeCallCount);
+
+        service.AllowDispose.TrySetResult();
+        await joinedDispose.WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, service.DisposeCallCount);
+        Assert.Empty(runtimeRegistry.GetTrackedDeviceIdsSnapshot());
+    }
+
+    [Fact]
+    public async Task PlcLifecycleCoordinator_StopAsyncDuringDispose_ShouldNotRunCleanupTwice()
+    {
+        var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
+        var ioMappings = new InMemoryRepository<IoMappingEntity>();
+        var contextStore = new FakeProductionContextStore();
+        var logger = new FakeLogService();
+        var runtimeRegistry = new PlcRuntimeRegistry();
+        var statusStore = new PlcConnectionStatusStore();
+        var service = new ControlledDisposePlcService();
+        var runtime = new PlcDeviceRuntimeHandle
+        {
+            DeviceId = 702,
+            DeviceName = "PLC-DISPOSE-SERIALIZED",
+            PlcService = service,
+            CancellationTokenSource = new CancellationTokenSource(),
+            Tasks = []
+        };
+        Assert.True(runtimeRegistry.TryAddRuntime(runtime));
+        var coordinator = CreateLifecycleCoordinator(
+            networkDevices,
+            ioMappings,
+            new TrackingPlcServiceFactory(),
+            contextStore,
+            logger,
+            runtimeRegistry,
+            statusStore);
+
+        coordinator.Dispose();
+        await service.DisposeStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+        var stopTask = coordinator.StopAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(stopTask.IsCompleted);
+        Assert.Equal(1, service.DisposeCallCount);
+
+        service.AllowDispose.TrySetResult();
+        await Task.WhenAll(
+                coordinator.DisposeAsync().AsTask(),
+                stopTask)
+            .WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, service.DisposeCallCount);
+        Assert.Empty(runtimeRegistry.GetTrackedDeviceIdsSnapshot());
+    }
+
+    [Fact]
+    public async Task PlcLifecycleCoordinator_WhenDisposeQuarantines_ShouldKeepReservationAndRejectReloadReplacement()
+    {
+        var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
+        var ioMappings = new InMemoryRepository<IoMappingEntity>();
+        var device = networkDevices.Add(CreateLifecyclePlc("PLC-QUARANTINE", 6400));
+        var contextStore = new FakeProductionContextStore();
+        var logger = new FakeLogService();
+        var runtimeRegistry = new PlcRuntimeRegistry();
+        var statusStore = new PlcConnectionStatusStore();
+        var replacementFactory = new TrackingPlcServiceFactory();
+        var quarantinedService = new QuarantinedDisposePlcService();
+        var runtime = new PlcDeviceRuntimeHandle
+        {
+            DeviceId = device.Id,
+            DeviceName = device.DeviceName,
+            PlcService = quarantinedService,
+            CancellationTokenSource = new CancellationTokenSource(),
+            Tasks = []
+        };
+        Assert.True(runtimeRegistry.TryAddRuntime(runtime));
+        var coordinator = CreateLifecycleCoordinator(
+            networkDevices,
+            ioMappings,
+            replacementFactory,
+            contextStore,
+            logger,
+            runtimeRegistry,
+            statusStore);
+
+        await coordinator.ReloadAsync(device.DeviceName, TestContext.Current.CancellationToken);
+
+        Assert.Same(runtime, runtimeRegistry.GetRuntime(device.Id));
+        Assert.Empty(replacementFactory.CreatedDeviceNames);
+        Assert.Equal(1, quarantinedService.DisposeCallCount);
+        var snapshot = statusStore.GetSnapshot(device.Id);
+        Assert.NotNull(snapshot);
+        Assert.Equal(PlcConnectionState.Faulted, snapshot!.ConnectionState);
+        Assert.Contains(PlcServiceQuarantinedException.StableReasonCode, snapshot.LastError);
+        Assert.Contains(
+            logger.Warnings,
+            message => message.Contains("禁止创建替代 runtime", StringComparison.Ordinal));
+
+        await coordinator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task PlcLifecycleCoordinator_WhenReservationChangesDuringCleanup_ShouldRaiseStableRuntimeFault()
+    {
+        var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
+        var ioMappings = new InMemoryRepository<IoMappingEntity>();
+        var device = networkDevices.Add(CreateLifecyclePlc("PLC-RESERVATION", 6401));
+        var contextStore = new FakeProductionContextStore();
+        var logger = new FakeLogService();
+        var runtimeRegistry = new PlcRuntimeRegistry();
+        var statusStore = new PlcConnectionStatusStore();
+        var factory = new TrackingPlcServiceFactory();
+        var controlledService = new ControlledDisposePlcService();
+        var originalRuntime = new PlcDeviceRuntimeHandle
+        {
+            DeviceId = device.Id,
+            DeviceName = device.DeviceName,
+            PlcService = controlledService,
+            CancellationTokenSource = new CancellationTokenSource(),
+            Tasks = []
+        };
+        var unexpectedReplacement = new PlcDeviceRuntimeHandle
+        {
+            DeviceId = device.Id,
+            DeviceName = device.DeviceName,
+            PlcService = new ConnectedPlcService(),
+            CancellationTokenSource = new CancellationTokenSource(),
+            Tasks = []
+        };
+        Assert.True(runtimeRegistry.TryAddRuntime(originalRuntime));
+        var coordinator = CreateLifecycleCoordinator(
+            networkDevices,
+            ioMappings,
+            factory,
+            contextStore,
+            logger,
+            runtimeRegistry,
+            statusStore);
+
+        var reloadTask = coordinator.ReloadAsync(
+            device.DeviceName,
+            TestContext.Current.CancellationToken);
+        await controlledService.DisposeStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+        Assert.True(runtimeRegistry.TryRemoveRuntime(device.Id, originalRuntime));
+        Assert.True(runtimeRegistry.TryAddRuntime(unexpectedReplacement));
+        controlledService.AllowDispose.TrySetResult();
+
+        await reloadTask.WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.Same(unexpectedReplacement, runtimeRegistry.GetRuntime(device.Id));
+        Assert.Empty(factory.CreatedDeviceNames);
+        var snapshot = statusStore.GetSnapshot(device.Id);
+        Assert.NotNull(snapshot);
+        Assert.Equal(PlcConnectionState.Faulted, snapshot!.ConnectionState);
+        Assert.Contains("registry reservation", snapshot.LastError, StringComparison.Ordinal);
+
+        await coordinator.DisposeAsync();
+    }
+
+    private static PlcLifecycleCoordinator CreateLifecycleCoordinator(
+        InMemoryRepository<NetworkDeviceEntity> networkDevices,
+        InMemoryRepository<IoMappingEntity> ioMappings,
+        IPlcServiceFactory plcServiceFactory,
+        FakeProductionContextStore contextStore,
+        FakeLogService logger,
+        PlcRuntimeRegistry runtimeRegistry,
+        PlcConnectionStatusStore statusStore)
+    {
+        var runtimeBuilder = new PlcDeviceRuntimeBuilder(
+            ioMappings,
+            new PlcDataStore(),
+            plcServiceFactory,
+            contextStore,
+            logger,
+            statusStore,
+            new DefaultPlcSignalBlockPlanner(),
+            new StaticPlcEndpointResolver(),
+            new ModuleHardwareProfileResolver([]));
+        return new PlcLifecycleCoordinator(
+            networkDevices,
+            contextStore,
+            logger,
+            runtimeRegistry,
+            runtimeBuilder,
+            statusStore);
+    }
+
     private static readonly IReadOnlyCollection<TaskCandidate> TestCandidates =
     [
         new(
@@ -806,31 +1025,73 @@ public sealed class PlcTaskBindingBehaviorTests
                 new TcpPlcEndpoint(device.IpAddress, device.Port1, device.ConnectTimeout));
     }
 
-    private sealed class ConnectedPlcService : IPlcService
+    private sealed class ConnectedPlcService : PlcServiceTestDouble
     {
-        public bool IsConnected { get; private set; }
+        public override bool IsConnected { get; protected set; }
 
-        public void Init(PlcEndpoint endpoint)
-        {
-        }
-
-        public Task<bool> ConnectAsync()
+        public override Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
         {
             IsConnected = true;
             return Task.FromResult(true);
         }
 
-        public void Disconnect()
-            => IsConnected = false;
+        public override Task DisconnectAsync(CancellationToken cancellationToken = default)
+        {
+            IsConnected = false;
+            return Task.CompletedTask;
+        }
 
-        public Task<List<T>> ReadDataAsync<T>(string address, ushort length)
+        public override Task<List<T>> ReadDataAsync<T>(
+            string address,
+            ushort length,
+            CancellationToken cancellationToken = default)
             => Task.FromResult(Enumerable.Repeat(default(T)!, length).ToList());
 
-        public Task WriteDataAsync<T>(string address, List<T> data)
+        public override Task WriteDataAsync<T>(
+            string address,
+            List<T> data,
+            CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 
-        public void Dispose()
-            => Disconnect();
+        public override ValueTask DisposeAsync()
+        {
+            IsConnected = false;
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class ControlledDisposePlcService : PlcServiceTestDouble
+    {
+        private int _disposeCallCount;
+
+        public TaskCompletionSource DisposeStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource AllowDispose { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int DisposeCallCount => Volatile.Read(ref _disposeCallCount);
+
+        public override async ValueTask DisposeAsync()
+        {
+            Interlocked.Increment(ref _disposeCallCount);
+            DisposeStarted.TrySetResult();
+            await AllowDispose.Task.ConfigureAwait(false);
+        }
+    }
+
+    private sealed class QuarantinedDisposePlcService : PlcServiceTestDouble
+    {
+        public int DisposeCallCount { get; private set; }
+
+        public override ValueTask DisposeAsync()
+        {
+            DisposeCallCount++;
+            return ValueTask.FromException(new PlcServiceQuarantinedException(
+                nameof(QuarantinedDisposePlcService),
+                nameof(DisposeAsync),
+                "protocol task did not settle"));
+        }
     }
 
     private sealed class HangingPlcServiceFactory : IPlcServiceFactory
@@ -844,30 +1105,10 @@ public sealed class PlcTaskBindingBehaviorTests
         }
     }
 
-    private sealed class HangingPlcService : IPlcService
+    private sealed class HangingPlcService : PlcServiceTestDouble
     {
-        public bool IsConnected => false;
-
-        public void Init(PlcEndpoint endpoint)
-        {
-        }
-
-        public Task<bool> ConnectAsync()
+        public override Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
             => new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously).Task;
-
-        public void Disconnect()
-        {
-        }
-
-        public Task<List<T>> ReadDataAsync<T>(string address, ushort length)
-            => throw new NotSupportedException();
-
-        public Task WriteDataAsync<T>(string address, List<T> data)
-            => throw new NotSupportedException();
-
-        public void Dispose()
-        {
-        }
     }
 
     private sealed class InMemoryRepository<T> : IRepository<T>

@@ -5,93 +5,65 @@ using S7.Net.Types;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc.Services;
 
-public sealed class S7PlcService : IPlcService, IDisposable
+public sealed class S7PlcService : IPlcService
 {
     private static readonly TimeSpan OperationTimeout = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan OperationSettleTimeout = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan DisposeTimeout = TimeSpan.FromSeconds(5);
 
-    private PlcClient? _plc;
+    private readonly PlcOperationGate _operationGate = new(
+        nameof(S7PlcService),
+        OperationSettleTimeout,
+        DisposeTimeout);
+    private PlcTransportOwner<PlcClient>? _plcOwner;
     private TcpPlcEndpoint? _endpoint;
     private int _port;
-    private readonly SemaphoreSlim _semaphore = new(1, 1);
-    private int _disposed;
 
-    public bool IsConnected => Volatile.Read(ref _disposed) == 0 && (_plc?.IsConnected ?? false);
+    public bool IsConnected
+        => _operationGate.IsOpen
+           && _plcOwner?.ValueOrDefault?.IsConnected == true;
 
     public void Init(PlcEndpoint endpoint)
     {
-        ThrowIfDisposed();
+        _operationGate.ThrowIfNotOpen(nameof(Init));
         _endpoint = endpoint as TcpPlcEndpoint
             ?? throw new ArgumentException("S7 PLC 只支持 TCP 端点。", nameof(endpoint));
         _port = _endpoint.Port;
     }
 
-    public async Task<bool> ConnectAsync()
+    public Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
-        await _semaphore.WaitAsync().ConfigureAwait(false);
-        try
-        {
-            EnsureInitialized();
-
-            if (IsConnected)
-            {
-                return true;
-            }
-
-            ReleasePlc(_plc);
-            _plc = new PlcClient(CpuType.S71200, _endpoint!.Host, 0, 1);
-
-            using var timeoutCts = new CancellationTokenSource(_endpoint.ConnectTimeout);
-
-            try
-            {
-                await _plc.OpenAsync(timeoutCts.Token).ConfigureAwait(false);
-                if (!_plc.IsConnected)
-                {
-                    throw new InvalidOperationException($"S7 PLC {_endpoint.Host}:{_port} reported success but is still disconnected.");
-                }
-
-                return true;
-            }
-            catch (OperationCanceledException ex) when (timeoutCts.IsCancellationRequested)
-            {
-                ReleasePlc(_plc);
-                _plc = null;
-                throw new TimeoutException($"Connect to S7 PLC {_endpoint.Host}:{_port} timed out after {_endpoint.ConnectTimeout.TotalSeconds:0}s.", ex);
-            }
-            catch
-            {
-                ReleasePlc(_plc);
-                _plc = null;
-                throw;
-            }
-        }
-        finally
-        {
-            _semaphore.Release();
-        }
+        var context = new PlcOperationContext();
+        return _operationGate.ExecuteAsync(
+            nameof(ConnectAsync),
+            token => Task.Run(() => ConnectCoreAsync(context, token), CancellationToken.None),
+            GetConnectTimeout(),
+            () => AbortPlcAsync(context.Owner ?? _plcOwner),
+            _ => ReleasePlcAsync(context.Owner ?? _plcOwner),
+            cancellationToken);
     }
 
-    public void Disconnect()
+    public Task DisconnectAsync(CancellationToken cancellationToken = default)
     {
-        if (Volatile.Read(ref _disposed) != 0)
-        {
-            return;
-        }
-
-        _semaphore.Wait();
-        try
-        {
-            ReleasePlc(_plc);
-            _plc = null;
-        }
-        finally
-        {
-            _semaphore.Release();
-        }
+        var context = new PlcOperationContext();
+        return _operationGate.ExecuteAsync(
+            nameof(DisconnectAsync),
+            token => Task.Run(() =>
+            {
+                token.ThrowIfCancellationRequested();
+                context.Owner = _plcOwner;
+                DisconnectCore();
+            }, CancellationToken.None),
+            OperationTimeout,
+            () => AbortPlcAsync(context.Owner ?? _plcOwner),
+            _ => ReleasePlcAsync(context.Owner ?? _plcOwner),
+            cancellationToken);
     }
 
-    public async Task<List<T>> ReadDataAsync<T>(string address, ushort length)
+    public async Task<List<T>> ReadDataAsync<T>(
+        string address,
+        ushort length,
+        CancellationToken cancellationToken = default)
         => await ExecutePlcOperationAsync(
             "Read",
             address,
@@ -136,10 +108,14 @@ public sealed class S7PlcService : IPlcService, IDisposable
                 }
 
                 return result;
-            })
+            },
+            cancellationToken)
             .ConfigureAwait(false);
 
-    public async Task WriteDataAsync<T>(string address, List<T> data)
+    public async Task WriteDataAsync<T>(
+        string address,
+        List<T> data,
+        CancellationToken cancellationToken = default)
         => await ExecutePlcOperationAsync<object?>(
             "Write",
             address,
@@ -163,65 +139,127 @@ public sealed class S7PlcService : IPlcService, IDisposable
                 }
 
                 return null;
-            })
+            },
+            cancellationToken)
             .ConfigureAwait(false);
 
     private async Task<TResult> ExecutePlcOperationAsync<TResult>(
         string operation,
         string address,
-        Func<PlcClient, CancellationToken, Task<TResult>> action)
+        Func<PlcClient, CancellationToken, Task<TResult>> action,
+        CancellationToken cancellationToken)
     {
-        ThrowIfDisposed();
-        await _semaphore.WaitAsync().ConfigureAwait(false);
+        var context = new PlcOperationContext();
         try
         {
-            var plc = EnsureConnected();
-            using var timeoutCts = new CancellationTokenSource(OperationTimeout);
-            return await action(plc, timeoutCts.Token).ConfigureAwait(false);
+            return await _operationGate.ExecuteAsync(
+                    $"{operation} {address}",
+                    token =>
+                    {
+                        context.Owner = EnsureConnected();
+                        return action(context.Owner.Value, token);
+                    },
+                    OperationTimeout,
+                    () => AbortPlcAsync(context.Owner),
+                    _ => ReleasePlcAsync(context.Owner),
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
-        catch (OperationCanceledException ex)
-        {
-            throw new TimeoutException($"{operation} {address} timed out after {OperationTimeout.TotalSeconds:0}s.", ex);
-        }
-        catch (Exception ex) when (ex is not TimeoutException)
+        catch (Exception ex) when (PlcOperationGate.ShouldWrapOperationException(ex))
         {
             throw new InvalidOperationException($"{operation} {address} failed.", ex);
         }
-        finally
-        {
-            _semaphore.Release();
-        }
     }
 
-    public void Dispose()
+    public ValueTask DisposeAsync()
+        => _operationGate.DisposeAsync(() => Task.Run(DisconnectCore));
+
+    private async Task<bool> ConnectCoreAsync(
+        PlcOperationContext context,
+        CancellationToken cancellationToken)
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        cancellationToken.ThrowIfCancellationRequested();
+        EnsureInitialized();
+        if (IsConnected)
         {
-            return;
+            return true;
         }
 
-        _semaphore.Wait();
+        context.Owner = _plcOwner;
+        DisconnectCore();
+        context.Owner = null;
+
+        var endpoint = _endpoint!;
+        var client = new PlcClient(CpuType.S71200, endpoint.Host, 0, 1);
+        var owner = new PlcTransportOwner<PlcClient>(client, ReleasePlcClient);
+        context.Owner = owner;
         try
         {
-            ReleasePlc(_plc);
-            _plc = null;
+            await client.OpenAsync(cancellationToken).ConfigureAwait(false);
+            if (!client.IsConnected)
+            {
+                throw new InvalidOperationException(
+                    $"S7 PLC {endpoint.Host}:{_port} reported success but is still disconnected.");
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            _plcOwner = owner;
+            return true;
         }
-        finally
+        catch when (!cancellationToken.IsCancellationRequested)
         {
-            _semaphore.Release();
-            _semaphore.Dispose();
+            ReleasePlc(owner);
+            throw;
         }
     }
 
-    private static void ReleasePlc(PlcClient? plc)
+    private void DisconnectCore()
     {
-        if (plc is null)
+        var owner = _plcOwner;
+        _plcOwner = null;
+        owner?.Release();
+    }
+
+    private TimeSpan GetConnectTimeout()
+        => _endpoint?.ConnectTimeout > TimeSpan.Zero
+            ? _endpoint.ConnectTimeout
+            : OperationTimeout;
+
+    private static Task AbortPlcAsync(PlcTransportOwner<PlcClient>? owner)
+        => owner is null
+            ? Task.CompletedTask
+            : Task.Run(owner.Release);
+
+    private Task ReleasePlcAsync(PlcTransportOwner<PlcClient>? owner)
+        => owner is null
+            ? Task.CompletedTask
+            : Task.Run(() => ReleasePlc(owner));
+
+    private void ReleasePlc(PlcTransportOwner<PlcClient>? owner)
+    {
+        if (owner is null)
         {
             return;
         }
 
-        plc.Close();
-        ((IDisposable)plc).Dispose();
+        if (ReferenceEquals(_plcOwner, owner))
+        {
+            _plcOwner = null;
+        }
+
+        owner.Release();
+    }
+
+    private static void ReleasePlcClient(PlcClient plc)
+    {
+        try
+        {
+            plc.Close();
+        }
+        finally
+        {
+            ((IDisposable)plc).Dispose();
+        }
     }
 
     private void EnsureInitialized()
@@ -232,22 +270,14 @@ public sealed class S7PlcService : IPlcService, IDisposable
         }
     }
 
-    private void ThrowIfDisposed()
+    private PlcTransportOwner<PlcClient> EnsureConnected()
     {
-        if (Volatile.Read(ref _disposed) != 0)
-        {
-            throw new ObjectDisposedException(nameof(S7PlcService));
-        }
-    }
-
-    private PlcClient EnsureConnected()
-    {
-        if (_plc is null || !_plc.IsConnected)
+        if (!IsConnected || _plcOwner is null)
         {
             throw new InvalidOperationException("PLC is not connected.");
         }
 
-        return _plc;
+        return _plcOwner;
     }
 
     private static string GetIndexedAddress(string baseAddress, int index)
@@ -285,5 +315,10 @@ public sealed class S7PlcService : IPlcService, IDisposable
                 $"Convert {value.GetType().Name} to {typeof(T).Name} failed.",
                 ex);
         }
+    }
+
+    private sealed class PlcOperationContext
+    {
+        public PlcTransportOwner<PlcClient>? Owner { get; set; }
     }
 }

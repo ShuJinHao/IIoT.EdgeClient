@@ -40,9 +40,14 @@ public sealed class McPlcServiceBehaviorTests
     {
         await using var server = new FakeMc3EServer(
             request => CreateReadResponse(request, ToBytes((ushort)0x1234, (ushort)0x5678)));
-        using var service = CreateConnectedService(server.Port);
+        await using var service = await CreateConnectedServiceAsync(
+            server.Port,
+            cancellationToken: TestContext.Current.CancellationToken);
 
-        var values = await service.ReadDataAsync<ushort>("D700", 2);
+        var values = await service.ReadDataAsync<ushort>(
+            "D700",
+            2,
+            TestContext.Current.CancellationToken);
 
         Assert.Equal([0x1234, 0x5678], values);
         Assert.NotNull(server.LastRequest);
@@ -60,18 +65,19 @@ public sealed class McPlcServiceBehaviorTests
             releaseResponse.Task.GetAwaiter().GetResult();
             return CreateReadResponse(request, ToBytes((ushort)0x1234));
         });
-        using var service = CreateConnectedService(server.Port);
+        await using var service = await CreateConnectedServiceAsync(
+            server.Port,
+            cancellationToken: TestContext.Current.CancellationToken);
 
-        var readTask = service.ReadDataAsync<ushort>("D700", 1);
+        var readTask = service.ReadDataAsync<ushort>(
+            "D700",
+            1,
+            TestContext.Current.CancellationToken);
         await requestReceived.Task.WaitAsync(
             TimeSpan.FromSeconds(2),
             TestContext.Current.CancellationToken);
-        var disconnectTask = Task.Run(service.Disconnect, TestContext.Current.CancellationToken);
-
-        var completedBeforeReadReleased = await Task.WhenAny(
-            disconnectTask,
-            Task.Delay(50, TestContext.Current.CancellationToken)) == disconnectTask;
-        Assert.False(completedBeforeReadReleased);
+        var disconnectTask = service.DisconnectAsync(TestContext.Current.CancellationToken);
+        Assert.False(disconnectTask.IsCompleted);
 
         releaseResponse.SetResult();
         var values = await readTask;
@@ -88,9 +94,14 @@ public sealed class McPlcServiceBehaviorTests
     {
         await using var server = new FakeMc3EServer(
             request => CreateReadResponse(request, ToBitBytes(true, false, true)));
-        using var service = CreateConnectedService(server.Port);
+        await using var service = await CreateConnectedServiceAsync(
+            server.Port,
+            cancellationToken: TestContext.Current.CancellationToken);
 
-        var values = await service.ReadDataAsync<bool>("R300", 3);
+        var values = await service.ReadDataAsync<bool>(
+            "R300",
+            3,
+            TestContext.Current.CancellationToken);
 
         Assert.Equal([true, false, true], values);
         Assert.NotNull(server.LastRequest);
@@ -101,9 +112,14 @@ public sealed class McPlcServiceBehaviorTests
     public async Task WriteDataAsync_WhenWritingWords_ShouldUseMcpX3EProtocol()
     {
         await using var server = new FakeMc3EServer(CreateOkResponse);
-        using var service = CreateConnectedService(server.Port);
+        await using var service = await CreateConnectedServiceAsync(
+            server.Port,
+            cancellationToken: TestContext.Current.CancellationToken);
 
-        await service.WriteDataAsync<ushort>("D600", [0x1234, 0x5678]);
+        await service.WriteDataAsync<ushort>(
+            "D600",
+            [0x1234, 0x5678],
+            TestContext.Current.CancellationToken);
 
         Assert.NotNull(server.LastRequest);
         Assert.True(ContainsSequence(server.LastRequest!, [0x01, 0x14]));
@@ -114,20 +130,26 @@ public sealed class McPlcServiceBehaviorTests
     public async Task ReadDataAsync_WhenFrameTypeIsE4_ShouldUseMcpX4ERequestHeader()
     {
         await using var server = new FakeMc3EServer(_ => []);
-        using var service = CreateConnectedService(server.Port, McPlcFrameType.E4);
+        await using var service = await CreateConnectedServiceAsync(
+            server.Port,
+            McPlcFrameType.E4,
+            TestContext.Current.CancellationToken);
 
-        await Assert.ThrowsAnyAsync<Exception>(() => service.ReadDataAsync<ushort>("D700", 1));
+        await Assert.ThrowsAnyAsync<Exception>(() => service.ReadDataAsync<ushort>(
+            "D700",
+            1,
+            TestContext.Current.CancellationToken));
 
         Assert.NotNull(server.LastRequest);
         Assert.Equal(new byte[] { 0x54, 0x00 }, server.LastRequest!.Take(2).ToArray());
     }
 
     [Fact]
-    public void PlcServiceFactory_WhenMc_ShouldCreateMcpXBackedMcService()
+    public async Task PlcServiceFactory_WhenMc_ShouldCreateMcpXBackedMcService()
     {
         var factory = new PlcServiceFactory(new FakeLogService(), new ModbusAddressParser());
 
-        using var service = factory.Create(PlcType.Mc, "PLC-MC");
+        await using var service = factory.Create(PlcType.Mc, "PLC-MC");
 
         var target = typeof(PlcServiceProxy)
             .GetField("_target", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
@@ -135,11 +157,14 @@ public sealed class McPlcServiceBehaviorTests
         Assert.IsType<McPlcService>(target);
     }
 
-    private static McPlcService CreateConnectedService(int port, McPlcFrameType frameType = McPlcFrameType.E3)
+    private static async Task<McPlcService> CreateConnectedServiceAsync(
+        int port,
+        McPlcFrameType frameType = McPlcFrameType.E3,
+        CancellationToken cancellationToken = default)
     {
         var service = new McPlcService();
         service.Init(new TcpPlcEndpoint("127.0.0.1", port, 1000, frameType));
-        Assert.True(service.ConnectAsync().GetAwaiter().GetResult());
+        Assert.True(await service.ConnectAsync(cancellationToken));
         return service;
     }
 

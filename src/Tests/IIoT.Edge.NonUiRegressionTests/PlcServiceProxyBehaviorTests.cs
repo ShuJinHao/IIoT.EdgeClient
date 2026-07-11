@@ -29,7 +29,7 @@ public sealed class PlcServiceProxyBehaviorTests
             logger,
             "PLC-A");
 
-        var connected = await proxy.ConnectAsync();
+        var connected = await proxy.ConnectAsync(TestContext.Current.CancellationToken);
 
         Assert.False(connected);
         Assert.Contains(logger.Entries, x => x.Message == "[PLC-A] 连接失败");
@@ -47,7 +47,8 @@ public sealed class PlcServiceProxyBehaviorTests
             logger,
             "PLC-A");
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => proxy.ConnectAsync());
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => proxy.ConnectAsync(TestContext.Current.CancellationToken));
 
         Assert.Equal("network down", ex.Message);
         Assert.Contains(logger.Entries, x => x.Message == "[PLC-A] 连接异常: network down");
@@ -65,7 +66,10 @@ public sealed class PlcServiceProxyBehaviorTests
             logger,
             "PLC-A");
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => proxy.ReadDataAsync<int>("DB1.DBW0", 2));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => proxy.ReadDataAsync<int>(
+            "DB1.DBW0",
+            2,
+            TestContext.Current.CancellationToken));
 
         Assert.Equal("read failed", ex.Message);
         Assert.Contains(logger.Entries, x => x.Message == "[PLC-A] 读取 DB1.DBW0 失败: read failed");
@@ -83,13 +87,64 @@ public sealed class PlcServiceProxyBehaviorTests
             logger,
             "PLC-A");
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => proxy.WriteDataAsync("DB1.DBW0", [1, 2]));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => proxy.WriteDataAsync(
+            "DB1.DBW0",
+            [1, 2],
+            TestContext.Current.CancellationToken));
 
         Assert.Equal("write failed", ex.Message);
         Assert.Contains(logger.Entries, x => x.Message == "[PLC-A] 写入 DB1.DBW0 失败: write failed");
     }
 
-    private sealed class FakePlcService : IPlcService
+    [Fact]
+    public async Task ConnectAsync_WhenCanceled_ShouldPropagateWithoutErrorLog()
+    {
+        var logger = new FakeLogService();
+        var proxy = new PlcServiceProxy(
+            new FakePlcService
+            {
+                ConnectAsyncHandler = () => throw new OperationCanceledException("caller canceled")
+            },
+            logger,
+            "PLC-A");
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => proxy.ConnectAsync(TestContext.Current.CancellationToken));
+
+        Assert.DoesNotContain(logger.Entries, entry => entry.Level == "Error");
+    }
+
+    [Fact]
+    public async Task ReadDataAsync_WhenServiceQuarantined_ShouldPreserveStableException()
+    {
+        var expected = new PlcServiceQuarantinedException(
+            "FakePLC",
+            "Read",
+            "protocol did not settle");
+        var logger = new FakeLogService();
+        var proxy = new PlcServiceProxy(
+            new FakePlcService
+            {
+                ReadAsyncHandler = (_, _) => throw expected
+            },
+            logger,
+            "PLC-A");
+
+        var actual = await Assert.ThrowsAsync<PlcServiceQuarantinedException>(
+            () => proxy.ReadDataAsync<ushort>(
+                "D100",
+                1,
+                TestContext.Current.CancellationToken));
+
+        Assert.Same(expected, actual);
+        Assert.Equal(PlcServiceQuarantinedException.StableReasonCode, actual.ReasonCode);
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Level == "Error"
+                     && entry.Message.Contains(PlcServiceQuarantinedException.StableReasonCode, StringComparison.Ordinal));
+    }
+
+    private sealed class FakePlcService : PlcServiceTestDouble
     {
         public Func<Task<bool>>? ConnectAsyncHandler { get; init; }
 
@@ -99,21 +154,20 @@ public sealed class PlcServiceProxyBehaviorTests
 
         public PlcEndpoint? Endpoint { get; private set; }
 
-        public bool IsConnected => false;
+        public override bool IsConnected => false;
 
-        public void Init(PlcEndpoint endpoint)
+        public override void Init(PlcEndpoint endpoint)
         {
             Endpoint = endpoint;
         }
 
-        public Task<bool> ConnectAsync()
+        public override Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
             => ConnectAsyncHandler?.Invoke() ?? Task.FromResult(true);
 
-        public void Disconnect()
-        {
-        }
-
-        public async Task<List<T>> ReadDataAsync<T>(string address, ushort length)
+        public override async Task<List<T>> ReadDataAsync<T>(
+            string address,
+            ushort length,
+            CancellationToken cancellationToken = default)
         {
             if (ReadAsyncHandler is not null)
             {
@@ -123,11 +177,10 @@ public sealed class PlcServiceProxyBehaviorTests
             return [];
         }
 
-        public Task WriteDataAsync<T>(string address, List<T> data)
+        public override Task WriteDataAsync<T>(
+            string address,
+            List<T> data,
+            CancellationToken cancellationToken = default)
             => WriteAsyncHandler?.Invoke(address, data) ?? Task.CompletedTask;
-
-        public void Dispose()
-        {
-        }
     }
 }

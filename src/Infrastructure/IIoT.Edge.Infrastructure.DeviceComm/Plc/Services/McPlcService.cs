@@ -4,9 +4,11 @@ using McpXLib.Enums;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc.Services;
 
-public sealed class McPlcService : IPlcService, IDisposable
+public sealed class McPlcService : IPlcService
 {
     private static readonly TimeSpan OperationTimeout = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan OperationSettleTimeout = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan DisposeTimeout = TimeSpan.FromSeconds(5);
     private static readonly HashSet<Prefix> HexAddressPrefixes =
     [
         Prefix.X,
@@ -19,156 +21,207 @@ public sealed class McPlcService : IPlcService, IDisposable
         Prefix.DY
     ];
 
-    private McpX? _mcProtocol;
+    private readonly PlcOperationGate _operationGate = new(
+        nameof(McPlcService),
+        OperationSettleTimeout,
+        DisposeTimeout);
+    private PlcTransportOwner<McpX>? _protocolOwner;
     private TcpPlcEndpoint? _endpoint;
     private int _port;
     private bool _isConnected;
-    private readonly SemaphoreSlim _semaphore = new(1, 1);
-    private int _disposed;
 
-    public bool IsConnected => Volatile.Read(ref _disposed) == 0 && _isConnected && _mcProtocol is not null;
+    public bool IsConnected => _operationGate.IsOpen && _isConnected && _protocolOwner?.IsAvailable == true;
 
     public void Init(PlcEndpoint endpoint)
     {
-        ThrowIfDisposed();
+        _operationGate.ThrowIfNotOpen(nameof(Init));
         _endpoint = endpoint as TcpPlcEndpoint
             ?? throw new ArgumentException("MC PLC 只支持 TCP 端点。", nameof(endpoint));
         _port = _endpoint.Port;
     }
 
-    public async Task<bool> ConnectAsync()
+    public async Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
-        await _semaphore.WaitAsync().ConfigureAwait(false);
+        var context = new ProtocolOperationContext();
+        var endpoint = _endpoint;
+        var timeout = endpoint?.ConnectTimeout > TimeSpan.Zero
+            ? endpoint.ConnectTimeout
+            : OperationTimeout;
+        var endpointDisplay = endpoint is null
+            ? "<uninitialized>"
+            : $"{endpoint.Host}:{endpoint.Port}";
         try
         {
-            EnsureInitialized();
-            if (IsConnected)
-            {
-                return true;
-            }
-
-            DisconnectCore();
-            _mcProtocol = await Task.Run(CreateProtocol).ConfigureAwait(false);
-            _isConnected = true;
-            return true;
+            return await _operationGate.ExecuteAsync(
+                    nameof(ConnectAsync),
+                    token => Task.Run(() => ConnectCore(context, token), CancellationToken.None),
+                    timeout,
+                    () => AbortProtocolAsync(context.Owner ?? _protocolOwner),
+                    _ => ReleaseProtocolAsync(context.Owner ?? _protocolOwner),
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (TimeoutException ex)
         {
-            DisconnectCore();
-            throw new TimeoutException($"连接 MC PLC {_endpoint!.Host}:{_port} 超时，超时时间 {_endpoint.ConnectTimeout.TotalSeconds:0} 秒。", ex);
-        }
-        catch
-        {
-            DisconnectCore();
-            throw;
-        }
-        finally
-        {
-            _semaphore.Release();
+            throw new TimeoutException(
+                $"连接 MC PLC {endpointDisplay} 超时，超时时间 {timeout.TotalSeconds:0} 秒。",
+                ex);
         }
     }
 
-    public void Disconnect()
+    public Task DisconnectAsync(CancellationToken cancellationToken = default)
     {
-        if (Volatile.Read(ref _disposed) != 0)
-        {
-            return;
-        }
-
-        _semaphore.Wait();
-        try
-        {
-            DisconnectCore();
-        }
-        finally
-        {
-            _semaphore.Release();
-        }
+        var context = new ProtocolOperationContext();
+        return _operationGate.ExecuteAsync(
+            nameof(DisconnectAsync),
+            token => Task.Run(() =>
+            {
+                token.ThrowIfCancellationRequested();
+                context.Owner = _protocolOwner;
+                DisconnectCore();
+            }, CancellationToken.None),
+            OperationTimeout,
+            () => AbortProtocolAsync(context.Owner ?? _protocolOwner),
+            _ => ReleaseProtocolAsync(context.Owner ?? _protocolOwner),
+            cancellationToken);
     }
 
-    public async Task<List<T>> ReadDataAsync<T>(string address, ushort length)
+    public async Task<List<T>> ReadDataAsync<T>(
+        string address,
+        ushort length,
+        CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
         var parsedAddress = ParseAddress(address);
+        var context = new ProtocolOperationContext();
 
-        await _semaphore.WaitAsync().ConfigureAwait(false);
         try
         {
-            var protocol = EnsureConnected();
-            return await ReadSupportedAsync<T>(protocol, parsedAddress, length).ConfigureAwait(false);
+            return await _operationGate.ExecuteAsync(
+                    $"Read {address}",
+                    _ =>
+                    {
+                        context.Owner = EnsureConnected();
+                        return ReadSupportedAsync<T>(context.Owner.Value, parsedAddress, length);
+                    },
+                    OperationTimeout,
+                    () => AbortProtocolAsync(context.Owner),
+                    _ => ReleaseProtocolAsync(context.Owner),
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (TimeoutException ex)
         {
             throw new TimeoutException($"读取地址 {address} 超时，超时时间 {OperationTimeout.TotalSeconds:0} 秒。", ex);
         }
-        catch (Exception ex) when (ex is not TimeoutException)
+        catch (Exception ex) when (PlcOperationGate.ShouldWrapOperationException(ex))
         {
             throw new InvalidOperationException($"读取地址 {address} 失败。", ex);
         }
-        finally
-        {
-            _semaphore.Release();
-        }
     }
 
-    public async Task WriteDataAsync<T>(string address, List<T> data)
+    public async Task WriteDataAsync<T>(
+        string address,
+        List<T> data,
+        CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
         var parsedAddress = ParseAddress(address);
+        var context = new ProtocolOperationContext();
 
-        await _semaphore.WaitAsync().ConfigureAwait(false);
         try
         {
-            var protocol = EnsureConnected();
-            await WriteSupportedAsync(protocol, parsedAddress, data).ConfigureAwait(false);
+            await _operationGate.ExecuteAsync(
+                    $"Write {address}",
+                    _ =>
+                    {
+                        context.Owner = EnsureConnected();
+                        return WriteSupportedAsync(context.Owner.Value, parsedAddress, data);
+                    },
+                    OperationTimeout,
+                    () => AbortProtocolAsync(context.Owner),
+                    _ => ReleaseProtocolAsync(context.Owner),
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (TimeoutException ex)
         {
             throw new TimeoutException($"写入地址 {address} 超时，超时时间 {OperationTimeout.TotalSeconds:0} 秒。", ex);
         }
-        catch (Exception ex) when (ex is not TimeoutException)
+        catch (Exception ex) when (PlcOperationGate.ShouldWrapOperationException(ex))
         {
             throw new InvalidOperationException($"写入地址 {address} 失败。", ex);
         }
-        finally
-        {
-            _semaphore.Release();
-        }
     }
 
-    public void Dispose()
+    public ValueTask DisposeAsync()
+        => _operationGate.DisposeAsync(() => Task.Run(DisconnectCore));
+
+    private bool ConnectCore(
+        ProtocolOperationContext context,
+        CancellationToken cancellationToken)
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        cancellationToken.ThrowIfCancellationRequested();
+        EnsureInitialized();
+        if (IsConnected)
         {
-            return;
+            return true;
         }
 
-        _semaphore.Wait();
+        context.Owner = _protocolOwner;
+        DisconnectCore();
+        context.Owner = null;
+
         try
         {
-            DisconnectCore();
+            var protocol = CreateProtocol();
+            var owner = new PlcTransportOwner<McpX>(protocol, static value => value.Dispose());
+            context.Owner = owner;
+            cancellationToken.ThrowIfCancellationRequested();
+            _protocolOwner = owner;
+            _isConnected = true;
+            return true;
         }
-        finally
+        catch when (!cancellationToken.IsCancellationRequested)
         {
-            _semaphore.Release();
-            _semaphore.Dispose();
+            ReleaseProtocol(context.Owner ?? _protocolOwner);
+            throw;
         }
     }
 
     private void DisconnectCore()
     {
         _isConnected = false;
-        _mcProtocol?.Dispose();
-        _mcProtocol = null;
+        var owner = _protocolOwner;
+        _protocolOwner = null;
+        owner?.Release();
     }
 
-    private void ThrowIfDisposed()
+    private Task AbortProtocolAsync(PlcTransportOwner<McpX>? owner)
     {
-        if (Volatile.Read(ref _disposed) != 0)
+        _isConnected = false;
+        return owner is null
+            ? Task.CompletedTask
+            : Task.Run(owner.Release);
+    }
+
+    private Task ReleaseProtocolAsync(PlcTransportOwner<McpX>? owner)
+        => owner is null
+            ? Task.CompletedTask
+            : Task.Run(() => ReleaseProtocol(owner));
+
+    private void ReleaseProtocol(PlcTransportOwner<McpX>? owner)
+    {
+        if (owner is null)
         {
-            throw new ObjectDisposedException(nameof(McPlcService));
+            return;
         }
+
+        if (ReferenceEquals(_protocolOwner, owner))
+        {
+            _isConnected = false;
+            _protocolOwner = null;
+        }
+
+        owner.Release();
     }
 
     internal static McDeviceAddress ParseAddress(string address)
@@ -230,14 +283,14 @@ public sealed class McPlcService : IPlcService, IDisposable
         }
     }
 
-    private McpX EnsureConnected()
+    private PlcTransportOwner<McpX> EnsureConnected()
     {
-        if (!IsConnected || _mcProtocol is null)
+        if (!IsConnected || _protocolOwner is null)
         {
             throw new InvalidOperationException("PLC 未连接。");
         }
 
-        return _mcProtocol;
+        return _protocolOwner;
     }
 
     private static ushort ResolveTimeoutMilliseconds(TimeSpan timeout)
@@ -276,7 +329,6 @@ public sealed class McPlcService : IPlcService, IDisposable
     {
         var data = await protocol
             .BatchReadAsync<TValue>(address.Prefix, address.Address, length)
-            .WaitAsync(OperationTimeout)
             .ConfigureAwait(false);
         return data.Select(static value => (T)(object)value).ToList();
     }
@@ -295,12 +347,18 @@ public sealed class McPlcService : IPlcService, IDisposable
 
     private static Task WriteTypedAsync<T, TValue>(McpX protocol, McDeviceAddress address, IEnumerable<T> data)
         where TValue : unmanaged
-        => protocol
-            .BatchWriteAsync(address.Prefix, address.Address, data.Select(static value => (TValue)(object)value!).ToArray())
-            .WaitAsync(OperationTimeout);
+        => protocol.BatchWriteAsync(
+            address.Prefix,
+            address.Address,
+            data.Select(static value => (TValue)(object)value!).ToArray());
 
     private static NotSupportedException UnsupportedType<T>()
         => new($"不支持的数据类型：{typeof(T).Name}");
+
+    private sealed class ProtocolOperationContext
+    {
+        public PlcTransportOwner<McpX>? Owner { get; set; }
+    }
 }
 
 internal readonly record struct McDeviceAddress(Prefix Prefix, string Address);

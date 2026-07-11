@@ -52,11 +52,11 @@ public sealed class ModbusPlcServiceBehaviorTests
     [Theory]
     [InlineData(PlcType.ModbusTcp, typeof(ModbusPlcService))]
     [InlineData(PlcType.ModbusRtu, typeof(ModbusPlcService))]
-    public void PlcServiceFactory_ShouldCreateModbusServices(PlcType plcType, Type expectedType)
+    public async Task PlcServiceFactory_ShouldCreateModbusServices(PlcType plcType, Type expectedType)
     {
         var factory = new PlcServiceFactory(new FakeLogService(), _addressParser);
 
-        using var service = factory.Create(plcType, "PLC-MODBUS");
+        await using var service = factory.Create(plcType, "PLC-MODBUS");
 
         var proxyTarget = typeof(IIoT.Edge.Infrastructure.DeviceComm.Plc.Services.PlcServiceProxy)
             .GetField("_target", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
@@ -65,18 +65,18 @@ public sealed class ModbusPlcServiceBehaviorTests
     }
 
     [Fact]
-    public void ModbusTcpService_WhenInitializedWithSerialEndpoint_ShouldReject()
+    public async Task ModbusTcpService_WhenInitializedWithSerialEndpoint_ShouldReject()
     {
-        using var service = new ModbusPlcService(ModbusTransportKind.Tcp, _addressParser);
+        await using var service = new ModbusPlcService(ModbusTransportKind.Tcp, _addressParser);
 
         Assert.Throws<ArgumentException>(() => service.Init(
             new SerialPlcEndpoint("COM1", 9600, 8, "One", "None")));
     }
 
     [Fact]
-    public void ModbusRtuService_WhenInitializedWithTcpEndpoint_ShouldReject()
+    public async Task ModbusRtuService_WhenInitializedWithTcpEndpoint_ShouldReject()
     {
-        using var service = new ModbusPlcService(ModbusTransportKind.Rtu, _addressParser);
+        await using var service = new ModbusPlcService(ModbusTransportKind.Rtu, _addressParser);
 
         Assert.Throws<ArgumentException>(() => service.Init(
             new TcpPlcEndpoint("127.0.0.1", 502)));

@@ -30,8 +30,7 @@ public class PlcBarcodeReader : IBarcodeReader
     {
         var totalWords = (ushort)(_codeCount * _wordsPerCode);
         var rawData = await _plcService
-            .ReadDataAsync<ushort>(_startAddress, totalWords)
-            .WaitAsync(ct)
+            .ReadDataAsync<ushort>(_startAddress, totalWords, ct)
             .ConfigureAwait(false);
         var barcodes = new string[_codeCount];
 
