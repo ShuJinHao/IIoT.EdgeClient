@@ -239,7 +239,9 @@ function Invoke-EdgeCurlRequest {
         [ValidateRange(1, 104857600)][int]$LowSpeedLimitBytesPerSecond = 1024
     )
 
-    $curl = Get-Command curl -CommandType Application -ErrorAction SilentlyContinue
+    # Windows runners can expose both system32\curl.exe and Git\mingw64\bin\curl.exe.
+    # Select one command object explicitly; invoking an array joins both Source paths.
+    $curl = Get-Command curl -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($null -eq $curl) {
         throw 'curl is required for Edge HTTP release operations.'
     }
