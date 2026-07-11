@@ -26,45 +26,47 @@ function Get-EdgeLoopbackFakeCloudPortState {
     return [pscustomobject]@{ IsReady = $true; Port = $port; Description = "valid:$port" }
 }
 
-function Get-EdgeLoopbackFakeCloudOutputTail {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
-        return 'missing'
-    }
-
-    try {
-        $text = Get-Content -Raw -Encoding UTF8 -LiteralPath $Path
-    }
-    catch {
-        return 'unreadable'
-    }
-
-    if ([string]::IsNullOrWhiteSpace($text)) {
-        return 'empty'
-    }
-
-    $normalized = [System.Text.RegularExpressions.Regex]::Replace($text, '\s+', ' ').Trim()
-    if ($normalized.Length -gt 512) {
-        $normalized = $normalized.Substring($normalized.Length - 512)
-    }
-    return $normalized
-}
-
 function Get-EdgeLoopbackFakeCloudDiagnostic {
     param(
         [Parameter(Mandatory = $true)][System.Diagnostics.Process]$Process,
         [Parameter(Mandatory = $true)][string]$PortFile,
-        [Parameter(Mandatory = $true)][string]$StandardOutputPath,
-        [Parameter(Mandatory = $true)][string]$StandardErrorPath
+        [Parameter(Mandatory = $true)][string]$PythonPath
     )
 
     $Process.Refresh()
     $processState = if ($Process.HasExited) { "exited:$($Process.ExitCode)" } else { 'running' }
     $portState = Get-EdgeLoopbackFakeCloudPortState -PortFile $PortFile
-    $stdoutTail = Get-EdgeLoopbackFakeCloudOutputTail -Path $StandardOutputPath
-    $stderrTail = Get-EdgeLoopbackFakeCloudOutputTail -Path $StandardErrorPath
-    return "process=$processState; portFile=$($portState.Description); stdout=$stdoutTail; stderr=$stderrTail"
+    return "process=$processState; portFile=$($portState.Description); python=$PythonPath"
+}
+
+function Resolve-EdgeLoopbackFakeCloudPython {
+    if (-not [string]::IsNullOrWhiteSpace($env:pythonLocation)) {
+        $configuredPath = if ([OperatingSystem]::IsWindows()) {
+            Join-Path $env:pythonLocation 'python.exe'
+        }
+        else {
+            Join-Path $env:pythonLocation 'bin/python3'
+        }
+        if (Test-Path -LiteralPath $configuredPath -PathType Leaf) {
+            return [System.IO.Path]::GetFullPath($configuredPath)
+        }
+    }
+
+    $commandNames = if ([OperatingSystem]::IsWindows()) { @('python', 'python3') } else { @('python3', 'python') }
+    foreach ($commandName in $commandNames) {
+        $command = Get-Command $commandName -CommandType Application -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($null -eq $command) {
+            continue
+        }
+        if ([OperatingSystem]::IsWindows() -and
+            $command.Source.Contains('\WindowsApps\', [System.StringComparison]::OrdinalIgnoreCase)) {
+            continue
+        }
+        return [System.IO.Path]::GetFullPath($command.Source)
+    }
+
+    throw 'Python 3 is required for the loopback fake Cloud behavior tests.'
 }
 
 function Stop-EdgeLoopbackFakeCloud {
@@ -95,17 +97,10 @@ function Start-EdgeLoopbackFakeCloud {
         [Parameter(Mandatory = $true)][string]$PortFile,
         [Parameter(Mandatory = $true)][string]$RequestLog,
         [string]$PluginVersion,
-        [ValidateRange(1, 60)][int]$ReadyTimeoutSeconds = 10
+        [ValidateRange(1, 60)][int]$ReadyTimeoutSeconds = 30
     )
 
-    $python = Get-Command python3 -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($null -eq $python) {
-        $python = Get-Command python -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    }
-    if ($null -eq $python) {
-        throw 'Python 3 is required for the loopback fake Cloud behavior tests.'
-    }
-
+    $pythonPath = Resolve-EdgeLoopbackFakeCloudPython
     $serverScript = Join-Path $PSScriptRoot 'fake_edge_release_cloud.py'
     $diagnosticRoot = Split-Path -Parent $PortFile
     if ([string]::IsNullOrWhiteSpace($diagnosticRoot)) {
@@ -114,26 +109,33 @@ function Start-EdgeLoopbackFakeCloud {
     New-Item -ItemType Directory -Force -Path $diagnosticRoot | Out-Null
     Remove-Item -LiteralPath $PortFile -Force -ErrorAction SilentlyContinue
 
-    $standardOutputPath = Join-Path $diagnosticRoot 'fake-cloud.stdout.log'
-    $standardErrorPath = Join-Path $diagnosticRoot 'fake-cloud.stderr.log'
-    Remove-Item -LiteralPath $standardOutputPath, $standardErrorPath -Force -ErrorAction SilentlyContinue
-
-    $arguments = @($serverScript, '--port-file', $PortFile, '--request-log', $RequestLog)
+    $arguments = @('-u', $serverScript, '--port-file', $PortFile, '--request-log', $RequestLog)
     if (-not [string]::IsNullOrWhiteSpace($PluginVersion)) {
         $arguments += @('--plugin-version', $PluginVersion)
     }
 
     $process = $null
     try {
-        $process = Start-Process -FilePath $python.Source -ArgumentList $arguments -PassThru `
-            -RedirectStandardOutput $standardOutputPath -RedirectStandardError $standardErrorPath
+        $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+        $startInfo.FileName = $pythonPath
+        $startInfo.UseShellExecute = $false
+        $startInfo.CreateNoWindow = $true
+        foreach ($argument in $arguments) {
+            $startInfo.ArgumentList.Add($argument)
+        }
+
+        $process = [System.Diagnostics.Process]::new()
+        $process.StartInfo = $startInfo
+        if (-not $process.Start()) {
+            throw 'Loopback fake Cloud process could not be started.'
+        }
         $deadline = [DateTimeOffset]::UtcNow.AddSeconds($ReadyTimeoutSeconds)
 
         while ([DateTimeOffset]::UtcNow -lt $deadline) {
             $process.Refresh()
             if ($process.HasExited) {
                 $diagnostic = Get-EdgeLoopbackFakeCloudDiagnostic -Process $process -PortFile $PortFile `
-                    -StandardOutputPath $standardOutputPath -StandardErrorPath $standardErrorPath
+                    -PythonPath $pythonPath
                 throw "Loopback fake Cloud exited before readiness. $diagnostic"
             }
 
@@ -143,8 +145,7 @@ function Start-EdgeLoopbackFakeCloud {
                     Process = $process
                     Port = $portState.Port
                     BaseUrl = "http://127.0.0.1:$($portState.Port)"
-                    StandardOutputPath = $standardOutputPath
-                    StandardErrorPath = $standardErrorPath
+                    PythonPath = $pythonPath
                 }
             }
 
@@ -152,7 +153,7 @@ function Start-EdgeLoopbackFakeCloud {
         }
 
         $diagnostic = Get-EdgeLoopbackFakeCloudDiagnostic -Process $process -PortFile $PortFile `
-            -StandardOutputPath $standardOutputPath -StandardErrorPath $standardErrorPath
+            -PythonPath $pythonPath
         throw "Loopback fake Cloud readiness timed out after $ReadyTimeoutSeconds seconds. $diagnostic"
     }
     catch {
