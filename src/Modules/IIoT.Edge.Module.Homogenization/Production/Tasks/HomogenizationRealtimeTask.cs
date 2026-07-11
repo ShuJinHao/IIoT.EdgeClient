@@ -14,6 +14,8 @@ using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Production;
 using IIoT.Edge.Module.Sdk.Base;
+using IIoT.Edge.Module.Sdk.DataPipeline;
+using IIoT.Edge.Module.Sdk.Diagnostics;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Options;
@@ -140,7 +142,10 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
                 .EnqueueAsync(CreateCompletedRecord(cellData, includeMesPlanContext: mesEnabled), cancellationToken)
                 .ConfigureAwait(false);
 
-            var result = ToQueueResult(enqueueResult, uploadTargets);
+            var result = ModuleDataPipelineEnqueueResultMapper.ToQueuedUploadResult(
+                enqueueResult,
+                "实时数据",
+                uploadTargets);
             if (enqueueResult.IsDurablyAccepted)
             {
                 _context.LastRealtimeFingerprint = realtimeFingerprint;
@@ -161,94 +166,27 @@ internal sealed class HomogenizationRealtimeTask : PeriodicSnapshotUploadTaskBas
     {
         if (!result.IsSuccess)
         {
-            RecordUploadDiagnostics(result, _lastUploadTargets);
+            ModuleUploadDiagnosticsRecorder.RecordResult(
+                result,
+                _lastUploadTargets,
+                _diagnosticsStore,
+                _cloudDiagnosticsStore,
+                new ModuleUploadDiagnosticsRoute(
+                    _codeOptions.Mes.Channels.Realtime,
+                    DependencyInjection.ModuleKey,
+                    "plc_realtime_blocked",
+                    "plc_realtime_enqueue_failed"),
+                new ModuleUploadDiagnosticsIdentity(
+                    _context.DeviceName,
+                    DependencyInjection.ModuleKey,
+                    TaskName,
+                    "实时数据上传"));
         }
 
         _context.LastRealtimeAt = snapshot.CapturedAt;
         _context.LastRealtimeResult = result.Message;
         _context.LastRealtimeSnapshot = snapshot;
         return Task.CompletedTask;
-    }
-
-    private MesUploadDiagnosticsContext CreateMesDiagnosticsContext(string scenario)
-        => new(
-            DeviceName: _context.DeviceName,
-            ModuleId: DependencyInjection.ModuleKey,
-            TaskKey: TaskName,
-            Scenario: scenario);
-
-    private CloudUploadDiagnosticsContext CreateCloudDiagnosticsContext(string scenario)
-        => new(
-            DeviceName: _context.DeviceName,
-            ModuleId: DependencyInjection.ModuleKey,
-            TaskKey: TaskName,
-            Scenario: scenario);
-
-    private void RecordUploadDiagnostics(
-        MesCallResult result,
-        DataPipelineUploadTargets uploadTargets)
-    {
-        if (uploadTargets.HasFlag(DataPipelineUploadTargets.Mes))
-        {
-            RecordMesDiagnostics(result);
-        }
-
-        if (uploadTargets.HasFlag(DataPipelineUploadTargets.Cloud))
-        {
-            RecordCloudDiagnostics(result);
-        }
-    }
-
-    private void RecordMesDiagnostics(MesCallResult result)
-    {
-        if (result.Outcome is MesCallOutcome.BusinessRejected or MesCallOutcome.InvalidContext)
-        {
-            _diagnosticsStore.RecordBlocked(
-                _codeOptions.Mes.Channels.Realtime,
-                result.Message,
-                CreateMesDiagnosticsContext("实时数据上传"));
-            return;
-        }
-
-        _diagnosticsStore.RecordFailure(
-            _codeOptions.Mes.Channels.Realtime,
-            result.Message,
-            CreateMesDiagnosticsContext("实时数据上传"));
-    }
-
-    private void RecordCloudDiagnostics(MesCallResult result)
-    {
-        if (result.Outcome is MesCallOutcome.BusinessRejected or MesCallOutcome.InvalidContext)
-        {
-            _cloudDiagnosticsStore.RecordBlocked(
-                DependencyInjection.ModuleKey,
-                "plc_realtime_blocked",
-                result.Message,
-                CreateCloudDiagnosticsContext("实时数据上传"));
-            return;
-        }
-
-        _cloudDiagnosticsStore.RecordResult(
-            DependencyInjection.ModuleKey,
-            CloudCallResult.Failure(CloudCallOutcome.Exception, "plc_realtime_enqueue_failed"),
-            CreateCloudDiagnosticsContext("实时数据上传"));
-    }
-
-    private static MesCallResult ToQueueResult(
-        DataPipelineEnqueueResult enqueueResult,
-        DataPipelineUploadTargets uploadTargets)
-    {
-        if (enqueueResult.IsDurablyAccepted)
-        {
-            return MesCallResult.Success(enqueueResult.WasOverflow
-                ? "实时数据已接收，数据已进入溢出持久化。"
-                : $"实时数据已进入 {DataPipelineUploadTargetPolicy.Format(uploadTargets)} 上传队列。");
-        }
-
-        var reason = string.IsNullOrWhiteSpace(enqueueResult.ReasonCode)
-            ? "unknown"
-            : enqueueResult.ReasonCode;
-        return MesCallResult.TransportFailure($"实时数据未接收，数据管道拒绝入队（{reason}）。");
     }
 
     private CellCompletedRecord CreateCompletedRecord(

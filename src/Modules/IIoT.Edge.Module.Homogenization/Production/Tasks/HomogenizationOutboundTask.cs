@@ -12,6 +12,7 @@ using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Resources;
 using IIoT.Edge.Module.Homogenization.Production;
+using IIoT.Edge.Module.Sdk.Diagnostics;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Options;
@@ -84,10 +85,21 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
             {
                 ModuleContext.LastOutboundAt = ProductionTime.BusinessNow;
                 ModuleContext.LastOutboundResult = message;
-                _diagnosticsStore.RecordFailure(
-                    CodeOptions.Mes.Channels.Outbound,
+                ModuleUploadDiagnosticsRecorder.RecordFailure(
                     message,
-                    CreateMesDiagnosticsContext("出站上传"));
+                    DataPipelineUploadTargets.Mes,
+                    _diagnosticsStore,
+                    _cloudDiagnosticsStore,
+                    new ModuleUploadDiagnosticsRoute(
+                        CodeOptions.Mes.Channels.Outbound,
+                        DependencyInjection.ModuleKey,
+                        "plc_outbound_blocked",
+                        "plc_outbound_exception"),
+                    new ModuleUploadDiagnosticsIdentity(
+                        ModuleContext.DeviceName,
+                        DependencyInjection.ModuleKey,
+                        TaskName,
+                        "出站上传"));
             }).ConfigureAwait(false);
     }
 
@@ -98,6 +110,11 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
         var mesEnabled = parameterSnapshot.Mes<bool>(HomogenizationParams.Mes.启用);
         var cloudEnabled = _cloudExecutionPolicy.IsEnabled;
         var uploadTargets = ResolveUploadTargets(mesEnabled, cloudEnabled);
+        var diagnosticsIdentity = new ModuleUploadDiagnosticsIdentity(
+            ModuleContext.DeviceName,
+            DependencyInjection.ModuleKey,
+            TaskName,
+            "出站上传");
 
         if (mesEnabled)
         {
@@ -105,14 +122,17 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
             if (!gateResult.IsSuccess)
             {
                 RecordOutboundResult(gateResult.Message);
-                RecordUploadBlockedDiagnostics(
+                ModuleUploadDiagnosticsRecorder.RecordBlocked(
                     gateResult.Message,
                     uploadTargets,
                     _diagnosticsStore,
                     _cloudDiagnosticsStore,
-                    CodeOptions.Mes.Channels.Outbound,
-                    "plc_outbound_blocked",
-                    "出站上传");
+                    new ModuleUploadDiagnosticsRoute(
+                        CodeOptions.Mes.Channels.Outbound,
+                        DependencyInjection.ModuleKey,
+                        "plc_outbound_blocked",
+                        "plc_outbound_enqueue_failed"),
+                    diagnosticsIdentity);
                 Interaction.ReplyResult(trigger, gateResult);
                 return;
             }
@@ -123,14 +143,17 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
         {
             var message = error ?? "出料校验失败。";
             RecordOutbound(cellData, message);
-            RecordUploadFailureDiagnostics(
+            ModuleUploadDiagnosticsRecorder.RecordFailure(
                 message,
                 uploadTargets,
                 _diagnosticsStore,
                 _cloudDiagnosticsStore,
-                CodeOptions.Mes.Channels.Outbound,
-                "plc_outbound_validation_failed",
-                "出站上传");
+                new ModuleUploadDiagnosticsRoute(
+                    CodeOptions.Mes.Channels.Outbound,
+                    DependencyInjection.ModuleKey,
+                    "plc_outbound_blocked",
+                    "plc_outbound_validation_failed"),
+                diagnosticsIdentity);
             Interaction.ReplyException(trigger);
             return;
         }
@@ -144,14 +167,17 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
         {
             Interaction.ReplyMesNg(trigger);
             RecordOutbound(cellData, duplicateMessage);
-            RecordUploadFailureDiagnostics(
+            ModuleUploadDiagnosticsRecorder.RecordFailure(
                 duplicateMessage,
                 uploadTargets,
                 _diagnosticsStore,
                 _cloudDiagnosticsStore,
-                CodeOptions.Mes.Channels.Outbound,
-                "plc_outbound_duplicate_tray",
-                "出站上传");
+                new ModuleUploadDiagnosticsRoute(
+                    CodeOptions.Mes.Channels.Outbound,
+                    DependencyInjection.ModuleKey,
+                    "plc_outbound_blocked",
+                    "plc_outbound_duplicate_tray"),
+                diagnosticsIdentity);
             return;
         }
 
@@ -179,14 +205,17 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
         {
             var message = $"出料处理异常：{ex.Message}";
             RecordOutboundResult(message);
-            RecordUploadFailureDiagnostics(
+            ModuleUploadDiagnosticsRecorder.RecordFailure(
                 message,
                 uploadTargets,
                 _diagnosticsStore,
                 _cloudDiagnosticsStore,
-                CodeOptions.Mes.Channels.Outbound,
-                "plc_outbound_exception",
-                "出站上传");
+                new ModuleUploadDiagnosticsRoute(
+                    CodeOptions.Mes.Channels.Outbound,
+                    DependencyInjection.ModuleKey,
+                    "plc_outbound_blocked",
+                    "plc_outbound_exception"),
+                diagnosticsIdentity);
             Interaction.ReplyException(trigger);
             return;
         }
@@ -195,14 +224,17 @@ internal sealed class HomogenizationOutboundTask : HomogenizationTaskBase
         {
             var failure = FormatRejectedResult(enqueueResult);
             RecordOutbound(cellData, failure);
-            RecordUploadFailureDiagnostics(
+            ModuleUploadDiagnosticsRecorder.RecordFailure(
                 failure,
                 uploadTargets,
                 _diagnosticsStore,
                 _cloudDiagnosticsStore,
-                CodeOptions.Mes.Channels.Outbound,
-                "plc_outbound_enqueue_failed",
-                "出站上传");
+                new ModuleUploadDiagnosticsRoute(
+                    CodeOptions.Mes.Channels.Outbound,
+                    DependencyInjection.ModuleKey,
+                    "plc_outbound_blocked",
+                    "plc_outbound_enqueue_failed"),
+                diagnosticsIdentity);
             Interaction.ReplyException(trigger);
             return;
         }

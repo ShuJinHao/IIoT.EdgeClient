@@ -1,5 +1,4 @@
 using IIoT.Edge.Application.Abstractions.Config;
-using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
@@ -85,20 +84,6 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
         return $"托盘码重复，已按业务 NG 拒绝{stageName}：{trayCode.Trim()}。";
     }
 
-    protected CellCompletedRecord CreatePipelineRecord(HomogenizationCellData cellData)
-        => new()
-        {
-            CellData = cellData,
-            NetworkDeviceId = ModuleContext.NetworkDeviceId,
-            DeviceName = ModuleContext.DeviceName,
-            ModuleId = DependencyInjection.ModuleKey,
-            TaskKey = TaskName,
-            PlanSessionId = ModuleContext.PlanSessionId ?? string.Empty,
-            MainPlanCode = ModuleContext.SelectedProductionPlan?.MainPlanCode ?? string.Empty,
-            TraceBatchNumber = ModuleContext.TraceBatchNumber ?? string.Empty,
-            CreatedAtUtc = DateTime.UtcNow
-        };
-
     protected CellCompletedRecord CreatePipelineRecord(
         HomogenizationCellData cellData,
         bool includeMesPlanContext)
@@ -115,141 +100,8 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
             CreatedAtUtc = DateTime.UtcNow
         };
 
-    protected MesUploadDiagnosticsContext CreateMesDiagnosticsContext(string scenario)
-        => new(
-            DeviceName: ModuleContext.DeviceName,
-            ModuleId: DependencyInjection.ModuleKey,
-            TaskKey: TaskName,
-            Scenario: scenario);
-
-    protected CloudUploadDiagnosticsContext CreateCloudDiagnosticsContext(string scenario)
-        => new(
-            DeviceName: ModuleContext.DeviceName,
-            ModuleId: DependencyInjection.ModuleKey,
-            TaskKey: TaskName,
-            Scenario: scenario);
-
     protected static DataPipelineUploadTargets ResolveUploadTargets(bool mesEnabled, bool cloudEnabled)
         => DataPipelineUploadTargetPolicy.Resolve(mesEnabled, cloudEnabled);
-
-    protected static string FormatUploadTargets(DataPipelineUploadTargets uploadTargets)
-        => DataPipelineUploadTargetPolicy.Format(uploadTargets);
-
-    protected static MesCallResult ToMesQueueResult(
-        DataPipelineEnqueueResult enqueueResult,
-        string acceptedMessage,
-        string overflowMessage,
-        string rejectedPrefix)
-    {
-        if (enqueueResult.IsDurablyAccepted)
-        {
-            return MesCallResult.Success(enqueueResult.WasOverflow ? overflowMessage : acceptedMessage);
-        }
-
-        var reason = string.IsNullOrWhiteSpace(enqueueResult.ReasonCode)
-            ? "unknown"
-            : enqueueResult.ReasonCode;
-        return MesCallResult.TransportFailure($"{rejectedPrefix}（{reason}）。");
-    }
-
-    protected static MesCallResult ToUploadQueueResult(
-        DataPipelineEnqueueResult enqueueResult,
-        string scenarioName,
-        DataPipelineUploadTargets uploadTargets)
-    {
-        if (enqueueResult.IsDurablyAccepted)
-        {
-            return MesCallResult.Success(enqueueResult.WasOverflow
-                ? $"{scenarioName}已接收，数据已进入溢出持久化。"
-                : $"{scenarioName}已进入 {FormatUploadTargets(uploadTargets)} 上传队列。");
-        }
-
-        var reason = string.IsNullOrWhiteSpace(enqueueResult.ReasonCode)
-            ? "unknown"
-            : enqueueResult.ReasonCode;
-        return MesCallResult.TransportFailure($"{scenarioName}未接收，数据管道拒绝入队（{reason}）。");
-    }
-
-    protected void RecordUploadDiagnostics(
-        MesCallResult result,
-        DataPipelineUploadTargets uploadTargets,
-        IMesUploadDiagnosticsStore mesDiagnosticsStore,
-        ICloudUploadDiagnosticsStore cloudDiagnosticsStore,
-        string mesChannel,
-        string cloudReasonCode,
-        string scenario)
-    {
-        if (result.Outcome is MesCallOutcome.BusinessRejected or MesCallOutcome.InvalidContext)
-        {
-            RecordUploadBlockedDiagnostics(
-                result.Message,
-                uploadTargets,
-                mesDiagnosticsStore,
-                cloudDiagnosticsStore,
-                mesChannel,
-                cloudReasonCode,
-                scenario);
-            return;
-        }
-
-        RecordUploadFailureDiagnostics(
-            result.Message,
-            uploadTargets,
-            mesDiagnosticsStore,
-            cloudDiagnosticsStore,
-            mesChannel,
-            cloudReasonCode,
-            scenario);
-    }
-
-    protected void RecordUploadFailureDiagnostics(
-        string message,
-        DataPipelineUploadTargets uploadTargets,
-        IMesUploadDiagnosticsStore mesDiagnosticsStore,
-        ICloudUploadDiagnosticsStore cloudDiagnosticsStore,
-        string mesChannel,
-        string cloudReasonCode,
-        string scenario)
-    {
-        if (uploadTargets.HasFlag(DataPipelineUploadTargets.Mes))
-        {
-            mesDiagnosticsStore.RecordFailure(mesChannel, message, CreateMesDiagnosticsContext(scenario));
-        }
-
-        if (!uploadTargets.HasFlag(DataPipelineUploadTargets.Cloud))
-        {
-            return;
-        }
-
-        cloudDiagnosticsStore.RecordResult(
-            DependencyInjection.ModuleKey,
-            CloudCallResult.Failure(CloudCallOutcome.Exception, cloudReasonCode),
-            CreateCloudDiagnosticsContext(scenario));
-    }
-
-    protected void RecordUploadBlockedDiagnostics(
-        string message,
-        DataPipelineUploadTargets uploadTargets,
-        IMesUploadDiagnosticsStore mesDiagnosticsStore,
-        ICloudUploadDiagnosticsStore cloudDiagnosticsStore,
-        string mesChannel,
-        string cloudReasonCode,
-        string scenario)
-    {
-        if (uploadTargets.HasFlag(DataPipelineUploadTargets.Mes))
-        {
-            mesDiagnosticsStore.RecordBlocked(mesChannel, message, CreateMesDiagnosticsContext(scenario));
-        }
-
-        if (uploadTargets.HasFlag(DataPipelineUploadTargets.Cloud))
-        {
-            cloudDiagnosticsStore.RecordBlocked(
-                DependencyInjection.ModuleKey,
-                cloudReasonCode,
-                message,
-                CreateCloudDiagnosticsContext(scenario));
-        }
-    }
 
     protected async Task<string?> ResolveDuplicateTrayMessageAsync(
         IModuleParamProvider<HomogenizationParams.Mes, HomogenizationParams.Cloud, HomogenizationParams.Business> parameters,
@@ -314,75 +166,6 @@ internal abstract class HomogenizationTaskBase : PlcTaskBase
 
                 break;
         }
-    }
-
-    protected Task ExecuteMesSnapshotHandshakeAsync<TSnapshot>(
-        HomogenizationPlcSignals.Interaction trigger,
-        string triggeredLog,
-        string resetLog,
-        string exceptionPrefix,
-        string channel,
-        string scenario,
-        IHomogenizationProductionGate productionGate,
-        IMesUploadDiagnosticsStore diagnosticsStore,
-        Func<TSnapshot> captureSnapshot,
-        Func<TSnapshot, CancellationToken, Task<MesCallResult>> uploadAsync,
-        Action<string> recordFailure,
-        Action<TSnapshot, MesCallResult> recordResult,
-        Action<TSnapshot>? beforeUpload = null)
-        => ExecuteHandshakeAsync(
-            trigger,
-            triggeredLog,
-            resetLog,
-            _ => UploadMesSnapshotWithGateAsync(
-                trigger,
-                channel,
-                scenario,
-                productionGate,
-                diagnosticsStore,
-                captureSnapshot,
-                uploadAsync,
-                recordFailure,
-                recordResult,
-                beforeUpload),
-            ex => $"{exceptionPrefix}：{ex.Message}",
-            message =>
-            {
-                diagnosticsStore.RecordFailure(channel, message, CreateMesDiagnosticsContext(scenario));
-                recordFailure(message);
-            });
-
-    protected async Task UploadMesSnapshotWithGateAsync<TSnapshot>(
-        HomogenizationPlcSignals.Interaction trigger,
-        string channel,
-        string scenario,
-        IHomogenizationProductionGate productionGate,
-        IMesUploadDiagnosticsStore diagnosticsStore,
-        Func<TSnapshot> captureSnapshot,
-        Func<TSnapshot, CancellationToken, Task<MesCallResult>> uploadAsync,
-        Action<string> recordGateFailure,
-        Action<TSnapshot, MesCallResult> recordResult,
-        Action<TSnapshot>? beforeUpload = null)
-    {
-        var gateResult = await productionGate.EnsureReadyAsync(ModuleContext, TaskCancellationToken).ConfigureAwait(false);
-        if (!gateResult.IsSuccess)
-        {
-            diagnosticsStore.RecordBlocked(channel, gateResult.Message, CreateMesDiagnosticsContext(scenario));
-            recordGateFailure(gateResult.Message);
-            Interaction.ReplyResult(trigger, gateResult);
-            return;
-        }
-
-        var snapshot = captureSnapshot();
-        beforeUpload?.Invoke(snapshot);
-        var result = await uploadAsync(snapshot, TaskCancellationToken).ConfigureAwait(false);
-        if (!result.IsSuccess)
-        {
-            diagnosticsStore.RecordFailure(channel, result.Message, CreateMesDiagnosticsContext(scenario));
-        }
-
-        recordResult(snapshot, result);
-        Interaction.ReplyResult(trigger, result);
     }
 
 }

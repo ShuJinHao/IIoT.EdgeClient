@@ -12,6 +12,8 @@ using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Resources;
 using IIoT.Edge.Module.Homogenization.Production;
+using IIoT.Edge.Module.Sdk.DataPipeline;
+using IIoT.Edge.Module.Sdk.Diagnostics;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Options;
 
@@ -78,10 +80,21 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
             static ex => $"进站处理异常：{ex.Message}",
             message =>
             {
-                _diagnosticsStore.RecordFailure(
-                    CodeOptions.Mes.Channels.Inbound,
+                ModuleUploadDiagnosticsRecorder.RecordFailure(
                     message,
-                    CreateMesDiagnosticsContext("进站上传"));
+                    DataPipelineUploadTargets.Mes,
+                    _diagnosticsStore,
+                    _cloudDiagnosticsStore,
+                    new ModuleUploadDiagnosticsRoute(
+                        CodeOptions.Mes.Channels.Inbound,
+                        DependencyInjection.ModuleKey,
+                        "plc_inbound_blocked",
+                        "plc_inbound_enqueue_failed"),
+                    new ModuleUploadDiagnosticsIdentity(
+                        ModuleContext.DeviceName,
+                        DependencyInjection.ModuleKey,
+                        TaskName,
+                        "进站上传"));
                 RecordInboundResult(string.Empty, message);
             }).ConfigureAwait(false);
     }
@@ -95,6 +108,11 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         var mesEnabled = parameterSnapshot.Mes<bool>(HomogenizationParams.Mes.启用);
         var cloudEnabled = _cloudExecutionPolicy.IsEnabled;
         var uploadTargets = ResolveUploadTargets(mesEnabled, cloudEnabled);
+        var diagnosticsIdentity = new ModuleUploadDiagnosticsIdentity(
+            ModuleContext.DeviceName,
+            DependencyInjection.ModuleKey,
+            TaskName,
+            "进站上传");
         if (uploadTargets == DataPipelineUploadTargets.None)
         {
             var disabled = MesCallResult.Disabled("MES/Cloud 上传已关闭，进站上传已跳过。");
@@ -106,14 +124,17 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         if (string.IsNullOrWhiteSpace(trayCode))
         {
             var message = HomogenizationText.Get("Homogenization_Error_PalletCodeRequired", "托盘码不能为空。");
-            RecordUploadFailureDiagnostics(
+            ModuleUploadDiagnosticsRecorder.RecordFailure(
                 message,
                 uploadTargets,
                 _diagnosticsStore,
                 _cloudDiagnosticsStore,
-                CodeOptions.Mes.Channels.Inbound,
-                "plc_inbound_invalid_context",
-                "进站上传");
+                new ModuleUploadDiagnosticsRoute(
+                    CodeOptions.Mes.Channels.Inbound,
+                    DependencyInjection.ModuleKey,
+                    "plc_inbound_blocked",
+                    "plc_inbound_invalid_context"),
+                diagnosticsIdentity);
             RecordInboundResult(string.Empty, message);
             Interaction.ReplyException(trigger);
             return;
@@ -124,14 +145,17 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
             var gateResult = await _productionGate.EnsureReadyAsync(ModuleContext, cancellationToken).ConfigureAwait(false);
             if (!gateResult.IsSuccess)
             {
-                RecordUploadBlockedDiagnostics(
+                ModuleUploadDiagnosticsRecorder.RecordBlocked(
                     gateResult.Message,
                     uploadTargets,
                     _diagnosticsStore,
                     _cloudDiagnosticsStore,
-                    CodeOptions.Mes.Channels.Inbound,
-                    "plc_inbound_blocked",
-                    "进站上传");
+                    new ModuleUploadDiagnosticsRoute(
+                        CodeOptions.Mes.Channels.Inbound,
+                        DependencyInjection.ModuleKey,
+                        "plc_inbound_blocked",
+                        "plc_inbound_enqueue_failed"),
+                    diagnosticsIdentity);
                 RecordInboundResult(trayCode, gateResult.Message);
                 Interaction.ReplyResult(trigger, gateResult);
                 return;
@@ -146,14 +170,17 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         if (duplicateMessage is not null)
         {
             Interaction.ReplyMesNg(trigger);
-            RecordUploadFailureDiagnostics(
+            ModuleUploadDiagnosticsRecorder.RecordFailure(
                 duplicateMessage,
                 uploadTargets,
                 _diagnosticsStore,
                 _cloudDiagnosticsStore,
-                CodeOptions.Mes.Channels.Inbound,
-                "plc_inbound_duplicate_tray",
-                "进站上传");
+                new ModuleUploadDiagnosticsRoute(
+                    CodeOptions.Mes.Channels.Inbound,
+                    DependencyInjection.ModuleKey,
+                    "plc_inbound_blocked",
+                    "plc_inbound_duplicate_tray"),
+                diagnosticsIdentity);
             RecordInboundResult(trayCode, duplicateMessage);
             return;
         }
@@ -176,7 +203,10 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
             var enqueueResult = await _dataPipelineService
                 .EnqueueAsync(CreatePipelineRecord(cellData, includeMesPlanContext: mesEnabled), cancellationToken)
                 .ConfigureAwait(false);
-            result = ToUploadQueueResult(enqueueResult, "进站", uploadTargets);
+            result = ModuleDataPipelineEnqueueResultMapper.ToQueuedUploadResult(
+                enqueueResult,
+                "进站",
+                uploadTargets);
         }
         catch (Exception ex)
         {
@@ -193,14 +223,17 @@ internal sealed class HomogenizationInboundTask : HomogenizationTaskBase
         }
         else
         {
-            RecordUploadDiagnostics(
+            ModuleUploadDiagnosticsRecorder.RecordResult(
                 result,
                 uploadTargets,
                 _diagnosticsStore,
                 _cloudDiagnosticsStore,
-                CodeOptions.Mes.Channels.Inbound,
-                "plc_inbound_enqueue_failed",
-                "进站上传");
+                new ModuleUploadDiagnosticsRoute(
+                    CodeOptions.Mes.Channels.Inbound,
+                    DependencyInjection.ModuleKey,
+                    "plc_inbound_enqueue_failed",
+                    "plc_inbound_enqueue_failed"),
+                diagnosticsIdentity);
         }
 
         RecordInboundResult(trayCode, result.Message);

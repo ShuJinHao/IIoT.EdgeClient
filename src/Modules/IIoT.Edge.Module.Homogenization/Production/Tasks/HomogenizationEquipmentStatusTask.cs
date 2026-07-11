@@ -11,6 +11,8 @@ using IIoT.Edge.Module.Homogenization.Config.Io;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Production;
+using IIoT.Edge.Module.Sdk.DataPipeline;
+using IIoT.Edge.Module.Sdk.Diagnostics;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Options;
 
@@ -72,10 +74,21 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
             {
                 ModuleContext.LastEquipmentStatusAt = ProductionTime.BusinessNow;
                 ModuleContext.LastEquipmentStatusResult = message;
-                _mesDiagnosticsStore.RecordFailure(
-                    CodeOptions.Mes.Channels.EquipmentStatus,
+                ModuleUploadDiagnosticsRecorder.RecordFailure(
                     message,
-                    CreateMesDiagnosticsContext("设备状态上传"));
+                    DataPipelineUploadTargets.Mes,
+                    _mesDiagnosticsStore,
+                    _cloudDiagnosticsStore,
+                    new ModuleUploadDiagnosticsRoute(
+                        CodeOptions.Mes.Channels.EquipmentStatus,
+                        DependencyInjection.ModuleKey,
+                        "plc_equipment_status_enqueue_failed",
+                        "plc_equipment_status_enqueue_failed"),
+                    new ModuleUploadDiagnosticsIdentity(
+                        ModuleContext.DeviceName,
+                        DependencyInjection.ModuleKey,
+                        TaskName,
+                        "设备状态上传"));
             }).ConfigureAwait(false);
     }
 
@@ -87,7 +100,21 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
         var (result, uploadTargets) = await EnqueueEquipmentStatusAsync(snapshot, cancellationToken).ConfigureAwait(false);
         if (!result.IsSuccess)
         {
-            RecordUploadDiagnostics(result, uploadTargets);
+            ModuleUploadDiagnosticsRecorder.RecordFailure(
+                result.Message,
+                uploadTargets,
+                _mesDiagnosticsStore,
+                _cloudDiagnosticsStore,
+                new ModuleUploadDiagnosticsRoute(
+                    CodeOptions.Mes.Channels.EquipmentStatus,
+                    DependencyInjection.ModuleKey,
+                    "plc_equipment_status_enqueue_failed",
+                    "plc_equipment_status_enqueue_failed"),
+                new ModuleUploadDiagnosticsIdentity(
+                    ModuleContext.DeviceName,
+                    DependencyInjection.ModuleKey,
+                    TaskName,
+                    "设备状态上传"));
         }
 
         ModuleContext.LastEquipmentStatusAt = snapshot.CapturedAt;
@@ -127,11 +154,10 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
                 .EnqueueAsync(CreatePipelineRecord(cellData, includeMesPlanContext: false), cancellationToken)
                 .ConfigureAwait(false);
 
-            return (ToMesQueueResult(
+            return (ModuleDataPipelineEnqueueResultMapper.ToQueuedUploadResult(
                     enqueueResult,
-                    $"设备状态已进入 {FormatUploadTargets(uploadTargets)} 上传队列。",
-                    "设备状态已接收，数据已进入溢出持久化。",
-                    "设备状态未接收，数据管道拒绝入队"),
+                    "设备状态",
+                    uploadTargets),
                 uploadTargets);
         }
         catch (Exception ex)
@@ -140,15 +166,4 @@ internal sealed class HomogenizationEquipmentStatusTask : HomogenizationTaskBase
         }
     }
 
-    private void RecordUploadDiagnostics(
-        MesCallResult result,
-        DataPipelineUploadTargets uploadTargets)
-        => RecordUploadFailureDiagnostics(
-            result.Message,
-            uploadTargets,
-            _mesDiagnosticsStore,
-            _cloudDiagnosticsStore,
-            CodeOptions.Mes.Channels.EquipmentStatus,
-            "plc_equipment_status_enqueue_failed",
-            "设备状态上传");
 }

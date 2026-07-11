@@ -482,6 +482,10 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
 
         await InvokeTaskCoreOnceAsync(runtime.Task);
 
+        var definition = provider.GetRequiredService<DieCuttingModuleDefinition>();
+        var diagnostics = provider
+            .GetRequiredService<IMesUploadDiagnosticsStore>()
+            .Get(definition.RealtimeDiagnosticsChannel);
         Assert.Contains(logEntries, entry =>
             entry.Message.Contains("[模切采样] 任务配置", StringComparison.Ordinal)
             && entry.Message.Contains($"MES地址={TestMesBaseUrl}", StringComparison.Ordinal)
@@ -489,6 +493,14 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         Assert.Contains(logEntries, entry =>
             entry.Message.Contains("PLC 未连接，模切采样上传暂停", StringComparison.Ordinal));
         Assert.DoesNotContain(logEntries, ContainsSensitiveMesCredentialText);
+        Assert.NotNull(diagnostics);
+        Assert.Equal("Blocked", diagnostics.LastResult);
+        Assert.Contains("PLC 未连接", diagnostics.LastBlockedReason, StringComparison.Ordinal);
+        Assert.Equal(ExpectedFirstDevice, diagnostics.DeviceName);
+        Assert.Equal(ExpectedModuleId, diagnostics.ModuleId);
+        Assert.Equal(definition.RealtimeSampleUploadTaskKey, diagnostics.TaskKey);
+        Assert.Equal("生产上传", diagnostics.Scenario);
+        Assert.Null(provider.GetRequiredService<ICloudUploadDiagnosticsStore>().Snapshot.LastProcessType);
     }
 
     [Fact]
@@ -622,6 +634,9 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         Assert.Equal(DieCuttingCellData.RecordKinds.RealtimeOutbound, cellData.RecordKind);
         Assert.Equal(DataPipelineUploadTargets.Mes, cellData.UploadTargets);
         Assert.Contains("MES 上传队列", runtime.Context.LastRealtimeResult, StringComparison.Ordinal);
+        Assert.Null(provider
+            .GetRequiredService<IMesUploadDiagnosticsStore>()
+            .Get(definition.RealtimeDiagnosticsChannel));
     }
 
     [Fact]
@@ -708,6 +723,9 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         Assert.Equal(ExpectedModuleId, diagnostics.LastModuleId);
         Assert.Equal(definition.RealtimeSampleUploadTaskKey, diagnostics.LastTaskKey);
         Assert.Equal("生产上传", diagnostics.LastScenario);
+        Assert.Null(provider
+            .GetRequiredService<IMesUploadDiagnosticsStore>()
+            .Get(definition.RealtimeDiagnosticsChannel));
     }
 
     [Fact]
@@ -850,6 +868,9 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
         Assert.Equal(ExpectedModuleId, diagnostics.LastModuleId);
         Assert.Equal(definition.DeviceStatusUploadTaskKey, diagnostics.LastTaskKey);
         Assert.Equal("设备状态上传", diagnostics.LastScenario);
+        Assert.Null(provider
+            .GetRequiredService<IMesUploadDiagnosticsStore>()
+            .Get(definition.DeviceStatusDiagnosticsChannel));
     }
 
     [Fact]
@@ -1777,11 +1798,50 @@ public abstract class DieCuttingModuleContractTestsBase<TModule> : ModuleContrac
 
     private sealed class ContractMesUploadDiagnosticsStore : IMesUploadDiagnosticsStore
     {
-        public IReadOnlyList<MesChannelDiagnostics> GetAll() => [];
-        public MesChannelDiagnostics? Get(string processType) => null;
-        public void RecordSuccess(string processType, MesUploadDiagnosticsContext? context = null) { }
-        public void RecordFailure(string processType, string failureReason, MesUploadDiagnosticsContext? context = null) { }
-        public void RecordBlocked(string processType, string blockedReason, MesUploadDiagnosticsContext? context = null) { }
+        private readonly Dictionary<string, MesChannelDiagnostics> _entries = new(StringComparer.OrdinalIgnoreCase);
+
+        public IReadOnlyList<MesChannelDiagnostics> GetAll()
+            => _entries.Values.ToArray();
+
+        public MesChannelDiagnostics? Get(string processType)
+            => _entries.GetValueOrDefault(processType);
+
+        public void RecordSuccess(string processType, MesUploadDiagnosticsContext? context = null)
+            => _entries[processType] = Create(processType, "Success", null, null, context);
+
+        public void RecordFailure(
+            string processType,
+            string failureReason,
+            MesUploadDiagnosticsContext? context = null)
+            => _entries[processType] = Create(processType, "Failed", failureReason, null, context);
+
+        public void RecordBlocked(
+            string processType,
+            string blockedReason,
+            MesUploadDiagnosticsContext? context = null)
+            => _entries[processType] = Create(processType, "Blocked", null, blockedReason, context);
+
+        private static MesChannelDiagnostics Create(
+            string processType,
+            string result,
+            string? failureReason,
+            string? blockedReason,
+            MesUploadDiagnosticsContext? context)
+        {
+            var now = DateTime.UtcNow;
+            return new MesChannelDiagnostics(
+                processType,
+                now,
+                result == "Success" ? now : null,
+                result,
+                failureReason,
+                LastBlockedAt: blockedReason is null ? null : now,
+                LastBlockedReason: blockedReason,
+                DeviceName: context?.DeviceName,
+                ModuleId: context?.ModuleId,
+                TaskKey: context?.TaskKey,
+                Scenario: context?.Scenario);
+        }
     }
 
     private sealed class ContractCloudUploadDiagnosticsStore : ICloudUploadDiagnosticsStore

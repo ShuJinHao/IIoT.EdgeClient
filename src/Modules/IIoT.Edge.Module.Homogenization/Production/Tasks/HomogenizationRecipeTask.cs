@@ -10,6 +10,8 @@ using IIoT.Edge.Module.Homogenization.Config.Io;
 using IIoT.Edge.Module.Homogenization.Config.Parameters;
 using IIoT.Edge.Module.Homogenization.Payload;
 using IIoT.Edge.Module.Homogenization.Production;
+using IIoT.Edge.Module.Sdk.DataPipeline;
+using IIoT.Edge.Module.Sdk.Diagnostics;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Options;
 
@@ -75,10 +77,21 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
             {
                 ModuleContext.LastRecipeAt = ProductionTime.BusinessNow;
                 ModuleContext.LastRecipeResult = message;
-                _diagnosticsStore.RecordFailure(
-                    CodeOptions.Mes.Channels.Recipe,
+                ModuleUploadDiagnosticsRecorder.RecordFailure(
                     message,
-                    CreateMesDiagnosticsContext("配方上传"));
+                    DataPipelineUploadTargets.Mes,
+                    _diagnosticsStore,
+                    _cloudDiagnosticsStore,
+                    new ModuleUploadDiagnosticsRoute(
+                        CodeOptions.Mes.Channels.Recipe,
+                        DependencyInjection.ModuleKey,
+                        "plc_recipe_blocked",
+                        "plc_recipe_enqueue_failed"),
+                    new ModuleUploadDiagnosticsIdentity(
+                        ModuleContext.DeviceName,
+                        DependencyInjection.ModuleKey,
+                        TaskName,
+                        "配方上传"));
             }).ConfigureAwait(false);
     }
 
@@ -89,6 +102,11 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
         var mesEnabled = parameterSnapshot.Mes<bool>(HomogenizationParams.Mes.启用);
         var cloudEnabled = _cloudExecutionPolicy.IsEnabled;
         var uploadTargets = ResolveUploadTargets(mesEnabled, cloudEnabled);
+        var diagnosticsIdentity = new ModuleUploadDiagnosticsIdentity(
+            ModuleContext.DeviceName,
+            DependencyInjection.ModuleKey,
+            TaskName,
+            "配方上传");
         if (uploadTargets == DataPipelineUploadTargets.None)
         {
             var disabled = MesCallResult.Disabled("MES/Cloud 上传已关闭，配方上传已跳过。");
@@ -103,14 +121,17 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
             var gateResult = await _productionGate.EnsureReadyAsync(ModuleContext, cancellationToken).ConfigureAwait(false);
             if (!gateResult.IsSuccess)
             {
-                RecordUploadBlockedDiagnostics(
+                ModuleUploadDiagnosticsRecorder.RecordBlocked(
                     gateResult.Message,
                     uploadTargets,
                     _diagnosticsStore,
                     _cloudDiagnosticsStore,
-                    CodeOptions.Mes.Channels.Recipe,
-                    "plc_recipe_blocked",
-                    "配方上传");
+                    new ModuleUploadDiagnosticsRoute(
+                        CodeOptions.Mes.Channels.Recipe,
+                        DependencyInjection.ModuleKey,
+                        "plc_recipe_blocked",
+                        "plc_recipe_enqueue_failed"),
+                    diagnosticsIdentity);
                 ModuleContext.LastRecipeAt = ProductionTime.BusinessNow;
                 ModuleContext.LastRecipeResult = gateResult.Message;
                 Interaction.ReplyResult(trigger, gateResult);
@@ -122,14 +143,17 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
         var result = await EnqueueRecipeAsync(snapshot, uploadTargets, mesEnabled, cancellationToken).ConfigureAwait(false);
         if (!result.IsSuccess)
         {
-            RecordUploadDiagnostics(
+            ModuleUploadDiagnosticsRecorder.RecordResult(
                 result,
                 uploadTargets,
                 _diagnosticsStore,
                 _cloudDiagnosticsStore,
-                CodeOptions.Mes.Channels.Recipe,
-                "plc_recipe_enqueue_failed",
-                "配方上传");
+                new ModuleUploadDiagnosticsRoute(
+                    CodeOptions.Mes.Channels.Recipe,
+                    DependencyInjection.ModuleKey,
+                    "plc_recipe_enqueue_failed",
+                    "plc_recipe_enqueue_failed"),
+                diagnosticsIdentity);
         }
 
         ModuleContext.LastRecipeAt = snapshot.CapturedAt;
@@ -162,7 +186,10 @@ internal sealed class HomogenizationRecipeTask : HomogenizationTaskBase
                 .EnqueueAsync(CreatePipelineRecord(cellData, includeMesPlanContext), cancellationToken)
                 .ConfigureAwait(false);
 
-            return ToUploadQueueResult(enqueueResult, "配方", uploadTargets);
+            return ModuleDataPipelineEnqueueResultMapper.ToQueuedUploadResult(
+                enqueueResult,
+                "配方",
+                uploadTargets);
         }
         catch (Exception ex)
         {

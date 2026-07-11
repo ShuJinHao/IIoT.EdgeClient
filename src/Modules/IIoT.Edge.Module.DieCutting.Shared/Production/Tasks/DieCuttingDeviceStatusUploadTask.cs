@@ -10,6 +10,8 @@ using IIoT.Edge.Module.DieCutting.Config;
 using IIoT.Edge.Module.DieCutting.Config.Parameters;
 using IIoT.Edge.Module.DieCutting.Payload;
 using IIoT.Edge.Module.Sdk.Base;
+using IIoT.Edge.Module.Sdk.DataPipeline;
+using IIoT.Edge.Module.Sdk.Diagnostics;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.Options;
@@ -118,7 +120,10 @@ internal sealed class DieCuttingDeviceStatusUploadTask : PlcTaskBase
             var enqueueResult = await _dataPipelineService
                 .EnqueueAsync(CreateCompletedRecord(statusSnapshot, uploadTargets), TaskCancellationToken)
                 .ConfigureAwait(false);
-            result = FormatEnqueueResult(enqueueResult, uploadTargets);
+            result = ModuleDataPipelineEnqueueResultMapper.ToPendingBackgroundUploadResult(
+                enqueueResult,
+                "模切设备状态",
+                uploadTargets);
 
             if (enqueueResult.IsDurablyAccepted)
             {
@@ -188,7 +193,21 @@ internal sealed class DieCuttingDeviceStatusUploadTask : PlcTaskBase
     {
         if (!result.IsSuccess)
         {
-            RecordUploadDiagnostics(result, uploadTargets);
+            ModuleUploadDiagnosticsRecorder.RecordResult(
+                result,
+                uploadTargets,
+                _mesDiagnosticsStore,
+                _cloudDiagnosticsStore,
+                new ModuleUploadDiagnosticsRoute(
+                    _definition.DeviceStatusDiagnosticsChannel,
+                    _definition.ProcessType,
+                    "plc_device_status_blocked",
+                    "plc_device_status_enqueue_failed"),
+                new ModuleUploadDiagnosticsIdentity(
+                    _context.DeviceName,
+                    _definition.ModuleId,
+                    TaskName,
+                    "设备状态上传"));
         }
 
         _context.LastDeviceStatusAt = snapshot?.CapturedAt ?? DateTime.Now;
@@ -250,70 +269,6 @@ internal sealed class DieCuttingDeviceStatusUploadTask : PlcTaskBase
         return true;
     }
 
-    private void RecordUploadDiagnostics(
-        MesCallResult result,
-        DataPipelineUploadTargets uploadTargets)
-    {
-        if (uploadTargets.HasFlag(DataPipelineUploadTargets.Mes))
-        {
-            RecordMesDiagnostics(result);
-        }
-
-        if (uploadTargets.HasFlag(DataPipelineUploadTargets.Cloud))
-        {
-            RecordCloudDiagnostics(result);
-        }
-    }
-
-    private void RecordMesDiagnostics(MesCallResult result)
-    {
-        if (result.Outcome is MesCallOutcome.BusinessRejected or MesCallOutcome.InvalidContext)
-        {
-            _mesDiagnosticsStore.RecordBlocked(
-                _definition.DeviceStatusDiagnosticsChannel,
-                result.Message,
-                CreateMesDiagnosticsContext());
-            return;
-        }
-
-        _mesDiagnosticsStore.RecordFailure(
-            _definition.DeviceStatusDiagnosticsChannel,
-            result.Message,
-            CreateMesDiagnosticsContext());
-    }
-
-    private void RecordCloudDiagnostics(MesCallResult result)
-    {
-        if (result.Outcome is MesCallOutcome.BusinessRejected or MesCallOutcome.InvalidContext)
-        {
-            _cloudDiagnosticsStore.RecordBlocked(
-                _definition.ProcessType,
-                "plc_device_status_blocked",
-                result.Message,
-                CreateCloudDiagnosticsContext());
-            return;
-        }
-
-        _cloudDiagnosticsStore.RecordResult(
-            _definition.ProcessType,
-            CloudCallResult.Failure(CloudCallOutcome.Exception, "plc_device_status_enqueue_failed"),
-            CreateCloudDiagnosticsContext());
-    }
-
-    private MesUploadDiagnosticsContext CreateMesDiagnosticsContext()
-        => new(
-            DeviceName: _context.DeviceName,
-            ModuleId: _definition.ModuleId,
-            TaskKey: TaskName,
-            Scenario: "设备状态上传");
-
-    private CloudUploadDiagnosticsContext CreateCloudDiagnosticsContext()
-        => new(
-            DeviceName: _context.DeviceName,
-            ModuleId: _definition.ModuleId,
-            TaskKey: TaskName,
-            Scenario: "设备状态上传");
-
     private void WriteOutcomeLog(MesCallOutcome outcome, string message)
     {
         switch (outcome)
@@ -329,23 +284,6 @@ internal sealed class DieCuttingDeviceStatusUploadTask : PlcTaskBase
                 Logger.Error(message);
                 break;
         }
-    }
-
-    private static MesCallResult FormatEnqueueResult(
-        DataPipelineEnqueueResult enqueueResult,
-        DataPipelineUploadTargets uploadTargets)
-    {
-        if (enqueueResult.IsDurablyAccepted)
-        {
-            return enqueueResult.WasOverflow
-                ? MesCallResult.Success("模切设备状态已进入溢出补偿，等待后台上传。")
-                : MesCallResult.Success($"模切设备状态已进入 {DataPipelineUploadTargetPolicy.Format(uploadTargets)} 上传队列，等待后台上传。");
-        }
-
-        var reason = string.IsNullOrWhiteSpace(enqueueResult.ReasonCode)
-            ? "unknown"
-            : enqueueResult.ReasonCode;
-        return MesCallResult.TransportFailure($"模切设备状态未进入上传队列，原因={reason}。");
     }
 
     private static int NormalizeInterval(int value, int fallback)
