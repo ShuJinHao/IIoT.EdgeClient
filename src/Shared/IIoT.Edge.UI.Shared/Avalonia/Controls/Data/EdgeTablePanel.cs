@@ -69,6 +69,9 @@ public class EdgeTablePanel : TemplatedControl
     public static readonly StyledProperty<bool> HasErrorProperty =
         AvaloniaProperty.Register<EdgeTablePanel, bool>(nameof(HasError));
 
+    public static readonly StyledProperty<object?> ErrorTitleProperty =
+        AvaloniaProperty.Register<EdgeTablePanel, object?>(nameof(ErrorTitle));
+
     public static readonly StyledProperty<object?> ErrorMessageProperty =
         AvaloniaProperty.Register<EdgeTablePanel, object?>(nameof(ErrorMessage));
 
@@ -195,6 +198,12 @@ public class EdgeTablePanel : TemplatedControl
     {
         get => GetValue(HasErrorProperty);
         set => SetValue(HasErrorProperty, value);
+    }
+
+    public object? ErrorTitle
+    {
+        get => GetValue(ErrorTitleProperty);
+        set => SetValue(ErrorTitleProperty, value);
     }
 
     public object? ErrorMessage

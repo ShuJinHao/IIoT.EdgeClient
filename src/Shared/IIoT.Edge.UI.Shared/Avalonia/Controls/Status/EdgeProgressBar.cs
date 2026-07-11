@@ -22,9 +22,6 @@ public class EdgeProgressBar : RangeBase
     public static readonly StyledProperty<double> TrackThicknessProperty =
         AvaloniaProperty.Register<EdgeProgressBar, double>(nameof(TrackThickness), 4d);
 
-    public static readonly StyledProperty<double> RadiusProperty =
-        AvaloniaProperty.Register<EdgeProgressBar, double>(nameof(Radius), 999d);
-
     public static readonly StyledProperty<IBrush?> TrackBrushProperty =
         AvaloniaProperty.Register<EdgeProgressBar, IBrush?>(nameof(TrackBrush));
 
@@ -52,7 +49,6 @@ public class EdgeProgressBar : RangeBase
             control.InvalidateMeasure();
             control.InvalidateVisual();
         });
-        RadiusProperty.Changed.AddClassHandler<EdgeProgressBar>((control, _) => control.InvalidateVisual());
         TrackBrushProperty.Changed.AddClassHandler<EdgeProgressBar>((control, _) => control.InvalidateVisual());
         IndicatorBrushProperty.Changed.AddClassHandler<EdgeProgressBar>((control, _) => control.InvalidateVisual());
     }
@@ -81,12 +77,6 @@ public class EdgeProgressBar : RangeBase
     {
         get => GetValue(TrackThicknessProperty);
         set => SetValue(TrackThicknessProperty, value);
-    }
-
-    public double Radius
-    {
-        get => GetValue(RadiusProperty);
-        set => SetValue(RadiusProperty, value);
     }
 
     public IBrush? TrackBrush
@@ -140,7 +130,7 @@ public class EdgeProgressBar : RangeBase
             (Bounds.Height - trackHeight) / 2d,
             Bounds.Width,
             trackHeight);
-        var radius = Math.Max(0d, Math.Min(Radius, trackRect.Height / 2d));
+        var radius = trackRect.Height / 2d;
         var roundedTrack = new RoundedRect(trackRect, radius);
 
         if (TrackBrush is not null)

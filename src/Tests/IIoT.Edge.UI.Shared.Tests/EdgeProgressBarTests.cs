@@ -9,6 +9,13 @@ namespace IIoT.Edge.UI.Shared.Tests;
 
 public sealed class EdgeProgressBarTests
 {
+    [Fact]
+    public void PublicApi_ShouldNotExposeUnusedRadiusOverride()
+    {
+        Assert.Null(typeof(EdgeProgressBar).GetProperty("Radius"));
+        Assert.Null(typeof(EdgeProgressBar).GetField("RadiusProperty"));
+    }
+
     [AvaloniaFact]
     public void IndeterminateAnimation_FollowsVisibilityAndVisualTreeLifetime()
     {

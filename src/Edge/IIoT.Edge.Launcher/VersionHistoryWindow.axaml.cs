@@ -8,7 +8,7 @@ namespace IIoT.Edge.Launcher;
 
 public partial class VersionHistoryWindow : Window
 {
-    private const int WindowCornerRadius = 12;
+    private const int WindowCornerRadius = 8;
     private readonly LauncherClientReleasePanelViewModel _panel;
 
     public VersionHistoryWindow()

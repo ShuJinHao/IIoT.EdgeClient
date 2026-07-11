@@ -7,7 +7,7 @@ namespace IIoT.Edge.Launcher;
 
 public partial class ReleaseNotesWindow : Window
 {
-    private const int WindowCornerRadius = 12;
+    private const int WindowCornerRadius = 16;
 
     public ReleaseNotesWindow()
     {

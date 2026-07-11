@@ -58,6 +58,7 @@
             x:Name="CapacityTable"
             Grid.Row="3"
             Classes="fill"
+            ErrorTitle="{DynamicResource Navigation_Capacity_QueryFailed}"
             ErrorMessage="{Binding ErrorMessage}"
             HasError="{Binding HasError}"
             IsEmpty="{Binding IsDailyRecordsEmpty}"

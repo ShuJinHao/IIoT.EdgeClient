@@ -8,6 +8,7 @@
     Width="620"
     Height="360"
     CanResize="False"
+    TransparencyLevelHint="Transparent"
     WindowDecorations="None"
     WindowStartupLocation="CenterScreen">
     <Grid>

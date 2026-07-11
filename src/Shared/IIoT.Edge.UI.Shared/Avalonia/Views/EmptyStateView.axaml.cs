@@ -22,13 +22,11 @@ public partial class EmptyStateView : UserControl
 
     public static readonly StyledProperty<object?> TitleProperty =
         AvaloniaProperty.Register<EmptyStateView, object?>(
-            nameof(Title),
-            "暂无数据");
+            nameof(Title));
 
     public static readonly StyledProperty<object?> MessageProperty =
         AvaloniaProperty.Register<EmptyStateView, object?>(
-            nameof(Message),
-            "当前没有可展示的真实数据。");
+            nameof(Message));
 
     static EmptyStateView()
     {

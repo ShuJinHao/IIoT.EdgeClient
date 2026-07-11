@@ -33,7 +33,7 @@
                 <Border
                     Padding="2"
                     Background="{TemplateBinding Background}"
-                    CornerRadius="999">
+                    CornerRadius="{DynamicResource Edge.CornerRadius.Pill}">
                     <Track
                         Name="PART_Track"
                         Maximum="{TemplateBinding Maximum}"
@@ -65,7 +65,7 @@
                                     <ControlTemplate>
                                         <Border
                                             Background="{TemplateBinding Background}"
-                                            CornerRadius="999" />
+                                            CornerRadius="{DynamicResource Edge.CornerRadius.Pill}" />
                                     </ControlTemplate>
                                 </Thumb.Template>
                             </Thumb>
@@ -462,7 +462,7 @@
                 <Border
                     Padding="2"
                     Background="{TemplateBinding Background}"
-                    CornerRadius="999">
+                    CornerRadius="{DynamicResource Edge.CornerRadius.Pill}">
                     <Track
                         Name="PART_Track"
                         Maximum="{TemplateBinding Maximum}"
@@ -494,7 +494,7 @@
                                     <ControlTemplate>
                                         <Border
                                             Background="{TemplateBinding Background}"
-                                            CornerRadius="999" />
+                                            CornerRadius="{DynamicResource Edge.CornerRadius.Pill}" />
                                     </ControlTemplate>
                                 </Thumb.Template>
                             </Thumb>
@@ -856,9 +856,9 @@
 
                             <views:EmptyStateView
                                 Classes="edge-table-error"
-                                Message=""
+                                Message="{TemplateBinding ErrorMessage}"
                                 State="Error"
-                                Title="{TemplateBinding ErrorMessage}" />
+                                Title="{TemplateBinding ErrorTitle}" />
 
                             <views:EmptyStateView
                                 Classes="edge-table-empty"

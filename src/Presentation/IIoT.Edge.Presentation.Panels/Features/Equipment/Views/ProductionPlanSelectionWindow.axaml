@@ -21,6 +21,7 @@
         <edge:EdgeTablePanel
             EmptyMessage="{DynamicResource Panels_Empty_NoProductionPlans_Message}"
             EmptyTitle="{DynamicResource Panels_Empty_NoProductionPlans_Title}"
+            ErrorTitle="{DynamicResource Panels_PlanDialog_ErrorTitle}"
             ErrorMessage="{Binding ErrorMessage}"
             HasError="{Binding HasError}"
             IsEmpty="{Binding IsEmpty}"

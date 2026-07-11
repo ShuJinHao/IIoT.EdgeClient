@@ -7,7 +7,7 @@ namespace IIoT.Edge.Presentation.Panels.Features.Equipment;
 
 public partial class ProductionPlanSelectionWindow : Window
 {
-    private const int WindowCornerRadius = 28;
+    private const int WindowCornerRadius = 16;
 
     public event Action<ProductionPlanOption?>? Completed;
 

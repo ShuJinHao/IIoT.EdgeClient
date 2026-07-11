@@ -25,7 +25,6 @@
         <Setter Property="Height" Value="4" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="TrackThickness" Value="4" />
-        <Setter Property="Radius" Value="999" />
         <Setter Property="TrackBrush" Value="{DynamicResource Edge.Brush.Surface.Wash}" />
         <Setter Property="IndicatorBrush" Value="{DynamicResource Edge.Brush.Accent.Primary}" />
     </Style>

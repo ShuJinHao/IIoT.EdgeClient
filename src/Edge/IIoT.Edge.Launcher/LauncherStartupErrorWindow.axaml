@@ -1,0 +1,39 @@
+<Window
+    x:Class="IIoT.Edge.Launcher.LauncherStartupErrorWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
+    Title="{Binding WindowTitle}"
+    Width="460"
+    Height="260"
+    MinWidth="420"
+    MinHeight="240"
+    Background="Transparent"
+    CanResize="False"
+    ExtendClientAreaToDecorationsHint="True"
+    TransparencyLevelHint="Transparent"
+    WindowDecorations="None"
+    WindowStartupLocation="CenterScreen">
+    <edge:EdgeDialogChrome
+        x:Name="StartupErrorChrome"
+        Margin="1"
+        Subtitle="{Binding WindowTitle}"
+        Title="{Binding Title}">
+        <edge:EdgeNoticeBar Status="Error">
+            <TextBlock
+                x:Name="StartupErrorMessageText"
+                Classes="edge-notice-message prominent"
+                Text="{Binding Message}"
+                TextWrapping="Wrap" />
+        </edge:EdgeNoticeBar>
+
+        <edge:EdgeDialogChrome.FooterContent>
+            <edge:EdgeActionButton
+                x:Name="StartupErrorCloseButton"
+                Click="CloseButton_Click"
+                Content="{Binding CloseText}"
+                Icon="{StaticResource Edge.Icon.Close}"
+                Kind="Primary" />
+        </edge:EdgeDialogChrome.FooterContent>
+    </edge:EdgeDialogChrome>
+</Window>

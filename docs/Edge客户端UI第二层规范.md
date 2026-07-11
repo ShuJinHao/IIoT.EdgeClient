@@ -49,6 +49,8 @@
 - 不得把主表格放入整页 `EdgeScrollHost + StackPanel` 形成无限高度；外层滚动只包非主表格内容或分组列表。
 - 表格头部通过 `EdgeTablePanel.HeaderMetaContent` 展示总数，例如“共 N 条”。
 - 空态统一使用 `EmptyStateView` 或 `EdgeTablePanel` 的空态属性，文案必须是真实空态，不能暗示设备不存在或伪造运行结果。
+- `EmptyStateView` 的共享默认 `Title` / `Message` 必须保持语言中立空值；每个生产 AXAML 使用点都必须显式提供成对的资源或绑定，不能依赖控件内置中文兜底。
+- `EdgeTablePanel` 错误态必须把本地化短标题绑定到 `ErrorTitle`，把经过安全处理的真实失败说明绑定到 `ErrorMessage`；不得把长错误正文塞进单行标题并把正文留空。
 - 当前 PLC 点位量级不做分页；现场需要一屏扫视和受约束滚动。
 - `任务绑定`、Launcher 版本摘要等少量固定行属于紧凑清单：使用内容驱动高度和共享 `MaxHeight`，不得套 `Classes="fill"` 拉伸到整页；行数超过上限后再由表格内部滚动。
 - `详情`、`修改` 等行级操作列统一使用共享 `EdgeActionColumn`，不得在普通模板列里手调按钮边距或列宽；操作按钮必须与表头和其他列的行中心对齐。
@@ -60,6 +62,9 @@
 - `EdgeScrollHost`、`EdgeDataGrid` 的滚动条轨道、滑块、命中区、悬停反馈、边距和占位只允许在 `IIoT.Edge.UI.Shared` 维护；页面不得复制 ScrollBar 模板或用私有颜色/宽度补丁。
 - 纵向和横向滚动条都必须保持轻量视觉与可操作命中区；滚动条不能覆盖最后一列、操作按钮或最后一行，也不能因为内容不足仍显示一根贯穿卡片的长滑块。
 - 弹窗统一使用 `EdgeDialogChrome`；详情弹窗按“身份 / 连接 / 运行时间 / 错误”这类真实信息层级组合共享卡片或字段行，编辑弹窗按业务分组组合 `EdgeFieldRow`，页面不得私造弹窗标题栏、关闭按钮和底部操作区。
+- 使用 `EdgeRoundedWindowRegion` 的窗口，其原生 region 半径必须与实际应用模板后的最外层可见 `Border.CornerRadius` 一致；Headless 测试应读取真实模板树并与窗口常量比较，不得只用源码字符串断言冒充窗口行为。
+- 半透明遮罩窗口必须显式请求 `TransparencyLevelHint="Transparent"`，同时保留共享 `edge-dialog-overlay-window` 背景；不得用本地 `Background="Transparent"` 覆盖遮罩，也不得在无平台证据时添加 `ExtendClientAreaToDecorationsHint`。
+- Launcher 最后兜底错误窗必须复用 `EdgeDialogChrome` 和共享 token；因语言资源初始化也可能失败，生产调用必须传入非空 title/message/closeText 实值。错误正文只允许本地化固定摘要、稳定原因码或异常类型，不得显示原始异常消息、路径、端点、响应正文或凭据片段。
 
 ## 4.2 IO 备注
 

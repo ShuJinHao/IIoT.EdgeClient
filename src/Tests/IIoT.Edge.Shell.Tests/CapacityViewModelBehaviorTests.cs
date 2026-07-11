@@ -147,6 +147,8 @@ public sealed class CapacityViewModelBehaviorTests
         };
         var viewModel = CreateViewModel(facade, new DeviceSelectionService());
         var view = new CapacityViewPage { DataContext = viewModel };
+        const string expectedErrorTitle = "existing-capacity-error-title";
+        view.Resources["Navigation_Capacity_QueryFailed"] = expectedErrorTitle;
         var window = new Window
         {
             Width = 1200,
@@ -170,6 +172,7 @@ public sealed class CapacityViewModelBehaviorTests
 
             Assert.False(table.IsLoading);
             Assert.True(table.HasError);
+            Assert.Equal(expectedErrorTitle, table.ErrorTitle);
             Assert.Equal(viewModel.ErrorMessage, table.ErrorMessage);
             Assert.DoesNotContain("raw_internal_failure", viewModel.ErrorMessage, StringComparison.Ordinal);
         }

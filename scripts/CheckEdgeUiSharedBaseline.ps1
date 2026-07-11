@@ -13,11 +13,13 @@ $edgeControls = Join-Path $sharedRoot "Avalonia/Styles/EdgeControls.axaml"
 $edgeControlsDir = Join-Path $sharedRoot "Avalonia/Styles/Controls"
 $edgeInputs = Join-Path $edgeControlsDir "Inputs.axaml"
 $edgeFilterDatePicker = Join-Path $controlsDir "Inputs/EdgeFilterDatePicker.cs"
+$edgeProgressBar = Join-Path $controlsDir "Status/EdgeProgressBar.cs"
 $edgeTheme = Join-Path $sharedRoot "Avalonia/Styles/EdgeTheme.axaml"
 $edgeIcons = Join-Path $sharedRoot "Avalonia/Resources/EdgeIcons.axaml"
 $edgeConverters = Join-Path $sharedRoot "Avalonia/Resources/EdgeConverters.axaml"
 $convertersDir = Join-Path $sharedRoot "Avalonia/Converters"
 $srcDir = Join-Path $repoRoot "src"
+$launcherApp = Join-Path $repoRoot "src/Edge/IIoT.Edge.Launcher/App.axaml.cs"
 
 $edgeStyleFiles = @($edgeControls)
 if (Test-Path $edgeControlsDir) {
@@ -330,6 +332,8 @@ $axamlFiles = @(
         Where-Object { $_.FullName -notmatch "[/\\](bin|obj)[/\\]" }
 )
 
+$emptyStateUsageCount = 0
+
 $sharedAxamlFiles = @(
     Get-ChildItem -Path (Join-Path $sharedRoot "Avalonia") -Recurse -File -Filter "*.axaml" |
         Where-Object { $_.FullName -notmatch "[/\\](bin|obj)[/\\]" }
@@ -362,6 +366,14 @@ foreach ($axamlFile in $axamlFiles) {
         $sharedAvaloniaPrefix,
         [System.StringComparison]::OrdinalIgnoreCase)
 
+    foreach ($emptyStateNode in @($document.SelectNodes("//*[local-name()='EmptyStateView']"))) {
+        $emptyStateUsageCount++
+        if ($null -eq $emptyStateNode.Attributes["Title"] -or
+            $null -eq $emptyStateNode.Attributes["Message"]) {
+            Write-Error "EmptyStateView usage must explicitly provide localized Title and Message: $relativePath"
+        }
+    }
+
     foreach ($definition in @($document.SelectNodes("//*[@x:Key]", $namespaceManager))) {
         $key = $definition.GetAttribute("Key", $xamlNamespace)
         if ($key.StartsWith("Edge.", [System.StringComparison]::Ordinal)) {
@@ -387,6 +399,10 @@ foreach ($axamlFile in $axamlFiles) {
             })
         }
     }
+}
+
+if ($emptyStateUsageCount -eq 0) {
+    Write-Error "No EmptyStateView production usages were discovered by the XML baseline."
 }
 
 $externalEdgeResourceDefinitions = @(
@@ -527,6 +543,25 @@ if ($localStyleHits.Count -ne 0) {
 $privateSurfaceValueHits = @($businessAxamlFiles | Select-String -Pattern 'Background="#[0-9A-Fa-f]{6,8}"|BorderBrush="#[0-9A-Fa-f]{6,8}"|Foreground="#[0-9A-Fa-f]{6,8}"|BoxShadow="[^"]*#[0-9A-Fa-f]{6,8}"|CornerRadius="[0-9][^"{]*"')
 if ($privateSurfaceValueHits.Count -ne 0) {
     Write-Error 'Private surface visual values remain in business XAML. Use EdgeCard, EdgeDialogChrome, shared classes, and Edge.* tokens.'
+}
+
+$rawSharedPillRadiusHits = @(Select-String -Path $edgeStyleFiles -Pattern 'CornerRadius="999"' -SimpleMatch)
+if ($rawSharedPillRadiusHits.Count -ne 0) {
+    Write-Error 'Raw CornerRadius="999" remains in shared styles. Use Edge.CornerRadius.Pill.'
+}
+
+$legacyProgressRadiusHits = @(
+    Select-String -Path @($edgeProgressBar, (Join-Path $edgeControlsDir "Status.axaml")) -Pattern 'RadiusProperty|public double Radius|Property="Radius"'
+)
+if ($legacyProgressRadiusHits.Count -ne 0) {
+    Write-Error 'EdgeProgressBar still exposes the redundant Radius API or style setter.'
+}
+
+$programmaticStartupVisualHits = @(
+    Select-String -Path $launcherApp -Pattern 'new Window\b|new Button\b|new SolidColorBrush|Color\.Parse|new Border\b|new StackPanel\b|new TextBlock\b|new CornerRadius|FontSize\s*=|Brushes\.'
+)
+if ($programmaticStartupVisualHits.Count -ne 0) {
+    Write-Error 'Launcher App must delegate startup-error visuals to a dedicated shared-chrome window.'
 }
 
 $hardcodedFontSizeHits = @($businessAxamlFiles | Select-String -Pattern 'FontSize="[0-9][^"]*"')
@@ -836,4 +871,4 @@ if ($scrollbarRollbackHits.Count -ne 0) {
     Write-Error 'Scrollbar Value="{TemplateBinding Value}" rollback detected.'
 }
 
-Write-Host "Edge UI shared baseline check passed."
+Write-Host "Edge UI shared baseline check passed; validated $emptyStateUsageCount explicit EmptyStateView Title/Message usages."

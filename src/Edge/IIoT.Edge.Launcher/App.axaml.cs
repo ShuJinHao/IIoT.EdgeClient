@@ -4,10 +4,8 @@ using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Markup.Xaml.Styling;
-using Avalonia.Media;
 using Avalonia.Styling;
 using IIoT.Edge.Application.Abstractions.Updates;
 using IIoT.Edge.Launcher.Services;
@@ -62,7 +60,7 @@ public partial class App : Avalonia.Application
             EnsureLanguageResources();
             ShowStartupError(
                 desktop,
-                ResourceFormat("Launcher_Startup_ErrorFormat", "{0}", ex.Message));
+                CreateSafeStartupErrorMessage(ex));
         }
     }
 
@@ -74,55 +72,11 @@ public partial class App : Avalonia.Application
 
     private static void ShowStartupError(IClassicDesktopStyleApplicationLifetime desktop, string message)
     {
-        var closeButton = new Button
-        {
-            Content = ResourceText("Launcher_ToolTip_Close"),
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Padding = new Thickness(18, 8)
-        };
-
-        var window = new Window
-        {
-            Title = ResourceText("Launcher_WindowTitle"),
-            Width = 460,
-            Height = 220,
-            MinWidth = 420,
-            MinHeight = 200,
-            WindowStartupLocation = WindowStartupLocation.CenterScreen,
-            Background = new SolidColorBrush(Color.Parse("#12181C")),
-            Content = new Border
-            {
-                Margin = new Thickness(1),
-                Padding = new Thickness(24),
-                Background = new SolidColorBrush(Color.Parse("#161D22")),
-                BorderBrush = new SolidColorBrush(Color.Parse("#334047")),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(12),
-                Child = new StackPanel
-                {
-                    Spacing = 14,
-                    Children =
-                    {
-                        new TextBlock
-                        {
-                            Text = ResourceText("Launcher_Startup_ErrorTitle"),
-                            FontSize = 20,
-                            FontWeight = FontWeight.SemiBold,
-                            Foreground = Brushes.White
-                        },
-                        new TextBlock
-                        {
-                            Text = message,
-                            TextWrapping = TextWrapping.Wrap,
-                            Foreground = new SolidColorBrush(Color.Parse("#CBD5E1"))
-                        },
-                        closeButton
-                    }
-                }
-            }
-        };
-
-        closeButton.Click += (_, _) => window.Close();
+        var window = new LauncherStartupErrorWindow(
+            ResourceText("Launcher_WindowTitle", LauncherStartupErrorWindow.FallbackWindowTitle),
+            ResourceText("Launcher_Startup_ErrorTitle", LauncherStartupErrorWindow.FallbackTitle),
+            message,
+            ResourceText("Launcher_ToolTip_Close", LauncherStartupErrorWindow.FallbackCloseText));
         window.Closed += (_, _) => desktop.Shutdown(-1);
         desktop.MainWindow = window;
         window.Show();
@@ -152,6 +106,15 @@ public partial class App : Avalonia.Application
 
     private static string ResourceFormat(string key, string fallback, params object[] args)
         => string.Format(CultureInfo.CurrentCulture, ResourceText(key, fallback), args);
+
+    internal static string CreateSafeStartupErrorMessage(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        return ResourceFormat(
+            "Launcher_Startup_ErrorFormat",
+            "本地启动器初始化失败：{0}",
+            exception.GetType().Name);
+    }
 }
 
 internal sealed class LauncherLanguageService : IAppLanguageService
