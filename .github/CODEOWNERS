@@ -3,3 +3,30 @@
 /src/Edge/IIoT.Edge.Host.Bootstrap/ @ShuJinHao
 /src/Tests/IIoT.Edge.Module.ContractTests/ @ShuJinHao
 /src/Modules/IIoT.Edge.Module.Homogenization/ @ShuJinHao
+
+# EDGE-TEST-GOV-001 hard-gate ownership. Branch protection must require Code Owner approval.
+/.github/workflows/** @ShuJinHao
+/.github/CODEOWNERS @ShuJinHao
+/.gitattributes @ShuJinHao
+/global.json @ShuJinHao
+/Directory.Build.props @ShuJinHao
+/Directory.Build.targets @ShuJinHao
+/Directory.Packages.props @ShuJinHao
+/NuGet.Config @ShuJinHao
+/IIoT.EdgeClient.slnx @ShuJinHao
+/.github/workflows/edge-smoke-build.yml @ShuJinHao
+/.github/workflows/edge-pack-modules.yml @ShuJinHao
+/scripts/tests/TestEdgeTestGovernancePolicy.ps1 @ShuJinHao
+/scripts/tests/TestEdgeTestGovernanceBehavior.ps1 @ShuJinHao
+/scripts/tests/baselines/ @ShuJinHao
+/src/Tests/**/*.cs @ShuJinHao
+/src/Tests/Directory.Build.props @ShuJinHao
+/src/Tests/xunit.runner.json @ShuJinHao
+/src/Tests/**/*.csproj @ShuJinHao
+/src/Tests/**/*.fsproj @ShuJinHao
+/src/Tests/**/*.vbproj @ShuJinHao
+/src/Tests/**/*.props @ShuJinHao
+/src/Tests/**/*.targets @ShuJinHao
+/src/Tests/**/*xunit.runner.json @ShuJinHao
+/src/Tests/**/*.runsettings @ShuJinHao
+/src/Tests/**/Directory.Build.targets @ShuJinHao

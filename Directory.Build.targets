@@ -6,6 +6,35 @@
     <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)scripts/tests/TestEdgeDeploymentPolicy.ps1&quot;" />
   </Target>
 
+  <Target Name="ValidateEdgeTestGovernanceStaticPolicy"
+          BeforeTargets="PrepareForBuild"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(MSBuildProjectName)' == 'IIoT.Edge.Shell'">
+    <Exec Command="pwsh -NoLogo -NoProfile -NonInteractive -File &quot;$(MSBuildThisFileDirectory)scripts/tests/TestEdgeTestGovernancePolicy.ps1&quot; -Mode ValidateStatic -Configuration &quot;$(Configuration)&quot;" />
+  </Target>
+
+  <Target Name="ValidateEdgeTestGovernanceAssembly"
+          AfterTargets="Compile"
+          Condition="'$(IsTestProject)' == 'true' and '$(DesignTimeBuild)' != 'true' and '$(IsCrossTargetingBuild)' != 'true' and '$(TargetFramework)' != ''">
+    <PropertyGroup>
+      <_EdgeTestGovernanceDirectory>$(MSBuildProjectDirectory)/$(IntermediateOutputPath)test-governance</_EdgeTestGovernanceDirectory>
+      <_EdgeTestGovernanceReferencePathsFile>$(_EdgeTestGovernanceDirectory)/reference-paths.rsp</_EdgeTestGovernanceReferencePathsFile>
+    </PropertyGroup>
+    <Error Condition="'@(IntermediateAssembly)' == ''"
+           Text="EDGE-TEST-GOV-001-SCAN compiled test assembly was not produced for $(MSBuildProjectName)." />
+    <MakeDir Directories="$(_EdgeTestGovernanceDirectory)" />
+    <WriteLinesToFile File="$(_EdgeTestGovernanceReferencePathsFile)"
+                      Lines="@(ReferencePath->'%(FullPath)')"
+                      Overwrite="true"
+                      Encoding="UTF-8" />
+    <Exec Command="pwsh -NoLogo -NoProfile -NonInteractive -File &quot;$(MSBuildThisFileDirectory)scripts/tests/TestEdgeTestGovernancePolicy.ps1&quot; -Mode ValidateProject -Configuration &quot;$(Configuration)&quot; -ProjectPath &quot;$(MSBuildProjectFullPath)&quot; -ProjectName &quot;$(MSBuildProjectName)&quot; -AssemblyPath &quot;@(IntermediateAssembly->'%(FullPath)')&quot; -ReferencePathsFile &quot;$(_EdgeTestGovernanceReferencePathsFile)&quot;" />
+  </Target>
+
+  <Target Name="ValidateEdgeTestRunnerConfiguration"
+          AfterTargets="CopyFilesToOutputDirectory"
+          Condition="'$(IsTestProject)' == 'true' and '$(DesignTimeBuild)' != 'true' and '$(IsCrossTargetingBuild)' != 'true' and '$(TargetFramework)' != ''">
+    <Exec Command="pwsh -NoLogo -NoProfile -NonInteractive -File &quot;$(MSBuildThisFileDirectory)scripts/tests/TestEdgeTestGovernancePolicy.ps1&quot; -Mode ValidateRunnerConfiguration -RunnerConfigPath &quot;$(TargetDir)xunit.runner.json&quot;" />
+  </Target>
+
   <Target Name="ValidateEdgePluginProjectReferences"
           BeforeTargets="ResolveProjectReferences"
           Condition="'$(IsEdgePluginModule)' == 'true'">

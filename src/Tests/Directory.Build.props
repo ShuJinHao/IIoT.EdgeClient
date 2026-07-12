@@ -2,4 +2,10 @@
   <PropertyGroup>
     <WarningsAsErrors>$(WarningsAsErrors);xUnit1051</WarningsAsErrors>
   </PropertyGroup>
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)xunit.runner.json"
+          Link="xunit.runner.json"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
