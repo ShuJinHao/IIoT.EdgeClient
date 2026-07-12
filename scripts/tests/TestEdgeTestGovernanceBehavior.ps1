@@ -1332,6 +1332,30 @@ try {
     }
     Write-Host 'Rejected Edge output-governance fixtures: tampered/missing xunit.runner.json (EDGE-TEST-GOV-001-DISABLED)'
 
+    foreach ($pluginStagingFixture in @(
+        [pscustomobject]@{
+            Name = 'contract-test-runtime-layout'
+            Project = 'src/Tests/IIoT.Edge.Module.ContractTests/IIoT.Edge.Module.ContractTests.csproj'
+        },
+        [pscustomobject]@{
+            Name = 'shell-test-runtime-layout'
+            Project = 'src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj'
+        }
+    )) {
+        $pluginStagingOutput = & dotnet msbuild (Join-Path $RepositoryRoot $pluginStagingFixture.Project) `
+            -t:CopyPluginModulesToTestOutput `
+            -p:Configuration=Release `
+            -p:TargetFramework=net10.0 `
+            -p:EdgeTestForceEmptyPluginArtifacts=true `
+            --nologo `
+            -noAutoResponse 2>&1
+        if ($LASTEXITCODE -eq 0 -or
+            -not (($pluginStagingOutput | Out-String).Contains('EDGE-TEST-GOV-001-PLUGIN-STAGING', [StringComparison]::Ordinal))) {
+            throw "Empty $($pluginStagingFixture.Name) artifacts must fail before staging cleanup:`n$(($pluginStagingOutput | Out-String).Trim())"
+        }
+        Write-Host "Rejected Edge plugin-staging fixture: $($pluginStagingFixture.Name)-empty-artifacts (EDGE-TEST-GOV-001-PLUGIN-STAGING)"
+    }
+
     $skipFixtureRoot = Join-Path $tempRoot 'runtime-skip-must-fail'
     [void](New-Item $skipFixtureRoot -ItemType Directory -Force)
     Copy-Item (Join-Path $RepositoryRoot 'src/Tests/xunit.runner.json') (Join-Path $skipFixtureRoot 'xunit.runner.json')

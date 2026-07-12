@@ -51,15 +51,27 @@
           DependsOnTargets="Build"
           Returns="@(PluginArtifact)"
           Condition="'$(IsEdgePluginModule)' == 'true'">
+    <Error Condition="'$(PluginModuleId)' == ''"
+           Text="EDGE-TEST-GOV-001-PLUGIN-STAGING plugin project $(MSBuildProjectName) does not declare PluginModuleId." />
+    <FindUnderPath Path="$(TargetDir)"
+                   Files="@(FileWrites)"
+                   UpdateToAbsolutePaths="true">
+      <Output TaskParameter="InPath" ItemName="_PluginOutputFile" />
+    </FindUnderPath>
     <ItemGroup>
-      <PluginArtifact Include="$(TargetDir)**\*.*"
-                      Exclude="$(TargetDir)ref\**;$(TargetDir)refint\**;$(TargetDir)**\*.nupkg;$(TargetDir)plugin.json">
+      <_MissingPluginOutputFile Include="@(_PluginOutputFile)"
+                                Condition="!Exists('%(_PluginOutputFile.FullPath)')" />
+      <PluginArtifact Include="@(_PluginOutputFile)">
         <ModuleId>$(PluginModuleId)</ModuleId>
-      </PluginArtifact>
-      <PluginArtifact Include="$(MSBuildProjectDirectory)\plugin.json">
-        <ModuleId>$(PluginModuleId)</ModuleId>
+        <ArtifactRelativePath>$([MSBuild]::MakeRelative('$(TargetDir)', '%(_PluginOutputFile.FullPath)'))</ArtifactRelativePath>
       </PluginArtifact>
     </ItemGroup>
+    <Error Condition="'@(_PluginOutputFile)' == ''"
+           Text="EDGE-TEST-GOV-001-PLUGIN-STAGING plugin project $(MSBuildProjectName) produced no current-build artifacts under $(TargetDir)." />
+    <Error Condition="'@(_MissingPluginOutputFile)' != ''"
+           Text="EDGE-TEST-GOV-001-PLUGIN-STAGING plugin project $(MSBuildProjectName) reported missing current-build artifacts: @(_MissingPluginOutputFile->'%(FullPath)', ', ')." />
+    <Error Condition="!Exists('$(TargetPath)') or !Exists('$(TargetDir)plugin.json')"
+           Text="EDGE-TEST-GOV-001-PLUGIN-STAGING plugin project $(MSBuildProjectName) is missing its entry assembly or staged plugin.json." />
   </Target>
 
 </Project>

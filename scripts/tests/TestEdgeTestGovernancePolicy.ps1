@@ -38,7 +38,7 @@ $nonUiFrozenSourceManifestSha256 = '54baa3fe6565ca416b4d97e0463496837e4dfd8d6265
 $xunitRunnerConfigSha256 = '3aaf68ea8927dce2c9ee5404088745084d709c1ff2d00bf41c90d9406d31b8a1'
 $canonicalTestBuildPropsSha256 = '189a12b9770d01f3b2221675ea6b879ad36c06074bc281f1d2bc52ba662eef63'
 $rootBuildPropsSha256 = '4ee0e7d684211afc1a20ba62d57cfdb29f11341f2ef29940b987f4a798128569'
-$rootBuildTargetsSha256 = '14cde139656d4b5910d1e96b9e69adca3a7b1aae2cccebd7328500815f9505f8'
+$rootBuildTargetsSha256 = '0a597573cbc09d958c93e167d7af14784fbda73eab26f3994b9e22e9cfd7fe88'
 $directoryPackagesPropsSha256 = '60f4ae24b34c2d8061a87c36f2d957976de1495bfb2eae2896f6bf6124a9d548'
 $nugetConfigSha256 = 'aec93b5637ab6d62470979a008990a4a336a287ab83a3f2541849ae735674055'
 $packageVulnerabilityScriptSha256 = 'fbfe7f05db5d465478744ce168198a8d2cae44e94c033a8172b2e8724c2f92a7'
@@ -51,22 +51,22 @@ $codeOwnersSha256 = '29b8fd2df7429c6e5f0919e9fc78ea08fce83d7859c7c88ada51d17b38a
 $gitAttributesSha256 = '24418a20248958b24e4a29b013220a2cdf02d51b897e25455bf4c8c468e3ac46'
 $solutionFileSha256 = 'a2eb9a0532c63efb9ebe013eb93e7566b342917fd1792d69cee47af00e54dcc1'
 $globalJsonSha256 = '18303059fe920620f05e25d0157b7ed4a74934841e6a34b0b86d713fbf631444'
-$governanceBehaviorSha256 = 'dc89fcbdca2e76dec8c27e2e03ba0104a5a29fd1910d1753e2b5316ac2d7225d'
+$governanceBehaviorSha256 = 'ac268ef3cf9314ff336881e0fe982f66b45794cef795f0878727aafdd3c309e2'
 $repositoryProjectRosterCount = 32
 $repositoryProjectRosterSha256 = '82f2e2ee50ea7d555304cd80c5d0c97585d03bda9c3227ff65caeed9a21d86ce'
-$repositoryProjectContentManifestSha256 = '0d74d4045b053e17a7e3e455b528197047bd73a41a502119831320efda76d24c'
+$repositoryProjectContentManifestSha256 = '1e6ad58e1562427b4b68874a0b896179375c62667e9d38b0ca327403ee4d4b40'
 $testProjectAssetManifestCount = 7
-$testProjectAssetManifestSha256 = 'd5ac65b6d2f948858cd7dc4a395647dce1793d9dce1edd7ef36bdcac071f5972'
+$testProjectAssetManifestSha256 = '13223b8bda8ee0b34edc16ccd0a5c855fd11b3afdeddd0207f26575d43adc98f'
 $buildFileManifestCount = 4
-$buildFileManifestSha256 = '84e955382a229aa576cebdfa9e266021eb718cb553eff0929f858d3fa22e1fdd'
+$buildFileManifestSha256 = '8b33a996ab7e32c34d30b2f90cb89a356025902bbe47dccffe0388e46c032641'
 $workflowManifestCount = 2
 $workflowManifestSha256 = '44f4b96362bf357c1f643c0a463ee160f3d1596731c3d871dc2bfa7e1814b718'
 $criticalTestSourceManifestCount = 13
-$criticalTestSourceManifestSha256 = '155eebf06c3ccd07fb9e0a49b76e87b17d08d29cc16feeb9616b5e8bbfa9d853'
+$criticalTestSourceManifestSha256 = '1df0560d671bef6af08433eda9354a7a10703ea99182aebd02cd8c39fc9b7b9a'
 $nonUiFrozenSourceContentManifestCount = 71
 $nonUiFrozenSourceContentManifestSha256 = 'ad9cb1c27bdff493972756b109ce1f5c24b5aec765fa83e597b0fce7079e8336'
 $allTestSourceManifestCount = 132
-$allTestSourceManifestSha256 = '44e705217f4b9100a82be3238316b75ab4d88685fb76ef609128a45256e9f11b'
+$allTestSourceManifestSha256 = '729f86f9ffc37c89c2ce3e8daf5a039118b19e4cf807729f4e0ab5bff4bec22b'
 $criticalTestSourcePaths = @(
     'src/Tests/IIoT.Edge.Shell.Tests/RepositoryHygieneTests.cs',
     'src/Tests/IIoT.Edge.Module.ContractTests/ArchitectureBoundaryContractTests.cs',
@@ -92,8 +92,8 @@ $requiredWorkflowJobSha256 = @{
 }
 $allowedTestProjectTargetHashes = @{
     'src/Edge/IIoT.Edge.Launcher/IIoT.Edge.Launcher.csproj' = 'f96ff44f47f79371365bbb91b63c8875458c04b0a2e87e3dbab86d9f55ce5011'
-    'src/Tests/IIoT.Edge.Module.ContractTests/IIoT.Edge.Module.ContractTests.csproj' = 'fc1a7e68c61d988ddc73ee97b08b0335027e1f66e436e1c750fdcd22cb5efc8c'
-    'src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj' = '6c2ab444f37f9b5528d64655a6e5b2617655e488201ed01ccf916866bad29b2e'
+    'src/Tests/IIoT.Edge.Module.ContractTests/IIoT.Edge.Module.ContractTests.csproj' = '56370d29538cd9d81c7e1f0f6e4b6b7c4e474aa5610b96a6d5c51cc736a288e9'
+    'src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj' = '0971d8d60f83000dcf0a6de08b5b956dd9f027d971cc7eee9a9b08cdb1a3e8a6'
 }
 
 function Get-NormalizedPath {

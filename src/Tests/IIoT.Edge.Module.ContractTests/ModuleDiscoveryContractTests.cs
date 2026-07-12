@@ -17,11 +17,16 @@ public sealed class ModuleDiscoveryContractTests
     [Fact]
     public void DiscoverDirectoryPlugins_ShouldFindProductModules()
     {
+        AssertStagedModuleLayout("DieCuttingAnode", "diecutting-anode.module.json");
+        AssertStagedModuleLayout("DieCuttingCathode", "diecutting-cathode.module.json");
+        AssertStagedModuleLayout("Homogenization", "homogenization.module.json", hasLanguageResources: true);
+
         var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization", "DieCuttingAnode", "DieCuttingCathode");
         try
         {
             var discovery = DiscoverPlugins(pluginRoot);
 
+            Assert.Empty(discovery.Issues);
             Assert.Equal(
                 ["DieCuttingAnode", "DieCuttingCathode", "Homogenization"],
                 discovery.Modules.Select(x => x.ModuleId).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray());
@@ -29,6 +34,29 @@ public sealed class ModuleDiscoveryContractTests
         finally
         {
             ContractTestPathHelper.DeleteDirectory(pluginRoot);
+        }
+    }
+
+    private static void AssertStagedModuleLayout(
+        string moduleId,
+        string configFileName,
+        bool hasLanguageResources = false)
+    {
+        var runtimeDirectory = ContractTestPathHelper.GetModuleRuntimeDirectory(moduleId);
+
+        Assert.Equal(
+            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Modules", moduleId)),
+            Path.GetFullPath(runtimeDirectory));
+        Assert.True(File.Exists(Path.Combine(runtimeDirectory, "plugin.json")));
+        Assert.True(File.Exists(Path.Combine(runtimeDirectory, $"IIoT.Edge.Module.{moduleId}.dll")));
+        Assert.True(File.Exists(Path.Combine(runtimeDirectory, "Config", configFileName)));
+        Assert.Empty(Directory.GetFiles(runtimeDirectory, "*.module.json", SearchOption.TopDirectoryOnly));
+        Assert.Empty(Directory.GetFiles(runtimeDirectory, "*.axaml", SearchOption.TopDirectoryOnly));
+
+        if (hasLanguageResources)
+        {
+            Assert.True(File.Exists(Path.Combine(runtimeDirectory, "Resources", "Languages", "en-US.axaml")));
+            Assert.True(File.Exists(Path.Combine(runtimeDirectory, "Resources", "Languages", "zh-CN.axaml")));
         }
     }
 

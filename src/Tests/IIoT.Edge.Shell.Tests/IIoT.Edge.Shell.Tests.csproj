@@ -34,7 +34,7 @@
     <ProjectReference Include="..\..\Tools\IIoT.Edge.RuntimeLayoutSync\IIoT.Edge.RuntimeLayoutSync.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(EdgeTestForceEmptyPluginArtifacts)' != 'true'">
     <PluginModuleProject Include="..\..\Modules\**\*.csproj" Exclude="..\..\Modules\IIoT.Edge.Module.Sdk\IIoT.Edge.Module.Sdk.csproj" />
   </ItemGroup>
 
@@ -48,11 +48,12 @@
     </MSBuild>
   </Target>
 
-  <Target Name="CopyPluginModulesToTestOutput" AfterTargets="Build" DependsOnTargets="ResolvePluginModuleArtifacts" Condition="'@(PluginModuleArtifact)' != ''">
-    <MakeDir Directories="@(PluginModuleArtifact -> '$(TargetDir)..\plugins\%(ModuleId)\%(RecursiveDir)')" />
+  <Target Name="CopyPluginModulesToTestOutput" AfterTargets="Build" DependsOnTargets="ResolvePluginModuleArtifacts">
+    <Error Condition="'@(PluginModuleArtifact)' == ''" Text="EDGE-TEST-GOV-001-PLUGIN-STAGING no plugin module artifacts were resolved for the shell-test runtime layout." />
+    <RemoveDir Directories="$(TargetDir)..\plugins" />
     <Copy
       SourceFiles="@(PluginModuleArtifact)"
-      DestinationFiles="@(PluginModuleArtifact -> '$(TargetDir)..\plugins\%(ModuleId)\%(RecursiveDir)%(Filename)%(Extension)')"
+      DestinationFiles="@(PluginModuleArtifact -> '$(TargetDir)..\plugins\%(ModuleId)\%(ArtifactRelativePath)')"
       SkipUnchangedFiles="true" />
   </Target>
 

@@ -65,20 +65,11 @@ internal static class ContractTestPathHelper
     public static string CreatePluginRuntimeRoot(params string[] moduleIds)
     {
         var pluginRoot = CreateTempDirectory("edge-plugin-runtime-tests");
-        var runtimeModulesRoot = Path.Combine(AppContext.BaseDirectory, "Modules");
         foreach (var moduleId in moduleIds)
         {
-            var runtimeModuleDirectory = Path.Combine(runtimeModulesRoot, moduleId);
-            if (!Directory.Exists(runtimeModuleDirectory))
-            {
-                runtimeModuleDirectory = GetModuleRuntimeDirectory(moduleId);
-            }
-
+            var runtimeModuleDirectory = GetModuleRuntimeDirectory(moduleId);
             var targetModuleDirectory = Path.Combine(pluginRoot, moduleId);
             CopyDirectory(runtimeModuleDirectory, targetModuleDirectory);
-
-            var sourceManifestPath = Path.Combine(GetModuleSourceDirectory(moduleId), "plugin.json");
-            File.Copy(sourceManifestPath, Path.Combine(targetModuleDirectory, "plugin.json"), overwrite: true);
         }
 
         return pluginRoot;
@@ -98,10 +89,17 @@ internal static class ContractTestPathHelper
 
     public static string GetModuleRuntimeDirectory(string moduleId)
     {
-        var runtimeDirectory = Path.Combine(GetModuleSourceDirectory(moduleId), "bin", "Debug", "net10.0");
+        if (moduleId is not ("DieCuttingAnode" or "DieCuttingCathode" or "Homogenization"))
+        {
+            throw new InvalidOperationException($"Unsupported module id '{moduleId}'.");
+        }
+
+        var runtimeDirectory = Path.Combine(AppContext.BaseDirectory, "Modules", moduleId);
         if (!Directory.Exists(runtimeDirectory))
         {
-            throw new DirectoryNotFoundException($"Module runtime directory was not found: '{runtimeDirectory}'.");
+            throw new DirectoryNotFoundException(
+                $"Staged module runtime directory was not found: '{runtimeDirectory}'. " +
+                "Build IIoT.Edge.Module.ContractTests for the current configuration before running tests.");
         }
 
         return runtimeDirectory;

@@ -128,18 +128,39 @@ public sealed class ModuleRuntimeRegistrationTests
     [Fact]
     public void DiscoverDirectoryPlugins_ShouldFindProductModules()
     {
-        var pluginRoot = CreatePluginRuntimeRoot();
-        try
-        {
-            var discovery = DiscoverTestPlugins(pluginRoot);
+        var pluginRoot = CreateShellModuleCatalog().GetPluginRootPath(AppContext.BaseDirectory);
 
-            Assert.Equal(
-                ["Homogenization"],
-                discovery.Modules.Select(x => x.ModuleId).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray());
-        }
-        finally
+        AssertStagedModuleLayout(pluginRoot, "DieCuttingAnode", "diecutting-anode.module.json");
+        AssertStagedModuleLayout(pluginRoot, "DieCuttingCathode", "diecutting-cathode.module.json");
+        AssertStagedModuleLayout(pluginRoot, "Homogenization", "homogenization.module.json", hasLanguageResources: true);
+
+        var discovery = DiscoverTestPlugins(pluginRoot);
+
+        Assert.Empty(discovery.Issues);
+        Assert.Equal(
+            ["DieCuttingAnode", "DieCuttingCathode", "Homogenization"],
+            discovery.Modules.Select(x => x.ModuleId).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray());
+    }
+
+    private static void AssertStagedModuleLayout(
+        string pluginRoot,
+        string moduleId,
+        string configFileName,
+        bool hasLanguageResources = false)
+    {
+        var runtimeDirectory = Path.Combine(pluginRoot, moduleId);
+
+        Assert.True(Directory.Exists(runtimeDirectory));
+        Assert.True(File.Exists(Path.Combine(runtimeDirectory, "plugin.json")));
+        Assert.True(File.Exists(Path.Combine(runtimeDirectory, $"IIoT.Edge.Module.{moduleId}.dll")));
+        Assert.True(File.Exists(Path.Combine(runtimeDirectory, "Config", configFileName)));
+        Assert.Empty(Directory.GetFiles(runtimeDirectory, "*.module.json", SearchOption.TopDirectoryOnly));
+        Assert.Empty(Directory.GetFiles(runtimeDirectory, "*.axaml", SearchOption.TopDirectoryOnly));
+
+        if (hasLanguageResources)
         {
-            DeleteDirectory(pluginRoot);
+            Assert.True(File.Exists(Path.Combine(runtimeDirectory, "Resources", "Languages", "en-US.axaml")));
+            Assert.True(File.Exists(Path.Combine(runtimeDirectory, "Resources", "Languages", "zh-CN.axaml")));
         }
     }
 
@@ -731,35 +752,16 @@ public sealed class ModuleRuntimeRegistrationTests
             var sourceModuleDirectory = Path.Combine(runtimeModulesRoot, moduleId);
             if (!Directory.Exists(sourceModuleDirectory))
             {
-                sourceModuleDirectory = GetModuleRuntimeDirectory(moduleId);
+                throw new DirectoryNotFoundException(
+                    $"Staged shell-test plugin directory was not found: '{sourceModuleDirectory}'. " +
+                    "Build IIoT.Edge.Shell.Tests for the current configuration before running tests.");
             }
 
             var targetModuleDirectory = Path.Combine(pluginRoot, moduleId);
             CopyDirectory(sourceModuleDirectory, targetModuleDirectory);
-
-            var sourceManifestPath = Path.Combine(GetModuleSourceDirectory(moduleId), "plugin.json");
-            File.Copy(sourceManifestPath, Path.Combine(targetModuleDirectory, "plugin.json"), overwrite: true);
         }
 
         return pluginRoot;
-    }
-
-    private static string GetModuleSourceDirectory(string moduleId)
-        => moduleId switch
-        {
-            "Homogenization" => Path.Combine(FindRepoRoot(), "src", "Modules", "IIoT.Edge.Module.Homogenization"),
-            _ => throw new InvalidOperationException($"Unsupported module id '{moduleId}'.")
-        };
-
-    private static string GetModuleRuntimeDirectory(string moduleId)
-    {
-        var runtimeDirectory = Path.Combine(GetModuleSourceDirectory(moduleId), "bin", "Debug", "net10.0");
-        if (!Directory.Exists(runtimeDirectory))
-        {
-            throw new DirectoryNotFoundException($"Module runtime directory was not found: '{runtimeDirectory}'.");
-        }
-
-        return runtimeDirectory;
     }
 
     private static string FindRepoRoot()
