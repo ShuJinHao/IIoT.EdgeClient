@@ -991,7 +991,11 @@ public sealed class RepositoryHygieneTests
         Assert.Contains("publish-edge-updates:", workflow, StringComparison.Ordinal);
         Assert.Contains("self-hosted", workflow, StringComparison.Ordinal);
         Assert.Contains("iiot-linux-prod", workflow, StringComparison.Ordinal);
-        Assert.Contains("actions/download-artifact@v4", workflow, StringComparison.Ordinal);
+        Assert.Contains(
+            "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("actions/download-artifact@v4", workflow, StringComparison.Ordinal);
         Assert.Contains("EDGE_CLOUD_API_BASE_URL", workflow, StringComparison.Ordinal);
         Assert.Contains("IIOT_CLOUD_RELEASE_EMPLOYEE_NO", workflow, StringComparison.Ordinal);
         Assert.Contains("IIOT_CLOUD_RELEASE_PASSWORD", workflow, StringComparison.Ordinal);

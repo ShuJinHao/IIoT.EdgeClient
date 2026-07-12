@@ -27,19 +27,10 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           submodules: recursive
           fetch-depth: 0
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v5
-        with:
-          global-json-file: global.json
-
-      - name: Restore edge solution
-        shell: pwsh
-        run: dotnet restore IIoT.EdgeClient.slnx -p:RestoreDisableParallel=true --disable-build-servers
 
       - name: Validate protected-main test baseline anchor
         shell: pwsh
@@ -50,6 +41,19 @@ jobs:
             throw 'Manual Edge release validation must run from refs/heads/main.'
           }
           ./scripts/tests/TestEdgeTestGovernancePolicy.ps1 -Mode ValidateBaselineAnchor -TrustedBaseRevision $trustedMain -AnchorRelationship HeadAncestorOfBase
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+
+      - name: Validate reviewed restore and build inputs
+        shell: pwsh
+        run: ./scripts/tests/TestEdgeTestGovernancePolicy.ps1 -Mode ValidateStatic -Configuration Release
+
+      - name: Restore edge solution
+        shell: pwsh
+        run: dotnet restore IIoT.EdgeClient.slnx -p:RestoreDisableParallel=true --disable-build-servers -noAutoResponse
 
       - name: Run Edge test governance self-tests
         shell: pwsh
@@ -85,7 +89,7 @@ jobs:
 
       - name: Build Edge solution and test assemblies
         shell: pwsh
-        run: dotnet build IIoT.EdgeClient.slnx -c Release --no-restore -m:1 -p:BuildInParallel=false --disable-build-servers --nologo
+        run: dotnet build IIoT.EdgeClient.slnx -c Release --no-restore -m:1 -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse
 
       - name: Validate Edge test repository and legacy discovery ceilings
         shell: pwsh
@@ -95,35 +99,35 @@ jobs:
 
       - name: Run architecture policy tests
         shell: pwsh
-        run: dotnet test src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj -c Release --no-build --no-restore --filter "FullyQualifiedName~RepositoryHygieneTests" -p:BuildInParallel=false --disable-build-servers --nologo
+        run: dotnet test src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj -c Release --no-build --no-restore --filter "FullyQualifiedName~RepositoryHygieneTests" -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse
 
       - name: Run plugin conformance tests
         shell: pwsh
-        run: dotnet test src/Tests/IIoT.Edge.Module.ContractTests/IIoT.Edge.Module.ContractTests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo
+        run: dotnet test src/Tests/IIoT.Edge.Module.ContractTests/IIoT.Edge.Module.ContractTests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse
 
       - name: Run remaining shell behavior tests
         shell: pwsh
-        run: dotnet test src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj -c Release --no-build --no-restore --filter "FullyQualifiedName!~RepositoryHygieneTests" -p:BuildInParallel=false --disable-build-servers --nologo
+        run: dotnet test src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj -c Release --no-build --no-restore --filter "FullyQualifiedName!~RepositoryHygieneTests" -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse
 
       - name: Run launcher tests
         shell: pwsh
-        run: dotnet test src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo
+        run: dotnet test src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse
 
       - name: Run installer tests
         shell: pwsh
-        run: dotnet test src/Tests/IIoT.Edge.Installer.Tests/IIoT.Edge.Installer.Tests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo
+        run: dotnet test src/Tests/IIoT.Edge.Installer.Tests/IIoT.Edge.Installer.Tests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse
 
       - name: Run infrastructure update tests
         shell: pwsh
-        run: dotnet test src/Tests/IIoT.Edge.Infrastructure.Update.Tests/IIoT.Edge.Infrastructure.Update.Tests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo
+        run: dotnet test src/Tests/IIoT.Edge.Infrastructure.Update.Tests/IIoT.Edge.Infrastructure.Update.Tests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse
 
       - name: Run shared UI behavior tests
         shell: pwsh
-        run: dotnet test src/Tests/IIoT.Edge.UI.Shared.Tests/IIoT.Edge.UI.Shared.Tests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo
+        run: dotnet test src/Tests/IIoT.Edge.UI.Shared.Tests/IIoT.Edge.UI.Shared.Tests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse
 
       - name: Run non-UI regression tests
         shell: pwsh
-        run: dotnet test src/Tests/IIoT.Edge.NonUiRegressionTests/IIoT.Edge.NonUiRegressionTests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo
+        run: dotnet test src/Tests/IIoT.Edge.NonUiRegressionTests/IIoT.Edge.NonUiRegressionTests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse
 
       - name: Scan vulnerable NuGet packages
         shell: pwsh
@@ -135,12 +139,12 @@ jobs:
     needs: validate-runtime
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           submodules: recursive
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
           global-json-file: global.json
 
@@ -215,19 +219,19 @@ jobs:
         run: ./scripts/TestEdgeClientInstallerArtifact.ps1 -ArtifactRoot "publish/edge-installer-artifacts/$env:EDGE_RELEASE_CHANNEL/$env:EDGE_RELEASE_VERSION" -ExpectedChannel $env:EDGE_RELEASE_CHANNEL -ExpectedVersion $env:EDGE_RELEASE_VERSION
 
       - name: Upload runtime artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: edge-runtime-package
           path: publish/edge-runtime/**
 
       - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: edge-installer-artifact
           path: publish/edge-installer-artifacts/${{ env.EDGE_RELEASE_CHANNEL }}/${{ env.EDGE_RELEASE_VERSION }}/**
 
       - name: Upload Velopack releases
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: edge-velopack-releases
           path: publish/edge-velopack/**
@@ -268,13 +272,13 @@ jobs:
           echo "Resolved Edge release: version=$version channel=$channel"
 
       - name: Download installer artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: edge-installer-artifact
           path: publish-download/installer
 
       - name: Download Velopack releases
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: edge-velopack-releases
           path: publish-download/velopack

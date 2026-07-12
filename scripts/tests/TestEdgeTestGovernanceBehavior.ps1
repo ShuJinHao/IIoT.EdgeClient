@@ -324,6 +324,7 @@ function Copy-StaticFixtureRepository {
 
     $relativeFiles = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     foreach ($relativePath in @(
+        '.gitignore',
         '.gitattributes',
         'global.json',
         'Directory.Build.props',
@@ -335,6 +336,7 @@ function Copy-StaticFixtureRepository {
         '.github/workflows/edge-smoke-build.yml',
         '.github/workflows/edge-pack-modules.yml',
         'scripts/tests/TestEdgeTestGovernanceBehavior.ps1',
+        'scripts/TestEdgePackageVulnerabilities.ps1',
         'scripts/tests/baselines/edge-test-governance.baseline.json',
         'scripts/tests/baselines/edge-test-governance.waivers.json',
         'src/Tests/Directory.Build.props',
@@ -393,11 +395,11 @@ try {
         throw "Current repository static policy should pass:`n$($currentStatic.Output)"
     }
     Write-Host 'Accepted Edge static-governance fixture: current-repository-static-policy'
-    $bootstrapAnchor = Invoke-BaselineAnchorValidation -ValidationRoot $RepositoryRoot -BaselinePath $reviewedBaselinePath -TrustedBaseRevision 'de5e38510e782c111b0a99bca6365bb94940c65e'
-    if ($bootstrapAnchor.ExitCode -ne 0) {
-        throw "Current Phase 0 bootstrap anchor should pass:`n$($bootstrapAnchor.Output)"
+    $closedBootstrapAnchor = Invoke-BaselineAnchorValidation -ValidationRoot $RepositoryRoot -BaselinePath $reviewedBaselinePath -TrustedBaseRevision 'de5e38510e782c111b0a99bca6365bb94940c65e'
+    if ($closedBootstrapAnchor.ExitCode -eq 0 -or -not $closedBootstrapAnchor.Output.Contains('EDGE-TEST-GOV-001-BASELINE', [StringComparison]::Ordinal)) {
+        throw "Trusted revisions without a baseline must fail after Phase 0 bootstrap closes:`n$($closedBootstrapAnchor.Output)"
     }
-    Write-Host 'Accepted Edge immutable baseline bootstrap anchor fixture'
+    Write-Host 'Rejected Edge immutable baseline fixture: closed-bootstrap-base-without-baseline (EDGE-TEST-GOV-001-BASELINE)'
     $runnerNormalizationOutput = & pwsh -NoLogo -NoProfile -File $policyPath -Mode ValidateRunnerCaseNormalization 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "Runner-case normalization fixture should pass:`n$(($runnerNormalizationOutput | Out-String).Trim())"
@@ -643,6 +645,22 @@ try {
         -WaiverPath $reviewedWaiverPath `
         -ExpectedCode 'EDGE-TEST-GOV-001-BASELINE'
 
+    $tamperedScannerBaseline = $reviewedBaseline | ConvertTo-Json -Depth 100 | ConvertFrom-Json -Depth 100
+    $tamperedScannerBaseline.scanner.activeDotnetSdk = '0.0.0-fixture'
+    Assert-StaticRejected -Name 'scanner-toolchain-drift-cannot-pass' `
+        -ValidationRoot $RepositoryRoot `
+        -Baseline $tamperedScannerBaseline `
+        -WaiverPath $reviewedWaiverPath `
+        -ExpectedCode 'EDGE-TEST-GOV-001-SCAN'
+
+    $tamperedScannerHashBaseline = $reviewedBaseline | ConvertTo-Json -Depth 100 | ConvertFrom-Json -Depth 100
+    $tamperedScannerHashBaseline.scanner.metadataLoadContextSha256 = ('0' * 64)
+    Assert-StaticRejected -Name 'unapproved-scanner-binary-hash-cannot-pass' `
+        -ValidationRoot $RepositoryRoot `
+        -Baseline $tamperedScannerHashBaseline `
+        -WaiverPath $reviewedWaiverPath `
+        -ExpectedCode 'EDGE-TEST-GOV-001-SCAN'
+
     $commentRoot = Join-Path $tempRoot 'comment-only-workflow'
     Copy-StaticFixtureRepository -TargetRoot $commentRoot
 
@@ -705,6 +723,51 @@ try {
     }
     Write-Host 'Rejected Edge protected-main release anchor fixture: unreviewed branch (EDGE-TEST-GOV-001-BASELINE)'
 
+    $trackedIgnoredAssetCases = @(
+        [pscustomobject]@{ Name = 'bin-project'; RelativePath = 'src/Tests/bin/TrackedBin.Tests.csproj'; Content = '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework><IsTestProject>true</IsTestProject></PropertyGroup></Project>'; ExpectedCode = 'EDGE-TEST-GOV-001-PROJECT'; ExpectIgnored = $true },
+        [pscustomobject]@{ Name = 'obj-source'; RelativePath = 'src/Tests/obj/TrackedGeneratedTest.cs'; Content = 'public static class TrackedGeneratedTest { }'; ExpectedCode = 'EDGE-TEST-GOV-001-FROZEN'; ExpectIgnored = $true },
+        [pscustomobject]@{ Name = 'artifacts-build-graph'; RelativePath = '.artifacts/Directory.Build.targets'; Content = '<Project />'; ExpectedCode = 'EDGE-TEST-GOV-001-BYPASS'; ExpectIgnored = $true },
+        [pscustomobject]@{ Name = 'publish-project'; RelativePath = 'publish/TrackedPublish.Tests.csproj'; Content = '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework><IsTestProject>true</IsTestProject></PropertyGroup></Project>'; ExpectedCode = 'EDGE-TEST-GOV-001-PROJECT'; ExpectIgnored = $true },
+        [pscustomobject]@{ Name = 'dot-project'; RelativePath = '.hidden/TrackedDot.Tests.csproj'; Content = '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework><IsTestProject>true</IsTestProject></PropertyGroup></Project>'; ExpectedCode = 'EDGE-TEST-GOV-001-PROJECT'; ExpectIgnored = $false }
+    )
+    foreach ($trackedCase in $trackedIgnoredAssetCases) {
+        $trackedAssetRoot = Join-Path $tempRoot "tracked-$($trackedCase.Name)"
+        Copy-StaticFixtureRepository -TargetRoot $trackedAssetRoot
+        & git -C $trackedAssetRoot init --initial-branch=main | Out-Null
+        & git -C $trackedAssetRoot config user.name 'Edge Governance Fixture'
+        & git -C $trackedAssetRoot config user.email 'edge-governance-fixture@example.invalid'
+        & git -C $trackedAssetRoot config core.autocrlf false
+        & git -C $trackedAssetRoot add --all
+        & git -C $trackedAssetRoot commit -m 'reviewed tracked assets' | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Could not create tracked-asset fixture baseline '$($trackedCase.Name)'." }
+        $assetPath = Join-Path $trackedAssetRoot $trackedCase.RelativePath
+        [void](New-Item (Split-Path $assetPath -Parent) -ItemType Directory -Force)
+        [IO.File]::WriteAllText($assetPath, [string]$trackedCase.Content, [Text.UTF8Encoding]::new($false))
+        & git -C $trackedAssetRoot check-ignore --quiet -- $trackedCase.RelativePath
+        $ignoreExitCode = $LASTEXITCODE
+        if ([bool]$trackedCase.ExpectIgnored -and $ignoreExitCode -ne 0) {
+            throw "Fixture '$($trackedCase.RelativePath)' should be ignored before git add -f."
+        }
+        if (-not [bool]$trackedCase.ExpectIgnored -and $ignoreExitCode -ne 1) {
+            throw "Fixture '$($trackedCase.RelativePath)' should be a visible untracked dot-path before git add -f; git check-ignore exit=$ignoreExitCode."
+        }
+        & git -C $trackedAssetRoot add -f $trackedCase.RelativePath
+        if ($LASTEXITCODE -ne 0) { throw "Could not force-track ignored-path fixture asset '$($trackedCase.RelativePath)'." }
+        & git -C $trackedAssetRoot ls-files --error-unmatch -- $trackedCase.RelativePath | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Fixture asset '$($trackedCase.RelativePath)' was not force-tracked." }
+        & git -C $trackedAssetRoot commit -m "force-track $($trackedCase.Name) asset" | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Could not commit force-tracked ignored-path fixture '$($trackedCase.Name)'." }
+        $trackedIgnoredResult = Invoke-StaticPolicyValidation `
+            -Name "force-tracked-$($trackedCase.Name)-cannot-escape" `
+            -ValidationRoot $trackedAssetRoot `
+            -BaselinePath (Join-Path $trackedAssetRoot 'scripts/tests/baselines/edge-test-governance.baseline.json') `
+            -WaiverPath (Join-Path $trackedAssetRoot 'scripts/tests/baselines/edge-test-governance.waivers.json')
+        if ($trackedIgnoredResult.ExitCode -eq 0 -or -not $trackedIgnoredResult.Output.Contains([string]$trackedCase.ExpectedCode, [StringComparison]::Ordinal)) {
+            throw "Force-tracked ignored-path fixture '$($trackedCase.Name)' should fail with $($trackedCase.ExpectedCode):`n$($trackedIgnoredResult.Output)"
+        }
+        Write-Host "Rejected Edge tracked-asset fixture: force-tracked-$($trackedCase.Name)-cannot-escape ($($trackedCase.ExpectedCode))"
+    }
+
     $dotHiddenProject = Join-Path $commentRoot '.hidden/Stealth/Stealth.csproj'
     Assert-StaticMutationRejected -Name 'dot-directory-cannot-hide-test-project' -ValidationRoot $commentRoot `
         -Mutate {
@@ -737,7 +800,42 @@ try {
             [IO.File]::WriteAllText($domainProjectPath, $mutated, [Text.UTF8Encoding]::new($false))
         } `
         -Restore { [IO.File]::WriteAllText($domainProjectPath, $domainProjectOriginal, [Text.UTF8Encoding]::new($false)) } `
-        -BaselinePath $reviewedBaselinePath -WaiverPath $reviewedWaiverPath -ExpectedCode 'EDGE-TEST-GOV-001-BYPASS'
+        -BaselinePath $reviewedBaselinePath -WaiverPath $reviewedWaiverPath -ExpectedCode 'EDGE-TEST-GOV-001-BYPASS-AUTOIMPORT'
+
+    $automaticImportTargetsPath = Join-Path $commentRoot 'src/evil.targets'
+    Assert-StaticMutationRejected -Name 'automatic-msbuild-target-import-cannot-run-after-static-gate' -ValidationRoot $commentRoot `
+        -Mutate {
+            [IO.File]::WriteAllText($automaticImportTargetsPath, '<Project><Target Name="ExecuteUnreviewedBuildInput"><Exec Command="echo unreviewed" /></Target></Project>', [Text.UTF8Encoding]::new($false))
+            $mutated = $domainProjectOriginal.Replace('</Project>', '<PropertyGroup><CustomAfterMicrosoftCommonTargets>../evil.targets</CustomAfterMicrosoftCommonTargets></PropertyGroup></Project>')
+            [IO.File]::WriteAllText($domainProjectPath, $mutated, [Text.UTF8Encoding]::new($false))
+        } `
+        -Restore {
+            [IO.File]::WriteAllText($domainProjectPath, $domainProjectOriginal, [Text.UTF8Encoding]::new($false))
+            Remove-Item $automaticImportTargetsPath -Force -ErrorAction SilentlyContinue
+        } `
+        -BaselinePath $reviewedBaselinePath -WaiverPath $reviewedWaiverPath -ExpectedCode 'EDGE-TEST-GOV-001-BYPASS-AUTOIMPORT'
+
+    $automaticResponsePath = Join-Path $commentRoot 'Directory.Build.rsp'
+    Assert-StaticMutationRejected -Name 'automatic-msbuild-response-file-cannot-enter-repository' -ValidationRoot $commentRoot `
+        -Mutate { [IO.File]::WriteAllText($automaticResponsePath, '/p:CustomAfterMicrosoftCommonTargets=evil.xml', [Text.UTF8Encoding]::new($false)) } `
+        -Restore { Remove-Item $automaticResponsePath -Force -ErrorAction SilentlyContinue } `
+        -BaselinePath $reviewedBaselinePath -WaiverPath $reviewedWaiverPath -ExpectedCode 'EDGE-TEST-GOV-001-BYPASS-RESPONSE'
+
+    Assert-StaticMutationRejected -Name 'raw-compiler-analyzer-cannot-enter-project' -ValidationRoot $commentRoot `
+        -Mutate {
+            $mutated = $domainProjectOriginal.Replace('</Project>', '<ItemGroup><Analyzer Include="../unreviewed-analyzer.dll" /></ItemGroup></Project>')
+            [IO.File]::WriteAllText($domainProjectPath, $mutated, [Text.UTF8Encoding]::new($false))
+        } `
+        -Restore { [IO.File]::WriteAllText($domainProjectPath, $domainProjectOriginal, [Text.UTF8Encoding]::new($false)) } `
+        -BaselinePath $reviewedBaselinePath -WaiverPath $reviewedWaiverPath -ExpectedCode 'EDGE-TEST-GOV-001-BYPASS-ANALYZER'
+
+    Assert-StaticMutationRejected -Name 'project-local-package-version-cannot-bypass-central-review' -ValidationRoot $commentRoot `
+        -Mutate {
+            $mutated = $domainProjectOriginal.Replace('</Project>', '<ItemGroup><PackageReference Include="Unreviewed.Build.Package" Version="1.0.0" /></ItemGroup></Project>')
+            [IO.File]::WriteAllText($domainProjectPath, $mutated, [Text.UTF8Encoding]::new($false))
+        } `
+        -Restore { [IO.File]::WriteAllText($domainProjectPath, $domainProjectOriginal, [Text.UTF8Encoding]::new($false)) } `
+        -BaselinePath $reviewedBaselinePath -WaiverPath $reviewedWaiverPath -ExpectedCode 'EDGE-TEST-GOV-001-BYPASS-PACKAGEVERSION'
 
     Assert-StaticMutationRejected -Name 'unreviewed-test-sdk-cannot-hide-in-production-project' -ValidationRoot $commentRoot `
         -Mutate {
@@ -807,6 +905,38 @@ try {
         -Restore { [IO.File]::WriteAllText($nugetConfigFixturePath, $nugetConfigOriginal, [Text.UTF8Encoding]::new($false)) } `
         -BaselinePath $reviewedBaselinePath -WaiverPath $reviewedWaiverPath -ExpectedCode 'EDGE-TEST-GOV-001-CONFIG'
 
+    $vulnerabilityScannerFixturePath = Join-Path $commentRoot 'scripts/TestEdgePackageVulnerabilities.ps1'
+    $vulnerabilityScannerOriginal = Get-Content $vulnerabilityScannerFixturePath -Raw
+    Assert-StaticMutationRejected -Name 'package-vulnerability-scanner-cannot-be-hollowed' -ValidationRoot $commentRoot `
+        -Mutate { [IO.File]::WriteAllText($vulnerabilityScannerFixturePath, "Write-Host 'no-op'`n", [Text.UTF8Encoding]::new($false)) } `
+        -Restore { [IO.File]::WriteAllText($vulnerabilityScannerFixturePath, $vulnerabilityScannerOriginal, [Text.UTF8Encoding]::new($false)) } `
+        -BaselinePath $reviewedBaselinePath -WaiverPath $reviewedWaiverPath -ExpectedCode 'EDGE-TEST-GOV-001-CONFIG'
+
+    $dotnetStubRoot = Join-Path $tempRoot 'empty-vulnerability-report-dotnet'
+    [void](New-Item $dotnetStubRoot -ItemType Directory -Force)
+    if ($IsWindows) {
+        [IO.File]::WriteAllText((Join-Path $dotnetStubRoot 'dotnet.cmd'), "@echo off`r`necho {}`r`n", [Text.UTF8Encoding]::new($false))
+    } else {
+        $dotnetStubPath = Join-Path $dotnetStubRoot 'dotnet'
+        [IO.File]::WriteAllText($dotnetStubPath, "#!/bin/sh`nprintf '%s\n' '{}'`n", [Text.UTF8Encoding]::new($false))
+        & chmod +x $dotnetStubPath
+        if ($LASTEXITCODE -ne 0) { throw 'Could not make the empty vulnerability-report dotnet stub executable.' }
+    }
+    $originalPath = $env:PATH
+    try {
+        $env:PATH = "$dotnetStubRoot$([IO.Path]::PathSeparator)$originalPath"
+        $emptyReportOutput = & pwsh -NoLogo -NoProfile -File $vulnerabilityScannerFixturePath 2>&1
+        $emptyReportExitCode = $LASTEXITCODE
+    } finally {
+        $env:PATH = $originalPath
+    }
+    $emptyReportText = ($emptyReportOutput | Out-String).Trim()
+    if ($emptyReportExitCode -eq 0 -or
+        -not $emptyReportText.Contains('unsupported or incomplete', [StringComparison]::Ordinal)) {
+        throw "Empty vulnerability-report stub should fail closed; exit=${emptyReportExitCode}:`n$emptyReportText"
+    }
+    Write-Host 'Rejected Edge package-vulnerability fixture: empty report cannot pass scanner coverage'
+
     $duplicateWorkflowPath = Join-Path $commentRoot '.github/workflows/duplicate-required-check.yml'
     Assert-StaticMutationRejected -Name 'workflow-roster-cannot-grow-with-shadow-check' -ValidationRoot $commentRoot `
         -Mutate { [IO.File]::WriteAllText($duplicateWorkflowPath, "name: Edge smoke build`non: { pull_request: {} }`njobs: { smoke-build: { runs-on: windows-latest, steps: [] } }`n", [Text.UTF8Encoding]::new($false)) } `
@@ -825,6 +955,55 @@ try {
         -Mutate { [IO.File]::WriteAllText($pullRequestTargetWorkflow, $pullRequestTargetOriginal.Replace("on:`n", "on:`n  pull_request_target: {}`n"), [Text.UTF8Encoding]::new($false)) } `
         -Restore { [IO.File]::WriteAllText($pullRequestTargetWorkflow, $pullRequestTargetOriginal, [Text.UTF8Encoding]::new($false)) } `
         -BaselinePath $reviewedBaselinePath -WaiverPath $reviewedWaiverPath -ExpectedCode 'EDGE-TEST-GOV-001-CI'
+
+    $movableActionWorkflow = Join-Path $commentRoot '.github/workflows/edge-smoke-build.yml'
+    $movableActionOriginal = Get-Content $movableActionWorkflow -Raw
+    Assert-StaticMutationRejected -Name 'movable-action-tag-cannot-enter-required-workflow' -ValidationRoot $commentRoot `
+        -Mutate {
+            $mutated = $movableActionOriginal.Replace('actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7', 'actions/checkout@v7')
+            [IO.File]::WriteAllText($movableActionWorkflow, $mutated, [Text.UTF8Encoding]::new($false))
+        } `
+        -Restore { [IO.File]::WriteAllText($movableActionWorkflow, $movableActionOriginal, [Text.UTF8Encoding]::new($false)) } `
+        -BaselinePath $reviewedBaselinePath -WaiverPath $reviewedWaiverPath -ExpectedCode 'EDGE-TEST-GOV-001-CI'
+
+    $reviewedTrustPreflight = @'
+      - name: Validate reviewed restore and build inputs
+        shell: pwsh
+        run: ./scripts/tests/TestEdgeTestGovernancePolicy.ps1 -Mode ValidateStatic -Configuration Release
+
+      - name: Restore Edge solution
+        shell: pwsh
+        run: dotnet restore IIoT.EdgeClient.slnx -p:RestoreDisableParallel=true --disable-build-servers -noAutoResponse
+'@
+    $restoreBeforeTrustPreflight = @'
+      - name: Restore Edge solution
+        shell: pwsh
+        run: dotnet restore IIoT.EdgeClient.slnx -p:RestoreDisableParallel=true --disable-build-servers -noAutoResponse
+
+      - name: Validate reviewed restore and build inputs
+        shell: pwsh
+        run: ./scripts/tests/TestEdgeTestGovernancePolicy.ps1 -Mode ValidateStatic -Configuration Release
+'@
+    Assert-StaticMutationRejected -Name 'restore-cannot-run-before-reviewed-input-gate' -ValidationRoot $commentRoot `
+        -Mutate {
+            if (-not $movableActionOriginal.Contains($reviewedTrustPreflight, [StringComparison]::Ordinal)) {
+                throw 'Restore-order fixture could not locate the reviewed preflight and restore steps.'
+            }
+            [IO.File]::WriteAllText($movableActionWorkflow, $movableActionOriginal.Replace($reviewedTrustPreflight, $restoreBeforeTrustPreflight), [Text.UTF8Encoding]::new($false))
+        } `
+        -Restore { [IO.File]::WriteAllText($movableActionWorkflow, $movableActionOriginal, [Text.UTF8Encoding]::new($false)) } `
+        -BaselinePath $reviewedBaselinePath -WaiverPath $reviewedWaiverPath -ExpectedCode 'EDGE-TEST-GOV-001-CI'
+
+    Assert-StaticMutationRejected -Name 'required-workflow-cannot-enable-msbuild-auto-response' -ValidationRoot $commentRoot `
+        -Mutate {
+            $reviewedRestore = 'dotnet restore IIoT.EdgeClient.slnx -p:RestoreDisableParallel=true --disable-build-servers -noAutoResponse'
+            if (-not $movableActionOriginal.Contains($reviewedRestore, [StringComparison]::Ordinal)) {
+                throw 'MSBuild response-file workflow fixture could not locate the reviewed restore command.'
+            }
+            [IO.File]::WriteAllText($movableActionWorkflow, $movableActionOriginal.Replace($reviewedRestore, $reviewedRestore.Replace(' -noAutoResponse', '')), [Text.UTF8Encoding]::new($false))
+        } `
+        -Restore { [IO.File]::WriteAllText($movableActionWorkflow, $movableActionOriginal, [Text.UTF8Encoding]::new($false)) } `
+        -BaselinePath $reviewedBaselinePath -WaiverPath $reviewedWaiverPath -ExpectedCode 'EDGE-TEST-GOV-001-BYPASS-RESPONSE'
 
     foreach ($workflowPath in @('.github/workflows/edge-smoke-build.yml', '.github/workflows/edge-pack-modules.yml')) {
         $workflow = (Get-Content (Join-Path $RepositoryRoot $workflowPath) -Raw).Replace('        run: dotnet test ', '        # run: dotnet test ')
@@ -870,14 +1049,14 @@ try {
     $reviewedLauncherStep = @'
       - name: Run launcher tests
         shell: pwsh
-        run: dotnet test src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo
+        run: dotnet test src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse
 '@
     $shadowedLauncherStep = @'
       - name: Run launcher tests
         shell: pwsh
         run: Write-Host "disabled"
         env:
-          run: dotnet test src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo
+          run: dotnet test src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse
 '@
     if (-not $smokeWorkflow.Contains($reviewedLauncherStep, [StringComparison]::Ordinal)) {
         throw 'Nested env.run shadow fixture could not locate the reviewed launcher step.'
@@ -1179,7 +1358,7 @@ public sealed class RuntimeSkipFixture
     public void RuntimeSkipMustFailRequiredLane() => Assert.Skip("synthetic runtime skip");
 }
 '@, [Text.UTF8Encoding]::new($false))
-    $skipOutput = & dotnet test (Join-Path $skipFixtureRoot 'RuntimeSkipFixture.csproj') -c Release -p:RestoreDisableParallel=true --disable-build-servers --nologo 2>&1
+    $skipOutput = & dotnet test (Join-Path $skipFixtureRoot 'RuntimeSkipFixture.csproj') -c Release -p:RestoreDisableParallel=true --disable-build-servers --nologo -noAutoResponse 2>&1
     if ($LASTEXITCODE -eq 0) {
         throw "Runtime Assert.Skip fixture must produce a non-zero test exit when failSkips=true:`n$(($skipOutput | Out-String).Trim())"
     }

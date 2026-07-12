@@ -41,28 +41,32 @@ $rootBuildPropsSha256 = '4ee0e7d684211afc1a20ba62d57cfdb29f11341f2ef29940b987f4a
 $rootBuildTargetsSha256 = '14cde139656d4b5910d1e96b9e69adca3a7b1aae2cccebd7328500815f9505f8'
 $directoryPackagesPropsSha256 = '60f4ae24b34c2d8061a87c36f2d957976de1495bfb2eae2896f6bf6124a9d548'
 $nugetConfigSha256 = 'aec93b5637ab6d62470979a008990a4a336a287ab83a3f2541849ae735674055'
+$packageVulnerabilityScriptSha256 = 'fbfe7f05db5d465478744ce168198a8d2cae44e94c033a8172b2e8724c2f92a7'
 $baselineRepositoryPath = 'scripts/tests/baselines/edge-test-governance.baseline.json'
-$bootstrapBaselineParentRevision = 'de5e38510e782c111b0a99bca6365bb94940c65e'
-$bootstrapBaselineSha256 = '7e57a6e9a4028a99c3afaf611f635045caa35f62148aa7e6aba85c25a487f97a'
-$codeOwnersSha256 = '8e0bb06bb32911fda9abca9e212d617f97004d40d47fa328e5f63ac330baa818'
+$approvedMetadataLoadContextSha256ByPlatform = @{
+    'macOS-Arm64' = 'd5aeb7ae95e463315d722fb7f22679658b62959c2d6dc0f5f1be9e45f0cb9c39'
+    'Windows-X64' = '8e6af791299bb85c94a3fc3eef2b55621a30ca77025d062944f3578e10057ddb'
+}
+$codeOwnersSha256 = '29b8fd2df7429c6e5f0919e9fc78ea08fce83d7859c7c88ada51d17b38a3f41a'
 $gitAttributesSha256 = '24418a20248958b24e4a29b013220a2cdf02d51b897e25455bf4c8c468e3ac46'
 $solutionFileSha256 = 'a2eb9a0532c63efb9ebe013eb93e7566b342917fd1792d69cee47af00e54dcc1'
 $globalJsonSha256 = '18303059fe920620f05e25d0157b7ed4a74934841e6a34b0b86d713fbf631444'
-$governanceBehaviorSha256 = 'ccb73e526048f20e0224e60d004fa62eb9a3bb3d8a124a91aee21e55aacaa109'
+$governanceBehaviorSha256 = 'dc89fcbdca2e76dec8c27e2e03ba0104a5a29fd1910d1753e2b5316ac2d7225d'
 $repositoryProjectRosterCount = 32
 $repositoryProjectRosterSha256 = '82f2e2ee50ea7d555304cd80c5d0c97585d03bda9c3227ff65caeed9a21d86ce'
+$repositoryProjectContentManifestSha256 = '0d74d4045b053e17a7e3e455b528197047bd73a41a502119831320efda76d24c'
 $testProjectAssetManifestCount = 7
 $testProjectAssetManifestSha256 = 'd5ac65b6d2f948858cd7dc4a395647dce1793d9dce1edd7ef36bdcac071f5972'
-$buildFileManifestCount = 3
-$buildFileManifestSha256 = '281b002ce513cf5cb41e3b005b68c849544ef1fb6ee8fc8829bf21c9943620bd'
+$buildFileManifestCount = 4
+$buildFileManifestSha256 = '84e955382a229aa576cebdfa9e266021eb718cb553eff0929f858d3fa22e1fdd'
 $workflowManifestCount = 2
-$workflowManifestSha256 = '90c742966e5cd903c59e35cc1908461475a9d4e7a194f255421b314cc07c710b'
+$workflowManifestSha256 = '44f4b96362bf357c1f643c0a463ee160f3d1596731c3d871dc2bfa7e1814b718'
 $criticalTestSourceManifestCount = 13
-$criticalTestSourceManifestSha256 = '2e887b53c74dcdb2c47c7802ffca79884e355a164b98bdd3b1b650bdad0bfd83'
+$criticalTestSourceManifestSha256 = '155eebf06c3ccd07fb9e0a49b76e87b17d08d29cc16feeb9616b5e8bbfa9d853'
 $nonUiFrozenSourceContentManifestCount = 71
 $nonUiFrozenSourceContentManifestSha256 = 'ad9cb1c27bdff493972756b109ce1f5c24b5aec765fa83e597b0fce7079e8336'
 $allTestSourceManifestCount = 132
-$allTestSourceManifestSha256 = '3885248cfb2c12e2b9669b7002f7225134f93e55c62ea4c3dd4e005a2d674b75'
+$allTestSourceManifestSha256 = '44e705217f4b9100a82be3238316b75ab4d88685fb76ef609128a45256e9f11b'
 $criticalTestSourcePaths = @(
     'src/Tests/IIoT.Edge.Shell.Tests/RepositoryHygieneTests.cs',
     'src/Tests/IIoT.Edge.Module.ContractTests/ArchitectureBoundaryContractTests.cs',
@@ -79,12 +83,12 @@ $criticalTestSourcePaths = @(
     'src/Tests/IIoT.Edge.Module.ContractTests/PluginCommentContractTests.cs'
 )
 $requiredWorkflowSha256 = @{
-    '.github/workflows/edge-smoke-build.yml' = 'a9b529ead3a4d7ab75ca2e2e74c529602531bd6713f4bd48282ddeb911edaf58'
-    '.github/workflows/edge-pack-modules.yml' = '0264aa9904582d40dfecb90c9fb8dbbf17fa706843cd93cd5097e21338f66294'
+    '.github/workflows/edge-smoke-build.yml' = 'a6e8c2e934ff5661b06cf710cc8de3476af98af972970ffcdda0e427ce4c5908'
+    '.github/workflows/edge-pack-modules.yml' = 'b739534e1dde66021d37dc062e103eb7223a0c5a7265e431fbdd469f555310fb'
 }
 $requiredWorkflowJobSha256 = @{
-    '.github/workflows/edge-smoke-build.yml' = '5dc8b740ca98323cc12206f7f2547330801f10432888658b96003de9fea4fabd'
-    '.github/workflows/edge-pack-modules.yml' = 'c685ed1c9a30ca8133118d2b6b4fcac7b393e75a548eb562aa79aad94d0ec3a2'
+    '.github/workflows/edge-smoke-build.yml' = '43f6a457fe7d5edb1e1101489042b863da53a98f36b08fe59bc4ba814c4df541'
+    '.github/workflows/edge-pack-modules.yml' = 'f309c3ad73ac4837c7dedeb0c7591e69eaa577a8e0ed3e6c7eee9816d344c033'
 }
 $allowedTestProjectTargetHashes = @{
     'src/Edge/IIoT.Edge.Launcher/IIoT.Edge.Launcher.csproj' = 'f96ff44f47f79371365bbb91b63c8875458c04b0a2e87e3dbab86d9f55ce5011'
@@ -723,6 +727,10 @@ function Get-CanonicalWorkflowRunSteps {
             Run = "git fetch origin main --no-tags`n`$trustedMain = (git rev-parse origin/main | Out-String).Trim()`nif (`$env:GITHUB_EVENT_NAME -eq 'workflow_dispatch' -and `$env:GITHUB_REF -ne 'refs/heads/main') {`n  throw 'Manual Edge release validation must run from refs/heads/main.'`n}`n./scripts/tests/TestEdgeTestGovernancePolicy.ps1 -Mode ValidateBaselineAnchor -TrustedBaseRevision `$trustedMain -AnchorRelationship HeadAncestorOfBase"
         })
     }
+    $steps.Add([pscustomobject]@{
+        Name = 'Validate reviewed restore and build inputs'
+        Run = './scripts/tests/TestEdgeTestGovernancePolicy.ps1 -Mode ValidateStatic -Configuration Release'
+    })
     foreach ($step in @(
         [pscustomobject]@{
             Name = 'Run Edge test governance self-tests'
@@ -730,7 +738,7 @@ function Get-CanonicalWorkflowRunSteps {
         },
         [pscustomobject]@{
             Name = 'Build Edge solution and test assemblies'
-            Run = 'dotnet build IIoT.EdgeClient.slnx -c Release --no-restore -m:1 -p:BuildInParallel=false --disable-build-servers --nologo'
+            Run = 'dotnet build IIoT.EdgeClient.slnx -c Release --no-restore -m:1 -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse'
         },
         [pscustomobject]@{
             Name = 'Validate Edge test repository and legacy discovery ceilings'
@@ -738,35 +746,35 @@ function Get-CanonicalWorkflowRunSteps {
         },
         [pscustomobject]@{
             Name = 'Run architecture policy tests'
-            Run = 'dotnet test src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj -c Release --no-build --no-restore --filter "FullyQualifiedName~RepositoryHygieneTests" -p:BuildInParallel=false --disable-build-servers --nologo'
+            Run = 'dotnet test src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj -c Release --no-build --no-restore --filter "FullyQualifiedName~RepositoryHygieneTests" -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse'
         },
         [pscustomobject]@{
             Name = 'Run plugin conformance tests'
-            Run = 'dotnet test src/Tests/IIoT.Edge.Module.ContractTests/IIoT.Edge.Module.ContractTests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo'
+            Run = 'dotnet test src/Tests/IIoT.Edge.Module.ContractTests/IIoT.Edge.Module.ContractTests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse'
         },
         [pscustomobject]@{
             Name = 'Run remaining shell behavior tests'
-            Run = 'dotnet test src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj -c Release --no-build --no-restore --filter "FullyQualifiedName!~RepositoryHygieneTests" -p:BuildInParallel=false --disable-build-servers --nologo'
+            Run = 'dotnet test src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj -c Release --no-build --no-restore --filter "FullyQualifiedName!~RepositoryHygieneTests" -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse'
         },
         [pscustomobject]@{
             Name = 'Run shared UI behavior tests'
-            Run = 'dotnet test src/Tests/IIoT.Edge.UI.Shared.Tests/IIoT.Edge.UI.Shared.Tests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo'
+            Run = 'dotnet test src/Tests/IIoT.Edge.UI.Shared.Tests/IIoT.Edge.UI.Shared.Tests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse'
         },
         [pscustomobject]@{
             Name = 'Run launcher tests'
-            Run = 'dotnet test src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo'
+            Run = 'dotnet test src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse'
         },
         [pscustomobject]@{
             Name = 'Run installer tests'
-            Run = 'dotnet test src/Tests/IIoT.Edge.Installer.Tests/IIoT.Edge.Installer.Tests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo'
+            Run = 'dotnet test src/Tests/IIoT.Edge.Installer.Tests/IIoT.Edge.Installer.Tests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse'
         },
         [pscustomobject]@{
             Name = 'Run infrastructure update tests'
-            Run = 'dotnet test src/Tests/IIoT.Edge.Infrastructure.Update.Tests/IIoT.Edge.Infrastructure.Update.Tests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo'
+            Run = 'dotnet test src/Tests/IIoT.Edge.Infrastructure.Update.Tests/IIoT.Edge.Infrastructure.Update.Tests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse'
         },
         [pscustomobject]@{
             Name = 'Run non-UI regression tests'
-            Run = 'dotnet test src/Tests/IIoT.Edge.NonUiRegressionTests/IIoT.Edge.NonUiRegressionTests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo'
+            Run = 'dotnet test src/Tests/IIoT.Edge.NonUiRegressionTests/IIoT.Edge.NonUiRegressionTests.csproj -c Release --no-build --no-restore -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse'
         }
     )) {
         $steps.Add($step)
@@ -902,9 +910,10 @@ function Get-CanonicalWorkflowStepNames {
     if ($WorkflowPath -eq '.github/workflows/edge-smoke-build.yml') {
         return [string[]]@(
             'Checkout',
-            'Setup .NET',
-            'Restore Edge solution',
             'Validate immutable test baseline anchor',
+            'Setup .NET',
+            'Validate reviewed restore and build inputs',
+            'Restore Edge solution',
             'Run Edge test governance self-tests',
             'Setup Python for deployment behavior tests',
             'Run Edge deployment behavior tests',
@@ -924,9 +933,10 @@ function Get-CanonicalWorkflowStepNames {
     }
     return [string[]]@(
         'Checkout',
-        'Setup .NET',
-        'Restore edge solution',
         'Validate protected-main test baseline anchor',
+        'Setup .NET',
+        'Validate reviewed restore and build inputs',
+        'Restore edge solution',
         'Run Edge test governance self-tests',
         'Resolve release metadata',
         'Build Edge solution and test assemblies',
@@ -1375,11 +1385,18 @@ function Test-StaticPolicy {
     $baselineScanner = Get-OptionalProperty $Baseline 'scanner' $null
     $activeSdk = (& dotnet --version | Out-String).Trim()
     $activeMetadataLoadContextHash = (Get-FileHash (Get-ActiveSdkMetadataLoadContextPath) -Algorithm SHA256).Hash.ToLowerInvariant()
+    $operatingSystem = if ($IsWindows) { 'Windows' } elseif ($IsMacOS) { 'macOS' } elseif ($IsLinux) { 'Linux' } else { 'Unknown' }
+    $platformKey = "$operatingSystem-$([Runtime.InteropServices.RuntimeInformation]::OSArchitecture)"
+    $approvedPlatformHash = [string]$approvedMetadataLoadContextSha256ByPlatform[$platformKey]
+    $baselineScannerHash = [string](Get-OptionalProperty $baselineScanner 'metadataLoadContextSha256' '')
+    $approvedScannerHashes = [string[]]@($approvedMetadataLoadContextSha256ByPlatform.Values)
     if ($null -eq $baselineScanner -or
         [string](Get-OptionalProperty $baselineScanner 'engine' '') -ne 'System.Reflection.MetadataLoadContext' -or
         [string](Get-OptionalProperty $baselineScanner 'activeDotnetSdk' '') -ne $activeSdk -or
-        [string](Get-OptionalProperty $baselineScanner 'metadataLoadContextSha256' '') -ne $activeMetadataLoadContextHash) {
-        Add-PolicyError -Errors $Errors -Code "$ruleId-SCAN" -Message "active scanner toolchain differs from the reviewed baseline: sdk=$activeSdk metadataLoadContextSha256=$activeMetadataLoadContextHash."
+        [string]::IsNullOrWhiteSpace($approvedPlatformHash) -or
+        $activeMetadataLoadContextHash -ne $approvedPlatformHash -or
+        $baselineScannerHash -notin $approvedScannerHashes) {
+        Add-PolicyError -Errors $Errors -Code "$ruleId-SCAN" -Message "active scanner toolchain is not approved: platform=$platformKey sdk=$activeSdk metadataLoadContextSha256=$activeMetadataLoadContextHash baselineRecordedSha256=$baselineScannerHash."
     }
 
     Test-ExactReviewedFile -RelativePath '.gitattributes' -ExpectedSha256 $gitAttributesSha256 -Code "$ruleId-CONFIG" -Description 'LF normalization policy' -Errors $Errors
@@ -1388,6 +1405,7 @@ function Test-StaticPolicy {
     Test-ExactReviewedFile -RelativePath 'Directory.Build.targets' -ExpectedSha256 $rootBuildTargetsSha256 -Code "$ruleId-BYPASS" -Description 'root MSBuild hard-gate graph' -Errors $Errors
     Test-ExactReviewedFile -RelativePath 'Directory.Packages.props' -ExpectedSha256 $directoryPackagesPropsSha256 -Code "$ruleId-CONFIG" -Description 'central test SDK and runner dependency versions' -Errors $Errors
     Test-ExactReviewedFile -RelativePath 'NuGet.Config' -ExpectedSha256 $nugetConfigSha256 -Code "$ruleId-CONFIG" -Description 'NuGet source and restore policy' -Errors $Errors
+    Test-ExactReviewedFile -RelativePath 'scripts/TestEdgePackageVulnerabilities.ps1' -ExpectedSha256 $packageVulnerabilityScriptSha256 -Code "$ruleId-CONFIG" -Description 'NuGet vulnerability scan implementation' -Errors $Errors
     Test-ExactReviewedFile -RelativePath 'src/Tests/Directory.Build.props' -ExpectedSha256 $canonicalTestBuildPropsSha256 -Code "$ruleId-CONFIG" -Description 'shared test analyzer/runner configuration' -Errors $Errors
     Test-ExactReviewedFile -RelativePath '.github/CODEOWNERS' -ExpectedSha256 $codeOwnersSha256 -Code "$ruleId-CODEOWNER" -Description 'test-governance ownership graph' -Errors $Errors
     Test-ExactReviewedFile -RelativePath 'IIoT.EdgeClient.slnx' -ExpectedSha256 $solutionFileSha256 -Code "$ruleId-PROJECT" -Description 'solution build graph' -Errors $Errors
@@ -1404,8 +1422,14 @@ function Test-StaticPolicy {
             '/Directory.Build.targets @ShuJinHao',
             '/Directory.Packages.props @ShuJinHao',
             '/NuGet.Config @ShuJinHao',
+            '/scripts/TestEdgePackageVulnerabilities.ps1 @ShuJinHao',
             '/scripts/tests/TestEdgeTestGovernancePolicy.ps1 @ShuJinHao',
             '/scripts/tests/TestEdgeTestGovernanceBehavior.ps1 @ShuJinHao',
+            '**/*.csproj @ShuJinHao',
+            '**/*.fsproj @ShuJinHao',
+            '**/*.vbproj @ShuJinHao',
+            '**/*.props @ShuJinHao',
+            '**/*.targets @ShuJinHao',
             '/scripts/tests/baselines/ @ShuJinHao',
             '/src/Tests/**/*.cs @ShuJinHao',
             '/src/Tests/**/*.csproj @ShuJinHao',
@@ -1426,6 +1450,10 @@ function Test-StaticPolicy {
         (Get-PathManifestDigest -Files $repositoryProjectFiles) -ne $repositoryProjectRosterSha256) {
         Add-PolicyError -Errors $Errors -Code "$ruleId-PROJECT" -Message "repository project roster differs from the reviewed $repositoryProjectRosterCount-project graph."
     }
+    if ($repositoryProjectFiles.Count -ne $repositoryProjectRosterCount -or
+        (Get-FileManifestDigest -Files $repositoryProjectFiles) -ne $repositoryProjectContentManifestSha256) {
+        Add-PolicyError -Errors $Errors -Code "$ruleId-BYPASS" -Message 'repository project contents differ from the exact reviewed restore/build graph.'
+    }
 
     $testProjectAssetFiles = [System.Collections.Generic.List[object]]::new()
     foreach ($projectPath in @($Baseline.projects | ForEach-Object { [string]$_.projectPath } | Sort-Object -Unique)) {
@@ -1441,11 +1469,17 @@ function Test-StaticPolicy {
 
     $directoryBuildFiles = @(Get-RepositoryFiles -Root $RepositoryRoot -Predicate {
         param($file)
-        $file.Name -match '(?i)^Directory\.Build\.(?:props|targets)$'
+        $file.Name -match '(?i)\.(?:props|targets)$'
     })
     if ($directoryBuildFiles.Count -ne $buildFileManifestCount -or
         (Get-FileManifestDigest -Files $directoryBuildFiles) -ne $buildFileManifestSha256) {
-        Add-PolicyError -Errors $Errors -Code "$ruleId-BYPASS" -Message 'Directory.Build.props/targets roster or content differs from the reviewed hard-gate graph.'
+        Add-PolicyError -Errors $Errors -Code "$ruleId-BYPASS" -Message 'MSBuild props/targets roster or content differs from the exact reviewed restore/build graph.'
+    }
+    foreach ($responseFile in @(Get-RepositoryFiles -Root $RepositoryRoot -Predicate {
+        param($file)
+        $file.Extension -ieq '.rsp'
+    })) {
+        Add-PolicyError -Errors $Errors -Code "$ruleId-BYPASS-RESPONSE" -Message "MSBuild response files are forbidden in the reviewed repository: $(Get-RelativePath -BasePath $RepositoryRoot -Path $responseFile.FullName)."
     }
 
     $workflowFiles = @(Get-RepositoryFiles -Root (Join-Path $RepositoryRoot '.github/workflows') -Predicate {
@@ -1555,11 +1589,21 @@ function Test-StaticPolicy {
                 'VSTestTestAdapterPath',
                 'VSTestTestCaseFilter',
                 'RestoreSources',
-                'RestoreAdditionalProjectSources'
-            )
+                'RestoreAdditionalProjectSources',
+                'MSBuildExtensionsPath',
+                'MSBuildExtensionsPath32',
+                'MSBuildExtensionsPath64',
+                'MSBuildUserExtensionsPath',
+                'MSBuildProjectExtensionsPath',
+                'ProjectExtensionsPath',
+                'BaseIntermediateOutputPath',
+                'IntermediateOutputPath',
+                'ImportProjectExtensionProps',
+                'ImportProjectExtensionTargets'
+            ) -or $_.LocalName -match '^Custom(?:Before|After).+Targets$'
         })
         if ($forbiddenGatePropertyNodes.Count -gt 0) {
-            Add-PolicyError -Errors $Errors -Code "$ruleId-BYPASS" -Message "$relativeProjectPath declares an MSBuild/VSTest property that can alter the reviewed test gate."
+            Add-PolicyError -Errors $Errors -Code "$ruleId-BYPASS-AUTOIMPORT" -Message "$relativeProjectPath declares an MSBuild/VSTest property that can alter the reviewed test gate."
         }
         $usingTaskNodes = @($allProjectElements | Where-Object { $_.LocalName -in @('UsingTask', 'TaskFactory') })
         $initialTargetsAttributes = @($projectXml.Project.Attributes | Where-Object { $_.LocalName -ieq 'InitialTargets' })
@@ -1569,6 +1613,10 @@ function Test-StaticPolicy {
         $rawReferenceNodes = @(Get-XmlElementsByLocalName -Xml $projectXml -Names @('Reference'))
         if ($rawReferenceNodes.Count -gt 0) {
             Add-PolicyError -Errors $Errors -Code "$ruleId-BYPASS" -Message "$relativeProjectPath uses raw assembly Reference items; the reviewed graph permits explicit PackageReference/ProjectReference dependencies only."
+        }
+        $rawAnalyzerNodes = @(Get-XmlElementsByLocalName -Xml $projectXml -Names @('Analyzer'))
+        if ($rawAnalyzerNodes.Count -gt 0) {
+            Add-PolicyError -Errors $Errors -Code "$ruleId-BYPASS-ANALYZER" -Message "$relativeProjectPath imports a raw compiler analyzer; analyzers must enter through the exact reviewed central package graph."
         }
         $projectReferenceNodes = @(Get-XmlElementsByLocalName -Xml $projectXml -Names @('ProjectReference'))
         $indirectProjectReferenceNodes = @($projectReferenceNodes | Where-Object { (Get-XmlAttributeValue -Node $_ -Name 'Include') -match '\$\(' })
@@ -1596,10 +1644,19 @@ function Test-StaticPolicy {
             [string]$_.InnerText -match '^\s*true\s*$' -and
             [string]::IsNullOrWhiteSpace((Get-XmlAttributeValue -Node $_ -Name 'Condition'))
         })
-        $testPackageNodes = @(Get-XmlElementsByLocalName -Xml $projectXml -Names @('PackageReference') | Where-Object {
+        $packageReferenceNodes = @(Get-XmlElementsByLocalName -Xml $projectXml -Names @('PackageReference'))
+        $testPackageNodes = @($packageReferenceNodes | Where-Object {
             (Get-XmlAttributeValue -Node $_ -Name 'Include') -match '^(?i)(?:xunit|Microsoft\.NET\.Test\.Sdk|Microsoft\.TestPlatform|Microsoft\.Testing\.Platform|MSTest|NUnit|TUnit)'
         })
-        $indirectPackageIdentityNodes = @(Get-XmlElementsByLocalName -Xml $projectXml -Names @('PackageReference') | Where-Object { (Get-XmlAttributeValue -Node $_ -Name 'Include') -match '\$\(' })
+        $indirectPackageIdentityNodes = @($packageReferenceNodes | Where-Object { (Get-XmlAttributeValue -Node $_ -Name 'Include') -match '\$\(' })
+        $projectVersionOverrideNodes = @($packageReferenceNodes | Where-Object {
+            -not [string]::IsNullOrWhiteSpace((Get-XmlAttributeValue -Node $_ -Name 'Version')) -or
+            -not [string]::IsNullOrWhiteSpace((Get-XmlAttributeValue -Node $_ -Name 'VersionOverride')) -or
+            @($_.ChildNodes | Where-Object { $_.LocalName -in @('Version', 'VersionOverride') -and -not [string]::IsNullOrWhiteSpace([string]$_.InnerText) }).Count -gt 0
+        })
+        if ($projectVersionOverrideNodes.Count -gt 0) {
+            Add-PolicyError -Errors $Errors -Code "$ruleId-BYPASS-PACKAGEVERSION" -Message "$relativeProjectPath bypasses exact central package versions with a project-local Version/VersionOverride."
+        }
         $rawTestIdentity = $projectContent -match '(?is)<\s*(?:IsTestProject|IsTestingPlatformApplication|TestingPlatformApplication)(?:\s|>)' -or
             $projectContent -match '(?is)<\s*Project\b[^>]*\bSdk\s*=\s*["''][^"'']*(?:MSTest\.Sdk|Microsoft\.Testing\.Platform|TUnit)[^"'']*["'']' -or
             $projectContent -match '(?is)<\s*PackageReference\b[^>]*\bInclude\s*=\s*["''][^"'']*(?:xunit|Microsoft\.NET\.Test\.Sdk|Microsoft\.TestPlatform|Microsoft\.Testing\.Platform|MSTest|NUnit|TUnit)[^"'']*["'']'
@@ -1797,6 +1854,17 @@ function Test-StaticPolicy {
             Add-PolicyError -Errors $Errors -Code "$ruleId-CI" -Message "$($requirement.workflowPath) differs from the exact reviewed workflow, including triggers, permissions and path filters."
         }
         $workflowContent = (Get-Content $workflowPath -Raw).Replace('\', '/')
+        $unpinnedActionReferences = @([regex]::Matches($workflowContent, '(?mi)^\s*uses:\s*[^@\s]+@(?<ref>[^\s#]+)') | Where-Object {
+            $_.Groups['ref'].Value -notmatch '^[0-9a-f]{40}$'
+        })
+        if ($unpinnedActionReferences.Count -gt 0) {
+            Add-PolicyError -Errors $Errors -Code "$ruleId-CI" -Message "$($requirement.workflowPath) contains an external Action reference that is not pinned to one full commit SHA."
+        }
+        foreach ($dotnetCommand in @([regex]::Matches($workflowContent, '(?mi)^\s*(?:run:\s*)?dotnet\s+(?:restore|build|test)\b[^\r\n]*$'))) {
+            if ($dotnetCommand.Value -notmatch '(?:^|\s)-noAuto(?:Response|Rsp)(?:\s|$)') {
+                Add-PolicyError -Errors $Errors -Code "$ruleId-BYPASS-RESPONSE" -Message "$($requirement.workflowPath) runs restore/build/test without disabling automatic MSBuild response files."
+            }
+        }
         $requiredJobName = if ([string]$requirement.workflowPath -eq '.github/workflows/edge-smoke-build.yml') { 'smoke-build' } else { 'validate-runtime' }
         $jobEnvelopes = @(Get-WorkflowJobEnvelope -WorkflowContent $workflowContent -JobName $requiredJobName)
         if ($jobEnvelopes.Count -ne 1 -or $jobEnvelopes[0].HasIf -or $jobEnvelopes[0].Ambiguous -or
@@ -1858,13 +1926,11 @@ function Test-StaticPolicy {
         $lastCommandPosition = -1
         foreach ($commandPrefix in @($requirement.requiredCommandPrefixes)) {
             $pattern = '(?m)^[ \t]*(?:run:[ \t]*)?' + [regex]::Escape([string]$commandPrefix) + '(?=[ \t]|$)'
-            $match = [regex]::Match($workflowContent, $pattern)
-            if (-not $match.Success) {
+            $match = @([regex]::Matches($workflowContent, $pattern) | Where-Object { $_.Index -gt $lastCommandPosition } | Select-Object -First 1)
+            if ($match.Count -eq 0) {
                 Add-PolicyError -Errors $Errors -Code "$ruleId-CI" -Message "$($requirement.workflowPath) is missing required command '$commandPrefix'."
-            } elseif ($match.Index -le $lastCommandPosition) {
-                Add-PolicyError -Errors $Errors -Code "$ruleId-CI" -Message "$($requirement.workflowPath) schedules '$commandPrefix' out of governance order."
             } else {
-                $lastCommandPosition = $match.Index
+                $lastCommandPosition = $match[0].Index
             }
         }
     }
@@ -2256,12 +2322,7 @@ if ($Mode -eq 'ValidateBaselineAnchor') {
         exit 0
     }
 
-    if ($TrustedBaseRevision.ToLowerInvariant() -ne $bootstrapBaselineParentRevision -or
-        $currentBaselineDigest -ne $bootstrapBaselineSha256) {
-        throw "$ruleId-BASELINE trusted base has no reviewed baseline and is not the one-time Phase 0 bootstrap parent: $TrustedBaseRevision."
-    }
-    Write-Host "Edge immutable baseline bootstrap anchor passed: base=$TrustedBaseRevision digest=$currentBaselineDigest"
-    exit 0
+    throw "$ruleId-BASELINE trusted base has no reviewed baseline; Phase 0 bootstrap is closed: $TrustedBaseRevision."
 }
 
 if ($Mode -eq 'ValidateRunnerCaseNormalization') {
