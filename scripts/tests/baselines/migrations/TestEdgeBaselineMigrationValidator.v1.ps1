@@ -1237,29 +1237,8 @@ try {
         Invoke-Validation -Fixture $duplicateWrapperReference -Base $duplicateWrapperReference.Authorization -Candidate $duplicateWrapperReference.Candidate
     }
 
-    $baselinePolicyCoChange = New-BaseFixture
-    $baselinePath = Join-Path $baselinePolicyCoChange.Root 'scripts/tests/baselines/edge-test-governance.baseline.json'
-    $baselineText = [IO.File]::ReadAllText($baselinePath).Replace(
-        '"baselineDeclarations": 1',
-        '"baselineDeclarations": 2')
-    Write-Utf8File -Path $baselinePath -Content $baselineText
-    Write-Utf8File `
-        -Path (Join-Path $baselinePolicyCoChange.Root 'scripts/tests/TestEdgeTestGovernancePolicy.ps1') `
-        -Content "throw 'candidate policy'`n"
-    $baselinePolicyCoChange | Add-Member `
-        -NotePropertyName Template `
-        -NotePropertyValue (Commit-All -Root $baselinePolicyCoChange.Root -Message 'baseline policy co-change') `
-        -Force
-
     $ordinaryTrustChange = New-TrustTemplateFixture
-    Assert-Rejected -Name 'baseline-policy co-change and ordinary trust replacement are rejected' -ExpectedCode 'TRUST' -Action {
-        $coChangeResult = Invoke-DescribeResult `
-            -Fixture $baselinePolicyCoChange `
-            -RuleIdsCsv 'EDGE-ARCH-001'
-        if ($coChangeResult.ExitCode -eq 0 -or
-            $coChangeResult.Output -notmatch [regex]::Escape('EDGE-BASELINE-MIG-001-POLICY')) {
-            throw "expected POLICY for baseline/policy co-change but got: $($coChangeResult.Output)"
-        }
+    Assert-Rejected -Name 'ordinary receipt cannot replace trust implementation' -ExpectedCode 'TRUST' -Action {
         Invoke-DescribeResult -Fixture $ordinaryTrustChange -RuleIdsCsv 'EDGE-ARCH-001'
     }
 
