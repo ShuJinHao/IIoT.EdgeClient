@@ -60,7 +60,7 @@ $testProjectAssetManifestSha256 = '13223b8bda8ee0b34edc16ccd0a5c855fd11b3afdeddd
 $buildFileManifestCount = 4
 $buildFileManifestSha256 = '8b33a996ab7e32c34d30b2f90cb89a356025902bbe47dccffe0388e46c032641'
 $workflowManifestCount = 2
-$workflowManifestSha256 = '44f4b96362bf357c1f643c0a463ee160f3d1596731c3d871dc2bfa7e1814b718'
+$workflowManifestSha256 = '0f1551103746eec15b9c73bb1462c0089afbb86e383a37e286b9da0ba180c0e6'
 $criticalTestSourceManifestCount = 13
 $criticalTestSourceManifestSha256 = '1df0560d671bef6af08433eda9354a7a10703ea99182aebd02cd8c39fc9b7b9a'
 $nonUiFrozenSourceContentManifestCount = 71
@@ -83,12 +83,12 @@ $criticalTestSourcePaths = @(
     'src/Tests/IIoT.Edge.Module.ContractTests/PluginCommentContractTests.cs'
 )
 $requiredWorkflowSha256 = @{
-    '.github/workflows/edge-smoke-build.yml' = 'a6e8c2e934ff5661b06cf710cc8de3476af98af972970ffcdda0e427ce4c5908'
-    '.github/workflows/edge-pack-modules.yml' = 'b739534e1dde66021d37dc062e103eb7223a0c5a7265e431fbdd469f555310fb'
+    '.github/workflows/edge-smoke-build.yml' = '963e6206e66f20765b60f3dd4108fb8c6b50ada5396724d7f0cff0254f82d867'
+    '.github/workflows/edge-pack-modules.yml' = '7f5b73de815c3673b9c9e905b57b172d9dc3a4d4700f54df0b4b1419867b1558'
 }
 $requiredWorkflowJobSha256 = @{
-    '.github/workflows/edge-smoke-build.yml' = '43f6a457fe7d5edb1e1101489042b863da53a98f36b08fe59bc4ba814c4df541'
-    '.github/workflows/edge-pack-modules.yml' = 'f309c3ad73ac4837c7dedeb0c7591e69eaa577a8e0ed3e6c7eee9816d344c033'
+    '.github/workflows/edge-smoke-build.yml' = '27b20971814c6f90fb475f412cbcbcff9ed287b1c3097dc13377d3ea61a12b06'
+    '.github/workflows/edge-pack-modules.yml' = 'a2e2fc4c2173bc0f963f91e9912e0709809d25b2c9e0343e16af070b8511862e'
 }
 $allowedTestProjectTargetHashes = @{
     'src/Edge/IIoT.Edge.Launcher/IIoT.Edge.Launcher.csproj' = 'f96ff44f47f79371365bbb91b63c8875458c04b0a2e87e3dbab86d9f55ce5011'
@@ -712,19 +712,86 @@ function Get-CanonicalRequiredCommandPrefixes {
     )
 }
 
+function Get-CanonicalSmokeMigrationGateRun {
+    return @'
+# EDGE-BASELINE-MIG-TRUSTED-EXECUTOR-V1
+$trustedBase = '${{ github.event.pull_request.base.sha || github.event.before }}'
+$candidate = '${{ github.event.pull_request.head.sha || github.sha }}'
+$trustedWrapperPath = 'scripts/tests/baselines/migrations/InvokeEdgeBaselineMigrationFromTrustedBase.v1.ps1'
+$entry = (git ls-tree $trustedBase -- $trustedWrapperPath | Out-String).Trim()
+$entryPattern = '^100644 blob (?<ObjectId>[0-9a-f]+)\t' + [regex]::Escape($trustedWrapperPath) + '$'
+if ($LASTEXITCODE -ne 0 -or $entry -notmatch $entryPattern) {
+  throw 'Trusted base does not contain the reviewed migration wrapper.'
+}
+$temporaryWrapper = Join-Path $env:RUNNER_TEMP 'edge-baseline-migration-wrapper.ps1'
+try {
+  & git cat-file blob $Matches.ObjectId > $temporaryWrapper
+  if ($LASTEXITCODE -ne 0) { throw 'Could not extract the trusted migration wrapper.' }
+  $extractedObjectId = (git hash-object --no-filters -- $temporaryWrapper | Out-String).Trim()
+  if ($LASTEXITCODE -ne 0 -or $extractedObjectId -cne $Matches.ObjectId) {
+    throw 'Extracted migration wrapper differs from the trusted Git blob.'
+  }
+  & pwsh -NoLogo -NoProfile -NonInteractive -File $temporaryWrapper `
+    -RepositoryRoot . `
+    -TrustedBaseRevision $trustedBase `
+    -CandidateRevision $candidate `
+    -AnchorRelationship BaseAncestorOfHead
+  if ($LASTEXITCODE -ne 0) { throw "Trusted migration validation failed with exit code $LASTEXITCODE." }
+}
+finally {
+  Remove-Item $temporaryWrapper -Force -ErrorAction SilentlyContinue
+}
+'@
+}
+
+function Get-CanonicalPackMigrationGateRun {
+    return @'
+# EDGE-BASELINE-MIG-TRUSTED-EXECUTOR-V1
+git fetch origin main --no-tags
+$trustedMain = (git rev-parse origin/main | Out-String).Trim()
+if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch' -and $env:GITHUB_REF -ne 'refs/heads/main') {
+  throw 'Manual Edge release validation must run from refs/heads/main.'
+}
+$trustedWrapperPath = 'scripts/tests/baselines/migrations/InvokeEdgeBaselineMigrationFromTrustedBase.v1.ps1'
+$entry = (git ls-tree $trustedMain -- $trustedWrapperPath | Out-String).Trim()
+$entryPattern = '^100644 blob (?<ObjectId>[0-9a-f]+)\t' + [regex]::Escape($trustedWrapperPath) + '$'
+if ($LASTEXITCODE -ne 0 -or $entry -notmatch $entryPattern) {
+  throw 'Trusted main does not contain the reviewed migration wrapper.'
+}
+$temporaryWrapper = Join-Path $env:RUNNER_TEMP 'edge-baseline-migration-wrapper.ps1'
+try {
+  & git cat-file blob $Matches.ObjectId > $temporaryWrapper
+  if ($LASTEXITCODE -ne 0) { throw 'Could not extract the trusted migration wrapper.' }
+  $extractedObjectId = (git hash-object --no-filters -- $temporaryWrapper | Out-String).Trim()
+  if ($LASTEXITCODE -ne 0 -or $extractedObjectId -cne $Matches.ObjectId) {
+    throw 'Extracted migration wrapper differs from the trusted Git blob.'
+  }
+  & pwsh -NoLogo -NoProfile -NonInteractive -File $temporaryWrapper `
+    -RepositoryRoot . `
+    -TrustedBaseRevision $trustedMain `
+    -CandidateRevision '${{ github.sha }}' `
+    -AnchorRelationship HeadAncestorOfBase
+  if ($LASTEXITCODE -ne 0) { throw "Trusted migration validation failed with exit code $LASTEXITCODE." }
+}
+finally {
+  Remove-Item $temporaryWrapper -Force -ErrorAction SilentlyContinue
+}
+'@
+}
+
 function Get-CanonicalWorkflowRunSteps {
     param([Parameter(Mandatory)][string]$WorkflowPath)
 
     $steps = [System.Collections.Generic.List[object]]::new()
     if ($WorkflowPath -eq '.github/workflows/edge-smoke-build.yml') {
         $steps.Add([pscustomobject]@{
-            Name = 'Validate immutable test baseline anchor'
-            Run = './scripts/tests/TestEdgeTestGovernancePolicy.ps1 -Mode ValidateBaselineAnchor -TrustedBaseRevision ''${{ github.event.pull_request.base.sha || github.event.before }}'''
+            Name = 'Validate trusted baseline migration'
+            Run = (Get-CanonicalSmokeMigrationGateRun)
         })
     } elseif ($WorkflowPath -eq '.github/workflows/edge-pack-modules.yml') {
         $steps.Add([pscustomobject]@{
-            Name = 'Validate protected-main test baseline anchor'
-            Run = "git fetch origin main --no-tags`n`$trustedMain = (git rev-parse origin/main | Out-String).Trim()`nif (`$env:GITHUB_EVENT_NAME -eq 'workflow_dispatch' -and `$env:GITHUB_REF -ne 'refs/heads/main') {`n  throw 'Manual Edge release validation must run from refs/heads/main.'`n}`n./scripts/tests/TestEdgeTestGovernancePolicy.ps1 -Mode ValidateBaselineAnchor -TrustedBaseRevision `$trustedMain -AnchorRelationship HeadAncestorOfBase"
+            Name = 'Validate trusted baseline migration'
+            Run = (Get-CanonicalPackMigrationGateRun)
         })
     }
     $steps.Add([pscustomobject]@{
@@ -735,6 +802,10 @@ function Get-CanonicalWorkflowRunSteps {
         [pscustomobject]@{
             Name = 'Run Edge test governance self-tests'
             Run = "./scripts/tests/TestEdgeTestGovernanceBehavior.ps1`n./scripts/tests/TestEdgeTestGovernancePolicy.ps1 -Mode ValidateRunnerCaseNormalization`n./scripts/tests/TestEdgeTestGovernancePolicy.ps1 -Mode ValidateStatic -Configuration Release"
+        },
+        [pscustomobject]@{
+            Name = 'Run Edge baseline migration self-tests'
+            Run = './scripts/tests/baselines/migrations/TestEdgeBaselineMigrationValidator.v1.ps1'
         },
         [pscustomobject]@{
             Name = 'Build Edge solution and test assemblies'
@@ -910,11 +981,12 @@ function Get-CanonicalWorkflowStepNames {
     if ($WorkflowPath -eq '.github/workflows/edge-smoke-build.yml') {
         return [string[]]@(
             'Checkout',
-            'Validate immutable test baseline anchor',
+            'Validate trusted baseline migration',
             'Setup .NET',
             'Validate reviewed restore and build inputs',
             'Restore Edge solution',
             'Run Edge test governance self-tests',
+            'Run Edge baseline migration self-tests',
             'Setup Python for deployment behavior tests',
             'Run Edge deployment behavior tests',
             'Enforce shared UI baseline',
@@ -933,11 +1005,12 @@ function Get-CanonicalWorkflowStepNames {
     }
     return [string[]]@(
         'Checkout',
-        'Validate protected-main test baseline anchor',
+        'Validate trusted baseline migration',
         'Setup .NET',
         'Validate reviewed restore and build inputs',
         'Restore edge solution',
         'Run Edge test governance self-tests',
+        'Run Edge baseline migration self-tests',
         'Resolve release metadata',
         'Build Edge solution and test assemblies',
         'Validate Edge test repository and legacy discovery ceilings',
@@ -1853,7 +1926,7 @@ function Test-StaticPolicy {
             (Get-FileHash $workflowPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expectedWorkflowSha256) {
             Add-PolicyError -Errors $Errors -Code "$ruleId-CI" -Message "$($requirement.workflowPath) differs from the exact reviewed workflow, including triggers, permissions and path filters."
         }
-        $workflowContent = (Get-Content $workflowPath -Raw).Replace('\', '/')
+        $workflowContent = Get-Content $workflowPath -Raw
         $unpinnedActionReferences = @([regex]::Matches($workflowContent, '(?mi)^\s*uses:\s*[^@\s]+@(?<ref>[^\s#]+)') | Where-Object {
             $_.Groups['ref'].Value -notmatch '^[0-9a-f]{40}$'
         })
