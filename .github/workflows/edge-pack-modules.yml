@@ -31,17 +31,39 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-
-      - name: Validate protected-main test baseline anchor
+      - name: Validate trusted baseline migration
         shell: pwsh
         run: |
+          # EDGE-BASELINE-MIG-TRUSTED-EXECUTOR-V1
           git fetch origin main --no-tags
           $trustedMain = (git rev-parse origin/main | Out-String).Trim()
           if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch' -and $env:GITHUB_REF -ne 'refs/heads/main') {
             throw 'Manual Edge release validation must run from refs/heads/main.'
           }
-          ./scripts/tests/TestEdgeTestGovernancePolicy.ps1 -Mode ValidateBaselineAnchor -TrustedBaseRevision $trustedMain -AnchorRelationship HeadAncestorOfBase
-
+          $trustedWrapperPath = 'scripts/tests/baselines/migrations/InvokeEdgeBaselineMigrationFromTrustedBase.v1.ps1'
+          $entry = (git ls-tree $trustedMain -- $trustedWrapperPath | Out-String).Trim()
+          $entryPattern = '^100644 blob (?<ObjectId>[0-9a-f]+)\t' + [regex]::Escape($trustedWrapperPath) + '$'
+          if ($LASTEXITCODE -ne 0 -or $entry -notmatch $entryPattern) {
+            throw 'Trusted main does not contain the reviewed migration wrapper.'
+          }
+          $temporaryWrapper = Join-Path $env:RUNNER_TEMP 'edge-baseline-migration-wrapper.ps1'
+          try {
+            & git cat-file blob $Matches.ObjectId > $temporaryWrapper
+            if ($LASTEXITCODE -ne 0) { throw 'Could not extract the trusted migration wrapper.' }
+            $extractedObjectId = (git hash-object --no-filters -- $temporaryWrapper | Out-String).Trim()
+            if ($LASTEXITCODE -ne 0 -or $extractedObjectId -cne $Matches.ObjectId) {
+              throw 'Extracted migration wrapper differs from the trusted Git blob.'
+            }
+            & pwsh -NoLogo -NoProfile -NonInteractive -File $temporaryWrapper `
+              -RepositoryRoot . `
+              -TrustedBaseRevision $trustedMain `
+              -CandidateRevision '${{ github.sha }}' `
+              -AnchorRelationship HeadAncestorOfBase
+            if ($LASTEXITCODE -ne 0) { throw "Trusted migration validation failed with exit code $LASTEXITCODE." }
+          }
+          finally {
+            Remove-Item $temporaryWrapper -Force -ErrorAction SilentlyContinue
+          }
       - name: Setup .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
@@ -61,6 +83,10 @@ jobs:
           ./scripts/tests/TestEdgeTestGovernanceBehavior.ps1
           ./scripts/tests/TestEdgeTestGovernancePolicy.ps1 -Mode ValidateRunnerCaseNormalization
           ./scripts/tests/TestEdgeTestGovernancePolicy.ps1 -Mode ValidateStatic -Configuration Release
+
+      - name: Run Edge baseline migration self-tests
+        shell: pwsh
+        run: ./scripts/tests/baselines/migrations/TestEdgeBaselineMigrationValidator.v1.ps1
 
       - name: Resolve release metadata
         shell: pwsh
