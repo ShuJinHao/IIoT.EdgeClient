@@ -274,6 +274,18 @@ AnalyzerTests 必须是 Pure/Architecture 测试，不得启动 Shell、SQLite�
 
 Phase 0 已冻结测试源码和测试项目，因此红灯用例先在隔离 candidate worktree 中对旧生产实现运行并保留 test source digest、失败输出和命令；不得把故意失败的提交推入 protected/main required lane。完成生产修复并取得全绿候选后，才按第 10 节用精确 receipt 批准最终 project/test/count/digest delta。
 
+### 9.1 EDGE-TEST-FIXTURE-001 外部进程夹具确定性
+
+启动 fake Cloud、HTTP stub 或其他外部进程的测试夹具必须满足以下协议：
+
+- 使用精确解释器/可执行文件和结构化参数启动子进程，不得依赖 shell 字符串拼接、模糊 PATH 命中或与业务参数混在一个未转义字符串中。
+- 端口只能来自测试进程实际成功绑定的合法 socket 端口；禁止把未绑定、越界、保留值或猜测端口写入就绪文件。
+- 就绪文件必须先完整写入受控临时文件，flush/fsync 后在同一目录原子替换为最终路径；文件存在本身不构成就绪。
+- 调用方必须在有界超时内同时验证结构化就绪内容、端口可连接/满足目标探针，以及子进程仍存活；子进程提前退出、内容不完整、端口不匹配或超时均须 fail closed 并保留脱敏诊断。
+- 禁止用固定 `Task.Delay`、轮询文件存在或盲目重试代替上述握手。每个夹具使用独立临时根、端口和进程租约，清理只能触碰本夹具拥有的资源。
+
+该协议只约束测试基础设施，不改变生产 Cloud/MES/PLC 连接、启动或降级语义。
+
 ## 10. Phase 0 基线迁移回执
 
 现有 Phase 0 baseline 精确冻结 32 个项目、7 个测试项目、964 declaration、1010 execution template、1091 runner、项目/build/workflow/policy 输入。新增 Analyzer/AnalyzerTests 或物理拆分测试会合法改变这些资产，因此必须先建立受审迁移回执，不能直接重生成 baseline。
