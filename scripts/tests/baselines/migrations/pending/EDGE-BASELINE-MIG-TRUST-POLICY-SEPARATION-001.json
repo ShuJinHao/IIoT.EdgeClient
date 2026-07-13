@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "1.0",
+  "ruleId": "EDGE-BASELINE-MIG-001",
+  "migrationId": "EDGE-BASELINE-MIG-TRUST-POLICY-SEPARATION-001",
+  "issuedAgainstRevision": "e92846eec7a4d4a3cf9b9d9f843d06244d2b40ff",
+  "issuedAtUtc": "2026-07-13T05:21:18Z",
+  "expiresAtUtc": "2026-07-20T05:21:18Z",
+  "owner": "Edge.Architecture",
+  "approvedBy": "ShuJinHao",
+  "reason": "Authorize the isolated validator upgrade that forbids baseline and governance policy changes in one receipt.",
+  "ruleIds": [
+    "EDGE-BASELINE-TRUST-UPGRADE-001"
+  ],
+  "source": {
+    "baselineSha256": "7e57a6e9a4028a99c3afaf611f635045caa35f62148aa7e6aba85c25a487f97a",
+    "protectedManifestSha256": "641ac06518c252e7b312d556e57e56f78cb44c1661cd252c77e9fe19637ec1e6",
+    "counts": {
+      "repositoryProjects": 32,
+      "testProjects": 7,
+      "testSourceFiles": 132,
+      "declarations": 964,
+      "executionTemplates": 1010,
+      "projectedCases": 1091,
+      "runnerCases": 1091
+    }
+  },
+  "target": {
+    "baselineSha256": "7e57a6e9a4028a99c3afaf611f635045caa35f62148aa7e6aba85c25a487f97a",
+    "protectedManifestSha256": "2f359ea5d16497e0fdf92f8c1f6e3c3ea7d1f6259884c9260843c7f5071e9d8b",
+    "counts": {
+      "repositoryProjects": 32,
+      "testProjects": 7,
+      "testSourceFiles": 132,
+      "declarations": 964,
+      "executionTemplates": 1010,
+      "projectedCases": 1091,
+      "runnerCases": 1091
+    }
+  },
+  "projectChanges": {
+    "added": [],
+    "removed": [],
+    "addedTests": [],
+    "removedTests": []
+  },
+  "changes": [
+    {
+      "path": "scripts/tests/baselines/migrations/TestEdgeBaselineMigrationValidator.v1.ps1",
+      "status": "M",
+      "beforeMode": "100644",
+      "beforeSha256": "10a7681bd2abe458c7589a98464ea0540c0393cce33a507bc35241c3598dbcfa",
+      "afterMode": "100644",
+      "afterSha256": "abfc748768425a990c7567202c34e87158617fdf83f1a0fc1363e310e044e30f"
+    },
+    {
+      "path": "scripts/tests/baselines/migrations/ValidateEdgeBaselineMigration.v1.ps1",
+      "status": "M",
+      "beforeMode": "100644",
+      "beforeSha256": "317f72da2b87367b063ffe1ea2f3e119c52cb339e0dd321797b4d2c706ac47c9",
+      "afterMode": "100644",
+      "afterSha256": "9baf37a9244b15fca2359bc88c5fe6574d6ec62ae887e0feeae45895fe11c1d2"
+    }
+  ]
+}
