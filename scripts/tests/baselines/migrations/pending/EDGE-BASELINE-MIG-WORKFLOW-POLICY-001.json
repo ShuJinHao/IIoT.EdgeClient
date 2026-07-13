@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "1.0",
+  "ruleId": "EDGE-BASELINE-MIG-001",
+  "migrationId": "EDGE-BASELINE-MIG-WORKFLOW-POLICY-001",
+  "issuedAgainstRevision": "e92846eec7a4d4a3cf9b9d9f843d06244d2b40ff",
+  "issuedAtUtc": "2026-07-13T04:30:38Z",
+  "expiresAtUtc": "2026-07-20T04:30:38Z",
+  "owner": "Edge.Tests",
+  "approvedBy": "ShuJinHao",
+  "reason": "Authorize only the reviewed workflow and policy hashes that add base-owned migration validation and the required 92-case self-test.",
+  "ruleIds": [
+    "EDGE-TEST-GOV-001"
+  ],
+  "source": {
+    "baselineSha256": "7e57a6e9a4028a99c3afaf611f635045caa35f62148aa7e6aba85c25a487f97a",
+    "protectedManifestSha256": "641ac06518c252e7b312d556e57e56f78cb44c1661cd252c77e9fe19637ec1e6",
+    "counts": {
+      "repositoryProjects": 32,
+      "testProjects": 7,
+      "testSourceFiles": 132,
+      "declarations": 964,
+      "executionTemplates": 1010,
+      "projectedCases": 1091,
+      "runnerCases": 1091
+    }
+  },
+  "target": {
+    "baselineSha256": "7e57a6e9a4028a99c3afaf611f635045caa35f62148aa7e6aba85c25a487f97a",
+    "protectedManifestSha256": "8418c47c790234ef602d157ab32d5d91664b7e640d00a7e3a1cae4f16b2d9e60",
+    "counts": {
+      "repositoryProjects": 32,
+      "testProjects": 7,
+      "testSourceFiles": 132,
+      "declarations": 964,
+      "executionTemplates": 1010,
+      "projectedCases": 1091,
+      "runnerCases": 1091
+    }
+  },
+  "projectChanges": {
+    "added": [],
+    "removed": [],
+    "addedTests": [],
+    "removedTests": []
+  },
+  "changes": [
+    {
+      "path": ".github/workflows/edge-pack-modules.yml",
+      "status": "M",
+      "beforeMode": "100644",
+      "beforeSha256": "b739534e1dde66021d37dc062e103eb7223a0c5a7265e431fbdd469f555310fb",
+      "afterMode": "100644",
+      "afterSha256": "7f5b73de815c3673b9c9e905b57b172d9dc3a4d4700f54df0b4b1419867b1558"
+    },
+    {
+      "path": ".github/workflows/edge-smoke-build.yml",
+      "status": "M",
+      "beforeMode": "100644",
+      "beforeSha256": "a6e8c2e934ff5661b06cf710cc8de3476af98af972970ffcdda0e427ce4c5908",
+      "afterMode": "100644",
+      "afterSha256": "963e6206e66f20765b60f3dd4108fb8c6b50ada5396724d7f0cff0254f82d867"
+    },
+    {
+      "path": "scripts/tests/TestEdgeTestGovernancePolicy.ps1",
+      "status": "M",
+      "beforeMode": "100644",
+      "beforeSha256": "785676a91e8fee839136a56cfdb15762f54bf8f9796478fad3c6376b64933e03",
+      "afterMode": "100644",
+      "afterSha256": "d7c80394c41d1b8b2e94d3b38e8c3420e1c2b07466f97dd2227312b36bad8a79"
+    }
+  ]
+}
