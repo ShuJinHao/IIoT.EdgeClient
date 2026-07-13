@@ -26,6 +26,7 @@ $ErrorActionPreference = 'Stop'
 $script:RuleId = 'EDGE-BASELINE-MIG-001'
 $script:ReceiptSchemaVersion = '1.0'
 $script:BaselinePath = 'scripts/tests/baselines/edge-test-governance.baseline.json'
+$script:PolicyPath = 'scripts/tests/TestEdgeTestGovernancePolicy.ps1'
 $script:PendingRoot = 'scripts/tests/baselines/migrations/pending/'
 $script:ConsumedRoot = 'scripts/tests/baselines/migrations/consumed/'
 $script:CancelledRoot = 'scripts/tests/baselines/migrations/cancelled/'
@@ -787,7 +788,7 @@ function Test-IsProtectedPath {
         '.config/dotnet-tools.json',
         'scripts/CheckEdgeUiSharedBaseline.ps1',
         'scripts/TestEdgePackageVulnerabilities.ps1',
-        'scripts/tests/TestEdgeTestGovernancePolicy.ps1',
+        $script:PolicyPath,
         'scripts/tests/TestEdgeTestGovernanceBehavior.ps1'
     )
     if ($Path -in $exactPaths) { return $true }
@@ -1310,6 +1311,8 @@ function Assert-ReceiptShape {
     $hasProtectedChange = $false
     $hasTrustImplementationChange = $false
     $hasOrdinaryChange = $false
+    $hasBaselineChange = $false
+    $hasPolicyChange = $false
     $lastPath = $null
     foreach ($change in $changes) {
         Assert-ExactProperties -Object $change -Expected @(
@@ -1335,6 +1338,8 @@ function Assert-ReceiptShape {
             $hasOrdinaryChange = $true
         }
         if (Test-IsProtectedPath -Path $path) { $hasProtectedChange = $true }
+        if ($path -ceq $script:BaselinePath) { $hasBaselineChange = $true }
+        if ($path -ceq $script:PolicyPath) { $hasPolicyChange = $true }
 
         $status = [string]$change.status
         if ($status -cnotin @('A', 'M', 'D')) {
@@ -1363,6 +1368,10 @@ function Assert-ReceiptShape {
         }
         Assert-HashOrNull -Value $change.beforeSha256 -MustExist $beforeExists -Location "change[$path].beforeSha256"
         Assert-HashOrNull -Value $change.afterSha256 -MustExist $afterExists -Location "change[$path].afterSha256"
+    }
+    if ($hasBaselineChange -and $hasPolicyChange) {
+        Stop-MigrationValidation -Code 'POLICY' -Message (
+            'baseline and governance policy must be migrated in separate receipts.')
     }
     if (-not $hasProtectedChange) {
         Stop-MigrationValidation -Code 'RECEIPT' -Message 'a migration receipt must govern at least one protected asset change.'
