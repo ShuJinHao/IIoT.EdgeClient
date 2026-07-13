@@ -1,0 +1,306 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://iiot.local/schemas/edge-baseline-migration-receipt-v1.json",
+  "title": "Edge baseline migration receipt v1",
+  "$comment": "Reference schema for authoring and review. ValidateEdgeBaselineMigration.v1.ps1 is authoritative for byte limits, ordinal ordering, path portability, time windows, cross-field constraints, and state transitions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "ruleId",
+    "migrationId",
+    "issuedAgainstRevision",
+    "issuedAtUtc",
+    "expiresAtUtc",
+    "owner",
+    "approvedBy",
+    "reason",
+    "ruleIds",
+    "source",
+    "target",
+    "projectChanges",
+    "changes"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "ruleId": {
+      "const": "EDGE-BASELINE-MIG-001"
+    },
+    "migrationId": {
+      "type": "string",
+      "pattern": "^EDGE-BASELINE-MIG-[A-Z0-9][A-Z0-9-]{2,80}$"
+    },
+    "issuedAgainstRevision": {
+      "$ref": "#/$defs/commitSha"
+    },
+    "issuedAtUtc": {
+      "$ref": "#/$defs/utcTimestamp"
+    },
+    "expiresAtUtc": {
+      "$ref": "#/$defs/utcTimestamp"
+    },
+    "owner": {
+      "enum": [
+        "Edge.Architecture",
+        "Edge.Persistence",
+        "Edge.Tests",
+        "Edge.Deployment",
+        "Edge.Security"
+      ]
+    },
+    "approvedBy": {
+      "const": "ShuJinHao"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 500
+    },
+    "ruleIds": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "EDGE-ARCH-001",
+          "EDGE-PERSIST-001",
+          "EDGE-TEST-GOV-001",
+          "EDGE-TEST-PHYSICAL-001",
+          "WSARCH001",
+          "WSARCH003",
+          "WSARCH004",
+          "WSARCH005",
+          "WSARCH008",
+          "DDD001",
+          "DDD002",
+          "DDD003",
+          "DDD004",
+          "DDD005",
+          "DDD006",
+          "DDD007",
+          "DATA001",
+          "DATA002",
+          "DATA003",
+          "DATA004",
+          "DATA005",
+          "DATA006",
+          "DATA007",
+          "PLUG001",
+          "PLUG002",
+          "PLUG003",
+          "PLUG004",
+          "PLUG005",
+          "PLUG006",
+          "EDGEOUT001",
+          "EDGEPLCOWN001",
+          "EDGEASYNC001",
+          "EDGEASYNC002",
+          "EDGEFRIEND001",
+          "EDGEPLUGCON001",
+          "QUALITY001",
+          "EDGE-BASELINE-TRUST-UPGRADE-001"
+        ]
+      }
+    },
+    "source": {
+      "$ref": "#/$defs/state"
+    },
+    "target": {
+      "$ref": "#/$defs/state"
+    },
+    "projectChanges": {
+      "$ref": "#/$defs/projectChanges"
+    },
+    "changes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5000,
+      "items": {
+        "$ref": "#/$defs/change"
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "commitSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repositoryProjects",
+        "testProjects",
+        "testSourceFiles",
+        "declarations",
+        "executionTemplates",
+        "projectedCases",
+        "runnerCases"
+      ],
+      "properties": {
+        "repositoryProjects": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "testProjects": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "testSourceFiles": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "declarations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "executionTemplates": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "projectedCases": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "runnerCases": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "baselineSha256",
+        "protectedManifestSha256",
+        "counts"
+      ],
+      "properties": {
+        "baselineSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "protectedManifestSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "counts": {
+          "$ref": "#/$defs/counts"
+        }
+      }
+    },
+    "pathArray": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "projectChanges": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "added",
+        "removed",
+        "addedTests",
+        "removedTests"
+      ],
+      "properties": {
+        "added": {
+          "$ref": "#/$defs/pathArray"
+        },
+        "removed": {
+          "$ref": "#/$defs/pathArray"
+        },
+        "addedTests": {
+          "$ref": "#/$defs/pathArray"
+        },
+        "removedTests": {
+          "$ref": "#/$defs/pathArray"
+        }
+      }
+    },
+    "gitMode": {
+      "enum": [
+        "100644",
+        "100755"
+      ]
+    },
+    "change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "status",
+        "beforeMode",
+        "beforeSha256",
+        "afterMode",
+        "afterSha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "A",
+            "M",
+            "D"
+          ]
+        },
+        "beforeMode": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/gitMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "beforeSha256": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "afterMode": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/gitMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "afterSha256": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

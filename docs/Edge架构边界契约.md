@@ -2,7 +2,7 @@
 
 本文档是 `IIoT.EdgeClient` 的长期架构边界与测试归口契约。它以当前源码、MSBuild 评估图、EF model、真实写入路径、插件装载/打包路径和测试资产为依据，为 `EDGE-ARCH-001` 提供权威输入；Analyzer 不得按目录名、接口名或 EF navigation 自行猜测业务边界。
 
-当前证据基线：`9540f6661c1bb5309751fabe776b456db8f5d6ce`。在 `EDGE-BASELINE-MIG-BOOTSTRAP` 建立可信消费器前，受保护的项目图、测试资产和 Phase 0 基线不得变化；bootstrap 完成后，Owner、例外、聚合裁决和受保护资产只能通过受审迁移回执演进，不能在同一候选提交中改规则、改基线并自我批准。
+当前证据基线：`9540f6661c1bb5309751fabe776b456db8f5d6ce`。在 `EDGE-BASELINE-MIG-BOOTSTRAP` 工具完成、首次 workflow/policy receipt 被精确消费且 base-owned required check 真正强制之前，受保护的项目图、测试资产和 Phase 0 基线不得变化；远端接入生效后，Owner、例外、聚合裁决和受保护资产也只能通过受审迁移回执演进，不能在同一候选提交中改规则、改基线并自我批准。
 
 ## 1. 状态语义
 
@@ -278,16 +278,18 @@ Phase 0 已冻结测试源码和测试项目，因此红灯用例先在隔离 ca
 
 现有 Phase 0 baseline 精确冻结 32 个项目、7 个测试项目、964 declaration、1010 execution template、1091 runner、项目/build/workflow/policy 输入。新增 Analyzer/AnalyzerTests 或物理拆分测试会合法改变这些资产，因此必须先建立受审迁移回执，不能直接重生成 baseline。
 
-以下是目标协议设计，**当前尚未实现**。现有 `ValidateBaselineAnchor` 对任何 baseline digest 变化都会无条件失败，没有 receipt schema、可信消费器、过期/重放或消费 ledger；在 `EDGE-BASELINE-MIG-BOOTSTRAP` 完成并有正反证据前，不得宣称 receipt 已可执行。
+`EDGE-BASELINE-MIG-BOOTSTRAP` 已在 `scripts/tests/baselines/migrations/` 落下 v1 validator、trusted-base 提取 wrapper、reference schema 和 92 条隔离正反 self-test。它当前仍是 **bootstrap 工具和本地受控证据**：既有两份 required workflow / Phase 0 policy 尚未接入新入口，远端 branch protection 与第二位独立 reviewer 也尚未建立，因此不能宣称 receipt 已成为不可规避 trust root，也不能用本地 pending receipt 放行任何 Analyzer、项目图、测试源码或 baseline 变化。
 
 目标采用“可信消费器 bootstrap + 授权回执提交 + 消费回执提交”协议：
 
 ### 0. 可信消费器 bootstrap
 
 - 先把通用 receipt validator 和自身隔离正反测试放入既有 CODEOWNERS 覆盖的受控目录；旧 baseline、solution、policy、workflow 和测试源码保持不变，使 bootstrap 提交能由旧门禁独立验收。
-- 后续 required workflow 必须从 `TrustedBaseRevision` 用 `git show` 提取 validator 到临时目录执行，禁止直接执行 candidate 自己的 validator。
+- 后续 required workflow 必须从 `TrustedBaseRevision` 的 Git blob 提取 validator 到临时目录、复核 blob object id 后执行，禁止直接执行 candidate 自己的 validator。仓库内 candidate wrapper 只能作为防误用入口；没有 base-owned required check 时，它本身不是信任根。
 - trusted validator 对每次提交比较 base/candidate 的受保护资产集合：baseline、policy/behavior、workflow、solution、所有 project/build/test source、runner、NuGet、CODEOWNERS 和 waiver。无 receipt 时这些资产必须与 base 相同；有 receipt 时只允许精确路径、状态和 SHA-256。
-- bootstrap validator 自身升级也必须先以独立可信提交进入 base；candidate 不得在消费 receipt 时同时替换 trusted validator。
+- bootstrap validator/wrapper/schema/self-test 后续升级只能使用唯一 `EDGE-BASELINE-TRUST-UPGRADE-001`：receipt 的全部显式变化必须都是 trust implementation path，不能夹带 workflow、baseline、项目、测试或生产路径；旧 trusted validator 负责核对精确 hash/mode/diff，升级候选仍需单独跑完整新 self-test。普通 receipt 不得替换 trusted implementation。
+- trust implementation 只允许上述 validator、wrapper、schema、self-test 四个精确路径；四项在 trusted base 和普通候选中都必须存在且保持 `100644`。目录内新增第五个“信任脚本”或删除任一信任资产都必须失败，不能靠目录前缀自动获得升级权限。
+- 首次接入目标 workflow 必须逐字节锁定 trigger/env/top-level key、canonical job 仅有 `runs-on` / `timeout-minutes` / `steps` 三个直接键、Windows runner、25 分钟预算、完整 SHA pinned checkout、精确 candidate ref、无条件且不可 soft-fail 的 gate step envelope，以及紧邻的 setup-dotnet 前缀。注释伪造 checkout、self-hosted runner、top-level permissions、尾置 job-level env/defaults/container/services/strategy、gate 尾部 `if: false` / `continue-on-error: true` 都必须拒绝。
 
 ### A. 授权回执提交
 
@@ -295,20 +297,23 @@ Phase 0 已冻结测试源码和测试项目，因此红灯用例先在隔离 ca
 - 只新增一次性 receipt/ledger，不修改旧 baseline、policy、workflow、solution 或项目文件。
 - receipt 固定：旧 baseline SHA-256、候选新 baseline SHA-256、全部受保护资产的新 SHA-256、允许变更路径精确集合、项目/测试/count 增减、Rule ID、Owner、批准人、原因、到期日、唯一 MigrationId。
 - receipt 必须在旧门禁下独立 build/test/CI 全绿并进入可信 base；作者不能把未进入 base 的本地 receipt 当批准。
+- AuthorizationOnly 固定为 trusted base 的单父直接子提交，只能新增一个 `mode 100644` pending receipt；receipt 使用严格 UTF-8/JSON、大小写敏感字段、注册 Rule/Owner/Approver、最长 7 天、最大 1 MiB、最多 5000 个变化，路径必须满足 Windows 可移植性。`approvedBy` 仍只是回执声明，身份真实性必须由远端独立 Code Owner / branch rule 证明。
 
 ### B. 消费回执提交
 
-- candidate 只能消费 trusted base 上尚未使用且未过期的 receipt。
+- candidate 只能消费 trusted base 上尚未使用且未过期的 receipt，并且必须是该 authorization base 的单父直接子提交。PR 校验必须 checkout / 传递 `pull_request.head.sha`，不得拿 GitHub synthetic merge SHA 冒充迁移候选；远端合并策略需限制为 squash/rebase，merge-shaped consumption fail-closed。
 - 实际 diff、全部保护资产 digest、project/test/count delta 必须与 receipt 完全一致；多一个、少一个或 hash 不同都失败。
-- receipt 消费后不可重复；后续普通提交重新执行 immutable anchor。
+- pending receipt 必须逐字节、同 `100644` mode 移到 `consumed/`；消费后 MigrationId 不可重复。目标 testProjects/testSource/declaration/execution/projected/runner 声明不得下降，但 declaration/execution/runner 仍含 baseline 声明值，不能替代 Phase 0 scanner、真实 discovery 和 1091+ runner 全量验收。
+- 过期、候选废弃或 intervening main 变化时，允许从“当前含唯一 pending receipt 的 trusted base”用一个单父直接子提交把同一 blob 移到 `cancelled/`；取消可接受已过期 receipt，但不能改字节、mode 或夹带其他路径。consumed/cancelled MigrationId 都永久阻止重放。
+- 无 pending 且 protected diff 为空时是 Immutable；只有上述 AuthorizationOnly、Consume、Cancel、隔离 TrustUpgrade 四种状态可改变 receipt/protected 状态，其他路径一律 fail-closed。
 - 迁移只允许正常 descendant push。若现有 policy 无法安全引入可信消费器，必须重新取得当前轮明确授权后，才可讨论精确 lease 的一次性历史过渡；Cloud 的历史授权不得自动扩大到 Edge。
 
-在远端 branch protection 和独立 reviewer 尚未具备时，只能称为“受控迁移证据”，不能宣称不可规避 trust root。
+reference JSON schema 只帮助 author/reviewer 检查字段；字节上限、ordinal 排序、Windows path、时间窗口、状态拓扑、跨字段与单调约束以 trusted validator 为权威。首次 workflow/policy 接入必须用精确 receipt 完成，并让 required job 实际运行本 self-test；在 base-owned required check、squash/rebase-only、禁止 direct/force/admin bypass 和独立 reviewer 尚未具备时，只能称为“受控迁移证据”。
 
 ## 11. 实施批次与退出条件
 
 1. **EDGE-ARCH-001A 边界契约**：冻结本文的项目角色、5+1 聚合裁决、persistence/plugin/PLC owner、Rule ID 和已知债务。退出：文档链接、`rg` 死链检查、工作树 diff 审核通过。
-2. **EDGE-BASELINE-MIG-BOOTSTRAP**：实现从 trusted base 提取的通用 receipt validator 及正反 self-test；先以旧门禁独立验收 bootstrap，再为首次 workflow/policy 接入准备精确 receipt。退出：无 receipt 的受保护资产变化、伪 receipt、过期、重放、多/少路径、hash 漂移和 candidate validator 自审均稳定失败。
+2. **EDGE-BASELINE-MIG-BOOTSTRAP**：v1 validator/wrapper/schema 和 92 条隔离 self-test 已实现；本批仍需旧门禁、本地 full suite、远端 Windows CI 独立验收。首次 workflow/policy 接入另做精确 receipt，并把 self-test 加入 required job。退出：无 receipt 变化、伪/过期/超大/无效 UTF-8 receipt、重放、取消、trust-upgrade 隔离、路径/mode/hash/count 漂移、非单父拓扑、workflow gate 篡改均有稳定正反证据；未接远端前仍不得关单。
 3. **EDGE-ARCH-001B 隔离 Analyzer 候选**：在独立 worktree 建仓库专属 Analyzer/AnalyzerTests、project graph/owner ledger；无现存违规的规则立即 error，现存 Panels/SDK/async/schema/navigation 债务使用精确 Owner+原因+到期日 waiver，不等待所有生产债务修复。
 4. **EDGE-BASELINE-MIG-ARCH-001**：据第 3 步最终全绿候选计算精确 digest；独立授权 receipt 先进入可信 base，再正常提交候选消费。退出：正反 fixture 使约定违规 `dotnet build` 红、合法 alias/helper/generic/跨文件场景绿，1091 既有 case 不减少。
 5. **EDGE-PERSIST-001 隔离红灯候选**：独立于 Analyzer，在单独 worktree 编写第 9 节的并发、失败恢复、replace 原子性、cascade policy tests，对旧生产实现取得可复现失败；保留命令、test source digest 和失败输出，不 push 故意失败的 main 候选。
