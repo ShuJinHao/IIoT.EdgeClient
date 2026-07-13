@@ -313,7 +313,7 @@ reference JSON schema 只帮助 author/reviewer 检查字段；字节上限、or
 ## 11. 实施批次与退出条件
 
 1. **EDGE-ARCH-001A 边界契约**：冻结本文的项目角色、5+1 聚合裁决、persistence/plugin/PLC owner、Rule ID 和已知债务。退出：文档链接、`rg` 死链检查、工作树 diff 审核通过。
-2. **EDGE-BASELINE-MIG-BOOTSTRAP**：v1 validator/wrapper/schema 和 92 条隔离 self-test 已实现；本批仍需旧门禁、本地 full suite、远端 Windows CI 独立验收。首次 workflow/policy 接入另做精确 receipt，并把 self-test 加入 required job。退出：无 receipt 变化、伪/过期/超大/无效 UTF-8 receipt、重放、取消、trust-upgrade 隔离、路径/mode/hash/count 漂移、非单父拓扑、workflow gate 篡改均有稳定正反证据；未接远端前仍不得关单。
+2. **EDGE-BASELINE-MIG-BOOTSTRAP**：v1 validator/wrapper/schema 和 92 条隔离 self-test 已实现；提交 `a4abf28` 已通过旧门禁、本地分段 1091 case 与远端 Windows run `29220699596` 独立验收。首次 workflow/policy 接入仍须另做精确 receipt，并把 self-test 加入 required job；在该接入与远端保护完成前，bootstrap 仍不是 trust root。退出证据已覆盖无 receipt 变化、伪/过期/超大/无效 UTF-8 receipt、重放、取消、trust-upgrade 隔离、路径/mode/hash/count 漂移、非单父拓扑和 workflow gate 篡改。
 3. **EDGE-ARCH-001B 隔离 Analyzer 候选**：在独立 worktree 建仓库专属 Analyzer/AnalyzerTests、project graph/owner ledger；无现存违规的规则立即 error，现存 Panels/SDK/async/schema/navigation 债务使用精确 Owner+原因+到期日 waiver，不等待所有生产债务修复。
 4. **EDGE-BASELINE-MIG-ARCH-001**：据第 3 步最终全绿候选计算精确 digest；独立授权 receipt 先进入可信 base，再正常提交候选消费。退出：正反 fixture 使约定违规 `dotnet build` 红、合法 alias/helper/generic/跨文件场景绿，1091 既有 case 不减少。
 5. **EDGE-PERSIST-001 隔离红灯候选**：独立于 Analyzer，在单独 worktree 编写第 9 节的并发、失败恢复、replace 原子性、cascade policy tests，对旧生产实现取得可复现失败；保留命令、test source digest 和失败输出，不 push 故意失败的 main 候选。
