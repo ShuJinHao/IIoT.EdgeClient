@@ -28,7 +28,7 @@
     "preAuditBytesAvailable": false,
     "auditMode": "full-current-snapshot-reaudit",
     "reason": "Only the pre-audit SHA-256 and line count were retained before concurrent main-owned plan edits; exact pre-audit bytes are unavailable, so no byte diff or auditedDiffSha256 is claimed.",
-    "finalSha256": "432026d7c3f02ac511ec761ac30d4946f68ddf55dc38be650b8126d2b606e5a2",
+    "finalSha256": "505dc9fc60963cbf1cd0c4cd65d76ad4fa85c3ce99c11b117bfd35fa7744ba3b",
     "finalLineCount": 1418,
     "auditedDiffSha256": null,
     "topLevelSectionInventory": {
@@ -54,16 +54,16 @@
         { "ordinal": 17, "startLine": 1290, "endLine": 1328, "sha256": "8b12fc9d3ed2236cdea8c323b8f021d4c4b4356aace1db9588039bfb2a9af22e" },
         { "ordinal": 18, "startLine": 1329, "endLine": 1348, "sha256": "a8002c6627e048f668c5555cb21abe00313ac94eb20640dfa0f72ac1c930186b" },
         { "ordinal": 19, "startLine": 1349, "endLine": 1390, "sha256": "a599314dd3007661cc3760d845556a14e90ca60a5e95a61b7d3580029baade87" },
-        { "ordinal": 20, "startLine": 1391, "endLine": 1418, "sha256": "3d4db1aaffa94f9ccb26286989a459acfe177dea9219c6f43fbf058be5f4b450" }
+        { "ordinal": 20, "startLine": 1391, "endLine": 1418, "sha256": "7e78dc6691be6bb0e4dc55a3c2c62796058be5ba99435a9202d1a4a20f8134c5" }
       ]
     },
     "decisionMappings": [
-      { "planSection": "6.5", "decision": "local-candidate-audited-formal-closure-still-false", "batchIds": ["TEST-GOV-RULE-EXTRACTION-001-EDGE"] },
+      { "planSection": "6.5", "decision": "project-extraction-closed-at-independent-commit-entry-migration-kept-separate", "batchIds": ["TEST-GOV-RULE-EXTRACTION-001-EDGE", "TEST-GOV-RULE-EXTRACTION-001-EDGE-ENTRY"] },
       { "planSection": "16.2", "decision": "receipt-and-multi-agent-trust-boundaries-retained", "batchIds": ["EDGE-BASELINE-MIG-BOOTSTRAP"] },
       { "planSection": "20", "decision": "edge-counts-review-debts-and-no-e0-claim-reconciled", "batchIds": ["EDGE-TEST-FLAKE-001", "EDGE-ARCH-001"] }
     ],
     "status": "complete-full-current-snapshot-reaudit",
-    "reviewer": "pending-final-nonauthor-review"
+    "reviewer": "local-nonauthor-final-review-pass-2026-07-14"
   },
   "inputs": [
     {
@@ -8537,7 +8537,7 @@
             "lineCount": 291
           },
           "postAudit": {
-            "revision": "uncommitted-candidate",
+            "revision": "8be4ba016499483000548cbc6f5f9f0b29210a44",
             "sha256": "cede8e6cdcf2b619b3e213956376a87c79f3d6ccd4535ec7d1e87391a13327b6",
             "lineCount": 380
           },
@@ -8642,7 +8642,7 @@
             "lineCount": 623
           },
           "postAudit": {
-            "revision": "uncommitted-candidate",
+            "revision": "8be4ba016499483000548cbc6f5f9f0b29210a44",
             "sha256": "3a873223c613798af665fbb987aad698138630ec9a67249788aec63d7463696c",
             "lineCount": 624
           },
@@ -8667,7 +8667,7 @@
             "lineCount": 2053
           },
           "postAudit": {
-            "revision": "uncommitted-candidate",
+            "revision": "8be4ba016499483000548cbc6f5f9f0b29210a44",
             "sha256": "e866493835551825311a4e6b00a28a6b6e4126d76adf34a010beeb144bff6b5f",
             "lineCount": 2069
           },
@@ -10835,7 +10835,7 @@
             "lineCount": 240
           },
           "postAudit": {
-            "revision": "uncommitted-candidate",
+            "revision": "8be4ba016499483000548cbc6f5f9f0b29210a44",
             "sha256": "4d4db6951c3fe096203cc9390be25760249a3c7dfa066de2277f1d9085e0b638",
             "lineCount": 224
           },
@@ -10866,7 +10866,7 @@
             "lineCount": 152
           },
           "postAudit": {
-            "revision": "uncommitted-candidate",
+            "revision": "8be4ba016499483000548cbc6f5f9f0b29210a44",
             "sha256": "c9b954c97a7784c754db27fa11691fb9f26f592a81945597c78942ed6211c8bc",
             "lineCount": 150
           },
@@ -10886,7 +10886,7 @@
             "lineCount": 517
           },
           "postAudit": {
-            "revision": "uncommitted-candidate",
+            "revision": "8be4ba016499483000548cbc6f5f9f0b29210a44",
             "sha256": "14b3b017cae8ea96a9dacbf1fa2f1d107ecc277c9984a396f724c61ceeedf116",
             "lineCount": 514
           },
@@ -13565,10 +13565,147 @@
     }
   ],
   "baseRevision": "e92846eec7a4d4a3cf9b9d9f843d06244d2b40ff",
-  "candidateRevision": "uncommitted",
+  "candidateRevision": "8be4ba016499483000548cbc6f5f9f0b29210a44",
   "reviewStatus": {
-    "status": "pending-nonauthor-rereview",
-    "reason": "首轮 reviewer 状态因语义问题撤回；本轮作者返工只完成机械自检，必须由新的非作者复审后才能更新 reviewer。"
+    "status": "complete-local-nonauthor-and-main-review",
+    "reason": "首轮语义问题撤回后已完成返工、两路非作者终审和主代理复核，P0/P1/P2 均为 0；82 个历史 entry 中的 reviewer 字段保留 8be4ba0 提交前状态，由本顶层当前状态和 projectRuleExtractionClosure 明确 supersede，不冒充 GitHub 独立 reviewer。",
+    "reviewers": [
+      "edge_validator_final_review",
+      "edge_clean_rebuild",
+      "main-agent"
+    ],
+    "reviewedAtUtc": "2026-07-14T03:09:28Z",
+    "doesNotImplyGitHubIndependentReviewer": true
+  },
+  "projectRuleExtractionClosure": {
+    "batchId": "TEST-GOV-RULE-EXTRACTION-001-EDGE",
+    "closed": true,
+    "closedAtRevision": "8be4ba016499483000548cbc6f5f9f0b29210a44",
+    "closedAtUtc": "2026-07-14T03:09:28Z",
+    "conditions": {
+      "inputDigestsRetained": true,
+      "unclassifiedCountZero": true,
+      "needsDecisionCountZero": true,
+      "activeCandidatesHaveUniqueRuleIds": true,
+      "activeCandidatesHaveUniqueAuthoritiesAndResolvableLinks": true,
+      "conflictsDuplicatesSupersededAndIncidentsHaveExplicitDecisions": true,
+      "detectableRulesHaveGateOrRegisteredDebt": true,
+      "mainAgentReviewComplete": true,
+      "nonauthorCrossReviewComplete": true,
+      "ruleIdLinkOldEntryAndCoreRedLineSearchPassed": true,
+      "independentProjectCommitPushed": true
+    },
+    "statusCountsAtClosure": {
+      "Active-Linked": 65,
+      "Active-Migrated": 5,
+      "Superseded": 5,
+      "Duplicate": 4,
+      "Incident-Only": 3,
+      "Needs-Decision": 0
+    },
+    "entryCount": 82,
+    "activeRuleIdCount": 70,
+    "entryLevelReviewerStateAtCommittedExtraction": "pending-nonauthor-rereview",
+    "entryLevelReviewerStateSupersededBy": "reviewStatus and this closure object",
+    "projectEntryMigrationMayProceedAsSeparateBatch": true,
+    "entryMigrationEffective": false,
+    "workspaceRootDefaultReadRelaxationEffective": false,
+    "historicalCoreEntryCancelled": false,
+    "trustRootOrE0Implied": false
+  },
+  "independentCommitEvidence": {
+    "batchId": "TEST-GOV-RULE-EXTRACTION-001-EDGE",
+    "commit": "8be4ba016499483000548cbc6f5f9f0b29210a44",
+    "parent": "e92846eec7a4d4a3cf9b9d9f843d06244d2b40ff",
+    "tree": "aefd9957493832ba4a603cfa2fec453578675520",
+    "subject": "docs(governance): extract edge long-term rules",
+    "branch": "agent/edge-rule-extraction-20260714",
+    "remoteTrackingRef": "refs/remotes/origin/agent/edge-rule-extraction-20260714",
+    "remoteTrackingSha": "8be4ba016499483000548cbc6f5f9f0b29210a44",
+    "pushed": true,
+    "verifiedAtUtc": "2026-07-14T03:09:28Z",
+    "changedPaths": [
+      "IIoT.EdgeClient/docs/Edge安装更新验收.md",
+      "IIoT.EdgeClient/docs/Edge客户端宿主插件分发契约.md",
+      "IIoT.EdgeClient/docs/testing/rule-extraction-ledger.json",
+      "IIoT.EdgeClient/docs/客户端架构治理清单.md",
+      "IIoT.EdgeClient/docs/客户端规则.md",
+      "IIoT.EdgeClient/docs/客户端部署.md",
+      "IIoT.EdgeClient/docs/改动复盘与规则沉淀.md"
+    ],
+    "separateFromEntryMigration": true
+  },
+  "entryMigrationCandidateEvidence": {
+    "batchId": "TEST-GOV-RULE-EXTRACTION-001-EDGE-ENTRY",
+    "baseCommit": "8be4ba016499483000548cbc6f5f9f0b29210a44",
+    "candidateRevision": "uncommitted",
+    "preparedAtUtc": "2026-07-14T03:09:28Z",
+    "allowedPaths": [
+      "IIoT.EdgeClient/AGENTS.md",
+      "IIoT.EdgeClient/docs/客户端规则.md",
+      "IIoT.EdgeClient/docs/客户端架构治理清单.md",
+      "IIoT.EdgeClient/docs/改动复盘与规则沉淀.md",
+      "IIoT.EdgeClient/docs/testing/rule-extraction-ledger.json"
+    ],
+    "excludedPaths": [
+      "production-code",
+      "tests",
+      "analyzers",
+      "workflow",
+      "policy",
+      "baseline",
+      "migration-validator",
+      "receipt",
+      "workspace-shared-rules",
+      "IIoT.CloudPlatform",
+      "AICopilot"
+    ],
+    "fixedTextSource": {
+      "path": "docs/三项目测试架构治理总计划.md",
+      "section": "6.5",
+      "lineStart": 444,
+      "lineEnd": 455,
+      "sha256": "eb488a6e006430b3b1e69553f677e85356ba7a509c03c327e316e944e94abb13",
+      "lineCount": 12
+    },
+    "entryPointsAudited": [
+      {
+        "path": "IIoT.EdgeClient/AGENTS.md",
+        "action": "add-complete-fixed-text-and-retain-historical-core-must-read"
+      },
+      {
+        "path": "IIoT.EdgeClient/docs/客户端规则.md",
+        "action": "replace-deferred-policy-with-complete-fixed-text"
+      }
+    ],
+    "governingRuleId": "EDGE-GOV-CHANGE-CLOSURE-001",
+    "newRuleIdIntroduced": false,
+    "rollingReviewDefaultFullReadRemovedInCandidate": true,
+    "sixTriggerPreciseLookupPresent": true,
+    "currentRulesRemainPrimary": true,
+    "newCurrentBatchRecapStillRequiredForCodeChanges": true,
+    "historicalCoreEntryRetained": true,
+    "workspaceRootEntryModified": false,
+    "requiresSeparateCommit": true,
+    "committed": false,
+    "pushed": false,
+    "validation": {
+      "jsonParse": "pass",
+      "gitDiffCheck": "pass",
+      "changedPathsMatchAllowedPaths": true,
+      "fixedTextOccurrences": {
+        "IIoT.EdgeClient/AGENTS.md": 1,
+        "IIoT.EdgeClient/docs/客户端规则.md": 1
+      },
+      "ruleIndexRowsUniqueAndResolvable": 70,
+      "staleDeferredDefaultReadPhrasesInCurrentEntryFiles": 0,
+      "postAuditFilesVerifiedByteForByteAtExtractionCommit": 6,
+      "historicalCoreEntryRetained": true,
+      "trustRootAndE0RemainFalse": true,
+      "codeTestsOrRemoteCiRun": false,
+      "codeTestsOrRemoteCiReason": "Docs-only local candidate; no code, test, workflow, policy, baseline or remote asset changed."
+    },
+    "trustRootOrE0Implied": false
   },
   "trustRootStatus": {
     "effective": false,
