@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <Target Name="FixtureHiddenEdgeLedger">
+    <MSBuild Projects="../TestsA/IIoT.Edge.CycleA.Tests.csproj" Targets="Build" />
+  </Target>
+</Project>

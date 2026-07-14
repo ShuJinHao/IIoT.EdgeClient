@@ -11,12 +11,14 @@ using IIoT.Edge.Application.Features.Config.UseCases.ModuleParam;
 using IIoT.Edge.Application.Features.Config.UseCases.SystemConfig.Commands;
 using IIoT.Edge.Application.Features.Config.UseCases.SystemConfig.Queries;
 using IIoT.Edge.Domain.Config.Aggregates;
+using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.SharedKernel.Domain;
 using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.SharedKernel.Result;
 using IIoT.Edge.SharedKernel.Specification;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.NonUiRegressionTests;
 
@@ -33,6 +35,9 @@ public sealed class LocalParameterConfigBehaviorTests
             [
                 CreateSystemConfig(1, key, "http://mes.local")
             ]);
+        var snapshotReader = Assert.IsAssignableFrom<ILocalSystemConfigSnapshotReader>(
+            host.LocalParameterConfigService);
+        Assert.Empty(snapshotReader.GetCurrentSystemConfigs());
 
         var first = await host.LocalParameterConfigService.GetSystemConfigsAsync(TestContext.Current.CancellationToken);
         var second = await host.LocalParameterConfigService.GetSystemConfigsAsync(TestContext.Current.CancellationToken);
@@ -40,6 +45,61 @@ public sealed class LocalParameterConfigBehaviorTests
         Assert.True(host.Cache.Contains(ParameterCacheKeys.SystemAll));
         Assert.Equal(first.Single().Key, second.Single().Key);
         Assert.Equal(first.Single().Value, second.Single().Value);
+        Assert.Equal(first, snapshotReader.GetCurrentSystemConfigs());
+    }
+
+    [Fact]
+    public async Task CloudApiEndpointProvider_WhenRealAsyncInitializationCompletes_ShouldPreferLocalSnapshot()
+    {
+        using var host = new ParameterConfigTestHost(
+            systemConfigs:
+            [
+                CreateSystemConfig(1, CloudApiConfigParamSchema.BaseUrl, "https://local-cloud.test")
+            ]);
+        var provider = CreateCloudApiEndpointProvider(host);
+        using var runtimeConfig = CreateRuntimeConfigService(host);
+
+        Assert.Equal("https://options-cloud.test/probe", provider.BuildUrl("/probe"));
+
+        await runtimeConfig.EnsureInitializedAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("https://local-cloud.test/probe", provider.BuildUrl("/probe"));
+    }
+
+    [Fact]
+    public async Task CloudApiEndpointProvider_WhenRuntimeConfigRefreshCompletes_ShouldAtomicallyReadNewSnapshot()
+    {
+        using var host = new ParameterConfigTestHost(
+            systemConfigs:
+            [
+                CreateSystemConfig(1, CloudApiConfigParamSchema.BaseUrl, "https://old-local.test")
+            ]);
+        var provider = CreateCloudApiEndpointProvider(host);
+        using var runtimeConfig = CreateRuntimeConfigService(host);
+        await runtimeConfig.EnsureInitializedAsync(TestContext.Current.CancellationToken);
+        Assert.Equal("https://old-local.test/probe", provider.BuildUrl("/probe"));
+
+        host.SystemRepo.Items.Single().UpdateValue("https://new-local.test");
+        host.Cache.Remove(ParameterCacheKeys.SystemAll);
+
+        Assert.Equal("https://old-local.test/probe", provider.BuildUrl("/probe"));
+        await runtimeConfig.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("https://new-local.test/probe", provider.BuildUrl("/probe"));
+    }
+
+    [Fact]
+    public async Task CloudApiEndpointProvider_WhenRealAsyncInitializationFails_ShouldUseOptionsWithoutBlocking()
+    {
+        using var host = new ParameterConfigTestHost();
+        host.Cache.GetOrCreateException = new IOException("local config unavailable");
+        var provider = CreateCloudApiEndpointProvider(host);
+        using var runtimeConfig = CreateRuntimeConfigService(host);
+
+        await Assert.ThrowsAsync<IOException>(
+            () => runtimeConfig.EnsureInitializedAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal("https://options-cloud.test/probe", provider.BuildUrl("/probe"));
     }
 
     [Fact]
@@ -400,6 +460,21 @@ public sealed class LocalParameterConfigBehaviorTests
         return entity;
     }
 
+    private static CloudApiEndpointProvider CreateCloudApiEndpointProvider(ParameterConfigTestHost host)
+        => new(
+            new StaticOptionsMonitor<CloudApiConfig>(new CloudApiConfig
+            {
+                BaseUrl = "https://options-cloud.test"
+            }),
+            Assert.IsAssignableFrom<ILocalSystemConfigSnapshotReader>(host.LocalParameterConfigService));
+
+    private static LocalSystemRuntimeConfigService CreateRuntimeConfigService(ParameterConfigTestHost host)
+        => new(
+            host.LocalParameterConfigService,
+            new FakeModuleParamRoleProvider(),
+            new FakeProcessIntegrationRegistry(),
+            new FakeLogService());
+
     private sealed class ParameterConfigTestHost : IDisposable
     {
         private readonly ServiceProvider _serviceProvider;
@@ -577,6 +652,15 @@ public sealed class LocalParameterConfigBehaviorTests
             => Task.CompletedTask;
     }
 
+    private sealed class StaticOptionsMonitor<T>(T currentValue) : IOptionsMonitor<T>
+    {
+        public T CurrentValue { get; } = currentValue;
+
+        public T Get(string? name) => CurrentValue;
+
+        public IDisposable? OnChange(Action<T, string?> listener) => null;
+    }
+
     private sealed class RecordingCloudProfileSwitchProjectionWriter : ICloudProfileSwitchProjectionWriter
     {
         public List<bool> Values { get; } = [];
@@ -744,6 +828,8 @@ public sealed class LocalParameterConfigBehaviorTests
         private readonly Dictionary<string, object?> _entries = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, SemaphoreSlim> _locks = new(StringComparer.OrdinalIgnoreCase);
 
+        public Exception? GetOrCreateException { get; set; }
+
         public T? Get<T>(string key)
             => _entries.TryGetValue(key, out var value) && value is T typed
                 ? typed
@@ -775,6 +861,11 @@ public sealed class LocalParameterConfigBehaviorTests
             TimeSpan? nullValueExpirationRelativeToNow = null,
             CancellationToken cancellationToken = default)
         {
+            if (GetOrCreateException is not null)
+            {
+                throw GetOrCreateException;
+            }
+
             if (_entries.TryGetValue(key, out var cached))
             {
                 return cached is T typed ? typed : default;

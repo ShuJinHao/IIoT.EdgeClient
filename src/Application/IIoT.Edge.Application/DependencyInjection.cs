@@ -39,6 +39,7 @@ public static class DependencyInjection
         services.AddSingleton<LocalParameterConfigService>();
         services.AddSingleton<ILocalParameterConfigService>(sp => sp.GetRequiredService<LocalParameterConfigService>());
         services.AddSingleton<ILocalParameterConfigChangePublisher>(sp => sp.GetRequiredService<LocalParameterConfigService>());
+        services.AddSingleton<ILocalSystemConfigSnapshotReader>(sp => sp.GetRequiredService<LocalParameterConfigService>());
         services.AddSingleton<LocalSystemRuntimeConfigService>();
         services.AddSingleton<ILocalSystemRuntimeConfigService>(sp => sp.GetRequiredService<LocalSystemRuntimeConfigService>());
         services.AddSingleton<ICloudExecutionPolicy, CloudExecutionPolicy>();

@@ -4,6 +4,10 @@
   "configuration": "Release",
   "projects": [
     {
+      "projectPath": "src/Tests/IIoT.Edge.Architecture.AnalyzerTests/IIoT.Edge.Architecture.AnalyzerTests.csproj",
+      "discovered": 51
+    },
+    {
       "projectPath": "src/Tests/IIoT.Edge.Infrastructure.Update.Tests/IIoT.Edge.Infrastructure.Update.Tests.csproj",
       "discovered": 17
     },
@@ -17,15 +21,15 @@
     },
     {
       "projectPath": "src/Tests/IIoT.Edge.Module.ContractTests/IIoT.Edge.Module.ContractTests.csproj",
-      "discovered": 59
+      "discovered": 53
     },
     {
       "projectPath": "src/Tests/IIoT.Edge.NonUiRegressionTests/IIoT.Edge.NonUiRegressionTests.csproj",
-      "discovered": 587
+      "discovered": 590
     },
     {
       "projectPath": "src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj",
-      "discovered": 211
+      "discovered": 207
     },
     {
       "projectPath": "src/Tests/IIoT.Edge.UI.Shared.Tests/IIoT.Edge.UI.Shared.Tests.csproj",

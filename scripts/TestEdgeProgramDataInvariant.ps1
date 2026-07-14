@@ -1,5 +1,4 @@
 param(
-    [Alias('ProgramDataRoot')]
     [string]$AppDataRoot,
 
     [string]$SnapshotPath,

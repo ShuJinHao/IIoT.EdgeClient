@@ -1,9 +1,16 @@
 {
   "schemaVersion": 1,
   "solutionPath": "IIoT.EdgeClient.slnx",
-  "solutionProjectCount": 30,
-  "testProjectCount": 7,
+  "solutionProjectCount": 32,
+  "testProjectCount": 8,
   "projects": [
+    {
+      "projectPath": "src/Tests/IIoT.Edge.Architecture.AnalyzerTests/IIoT.Edge.Architecture.AnalyzerTests.csproj",
+      "projectName": "IIoT.Edge.Architecture.AnalyzerTests",
+      "classification": "Architecture",
+      "runtime": "Pure/Roslyn",
+      "required": true
+    },
     {
       "projectPath": "src/Tests/IIoT.Edge.Infrastructure.Update.Tests/IIoT.Edge.Infrastructure.Update.Tests.csproj",
       "projectName": "IIoT.Edge.Infrastructure.Update.Tests",

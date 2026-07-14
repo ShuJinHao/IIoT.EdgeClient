@@ -11,14 +11,14 @@ namespace IIoT.Edge.Infrastructure.Integration.Config;
 public class CloudApiEndpointProvider : ICloudApiEndpointProvider
 {
     private readonly IOptionsMonitor<CloudApiConfig> _cloudApiOptions;
-    private readonly ILocalParameterConfigService? _localParameterConfigService;
+    private readonly ILocalSystemConfigSnapshotReader? _localSystemConfigSnapshotReader;
 
     public CloudApiEndpointProvider(
         IOptionsMonitor<CloudApiConfig> cloudApiOptions,
-        ILocalParameterConfigService? localParameterConfigService = null)
+        ILocalSystemConfigSnapshotReader? localSystemConfigSnapshotReader = null)
     {
         _cloudApiOptions = cloudApiOptions;
-        _localParameterConfigService = localParameterConfigService;
+        _localSystemConfigSnapshotReader = localSystemConfigSnapshotReader;
     }
 
     public string BuildUrl(string relativeOrAbsoluteUrl)
@@ -136,11 +136,8 @@ public class CloudApiEndpointProvider : ICloudApiEndpointProvider
     }
 
     private string? FirstLocalConfigString(string key)
-        => _localParameterConfigService?
-            .GetSystemConfigsAsync()
-            .ConfigureAwait(false)
-            .GetAwaiter()
-            .GetResult()
+        => _localSystemConfigSnapshotReader?
+            .GetCurrentSystemConfigs()
             .FirstOrDefault(snapshot => string.Equals(snapshot.Key, key, StringComparison.OrdinalIgnoreCase))
             ?.Value
             ?.Trim();

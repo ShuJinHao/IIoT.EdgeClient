@@ -13,10 +13,11 @@ namespace IIoT.Edge.Application.Features.Config.LocalParameterConfig;
 public sealed class LocalParameterConfigService(
     IRepository<SystemConfigEntity> systemConfigs,
     IEdgeCacheService cache)
-    : ILocalParameterConfigService, ILocalParameterConfigChangePublisher
+    : ILocalParameterConfigService, ILocalParameterConfigChangePublisher, ILocalSystemConfigSnapshotReader
 {
     private readonly IRepository<SystemConfigEntity> _systemConfigs = systemConfigs;
     private readonly IEdgeCacheService _cache = cache;
+    private IReadOnlyList<LocalSystemConfigSnapshot> _currentSystemConfigs = Array.Empty<LocalSystemConfigSnapshot>();
 
     public event EventHandler<ParameterConfigChangedEventArgs>? ParameterConfigChanged;
 
@@ -29,11 +30,16 @@ public sealed class LocalParameterConfigService(
                 cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
-        return (result ?? [])
+        var snapshots = (result ?? [])
             .OrderBy(x => x.SortOrder)
             .Select(MapSystemConfig)
-            .ToList();
+            .ToArray();
+        Volatile.Write(ref _currentSystemConfigs, snapshots);
+        return snapshots;
     }
+
+    public IReadOnlyList<LocalSystemConfigSnapshot> GetCurrentSystemConfigs()
+        => Volatile.Read(ref _currentSystemConfigs);
 
     public async Task InsertSystemConfigAsync(
         string key,
