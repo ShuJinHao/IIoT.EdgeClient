@@ -226,7 +226,7 @@ try {
 
     $profilesJson = Read-ZipEntryText -Archive $archive -EntryName 'lib/app/launcher.profiles.json'
     $profiles = @($profilesJson | ConvertFrom-Json)
-    $expectedProfileIds = @('HomogenizationLine', 'DieCuttingAnodeLine', 'DieCuttingCathodeLine')
+    $expectedProfileIds = @('HomogenizationLine')
     if ($profiles.Count -lt $expectedProfileIds.Count) {
         throw "Velopack package launcher.profiles.json contains $($profiles.Count) profile(s), expected at least $($expectedProfileIds.Count)."
     }

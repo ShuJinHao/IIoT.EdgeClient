@@ -24,8 +24,12 @@ public class ProcessQueueTask : ScheduledTaskBase
     private readonly Channel<DurableConsumerWorkItem> _cloudDurableQueue;
     private readonly Channel<DurableConsumerWorkItem> _mesDurableQueue;
     private readonly object _workerSync = new();
+    private readonly object _durableIdleSync = new();
+    private TaskCompletionSource _durableIdleSignal = CreateCompletedIdleSignal();
     private Task? _cloudDurableWorker;
     private Task? _mesDurableWorker;
+    private bool _cloudDurableWorkerStopped;
+    private bool _mesDurableWorkerStopped;
     private int _cloudPendingCount;
     private int _mesPendingCount;
 
@@ -86,7 +90,7 @@ public class ProcessQueueTask : ScheduledTaskBase
         {
             if (consumer.FailureMode == ConsumerFailureMode.Durable)
             {
-                await DispatchDurableConsumerAsync(record, consumer).ConfigureAwait(false);
+                await DispatchDurableConsumerAsync(record, consumer, cancellationToken).ConfigureAwait(false);
                 continue;
             }
 
@@ -113,6 +117,10 @@ public class ProcessQueueTask : ScheduledTaskBase
             {
                 await HandleFailureAsync(record, consumer, "消费者返回失败。").ConfigureAwait(false);
             }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -172,12 +180,25 @@ public class ProcessQueueTask : ScheduledTaskBase
 
     protected async Task WaitForDurableQueuesIdleAsync(TimeSpan timeout)
     {
-        using var cts = new CancellationTokenSource(timeout);
-        while (Volatile.Read(ref _cloudPendingCount) > 0
-               || Volatile.Read(ref _mesPendingCount) > 0)
+        Task idleTask;
+        lock (_durableIdleSync)
         {
-            await Task.Delay(10, cts.Token).ConfigureAwait(false);
+            if (_cloudPendingCount == 0 && _mesPendingCount == 0)
+            {
+                return;
+            }
+
+            idleTask = _durableIdleSignal.Task;
         }
+
+        await idleTask.WaitAsync(timeout).ConfigureAwait(false);
+    }
+
+    private static TaskCompletionSource CreateCompletedIdleSignal()
+    {
+        var signal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        signal.SetResult();
+        return signal;
     }
 
     private static Channel<DurableConsumerWorkItem> CreateDurableQueue(int capacity)
@@ -209,8 +230,10 @@ public class ProcessQueueTask : ScheduledTaskBase
 
     private async Task DispatchDurableConsumerAsync(
         CellCompletedRecord record,
-        ICellDataConsumer consumer)
+        ICellDataConsumer consumer,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var writer = ResolveDurableQueueWriter(consumer.RetryChannel);
         if (writer is null)
         {
@@ -218,15 +241,44 @@ public class ProcessQueueTask : ScheduledTaskBase
             return;
         }
 
-        IncrementPending(consumer.RetryChannel);
-        if (writer.TryWrite(new DurableConsumerWorkItem(record, consumer)))
+        var accepted = false;
+        var workerStopped = false;
+        lock (_workerSync)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (IsDurableWorkerStopped(consumer.RetryChannel))
+            {
+                workerStopped = true;
+            }
+            else
+            {
+                IncrementPending(consumer.RetryChannel);
+                accepted = writer.TryWrite(new DurableConsumerWorkItem(record, consumer));
+                if (!accepted)
+                {
+                    DecrementPending(consumer.RetryChannel);
+                }
+            }
+        }
+
+        if (accepted)
         {
             return;
         }
 
-        DecrementPending(consumer.RetryChannel);
-        await HandleFailureAsync(record, consumer, "目标出口队列已满。").ConfigureAwait(false);
+        var failureMessage = workerStopped
+            ? "目标出口后台任务已停止。"
+            : "目标出口队列已满。";
+        await HandleFailureAsync(record, consumer, failureMessage).ConfigureAwait(false);
     }
+
+    private bool IsDurableWorkerStopped(DataPipelineRetryChannel channel)
+        => channel switch
+        {
+            DataPipelineRetryChannel.Cloud => _cloudDurableWorkerStopped,
+            DataPipelineRetryChannel.Mes => _mesDurableWorkerStopped,
+            _ => true
+        };
 
     private ChannelWriter<DurableConsumerWorkItem>? ResolveDurableQueueWriter(DataPipelineRetryChannel channel)
         => channel switch
@@ -255,34 +307,70 @@ public class ProcessQueueTask : ScheduledTaskBase
                 }
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+        }
+        finally
+        {
+            lock (_workerSync)
+            {
+                switch (channel)
+                {
+                    case DataPipelineRetryChannel.Cloud:
+                        _cloudDurableWorkerStopped = true;
+                        break;
+                    case DataPipelineRetryChannel.Mes:
+                        _mesDurableWorkerStopped = true;
+                        break;
+                }
+
+                while (reader.TryRead(out _))
+                {
+                    DecrementPending(channel);
+                }
+            }
         }
     }
 
     private void IncrementPending(DataPipelineRetryChannel channel)
     {
-        switch (channel)
+        lock (_durableIdleSync)
         {
-            case DataPipelineRetryChannel.Cloud:
-                Interlocked.Increment(ref _cloudPendingCount);
-                break;
-            case DataPipelineRetryChannel.Mes:
-                Interlocked.Increment(ref _mesPendingCount);
-                break;
+            if (_cloudPendingCount == 0 && _mesPendingCount == 0)
+            {
+                _durableIdleSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+
+            switch (channel)
+            {
+                case DataPipelineRetryChannel.Cloud:
+                    _cloudPendingCount++;
+                    break;
+                case DataPipelineRetryChannel.Mes:
+                    _mesPendingCount++;
+                    break;
+            }
         }
     }
 
     private void DecrementPending(DataPipelineRetryChannel channel)
     {
-        switch (channel)
+        lock (_durableIdleSync)
         {
-            case DataPipelineRetryChannel.Cloud:
-                Interlocked.Decrement(ref _cloudPendingCount);
-                break;
-            case DataPipelineRetryChannel.Mes:
-                Interlocked.Decrement(ref _mesPendingCount);
-                break;
+            switch (channel)
+            {
+                case DataPipelineRetryChannel.Cloud:
+                    _cloudPendingCount--;
+                    break;
+                case DataPipelineRetryChannel.Mes:
+                    _mesPendingCount--;
+                    break;
+            }
+
+            if (_cloudPendingCount == 0 && _mesPendingCount == 0)
+            {
+                _durableIdleSignal.TrySetResult();
+            }
         }
     }
 

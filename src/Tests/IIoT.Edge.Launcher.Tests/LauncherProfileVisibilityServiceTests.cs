@@ -24,8 +24,8 @@ public sealed class LauncherProfileVisibilityServiceTests
                 """
                 {
                   "plugins": [
-                    { "moduleId": "DieCuttingAnode" },
-                    { "moduleId": "DieCuttingCathode" }
+                    { "moduleId": "TestPluginAlpha" },
+                    { "moduleId": "TestPluginBeta" }
                   ]
                 }
                 """);
@@ -41,13 +41,13 @@ public sealed class LauncherProfileVisibilityServiceTests
             var selection = service.ResolveSelection(profiles);
 
             Assert.Equal(
-                ["DieCuttingAnodeLine", "DieCuttingCathodeLine"],
+                ["TestPluginAlphaLine", "TestPluginBetaLine"],
                 visible.Select(static profile => profile.ProfileId).OrderBy(static x => x).ToArray());
             Assert.Equal(
-                ["DieCuttingAnode", "DieCuttingCathode"],
+                ["TestPluginAlpha", "TestPluginBeta"],
                 selection.EnabledModuleIds.OrderBy(static x => x).ToArray());
-            Assert.Equal("DieCuttingAnodeLine", selection.ModuleProfileIds["DieCuttingAnode"]);
-            Assert.Equal("DieCuttingCathodeLine", selection.ModuleProfileIds["DieCuttingCathode"]);
+            Assert.Equal("TestPluginAlphaLine", selection.ModuleProfileIds["TestPluginAlpha"]);
+            Assert.Equal("TestPluginBetaLine", selection.ModuleProfileIds["TestPluginBeta"]);
         }
         finally
         {
@@ -66,14 +66,14 @@ public sealed class LauncherProfileVisibilityServiceTests
             var profiles = CreateProcessProfiles(currentDirectory);
             var service = new LauncherProfileVisibilityService(
                 currentDirectory,
-                new StubInstalledPluginCatalog("DieCuttingAnode", "DieCuttingCathode"),
+                new StubInstalledPluginCatalog("TestPluginAlpha", "TestPluginBeta"),
                 CreateModuleConfiguration(),
                 new LauncherUpdateTargetFactory());
 
             var visible = service.SelectVisibleProfiles(profiles);
 
             Assert.Equal(
-                ["DieCuttingAnodeLine", "DieCuttingCathodeLine"],
+                ["TestPluginAlphaLine", "TestPluginBetaLine"],
                 visible.Select(static profile => profile.ProfileId).OrderBy(static x => x).ToArray());
         }
         finally
@@ -113,8 +113,8 @@ public sealed class LauncherProfileVisibilityServiceTests
         return
         [
             Profile("HomogenizationLine", "匀浆", hostExecutable),
-            Profile("DieCuttingAnodeLine", "负极模切", hostExecutable),
-            Profile("DieCuttingCathodeLine", "正极模切", hostExecutable)
+            Profile("TestPluginAlphaLine", "测试插件甲", hostExecutable),
+            Profile("TestPluginBetaLine", "测试插件乙", hostExecutable)
         ];
     }
 
@@ -136,8 +136,8 @@ public sealed class LauncherProfileVisibilityServiceTests
         => new StubModuleConfigurationStore(new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
         {
             ["HomogenizationLine"] = ["Homogenization"],
-            ["DieCuttingAnodeLine"] = ["DieCuttingAnode"],
-            ["DieCuttingCathodeLine"] = ["DieCuttingCathode"]
+            ["TestPluginAlphaLine"] = ["TestPluginAlpha"],
+            ["TestPluginBetaLine"] = ["TestPluginBeta"]
         });
 
     private static string CreateTempDirectory()

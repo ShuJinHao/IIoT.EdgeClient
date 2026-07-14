@@ -15,6 +15,253 @@ namespace IIoT.Edge.NonUiRegressionTests;
 public sealed class ProcessQueueTaskBehaviorTests
 {
     [Fact]
+    public async Task TestPluginRecord_WhenRealPipelineAccepts_ShouldReachDurableConsumerExactlyOnce()
+    {
+        var events = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        var consumerStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowConsumerToComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var consumerCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var logger = new FakeLogService();
+        var pipeline = new DataPipelineService(new FakeIngressOverflowPersistence(), logger);
+        var cloudRetryStore = new FakeFailedRecordStore();
+        var mesRetryStore = new FakeFailedRecordStore();
+        var cloudFallbackStore = new FakeCloudFallbackBufferStore();
+        var mesFallbackStore = new FakeMesFallbackBufferStore();
+        var cloudDeadLetterStore = new FakeCloudDeadLetterStore();
+        var mesDeadLetterStore = new FakeMesDeadLetterStore();
+        var criticalWriter = new FakeCriticalPersistenceFallbackWriter();
+        var cloudConsumer = new FakeCellDataConsumer(
+            name: "Cloud",
+            order: 10,
+            retryChannel: "Cloud",
+            result: true,
+            failureMode: ConsumerFailureMode.Durable,
+            processAsync: async (_, cancellationToken) =>
+            {
+                events.Enqueue("durable-start");
+                consumerStarted.TrySetResult();
+                await allowConsumerToComplete.Task.WaitAsync(cancellationToken);
+                events.Enqueue("durable-complete");
+                consumerCompleted.TrySetResult();
+                return true;
+            });
+        var task = new TestableProcessQueueTask(
+            logger,
+            pipeline,
+            [cloudConsumer],
+            cloudRetryStore,
+            mesRetryStore,
+            cloudFallbackStore,
+            mesFallbackStore,
+            cloudDeadLetterStore,
+            mesDeadLetterStore,
+            criticalWriter);
+
+        var enqueueResult = await pipeline.EnqueueAsync(
+            CreateTestPluginRecord(),
+            TestContext.Current.CancellationToken);
+        events.Enqueue("enqueue-accepted");
+        using var cancellation = new CancellationTokenSource();
+        Task? runtime = null;
+
+        try
+        {
+            Assert.True(enqueueResult.IsDurablyAccepted);
+            Assert.Equal(1, pipeline.PendingCount);
+            Assert.Equal(0, cloudConsumer.ProcessCallCount);
+
+            runtime = task.StartAsync(cancellation.Token);
+            await consumerStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+
+            Assert.Equal(["enqueue-accepted", "durable-start"], events.ToArray());
+            Assert.Equal(1, cloudConsumer.ProcessCallCount);
+            Assert.Equal(0, pipeline.PendingCount);
+            Assert.False(consumerCompleted.Task.IsCompleted);
+
+            allowConsumerToComplete.TrySetResult();
+            await consumerCompleted.Task.WaitAsync(TestContext.Current.CancellationToken);
+            await task.WaitUntilDurableIdleAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(
+                ["enqueue-accepted", "durable-start", "durable-complete"],
+                events.ToArray());
+            Assert.Equal(1, cloudConsumer.ProcessCallCount);
+            AssertNoCompensationWrites(
+                cloudRetryStore,
+                mesRetryStore,
+                cloudFallbackStore,
+                mesFallbackStore,
+                cloudDeadLetterStore,
+                mesDeadLetterStore,
+                criticalWriter);
+        }
+        finally
+        {
+            allowConsumerToComplete.TrySetResult();
+            await cancellation.CancelAsync();
+            if (runtime is not null)
+            {
+                await runtime.WaitAsync(TestContext.Current.CancellationToken);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task TestPluginRecords_WhenRuntimeIsCancelledWithQueuedDurableItem_ShouldDrainWithoutCompensation()
+    {
+        var consumerStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var consumerCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var neverComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var logger = new FakeLogService();
+        var pipeline = new DataPipelineService(new FakeIngressOverflowPersistence(), logger);
+        var observedPipeline = new ObservedDataPipelineService(pipeline);
+        var cloudRetryStore = new FakeFailedRecordStore();
+        var mesRetryStore = new FakeFailedRecordStore();
+        var cloudFallbackStore = new FakeCloudFallbackBufferStore();
+        var mesFallbackStore = new FakeMesFallbackBufferStore();
+        var cloudDeadLetterStore = new FakeCloudDeadLetterStore();
+        var mesDeadLetterStore = new FakeMesDeadLetterStore();
+        var criticalWriter = new FakeCriticalPersistenceFallbackWriter();
+        var cloudConsumer = new FakeCellDataConsumer(
+            name: "Cloud",
+            order: 10,
+            retryChannel: "Cloud",
+            result: true,
+            failureMode: ConsumerFailureMode.Durable,
+            processAsync: async (_, cancellationToken) =>
+            {
+                consumerStarted.TrySetResult();
+                try
+                {
+                    await neverComplete.Task.WaitAsync(cancellationToken);
+                    return true;
+                }
+                catch (OperationCanceledException)
+                {
+                    consumerCancelled.TrySetResult();
+                    throw;
+                }
+            });
+        var task = new TestableProcessQueueTask(
+            logger,
+            observedPipeline,
+            [cloudConsumer],
+            cloudRetryStore,
+            mesRetryStore,
+            cloudFallbackStore,
+            mesFallbackStore,
+            cloudDeadLetterStore,
+            mesDeadLetterStore,
+            criticalWriter);
+        var firstEnqueueResult = await pipeline.EnqueueAsync(
+            CreateTestPluginRecord(),
+            TestContext.Current.CancellationToken);
+        var queuedEnqueueResult = await pipeline.EnqueueAsync(
+            CreateTestPluginRecord(),
+            TestContext.Current.CancellationToken);
+        using var cancellation = new CancellationTokenSource();
+
+        var runtime = task.StartAsync(cancellation.Token);
+        try
+        {
+            await consumerStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+            await observedPipeline.SecondRecordDequeued.WaitAsync(TestContext.Current.CancellationToken);
+            await observedPipeline.CurrentDrainCompleted.WaitAsync(TestContext.Current.CancellationToken);
+            Assert.Equal(0, pipeline.PendingCount);
+            await cancellation.CancelAsync();
+
+            await consumerCancelled.Task.WaitAsync(TestContext.Current.CancellationToken);
+            await task.WaitUntilDurableIdleAsync(TimeSpan.FromSeconds(5));
+            await runtime.WaitAsync(TestContext.Current.CancellationToken);
+            Assert.True(firstEnqueueResult.IsDurablyAccepted);
+            Assert.True(queuedEnqueueResult.IsDurablyAccepted);
+            Assert.Equal(1, cloudConsumer.ProcessCallCount);
+            Assert.Equal(0, pipeline.PendingCount);
+            AssertNoCompensationWrites(
+                cloudRetryStore,
+                mesRetryStore,
+                cloudFallbackStore,
+                mesFallbackStore,
+                cloudDeadLetterStore,
+                mesDeadLetterStore,
+                criticalWriter);
+        }
+        finally
+        {
+            await cancellation.CancelAsync();
+            await runtime.WaitAsync(TestContext.Current.CancellationToken);
+        }
+    }
+
+    [Fact]
+    public async Task TestPluginRecord_WhenDurableConsumerSelfCancels_ShouldPersistExactlyOneRetryRecord()
+    {
+        var consumerStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var logger = new FakeLogService();
+        var pipeline = new DataPipelineService(new FakeIngressOverflowPersistence(), logger);
+        var cloudRetryStore = new FakeFailedRecordStore();
+        var mesRetryStore = new FakeFailedRecordStore();
+        var cloudFallbackStore = new FakeCloudFallbackBufferStore();
+        var mesFallbackStore = new FakeMesFallbackBufferStore();
+        var cloudDeadLetterStore = new FakeCloudDeadLetterStore();
+        var mesDeadLetterStore = new FakeMesDeadLetterStore();
+        var criticalWriter = new FakeCriticalPersistenceFallbackWriter();
+        var cloudConsumer = new FakeCellDataConsumer(
+            name: "Cloud",
+            order: 10,
+            retryChannel: "Cloud",
+            result: true,
+            failureMode: ConsumerFailureMode.Durable,
+            processAsync: (_, _) =>
+            {
+                consumerStarted.TrySetResult();
+                throw new OperationCanceledException("provider cancelled itself");
+            });
+        var task = new TestableProcessQueueTask(
+            logger,
+            pipeline,
+            [cloudConsumer],
+            cloudRetryStore,
+            mesRetryStore,
+            cloudFallbackStore,
+            mesFallbackStore,
+            cloudDeadLetterStore,
+            mesDeadLetterStore,
+            criticalWriter);
+        var enqueueResult = await pipeline.EnqueueAsync(
+            CreateTestPluginRecord(),
+            TestContext.Current.CancellationToken);
+        using var cancellation = new CancellationTokenSource();
+        var runtime = task.StartAsync(cancellation.Token);
+
+        try
+        {
+            await consumerStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+            await task.WaitUntilDurableIdleAsync(TimeSpan.FromSeconds(5));
+
+            Assert.True(enqueueResult.IsDurablyAccepted);
+            Assert.False(cancellation.IsCancellationRequested);
+            Assert.False(runtime.IsCompleted);
+            Assert.Equal(1, cloudConsumer.ProcessCallCount);
+            var retry = Assert.Single(cloudRetryStore.PendingRecords);
+            Assert.Equal("Cloud", retry.Channel);
+            Assert.Equal("Cloud", retry.FailedTarget);
+            Assert.Contains("provider cancelled itself", retry.ErrorMessage, StringComparison.Ordinal);
+            Assert.Empty(mesRetryStore.PendingRecords);
+            Assert.Empty(cloudFallbackStore.Records);
+            Assert.Empty(mesFallbackStore.Records);
+            Assert.Empty(cloudDeadLetterStore.Records);
+            Assert.Empty(mesDeadLetterStore.Records);
+            Assert.Empty(criticalWriter.Writes);
+        }
+        finally
+        {
+            await cancellation.CancelAsync();
+            await runtime.WaitAsync(TestContext.Current.CancellationToken);
+        }
+    }
+
+    [Fact]
     public async Task DurableConsumerFailure_ShouldPersistRetryRecord()
     {
         var logger = new FakeLogService();
@@ -794,8 +1041,8 @@ public sealed class ProcessQueueTaskBehaviorTests
         {
             NetworkDeviceId = 1001,
             DeviceName = "PLC-A",
-            ModuleId = "DieCuttingCathode",
-            TaskKey = "DieCuttingCathode.Realtime",
+            ModuleId = "TestPluginBeta",
+            TaskKey = "TestPluginBeta.Realtime",
             PlanSessionId = "SESSION-001",
             MainPlanCode = "PLAN-001",
             TraceBatchNumber = "TRACE-001",
@@ -811,12 +1058,48 @@ public sealed class ProcessQueueTaskBehaviorTests
             }
         };
 
+    private static CellCompletedRecord CreateTestPluginRecord()
+        => new()
+        {
+            NetworkDeviceId = 17,
+            DeviceName = "PLC-TEST-01",
+            ModuleId = "TestPlugin",
+            TaskKey = "TestPlugin.Snapshot",
+            CreatedAtUtc = DateTime.UtcNow,
+            CellData = new TestPluginWorkflowCellData
+            {
+                PlcDeviceId = 17,
+                DeviceName = "PLC-TEST-01",
+                DeviceCode = "PLC-TEST-01",
+                CompletedTime = DateTime.UtcNow,
+                UploadTargets = DataPipelineUploadTargets.Cloud
+            }
+        };
+
+    private static void AssertNoCompensationWrites(
+        FakeFailedRecordStore cloudRetryStore,
+        FakeFailedRecordStore mesRetryStore,
+        FakeCloudFallbackBufferStore cloudFallbackStore,
+        FakeMesFallbackBufferStore mesFallbackStore,
+        FakeCloudDeadLetterStore cloudDeadLetterStore,
+        FakeMesDeadLetterStore mesDeadLetterStore,
+        FakeCriticalPersistenceFallbackWriter criticalWriter)
+    {
+        Assert.Empty(cloudRetryStore.PendingRecords);
+        Assert.Empty(mesRetryStore.PendingRecords);
+        Assert.Empty(cloudFallbackStore.Records);
+        Assert.Empty(mesFallbackStore.Records);
+        Assert.Empty(cloudDeadLetterStore.Records);
+        Assert.Empty(mesDeadLetterStore.Records);
+        Assert.Empty(criticalWriter.Writes);
+    }
+
     private static void AssertStoredContext(FailedCellRecord record)
     {
         Assert.Equal(1001, record.NetworkDeviceId);
         Assert.Equal("PLC-A", record.DeviceName);
-        Assert.Equal("DieCuttingCathode", record.ModuleId);
-        Assert.Equal("DieCuttingCathode.Realtime", record.TaskKey);
+        Assert.Equal("TestPluginBeta", record.ModuleId);
+        Assert.Equal("TestPluginBeta.Realtime", record.TaskKey);
         Assert.Equal("SESSION-001", record.PlanSessionId);
         Assert.Equal("PLAN-001", record.MainPlanCode);
         Assert.Equal("TRACE-001", record.TraceBatchNumber);
@@ -826,8 +1109,8 @@ public sealed class ProcessQueueTaskBehaviorTests
     {
         Assert.Equal(1001, record.NetworkDeviceId);
         Assert.Equal("PLC-A", record.DeviceName);
-        Assert.Equal("DieCuttingCathode", record.ModuleId);
-        Assert.Equal("DieCuttingCathode.Realtime", record.TaskKey);
+        Assert.Equal("TestPluginBeta", record.ModuleId);
+        Assert.Equal("TestPluginBeta.Realtime", record.TaskKey);
         Assert.Equal("SESSION-001", record.PlanSessionId);
         Assert.Equal("PLAN-001", record.MainPlanCode);
         Assert.Equal("TRACE-001", record.TraceBatchNumber);
@@ -837,8 +1120,8 @@ public sealed class ProcessQueueTaskBehaviorTests
     {
         Assert.Equal(1001, record.NetworkDeviceId);
         Assert.Equal("PLC-A", record.DeviceName);
-        Assert.Equal("DieCuttingCathode", record.ModuleId);
-        Assert.Equal("DieCuttingCathode.Realtime", record.TaskKey);
+        Assert.Equal("TestPluginBeta", record.ModuleId);
+        Assert.Equal("TestPluginBeta.Realtime", record.TaskKey);
         Assert.Equal("SESSION-001", record.PlanSessionId);
         Assert.Equal("PLAN-001", record.MainPlanCode);
         Assert.Equal("TRACE-001", record.TraceBatchNumber);
@@ -901,7 +1184,7 @@ public sealed class ProcessQueueTaskBehaviorTests
 
     private sealed class TestableProcessQueueTask(
         FakeLogService logger,
-        FakeDataPipelineService pipelineService,
+        IDataPipelineService pipelineService,
         IEnumerable<ICellDataConsumer> consumers,
         FakeFailedRecordStore cloudRetryStore,
         FakeFailedRecordStore mesRetryStore,
@@ -934,6 +1217,59 @@ public sealed class ProcessQueueTaskBehaviorTests
         {
             await base.ExecuteAsync();
             await WaitForDurableQueuesIdleAsync(TimeSpan.FromSeconds(5));
+        }
+
+        public Task WaitUntilDurableIdleAsync(TimeSpan timeout)
+            => WaitForDurableQueuesIdleAsync(timeout);
+    }
+
+    private sealed class TestPluginWorkflowCellData : CellDataBase
+    {
+        public override string ProcessType => "TestPlugin";
+    }
+
+    private sealed class ObservedDataPipelineService(IDataPipelineService inner) : IDataPipelineService
+    {
+        private readonly TaskCompletionSource _secondRecordDequeued =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _currentDrainCompleted =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _dequeuedCount;
+
+        public Task SecondRecordDequeued => _secondRecordDequeued.Task;
+
+        public Task CurrentDrainCompleted => _currentDrainCompleted.Task;
+
+        public int PendingCount => inner.PendingCount;
+
+        public int OverflowCount => inner.OverflowCount;
+
+        public int SpillCount => inner.SpillCount;
+
+        public ValueTask<DataPipelineEnqueueResult> EnqueueAsync(
+            CellCompletedRecord record,
+            CancellationToken cancellationToken = default)
+            => inner.EnqueueAsync(record, cancellationToken);
+
+        public bool TryDequeue(out CellCompletedRecord? record)
+        {
+            var dequeued = inner.TryDequeue(out record);
+            if (dequeued && Interlocked.Increment(ref _dequeuedCount) == 2)
+            {
+                _secondRecordDequeued.TrySetResult();
+            }
+
+            return dequeued;
+        }
+
+        public ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken = default)
+        {
+            if (Volatile.Read(ref _dequeuedCount) >= 2)
+            {
+                _currentDrainCompleted.TrySetResult();
+            }
+
+            return inner.WaitToReadAsync(cancellationToken);
         }
     }
 

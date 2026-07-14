@@ -21,10 +21,10 @@ public sealed class PluginCatalogLifecycleContractTests
     [Fact]
     public void DiscoverModules_WhenManifestMissesHostApiVersion_ShouldReportManifestInvalid()
     {
-        var pluginRoot = CreatePluginRoot("Homogenization");
+        var pluginRoot = CreatePluginRoot("TestPlugin");
         try
         {
-            var manifestPath = Path.Combine(pluginRoot, "Homogenization", "plugin.json");
+            var manifestPath = Path.Combine(pluginRoot, "TestPlugin", "plugin.json");
             var manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
             manifest.Remove("hostApiVersion");
             File.WriteAllText(manifestPath, manifest.ToJsonString(new() { WriteIndented = true }));
@@ -44,10 +44,10 @@ public sealed class PluginCatalogLifecycleContractTests
     [Fact]
     public void CreateEnabledModules_WhenHostApiVersionDoesNotMatch_ShouldReportCompatibilityIssue()
     {
-        var pluginRoot = CreatePluginRoot("Homogenization");
+        var pluginRoot = CreatePluginRoot("TestPlugin");
         try
         {
-            var manifestPath = Path.Combine(pluginRoot, "Homogenization", "plugin.json");
+            var manifestPath = Path.Combine(pluginRoot, "TestPlugin", "plugin.json");
             var manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
             manifest["hostApiVersion"] = "99.0.0";
             File.WriteAllText(manifestPath, manifest.ToJsonString(new() { WriteIndented = true }));
@@ -58,7 +58,7 @@ public sealed class PluginCatalogLifecycleContractTests
                 new ConfigurationBuilder()
                     .AddInMemoryCollection(new Dictionary<string, string?>
                     {
-                        ["Modules:Enabled:0"] = "Homogenization"
+                        ["Modules:Enabled:0"] = "TestPlugin"
                     })
                     .Build(),
                 "Modules",
@@ -76,10 +76,10 @@ public sealed class PluginCatalogLifecycleContractTests
     [Fact]
     public void CreateEnabledModules_WhenHostVersionIsOutsideSupportedRange_ShouldReportCompatibilityIssue()
     {
-        var pluginRoot = CreatePluginRoot("Homogenization");
+        var pluginRoot = CreatePluginRoot("TestPlugin");
         try
         {
-            var manifestPath = Path.Combine(pluginRoot, "Homogenization", "plugin.json");
+            var manifestPath = Path.Combine(pluginRoot, "TestPlugin", "plugin.json");
             var manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
             manifest["maxHostVersion"] = "0.9.0";
             File.WriteAllText(manifestPath, manifest.ToJsonString(new() { WriteIndented = true }));
@@ -90,7 +90,7 @@ public sealed class PluginCatalogLifecycleContractTests
                 new ConfigurationBuilder()
                     .AddInMemoryCollection(new Dictionary<string, string?>
                     {
-                        ["Modules:Enabled:0"] = "Homogenization"
+                        ["Modules:Enabled:0"] = "TestPlugin"
                     })
                     .Build(),
                 "Modules",
@@ -108,10 +108,10 @@ public sealed class PluginCatalogLifecycleContractTests
     [Fact]
     public void CreateEnabledModules_WhenDependencyIsNotEnabled_ShouldReportDependencyIssue()
     {
-        var pluginRoot = CreatePluginRoot("Homogenization");
+        var pluginRoot = CreatePluginRoot("TestPlugin");
         try
         {
-            var manifestPath = Path.Combine(pluginRoot, "Homogenization", "plugin.json");
+            var manifestPath = Path.Combine(pluginRoot, "TestPlugin", "plugin.json");
             var manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
             manifest["dependencies"] = new JsonArray("MissingProcess");
             File.WriteAllText(manifestPath, manifest.ToJsonString(new() { WriteIndented = true }));
@@ -122,7 +122,7 @@ public sealed class PluginCatalogLifecycleContractTests
                 new ConfigurationBuilder()
                     .AddInMemoryCollection(new Dictionary<string, string?>
                     {
-                        ["Modules:Enabled:0"] = "Homogenization"
+                        ["Modules:Enabled:0"] = "TestPlugin"
                     })
                     .Build(),
                 "Modules",

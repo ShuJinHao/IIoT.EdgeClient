@@ -1141,8 +1141,8 @@ internal sealed class DashboardPreviewDesignViewModel : DashboardPreviewLocalize
 
     public ObservableCollection<DashboardPreviewPlcStatusItem> PlcStatusTableItems { get; } =
     [
-        new("P1-AP01", "已连接", EdgeVisualStatus.Running, "24 ms", "—", "暂无运行错误", "plc-preview-01.local:65531", "Mc", "E4", "15:04:01", "15:04:03", "15:04:03", "—", false),
-        new("P1-AP02", "重试中", EdgeVisualStatus.Warning, "—", "读取失败", "Read R2450 failed.", "plc-preview-02.local:65531", "Mc", "E4", "15:04:12", "—", "—", "15:04:17", false)
+        new("PLC-PREVIEW-01", "已连接", EdgeVisualStatus.Running, "24 ms", "—", "暂无运行错误", "plc-preview-01.local:65531", "Mc", "E4", "15:04:01", "15:04:03", "15:04:03", "—", false),
+        new("PLC-PREVIEW-02", "重试中", EdgeVisualStatus.Warning, "—", "读取失败", "Read R2450 failed.", "plc-preview-02.local:65531", "Mc", "E4", "15:04:12", "—", "—", "15:04:17", false)
     ];
 
     public ObservableCollection<DashboardPreviewUploadChannelItem> UploadChannelItems { get; } = [];

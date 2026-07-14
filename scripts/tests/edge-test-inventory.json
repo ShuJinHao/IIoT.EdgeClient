@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "solutionPath": "IIoT.EdgeClient.slnx",
+  "solutionProjectCount": 30,
+  "testProjectCount": 7,
+  "projects": [
+    {
+      "projectPath": "src/Tests/IIoT.Edge.Infrastructure.Update.Tests/IIoT.Edge.Infrastructure.Update.Tests.csproj",
+      "projectName": "IIoT.Edge.Infrastructure.Update.Tests",
+      "classification": "Unit",
+      "runtime": "InProcess",
+      "required": true
+    },
+    {
+      "projectPath": "src/Tests/IIoT.Edge.Installer.Tests/IIoT.Edge.Installer.Tests.csproj",
+      "projectName": "IIoT.Edge.Installer.Tests",
+      "classification": "Unit",
+      "runtime": "Filesystem",
+      "required": true
+    },
+    {
+      "projectPath": "src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj",
+      "projectName": "IIoT.Edge.Launcher.Tests",
+      "classification": "Unit",
+      "runtime": "Filesystem",
+      "required": true
+    },
+    {
+      "projectPath": "src/Tests/IIoT.Edge.Module.ContractTests/IIoT.Edge.Module.ContractTests.csproj",
+      "projectName": "IIoT.Edge.Module.ContractTests",
+      "classification": "Conformance",
+      "runtime": "Filesystem",
+      "required": true
+    },
+    {
+      "projectPath": "src/Tests/IIoT.Edge.NonUiRegressionTests/IIoT.Edge.NonUiRegressionTests.csproj",
+      "projectName": "IIoT.Edge.NonUiRegressionTests",
+      "classification": "Regression",
+      "runtime": "InProcess",
+      "required": true
+    },
+    {
+      "projectPath": "src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj",
+      "projectName": "IIoT.Edge.Shell.Tests",
+      "classification": "UI",
+      "runtime": "Avalonia",
+      "required": true
+    },
+    {
+      "projectPath": "src/Tests/IIoT.Edge.UI.Shared.Tests/IIoT.Edge.UI.Shared.Tests.csproj",
+      "projectName": "IIoT.Edge.UI.Shared.Tests",
+      "classification": "UI",
+      "runtime": "Avalonia",
+      "required": true
+    }
+  ],
+  "testFixtures": [
+    {
+      "projectPath": "src/Testing/IIoT.Edge.TestPlugin/IIoT.Edge.TestPlugin.csproj",
+      "fixtureKind": "Plugin",
+      "productionEligible": false
+    }
+  ]
+}

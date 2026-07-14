@@ -97,8 +97,8 @@ public sealed class CloudConsumerBehaviorTests
         {
             NetworkDeviceId = 2001,
             DeviceName = "PLC-CLOUD-01",
-            ModuleId = "DieCuttingAnode",
-            TaskKey = "DieCutting.RealtimeSampleUpload",
+            ModuleId = "TestPluginAlpha",
+            TaskKey = "TestPlugin.RealtimeSampleUpload",
             CellData = new TestCellData
             {
                 Barcode = "BAR-CLOUD-STANDARD",
@@ -113,8 +113,8 @@ public sealed class CloudConsumerBehaviorTests
         Assert.Equal("/api/v1/edge/pass-stations/otherprocess/batch", cloudHttp.LastPostUrl);
         Assert.Equal("OtherProcess", diagnostics.Snapshot.LastProcessType);
         Assert.Equal("PLC-CLOUD-01", diagnostics.Snapshot.LastDeviceName);
-        Assert.Equal("DieCuttingAnode", diagnostics.Snapshot.LastModuleId);
-        Assert.Equal("DieCutting.RealtimeSampleUpload", diagnostics.Snapshot.LastTaskKey);
+        Assert.Equal("TestPluginAlpha", diagnostics.Snapshot.LastModuleId);
+        Assert.Equal("TestPlugin.RealtimeSampleUpload", diagnostics.Snapshot.LastTaskKey);
         Assert.Equal("生产上传", diagnostics.Snapshot.LastScenario);
 
         var payload = Assert.IsType<PassStationBatchUploadPayload>(cloudHttp.LastPayload);

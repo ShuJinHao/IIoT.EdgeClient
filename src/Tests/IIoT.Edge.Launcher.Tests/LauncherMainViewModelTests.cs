@@ -123,8 +123,8 @@ public sealed class LauncherMainViewModelTests
         var profiles = new[]
         {
             Profile("HomogenizationLine", "匀浆"),
-            Profile("DieCuttingAnodeLine", "负极模切"),
-            Profile("DieCuttingCathodeLine", "正极模切")
+            Profile("TestPluginAlphaLine", "测试插件甲"),
+            Profile("TestPluginBetaLine", "测试插件乙")
         };
         var viewModel = new LauncherMainViewModel(
             new StubLauncherProfileCatalog(profiles),
@@ -133,14 +133,14 @@ public sealed class LauncherMainViewModelTests
             new StubShellLaunchService(),
             updateConfigurationProvider: new StubUpdateConfigurationProvider(),
             profileVisibilityService: new StubProfileVisibilityService(
-                "DieCuttingAnodeLine",
-                "DieCuttingCathodeLine"));
+                "TestPluginAlphaLine",
+                "TestPluginBetaLine"));
 
         await viewModel.LoginAsync("operator", "secret");
 
         Assert.Equal(2, viewModel.Profiles.Count);
-        Assert.Contains(viewModel.Profiles, card => card.DisplayName == "负极模切");
-        Assert.Contains(viewModel.Profiles, card => card.DisplayName == "正极模切");
+        Assert.Contains(viewModel.Profiles, card => card.DisplayName == "测试插件甲");
+        Assert.Contains(viewModel.Profiles, card => card.DisplayName == "测试插件乙");
         Assert.DoesNotContain(viewModel.Profiles, card => card.DisplayName == "匀浆");
     }
 
@@ -490,14 +490,14 @@ public sealed class LauncherMainViewModelTests
     {
         var profiles = new[]
         {
-            Profile("DieCuttingAnodeLine", "负极模切"),
-            Profile("DieCuttingCathodeLine", "正极模切")
+            Profile("TestPluginAlphaLine", "测试插件甲"),
+            Profile("TestPluginBetaLine", "测试插件乙")
         };
         var releaseService = new ProfileAwareClientReleaseService(
             new Dictionary<string, EdgeReleaseCatalogResult>(StringComparer.OrdinalIgnoreCase)
             {
-                ["DieCuttingAnodeLine"] = CreateReleaseCheckForModule("DieCuttingAnode", "负极模切"),
-                ["DieCuttingCathodeLine"] = CreateReleaseCheckForModule("DieCuttingCathode", "正极模切")
+                ["TestPluginAlphaLine"] = CreateReleaseCheckForModule("TestPluginAlpha", "测试插件甲"),
+                ["TestPluginBetaLine"] = CreateReleaseCheckForModule("TestPluginBeta", "测试插件乙")
             });
         var viewModel = new LauncherMainViewModel(
             new StubLauncherProfileCatalog(profiles),
@@ -512,8 +512,8 @@ public sealed class LauncherMainViewModelTests
 
         Assert.Equal(3, viewModel.UpdateRows.Count);
         Assert.Contains(viewModel.UpdateRows, row => row.ModuleId == "Host");
-        Assert.Contains(viewModel.UpdateRows, row => row.ModuleId == "DieCuttingAnode");
-        Assert.Contains(viewModel.UpdateRows, row => row.ModuleId == "DieCuttingCathode");
+        Assert.Contains(viewModel.UpdateRows, row => row.ModuleId == "TestPluginAlpha");
+        Assert.Contains(viewModel.UpdateRows, row => row.ModuleId == "TestPluginBeta");
     }
 
     [Fact]
@@ -567,9 +567,9 @@ public sealed class LauncherMainViewModelTests
     [Fact]
     public async Task LaunchProfileCardAsync_WhenDifferentProfileIsRunning_ShouldStillLaunchSelectedProfile()
     {
-        var anode = Profile("DieCuttingAnodeLine", "负极模切");
-        var cathode = Profile("DieCuttingCathodeLine", "正极模切");
-        var launchService = new StubShellLaunchService(runningMachineProfiles: ["DieCuttingAnodeLine"]);
+        var anode = Profile("TestPluginAlphaLine", "测试插件甲");
+        var cathode = Profile("TestPluginBetaLine", "测试插件乙");
+        var launchService = new StubShellLaunchService(runningMachineProfiles: ["TestPluginAlphaLine"]);
         var viewModel = new LauncherMainViewModel(
             new StubLauncherProfileCatalog([anode, cathode]),
             new StubLocalAccountAuthService(
@@ -580,14 +580,14 @@ public sealed class LauncherMainViewModelTests
         await viewModel.LaunchProfileCardAsync(cathodeCard);
 
         Assert.Equal(1, launchService.LaunchCallCount);
-        Assert.Equal(["DieCuttingCathodeLine"], launchService.LaunchedMachineProfiles);
+        Assert.Equal(["TestPluginBetaLine"], launchService.LaunchedMachineProfiles);
     }
 
     [Fact]
     public async Task LaunchProfileCardAsync_WhenSameProfileIsRunning_ShouldNotLaunchAgain()
     {
-        var anode = Profile("DieCuttingAnodeLine", "负极模切");
-        var launchService = new StubShellLaunchService(runningMachineProfiles: ["DieCuttingAnodeLine"]);
+        var anode = Profile("TestPluginAlphaLine", "测试插件甲");
+        var launchService = new StubShellLaunchService(runningMachineProfiles: ["TestPluginAlphaLine"]);
         var viewModel = new LauncherMainViewModel(
             new StubLauncherProfileCatalog([anode]),
             new StubLocalAccountAuthService(
@@ -603,7 +603,7 @@ public sealed class LauncherMainViewModelTests
     [Fact]
     public async Task LaunchProfileCardAsync_WhenCardWasRunningButProfileStopped_ShouldAllowRelaunch()
     {
-        var anode = Profile("DieCuttingAnodeLine", "负极模切");
+        var anode = Profile("TestPluginAlphaLine", "测试插件甲");
         var launchService = new StubShellLaunchService();
         var viewModel = new LauncherMainViewModel(
             new StubLauncherProfileCatalog([anode]),
@@ -619,7 +619,7 @@ public sealed class LauncherMainViewModelTests
         await viewModel.LaunchProfileCardAsync(anodeCard);
 
         Assert.Equal(1, launchService.LaunchCallCount);
-        Assert.Equal(["DieCuttingAnodeLine"], launchService.LaunchedMachineProfiles);
+        Assert.Equal(["TestPluginAlphaLine"], launchService.LaunchedMachineProfiles);
     }
 
     private static LauncherAccountRecord Account(string userName, string displayName) =>

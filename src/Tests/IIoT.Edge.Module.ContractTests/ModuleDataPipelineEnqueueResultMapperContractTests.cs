@@ -46,31 +46,31 @@ public sealed class ModuleDataPipelineEnqueueResultMapperContractTests
         AssertResult(
             ModuleDataPipelineEnqueueResultMapper.ToPendingBackgroundUploadResult(
                 DataPipelineEnqueueResult.Accepted(),
-                "模切采样",
+                "插件采样",
                 DataPipelineUploadTargets.Cloud),
             MesCallOutcome.Success,
-            "模切采样已进入 Cloud 上传队列，等待后台上传。");
+            "插件采样已进入 Cloud 上传队列，等待后台上传。");
         AssertResult(
             ModuleDataPipelineEnqueueResultMapper.ToPendingBackgroundUploadResult(
                 DataPipelineEnqueueResult.OverflowPersisted(1, 0),
-                "模切采样",
+                "插件采样",
                 DataPipelineUploadTargets.Cloud),
             MesCallOutcome.Success,
-            "模切采样已进入溢出补偿，等待后台上传。");
+            "插件采样已进入溢出补偿，等待后台上传。");
         AssertResult(
             ModuleDataPipelineEnqueueResultMapper.ToPendingBackgroundUploadResult(
                 DataPipelineEnqueueResult.Rejected("queue_full"),
-                "模切采样",
+                "插件采样",
                 DataPipelineUploadTargets.Cloud),
             MesCallOutcome.TransportFailure,
-            "模切采样未进入上传队列，原因=queue_full。");
+            "插件采样未进入上传队列，原因=queue_full。");
         AssertResult(
             ModuleDataPipelineEnqueueResultMapper.ToPendingBackgroundUploadResult(
                 DataPipelineEnqueueResult.Rejected(string.Empty),
-                "模切采样",
+                "插件采样",
                 DataPipelineUploadTargets.Cloud),
             MesCallOutcome.TransportFailure,
-            "模切采样未进入上传队列，原因=unknown。");
+            "插件采样未进入上传队列，原因=unknown。");
     }
 
     private static void AssertResult(MesCallResult result, MesCallOutcome outcome, string message)

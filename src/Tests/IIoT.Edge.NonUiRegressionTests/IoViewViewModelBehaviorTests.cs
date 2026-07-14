@@ -211,7 +211,7 @@ public sealed class IoViewViewModelBehaviorTests
         {
             [device.Id] =
             [
-                CreateMapping(device.Id, "Signal.Barcode", "R9660", 8, "Ascii", "Read", IoMappingOptionCatalog.CategoryContinuousRead, "负极模切只读采集模块", 1)
+                CreateMapping(device.Id, "Signal.Barcode", "R9660", 8, "Ascii", "Read", IoMappingOptionCatalog.CategoryContinuousRead, "测试插件甲只读采集模块", 1)
             ]
         };
         var viewModel = CreateViewModel([device], mappings);

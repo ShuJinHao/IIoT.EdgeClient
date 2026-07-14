@@ -8,11 +8,11 @@ public sealed class ProductionPlanSelectionServiceResolverBehaviorTests
     [Fact]
     public void ResolveCurrent_WhenMultipleServicesExist_ShouldMatchEnabledModuleProcessType()
     {
-        var anodeService = new StubProductionPlanSelectionService("DieCuttingAnodeLine");
-        var cathodeService = new StubProductionPlanSelectionService("DieCuttingCathodeLine");
+        var anodeService = new StubProductionPlanSelectionService("TestPluginAlphaLine");
+        var cathodeService = new StubProductionPlanSelectionService("TestPluginBetaLine");
         var resolver = new ProductionPlanSelectionServiceResolver(
             [anodeService, cathodeService],
-            [new StubEdgeProcessModule("DieCuttingCathodeLine")]);
+            [new StubEdgeProcessModule("TestPluginBetaLine")]);
 
         var resolved = resolver.ResolveCurrent();
 
@@ -37,8 +37,8 @@ public sealed class ProductionPlanSelectionServiceResolverBehaviorTests
     {
         var resolver = new ProductionPlanSelectionServiceResolver(
             [
-                new StubProductionPlanSelectionService("DieCuttingAnodeLine"),
-                new StubProductionPlanSelectionService("DieCuttingCathodeLine")
+                new StubProductionPlanSelectionService("TestPluginAlphaLine"),
+                new StubProductionPlanSelectionService("TestPluginBetaLine")
             ],
             [new StubEdgeProcessModule("Homogenization")]);
 

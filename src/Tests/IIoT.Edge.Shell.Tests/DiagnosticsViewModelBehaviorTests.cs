@@ -342,17 +342,17 @@ public sealed class DiagnosticsViewModelBehaviorTests
             ModuleRegistrations: [],
             DeviceBindings:
             [
-                new DeviceModuleBindingSnapshot("P1-AP01", "ModuleA", true, true, true),
-                    new DeviceModuleBindingSnapshot("P1-AP02", "ModuleA", true, true, true)
+                new DeviceModuleBindingSnapshot("PLC-A01", "ModuleA", true, true, true),
+                    new DeviceModuleBindingSnapshot("PLC-A02", "ModuleA", true, true, true)
             ],
             Issues:
             [
-                new StartupDiagnosticIssue("PLC_A", "P1-AP01 地址缺失", "ModuleA", "P1-AP01"),
-                    new StartupDiagnosticIssue("PLC_B", "P1-AP02 地址缺失", "ModuleA", "P1-AP02"),
+                new StartupDiagnosticIssue("PLC_A", "PLC-A01 地址缺失", "ModuleA", "PLC-A01"),
+                    new StartupDiagnosticIssue("PLC_B", "PLC-A02 地址缺失", "ModuleA", "PLC-A02"),
                     new StartupDiagnosticIssue("GLOBAL", "插件配置缺失", "ModuleA")
             ]));
         var selectionService = new DeviceSelectionService();
-        selectionService.SelectDevice("P1-AP01");
+        selectionService.SelectDevice("PLC-A01");
         var viewModel = CreateViewModel(
             startupStore,
             new FakeEdgeSyncDiagnosticsQuery(),
@@ -362,11 +362,11 @@ public sealed class DiagnosticsViewModelBehaviorTests
         await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
 
         var binding = Assert.Single(viewModel.DeviceBindings);
-        Assert.Equal("P1-AP01", binding.DeviceName);
+        Assert.Equal("PLC-A01", binding.DeviceName);
         Assert.Equal(2, viewModel.Issues.Count);
-        Assert.Contains(viewModel.Issues, row => row.Message == "P1-AP01 地址缺失");
+        Assert.Contains(viewModel.Issues, row => row.Message == "PLC-A01 地址缺失");
         Assert.Contains(viewModel.Issues, row => row.Message == "插件配置缺失");
-        Assert.DoesNotContain(viewModel.Issues, row => row.Message == "P1-AP02 地址缺失");
+        Assert.DoesNotContain(viewModel.Issues, row => row.Message == "PLC-A02 地址缺失");
         Assert.Equal(2, viewModel.TotalIssueCount);
     }
 
@@ -374,7 +374,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
     public async Task DiagnosticsViewModel_WhenDeviceSelected_ShouldFilterAttributableDeadLettersAndKeepGlobalChannels()
     {
         var selectionService = new DeviceSelectionService();
-        selectionService.SelectDevice("P1-AP01");
+        selectionService.SelectDevice("PLC-A01");
         var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
         {
             Current = CreateReadySyncSnapshot(
@@ -382,8 +382,8 @@ public sealed class DiagnosticsViewModelBehaviorTests
                     2,
                     [],
                     [
-                        CreateDeadLetterRecord(101, "Cloud-A", "P1-AP01"),
-                            CreateDeadLetterRecord(102, "Cloud-B", "P1-AP02"),
+                        CreateDeadLetterRecord(101, "Cloud-A", "PLC-A01"),
+                            CreateDeadLetterRecord(102, "Cloud-B", "PLC-A02"),
                             CreateDeadLetterRecord(103, "Cloud-Global")
                     ],
                     false,
@@ -392,7 +392,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
                 mesDeadLetters: new DeadLetterDiagnosticsSnapshot(
                     1,
                     [],
-                    [CreateDeadLetterRecord(202, "MES-B", "P1-AP02")],
+                    [CreateDeadLetterRecord(202, "MES-B", "PLC-A02")],
                     false,
                     null,
                     null))

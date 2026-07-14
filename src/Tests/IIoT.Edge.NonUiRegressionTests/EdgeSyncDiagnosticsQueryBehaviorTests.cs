@@ -196,8 +196,8 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
             "缺少上传令牌。",
             new CloudUploadDiagnosticsContext(
                 DeviceName: "PLC-CLOUD-BLOCKED",
-                ModuleId: "DieCuttingAnode",
-                TaskKey: "DieCutting.RealtimeSampleUpload",
+                ModuleId: "TestPluginAlpha",
+                TaskKey: "TestPlugin.RealtimeSampleUpload",
                 Scenario: "生产上传"));
 
         var query = new EdgeSyncDiagnosticsQuery(
@@ -219,8 +219,8 @@ public sealed class EdgeSyncDiagnosticsQueryBehaviorTests
         Assert.NotNull(snapshot.Cloud.LastBlockedAt);
         Assert.Equal("缺少上传令牌。", snapshot.Cloud.LastBlockedReason);
         Assert.Equal("PLC-CLOUD-BLOCKED", snapshot.Cloud.LastDeviceName);
-        Assert.Equal("DieCuttingAnode", snapshot.Cloud.LastModuleId);
-        Assert.Equal("DieCutting.RealtimeSampleUpload", snapshot.Cloud.LastTaskKey);
+        Assert.Equal("TestPluginAlpha", snapshot.Cloud.LastModuleId);
+        Assert.Equal("TestPlugin.RealtimeSampleUpload", snapshot.Cloud.LastTaskKey);
         Assert.Equal("生产上传", snapshot.Cloud.LastScenario);
     }
 
