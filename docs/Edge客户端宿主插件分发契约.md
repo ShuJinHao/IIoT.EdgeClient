@@ -275,18 +275,15 @@ Cloud 下载中心、插件选择安装、设备盘点和版本上报属于后�
 
 EdgeClient 的交付物是 Windows 安装器、安装素材和 Velopack 更新包，不是 Docker 镜像。CI/CD 不允许推 Harbor、GHCR，也不允许从 GitHub hosted runner 通过 SSH/SCP 直连内网服务器。
 
-`push main` 只跑 smoke 编译和测试，不生成安装包。完整 GitHub 打包只在 `workflow_dispatch` 或 `edge-v*` / `v*` tag 时执行。日常自动发布由工作区 `deploy/Deploy-Changed.ps1` 先 push 已提交的 main、读取已发布宿主基线并按改动自动选择 EdgeHost 或具体 EdgePlugin；内部才允许 `Invoke-WorkspaceDeploy.ps1` 调度 `LocalPublishAndDeploy.ps1 -Transport http` 或插件实现。部署结果是服务器提供 Windows 安装器/Velopack/插件下载，不是远程安装 Windows，也不走 Harbor。正式发布要求 clean + pushed HEAD，Host/Plugin 共用本地互斥锁，catalog/HTTP/HEAD 必须 fail-fast；失败后从统一入口用 `-ResumeReleaseRoot` 复用产物。更新内容必须显式填写。生产 `stable` 不允许 `rsync/scp` 绕过 Cloud DB、审计和保留策略。
+`push main` 只跑 smoke 编译和测试，不生成安装包。完整 GitHub 打包只在 `workflow_dispatch` 或 `edge-v*` / `v*` tag 时执行。操作者或 AI 的日常唯一正式入口是工作区 `deploy/Deploy-Changed.ps1 -Targets Edge`，只读规划加 `-PlanOnly`；根入口先 push 已提交的 main、读取已发布宿主基线并按改动自动选择 EdgeHost 或具体 EdgePlugin。`Invoke-WorkspaceDeploy.ps1` 只允许被根入口内部调度，或在已保留发布目录的故障恢复中显式传入 `-ResumeReleaseRoot`；不得当作普通日常或正式命令。内部分发器才可调度 `LocalPublishAndDeploy.ps1 -Transport http` 或插件实现。部署结果是服务器提供 Windows 安装器/Velopack/插件下载，不是远程安装 Windows，也不走 Harbor。正式发布要求 clean + pushed HEAD，Host/Plugin 共用本地互斥锁，catalog/HTTP/HEAD 必须 fail-fast；失败后只通过上述显式恢复复用产物。更新内容必须显式填写。生产 `stable` 不允许 `rsync/scp` 绕过 Cloud DB、审计和保留策略。
 
-只改工序插件时走独立插件发布：
+只改工序插件时，根入口从 Git 影响自动选择独立插件发布；操作者或 AI 仍只执行：
 
 ```powershell
-pwsh ./deploy/Invoke-WorkspaceDeploy.ps1 `
-  -Target EdgePlugin `
-  -ModuleId <真实ModuleId> `
-  -ReleaseNotesPath ./release-notes.md
+pwsh ./deploy/Deploy-Changed.ps1 -Targets Edge -EdgeReleaseNotesPath ./release-notes.md
 ```
 
-内部插件脚本只上传 `IIoT.EdgePlugin.<ModuleId>-<version>-<runtime>.zip` 并写插件 release，不生成宿主 Velopack 版本。统一入口必须显式要求 `ModuleId`；脚本在打包前查 Cloud catalog，发现相同 `(moduleId, channel, version, targetRuntime)` 已存在时直接失败，要求提升插件 `plugin.json` 版本。
+内部插件脚本只上传 `IIoT.EdgePlugin.<ModuleId>-<version>-<runtime>.zip` 并写插件 release，不生成宿主 Velopack 版本。内部调度必须从真实影响显式传入 `ModuleId`；脚本在打包前查 Cloud catalog，发现相同 `(moduleId, channel, version, targetRuntime)` 已存在时直接失败，要求提升插件 `plugin.json` 版本。
 
 正式 GitHub 发布分两段：
 

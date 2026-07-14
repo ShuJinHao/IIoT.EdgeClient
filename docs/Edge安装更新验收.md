@@ -1,6 +1,6 @@
 # Edge 安装更新验收
 
-本文档是 EdgeClient 安装、更新和 Windows 分发安全策略的唯一客户端侧验收入口。上传部署总口径见 `../../docs/上传部署总览.md`；云端生成安装包的字段写入规则由 CloudPlatform 单独验收，本文件只约束 EdgeClient 本仓库能验证的内容。工作区日常唯一对外入口是根目录 `deploy/Deploy-Changed.ps1`；`deploy/Invoke-WorkspaceDeploy.ps1` 只作为宿主/插件内部执行器和显式恢复入口。本文件保留项目级验收细节。
+本文档是 EdgeClient 安装、更新和 Windows 分发安全策略的唯一客户端侧验收入口。上传部署总口径见 `../../docs/上传部署总览.md`；云端生成安装包的字段写入规则由 CloudPlatform 单独验收，本文件只约束 EdgeClient 本仓库能验证的内容。操作者或 AI 的 Edge 日常唯一对外入口是根目录 `deploy/Deploy-Changed.ps1 -Targets Edge`，只读规划加 `-PlanOnly`；`deploy/Invoke-WorkspaceDeploy.ps1` 只作为宿主/插件内部执行器，或在故障恢复时显式传入 `-ResumeReleaseRoot`，不得作为普通正式命令。本文件保留项目级验收细节。
 
 > 当前状态（2026-07-10）：隔离提交 `37ec98b` 的部署行为、失败恢复与发布契约回归已通过；本轮没有执行真实 Cloud `stable` 上传/catalog/DB/静态 HEAD，也没有执行 Windows runtime/installer/Velopack/targetRuntime 实机验收，因此本清单不能作为生产已验收证明。
 
@@ -12,8 +12,8 @@ EdgeClient 不发布 Docker 镜像，不推 Harbor，也不从 GitHub hosted run
 
 - `push main`：只跑 smoke 编译和测试，不生成安装包和 Velopack 发布包。
 - `workflow_dispatch` 或 `edge-v*` / `v*` tag：完整 GitHub 打包并发布到内网静态目录，渠道固定为 `stable`。
-- 本机宿主快发：操作者或 AI 从工作区根运行 `deploy/Invoke-WorkspaceDeploy.ps1 -Target EdgeHost`，统一入口内部调度 `LocalPublishAndDeploy.ps1 -Transport http`，本机编译、打包、生成 installer artifact 后通过 Cloud Human API 上传 release bundle；这是运维快发路径，不属于 GitHub CI/CD job。生产 `stable` 不允许走 `rsync/scp`。
-- 本机插件快发：只改工序插件时从工作区根运行 `deploy/Invoke-WorkspaceDeploy.ps1 -Target EdgePlugin -ModuleId <真实ModuleId>`；内部脚本只上传独立插件 zip 并登记插件 release，不生成宿主版本。
+- 本机宿主快发：操作者或 AI 从工作区根运行 `deploy/Deploy-Changed.ps1 -Targets Edge`；根入口确认宿主影响后，内部调度 `Invoke-WorkspaceDeploy.ps1` 和 `LocalPublishAndDeploy.ps1 -Transport http`，本机编译、打包、生成 installer artifact 后通过 Cloud Human API 上传 release bundle；这是运维快发路径，不属于 GitHub CI/CD job。生产 `stable` 不允许走 `rsync/scp`。
+- 本机插件快发：只改工序插件时仍运行 `deploy/Deploy-Changed.ps1 -Targets Edge`；根入口从 Git 影响自动识别真实 `ModuleId`，内部脚本只上传独立插件 zip 并登记插件 release，不生成宿主版本。
 - 本机快发和正式发布上传前，发布凭据必须优先使用 Edge Release API key 换短期发布 JWT；Human refresh token 只作为临时应急 fallback，不得作为稳定发布凭据。
 - 更新内容必须显式填写：本机快发传 `-ReleaseNotes` 或 `-ReleaseNotesPath`；`workflow_dispatch` 填 `release_notes`；tag 发布必须使用带正文的 annotated tag。
 - 本机正式发布必须由工作区统一入口生成内部调度标记；项目实现脚本拒绝直接执行。EdgeHost/EdgePlugin 共用本地互斥锁，且构建前必须确认工作树 clean、HEAD 已推送到 upstream。
@@ -57,12 +57,10 @@ ${EDGE_UPDATES_DIR}/
     IIoT.EdgePlugin.<ModuleId>-<version>-<runtime>.zip
 ```
 
-工作区标准入口会调度本机快发实现脚本；操作者和 AI 只执行根入口：
+工作区根入口会自动计算影响并调度本机快发实现脚本；操作者和 AI 只执行：
 
 ```powershell
-pwsh ./deploy/Invoke-WorkspaceDeploy.ps1 `
-  -Target EdgeHost `
-  -ReleaseNotesPath ./release-notes.md
+pwsh ./deploy/Deploy-Changed.ps1 -Targets Edge -EdgeReleaseNotesPath ./release-notes.md
 ```
 
 未传 `-Version` 时，HTTP 发布会读取 Cloud Human catalog 最新 stable 版本并自动递增 patch；需要固定版本时才显式传 `-Version`。本机快发的完整操作入口见 `docs/客户端部署.md`。
