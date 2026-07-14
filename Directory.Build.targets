@@ -1,5 +1,54 @@
 <Project>
 
+  <PropertyGroup>
+    <EdgeArchitectureAnalyzerProject>$(MSBuildThisFileDirectory)src/Analyzers/IIoT.Edge.Architecture.Analyzers/IIoT.Edge.Architecture.Analyzers.csproj</EdgeArchitectureAnalyzerProject>
+  </PropertyGroup>
+
+  <ItemGroup Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(MSBuildProjectFullPath)', '[/\\]src[/\\]Tests[/\\]'))
+                        and '$(MSBuildProjectName)' != 'IIoT.Edge.Architecture.Analyzers'
+                        and '$(MSBuildProjectName)' != 'IIoT.Edge.TestPlugin'">
+    <ProjectReference Include="$(EdgeArchitectureAnalyzerProject)"
+                      ReferenceOutputAssembly="false"
+                      OutputItemType="Analyzer"
+                      PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(EdgeModuleRole)' != ''">
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>EdgeModuleRole</_Parameter1>
+      <_Parameter2>$(EdgeModuleRole)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>IsEdgePluginModule</_Parameter1>
+      <_Parameter2>$(IsEdgePluginModule)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>IsPackable</_Parameter1>
+      <_Parameter2>$(IsPackable)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute"
+                       Condition="'$(PluginModuleId)' != ''">
+      <_Parameter1>PluginModuleId</_Parameter1>
+      <_Parameter2>$(PluginModuleId)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <Target Name="ValidateEdgeArchitectureProjectGraph"
+          BeforeTargets="PrepareForBuild"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(MSBuildProjectName)' == 'IIoT.Edge.Shell'">
+    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)scripts/tests/Test-EdgeArchitectureProjectGraph.ps1&quot; -RepositoryRoot &quot;$(MSBuildThisFileDirectory)&quot; -SolutionPath &quot;$(MSBuildThisFileDirectory)IIoT.EdgeClient.slnx&quot; -Configuration &quot;$(Configuration)&quot;" />
+  </Target>
+
+  <Target Name="ValidateEdgeArchitectureProjectGraphFixture"
+          BeforeTargets="PrepareForBuild"
+          Condition="'$(DesignTimeBuild)' != 'true'
+                     and '$(MSBuildProjectName)' != 'IIoT.Edge.Shell'
+                     and '$(IsEdgeArchitectureGraphFixture)' == 'true'">
+    <Error Condition="'$(EdgeArchitectureFixtureRepositoryRoot)' == '' or '$(EdgeArchitectureFixtureSolutionPath)' == ''"
+           Text="EDGE-ARCH-FIXTURE-001 graph fixture must declare EdgeArchitectureFixtureRepositoryRoot and EdgeArchitectureFixtureSolutionPath." />
+    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)scripts/tests/Test-EdgeArchitectureProjectGraph.ps1&quot; -RepositoryRoot &quot;$(EdgeArchitectureFixtureRepositoryRoot)&quot; -SolutionPath &quot;$(EdgeArchitectureFixtureSolutionPath)&quot; -Configuration &quot;$(Configuration)&quot;" />
+  </Target>
+
   <Target Name="ValidateEdgeDeploymentPolicy"
           BeforeTargets="PrepareForBuild"
           Condition="'$(DesignTimeBuild)' != 'true' and '$(MSBuildProjectName)' == 'IIoT.Edge.Shell'">

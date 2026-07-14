@@ -6,16 +6,6 @@ namespace IIoT.Edge.Shell.Tests;
 
 public sealed class RepositoryHygieneTests
 {
-    private static readonly string[] UpperLayerProjectFragments =
-    [
-        "Application",
-        "Runtime",
-        "Host",
-        "Infrastructure",
-        "Modules",
-        "Presentation"
-    ];
-
     private static readonly string[] ForbiddenContractNames =
     [
         "IIoT.Edge.Module." + "Abstractions",
@@ -96,118 +86,6 @@ public sealed class RepositoryHygieneTests
     private static readonly Regex RemovedMapperUsagePattern = new(
         @"\b(?:Add" + "Auto" + "Mapper|I" + "Mapper|Create" + "Map" + @")\b|:\s*Profile\b",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
-
-    [Fact]
-    public void SharedProjects_ShouldNotReferenceUpperLayers()
-    {
-        var root = FindRepositoryRoot();
-        var uiSharedProject = Path.Combine(root, "src", "Shared", "IIoT.Edge.UI.Shared", "IIoT.Edge.UI.Shared.csproj");
-        var sharedKernelProject = Path.Combine(root, "src", "Shared", "IIoT.Edge.SharedKernel", "IIoT.Edge.SharedKernel.csproj");
-
-        var uiReferences = GetProjectReferences(uiSharedProject);
-        Assert.All(uiReferences, reference => Assert.Contains("IIoT.Edge.SharedKernel", reference, StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain(uiReferences, reference =>
-            UpperLayerProjectFragments.Any(fragment => reference.Contains(fragment, StringComparison.OrdinalIgnoreCase)));
-
-        Assert.Empty(GetProjectReferences(sharedKernelProject));
-    }
-
-    [Fact]
-    public void CoreLayerProjectReferences_ShouldPreserveDependencyDirection()
-    {
-        var root = FindRepositoryRoot();
-        var projectReferences = new Dictionary<string, string[]>
-        {
-            ["src/Core/IIoT.Edge.Domain/IIoT.Edge.Domain.csproj"] =
-            [
-                "src/Shared/IIoT.Edge.SharedKernel/IIoT.Edge.SharedKernel.csproj"
-            ],
-            ["src/Application/IIoT.Edge.Application/IIoT.Edge.Application.csproj"] =
-            [
-                "src/Core/IIoT.Edge.Domain/IIoT.Edge.Domain.csproj",
-                "src/Shared/IIoT.Edge.SharedKernel/IIoT.Edge.SharedKernel.csproj"
-            ],
-            ["src/Modules/IIoT.Edge.Module.Sdk/IIoT.Edge.Module.Sdk.csproj"] =
-            [
-                "src/Application/IIoT.Edge.Application/IIoT.Edge.Application.csproj",
-                "src/Shared/IIoT.Edge.SharedKernel/IIoT.Edge.SharedKernel.csproj"
-            ],
-            ["src/Edge/IIoT.Edge.Host.DataPipeline/IIoT.Edge.Host.DataPipeline.csproj"] =
-            [
-                "src/Application/IIoT.Edge.Application/IIoT.Edge.Application.csproj",
-                "src/Modules/IIoT.Edge.Module.Sdk/IIoT.Edge.Module.Sdk.csproj",
-                "src/Shared/IIoT.Edge.SharedKernel/IIoT.Edge.SharedKernel.csproj"
-            ],
-            ["src/Infrastructure/IIoT.Edge.Infrastructure.DeviceComm/IIoT.Edge.Infrastructure.DeviceComm.csproj"] =
-            [
-                "src/Application/IIoT.Edge.Application/IIoT.Edge.Application.csproj"
-            ],
-            ["src/Shared/IIoT.Edge.SharedKernel/IIoT.Edge.SharedKernel.csproj"] = []
-        };
-
-        foreach (var (projectPath, expectedReferences) in projectReferences)
-        {
-            var actualReferences = GetProjectReferenceRepositoryPaths(root, ToFullPath(root, projectPath))
-                .Order(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-            var expected = expectedReferences
-                .Order(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            Assert.Equal(expected, actualReferences);
-        }
-    }
-
-    [Fact]
-    public void CoreLayerSource_ShouldNotReferenceForbiddenUpperLayerNamespaces()
-    {
-        var root = FindRepositoryRoot();
-        var forbiddenByDirectory = new Dictionary<string, string[]>
-        {
-            ["src/Core/IIoT.Edge.Domain"] =
-            [
-                "IIoT.Edge.Application",
-                "IIoT.Edge.Host.DataPipeline",
-                "IIoT.Edge.Infrastructure",
-                "IIoT.Edge.Module.Sdk",
-                "IIoT.Edge.Runtime",
-                "IIoT.Edge.Presentation",
-                "IIoT.Edge.UI.Shared"
-            ],
-            ["src/Application/IIoT.Edge.Application"] =
-            [
-                "IIoT.Edge.Host.DataPipeline",
-                "IIoT.Edge.Infrastructure",
-                "IIoT.Edge.Module.Sdk",
-                "IIoT.Edge.Runtime",
-                "IIoT.Edge.Presentation",
-                "IIoT.Edge.UI.Shared"
-            ],
-            ["src/Infrastructure/IIoT.Edge.Infrastructure.DeviceComm"] =
-            [
-                "IIoT.Edge.Host.DataPipeline",
-                "IIoT.Edge.Runtime"
-            ],
-            ["src/Shared/IIoT.Edge.SharedKernel"] =
-            [
-                "IIoT.Edge.Application",
-                "IIoT.Edge.Host.DataPipeline",
-                "IIoT.Edge.Infrastructure",
-                "IIoT.Edge.Module.Sdk",
-                "IIoT.Edge.Runtime",
-                "IIoT.Edge.Presentation",
-                "IIoT.Edge.UI.Shared"
-            ]
-        };
-
-        var matches = forbiddenByDirectory
-            .SelectMany(check => EnumerateFiles(ToFullPath(root, check.Key), "*.*")
-                .Where(IsTextCandidate)
-                .SelectMany(path => FindForbiddenMatches(root, path, check.Value)))
-            .ToArray();
-
-        Assert.Empty(matches);
-    }
 
     [Fact]
     public void MainSolution_ShouldContainOnlyApprovedRuntimeToolAndNoSdkSamples()
@@ -1679,51 +1557,6 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
-    public void ModuleProjects_ShouldDeclareExplicitPluginRole()
-    {
-        var root = FindRepositoryRoot();
-        var modulesRoot = ToFullPath(root, "src/Modules");
-        var findings = EnumerateFiles(modulesRoot, "*.csproj")
-            .Where(path => !Path.GetFileNameWithoutExtension(path).Equals(
-                "IIoT.Edge.Module.Sdk",
-                StringComparison.OrdinalIgnoreCase))
-            .SelectMany(path =>
-            {
-                var project = XDocument.Load(path);
-                var projectName = Path.GetFileNameWithoutExtension(path);
-                var projectDirectory = Path.GetDirectoryName(path)
-                    ?? throw new InvalidOperationException($"无法定位项目目录：{path}");
-                var moduleId = GetProjectProperty(project, "PluginModuleId");
-                var isEdgePluginModule = GetProjectProperty(project, "IsEdgePluginModule");
-                var isPackable = GetProjectProperty(project, "IsPackable");
-                var hasPluginManifest = File.Exists(Path.Combine(projectDirectory, "plugin.json"));
-                var repoPath = ToRepositoryPath(root, path);
-
-                return new[]
-                {
-                    !string.IsNullOrWhiteSpace(moduleId)
-                        ? null
-                        : $"{repoPath} has no PluginModuleId",
-                    hasPluginManifest ? null : $"{repoPath} is missing plugin.json",
-                    string.Equals(isEdgePluginModule, "true", StringComparison.OrdinalIgnoreCase)
-                        ? null
-                        : $"{repoPath} must declare IsEdgePluginModule=true",
-                    string.Equals(isPackable, "true", StringComparison.OrdinalIgnoreCase)
-                        ? null
-                        : $"{repoPath} must declare IsPackable=true",
-                    projectName.EndsWith(".Shared", StringComparison.OrdinalIgnoreCase)
-                        ? $"{repoPath} must be an independently loadable plugin, not a shared-family project"
-                        : null
-                };
-            })
-            .Where(finding => !string.IsNullOrWhiteSpace(finding))
-            .Select(finding => finding!)
-            .ToArray();
-
-        Assert.Empty(findings);
-    }
-
-    [Fact]
     public void TestPluginFixture_ShouldRemainOutsideProductionPackagingInputs()
     {
         var root = FindRepositoryRoot();
@@ -2103,29 +1936,6 @@ public sealed class RepositoryHygieneTests
         Assert.Contains("RequeueDeadLetterCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("Icon=\"{StaticResource Edge.Icon.Refresh}\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Icon=\"{StaticResource Edge.Icon.Sync}\"", xaml, StringComparison.Ordinal);
-    }
-
-    private static IReadOnlyList<string> GetProjectReferences(string projectPath)
-        => XDocument.Load(projectPath)
-            .Descendants("ProjectReference")
-            .Select(element => element.Attribute("Include")?.Value)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Select(value => value!)
-            .ToArray();
-
-    private static IReadOnlyList<string> GetProjectReferenceRepositoryPaths(string root, string projectPath)
-    {
-        var projectDirectory = Path.GetDirectoryName(projectPath)
-            ?? throw new InvalidOperationException($"无法定位项目目录：{projectPath}");
-
-        return XDocument.Load(projectPath)
-            .Descendants("ProjectReference")
-            .Select(element => element.Attribute("Include")?.Value)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Select(value => value!.Replace('\\', Path.DirectorySeparatorChar))
-            .Select(value => Path.GetFullPath(Path.Combine(projectDirectory, value)))
-            .Select(path => ToRepositoryPath(root, path))
-            .ToArray();
     }
 
     private static IReadOnlySet<string> GetXamlResourceKeys(string path)

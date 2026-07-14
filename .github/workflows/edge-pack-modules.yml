@@ -41,6 +41,14 @@ jobs:
         shell: pwsh
         run: ./scripts/tests/Get-EdgeTestInventory.ps1 -OutputPath artifacts/test-inventory.actual.json
 
+      - name: Validate Edge architecture project graph
+        shell: pwsh
+        run: ./scripts/tests/Test-EdgeArchitectureProjectGraph.ps1 -RepositoryRoot . -SolutionPath IIoT.EdgeClient.slnx -Configuration Release
+
+      - name: Validate Edge analyzer build fixtures
+        shell: pwsh
+        run: ./scripts/tests/Test-EdgeArchitectureAnalyzerFixtures.ps1 -RepositoryRoot . -Configuration Release
+
       - name: Restore edge solution
         shell: pwsh
         run: dotnet restore IIoT.EdgeClient.slnx -p:RestoreDisableParallel=true --disable-build-servers -noAutoResponse
@@ -73,6 +81,10 @@ jobs:
       - name: Build Edge solution and test assemblies
         shell: pwsh
         run: dotnet build IIoT.EdgeClient.slnx -c Release --no-restore -m:1 -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse
+
+      - name: Run architecture analyzer tests
+        shell: pwsh
+        run: dotnet test src/Tests/IIoT.Edge.Architecture.AnalyzerTests/IIoT.Edge.Architecture.AnalyzerTests.csproj -c Release --no-build --no-restore --logger "trx;LogFileName=IIoT.Edge.Architecture.AnalyzerTests.trx" --results-directory artifacts/test-results -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse
 
       - name: Run plugin conformance tests
         shell: pwsh

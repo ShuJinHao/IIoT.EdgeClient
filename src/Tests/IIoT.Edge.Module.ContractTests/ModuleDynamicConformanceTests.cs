@@ -1,139 +1,9 @@
 namespace IIoT.Edge.Module.ContractTests;
 
 using System.Text.RegularExpressions;
-using System.Xml.Linq;
 
-public sealed class ArchitectureBoundaryContractTests
+public sealed class ModuleDynamicConformanceTests
 {
-    private static readonly string[] ForbiddenModuleNamespaces =
-    [
-        "IIoT.Edge.Module.Homogenization"
-    ];
-
-    [Fact]
-    public void HostAndCommonProjects_ShouldNotReferenceConcreteModuleNamespaces()
-    {
-        var repoRoot = ContractTestPathHelper.FindRepoRoot();
-        var directories = new[]
-        {
-            Path.Combine(repoRoot, "src", "Core"),
-            Path.Combine(repoRoot, "src", "Application", "IIoT.Edge.Application"),
-            Path.Combine(repoRoot, "src", "Infrastructure"),
-            Path.Combine(repoRoot, "src", "Presentation"),
-            Path.Combine(repoRoot, "src", "Shared", "IIoT.Edge.SharedKernel"),
-            Path.Combine(repoRoot, "src", "Shared", "IIoT.Edge.UI.Shared"),
-            Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Shell"),
-            Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Host.Bootstrap"),
-            Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Host.DataPipeline")
-        };
-
-        var offendingFiles = directories
-            .Where(Directory.Exists)
-            .SelectMany(directory => Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories)
-                .Concat(Directory.EnumerateFiles(directory, "*.csproj", SearchOption.AllDirectories)))
-            .Where(path => !path.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-            .Where(path => !path.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-            .Select(path => new
-            {
-                Path = path,
-                Text = File.ReadAllText(path)
-            })
-            .Where(file => ForbiddenModuleNamespaces.Any(namespaceName => file.Text.Contains(namespaceName, StringComparison.Ordinal)))
-            .Select(file => file.Path)
-            .ToArray();
-
-        Assert.Empty(offendingFiles);
-    }
-
-    [Fact]
-    public void ConcreteModuleNamespaces_ShouldOnlyAppearInModulesAndTests()
-    {
-        var repoRoot = ContractTestPathHelper.FindRepoRoot();
-        var allowedRoots = new[]
-        {
-            Path.Combine(repoRoot, "src", "Modules"),
-            Path.Combine(repoRoot, "src", "Tests")
-        };
-
-        var offendingFiles = Directory
-            .EnumerateFiles(Path.Combine(repoRoot, "src"), "*.*", SearchOption.AllDirectories)
-            .Where(path => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
-                           || path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
-            .Where(path => !IsBuildArtifact(path))
-            .Where(path => !allowedRoots.Any(root => IsUnderDirectory(root, path)))
-            .Select(path => new
-            {
-                Path = path,
-                Text = File.ReadAllText(path)
-            })
-            .Where(file => ForbiddenModuleNamespaces.Any(namespaceName => file.Text.Contains(namespaceName, StringComparison.Ordinal)))
-            .Select(file => ToRepositoryPath(repoRoot, file.Path))
-            .ToArray();
-
-        Assert.Empty(offendingFiles);
-    }
-
-    [Fact]
-    public void ProcessModules_ShouldOnlyReferenceApprovedHostContracts()
-    {
-        var repoRoot = ContractTestPathHelper.FindRepoRoot();
-        var approvedReferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "src/Application/IIoT.Edge.Application/IIoT.Edge.Application.csproj",
-            "src/Modules/IIoT.Edge.Module.Sdk/IIoT.Edge.Module.Sdk.csproj",
-            "src/Shared/IIoT.Edge.SharedKernel/IIoT.Edge.SharedKernel.csproj",
-            "src/Shared/IIoT.Edge.UI.Shared/IIoT.Edge.UI.Shared.csproj",
-            "src/Presentation/IIoT.Edge.Presentation.Navigation/IIoT.Edge.Presentation.Navigation.csproj"
-        };
-        var offendingReferences = Directory
-            .EnumerateFiles(Path.Combine(repoRoot, "src", "Modules"), "*.csproj", SearchOption.AllDirectories)
-            .Where(path => !IsBuildArtifact(path))
-            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}IIoT.Edge.Module.Sdk{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
-            .SelectMany(projectPath =>
-            {
-                return ReadProjectReferences(repoRoot, projectPath)
-                    .Where(referencePath => !approvedReferences.Contains(referencePath))
-                    .Select(referencePath => $"{ToRepositoryPath(repoRoot, projectPath)} -> {referencePath}");
-            })
-            .ToArray();
-
-        Assert.Empty(offendingReferences);
-    }
-
-    [Fact]
-    public void ModuleSdk_ShouldNotReferenceDataPipelineRuntime()
-    {
-        var repoRoot = ContractTestPathHelper.FindRepoRoot();
-        var sdkProject = Path.Combine(
-            repoRoot,
-            "src",
-            "Modules",
-            "IIoT.Edge.Module.Sdk",
-            "IIoT.Edge.Module.Sdk.csproj");
-
-        var offendingReferences = ReadProjectReferences(repoRoot, sdkProject)
-            .Where(referencePath => referencePath.Contains("IIoT.Edge.Host.DataPipeline", StringComparison.OrdinalIgnoreCase))
-            .ToArray();
-
-        Assert.Empty(offendingReferences);
-    }
-
-    [Fact]
-    public void ProcessModules_ShouldNotReferenceDataPipelineRuntime()
-    {
-        var repoRoot = ContractTestPathHelper.FindRepoRoot();
-        var offendingReferences = Directory
-            .EnumerateFiles(Path.Combine(repoRoot, "src", "Modules"), "*.csproj", SearchOption.AllDirectories)
-            .Where(path => !IsBuildArtifact(path))
-            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}IIoT.Edge.Module.Sdk{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
-            .SelectMany(projectPath => ReadProjectReferences(repoRoot, projectPath)
-                .Where(referencePath => referencePath.Contains("IIoT.Edge.Host.DataPipeline", StringComparison.OrdinalIgnoreCase))
-                .Select(referencePath => $"{ToRepositoryPath(repoRoot, projectPath)} -> {referencePath}"))
-            .ToArray();
-
-        Assert.Empty(offendingReferences);
-    }
-
     [Fact]
     public void PluginCloudUploaders_ShouldDependOnApplicationCloudChannelAbstraction()
     {
@@ -191,43 +61,6 @@ public sealed class ArchitectureBoundaryContractTests
             .ToArray();
 
         Assert.Empty(offendingFiles);
-    }
-
-    [Fact]
-    public void PluginProductionTasks_ShouldOnlyEmitDataPipelineRecordsForExternalUploads()
-    {
-        var repoRoot = ContractTestPathHelper.FindRepoRoot();
-        var taskFiles = Directory
-            .EnumerateFiles(Path.Combine(repoRoot, "src", "Modules"), "*.cs", SearchOption.AllDirectories)
-            .Where(path => path.Contains($"{Path.DirectorySeparatorChar}Production{Path.DirectorySeparatorChar}Tasks{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .Where(path => !IsBuildArtifact(path))
-            .Select(path => new
-            {
-                Path = ToRepositoryPath(repoRoot, path),
-                Text = File.ReadAllText(path)
-            })
-            .ToArray();
-
-        var forbiddenTypePattern = new Regex(
-            @"\b(IProcessMesUploader|IProcessCloudUploader|IMesHttpClient|ICloudHttpClient|MesRequestExecutor|CloudUploadChannelBase|StandardPassStationCloudUploader)\b",
-            RegexOptions.Compiled);
-        var forbiddenCallPattern = new Regex(@"\.(UploadAsync|PostAsync)\s*\(", RegexOptions.Compiled);
-
-        var bypassOffenders = taskFiles
-            .Where(file => forbiddenTypePattern.IsMatch(file.Text) || forbiddenCallPattern.IsMatch(file.Text))
-            .Select(file => file.Path)
-            .ToArray();
-
-        var targetWithoutPipelineOffenders = taskFiles
-            .Where(file => !Regex.IsMatch(file.Text, @"\babstract\s+class\b"))
-            .Where(file => file.Text.Contains("UploadTargets", StringComparison.Ordinal))
-            .Where(file => !file.Text.Contains("IDataPipelineService", StringComparison.Ordinal)
-                           || !file.Text.Contains(".EnqueueAsync(", StringComparison.Ordinal))
-            .Select(file => file.Path)
-            .ToArray();
-
-        Assert.Empty(bypassOffenders);
-        Assert.Empty(targetWithoutPipelineOffenders);
     }
 
     [Fact]
@@ -350,33 +183,10 @@ public sealed class ArchitectureBoundaryContractTests
         Assert.Empty(offenders);
     }
 
-    private static string[] ReadProjectReferences(string repoRoot, string projectPath)
-    {
-        var projectDirectory = Path.GetDirectoryName(projectPath)!;
-        return XDocument
-            .Load(projectPath)
-            .Descendants("ProjectReference")
-            .Select(reference => reference.Attribute("Include")?.Value)
-            .Where(include => !string.IsNullOrWhiteSpace(include))
-            .Select(include => include!.Replace('\\', Path.DirectorySeparatorChar))
-            .Select(include => Path.GetFullPath(Path.Combine(projectDirectory, include)))
-            .Select(path => ToRepositoryPath(repoRoot, path))
-            .Order(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-    }
-
     private static bool IsBuildArtifact(string path)
     {
         return path.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
                || path.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool IsUnderDirectory(string directory, string path)
-    {
-        var relativePath = Path.GetRelativePath(directory, path);
-        return !Path.IsPathRooted(relativePath)
-               && !relativePath.Equals("..", StringComparison.Ordinal)
-               && !relativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal);
     }
 
     private static string ToRepositoryPath(string repoRoot, string path)

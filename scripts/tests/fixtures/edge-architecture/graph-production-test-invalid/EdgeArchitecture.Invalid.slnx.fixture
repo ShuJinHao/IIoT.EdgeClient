@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Application/IIoT.Edge.Application.csproj" />
+  <Project Path="Testing/IIoT.Edge.Testing.Core.csproj" />
+</Solution>

@@ -52,7 +52,7 @@ public static class DependencyInjection
         services.AddSingleton<ICloudProfileSwitchProjectionWriter, FileCloudProfileSwitchProjectionWriter>();
         services.AddSingleton<ICloudApiEndpointProvider>(sp => new CloudApiEndpointProvider(
             sp.GetRequiredService<IOptionsMonitor<CloudApiConfig>>(),
-            sp.GetService<ILocalParameterConfigService>()));
+            sp.GetService<ILocalSystemConfigSnapshotReader>()));
         services.AddSingleton<ICloudApiPathProvider>(sp =>
             sp.GetRequiredService<ICloudApiEndpointProvider>());
         services.AddSingleton<IMesEndpointProvider, MesEndpointProvider>();

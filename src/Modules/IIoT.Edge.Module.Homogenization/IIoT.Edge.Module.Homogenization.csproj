@@ -8,6 +8,7 @@
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
     <IsPackable>true</IsPackable>
     <PackageId>IIoT.Edge.Module.Homogenization</PackageId>
+    <EdgeModuleRole>Entry</EdgeModuleRole>
     <IsEdgePluginModule>true</IsEdgePluginModule>
     <PluginModuleId>Homogenization</PluginModuleId>
   </PropertyGroup>

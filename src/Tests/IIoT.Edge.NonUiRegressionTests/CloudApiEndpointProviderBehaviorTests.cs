@@ -69,30 +69,9 @@ public sealed class CloudApiEndpointProviderBehaviorTests
         };
 
     private sealed class FakeLocalParameterConfigService(
-        IReadOnlyList<LocalSystemConfigSnapshot> systemConfigs) : ILocalParameterConfigService
+        IReadOnlyList<LocalSystemConfigSnapshot> systemConfigs) : ILocalSystemConfigSnapshotReader
     {
-        public event EventHandler<ParameterConfigChangedEventArgs>? ParameterConfigChanged
-        {
-            add { }
-            remove { }
-        }
-
-        public Task<IReadOnlyList<LocalSystemConfigSnapshot>> GetSystemConfigsAsync(
-            CancellationToken cancellationToken = default)
-            => Task.FromResult(systemConfigs);
-
-        public Task InsertSystemConfigAsync(
-            string key,
-            string value,
-            string? description = null,
-            int sortOrder = 0,
-            CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
-
-        public Task DeleteSystemConfigAsync(
-            string key,
-            CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
+        public IReadOnlyList<LocalSystemConfigSnapshot> GetCurrentSystemConfigs() => systemConfigs;
     }
 
     private sealed class TestOptionsMonitor<T>(T currentValue) : IOptionsMonitor<T>

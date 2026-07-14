@@ -1,5 +1,8 @@
 <Solution>
   <Folder Name="/src/" />
+  <Folder Name="/src/Analyzers/">
+    <Project Path="src/Analyzers/IIoT.Edge.Architecture.Analyzers/IIoT.Edge.Architecture.Analyzers.csproj" />
+  </Folder>
   <Folder Name="/src/Application/">
     <Project Path="src/Application/IIoT.Edge.Application/IIoT.Edge.Application.csproj" />
   </Folder>
@@ -38,6 +41,7 @@
     <Project Path="src/Edge/IIoT.Edge.Host.DataPipeline/IIoT.Edge.Host.DataPipeline.csproj" />
   </Folder>
   <Folder Name="/src/Tests/">
+    <Project Path="src/Tests/IIoT.Edge.Architecture.AnalyzerTests/IIoT.Edge.Architecture.AnalyzerTests.csproj" />
     <Project Path="src/Tests/IIoT.Edge.Infrastructure.Update.Tests/IIoT.Edge.Infrastructure.Update.Tests.csproj" />
     <Project Path="src/Tests/IIoT.Edge.Installer.Tests/IIoT.Edge.Installer.Tests.csproj" />
     <Project Path="src/Tests/IIoT.Edge.Launcher.Tests/IIoT.Edge.Launcher.Tests.csproj" />

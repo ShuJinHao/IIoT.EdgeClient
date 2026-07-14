@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <EdgeModuleRole>Fixture</EdgeModuleRole>
     <IsEdgePluginModule>true</IsEdgePluginModule>
     <IsEdgePluginTestFixture>true</IsEdgePluginTestFixture>
     <PluginModuleId>TestPlugin</PluginModuleId>

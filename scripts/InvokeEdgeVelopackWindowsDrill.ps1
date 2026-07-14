@@ -13,7 +13,6 @@ param(
 
     [string]$UpdateSource,
 
-    [Alias('ProgramDataRoot')]
     [string]$AppDataRoot,
 
     [string]$AppRoot,
