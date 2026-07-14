@@ -20,8 +20,8 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
     public async Task SnapshotProvider_WhenConfiguredPlcHasRuntimeSnapshot_ShouldOverlayRealRuntimeState()
     {
         var observedAt = new DateTimeOffset(2026, 7, 3, 8, 20, 30, TimeSpan.Zero);
-        var plcA = CreatePlc(1, "P1-AP01", "10.10.1.11", 6000, "MC-3E");
-        var plcB = CreatePlc(2, "P1-AP02", "10.10.1.12", 6000, "MC-3E");
+        var plcA = CreatePlc(1, "PLC-A01", "10.10.1.11", 6000, "MC-3E");
+        var plcB = CreatePlc(2, "PLC-A02", "10.10.1.12", 6000, "MC-3E");
         var provider = new EdgeHostPlcRuntimeStateSnapshotProvider(
             new InMemoryRepository<NetworkDeviceEntity>(plcA, plcB),
             new FakePlcConnectionManager(
@@ -37,14 +37,14 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
         var items = await provider.GetCurrentAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(2, items.Count);
-        var connected = Assert.Single(items, item => item.PlcCode == "P1-AP01");
+        var connected = Assert.Single(items, item => item.PlcCode == "PLC-A01");
         Assert.True(connected.IsConnected);
         Assert.Equal("Connected", connected.RuntimeStatus);
         Assert.Equal(observedAt.UtcDateTime, connected.ObservedAtUtc);
         Assert.Equal("MC-3E", connected.Protocol);
         Assert.Equal("10.10.1.11:6000", connected.Address);
 
-        var uncollected = Assert.Single(items, item => item.PlcCode == "P1-AP02");
+        var uncollected = Assert.Single(items, item => item.PlcCode == "PLC-A02");
         Assert.False(uncollected.IsConnected);
         Assert.Equal("Unknown", uncollected.RuntimeStatus);
         Assert.Null(uncollected.ObservedAtUtc);
@@ -63,7 +63,7 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
         string? lastError,
         string expectedRuntimeStatus)
     {
-        var plc = CreatePlc(1, "P1-AP01", "10.10.1.11", 6000, "MC-3E");
+        var plc = CreatePlc(1, "PLC-A01", "10.10.1.11", 6000, "MC-3E");
         var provider = new EdgeHostPlcRuntimeStateSnapshotProvider(
             new InMemoryRepository<NetworkDeviceEntity>(plc),
             new FakePlcConnectionManager(
@@ -86,7 +86,7 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
     [Fact]
     public async Task SnapshotProvider_WhenConfiguredPlcRenamed_ShouldKeepStableCodeAndReportNewName()
     {
-        var plc = CreatePlc(1, "P1-AP01", "10.10.1.11", 6000, "MC-3E");
+        var plc = CreatePlc(1, "PLC-A01", "10.10.1.11", 6000, "MC-3E");
         plc.Rename("一号 PLC");
         var provider = new EdgeHostPlcRuntimeStateSnapshotProvider(
             new InMemoryRepository<NetworkDeviceEntity>(plc),
@@ -94,7 +94,7 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
 
         var item = Assert.Single(await provider.GetCurrentAsync(TestContext.Current.CancellationToken));
 
-        Assert.Equal("P1-AP01", item.PlcCode);
+        Assert.Equal("PLC-A01", item.PlcCode);
         Assert.Equal("一号 PLC", item.ReportedPlcName);
     }
 
@@ -136,8 +136,8 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
             new StaticPlcRuntimeStateSnapshotProvider(
             [
                 new EdgeHostPlcRuntimeStateReportItem(
-                    "P1-AP01",
-                    "P1-AP01",
+                    "PLC-A01",
+                    "PLC-A01",
                     true,
                     "Connected",
                     new DateTime(2026, 7, 3, 8, 20, 30, DateTimeKind.Utc),
@@ -160,7 +160,7 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
         Assert.Equal(deviceId, payload.DeviceId);
         Assert.Equal("EDGE-APUC", payload.ClientCode);
         var plcState = Assert.Single(payload.PlcStates);
-        Assert.Equal("P1-AP01", plcState.PlcCode);
+        Assert.Equal("PLC-A01", plcState.PlcCode);
         Assert.True(plcState.IsConnected);
         Assert.Equal("Connected", plcState.RuntimeStatus);
     }
@@ -173,7 +173,7 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
         var reporter = new EdgeHostPlcRuntimeStateReporter(
             new StaticPlcRuntimeStateSnapshotProvider(
             [
-                new EdgeHostPlcRuntimeStateReportItem("P1-AP01", "P1-AP01", true, "Connected")
+                new EdgeHostPlcRuntimeStateReportItem("PLC-A01", "PLC-A01", true, "Connected")
             ]),
             cloudHttp,
             new FakeCloudApiEndpointProvider(),

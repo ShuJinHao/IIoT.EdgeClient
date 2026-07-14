@@ -299,7 +299,7 @@ public sealed class LocalParameterConfigBehaviorTests
         if (hasLegacySwitches)
         {
             configs.Add(CreateSystemConfig(2, "Module:Homogenization:Cloud:启用", allLegacyEnabled.ToString()));
-            configs.Add(CreateSystemConfig(3, "Module:DieCuttingAnode:Cloud:启用", "true"));
+            configs.Add(CreateSystemConfig(3, "Module:TestPluginAlpha:Cloud:启用", "true"));
         }
 
         var repository = new InMemoryRepository<SystemConfigEntity>([.. configs]);

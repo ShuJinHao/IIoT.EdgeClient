@@ -19,14 +19,14 @@ public sealed class MonitorViewModelBehaviorTests
         var viewModel = CreateViewModel(
             selectionService,
             [
-                CreateSnapshot(1, "P1-AP01"),
-                CreateSnapshot(2, "P1-AP02")
+                CreateSnapshot(1, "PLC-A01"),
+                CreateSnapshot(2, "PLC-A02")
             ]);
 
         await viewModel.OnActivatedAsync();
         await viewModel.OnDeactivatedAsync();
 
-        Assert.Equal(["P1-AP01", "P1-AP02"], viewModel.DeviceOptions.ToArray());
+        Assert.Equal(["PLC-A01", "PLC-A02"], viewModel.DeviceOptions.ToArray());
         Assert.Null(viewModel.SelectedDevice);
         Assert.Empty(viewModel.DeviceDataRows);
         Assert.Empty(viewModel.StateMachineTaskItems);
@@ -37,20 +37,20 @@ public sealed class MonitorViewModelBehaviorTests
     public async Task OnActivatedAsync_WhenSharedSelectionMatchesDevice_ShouldShowSelectedDeviceSnapshot()
     {
         var selectionService = new DeviceSelectionService();
-        selectionService.SelectDevice("P1-AP02");
+        selectionService.SelectDevice("PLC-A02");
         var viewModel = CreateViewModel(
             selectionService,
             [
-                CreateSnapshot(1, "P1-AP01", deviceDataValue: "A"),
-                CreateSnapshot(2, "P1-AP02", deviceDataValue: "B")
+                CreateSnapshot(1, "PLC-A01", deviceDataValue: "A"),
+                CreateSnapshot(2, "PLC-A02", deviceDataValue: "B")
             ]);
 
         await viewModel.OnActivatedAsync();
         await viewModel.OnDeactivatedAsync();
 
-        Assert.Equal("P1-AP02", viewModel.SelectedDevice);
+        Assert.Equal("PLC-A02", viewModel.SelectedDevice);
         Assert.Equal("B", Assert.Single(viewModel.DeviceDataRows).Value);
-        Assert.Equal("P1-AP02", Assert.Single(viewModel.CellDebugItems).DeviceName);
+        Assert.Equal("PLC-A02", Assert.Single(viewModel.CellDebugItems).DeviceName);
         Assert.Equal("上传任务", Assert.Single(viewModel.StateMachineTaskItems).DisplayName);
     }
 
@@ -61,35 +61,35 @@ public sealed class MonitorViewModelBehaviorTests
         var viewModel = CreateViewModel(
             selectionService,
             [
-                CreateSnapshot(1, "P1-AP01"),
-                CreateSnapshot(2, "P1-AP02")
+                CreateSnapshot(1, "PLC-A01"),
+                CreateSnapshot(2, "PLC-A02")
             ]);
         await viewModel.OnActivatedAsync();
 
-        viewModel.SelectedDevice = "P1-AP01";
+        viewModel.SelectedDevice = "PLC-A01";
         await viewModel.OnDeactivatedAsync();
 
         Assert.Equal(IDeviceSelectionService.AllFilterKey, selectionService.SelectedDeviceKey);
-        Assert.Equal("P1-AP01", viewModel.SelectedDevice);
+        Assert.Equal("PLC-A01", viewModel.SelectedDevice);
     }
 
     [Fact]
     public async Task OnActivatedAsync_WhenSharedSelectionHasNoSnapshot_ShouldKeepSelectedDeviceAndShowEmpty()
     {
         var selectionService = new DeviceSelectionService();
-        selectionService.SelectDevice("P1-AP99");
+        selectionService.SelectDevice("PLC-A99");
         var viewModel = CreateViewModel(
             selectionService,
             [
-                CreateSnapshot(1, "P1-AP01")
+                CreateSnapshot(1, "PLC-A01")
             ]);
 
         await viewModel.OnActivatedAsync();
         await viewModel.OnDeactivatedAsync();
 
-        Assert.Equal("P1-AP99", viewModel.SelectedDevice);
+        Assert.Equal("PLC-A99", viewModel.SelectedDevice);
         Assert.Empty(viewModel.DeviceDataRows);
-        Assert.Equal("P1-AP99", selectionService.SelectedDeviceKey);
+        Assert.Equal("PLC-A99", selectionService.SelectedDeviceKey);
     }
 
     private static MonitorViewModel CreateViewModel(

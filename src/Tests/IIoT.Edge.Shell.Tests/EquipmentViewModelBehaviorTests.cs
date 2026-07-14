@@ -49,13 +49,13 @@ public sealed class EquipmentViewModelBehaviorTests
     {
         var viewModel = CreateViewModel(
             [
-                CreateMenu("DieCutting.DataView", "负极模切采样", "DieCutting_Menu_ProcessData")
+                CreateMenu("TestPlugin.DataView", "测试插件甲采样", "TestPlugin_Menu_ProcessData")
             ],
             [
-                new FakeProcessModule("DieCutting", "模切")
+                new FakeProcessModule("TestPlugin", "测试插件")
             ]);
 
-        Assert.Equal("负极模切采样", viewModel.CurrentProcessDisplayName);
+        Assert.Equal("测试插件甲采样", viewModel.CurrentProcessDisplayName);
     }
 
     [Fact]
@@ -64,11 +64,11 @@ public sealed class EquipmentViewModelBehaviorTests
         var viewModel = CreateViewModel(
             [
                 CreateMenu("Homogenization.DataView", "数据", "Homogenization_Menu_Data"),
-                CreateMenu("DieCutting.DataView", "数据", "DieCutting_Menu_Data")
+                CreateMenu("TestPlugin.DataView", "数据", "TestPlugin_Menu_Data")
             ],
             [
                 new FakeProcessModule("Homogenization", "匀浆"),
-                new FakeProcessModule("DieCutting", "模切")
+                new FakeProcessModule("TestPlugin", "测试插件")
             ]);
 
         Assert.Equal("未确定", viewModel.CurrentProcessDisplayName);

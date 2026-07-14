@@ -124,16 +124,6 @@ public sealed class SystemLogDisplayProjector : ISystemLogDisplayProjector
 
     private static string ResolveLineName(string deviceName)
     {
-        if (deviceName.StartsWith("P1-AP", StringComparison.OrdinalIgnoreCase))
-        {
-            return "负极模切";
-        }
-
-        if (deviceName.StartsWith("P2-CP", StringComparison.OrdinalIgnoreCase))
-        {
-            return "正极模切";
-        }
-
         return "PLC";
     }
 

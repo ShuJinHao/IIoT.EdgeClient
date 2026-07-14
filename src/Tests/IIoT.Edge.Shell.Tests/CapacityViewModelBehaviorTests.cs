@@ -28,12 +28,12 @@ public sealed class CapacityViewModelBehaviorTests
     {
         var facade = new FakeCapacityQueryFacade { IsOnline = true };
         var selectionService = new DeviceSelectionService();
-        selectionService.SelectDevice("P1-AP01");
+        selectionService.SelectDevice("PLC-A01");
         var viewModel = CreateViewModel(facade, selectionService);
 
         await viewModel.OnActivatedAsync();
 
-        Assert.Equal("P1-AP01", facade.LastLoadTodayPlcName);
+        Assert.Equal("PLC-A01", facade.LastLoadTodayPlcName);
         Assert.Equal(1, facade.LoadTodayCallCount);
     }
 

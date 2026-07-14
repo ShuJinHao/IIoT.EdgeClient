@@ -17,8 +17,8 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
         var selectionService = new DeviceSelectionService();
         var service = new FakePlcTaskBindingService(
         [
-            CreateDevice(1, "P1-AP01"),
-            CreateDevice(2, "P1-AP02")
+            CreateDevice(1, "PLC-A01"),
+            CreateDevice(2, "PLC-A02")
         ]);
         var viewModel = CreateViewModel(service, selectionService);
 
@@ -36,39 +36,39 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
     public async Task OnActivatedAsync_WhenSharedSelectionMatchesDeviceName_ShouldSelectThatDevice()
     {
         var selectionService = new DeviceSelectionService();
-        selectionService.SelectDevice("P1-AP02");
+        selectionService.SelectDevice("PLC-A02");
         var viewModel = CreateViewModel(
             new FakePlcTaskBindingService(
             [
-                CreateDevice(1, "P1-AP01"),
-                CreateDevice(2, "P1-AP02")
+                CreateDevice(1, "PLC-A01"),
+                CreateDevice(2, "PLC-A02")
             ]),
             selectionService);
 
         await viewModel.OnActivatedAsync();
         await viewModel.OnDeactivatedAsync();
 
-        Assert.Equal("P1-AP02", viewModel.SelectedDevice?.DeviceName);
-        Assert.Equal("P1-AP02", selectionService.SelectedDeviceKey);
+        Assert.Equal("PLC-A02", viewModel.SelectedDevice?.DeviceName);
+        Assert.Equal("PLC-A02", selectionService.SelectedDeviceKey);
     }
 
     [Fact]
     public async Task OnActivatedAsync_WhenDeviceSelected_ShouldExposeCurrentDeviceTextWithoutSelectPrompt()
     {
         var selectionService = new DeviceSelectionService();
-        selectionService.SelectDevice("P1-AP02");
+        selectionService.SelectDevice("PLC-A02");
         var viewModel = CreateViewModel(
             new FakePlcTaskBindingService(
             [
-                CreateDevice(1, "P1-AP01"),
-                CreateDevice(2, "P1-AP02")
+                CreateDevice(1, "PLC-A01"),
+                CreateDevice(2, "PLC-A02")
             ]),
             selectionService);
 
         await viewModel.OnActivatedAsync();
         await viewModel.OnDeactivatedAsync();
 
-        Assert.Equal("当前 PLC：P1-AP02", viewModel.SelectedDeviceTitle);
+        Assert.Equal("当前 PLC：PLC-A02", viewModel.SelectedDeviceTitle);
         Assert.DoesNotContain("选择设备", viewModel.SelectedDeviceTitle);
         Assert.DoesNotContain("选择设备", viewModel.SelectedDevice?.DeviceStateText ?? string.Empty);
     }
@@ -80,28 +80,28 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
         var viewModel = CreateViewModel(
             new FakePlcTaskBindingService(
             [
-                CreateDevice(1, "P1-AP01"),
-                CreateDevice(2, "P1-AP02")
+                CreateDevice(1, "PLC-A01"),
+                CreateDevice(2, "PLC-A02")
             ]),
             selectionService);
         await viewModel.OnActivatedAsync();
 
-        viewModel.SelectedDevice = viewModel.Devices.Single(device => device.DeviceName == "P1-AP01");
+        viewModel.SelectedDevice = viewModel.Devices.Single(device => device.DeviceName == "PLC-A01");
         await viewModel.OnDeactivatedAsync();
 
         Assert.Equal(IDeviceSelectionService.AllFilterKey, selectionService.SelectedDeviceKey);
-        Assert.Equal("P1-AP01", viewModel.SelectedDevice?.DeviceName);
+        Assert.Equal("PLC-A01", viewModel.SelectedDevice?.DeviceName);
     }
 
     [Fact]
     public async Task SaveCommand_WhenDeviceSelected_ShouldPersistOnlySelectedDevice()
     {
         var selectionService = new DeviceSelectionService();
-        selectionService.SelectDevice("P1-AP02");
+        selectionService.SelectDevice("PLC-A02");
         var service = new FakePlcTaskBindingService(
         [
-            CreateDevice(1, "P1-AP01"),
-            CreateDevice(2, "P1-AP02")
+            CreateDevice(1, "PLC-A01"),
+            CreateDevice(2, "PLC-A02")
         ]);
         var runtimeApplyService = new FakePlcRuntimeApplyService();
         var viewModel = CreateViewModel(service, selectionService, runtimeApplyService);

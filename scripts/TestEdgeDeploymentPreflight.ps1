@@ -216,10 +216,6 @@ function Test-ClientSecurityRedLines {
             (Resolve-RepoPath 'src/Modules')
         ) `
         -Includes @('*.cs')
-    $mesDoc = Resolve-RepoPath 'docs/模切MES对接口径.md'
-    if (Test-Path -LiteralPath $mesDoc -PathType Leaf) {
-        $mesFiles += $mesDoc
-    }
     Add-ForbiddenTextFailures `
         -Description 'Legacy MES fixed token or MD5 signature' `
         -Files $mesFiles `
@@ -248,8 +244,7 @@ function Test-ClientSecurityRedLines {
         'docs/Edge安装更新验收.md',
         'docs/Edge客户端宿主插件分发契约.md',
         'docs/客户端规则.md',
-        'docs/客户端架构治理清单.md',
-        'docs/模切MES对接口径.md'
+        'docs/客户端架构治理清单.md'
     )) {
         $resolved = Resolve-RepoPath $docPath
         if (Test-Path -LiteralPath $resolved -PathType Leaf) {

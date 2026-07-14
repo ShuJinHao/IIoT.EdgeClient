@@ -125,19 +125,19 @@ public sealed class ShellLaunchServiceTests
         File.WriteAllText(executablePath, string.Empty);
         var service = CreateService(new SpyProcessStarter());
         var anode = new LauncherProfileDefinition(
-            "DieCuttingAnodeLine",
-            "负极模切",
+            "TestPluginAlphaLine",
+            "测试插件甲",
             "AP profile",
             null,
-            "DieCuttingAnodeLine",
+            "TestPluginAlphaLine",
             executablePath,
             "ChartBar",
             "#2563EB");
         var cathode = anode with
         {
-            ProfileId = "DieCuttingCathodeLine",
-            DisplayName = "正极模切",
-            MachineProfile = "DieCuttingCathodeLine"
+            ProfileId = "TestPluginBetaLine",
+            DisplayName = "测试插件乙",
+            MachineProfile = "TestPluginBetaLine"
         };
 
         try
@@ -158,18 +158,18 @@ public sealed class ShellLaunchServiceTests
     public void IsProfileRunning_WhenTrackedProcessMissingButProfileInstanceIsRunning_ShouldReturnTrue()
     {
         var profile = new LauncherProfileDefinition(
-            "DieCuttingAnodeLine",
-            "负极模切",
+            "TestPluginAlphaLine",
+            "测试插件甲",
             "AP profile",
             null,
-            "DieCuttingAnodeLine",
+            "TestPluginAlphaLine",
             Path.Combine(Path.GetTempPath(), "IIoT.Edge.Shell"),
             "ChartBar",
             "#2563EB");
         var service = CreateService(
             new SpyProcessStarter(),
-            new FakeShellInstanceIdResolver(("DieCuttingAnodeLine", "DieCuttingAnodeLine")),
-            new FakeShellInstanceProbe("DieCuttingAnodeLine"));
+            new FakeShellInstanceIdResolver(("TestPluginAlphaLine", "TestPluginAlphaLine")),
+            new FakeShellInstanceProbe("TestPluginAlphaLine"));
 
         Assert.True(service.IsProfileRunning(profile));
     }
@@ -178,18 +178,18 @@ public sealed class ShellLaunchServiceTests
     public void IsProfileRunning_WhenDifferentProfileInstanceIsRunning_ShouldReturnFalse()
     {
         var cathode = new LauncherProfileDefinition(
-            "DieCuttingCathodeLine",
-            "正极模切",
+            "TestPluginBetaLine",
+            "测试插件乙",
             "CP profile",
             null,
-            "DieCuttingCathodeLine",
+            "TestPluginBetaLine",
             Path.Combine(Path.GetTempPath(), "IIoT.Edge.Shell"),
             "ChartBar",
             "#2563EB");
         var service = CreateService(
             new SpyProcessStarter(),
-            new FakeShellInstanceIdResolver(("DieCuttingCathodeLine", "DieCuttingCathodeLine")),
-            new FakeShellInstanceProbe("DieCuttingAnodeLine"));
+            new FakeShellInstanceIdResolver(("TestPluginBetaLine", "TestPluginBetaLine")),
+            new FakeShellInstanceProbe("TestPluginAlphaLine"));
 
         Assert.False(service.IsProfileRunning(cathode));
     }
@@ -198,18 +198,18 @@ public sealed class ShellLaunchServiceTests
     public void IsProfileRunning_WhenInstanceIdCannotBeResolved_ShouldReturnFalse()
     {
         var profile = new LauncherProfileDefinition(
-            "DieCuttingCathodeLine",
-            "正极模切",
+            "TestPluginBetaLine",
+            "测试插件乙",
             "CP profile",
             null,
-            "DieCuttingCathodeLine",
+            "TestPluginBetaLine",
             Path.Combine(Path.GetTempPath(), "IIoT.Edge.Shell"),
             "ChartBar",
             "#2563EB");
         var service = CreateService(
             new SpyProcessStarter(),
             new FakeShellInstanceIdResolver(),
-            new FakeShellInstanceProbe("DieCuttingCathodeLine"));
+            new FakeShellInstanceProbe("TestPluginBetaLine"));
 
         Assert.False(service.IsProfileRunning(profile));
     }
@@ -222,18 +222,18 @@ public sealed class ShellLaunchServiceTests
         Directory.CreateDirectory(hostDirectory);
         var executablePath = Path.Combine(hostDirectory, "IIoT.Edge.Shell");
         File.WriteAllText(
-            Path.Combine(hostDirectory, "appsettings.machine.DieCuttingAnodeLine.json"),
+            Path.Combine(hostDirectory, "appsettings.machine.TestPluginAlphaLine.json"),
             """
             {
-              "InstanceId": "DieCuttingAnodeLine"
+              "InstanceId": "TestPluginAlphaLine"
             }
             """);
         var profile = new LauncherProfileDefinition(
-            "DieCuttingAnodeLine",
-            "负极模切",
+            "TestPluginAlphaLine",
+            "测试插件甲",
             "AP profile",
             null,
-            "DieCuttingAnodeLine",
+            "TestPluginAlphaLine",
             executablePath,
             "ChartBar",
             "#2563EB");
@@ -242,7 +242,7 @@ public sealed class ShellLaunchServiceTests
         {
             var instanceId = new ShellInstanceIdResolver().ResolveInstanceId(profile);
 
-            Assert.Equal("DieCuttingAnodeLine", instanceId);
+            Assert.Equal("TestPluginAlphaLine", instanceId);
         }
         finally
         {
@@ -260,7 +260,7 @@ public sealed class ShellLaunchServiceTests
         Directory.CreateDirectory(hostDirectory);
         var executablePath = Path.Combine(hostDirectory, "IIoT.Edge.Shell");
         File.WriteAllText(
-            Path.Combine(hostDirectory, "appsettings.machine.DieCuttingAnodeLine.json"),
+            Path.Combine(hostDirectory, "appsettings.machine.TestPluginAlphaLine.json"),
             """
             {
               "InstanceId": "PackagedInstance"
@@ -268,7 +268,7 @@ public sealed class ShellLaunchServiceTests
             """);
         Environment.SetEnvironmentVariable(EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable, dataRoot);
         var externalConfigPath = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(
-            "DieCuttingAnodeLine",
+            "TestPluginAlphaLine",
             hostDirectory);
         Directory.CreateDirectory(Path.GetDirectoryName(externalConfigPath)!);
         File.WriteAllText(
@@ -279,11 +279,11 @@ public sealed class ShellLaunchServiceTests
             }
             """);
         var profile = new LauncherProfileDefinition(
-            "DieCuttingAnodeLine",
-            "负极模切",
+            "TestPluginAlphaLine",
+            "测试插件甲",
             "AP profile",
             null,
-            "DieCuttingAnodeLine",
+            "TestPluginAlphaLine",
             executablePath,
             "ChartBar",
             "#2563EB");

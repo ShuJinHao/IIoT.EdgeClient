@@ -769,9 +769,4 @@
     <sys:String x:Key="Navigation_PlcTaskBinding_DeviceCountFormat">Loaded task bindings for {0} PLC devices.</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_DisableHeartbeatConfirmTitle">Confirm Disable Heartbeat Task</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_DisableHeartbeatConfirmMessageFormat">You are about to disable heartbeat-like tasks for PLC "{0}": {1}.&#x0a;After this, the PLC will no longer execute heartbeat handshakes, which may affect runtime status detection. Continue saving?</sys:String>
-    <sys:String x:Key="DieCutting_Runtime_AllStatus">All/Summary shows local production records. Select a PLC on the right to view realtime collection status.</sys:String>
-    <sys:String x:Key="DieCutting_Runtime_NoContext">PLC "{0}" has no die cutting sampling runtime context. Check whether task binding has been applied.</sys:String>
-    <sys:String x:Key="DieCutting_Runtime_LastResult">Last processing: {0}; result: {1}</sys:String>
-    <sys:String x:Key="DieCutting_Runtime_NoSnapshot">No die cutting sampling snapshot yet.</sys:String>
-    <sys:String x:Key="DieCutting_Runtime_Snapshot">batch={0}, quantity={1}, punching speed={2}, unwinding length={3}, clip={4}</sys:String>
 </ResourceDictionary>

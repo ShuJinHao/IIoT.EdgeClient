@@ -27,9 +27,6 @@
     <Project Path="src/Presentation/IIoT.Edge.Presentation.VisualTestData/IIoT.Edge.Presentation.VisualTestData.csproj" />
   </Folder>
   <Folder Name="/src/Modules/">
-    <Project Path="src/Modules/IIoT.Edge.Module.DieCutting.Shared/IIoT.Edge.Module.DieCutting.Shared.csproj" />
-    <Project Path="src/Modules/IIoT.Edge.Module.DieCuttingAnode/IIoT.Edge.Module.DieCuttingAnode.csproj" />
-    <Project Path="src/Modules/IIoT.Edge.Module.DieCuttingCathode/IIoT.Edge.Module.DieCuttingCathode.csproj" />
     <Project Path="src/Modules/IIoT.Edge.Module.Homogenization/IIoT.Edge.Module.Homogenization.csproj" />
     <Project Path="src/Modules/IIoT.Edge.Module.Sdk/IIoT.Edge.Module.Sdk.csproj" />
   </Folder>
@@ -48,6 +45,9 @@
     <Project Path="src/Tests/IIoT.Edge.NonUiRegressionTests/IIoT.Edge.NonUiRegressionTests.csproj" />
     <Project Path="src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj" />
     <Project Path="src/Tests/IIoT.Edge.UI.Shared.Tests/IIoT.Edge.UI.Shared.Tests.csproj" />
+  </Folder>
+  <Folder Name="/src/Testing/">
+    <Project Path="src/Testing/IIoT.Edge.TestPlugin/IIoT.Edge.TestPlugin.csproj" />
   </Folder>
   <Folder Name="/src/Tools/">
     <Project Path="src/Tools/IIoT.Edge.RuntimeLayoutSync/IIoT.Edge.RuntimeLayoutSync.csproj" />

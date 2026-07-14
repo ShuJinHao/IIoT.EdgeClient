@@ -9,6 +9,7 @@ using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Recipe;
 using IIoT.Edge.Application.Abstractions.Tasks;
+using IIoT.Edge.Application.Common.Tasks;
 using IIoT.Edge.Application.Features.Config.CloudApi;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Features.Config.SchemaReconciliation;
@@ -20,6 +21,7 @@ using IIoT.Edge.Infrastructure.Persistence.EfCore;
 using IIoT.Edge.Host.Bootstrap;
 using IIoT.Edge.Host.Bootstrap.Modules;
 using IIoT.Edge.Module.Homogenization;
+using IIoT.Edge.TestPlugin;
 using IIoT.Edge.Presentation.Navigation;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline;
@@ -73,7 +75,7 @@ public sealed class ModuleRuntimeRegistrationTests
     [Fact]
     public void ConfiguredCatalog_WhenNoModulesSectionExists_ShouldNotEnableDiscoveredModules()
     {
-        var pluginRoot = CreatePluginRuntimeRoot();
+        var pluginRoot = CreatePluginRuntimeRootFor("TestPlugin");
         try
         {
             var discovery = DiscoverTestPlugins(pluginRoot);
@@ -126,33 +128,41 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
-    public void DiscoverDirectoryPlugins_ShouldFindProductModules()
+    public void DiscoverDirectoryPlugins_ShouldFindTestPluginFixture()
     {
-        var pluginRoot = CreateShellModuleCatalog().GetPluginRootPath(AppContext.BaseDirectory);
+        var pluginRoot = CreatePluginRuntimeRootFor("TestPlugin");
 
-        AssertStagedModuleLayout(pluginRoot, "DieCuttingAnode", "diecutting-anode.module.json");
-        AssertStagedModuleLayout(pluginRoot, "DieCuttingCathode", "diecutting-cathode.module.json");
-        AssertStagedModuleLayout(pluginRoot, "Homogenization", "homogenization.module.json", hasLanguageResources: true);
+        try
+        {
+            AssertStagedModuleLayout(
+                pluginRoot,
+                "TestPlugin",
+                "test-plugin.module.json",
+                "IIoT.Edge.TestPlugin.dll");
 
-        var discovery = DiscoverTestPlugins(pluginRoot);
+            var discovery = DiscoverTestPlugins(pluginRoot);
 
-        Assert.Empty(discovery.Issues);
-        Assert.Equal(
-            ["DieCuttingAnode", "DieCuttingCathode", "Homogenization"],
-            discovery.Modules.Select(x => x.ModuleId).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray());
+            Assert.Empty(discovery.Issues);
+            Assert.Equal(["TestPlugin"], discovery.Modules.Select(x => x.ModuleId).ToArray());
+        }
+        finally
+        {
+            DeleteDirectory(pluginRoot);
+        }
     }
 
     private static void AssertStagedModuleLayout(
         string pluginRoot,
         string moduleId,
         string configFileName,
+        string entryAssemblyName,
         bool hasLanguageResources = false)
     {
         var runtimeDirectory = Path.Combine(pluginRoot, moduleId);
 
         Assert.True(Directory.Exists(runtimeDirectory));
         Assert.True(File.Exists(Path.Combine(runtimeDirectory, "plugin.json")));
-        Assert.True(File.Exists(Path.Combine(runtimeDirectory, $"IIoT.Edge.Module.{moduleId}.dll")));
+        Assert.True(File.Exists(Path.Combine(runtimeDirectory, entryAssemblyName)));
         Assert.True(File.Exists(Path.Combine(runtimeDirectory, "Config", configFileName)));
         Assert.Empty(Directory.GetFiles(runtimeDirectory, "*.module.json", SearchOption.TopDirectoryOnly));
         Assert.Empty(Directory.GetFiles(runtimeDirectory, "*.axaml", SearchOption.TopDirectoryOnly));
@@ -165,19 +175,19 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
-    public void ConfiguredCatalog_WhenHomogenizationIsEnabled_ShouldLoadModule()
+    public void ConfiguredCatalog_WhenTestPluginIsEnabled_ShouldLoadModule()
     {
-        var pluginRoot = CreatePluginRuntimeRoot();
+        var pluginRoot = CreatePluginRuntimeRootFor("TestPlugin");
         try
         {
             var discovery = DiscoverTestPlugins(pluginRoot);
             var activation = CreateShellModuleCatalog().CreateEnabledModules(
-                CreateConfiguration(["Homogenization"]),
+                CreateConfiguration(["TestPlugin"]),
                 discovery.Modules);
 
             Assert.Empty(activation.Issues);
             Assert.Single(activation.Modules);
-            Assert.Equal(["Homogenization"], activation.Modules.Select(module => module.ModuleId).ToArray());
+            Assert.Equal(["TestPlugin"], activation.Modules.Select(module => module.ModuleId).ToArray());
         }
         finally
         {
@@ -188,16 +198,16 @@ public sealed class ModuleRuntimeRegistrationTests
     [Fact]
     public void ConfiguredCatalog_WhenUnknownModuleIsConfigured_ShouldReportActivationIssue()
     {
-        var pluginRoot = CreatePluginRuntimeRoot();
+        var pluginRoot = CreatePluginRuntimeRootFor("TestPlugin");
         try
         {
             var discovery = DiscoverTestPlugins(pluginRoot);
             var activation = CreateShellModuleCatalog().CreateEnabledModules(
-                CreateConfiguration(["Homogenization", "UnknownModule"]),
+                CreateConfiguration(["TestPlugin", "UnknownModule"]),
                 discovery.Modules);
 
             Assert.Single(activation.Modules);
-            Assert.Equal("Homogenization", activation.Modules[0].ModuleId);
+            Assert.Equal("TestPlugin", activation.Modules[0].ModuleId);
             var issue = Assert.Single(activation.Issues);
             Assert.Equal("PLUGIN_ENABLED_NOT_FOUND", issue.Code);
             Assert.Contains("未知模块", issue.Message, StringComparison.Ordinal);
@@ -209,32 +219,53 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
-    public async Task AppLifecycleManager_WhenOnlyHomogenizationIsEnabled_ShouldReportPluginLifecycleStates()
+    public async Task AppLifecycleManager_WhenOnlyTestPluginIsEnabled_ShouldRunNeutralPluginLifecycleExactlyOnce()
     {
-        await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Homogenization"],
-            deviceModuleIds: ["Homogenization"]);
+        var harness = await AppLifecycleHarness.CreateAsync(
+            enabledModules: ["TestPlugin"],
+            deviceModuleIds: ["TestPlugin"]);
+        var lifecycleProbe = harness.GetTestPluginLifecycleProbe();
 
-        var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
+        try
+        {
+            var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
 
-        Assert.True(result.Success, result.Message);
+            Assert.True(result.Success, result.Message);
 
-        var report = harness.StartupDiagnosticsStore.Current;
-        Assert.Equal(["Homogenization"], report.EnabledModules);
-        Assert.Equal(["Homogenization"], report.ActivatedModules);
+            var report = harness.StartupDiagnosticsStore.Current;
+            Assert.Equal(["TestPlugin"], report.EnabledModules);
+            Assert.Equal(["TestPlugin"], report.ActivatedModules);
 
-        var homogenizationState = Assert.Single(
-            report.PluginStates,
-            x => string.Equals(x.ModuleId, "Homogenization", StringComparison.OrdinalIgnoreCase));
-        Assert.Equal(PluginLifecycleState.Activated, homogenizationState.State);
+            var testPluginState = Assert.Single(
+                report.PluginStates,
+                x => string.Equals(x.ModuleId, "TestPlugin", StringComparison.OrdinalIgnoreCase));
+            Assert.Equal(PluginLifecycleState.Activated, testPluginState.State);
+            Assert.Equal(1, lifecycleProbe.StartCount);
+            Assert.Equal(0, lifecycleProbe.StopCount);
+            Assert.Equal(0, lifecycleProbe.DisposeCount);
+
+            await harness.Manager.StopAsync(TestContext.Current.CancellationToken);
+
+            Assert.Equal(1, lifecycleProbe.StartCount);
+            Assert.Equal(1, lifecycleProbe.StopCount);
+            Assert.Equal(0, lifecycleProbe.DisposeCount);
+        }
+        finally
+        {
+            await harness.DisposeAsync();
+        }
+
+        Assert.Equal(1, lifecycleProbe.StartCount);
+        Assert.Equal(1, lifecycleProbe.StopCount);
+        Assert.Equal(1, lifecycleProbe.DisposeCount);
     }
 
     [Fact]
     public async Task AppLifecycleManager_WhenBootstrapSecretIsMissing_ShouldStartWithDiagnosticIssue()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Homogenization"],
-            deviceModuleIds: ["Homogenization"],
+            enabledModules: ["TestPlugin"],
+            deviceModuleIds: ["TestPlugin"],
             bootstrapSecret: null);
 
         var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
@@ -250,8 +281,8 @@ public sealed class ModuleRuntimeRegistrationTests
     public async Task AppLifecycleManager_WhenClientCodeIsMissing_ShouldStartWithDiagnosticIssue()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Homogenization"],
-            deviceModuleIds: ["Homogenization"],
+            enabledModules: ["TestPlugin"],
+            deviceModuleIds: ["TestPlugin"],
             clientCode: null);
 
         var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
@@ -267,8 +298,8 @@ public sealed class ModuleRuntimeRegistrationTests
     public async Task AppLifecycleManager_WhenIoMappingAddressIsEmpty_ShouldStartWithDiagnosticIssue()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Homogenization"],
-            deviceModuleIds: ["Homogenization"]);
+            enabledModules: ["TestPlugin"],
+            deviceModuleIds: ["TestPlugin"]);
         var device = Assert.Single(await harness.GetNetworkDevicesAsync());
         var mappings = await harness.GetIoMappingsAsync(device.Id);
         var sourceMapping = mappings.OrderBy(static x => x.SortOrder).First();
@@ -307,8 +338,8 @@ public sealed class ModuleRuntimeRegistrationTests
     public async Task AppLifecycleManager_WhenCloudApiPathIsMissing_ShouldStartWithDiagnosticIssue()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Homogenization"],
-            deviceModuleIds: ["Homogenization"],
+            enabledModules: ["TestPlugin"],
+            deviceModuleIds: ["TestPlugin"],
             omittedCloudPathKey: "CloudApi:Paths:DeviceInstance");
 
         var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
@@ -324,8 +355,8 @@ public sealed class ModuleRuntimeRegistrationTests
     public async Task AppLifecycleManager_WhenProcessUploadPathIsMissing_ShouldStartWithDiagnosticIssue()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Homogenization"],
-            deviceModuleIds: ["Homogenization"],
+            enabledModules: ["TestPlugin"],
+            deviceModuleIds: ["TestPlugin"],
             omittedCloudPathKey: "CloudApi:Paths:ProcessUpload");
 
         var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
@@ -341,8 +372,8 @@ public sealed class ModuleRuntimeRegistrationTests
     public async Task AppLifecycleManager_WhenCloudApiPathStartsWithSlash_ShouldPassStartupValidation()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Homogenization"],
-            deviceModuleIds: ["Homogenization"],
+            enabledModules: ["TestPlugin"],
+            deviceModuleIds: ["TestPlugin"],
             deviceInstancePath: "/api/v1/bootstrap/device-instance");
 
         var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
@@ -360,8 +391,8 @@ public sealed class ModuleRuntimeRegistrationTests
     public async Task AppLifecycleManager_WhenCloudApiPathHasExplicitScheme_ShouldStartWithDiagnosticIssue(string deviceInstancePath)
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Homogenization"],
-            deviceModuleIds: ["Homogenization"],
+            enabledModules: ["TestPlugin"],
+            deviceModuleIds: ["TestPlugin"],
             deviceInstancePath: deviceInstancePath);
 
         var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
@@ -378,8 +409,8 @@ public sealed class ModuleRuntimeRegistrationTests
     public async Task AppLifecycleManager_WhenCloudApiPathStartsWithDoubleSlash_ShouldStartWithDiagnosticIssue()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Homogenization"],
-            deviceModuleIds: ["Homogenization"],
+            enabledModules: ["TestPlugin"],
+            deviceModuleIds: ["TestPlugin"],
             deviceInstancePath: "//api/v1/bootstrap/device-instance");
 
         var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
@@ -396,8 +427,8 @@ public sealed class ModuleRuntimeRegistrationTests
     public async Task AppLifecycleManager_WhenRecipePathMissingDeviceIdPlaceholder_ShouldStartWithDiagnosticIssue()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Homogenization"],
-            deviceModuleIds: ["Homogenization"],
+            enabledModules: ["TestPlugin"],
+            deviceModuleIds: ["TestPlugin"],
             recipeByDeviceTemplate: "/api/v1/edge/recipes/device");
 
         var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
@@ -427,7 +458,7 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
-    public async Task AppLifecycleManager_WhenEnabledTaskSignalIsMissing_ShouldMarkRuntimeFaultAndSkipTaskRegistration()
+    public async Task HomogenizationEnabledTask_WhenRequiredSignalIsMissing_ShouldMarkRuntimeFaultAndSkipTaskRegistration()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
             enabledModules: ["Homogenization"],
@@ -468,8 +499,8 @@ public sealed class ModuleRuntimeRegistrationTests
     public async Task AppLifecycleManager_WhenBackgroundStartupFails_ShouldStillStartShell()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Homogenization"],
-            deviceModuleIds: ["Homogenization"],
+            enabledModules: ["TestPlugin"],
+            deviceModuleIds: ["TestPlugin"],
             backgroundStartException: new InvalidOperationException("cloud task unavailable"));
 
         var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
@@ -487,8 +518,8 @@ public sealed class ModuleRuntimeRegistrationTests
     public async Task AppLifecycleManager_WhenStartupDiagnosticValidatorFails_ShouldStillPublishConfigurationProfile()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
-            enabledModules: ["Homogenization"],
-            deviceModuleIds: ["Homogenization"],
+            enabledModules: ["TestPlugin"],
+            deviceModuleIds: ["TestPlugin"],
             startupDiagnosticException: new InvalidOperationException("legacy signal property missing"));
 
         var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
@@ -505,14 +536,14 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
-    public void ValidationCatalog_ShouldRegisterProductModulesWithoutConflicts()
+    public void ValidationCatalog_ShouldRegisterTestPluginWithoutConflicts()
     {
-        var pluginRoot = CreatePluginRuntimeRoot();
+        var pluginRoot = CreatePluginRuntimeRootFor("TestPlugin");
         try
         {
             var modules = CreateShellModuleCatalog().CreateAllModulesForValidation(DiscoverTestPlugins(pluginRoot).Modules);
             var viewRegistry = new ViewRegistry();
-        var cellDataRegistry = new CellDataRegistry(new CellDataTypeRegistry());
+            var cellDataRegistry = new CellDataRegistry(new CellDataTypeRegistry());
             var runtimeRegistry = new StationRuntimeRegistry();
             var integrationRegistry = new ProcessIntegrationRegistry();
             var moduleParamRegistry = new ModuleParamRegistry();
@@ -534,11 +565,10 @@ public sealed class ModuleRuntimeRegistrationTests
             Assert.Single(modules);
             Assert.Single(cellDataRegistry.GetRegistrations());
             Assert.Single(runtimeRegistry.GetRegistrations());
-            Assert.Single(integrationRegistry.GetCloudUploaders());
-            Assert.True(integrationRegistry.TryGetCloudUploader("Homogenization", out var cloudRegistration));
-            Assert.Equal(ProcessUploadMode.Batch, cloudRegistration.UploadMode);
-            Assert.Single(moduleParamRegistry.GetRegistrations());
-            Assert.NotNull(viewRegistry.GetViewRegistration("Homogenization.DataView"));
+            Assert.Empty(integrationRegistry.GetCloudUploaders());
+            Assert.Empty(integrationRegistry.GetMesUploaders());
+            Assert.Empty(moduleParamRegistry.GetRegistrations());
+            Assert.NotNull(viewRegistry.GetViewRegistration("TestPlugin.DataView"));
         }
         finally
         {
@@ -549,12 +579,12 @@ public sealed class ModuleRuntimeRegistrationTests
     [Fact]
     public void ModuleViewRegistry_ShouldRejectCorePrefixedRoutes()
     {
-        var registry = new ModuleViewRegistry(new ViewRegistry(), "Homogenization");
+        var registry = new ModuleViewRegistry(new ViewRegistry(), "TestPlugin");
 
         var ex = Assert.Throws<InvalidOperationException>(() =>
             registry.RegisterRoute("Core.BadRoute", typeof(object), typeof(object)));
 
-        Assert.Contains("Homogenization.", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("TestPlugin.", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -615,7 +645,7 @@ public sealed class ModuleRuntimeRegistrationTests
         var viewRegistry = new ViewRegistry();
         var configuration = CreateConfiguration();
         var hostRoot = Path.Combine(Path.GetTempPath(), "edge-host-bootstrap-" + Guid.NewGuid().ToString("N"));
-        var pluginRoot = CreatePluginRuntimeRoot();
+        var pluginRoot = CreatePluginRuntimeRootFor("TestPlugin");
 
         try
         {
@@ -741,13 +771,16 @@ public sealed class ModuleRuntimeRegistrationTests
         return CreateShellModuleCatalog().DiscoverModules(pluginRoot);
     }
 
-    private static string CreatePluginRuntimeRoot(string? targetRoot = null)
+    private static string CreatePluginRuntimeRootFor(params string[] moduleIds)
+        => CreatePluginRuntimeRoot(targetRoot: null, moduleIds);
+
+    private static string CreatePluginRuntimeRoot(string? targetRoot = null, string[]? moduleIds = null)
     {
         var pluginRoot = targetRoot ?? Path.Combine(Path.GetTempPath(), "edge-shell-plugin-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(pluginRoot);
 
         var runtimeModulesRoot = CreateShellModuleCatalog().GetPluginRootPath(AppContext.BaseDirectory);
-        foreach (var moduleId in new[] { "Homogenization" })
+        foreach (var moduleId in moduleIds ?? ["Homogenization"])
         {
             var sourceModuleDirectory = Path.Combine(runtimeModulesRoot, moduleId);
             if (!Directory.Exists(sourceModuleDirectory))
@@ -834,6 +867,7 @@ public sealed class ModuleRuntimeRegistrationTests
     {
         private readonly ServiceProvider _serviceProvider;
         private readonly string _tempDirectory;
+        private int _disposed;
 
         private AppLifecycleHarness(
             ServiceProvider serviceProvider,
@@ -866,6 +900,9 @@ public sealed class ModuleRuntimeRegistrationTests
         public SpyLogService Logger { get; }
 
         public IStartupDiagnosticsStore StartupDiagnosticsStore { get; }
+
+        public TestPluginLifecycleProbe GetTestPluginLifecycleProbe()
+            => _serviceProvider.GetRequiredService<TestPluginLifecycleProbe>();
 
         public async Task<List<NetworkDeviceEntity>> GetNetworkDevicesAsync()
             => await _serviceProvider
@@ -942,7 +979,7 @@ public sealed class ModuleRuntimeRegistrationTests
             services.AddSingleton(runtimePaths!);
             services.AddEfCorePersistenceInfrastructure(Path.Combine(runtimePaths!.DatabaseDirectory, "edge.db"));
             services.AddDapperPersistenceInfrastructure(runtimePaths.DatabaseDirectory);
-            var pluginRoot = CreatePluginRuntimeRoot(Path.Combine(tempDirectory, "Modules"));
+            var pluginRoot = CreatePluginRuntimeRoot(Path.Combine(tempDirectory, "Modules"), enabledModules);
 
             var shiftConfig = new ShiftConfig
             {
@@ -970,7 +1007,7 @@ public sealed class ModuleRuntimeRegistrationTests
             var discovery = DiscoverTestPlugins(pluginRoot);
             var activation = CreateShellModuleCatalog().CreateEnabledModules(configuration, discovery.Modules);
             var moduleViewRegistry = new ViewRegistry();
-        var cellDataRegistry = new CellDataRegistry(new CellDataTypeRegistry());
+            var cellDataRegistry = new CellDataRegistry(new CellDataTypeRegistry());
             var runtimeRegistry = new StationRuntimeRegistry();
             var integrationRegistry = new ProcessIntegrationRegistry();
             var moduleParamRegistry = new ModuleParamRegistry();
@@ -995,6 +1032,9 @@ public sealed class ModuleRuntimeRegistrationTests
             services.AddSingleton<IStartupDiagnosticsStore, StartupDiagnosticsStore>();
 
             var serviceProvider = services.BuildServiceProvider();
+            backgroundCoordinator.Attach(
+                serviceProvider.GetServices<IManagedBackgroundService>(),
+                logger);
             serviceProvider.ApplyMigrations();
 
             await SeedDevicesAsync(serviceProvider, deviceModuleIds).ConfigureAwait(false);
@@ -1069,6 +1109,11 @@ public sealed class ModuleRuntimeRegistrationTests
 
         public async ValueTask DisposeAsync()
         {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            {
+                return;
+            }
+
             await Manager.StopAsync().ConfigureAwait(false);
             await _serviceProvider.DisposeAsync().ConfigureAwait(false);
 
@@ -1235,11 +1280,16 @@ public sealed class ModuleRuntimeRegistrationTests
 
     private sealed class SpyBackgroundServiceCoordinator(Exception? startException = null) : IBackgroundServiceCoordinator
     {
+        private IBackgroundServiceCoordinator? _inner;
+
         public int StartCallCount { get; private set; }
 
         public int StopCallCount { get; private set; }
 
-        public Task StartAsync(CancellationToken cancellationToken = default)
+        public void Attach(IEnumerable<IManagedBackgroundService> services, ILogService logger)
+            => _inner = new BackgroundServiceCoordinator(services, logger);
+
+        public async Task StartAsync(CancellationToken cancellationToken = default)
         {
             StartCallCount++;
             if (startException is not null)
@@ -1247,13 +1297,17 @@ public sealed class ModuleRuntimeRegistrationTests
                 throw startException;
             }
 
-            return Task.CompletedTask;
+            await (_inner ?? throw new InvalidOperationException("Background service coordinator is not attached."))
+                .StartAsync(cancellationToken);
         }
 
-        public Task StopAsync(CancellationToken cancellationToken = default)
+        public async Task StopAsync(CancellationToken cancellationToken = default)
         {
             StopCallCount++;
-            return Task.CompletedTask;
+            if (_inner is not null)
+            {
+                await _inner.StopAsync(cancellationToken);
+            }
         }
     }
 

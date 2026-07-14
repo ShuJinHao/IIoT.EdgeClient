@@ -19,16 +19,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Edge\IIoT.Edge.Host.Bootstrap\IIoT.Edge.Host.Bootstrap.csproj" />
-    <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.DieCutting.Shared\IIoT.Edge.Module.DieCutting.Shared.csproj" />
-    <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.DieCuttingAnode\IIoT.Edge.Module.DieCuttingAnode.csproj" />
-    <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.DieCuttingCathode\IIoT.Edge.Module.DieCuttingCathode.csproj" />
     <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Homogenization\IIoT.Edge.Module.Homogenization.csproj" />
     <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Sdk\IIoT.Edge.Module.Sdk.csproj" />
+    <ProjectReference Include="..\..\Testing\IIoT.Edge.TestPlugin\IIoT.Edge.TestPlugin.csproj" />
     <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(EdgeTestForceEmptyPluginArtifacts)' != 'true'">
     <PluginModuleProject Include="..\..\Modules\**\*.csproj" Exclude="..\..\Modules\IIoT.Edge.Module.Sdk\IIoT.Edge.Module.Sdk.csproj" />
+    <PluginModuleProject Include="..\..\Testing\IIoT.Edge.TestPlugin\IIoT.Edge.TestPlugin.csproj" />
   </ItemGroup>
 
   <Target Name="ResolvePluginModuleArtifacts">
@@ -38,7 +37,7 @@
   </Target>
 
   <Target Name="CopyPluginModulesToTestOutput" AfterTargets="Build" DependsOnTargets="ResolvePluginModuleArtifacts">
-    <Error Condition="'@(PluginModuleArtifact)' == ''" Text="EDGE-TEST-GOV-001-PLUGIN-STAGING no plugin module artifacts were resolved for the contract-test runtime layout." />
+    <Error Condition="'@(PluginModuleArtifact)' == ''" Text="EDGE-PLUGIN-STAGING-001 no plugin module artifacts were resolved for the contract-test runtime layout." />
     <RemoveDir Directories="$(TargetDir)Modules" />
     <Copy SourceFiles="@(PluginModuleArtifact)" DestinationFiles="@(PluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(ArtifactRelativePath)')" SkipUnchangedFiles="true" />
   </Target>

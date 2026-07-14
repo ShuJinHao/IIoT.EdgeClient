@@ -73,13 +73,14 @@ install-root/
 
 旧的 `layout.zip`、`runtimeDirectory`、`runtime/Modules`、每工序一份宿主目录模型全部废弃，不得在新代码、脚本或文档中继续作为生产契约。
 
-### 3.1 插件工程和共享库工程角色
+### 3.1 插件工程角色
 
 仓库中的 `src/Modules` 必须让工程角色从名称和项目属性上可见：
 
 - 插件入口工程：目录/工程名为 `IIoT.Edge.Module.<Process>` 或 `IIoT.Edge.Module.<Process><Variant>`，必须声明 `PluginModuleId`、`IsEdgePluginModule=true`、`IsPackable=true`，并携带 `plugin.json`。只有这类工程允许进入插件 catalog、独立插件包和 Launcher 工序卡片。
-- 共享库工程：目录/工程名必须以 `.Shared` 结尾，必须声明 `IsEdgePluginModule=false`、`IsPackable=false`，不得携带 `plugin.json`，不得被发布脚本当成插件打包。
-- 同一工序存在正极、负极等独立插件时，共用实现只能放在 `.Shared` 工程中；共享工程可以保留业务命名空间，但工程名、打包属性和仓库卫生测试必须明确它不是插件入口。
+- 每个具体插件必须独立构建、测试和打包，不得新增插件族 `*.Shared` 业务工程，也不得让一个具体插件入口引用另一具体插件。
+- 多个插件真正共用且与工序无关的能力，只能经评审进入 `IIoT.Edge.Module.Sdk` 或稳定通用 contract；具体点位、MES 字段、业务状态、页面和持久化实现不得伪装成 SDK 通用能力。
+- `src/Testing` 下带 `IsEdgePluginTestFixture=true` 的中性 fixture 只允许由测试项目显式 staging；生产 catalog、bundle、Launcher profile、impact mapping 和发布脚本只能从 `src/Modules` 解析，不得把 fixture 当发布模块。
 
 禁止再出现没有 `PluginModuleId` 但名称像插件入口的模块工程。此类工程会误导部署、Launcher、catalog 和人工排查，必须通过仓库卫生测试拦截。
 

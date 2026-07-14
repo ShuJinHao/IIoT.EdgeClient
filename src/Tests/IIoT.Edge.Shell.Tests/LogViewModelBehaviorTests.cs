@@ -9,7 +9,7 @@ namespace IIoT.Edge.Shell.Tests;
 public sealed class LogViewModelBehaviorTests
 {
     [Fact]
-    public void Entries_WhenMultipleDieCuttingPlcsFailSameSignal_ShouldShowSummaryByDefault()
+    public void Entries_WhenMultiplePlcsFailSameSignal_ShouldShowSummaryByDefault()
     {
         var store = new TestSystemLogDisplayStore();
         var viewModel = new LogViewModel(
@@ -18,11 +18,11 @@ public sealed class LogViewModelBehaviorTests
             new TestAppLanguageService(),
             new DeviceSelectionService());
 
-        store.Entries.Add(CreateEntry("ERROR", "[P1-AP01] 读取 R2450 失败：Read R2450 failed.", second: 1));
-        store.Entries.Add(CreateEntry("ERROR", "[P1-AP02] 读取 R2450 失败：Read R2450 failed.", second: 2));
+        store.Entries.Add(CreateEntry("ERROR", "[PLC-A01] 读取 R2450 失败：Read R2450 failed.", second: 1));
+        store.Entries.Add(CreateEntry("ERROR", "[PLC-A02] 读取 R2450 失败：Read R2450 failed.", second: 2));
 
         var summary = Assert.Single(viewModel.Entries);
-        Assert.Contains("负极模切采样异常", summary.Message, StringComparison.Ordinal);
+        Assert.Contains("PLC采样异常", summary.Message, StringComparison.Ordinal);
         Assert.Contains("2 台 PLC", summary.Message, StringComparison.Ordinal);
         Assert.Contains("失败信号 R2450", summary.Message, StringComparison.Ordinal);
         Assert.Contains("MES 上传已暂停", summary.Message, StringComparison.Ordinal);
@@ -38,16 +38,16 @@ public sealed class LogViewModelBehaviorTests
             new TestAppLanguageService(),
             new DeviceSelectionService());
 
-        store.Entries.Add(CreateEntry("ERROR", "[P1-AP01] 读取 R2450 失败：Read R2450 failed.", second: 1));
-        store.Entries.Add(CreateEntry("ERROR", "[P1-AP02] 读取 R2450 失败：Read R2450 failed.", second: 2));
+        store.Entries.Add(CreateEntry("ERROR", "[PLC-A01] 读取 R2450 失败：Read R2450 failed.", second: 1));
+        store.Entries.Add(CreateEntry("ERROR", "[PLC-A02] 读取 R2450 失败：Read R2450 failed.", second: 2));
 
         viewModel.SelectedDeviceFilter = Assert.Single(
             viewModel.DeviceFilters,
-            static option => option.Key == "P1-AP01");
+            static option => option.Key == "PLC-A01");
 
         var entry = Assert.Single(viewModel.Entries);
-        Assert.Contains("[P1-AP01]", entry.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("[P1-AP02]", entry.Message, StringComparison.Ordinal);
+        Assert.Contains("[PLC-A01]", entry.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("[PLC-A02]", entry.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -61,14 +61,14 @@ public sealed class LogViewModelBehaviorTests
             new TestAppLanguageService(),
             selectionService);
 
-        store.Entries.Add(CreateEntry("ERROR", "[P1-AP01] 读取 R2450 失败：Read R2450 failed.", second: 1));
+        store.Entries.Add(CreateEntry("ERROR", "[PLC-A01] 读取 R2450 失败：Read R2450 failed.", second: 1));
 
         viewModel.SelectedDeviceFilter = Assert.Single(
             viewModel.DeviceFilters,
-            static option => option.Key == "P1-AP01");
+            static option => option.Key == "PLC-A01");
 
         Assert.Equal(IDeviceSelectionService.AllFilterKey, selectionService.SelectedDeviceKey);
-        Assert.Equal("P1-AP01", viewModel.SelectedDeviceFilter?.Key);
+        Assert.Equal("PLC-A01", viewModel.SelectedDeviceFilter?.Key);
     }
 
     [Fact]
@@ -82,10 +82,10 @@ public sealed class LogViewModelBehaviorTests
             new TestAppLanguageService(),
             selectionService);
 
-        selectionService.SelectDevice("P1-AP09");
+        selectionService.SelectDevice("PLC-A09");
 
-        Assert.Equal("P1-AP09", viewModel.SelectedDeviceFilter?.Key);
-        Assert.Contains(viewModel.DeviceFilters, static option => option.Key == "P1-AP09");
+        Assert.Equal("PLC-A09", viewModel.SelectedDeviceFilter?.Key);
+        Assert.Contains(viewModel.DeviceFilters, static option => option.Key == "PLC-A09");
         Assert.True(viewModel.IsLogEmpty);
     }
 

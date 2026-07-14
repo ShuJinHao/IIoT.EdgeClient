@@ -45,7 +45,7 @@ public sealed class DashboardPreviewRuntimeViewModelTests
                 new()
                 {
                     NetworkDeviceId = 1,
-                    DeviceName = "P1-AP01",
+                    DeviceName = "PLC-A01",
                     IsConnected = true,
                     ConnectionState = PlcConnectionState.Connected,
                     LatencyMs = 12,
@@ -54,7 +54,7 @@ public sealed class DashboardPreviewRuntimeViewModelTests
                 new()
                 {
                     NetworkDeviceId = 2,
-                    DeviceName = "P1-AP02",
+                    DeviceName = "PLC-A02",
                     IsConnected = false,
                     ConnectionState = PlcConnectionState.Retrying,
                     LastError = "Read R2450 failed.",
@@ -69,13 +69,13 @@ public sealed class DashboardPreviewRuntimeViewModelTests
             viewModel.PlcStatusTableItems,
             item =>
             {
-                Assert.Equal("P1-AP01", item.DeviceName);
+                Assert.Equal("PLC-A01", item.DeviceName);
                 Assert.Equal("已连接", item.StateText);
                 Assert.Equal("12 ms", item.LatencyText);
             },
             item =>
             {
-                Assert.Equal("P1-AP02", item.DeviceName);
+                Assert.Equal("PLC-A02", item.DeviceName);
                 Assert.Equal("重试中", item.StateText);
                 Assert.Equal("—", item.LatencyText);
                 Assert.Equal("读取失败", item.LastError);
@@ -96,9 +96,9 @@ public sealed class DashboardPreviewRuntimeViewModelTests
             new SystemLogDisplayProjector(),
             new TestAppLanguageService(),
             selectionService);
-        store.Entries.Add(CreateEntry("ERROR", "[P1-AP01] 读取 R2450 失败：Read R2450 failed.", second: 1));
-        store.Entries.Add(CreateEntry("ERROR", "[P1-AP02] 读取 R2450 失败：Read R2450 failed.", second: 2));
-        selectionService.SelectDevice("P1-AP01");
+        store.Entries.Add(CreateEntry("ERROR", "[PLC-A01] 读取 R2450 失败：Read R2450 failed.", second: 1));
+        store.Entries.Add(CreateEntry("ERROR", "[PLC-A02] 读取 R2450 失败：Read R2450 failed.", second: 2));
+        selectionService.SelectDevice("PLC-A01");
 
         var languageService = new TestAppLanguageService();
         var viewModel = new DashboardPreviewRuntimeViewModel(
@@ -113,12 +113,12 @@ public sealed class DashboardPreviewRuntimeViewModelTests
         ApplyDiagnostics(
             viewModel,
             [
-                new() { NetworkDeviceId = 1, DeviceName = "P1-AP01", IsConnected = false, ConnectionState = PlcConnectionState.Retrying },
-                new() { NetworkDeviceId = 2, DeviceName = "P1-AP02", IsConnected = false, ConnectionState = PlcConnectionState.Retrying }
+                new() { NetworkDeviceId = 1, DeviceName = "PLC-A01", IsConnected = false, ConnectionState = PlcConnectionState.Retrying },
+                new() { NetworkDeviceId = 2, DeviceName = "PLC-A02", IsConnected = false, ConnectionState = PlcConnectionState.Retrying }
             ]);
 
         var item = Assert.Single(viewModel.PlcStatusTableItems);
-        Assert.Equal("P1-AP01", item.DeviceName);
+        Assert.Equal("PLC-A01", item.DeviceName);
         Assert.True(item.IsSelected);
     }
 
@@ -141,7 +141,7 @@ public sealed class DashboardPreviewRuntimeViewModelTests
                 new()
                 {
                     NetworkDeviceId = 1,
-                    DeviceName = "P1-AP01",
+                    DeviceName = "PLC-A01",
                     IsConnected = false,
                     ConnectionState = PlcConnectionState.Retrying,
                     LastError = "The operation has timed out after 3s while reading R2450.",
@@ -179,7 +179,7 @@ public sealed class DashboardPreviewRuntimeViewModelTests
                 new()
                 {
                     NetworkDeviceId = 1,
-                    DeviceName = "P1-AP01",
+                    DeviceName = "PLC-A01",
                     IsConnected = true,
                     ConnectionState = PlcConnectionState.Connected,
                     LatencyMs = 12,
@@ -188,7 +188,7 @@ public sealed class DashboardPreviewRuntimeViewModelTests
                     LastReadAtUtc = new DateTimeOffset(2026, 6, 24, 16, 24, 2, TimeSpan.Zero)
                 }
             ],
-            [CreateConfiguredPlc(1, "P1-AP01")]);
+            [CreateConfiguredPlc(1, "PLC-A01")]);
 
         var item = Assert.Single(viewModel.PlcStatusTableItems);
         Assert.Equal("暂无运行错误", item.LastErrorDetail);
@@ -221,13 +221,13 @@ public sealed class DashboardPreviewRuntimeViewModelTests
                 new()
                 {
                     NetworkDeviceId = 1,
-                    DeviceName = "P1-AP01",
+                    DeviceName = "PLC-A01",
                     IsConnected = false,
                     ConnectionState = PlcConnectionState.Connecting,
                     LastAttemptAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1)
                 }
             ],
-            [CreateConfiguredPlc(1, "P1-AP01")]);
+            [CreateConfiguredPlc(1, "PLC-A01")]);
 
         var item = Assert.Single(viewModel.PlcStatusTableItems);
         Assert.Equal("连接超时", item.StateText);
@@ -251,9 +251,9 @@ public sealed class DashboardPreviewRuntimeViewModelTests
             viewModel,
             [],
             [
-                CreateConfiguredPlc(1, "P1-AP01"),
-                CreateConfiguredPlc(2, "P1-AP02"),
-                CreateConfiguredPlc(3, "P1-AP03")
+                CreateConfiguredPlc(1, "PLC-A01"),
+                CreateConfiguredPlc(2, "PLC-A02"),
+                CreateConfiguredPlc(3, "PLC-A03")
             ]);
 
         Assert.Equal("0 / 3", viewModel.ConnectedDevices);
@@ -290,7 +290,7 @@ public sealed class DashboardPreviewRuntimeViewModelTests
                 new()
                 {
                     NetworkDeviceId = 2,
-                    DeviceName = "P1-AP02",
+                    DeviceName = "PLC-A02",
                     IsConnected = true,
                     ConnectionState = PlcConnectionState.Connected,
                     LatencyMs = 16,
@@ -298,8 +298,8 @@ public sealed class DashboardPreviewRuntimeViewModelTests
                 }
             ],
             [
-                CreateConfiguredPlc(1, "P1-AP01"),
-                CreateConfiguredPlc(2, "P1-AP02")
+                CreateConfiguredPlc(1, "PLC-A01"),
+                CreateConfiguredPlc(2, "PLC-A02")
             ]);
 
         Assert.Equal("1 / 2", viewModel.ConnectedDevices);
@@ -308,13 +308,13 @@ public sealed class DashboardPreviewRuntimeViewModelTests
             viewModel.PlcStatusTableItems,
             item =>
             {
-                Assert.Equal("P1-AP01", item.DeviceName);
+                Assert.Equal("PLC-A01", item.DeviceName);
                 Assert.Equal("未采集", item.StateText);
                 Assert.Equal("—", item.LatencyText);
             },
             item =>
             {
-                Assert.Equal("P1-AP02", item.DeviceName);
+                Assert.Equal("PLC-A02", item.DeviceName);
                 Assert.Equal("已连接", item.StateText);
                 Assert.Equal("16 ms", item.LatencyText);
             });
@@ -355,7 +355,7 @@ public sealed class DashboardPreviewRuntimeViewModelTests
 
     private static EdgeSyncDiagnosticsSnapshot CreateDiagnostics()
         => new(
-            "P1-AP",
+            "PLC-A",
             new CloudSyncDiagnosticsSnapshot(
                 EdgeUploadGateState.Ready,
                 EdgeUploadBlockReason.None,

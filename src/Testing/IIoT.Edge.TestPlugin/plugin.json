@@ -1,0 +1,12 @@
+{
+  "moduleId": "TestPlugin",
+  "displayName": "Test Plugin",
+  "version": "1.0.0",
+  "hostApiVersion": "1.0.0",
+  "minHostVersion": "1.0.0",
+  "maxHostVersion": "99.0.0",
+  "entryAssembly": "IIoT.Edge.TestPlugin.dll",
+  "entryType": "IIoT.Edge.TestPlugin.DependencyInjection",
+  "supportedProcessType": "TestPlugin",
+  "dependencies": []
+}

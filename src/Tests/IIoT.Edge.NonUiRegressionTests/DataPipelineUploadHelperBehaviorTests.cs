@@ -16,9 +16,9 @@ public sealed class DataPipelineUploadHelperBehaviorTests
     }
 
     [Theory]
-    [InlineData("DieCutting.DeviceStatus", null, null, "设备状态上传")]
+    [InlineData("TestPlugin.DeviceStatus", null, null, "设备状态上传")]
     [InlineData("Homogenization.EquipmentStatus", null, null, "设备状态上传")]
-    [InlineData("DieCutting.RealtimeSample", null, null, "生产上传")]
+    [InlineData("TestPlugin.RealtimeSample", null, null, "生产上传")]
     [InlineData(null, "RealtimeOutbound", null, "生产上传")]
     [InlineData(null, "Inbound", null, "进站上传")]
     [InlineData(null, "Outbound", null, "出站上传")]

@@ -1091,8 +1091,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
             CreatedAt = DateTime.UtcNow.AddMinutes(-2),
             NetworkDeviceId = 7010,
             DeviceName = "PLC-CLOUD-701",
-            ModuleId = "DieCuttingCathode",
-            TaskKey = "DieCuttingCathode.Realtime",
+            ModuleId = "TestPluginBeta",
+            TaskKey = "TestPluginBeta.Realtime",
             PlanSessionId = "SESSION-CLOUD-701",
             MainPlanCode = "PLAN-CLOUD-701",
             TraceBatchNumber = "TRACE-CLOUD-701"
@@ -1120,8 +1120,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
             CreatedAt = DateTime.UtcNow.AddMinutes(-2),
             NetworkDeviceId = 8010,
             DeviceName = "PLC-MES-801",
-            ModuleId = "DieCuttingCathode",
-            TaskKey = "DieCuttingCathode.Realtime",
+            ModuleId = "TestPluginBeta",
+            TaskKey = "TestPluginBeta.Realtime",
             PlanSessionId = "SESSION-MES-801",
             MainPlanCode = "PLAN-MES-801",
             TraceBatchNumber = "TRACE-MES-801"
@@ -1144,8 +1144,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
         Assert.Equal(nameof(DeadLetterStage.FallbackRecoverDeserialize), cloudDeadLetter.FailureStage);
         Assert.Equal(7010, cloudDeadLetter.NetworkDeviceId);
         Assert.Equal("PLC-CLOUD-701", cloudDeadLetter.DeviceName);
-        Assert.Equal("DieCuttingCathode", cloudDeadLetter.ModuleId);
-        Assert.Equal("DieCuttingCathode.Realtime", cloudDeadLetter.TaskKey);
+        Assert.Equal("TestPluginBeta", cloudDeadLetter.ModuleId);
+        Assert.Equal("TestPluginBeta.Realtime", cloudDeadLetter.TaskKey);
         Assert.Equal("SESSION-CLOUD-701", cloudDeadLetter.PlanSessionId);
         Assert.Equal("PLAN-CLOUD-701", cloudDeadLetter.MainPlanCode);
         Assert.Equal("TRACE-CLOUD-701", cloudDeadLetter.TraceBatchNumber);
@@ -1158,8 +1158,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
         Assert.Equal(nameof(DeadLetterStage.FallbackRecoverDeserialize), mesDeadLetter.FailureStage);
         Assert.Equal(8010, mesDeadLetter.NetworkDeviceId);
         Assert.Equal("PLC-MES-801", mesDeadLetter.DeviceName);
-        Assert.Equal("DieCuttingCathode", mesDeadLetter.ModuleId);
-        Assert.Equal("DieCuttingCathode.Realtime", mesDeadLetter.TaskKey);
+        Assert.Equal("TestPluginBeta", mesDeadLetter.ModuleId);
+        Assert.Equal("TestPluginBeta.Realtime", mesDeadLetter.TaskKey);
         Assert.Equal("SESSION-MES-801", mesDeadLetter.PlanSessionId);
         Assert.Equal("PLAN-MES-801", mesDeadLetter.MainPlanCode);
         Assert.Equal("TRACE-MES-801", mesDeadLetter.TraceBatchNumber);

@@ -584,7 +584,6 @@ public sealed class RepositoryHygieneTests
         var root = FindRepositoryRoot();
         var files = EnumerateFiles(Path.Combine(root, "src", "Application", "IIoT.Edge.Application", "Modules", "Mes"), "*.cs")
             .Concat(EnumerateFiles(Path.Combine(root, "src", "Modules"), "*.cs"))
-            .Append(Path.Combine(root, "docs", "模切MES对接口径.md"))
             .Where(File.Exists)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -743,8 +742,7 @@ public sealed class RepositoryHygieneTests
                 Path.Combine(root, "docs", "Edge安装更新验收.md"),
                 Path.Combine(root, "docs", "Edge客户端宿主插件分发契约.md"),
                 Path.Combine(root, "docs", "客户端规则.md"),
-                Path.Combine(root, "docs", "客户端架构治理清单.md"),
-                Path.Combine(root, "docs", "模切MES对接口径.md")
+                Path.Combine(root, "docs", "客户端架构治理清单.md")
             ])
             .Where(File.Exists)
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -1681,21 +1679,7 @@ public sealed class RepositoryHygieneTests
     }
 
     [Fact]
-    public void DieCuttingDataViewModel_ShouldUseSharedDeviceSelectionForProductionRows()
-    {
-        var root = FindRepositoryRoot();
-        var source = File.ReadAllText(ToFullPath(
-            root,
-            "src/Modules/IIoT.Edge.Module.DieCutting.Shared/Presentation/DieCuttingDataViewModel.cs"));
-
-        Assert.Contains("_recordStore.QueryAsync(", source, StringComparison.Ordinal);
-        Assert.Contains("_deviceSelectionService.SelectedDeviceKey", source, StringComparison.Ordinal);
-        Assert.Contains("DieCutting_Empty_SelectedDeviceProductionRecords", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("SelectedDeviceFilter", source, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ModuleProjects_ShouldDeclareExplicitPluginOrSharedRole()
+    public void ModuleProjects_ShouldDeclareExplicitPluginRole()
     {
         var root = FindRepositoryRoot();
         var modulesRoot = ToFullPath(root, "src/Modules");
@@ -1715,35 +1699,21 @@ public sealed class RepositoryHygieneTests
                 var hasPluginManifest = File.Exists(Path.Combine(projectDirectory, "plugin.json"));
                 var repoPath = ToRepositoryPath(root, path);
 
-                if (!string.IsNullOrWhiteSpace(moduleId))
-                {
-                    return new[]
-                    {
-                        hasPluginManifest ? null : $"{repoPath} declares PluginModuleId but is missing plugin.json",
-                        string.Equals(isEdgePluginModule, "true", StringComparison.OrdinalIgnoreCase)
-                            ? null
-                            : $"{repoPath} declares PluginModuleId but IsEdgePluginModule is not true",
-                        string.Equals(isPackable, "true", StringComparison.OrdinalIgnoreCase)
-                            ? null
-                            : $"{repoPath} declares PluginModuleId but IsPackable is not true",
-                        projectName.EndsWith(".Shared", StringComparison.OrdinalIgnoreCase)
-                            ? $"{repoPath} is a plugin entry project but is named like a shared library"
-                            : null
-                    };
-                }
-
                 return new[]
                 {
+                    !string.IsNullOrWhiteSpace(moduleId)
+                        ? null
+                        : $"{repoPath} has no PluginModuleId",
+                    hasPluginManifest ? null : $"{repoPath} is missing plugin.json",
+                    string.Equals(isEdgePluginModule, "true", StringComparison.OrdinalIgnoreCase)
+                        ? null
+                        : $"{repoPath} must declare IsEdgePluginModule=true",
+                    string.Equals(isPackable, "true", StringComparison.OrdinalIgnoreCase)
+                        ? null
+                        : $"{repoPath} must declare IsPackable=true",
                     projectName.EndsWith(".Shared", StringComparison.OrdinalIgnoreCase)
-                        ? null
-                        : $"{repoPath} has no PluginModuleId and must be named *.Shared",
-                    hasPluginManifest ? $"{repoPath} is a shared library but contains plugin.json" : null,
-                    string.Equals(isEdgePluginModule, "false", StringComparison.OrdinalIgnoreCase)
-                        ? null
-                        : $"{repoPath} is a shared library but IsEdgePluginModule is not false",
-                    string.Equals(isPackable, "false", StringComparison.OrdinalIgnoreCase)
-                        ? null
-                        : $"{repoPath} is a shared library but IsPackable is not false"
+                        ? $"{repoPath} must be an independently loadable plugin, not a shared-family project"
+                        : null
                 };
             })
             .Where(finding => !string.IsNullOrWhiteSpace(finding))
@@ -1751,6 +1721,38 @@ public sealed class RepositoryHygieneTests
             .ToArray();
 
         Assert.Empty(findings);
+    }
+
+    [Fact]
+    public void TestPluginFixture_ShouldRemainOutsideProductionPackagingInputs()
+    {
+        var root = FindRepositoryRoot();
+        var fixtureProject = XDocument.Load(ToFullPath(
+            root,
+            "src/Testing/IIoT.Edge.TestPlugin/IIoT.Edge.TestPlugin.csproj"));
+
+        Assert.Equal("true", GetProjectProperty(fixtureProject, "IsEdgePluginTestFixture"));
+        Assert.Equal("false", GetProjectProperty(fixtureProject, "IsPackable"));
+        Assert.DoesNotContain(
+            "TestPlugin",
+            File.ReadAllText(ToFullPath(root, "scripts/edge-runtime.publish.json")),
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "TestPlugin",
+            File.ReadAllText(ToFullPath(root, "scripts/PluginBundles/all-official.json")),
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "TestPlugin",
+            File.ReadAllText(ToFullPath(root, "src/Edge/IIoT.Edge.Launcher/launcher.profiles.json")),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Get-EdgeModuleProjectMap -RepoRoot $repoRoot",
+            File.ReadAllText(ToFullPath(root, "scripts/PackEdgePlugin.ps1")),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Join-Path $RepoRoot 'src\\Modules'",
+            File.ReadAllText(ToFullPath(root, "scripts/EdgeRuntime.Common.ps1")),
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -2076,8 +2078,7 @@ public sealed class RepositoryHygieneTests
         var root = FindRepositoryRoot();
         var pagePaths = new[]
         {
-            "src/Modules/IIoT.Edge.Module.Homogenization/Presentation/Views/HomogenizationDataPage.axaml",
-            "src/Modules/IIoT.Edge.Module.DieCutting.Shared/Presentation/Views/DieCuttingDataPage.axaml"
+            "src/Modules/IIoT.Edge.Module.Homogenization/Presentation/Views/HomogenizationDataPage.axaml"
         };
 
         foreach (var pagePath in pagePaths)
@@ -2189,8 +2190,7 @@ public sealed class RepositoryHygieneTests
     private static bool IsTextCandidate(string path)
     {
         var fileName = Path.GetFileName(path);
-        if (string.Equals(fileName, "CODEOWNERS", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(fileName, ".gitignore", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(fileName, ".gitignore", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }

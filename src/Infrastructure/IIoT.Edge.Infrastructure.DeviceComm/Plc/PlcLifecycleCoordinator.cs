@@ -395,7 +395,7 @@ public sealed class PlcLifecycleCoordinator
 
         if (taskName.Contains("RealtimeSampleUpload", StringComparison.OrdinalIgnoreCase))
         {
-            return "模切采样上传";
+            return "实时采样上传";
         }
 
         return taskName;

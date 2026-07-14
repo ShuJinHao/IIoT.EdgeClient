@@ -234,7 +234,7 @@ public sealed class CloudHttpClientBehaviorTests
                 "LINE-01",
                 DateTime.UtcNow,
                 [
-                    new EdgeHostPlcRuntimeStateReportItem("P1-AP01", "P1-AP01", true, "Connected")
+                    new EdgeHostPlcRuntimeStateReportItem("PLC-A01", "PLC-A01", true, "Connected")
                 ]));
 
         Assert.True(result.IsSuccess);

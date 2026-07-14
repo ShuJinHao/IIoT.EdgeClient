@@ -31,11 +31,13 @@
     <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.VisualTestData\IIoT.Edge.Presentation.VisualTestData.csproj" />
     <ProjectReference Include="..\..\Edge\IIoT.Edge.Host.DataPipeline\IIoT.Edge.Host.DataPipeline.csproj" />
     <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\Testing\IIoT.Edge.TestPlugin\IIoT.Edge.TestPlugin.csproj" />
     <ProjectReference Include="..\..\Tools\IIoT.Edge.RuntimeLayoutSync\IIoT.Edge.RuntimeLayoutSync.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(EdgeTestForceEmptyPluginArtifacts)' != 'true'">
     <PluginModuleProject Include="..\..\Modules\**\*.csproj" Exclude="..\..\Modules\IIoT.Edge.Module.Sdk\IIoT.Edge.Module.Sdk.csproj" />
+    <PluginModuleProject Include="..\..\Testing\IIoT.Edge.TestPlugin\IIoT.Edge.TestPlugin.csproj" />
   </ItemGroup>
 
   <Target Name="ResolvePluginModuleArtifacts">
@@ -49,7 +51,7 @@
   </Target>
 
   <Target Name="CopyPluginModulesToTestOutput" AfterTargets="Build" DependsOnTargets="ResolvePluginModuleArtifacts">
-    <Error Condition="'@(PluginModuleArtifact)' == ''" Text="EDGE-TEST-GOV-001-PLUGIN-STAGING no plugin module artifacts were resolved for the shell-test runtime layout." />
+    <Error Condition="'@(PluginModuleArtifact)' == ''" Text="EDGE-PLUGIN-STAGING-001 no plugin module artifacts were resolved for the shell-test runtime layout." />
     <RemoveDir Directories="$(TargetDir)..\plugins" />
     <Copy
       SourceFiles="@(PluginModuleArtifact)"

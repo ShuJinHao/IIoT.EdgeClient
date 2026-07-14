@@ -15,20 +15,21 @@ namespace IIoT.Edge.Module.ContractTests;
 public sealed class ModuleDiscoveryContractTests
 {
     [Fact]
-    public void DiscoverDirectoryPlugins_ShouldFindProductModules()
+    public void DiscoverDirectoryPlugins_ShouldFindTestPluginFixture()
     {
-        AssertStagedModuleLayout("DieCuttingAnode", "diecutting-anode.module.json");
-        AssertStagedModuleLayout("DieCuttingCathode", "diecutting-cathode.module.json");
-        AssertStagedModuleLayout("Homogenization", "homogenization.module.json", hasLanguageResources: true);
+        AssertStagedModuleLayout(
+            "TestPlugin",
+            "test-plugin.module.json",
+            "IIoT.Edge.TestPlugin.dll");
 
-        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization", "DieCuttingAnode", "DieCuttingCathode");
+        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("TestPlugin");
         try
         {
             var discovery = DiscoverPlugins(pluginRoot);
 
             Assert.Empty(discovery.Issues);
             Assert.Equal(
-                ["DieCuttingAnode", "DieCuttingCathode", "Homogenization"],
+                ["TestPlugin"],
                 discovery.Modules.Select(x => x.ModuleId).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray());
         }
         finally
@@ -40,6 +41,7 @@ public sealed class ModuleDiscoveryContractTests
     private static void AssertStagedModuleLayout(
         string moduleId,
         string configFileName,
+        string entryAssemblyName,
         bool hasLanguageResources = false)
     {
         var runtimeDirectory = ContractTestPathHelper.GetModuleRuntimeDirectory(moduleId);
@@ -48,7 +50,7 @@ public sealed class ModuleDiscoveryContractTests
             Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Modules", moduleId)),
             Path.GetFullPath(runtimeDirectory));
         Assert.True(File.Exists(Path.Combine(runtimeDirectory, "plugin.json")));
-        Assert.True(File.Exists(Path.Combine(runtimeDirectory, $"IIoT.Edge.Module.{moduleId}.dll")));
+        Assert.True(File.Exists(Path.Combine(runtimeDirectory, entryAssemblyName)));
         Assert.True(File.Exists(Path.Combine(runtimeDirectory, "Config", configFileName)));
         Assert.Empty(Directory.GetFiles(runtimeDirectory, "*.module.json", SearchOption.TopDirectoryOnly));
         Assert.Empty(Directory.GetFiles(runtimeDirectory, "*.axaml", SearchOption.TopDirectoryOnly));
@@ -63,17 +65,15 @@ public sealed class ModuleDiscoveryContractTests
     [Fact]
     public void CreateAllModules_ShouldInstantiateAllDiscoveredPluginsWithoutDuplicateIdentity()
     {
-        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization", "DieCuttingAnode", "DieCuttingCathode");
+        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("TestPlugin");
         try
         {
             var modules = CreateModuleCatalog().CreateAllModules(DiscoverPlugins(pluginRoot).Modules);
 
-            Assert.Equal(3, modules.Count);
-            Assert.Equal(3, modules.Select(x => x.ModuleId).Distinct(StringComparer.OrdinalIgnoreCase).Count());
-            Assert.Equal(3, modules.Select(x => x.ProcessType).Distinct(StringComparer.OrdinalIgnoreCase).Count());
-            Assert.Contains(modules, x => string.Equals(x.ModuleId, "DieCuttingAnode", StringComparison.OrdinalIgnoreCase));
-            Assert.Contains(modules, x => string.Equals(x.ModuleId, "DieCuttingCathode", StringComparison.OrdinalIgnoreCase));
-            Assert.Contains(modules, x => string.Equals(x.ModuleId, "Homogenization", StringComparison.OrdinalIgnoreCase));
+            Assert.Single(modules);
+            Assert.Single(modules.Select(x => x.ModuleId).Distinct(StringComparer.OrdinalIgnoreCase));
+            Assert.Single(modules.Select(x => x.ProcessType).Distinct(StringComparer.OrdinalIgnoreCase));
+            Assert.Contains(modules, x => string.Equals(x.ModuleId, "TestPlugin", StringComparison.OrdinalIgnoreCase));
         }
         finally
         {
@@ -109,7 +109,7 @@ public sealed class ModuleDiscoveryContractTests
     [Fact]
     public void RegisterAllDiscoveredModules_ShouldNotProduceViewOrRegistrationConflicts()
     {
-        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("Homogenization");
+        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("TestPlugin");
         try
         {
             var modules = CreateModuleCatalog().CreateAllModules(DiscoverPlugins(pluginRoot).Modules);
@@ -136,11 +136,10 @@ public sealed class ModuleDiscoveryContractTests
 
             Assert.Single(cellDataRegistry.GetRegistrations());
             Assert.Single(runtimeRegistry.GetRegistrations());
-            Assert.Single(integrationRegistry.GetCloudUploaders());
-            Assert.True(integrationRegistry.TryGetCloudUploader("Homogenization", out var cloudRegistration));
-            Assert.Equal(ProcessUploadMode.Batch, cloudRegistration.UploadMode);
-            Assert.Single(moduleParamRegistry.GetRegistrations());
-            Assert.NotNull(viewRegistry.GetViewRegistration("Homogenization.DataView"));
+            Assert.Empty(integrationRegistry.GetCloudUploaders());
+            Assert.Empty(integrationRegistry.GetMesUploaders());
+            Assert.Empty(moduleParamRegistry.GetRegistrations());
+            Assert.NotNull(viewRegistry.GetViewRegistration("TestPlugin.DataView"));
         }
         finally
         {
@@ -149,23 +148,23 @@ public sealed class ModuleDiscoveryContractTests
     }
 
     [Fact]
-    public void RegisterMockNewModule_ShouldRequireZeroHostChanges()
+    public void RegisterAdditionalTestModule_ShouldRequireZeroHostChanges()
     {
-        var result = new ModuleContractFixture().RegisterModule(new MockEdgeProcessModule());
+        var result = new ModuleContractFixture().RegisterModule(new AdditionalTestProcessModule());
 
-        Assert.True(result.CellDataRegistry.IsRegistered(MockEdgeProcessModule.Process));
-        Assert.True(result.RuntimeRegistry.HasFactory(MockEdgeProcessModule.Module));
-        Assert.True(result.IntegrationRegistry.HasCloudUploader(MockEdgeProcessModule.Process));
-        Assert.False(result.IntegrationRegistry.HasMesUploader(MockEdgeProcessModule.Process));
+        Assert.True(result.CellDataRegistry.IsRegistered(AdditionalTestProcessModule.Process));
+        Assert.True(result.RuntimeRegistry.HasFactory(AdditionalTestProcessModule.Module));
+        Assert.True(result.IntegrationRegistry.HasCloudUploader(AdditionalTestProcessModule.Process));
+        Assert.False(result.IntegrationRegistry.HasMesUploader(AdditionalTestProcessModule.Process));
         Assert.True(result.ModuleParamRegistry.TryGetRegistration(
             typeof(MockMesParam),
             typeof(MockCloudParam),
             typeof(MockBusinessParam),
             out _));
-        Assert.NotNull(result.ViewRegistry.GetViewRegistration("MockProcess.DataView"));
+        Assert.NotNull(result.ViewRegistry.GetViewRegistration("AdditionalTestPlugin.DataView"));
         Assert.Contains(
             result.ViewRegistry.GetAllMenus(),
-            x => x.ViewId == "MockProcess.DataView" && x.Title == "模拟工序");
+            x => x.ViewId == "AdditionalTestPlugin.DataView" && x.Title == "Additional Test Plugin");
     }
 
     [Fact]
@@ -173,43 +172,6 @@ public sealed class ModuleDiscoveryContractTests
     {
         var repoRoot = ContractTestPathHelper.FindRepoRoot();
 
-        Assert.False(Directory.Exists(Path.Combine(
-            repoRoot,
-            "src",
-            "Modules",
-            "IIoT.Edge.Module.Stacking")));
-        Assert.True(File.Exists(Path.Combine(
-            repoRoot,
-            "src",
-            "Modules",
-            "IIoT.Edge.Module.DieCuttingAnode",
-            "plugin.json")));
-        Assert.True(File.Exists(Path.Combine(
-            repoRoot,
-            "src",
-            "Modules",
-            "IIoT.Edge.Module.DieCuttingCathode",
-            "plugin.json")));
-        Assert.False(File.Exists(Path.Combine(
-            repoRoot,
-            "src",
-            "Modules",
-            "IIoT.Edge.Module.DieCutting.Shared",
-            "plugin.json")));
-        Assert.True(File.Exists(Path.Combine(
-            repoRoot,
-            "src",
-            "Modules",
-            "IIoT.Edge.Module.DieCutting.Shared",
-            "Production",
-            "DieCuttingStationRuntimeFactory.cs")));
-        Assert.True(File.Exists(Path.Combine(
-            repoRoot,
-            "src",
-            "Modules",
-            "IIoT.Edge.Module.DieCutting.Shared",
-            "Samples",
-            "DieCuttingDevelopmentSampleContributor.cs")));
         Assert.True(File.Exists(Path.Combine(
             repoRoot,
             "src",
@@ -253,42 +215,6 @@ public sealed class ModuleDiscoveryContractTests
         Assert.Equal("HomogenizationLine", document.RootElement.GetProperty("machineProfiles")[0].GetString());
     }
 
-    [Fact]
-    public void PluginBundles_ShouldContainPolaritySpecificDieCuttingBundles()
-    {
-        var repoRoot = ContractTestPathHelper.FindRepoRoot();
-        Assert.False(File.Exists(Path.Combine(repoRoot, "scripts", "PluginBundles", "diecutting-line.json")));
-
-        AssertDieCuttingBundle(
-            repoRoot,
-            "diecutting-anode-line.json",
-            "diecutting-anode-line",
-            "DieCuttingAnode",
-            "DieCuttingAnodeLine");
-        AssertDieCuttingBundle(
-            repoRoot,
-            "diecutting-cathode-line.json",
-            "diecutting-cathode-line",
-            "DieCuttingCathode",
-            "DieCuttingCathodeLine");
-    }
-
-    private static void AssertDieCuttingBundle(
-        string repoRoot,
-        string fileName,
-        string expectedBundleId,
-        string expectedModuleId,
-        string expectedMachineProfile)
-    {
-        var bundlePath = Path.Combine(repoRoot, "scripts", "PluginBundles", fileName);
-
-        Assert.True(File.Exists(bundlePath));
-        using var document = JsonDocument.Parse(File.ReadAllText(bundlePath));
-        Assert.Equal(expectedBundleId, document.RootElement.GetProperty("bundleId").GetString());
-        Assert.Equal(expectedModuleId, document.RootElement.GetProperty("includeModules")[0].GetString());
-        Assert.Equal(expectedMachineProfile, document.RootElement.GetProperty("machineProfiles")[0].GetString());
-    }
-
     private static ModuleCatalogDiscoveryResult DiscoverPlugins(string pluginRoot)
     {
         var discovery = CreateModuleCatalog().DiscoverModules(pluginRoot);
@@ -305,30 +231,30 @@ public sealed class ModuleDiscoveryContractTests
     {
     }
 
-    private sealed class MockEdgeProcessModule : EdgeProcessModuleBase<MockCellData>
+    private sealed class AdditionalTestProcessModule : EdgeProcessModuleBase<AdditionalTestCellData>
     {
-        public const string Module = "MockProcess";
-        public const string Process = "MockProcess";
+        public const string Module = "AdditionalTestPlugin";
+        public const string Process = "AdditionalTestPlugin";
 
         public override string ModuleId => Module;
 
-        public override string DisplayName => "模拟工序";
+        public override string DisplayName => "Additional Test Plugin";
 
         protected override ProcessUploadMode? CloudUploadMode => ProcessUploadMode.Single;
 
         protected override IStationRuntimeFactory CreateRuntimeFactory()
-            => new MockRuntimeFactory();
+            => new AdditionalTestRuntimeFactory();
 
         protected override void ConfigureModuleServices(IEdgeProcessModuleBuilder builder)
             => builder.RegisterParameters<MockMesParam, MockCloudParam, MockBusinessParam>();
 
         protected override void RegisterModuleViews(IEdgeProcessModuleBuilder builder)
         {
-            builder.RegisterRoute("MockProcess.DataView", typeof(object), typeof(object));
+            builder.RegisterRoute("AdditionalTestPlugin.DataView", typeof(object), typeof(object));
             builder.RegisterMenu(new ModuleMenuDescriptor
             {
-                Title = "模拟工序",
-                ViewId = "MockProcess.DataView",
+                Title = "Additional Test Plugin",
+                ViewId = "AdditionalTestPlugin.DataView",
                 Icon = "Shape",
                 Order = 99
             });
@@ -353,14 +279,14 @@ public sealed class ModuleDiscoveryContractTests
         启用重码验证
     }
 
-    private sealed class MockCellData : CellDataBase
+    private sealed class AdditionalTestCellData : CellDataBase
     {
-        public override string ProcessType => MockEdgeProcessModule.Process;
+        public override string ProcessType => AdditionalTestProcessModule.Process;
     }
 
-    private sealed class MockRuntimeFactory : IStationRuntimeFactory
+    private sealed class AdditionalTestRuntimeFactory : IStationRuntimeFactory
     {
-        public string ModuleId => MockEdgeProcessModule.Module;
+        public string ModuleId => AdditionalTestProcessModule.Module;
 
         public IReadOnlyCollection<TaskCandidate> GetTaskCandidates()
             => [];
