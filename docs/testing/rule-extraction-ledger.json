@@ -28,7 +28,7 @@
     "preAuditBytesAvailable": false,
     "auditMode": "full-current-snapshot-reaudit",
     "reason": "Only the pre-audit SHA-256 and line count were retained before concurrent main-owned plan edits; exact pre-audit bytes are unavailable, so no byte diff or auditedDiffSha256 is claimed.",
-    "finalSha256": "505dc9fc60963cbf1cd0c4cd65d76ad4fa85c3ce99c11b117bfd35fa7744ba3b",
+    "finalSha256": "e03b382bf63c7a5b9561c7225858d36c95d2e5cdfb44fdf5f3b347193dafe027",
     "finalLineCount": 1418,
     "auditedDiffSha256": null,
     "topLevelSectionInventory": {
@@ -54,13 +54,13 @@
         { "ordinal": 17, "startLine": 1290, "endLine": 1328, "sha256": "8b12fc9d3ed2236cdea8c323b8f021d4c4b4356aace1db9588039bfb2a9af22e" },
         { "ordinal": 18, "startLine": 1329, "endLine": 1348, "sha256": "a8002c6627e048f668c5555cb21abe00313ac94eb20640dfa0f72ac1c930186b" },
         { "ordinal": 19, "startLine": 1349, "endLine": 1390, "sha256": "a599314dd3007661cc3760d845556a14e90ca60a5e95a61b7d3580029baade87" },
-        { "ordinal": 20, "startLine": 1391, "endLine": 1418, "sha256": "7e78dc6691be6bb0e4dc55a3c2c62796058be5ba99435a9202d1a4a20f8134c5" }
+        { "ordinal": 20, "startLine": 1391, "endLine": 1418, "sha256": "dbdcfe6fe27d8189650fde75473b221b17df511c81458221669beee78e7c0dab" }
       ]
     },
     "decisionMappings": [
-      { "planSection": "6.5", "decision": "project-extraction-closed-at-independent-commit-entry-migration-kept-separate", "batchIds": ["TEST-GOV-RULE-EXTRACTION-001-EDGE", "TEST-GOV-RULE-EXTRACTION-001-EDGE-ENTRY"] },
+      { "planSection": "6.5", "decision": "project-extraction-and-separate-entry-commit-pushed-feature-branch-effective-default-branch-not-integrated", "batchIds": ["TEST-GOV-RULE-EXTRACTION-001-EDGE", "TEST-GOV-RULE-EXTRACTION-001-EDGE-ENTRY"] },
       { "planSection": "16.2", "decision": "receipt-and-multi-agent-trust-boundaries-retained", "batchIds": ["EDGE-BASELINE-MIG-BOOTSTRAP"] },
-      { "planSection": "20", "decision": "edge-counts-review-debts-and-no-e0-claim-reconciled", "batchIds": ["EDGE-TEST-FLAKE-001", "EDGE-ARCH-001"] }
+      { "planSection": "20", "decision": "edge-entry-commit-pushed-feature-branch-effective-default-main-false-and-no-e0-claim-reconciled", "batchIds": ["TEST-GOV-RULE-EXTRACTION-001-EDGE-ENTRY", "EDGE-TEST-FLAKE-001", "EDGE-ARCH-001"] }
     ],
     "status": "complete-full-current-snapshot-reaudit",
     "reviewer": "local-nonauthor-final-review-pass-2026-07-14"
@@ -13608,8 +13608,14 @@
     "entryLevelReviewerStateAtCommittedExtraction": "pending-nonauthor-rereview",
     "entryLevelReviewerStateSupersededBy": "reviewStatus and this closure object",
     "projectEntryMigrationMayProceedAsSeparateBatch": true,
-    "entryMigrationEffective": false,
-    "workspaceRootDefaultReadRelaxationEffective": false,
+    "projectEntryMigrationCompletedAsSeparateBatch": true,
+    "entryMigrationCommit": "7b7c4e348d0ba30f23ad61570a8e8608346409d1",
+    "entryMigrationEffective": true,
+    "entryMigrationEffectiveScope": "origin/agent/edge-rule-extraction-20260714 only",
+    "featureBranchEntryMigrationEffective": true,
+    "defaultBranchEntryMigrationEffective": false,
+    "workspaceRootDefaultReadRelaxationEffective": true,
+    "workspaceRootDefaultReadRelaxationScope": "local workspace instructions only; this does not imply integration into origin/main",
     "historicalCoreEntryCancelled": false,
     "trustRootOrE0Implied": false
   },
@@ -13637,9 +13643,32 @@
   },
   "entryMigrationCandidateEvidence": {
     "batchId": "TEST-GOV-RULE-EXTRACTION-001-EDGE-ENTRY",
+    "status": "committed-and-pushed-feature-branch-effective",
     "baseCommit": "8be4ba016499483000548cbc6f5f9f0b29210a44",
-    "candidateRevision": "uncommitted",
+    "candidateRevision": "7b7c4e348d0ba30f23ad61570a8e8608346409d1",
     "preparedAtUtc": "2026-07-14T03:09:28Z",
+    "commitEvidence": {
+      "commit": "7b7c4e348d0ba30f23ad61570a8e8608346409d1",
+      "parent": "8be4ba016499483000548cbc6f5f9f0b29210a44",
+      "tree": "34999c8e16e6f8851c475e34a71cf28736fa5bda",
+      "subject": "docs(governance): migrate edge history review entry",
+      "branch": "agent/edge-rule-extraction-20260714",
+      "remoteTrackingRef": "refs/remotes/origin/agent/edge-rule-extraction-20260714",
+      "remoteTrackingSha": "7b7c4e348d0ba30f23ad61570a8e8608346409d1",
+      "directSingleParent": true,
+      "normalPush": true,
+      "remoteExact": true
+    },
+    "effectiveness": {
+      "featureBranchEffective": true,
+      "featureBranchRef": "refs/remotes/origin/agent/edge-rule-extraction-20260714",
+      "featureBranchRevision": "7b7c4e348d0ba30f23ad61570a8e8608346409d1",
+      "defaultBranchEffective": false,
+      "defaultBranchRef": "refs/remotes/origin/main",
+      "defaultBranchRevisionObserved": "e92846eec7a4d4a3cf9b9d9f843d06244d2b40ff",
+      "trustRootEffective": false,
+      "e0Effective": false
+    },
     "allowedPaths": [
       "IIoT.EdgeClient/AGENTS.md",
       "IIoT.EdgeClient/docs/客户端规则.md",
@@ -13687,8 +13716,9 @@
     "historicalCoreEntryRetained": true,
     "workspaceRootEntryModified": false,
     "requiresSeparateCommit": true,
-    "committed": false,
-    "pushed": false,
+    "separateCommitRequirementSatisfied": true,
+    "committed": true,
+    "pushed": true,
     "validation": {
       "jsonParse": "pass",
       "gitDiffCheck": "pass",
@@ -13702,8 +13732,10 @@
       "postAuditFilesVerifiedByteForByteAtExtractionCommit": 6,
       "historicalCoreEntryRetained": true,
       "trustRootAndE0RemainFalse": true,
+      "entryCommitTopologyAndRemoteTrackingVerified": true,
+      "historicalEntriesAndCountsUnchangedAtPostCommitSync": true,
       "codeTestsOrRemoteCiRun": false,
-      "codeTestsOrRemoteCiReason": "Docs-only local candidate; no code, test, workflow, policy, baseline or remote asset changed."
+      "codeTestsOrRemoteCiReason": "Docs-only ENTRY commit and post-commit evidence sync; no code, test, workflow, policy, baseline or remote CI asset changed."
     },
     "trustRootOrE0Implied": false
   },
