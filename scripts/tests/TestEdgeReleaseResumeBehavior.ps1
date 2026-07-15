@@ -7,9 +7,14 @@ Set-StrictMode -Version Latest
 
 $scriptsRoot = Split-Path -Parent $PSScriptRoot
 $sourceRepoRoot = Split-Path -Parent $scriptsRoot
-$testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("edge-resume-test-{0}" -f ([Guid]::NewGuid().ToString('N')))
-$cloneRoot = Join-Path $testRoot 'repo'
-$remoteRoot = Join-Path $testRoot 'remote.git'
+$testTempRoot = if ([string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
+    [System.IO.Path]::GetTempPath()
+} else {
+    [System.IO.Path]::GetFullPath($env:RUNNER_TEMP)
+}
+$testRoot = Join-Path $testTempRoot ("er-{0}" -f ([Guid]::NewGuid().ToString('N')))
+$cloneRoot = Join-Path $testRoot 'r'
+$remoteRoot = Join-Path $testRoot 'g.git'
 $fakeCloudServer = $null
 $oldEnvironment = @{
     Dispatch = $env:IIOT_EDGE_WORKSPACE_DISPATCH
@@ -65,6 +70,7 @@ try {
     New-Item -ItemType Directory -Path $testRoot, $cloneRoot | Out-Null
     & git init -q $cloneRoot
     if ($LASTEXITCODE -ne 0) { throw 'Could not initialize isolated Edge test clone.' }
+    Invoke-GitChecked -Directory $cloneRoot -Arguments @('config', 'core.longpaths', 'true')
     Invoke-GitChecked -Directory $cloneRoot -Arguments @('remote', 'add', 'source', $sourceRepoRoot)
     Invoke-GitChecked -Directory $cloneRoot -Arguments @('fetch', '-q', 'source', 'HEAD')
     Invoke-GitChecked -Directory $cloneRoot -Arguments @('checkout', '-q', '-b', 'edge-resume-test', 'FETCH_HEAD')
