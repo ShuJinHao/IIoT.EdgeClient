@@ -100,28 +100,6 @@ function Remove-CSharpNonCodeText {
     return [regex]::Replace($SourceText, $nonCodePattern, ' ')
 }
 
-function Remove-CSharpComments {
-    param([Parameter(Mandatory)][string]$SourceText)
-
-    $literalOrCommentPattern = @'
-(?xs)
-(?<literal>
-    (?:\$*)"{3,}.*?"{3,}
-  | (?:\$@|@\$|@)"(?:""|[^"])*"
-  | \$?"(?:\\.|[^"\\])*"
-  | '(?:\\.|[^'\\])*'
-)
-|
-(?<comment>/\*.*?\*/|//[^\r\n]*)
-'@
-    $evaluator = [Text.RegularExpressions.MatchEvaluator]{
-        param([Text.RegularExpressions.Match]$match)
-        if ($match.Groups['comment'].Success) { return ' ' }
-        return $match.Value
-    }
-    return [regex]::Replace($SourceText, $literalOrCommentPattern, $evaluator)
-}
-
 function Get-ProjectRole {
     param(
         [Parameter(Mandatory)][string]$ProjectPath,
@@ -198,14 +176,57 @@ function Test-IsApprovedAnalyzerToolEdge {
 
 function Test-IsArchitectureDiagnosticText {
     param([AllowEmptyString()][string]$Value)
-    return $Value -match '(?i)\b(?:WSARCH|DDD|DATA|PLUG|EDGEOUT|EDGECOMP|EDGECLOUDCFG|EDGEPLCOWN|EDGEASYNC)\d{3}\b'
+    return $Value -match [string]$architectureCatalog.CompilerIdPattern
 }
 
 function Test-ContainsArchitectureSeverityConfiguration {
     param([AllowEmptyString()][string]$Value)
 
-    return $Value -match '(?im)^\s*dotnet_diagnostic\.(?:WSARCH|DDD|DATA|PLUG|EDGEOUT|EDGECOMP|EDGECLOUDCFG|EDGEPLCOWN|EDGEASYNC)\d{3}\.severity\s*=' -or
+    return $Value -match "(?im)^\s*dotnet_diagnostic\.(?:$($architectureCatalog.CompilerIdAlternation))\.severity\s*=" -or
         $Value -match '(?im)^\s*dotnet_analyzer_diagnostic\.category-IIoT\.Architecture\.severity\s*='
+}
+
+function Test-ContainsArchitecturePragmaSuppression {
+    param([Parameter(Mandatory)][string]$SourceCode)
+
+    foreach ($pragma in [regex]::Matches(
+        $SourceCode,
+        '(?im)^\s*#pragma\s+warning\s+disable(?<ids>[^\r\n]*)')) {
+        $ids = $pragma.Groups['ids'].Value.Trim()
+        if ([string]::IsNullOrWhiteSpace($ids)) { return $true }
+        foreach ($id in $ids.Split(
+            [char[]]@(',', ' ', "`t"),
+            [StringSplitOptions]::RemoveEmptyEntries)) {
+            if ($architectureCompilerIds.Contains($id.Trim())) { return $true }
+        }
+    }
+    return $false
+}
+
+function Test-ContainsRealSuppressMessageAttribute {
+    param(
+        [Parameter(Mandatory)][object]$SyntaxRoot,
+        [Parameter(Mandatory)][object]$SemanticModel
+    )
+
+    foreach ($attribute in @($SyntaxRoot.DescendantNodes() | Where-Object {
+        $_.GetType().Name -eq 'AttributeSyntax'
+    })) {
+        $symbol = $SemanticModel.GetSymbolInfo($attribute).Symbol
+        if ($null -eq $symbol -or
+            ([string]$symbol.ContainingType) -cne 'System.Diagnostics.CodeAnalysis.SuppressMessageAttribute') {
+            continue
+        }
+        foreach ($argument in @($attribute.ArgumentList.Arguments)) {
+            $constant = $SemanticModel.GetConstantValue($argument.Expression)
+            if ($constant.HasValue -and
+                $constant.Value -is [string] -and
+                ([string]$constant.Value) -match [string]$architectureCatalog.CompilerIdPattern) {
+                return $true
+            }
+        }
+    }
+    return $false
 }
 
 function Test-IsApprovedAnalyzerToolDeclaration {
@@ -450,6 +471,13 @@ if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
     $RepositoryRoot = [IO.Path]::GetFullPath($RepositoryRoot)
 }
 
+$catalogRepositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
+$architectureCatalog = & (Join-Path $PSScriptRoot 'Get-EdgeArchitectureDiagnosticCatalog.ps1') `
+    -RepositoryRoot $catalogRepositoryRoot
+$architectureCompilerIds = [System.Collections.Generic.HashSet[string]]::new(
+    [string[]]$architectureCatalog.CompilerIds,
+    [StringComparer]::OrdinalIgnoreCase)
+
 $dotnetCommandPath = (Get-Command dotnet).Source
 $dotnetExecutable = (Get-Item $dotnetCommandPath).Target
 if ([string]::IsNullOrWhiteSpace($dotnetExecutable)) {
@@ -461,6 +489,12 @@ if (-not (Test-Path $microsoftBuildAssembly -PathType Leaf)) {
     throw "WSARCH004 Microsoft.Build evaluation assembly does not exist: $microsoftBuildAssembly"
 }
 [void][Reflection.Assembly]::LoadFrom($microsoftBuildAssembly)
+# PowerShell already hosts a matching Roslyn pair for its own parser/compiler. Loading
+# the SDK Roslyn binaries into the default context can bind a different minor version
+# than PowerShell and fail before the graph is inspected.
+if ($null -eq ('Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree' -as [type])) {
+    throw 'WSARCH004 PowerShell Roslyn CSharpSyntaxTree type is unavailable.'
+}
 $globalProperties = [Collections.Generic.Dictionary[string, string]]::new([StringComparer]::OrdinalIgnoreCase)
 $globalProperties['Configuration'] = $Configuration
 $projectCollection = [Microsoft.Build.Evaluation.ProjectCollection]::new($globalProperties)
@@ -487,6 +521,7 @@ $findings = [System.Collections.Generic.List[string]]::new()
 $projectsByPath = [System.Collections.Generic.Dictionary[string, object]]::new([StringComparer]::OrdinalIgnoreCase)
 $projects = [System.Collections.Generic.List[object]]::new()
 $inspectedAnalyzerConfigPaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+$inspectedMsBuildDeclarationPaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 
 function Test-ArchitectureAnalyzerConfigFile {
     param([Parameter(Mandatory)][string]$ConfigPath)
@@ -503,12 +538,46 @@ function Test-ArchitectureAnalyzerConfigFile {
     }
 }
 
+function Test-ArchitectureMsBuildDeclarationFile {
+    param([Parameter(Mandatory)][string]$DeclarationPath)
+
+    $fullPath = [IO.Path]::GetFullPath($DeclarationPath)
+    if (-not $inspectedMsBuildDeclarationPaths.Add($fullPath) -or
+        -not (Test-Path $fullPath -PathType Leaf)) {
+        return
+    }
+
+    [xml]$declaration = Get-Content $fullPath -Raw
+    foreach ($property in @($declaration.SelectNodes(
+        '//*[local-name()="RunAnalyzers" or local-name()="RunAnalyzersDuringBuild" or local-name()="NoWarn" or local-name()="WarningsNotAsErrors"]'))) {
+        $name = [string]$property.LocalName
+        $value = ([string]$property.InnerText).Trim()
+        if ($name -in @('RunAnalyzers', 'RunAnalyzersDuringBuild')) {
+            if ($value.Equals('false', [StringComparison]::OrdinalIgnoreCase)) {
+                Add-Finding 'WSARCH006' "$(Get-RepositoryPath $fullPath) contains raw/conditional/target-time $name=false; mandatory analyzers cannot be disabled in any build path."
+            }
+            continue
+        }
+        if (Test-IsArchitectureDiagnosticText $value) {
+            Add-Finding 'WSARCH006' "$(Get-RepositoryPath $fullPath) contains raw/conditional/target-time $name for a mandatory Edge architecture diagnostic."
+        }
+    }
+}
+
 foreach ($analyzerConfig in @(Get-ChildItem $RepositoryRoot -Recurse -File -Force |
     Where-Object {
         $_.Name -in @('.editorconfig', '.globalconfig') -and
         (Get-RepositoryPath $_.FullName) -notmatch '(^|/)(?:bin|obj)(?:/|$)'
     })) {
     Test-ArchitectureAnalyzerConfigFile $analyzerConfig.FullName
+}
+
+foreach ($declarationFile in @(Get-ChildItem $RepositoryRoot -Recurse -File -Force |
+    Where-Object {
+        $_.Extension -in @('.csproj', '.props', '.targets', '.proj') -and
+        (Get-RepositoryPath $_.FullName) -notmatch '(^|/)(?:bin|obj)(?:/|$)'
+    })) {
+    Test-ArchitectureMsBuildDeclarationFile $declarationFile.FullName
 }
 
 foreach ($projectPath in @($projectPaths | Sort-Object -Unique)) {
@@ -715,13 +784,36 @@ foreach ($project in $projects) {
     }
 
     if ($requiresArchitectureAnalyzer) {
+        $sourceDocuments = [System.Collections.Generic.List[object]]::new()
         foreach ($source in $ownedCompileItems) {
             $sourceText = Get-Content $source.FullName -Raw
-            $sourceCode = Remove-CSharpNonCodeText $sourceText
-            $sourceWithoutComments = Remove-CSharpComments $sourceText
-            if ($sourceCode -match '(?im)^\s*#pragma\s+warning\s+disable(?:\s*(?:$|(?:(?:WSARCH|DDD|DATA|PLUG|EDGEOUT|EDGECOMP|EDGECLOUDCFG|EDGEPLCOWN|EDGEASYNC)\d{3}\b)))' -or
-                ($sourceCode -match '\bSuppressMessage\s*\(' -and
-                 $sourceWithoutComments -match '(?is)\bSuppressMessage\s*\([^)]*\b(?:WSARCH|DDD|DATA|PLUG|EDGEOUT|EDGECOMP|EDGECLOUDCFG|EDGEPLCOWN|EDGEASYNC)\d{3}\b')) {
+            $syntaxTree = [Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree]::ParseText($sourceText)
+            $sourceDocuments.Add([pscustomobject]@{
+                FullName = $source.FullName
+                SourceCode = Remove-CSharpNonCodeText $sourceText
+                SyntaxTree = $syntaxTree
+                SyntaxRoot = $syntaxTree.GetRoot()
+            })
+        }
+
+        $suppressionCompilation = $null
+        if (@($sourceDocuments | Where-Object { $_.SourceCode -match 'SuppressMessage' }).Count -gt 0) {
+            $suppressionCompilation = [Microsoft.CodeAnalysis.CSharp.CSharpCompilation]::Create(
+                "EdgeArchitectureSuppressionScan_$($project.Name)",
+                [Microsoft.CodeAnalysis.SyntaxTree[]]@($sourceDocuments | ForEach-Object { $_.SyntaxTree }),
+                [Microsoft.CodeAnalysis.MetadataReference[]]@(
+                    [Microsoft.CodeAnalysis.MetadataReference]::CreateFromFile([object].Assembly.Location)),
+                [Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions]::new(
+                    [Microsoft.CodeAnalysis.OutputKind]::DynamicallyLinkedLibrary))
+        }
+        foreach ($source in $sourceDocuments) {
+            $hasRealSuppressMessage = $false
+            if ($null -ne $suppressionCompilation) {
+                $hasRealSuppressMessage = Test-ContainsRealSuppressMessageAttribute `
+                    -SyntaxRoot $source.SyntaxRoot `
+                    -SemanticModel ($suppressionCompilation.GetSemanticModel($source.SyntaxTree))
+            }
+            if ((Test-ContainsArchitecturePragmaSuppression $source.SourceCode) -or $hasRealSuppressMessage) {
                 Add-Finding 'WSARCH006' "$(Get-RepositoryPath $source.FullName) suppresses mandatory Edge architecture diagnostics in source."
             }
         }

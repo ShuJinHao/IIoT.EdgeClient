@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsEdgeArchitectureGraphFixture>true</IsEdgeArchitectureGraphFixture>
+    <EdgeArchitectureFixtureRepositoryRoot>$(MSBuildThisFileDirectory)..</EdgeArchitectureFixtureRepositoryRoot>
+    <EdgeArchitectureFixtureSolutionPath>$(MSBuildThisFileDirectory)..\EdgeArchitecture.Invalid.slnx</EdgeArchitectureFixtureSolutionPath>
+  </PropertyGroup>
+  <Import Project="..\Suppression.targets" Condition="'$(NeverImportSuppression)' == 'true'" />
+</Project>

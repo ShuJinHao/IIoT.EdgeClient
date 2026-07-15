@@ -2329,8 +2329,34 @@ public sealed class EdgeArchitectureAnalyzerTests
     public void SupportedDiagnostics_AreBuildBlockingAndNotConfigurable()
     {
         var diagnostics = new EdgeArchitectureAnalyzer().SupportedDiagnostics;
+        var testAssembly = typeof(EdgeArchitectureAnalyzerTests).Assembly;
+        var releasedIds = new[]
+            {
+                "AnalyzerReleases.Shipped.md",
+                "AnalyzerReleases.Unshipped.md"
+            }
+            .Select(resourceName =>
+            {
+                using var stream = testAssembly.GetManifestResourceStream(resourceName)
+                    ?? throw new InvalidOperationException($"Missing embedded Analyzer release catalog: {resourceName}");
+                using var reader = new StreamReader(stream);
+                return reader.ReadToEnd();
+            })
+            .SelectMany(text => text.Split('\n'))
+            .Select(line => line.Split('|', StringSplitOptions.TrimEntries))
+            .Where(columns =>
+                columns.Length >= 4 &&
+                columns[1] == "IIoT.Architecture" &&
+                columns[2] == "Error")
+            .Select(columns => columns[0])
+            .ToArray();
 
+        Assert.Equal(23, releasedIds.Length);
+        Assert.Equal(releasedIds.Length, releasedIds.Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(23, diagnostics.Length);
+        Assert.Equal(
+            releasedIds.Order(StringComparer.Ordinal),
+            diagnostics.Select(diagnostic => diagnostic.Id).Order(StringComparer.Ordinal));
         Assert.All(diagnostics, diagnostic =>
         {
             Assert.Equal(DiagnosticSeverity.Error, diagnostic.DefaultSeverity);
