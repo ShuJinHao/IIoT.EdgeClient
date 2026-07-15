@@ -7,8 +7,9 @@ using IIoT.Edge.SharedKernel.Repository;
 namespace IIoT.Edge.Application.Features.Config.SchemaReconciliation;
 
 public sealed class IoMappingConfigValueStore(
-    IRepository<NetworkDeviceEntity> networkDevices,
-    IRepository<IoMappingEntity> ioMappings,
+    IReadRepository<NetworkDeviceEntity> networkDevices,
+    IReadRepository<IoMappingEntity> ioMappings,
+    IEdgeUnitOfWorkFactory unitOfWorkFactory,
     ModuleHardwareProfileResolver hardwareProfileResolver) : IConfigValueStore, IRepairableConfigValueStore
 {
     public string SchemaId => IoMappingSchemaIds.Signals;
@@ -59,8 +60,11 @@ public sealed class IoMappingConfigValueStore(
             businessGroup);
         entity.UpdateSortOrder(sortOrder);
         entity.UpdateMetadata(signalKey, dataType, direction, category, businessGroup, remark);
-        ioMappings.Add(entity);
-        await ioMappings.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await using var unitOfWork = await unitOfWorkFactory
+            .BeginAsync(cancellationToken)
+            .ConfigureAwait(false);
+        unitOfWork.Repository<IoMappingEntity>().Add(entity);
+        await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task DeleteAsync(string key, CancellationToken cancellationToken = default)
@@ -70,7 +74,11 @@ public sealed class IoMappingConfigValueStore(
             return;
         }
 
-        var candidates = await ioMappings
+        await using var unitOfWork = await unitOfWorkFactory
+            .BeginAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var repository = unitOfWork.Repository<IoMappingEntity>();
+        var candidates = await repository
             .GetListAsync(x => x.NetworkDeviceId == parsed.NetworkDeviceId, cancellationToken)
             .ConfigureAwait(false);
         var matches = candidates
@@ -83,10 +91,10 @@ public sealed class IoMappingConfigValueStore(
 
         foreach (var mapping in matches)
         {
-            ioMappings.Delete(mapping);
+            repository.Delete(mapping);
         }
 
-        await ioMappings.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task RepairExistingAsync(
@@ -105,7 +113,11 @@ public sealed class IoMappingConfigValueStore(
             return;
         }
 
-        var candidates = await ioMappings
+        await using var unitOfWork = await unitOfWorkFactory
+            .BeginAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var repository = unitOfWork.Repository<IoMappingEntity>();
+        var candidates = await repository
             .GetListAsync(x => x.NetworkDeviceId == parsed.NetworkDeviceId, cancellationToken)
             .ConfigureAwait(false);
         var changed = false;
@@ -124,13 +136,13 @@ public sealed class IoMappingConfigValueStore(
                 mapping.Category,
                 mapping.BusinessGroup,
                 desiredRemark);
-            ioMappings.Update(mapping);
+            repository.Update(mapping);
             changed = true;
         }
 
         if (changed)
         {
-            await ioMappings.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
     }
 

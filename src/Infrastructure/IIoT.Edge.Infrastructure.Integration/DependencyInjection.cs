@@ -106,8 +106,9 @@ public static class DependencyInjection
 
         services.AddHttpClient("CloudApi", client => client.Timeout = Timeout.InfiniteTimeSpan)
             .AddHttpMessageHandler<CloudExecutionPolicyHandler>()
-            .AddResilienceHandler("cloud-transient", builder =>
+            .AddResilienceHandler("cloud-transient", (builder, context) =>
             {
+                builder.TimeProvider = context.ServiceProvider.GetService<TimeProvider>();
                 var retryOptions = new HttpRetryStrategyOptions
                 {
                     MaxRetryAttempts = 3,

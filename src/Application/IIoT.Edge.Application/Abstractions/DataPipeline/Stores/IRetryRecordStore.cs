@@ -10,7 +10,11 @@ public sealed class ClaimedFailedCellBatch
 
 public interface IRetryRecordStore
 {
-    Task SaveAsync(CellCompletedRecord record, string failedTarget, string errorMessage);
+    Task SaveAsync(
+        CellCompletedRecord record,
+        string failedTarget,
+        string errorMessage,
+        CancellationToken cancellationToken = default);
 
     Task SaveRawAsync(string processType, string cellDataJson, string failedTarget, string errorMessage);
 

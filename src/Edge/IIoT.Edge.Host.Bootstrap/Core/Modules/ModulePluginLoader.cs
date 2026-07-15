@@ -47,6 +47,19 @@ public sealed class ModulePluginLoader : IModulePluginLoader
             ?? throw new InvalidOperationException(
                 $"无法根据入口类型 '{descriptor.EntryTypeName}' 创建插件 '{descriptor.ModuleId}'。");
 
-        return (IEdgeProcessModule)instance;
+        var module = (IEdgeProcessModule)instance;
+        if (!string.Equals(module.ModuleId, descriptor.ModuleId, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"插件清单 ModuleId '{descriptor.ModuleId}' 与运行时入口 ModuleId '{module.ModuleId}' 不一致。");
+        }
+
+        if (!string.Equals(module.ProcessType, descriptor.ProcessType, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"插件清单 ProcessType '{descriptor.ProcessType}' 与运行时入口 ProcessType '{module.ProcessType}' 不一致。");
+        }
+
+        return module;
     }
 }

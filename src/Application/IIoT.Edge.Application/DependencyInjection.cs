@@ -85,6 +85,7 @@ public static class DependencyInjection
         services.AddSingleton<IEdgeReleaseService, EdgeReleaseService>();
         services.AddSingleton<IEdgeRuntimeHeartbeatService, EdgeRuntimeHeartbeatService>();
         services.AddSingleton<IEdgeSyncDiagnosticsQuery, EdgeSyncDiagnosticsQuery>();
+        services.AddSingleton(new BackgroundServiceCoordinatorOptions());
         services.AddSingleton<IBackgroundServiceCoordinator, BackgroundServiceCoordinator>();
         return services;
     }

@@ -1,5 +1,5 @@
 using IIoT.Edge.Application.Abstractions.Cache;
-using IIoT.Edge.Infrastructure.Persistence.EfCore.Caching.Memory;
+using IIoT.Edge.Application.Common.Caching.Memory;
 using IIoT.Edge.Infrastructure.Persistence.EfCore.Repositories;
 using IIoT.Edge.SharedKernel.Repository;
 using Microsoft.EntityFrameworkCore;
@@ -14,14 +14,14 @@ public static class DependencyInjection
         string dbPath)
     {
         var sqliteConnection = new EdgeSqliteConnection();
-        sqliteConnection.EnsureRuntimePragmas(dbPath);
 
         services.AddSingleton<IEdgeSqliteConnection>(sqliteConnection);
+        services.AddSingleton(new EdgeSqliteDatabasePath(Path.GetFullPath(dbPath)));
         services.AddDbContextFactory<EdgeDbContext>(
             options => options.UseSqlite(sqliteConnection.BuildConnectionString(dbPath)));
 
         services.AddSingleton(typeof(IReadRepository<>), typeof(EfReadRepository<>));
-        services.AddSingleton(typeof(IRepository<>), typeof(EfRepository<>));
+        services.AddSingleton<IEdgeUnitOfWorkFactory, EdgeUnitOfWorkFactory>();
         services.AddSingleton<IEdgeCacheService, EdgeMemoryCacheService>();
         services.AddSingleton<IEdgeSqliteSchemaRepair, EdgeSqliteSchemaRepair>();
 
@@ -30,10 +30,17 @@ public static class DependencyInjection
 
     public static void ApplyMigrations(this IServiceProvider serviceProvider)
     {
+        var sqliteConnection = serviceProvider.GetService<IEdgeSqliteConnection>();
+        var databasePath = serviceProvider.GetService<EdgeSqliteDatabasePath>();
+        if (sqliteConnection is not null && databasePath is not null)
+            sqliteConnection.EnsureRuntimePragmas(databasePath.Value);
+
         var factory = serviceProvider.GetRequiredService<IDbContextFactory<EdgeDbContext>>();
         var schemaRepair = serviceProvider.GetRequiredService<IEdgeSqliteSchemaRepair>();
         using var db = factory.CreateDbContext();
         db.Database.Migrate();
         schemaRepair.Repair(db);
     }
+
+    internal sealed record EdgeSqliteDatabasePath(string Value);
 }

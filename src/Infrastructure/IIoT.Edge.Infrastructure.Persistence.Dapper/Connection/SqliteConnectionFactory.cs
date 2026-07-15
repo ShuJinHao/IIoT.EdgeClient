@@ -34,14 +34,6 @@ public class SqliteConnectionFactory
         return connection;
     }
 
-    public async Task<IDbConnection> CreateAsync(string dbName)
-    {
-        var connection = new SqliteConnection(BuildConnectionString(dbName));
-        await connection.OpenAsync().ConfigureAwait(false);
-        await ApplyPragmasAsync(connection).ConfigureAwait(false);
-        return connection;
-    }
-
     public string GetDbPath(string dbName)
         => Path.Combine(_dbDirectory, $"{dbName}.db");
 
@@ -62,13 +54,6 @@ public class SqliteConnectionFactory
         ExecutePragma(connection, $"PRAGMA busy_timeout={BusyTimeoutMs};");
     }
 
-    private static async Task ApplyPragmasAsync(SqliteConnection connection)
-    {
-        await ExecutePragmaAsync(connection, "PRAGMA journal_mode=WAL;").ConfigureAwait(false);
-        await ExecutePragmaAsync(connection, "PRAGMA foreign_keys=ON;").ConfigureAwait(false);
-        await ExecutePragmaAsync(connection, $"PRAGMA busy_timeout={BusyTimeoutMs};").ConfigureAwait(false);
-    }
-
     private static void ExecutePragma(SqliteConnection connection, string pragma)
     {
         using var command = connection.CreateCommand();
@@ -76,10 +61,4 @@ public class SqliteConnectionFactory
         command.ExecuteNonQuery();
     }
 
-    private static async Task ExecutePragmaAsync(SqliteConnection connection, string pragma)
-    {
-        await using var command = connection.CreateCommand();
-        command.CommandText = pragma;
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
-    }
 }

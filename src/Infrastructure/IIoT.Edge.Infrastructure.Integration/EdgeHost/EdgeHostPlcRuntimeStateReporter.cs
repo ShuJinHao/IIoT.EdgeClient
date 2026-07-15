@@ -44,7 +44,10 @@ public sealed class EdgeHostPlcRuntimeStateReporter(
                 DateTime.UtcNow,
                 states);
             var result = await cloudHttp
-                .PostAsync(endpointProvider.GetEdgeHostPlcRuntimeStatesPath(), payload)
+                .PostAsync(
+                    endpointProvider.GetEdgeHostPlcRuntimeStatesPath(),
+                    payload,
+                    cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
 
             if (result.IsSuccess)

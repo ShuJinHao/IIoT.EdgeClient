@@ -2,6 +2,13 @@ using System.Threading;
 
 namespace IIoT.Edge.Shell.Core;
 
+internal enum SingleInstanceMutexAcquireResult
+{
+    Acquired,
+    AlreadyOwned,
+    Unavailable
+}
+
 internal sealed class SingleInstanceMutexHandle : IDisposable
 {
     private Mutex? _mutex;
@@ -9,19 +16,43 @@ internal sealed class SingleInstanceMutexHandle : IDisposable
     public bool OwnsMutex { get; private set; }
 
     public bool TryAcquire(string mutexName)
+        => TryAcquireNonBlocking(mutexName, out _) == SingleInstanceMutexAcquireResult.Acquired;
+
+    public SingleInstanceMutexAcquireResult TryAcquireNonBlocking(
+        string mutexName,
+        out Exception? failure)
     {
         Release();
 
-        var mutex = new Mutex(true, mutexName, out var createdNew);
-        if (createdNew)
+        Mutex? mutex = null;
+        try
         {
+            if (string.IsNullOrWhiteSpace(mutexName)
+                || mutexName.Contains('\0')
+                || mutexName.Length > 256)
+            {
+                throw new ArgumentException("命名互斥量名称无效。", nameof(mutexName));
+            }
+
+            mutex = new Mutex(initiallyOwned: true, mutexName, out var createdNew);
+            if (!createdNew)
+            {
+                mutex.Dispose();
+                failure = null;
+                return SingleInstanceMutexAcquireResult.AlreadyOwned;
+            }
+
             _mutex = mutex;
             OwnsMutex = true;
-            return true;
+            failure = null;
+            return SingleInstanceMutexAcquireResult.Acquired;
         }
-
-        mutex.Dispose();
-        return false;
+        catch (Exception ex)
+        {
+            mutex?.Dispose();
+            failure = ex;
+            return SingleInstanceMutexAcquireResult.Unavailable;
+        }
     }
 
     public void Release()

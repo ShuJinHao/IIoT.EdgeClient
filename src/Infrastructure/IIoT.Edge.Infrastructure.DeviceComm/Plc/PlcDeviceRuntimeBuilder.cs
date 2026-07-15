@@ -16,7 +16,7 @@ namespace IIoT.Edge.Infrastructure.DeviceComm.Plc;
 
 public sealed class PlcDeviceRuntimeBuilder
 {
-    private readonly IRepository<IoMappingEntity> _ioMappings;
+    private readonly IReadRepository<IoMappingEntity> _ioMappings;
     private readonly IPlcDataStore _dataStore;
     private readonly IPlcServiceFactory _plcServiceFactory;
     private readonly IProductionContextStore _contextStore;
@@ -28,7 +28,7 @@ public sealed class PlcDeviceRuntimeBuilder
     private readonly IModuleParamRoleProvider? _moduleParamRoleProvider;
 
     public PlcDeviceRuntimeBuilder(
-        IRepository<IoMappingEntity> ioMappings,
+        IReadRepository<IoMappingEntity> ioMappings,
         IPlcDataStore dataStore,
         IPlcServiceFactory plcServiceFactory,
         IProductionContextStore contextStore,

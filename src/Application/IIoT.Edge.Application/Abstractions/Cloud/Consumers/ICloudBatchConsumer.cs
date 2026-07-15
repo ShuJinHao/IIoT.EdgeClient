@@ -7,6 +7,8 @@ namespace IIoT.Edge.Application.Abstractions.Cloud;
 /// </summary>
 public interface ICloudBatchConsumer
 {
+    CloudCallResult ValidateBatchRecord(CellCompletedRecord record);
+
     Task<CloudCallResult> ProcessBatchAsync(
         IReadOnlyList<CellCompletedRecord> records,
         CancellationToken cancellationToken = default);

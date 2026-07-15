@@ -15,7 +15,8 @@ public interface ICloudSystemSwitchMigration
 /// 迁移按系统开关 AND 全部旧插件开关计算，缺失、冲突或非法值均关闭。
 /// </summary>
 public sealed class CloudSystemSwitchMigration(
-    IRepository<SystemConfigEntity> systemConfigs,
+    IReadRepository<SystemConfigEntity> systemConfigs,
+    IEdgeUnitOfWorkFactory unitOfWorkFactory,
     IEdgeCacheService cache,
     ICloudProfileSwitchProjectionWriter projectionWriter) : ICloudSystemSwitchMigration
 {
@@ -51,15 +52,22 @@ public sealed class CloudSystemSwitchMigration(
 
         if (enabled)
         {
-            await ReplaceSystemSwitchAsync(enabled, includeMarker: false, cancellationToken).ConfigureAwait(false);
-            await projectionWriter.WriteAsync(enabled, cancellationToken).ConfigureAwait(false);
-            systemConfigs.Add(CreateMigrationMarker());
-            await systemConfigs.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await ReplaceSystemSwitchAsync(enabled, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await projectionWriter.WriteAsync(enabled, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                await ReplaceSystemSwitchAsync(enabled: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+                await projectionWriter.WriteAsync(enabled: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+                throw;
+            }
         }
         else
         {
             await projectionWriter.WriteAsync(enabled, cancellationToken).ConfigureAwait(false);
-            await ReplaceSystemSwitchAsync(enabled, includeMarker: true, cancellationToken).ConfigureAwait(false);
+            await ReplaceSystemSwitchAsync(enabled, cancellationToken).ConfigureAwait(false);
         }
 
         cache.Remove(ParameterCacheKeys.SystemAll);
@@ -68,13 +76,22 @@ public sealed class CloudSystemSwitchMigration(
 
     private async Task ReplaceSystemSwitchAsync(
         bool enabled,
-        bool includeMarker,
         CancellationToken cancellationToken)
     {
-        await systemConfigs.ExecuteDeleteAsync(
-            static config => config.Key == CloudApiConfigParamSchema.Enabled
-                             || config.Key == MigrationMarkerKey,
-            cancellationToken).ConfigureAwait(false);
+        await using var unitOfWork = await unitOfWorkFactory
+            .BeginAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var repository = unitOfWork.Repository<SystemConfigEntity>();
+        var existing = await repository
+            .GetListAsync(
+                static config => config.Key == CloudApiConfigParamSchema.Enabled
+                                 || config.Key == MigrationMarkerKey,
+                cancellationToken)
+            .ConfigureAwait(false);
+        foreach (var config in existing)
+        {
+            repository.Delete(config);
+        }
 
         var systemEntity = SystemConfigEntity.Create(
             CloudApiConfigParamSchema.Enabled,
@@ -82,13 +99,9 @@ public sealed class CloudSystemSwitchMigration(
             "当前 machine profile 的 Cloud 通信总开关。");
         var descriptor = CloudApiConfigParamSchema.Find(CloudApiConfigParamSchema.Enabled);
         systemEntity.UpdateSortOrder(descriptor?.SortOrder ?? 0);
-        systemConfigs.Add(systemEntity);
-        if (includeMarker)
-        {
-            systemConfigs.Add(CreateMigrationMarker());
-        }
-
-        await systemConfigs.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        repository.Add(systemEntity);
+        repository.Add(CreateMigrationMarker());
+        await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private static SystemConfigEntity CreateMigrationMarker()

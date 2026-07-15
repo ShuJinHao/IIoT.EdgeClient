@@ -6,7 +6,8 @@ using IIoT.Edge.SharedKernel.Repository;
 namespace IIoT.Edge.Application.Features.Config.SchemaReconciliation;
 
 public sealed class CloudApiConfigValueStore(
-    IRepository<SystemConfigEntity> systemConfigs,
+    IReadRepository<SystemConfigEntity> systemConfigs,
+    IEdgeUnitOfWorkFactory unitOfWorkFactory,
     IEdgeCacheService cache) : IConfigValueStore
 {
     public string SchemaId => CloudApiConfigSchemaIds.CloudApi;
@@ -30,8 +31,11 @@ public sealed class CloudApiConfigValueStore(
             item.DefaultValue,
             CloudApiConfigSchemaSource.GetDescription(item));
         entity.UpdateSortOrder(CloudApiConfigSchemaSource.GetSortOrder(item));
-        systemConfigs.Add(entity);
-        await systemConfigs.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await using var unitOfWork = await unitOfWorkFactory
+            .BeginAsync(cancellationToken)
+            .ConfigureAwait(false);
+        unitOfWork.Repository<SystemConfigEntity>().Add(entity);
+        await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
         cache.Remove(ParameterCacheKeys.SystemAll);
     }
 
@@ -42,11 +46,21 @@ public sealed class CloudApiConfigValueStore(
             return;
         }
 
-        var deleted = await systemConfigs
-            .ExecuteDeleteAsync(x => x.Key == key, cancellationToken)
+        await using var unitOfWork = await unitOfWorkFactory
+            .BeginAsync(cancellationToken)
             .ConfigureAwait(false);
-        if (deleted > 0)
+        var repository = unitOfWork.Repository<SystemConfigEntity>();
+        var existing = await repository
+            .GetListAsync(x => x.Key == key, cancellationToken)
+            .ConfigureAwait(false);
+        foreach (var config in existing)
         {
+            repository.Delete(config);
+        }
+
+        if (existing.Count > 0)
+        {
+            await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
             cache.Remove(ParameterCacheKeys.SystemAll);
         }
     }

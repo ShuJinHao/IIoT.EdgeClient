@@ -1,6 +1,9 @@
+using IIoT.Edge.Application.Modules.Diagnostics;
+using IIoT.Edge.Host.Bootstrap.Modules;
 using IIoT.Edge.SharedKernel.Configuration;
 using Microsoft.Extensions.Configuration;
 using System.IO;
+using System.Text.Json;
 
 namespace IIoT.Edge.Shell.Core;
 
@@ -16,6 +19,8 @@ public sealed record ShellConfigurationLoadResult(
     public string? ExternalMachineProfilePath { get; init; }
 
     public bool IsExternalMachineProfileLoaded { get; init; }
+
+    public IReadOnlyList<StartupDiagnosticIssue> Issues { get; init; } = [];
 }
 
 public interface IShellConfigurationLoader
@@ -25,66 +30,105 @@ public interface IShellConfigurationLoader
 
 public sealed class ShellConfigurationLoader : IShellConfigurationLoader
 {
+    private static readonly JsonDocumentOptions JsonOptions = new()
+    {
+        AllowTrailingCommas = true,
+        CommentHandling = JsonCommentHandling.Skip
+    };
+
+    private readonly IModuleCatalog _moduleCatalog;
+
+    public ShellConfigurationLoader(IModuleCatalog? moduleCatalog = null)
+    {
+        _moduleCatalog = moduleCatalog
+            ?? new DirectoryModuleCatalog(
+                new ModulePluginLoader(new ModulePluginAssemblyResolver()),
+                new ModulePluginCompatibilityPolicy());
+    }
+
     public ShellConfigurationLoadResult Load(string baseDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
 
-        var environmentName = GetEnvironmentName();
+        var issues = new List<StartupDiagnosticIssue>();
+        var normalizedBaseDirectory = Path.GetFullPath(baseDirectory);
+        var environmentName = GetEnvironmentName(issues);
+        var baseSettings = ReadJsonSettings(
+            Path.Combine(normalizedBaseDirectory, "appsettings.json"),
+            "APPSETTINGS_BASE_UNAVAILABLE",
+            required: true,
+            issues);
+        var environmentSettings = ReadJsonSettings(
+            Path.Combine(normalizedBaseDirectory, $"appsettings.{environmentName}.json"),
+            "APPSETTINGS_ENVIRONMENT_INVALID",
+            required: false,
+            issues);
         var bootstrapConfiguration = new ConfigurationBuilder()
-            .SetBasePath(baseDirectory)
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-            .AddJsonFile($"appsettings.{environmentName}.json", optional: true, reloadOnChange: true)
+            .AddInMemoryCollection(baseSettings)
+            .AddInMemoryCollection(environmentSettings)
             .AddEnvironmentVariables()
             .Build();
 
-        var machineProfile = bootstrapConfiguration["Shell:MachineProfile"]?.Trim();
-        var machineProfileFileName = string.IsNullOrWhiteSpace(machineProfile)
+        var requestedMachineProfile = bootstrapConfiguration["Shell:MachineProfile"]?.Trim();
+        var machineProfile = IsSafeFileNameSegment(requestedMachineProfile)
+            ? requestedMachineProfile
+            : null;
+        if (!string.IsNullOrWhiteSpace(requestedMachineProfile) && machineProfile is null)
+        {
+            issues.Add(StartupDiagnosticIssueFactory.Create(
+                "MACHINE_PROFILE_NAME_INVALID",
+                $"机型配置名称包含非法路径字符，已忽略并使用 Default：{requestedMachineProfile}。"));
+        }
+
+        var machineProfileFileName = machineProfile is null
             ? null
             : $"appsettings.machine.{machineProfile}.json";
         var packagedMachineProfilePath = machineProfileFileName is null
             ? null
-            : Path.Combine(baseDirectory, machineProfileFileName);
-        var packagedMachineProfileLoaded = packagedMachineProfilePath is not null
-            && File.Exists(packagedMachineProfilePath);
-        var externalMachineProfilePath = string.IsNullOrWhiteSpace(machineProfile)
+            : Path.Combine(normalizedBaseDirectory, machineProfileFileName);
+        var externalMachineProfilePath = machineProfile is null
             ? null
-            : EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(machineProfile, baseDirectory);
+            : TryResolveExternalMachineProfilePath(machineProfile, normalizedBaseDirectory, issues);
 
         if (externalMachineProfilePath is not null)
         {
-            TryInitializeExternalMachineProfile(packagedMachineProfilePath, externalMachineProfilePath);
+            TryInitializeExternalMachineProfile(
+                packagedMachineProfilePath,
+                externalMachineProfilePath,
+                issues);
         }
 
-        var externalMachineProfileLoaded = externalMachineProfilePath is not null
-            && File.Exists(externalMachineProfilePath);
+        var packagedProfileSettings = ReadOptionalProfileSettings(
+            packagedMachineProfilePath,
+            "MACHINE_PROFILE_PACKAGED_INVALID",
+            issues,
+            out var packagedMachineProfileLoaded);
+        var externalProfileSettings = ReadOptionalProfileSettings(
+            externalMachineProfilePath,
+            "MACHINE_PROFILE_EXTERNAL_INVALID",
+            issues,
+            out var externalMachineProfileLoaded);
         var machineProfileLoaded = externalMachineProfileLoaded || packagedMachineProfileLoaded;
         var effectiveMachineProfilePath = externalMachineProfileLoaded
             ? externalMachineProfilePath
-            : packagedMachineProfilePath;
+            : packagedMachineProfileLoaded
+                ? packagedMachineProfilePath
+                : null;
 
-        var configuration = new ConfigurationBuilder()
-            .SetBasePath(baseDirectory);
-
-        foreach (var pluginConfigPath in FindPluginDefaultConfigurationFiles(baseDirectory, bootstrapConfiguration))
+        var configuration = new ConfigurationBuilder();
+        foreach (var pluginDefaults in FindPluginDefaultConfigurations(
+                     normalizedBaseDirectory,
+                     bootstrapConfiguration,
+                     issues))
         {
-            configuration.AddJsonFile(pluginConfigPath, optional: true, reloadOnChange: false);
+            configuration.AddInMemoryCollection(pluginDefaults);
         }
 
         configuration
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-            .AddJsonFile($"appsettings.{environmentName}.json", optional: true, reloadOnChange: true);
-
-        if (packagedMachineProfilePath is not null)
-        {
-            configuration.AddJsonFile(packagedMachineProfilePath, optional: true, reloadOnChange: true);
-        }
-
-        if (externalMachineProfilePath is not null)
-        {
-            configuration.AddJsonFile(externalMachineProfilePath, optional: true, reloadOnChange: true);
-        }
-
-        configuration
+            .AddInMemoryCollection(baseSettings)
+            .AddInMemoryCollection(environmentSettings)
+            .AddInMemoryCollection(packagedProfileSettings)
+            .AddInMemoryCollection(externalProfileSettings)
             .AddEnvironmentVariables()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -106,47 +150,294 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
         {
             MachineProfilePath = effectiveMachineProfilePath,
             ExternalMachineProfilePath = externalMachineProfilePath,
-            IsExternalMachineProfileLoaded = externalMachineProfileLoaded
+            IsExternalMachineProfileLoaded = externalMachineProfileLoaded,
+            Issues = issues
         };
     }
 
-    private string GetEnvironmentName()
-        => Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+    private static string GetEnvironmentName(ICollection<StartupDiagnosticIssue> issues)
+    {
+        var requested = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
             ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
             ?? "Production";
+        var environmentName = requested.Trim();
+        if (IsSafeFileNameSegment(environmentName))
+            return environmentName;
 
-    private IReadOnlyList<string> FindPluginDefaultConfigurationFiles(string baseDirectory, IConfiguration configuration)
+        issues.Add(StartupDiagnosticIssueFactory.Create(
+            "SHELL_ENVIRONMENT_NAME_INVALID",
+            $"运行环境名称包含非法路径字符，已回退到 Production：{requested}。"));
+        return "Production";
+    }
+
+    private IReadOnlyList<IReadOnlyDictionary<string, string?>> FindPluginDefaultConfigurations(
+        string baseDirectory,
+        IConfiguration configuration,
+        ICollection<StartupDiagnosticIssue> issues)
     {
+        var enabledModuleIds = configuration
+            .GetSection("Modules:Enabled")
+            .Get<string[]>()
+            ?.Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Select(static value => value.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase)
+            ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (enabledModuleIds.Count == 0)
+            return [];
+
         var configuredRoots = configuration
             .GetSection("Modules:PluginRoots")
             .Get<string[]>()
             ?? [];
-        var pluginRoots = configuredRoots
-            .Where(static path => !string.IsNullOrWhiteSpace(path))
-            .Select(path => ResolveConfiguredPluginRoot(baseDirectory, path))
-            .ToList();
-        if (pluginRoots.Count == 0)
+        var pluginRoots = new List<string>();
+        foreach (var configuredRoot in configuredRoots.Where(static path => !string.IsNullOrWhiteSpace(path)))
         {
-            pluginRoots.Add(EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(baseDirectory));
+            try
+            {
+                pluginRoots.Add(EdgeClientProgramDataPaths.ResolveConfiguredPluginRoot(
+                    baseDirectory,
+                    configuredRoot));
+            }
+            catch (Exception ex)
+            {
+                issues.Add(StartupDiagnosticIssueFactory.Create(
+                    "PLUGIN_ROOT_PATH_INVALID",
+                    $"插件根目录配置无效，已忽略“{configuredRoot}”：{ex.Message}"));
+            }
         }
 
-        return pluginRoots
-            .Where(Directory.Exists)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .SelectMany(static (pluginRoot, rootIndex) => Directory
-                .GetFiles(pluginRoot, "*.module.json", SearchOption.AllDirectories)
-                .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
-                .Select(path => new { Path = path, RootIndex = rootIndex }))
-            .OrderBy(static item => item.RootIndex)
-            .ThenBy(static item => item.Path, StringComparer.OrdinalIgnoreCase)
-            .Select(static item => item.Path)
-            .ToArray();
+        if (pluginRoots.Count == 0)
+            pluginRoots.Add(EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(baseDirectory));
+
+        var result = new List<IReadOnlyDictionary<string, string?>>();
+        foreach (var pluginRoot in pluginRoots.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (!Directory.Exists(pluginRoot))
+                continue;
+
+            ModuleCatalogDiscoveryResult discovery;
+            try
+            {
+                discovery = _moduleCatalog.DiscoverModules(pluginRoot);
+            }
+            catch (Exception ex)
+            {
+                issues.Add(StartupDiagnosticIssueFactory.Create(
+                    "PLUGIN_DEFAULT_DISCOVERY_FAILED",
+                    $"扫描插件默认配置失败，已继续启动：{pluginRoot}；{ex.Message}"));
+                continue;
+            }
+
+            foreach (var discoveryIssue in discovery.Issues)
+            {
+                issues.Add(StartupDiagnosticIssueFactory.Create(
+                    discoveryIssue.Code,
+                    discoveryIssue.Message,
+                    discoveryIssue.ModuleId));
+            }
+
+            foreach (var descriptor in discovery.Modules
+                         .Where(descriptor => enabledModuleIds.Contains(descriptor.ModuleId)))
+            {
+                foreach (var configPath in EnumeratePluginDefaultFiles(descriptor, issues))
+                {
+                    var settings = ReadJsonSettings(
+                        configPath,
+                        "PLUGIN_DEFAULT_CONFIG_INVALID",
+                        required: true,
+                        issues);
+                    var requiredPrefix = $"Modules:{descriptor.ModuleId}";
+                    var scopedSettings = settings
+                        .Where(pair => pair.Key.StartsWith(
+                            requiredPrefix + ":",
+                            StringComparison.OrdinalIgnoreCase))
+                        .ToDictionary(
+                            static pair => pair.Key,
+                            static pair => pair.Value,
+                            StringComparer.OrdinalIgnoreCase);
+                    if (settings.Keys.Any(key => !key.StartsWith(
+                            requiredPrefix + ":",
+                            StringComparison.OrdinalIgnoreCase)))
+                    {
+                        issues.Add(StartupDiagnosticIssueFactory.Create(
+                            "PLUGIN_DEFAULT_SCOPE_REJECTED",
+                            $"插件“{descriptor.ModuleId}”的默认配置包含宿主或其他插件键，越界键已忽略：{configPath}",
+                            descriptor.ModuleId));
+                    }
+
+                    if (scopedSettings.Count > 0)
+                        result.Add(scopedSettings);
+                }
+            }
+        }
+
+        return result;
     }
 
-    private static string ResolveConfiguredPluginRoot(string baseDirectory, string path)
-        => EdgeClientProgramDataPaths.ResolveConfiguredPluginRoot(baseDirectory, path);
+    private static IReadOnlyList<string> EnumeratePluginDefaultFiles(
+        ModulePluginDescriptor descriptor,
+        ICollection<StartupDiagnosticIssue> issues)
+    {
+        try
+        {
+            var candidates = Directory.EnumerateFiles(
+                    descriptor.PluginDirectory,
+                    "*.module.json",
+                    SearchOption.TopDirectoryOnly)
+                .Concat(Directory.Exists(Path.Combine(descriptor.PluginDirectory, "Config"))
+                    ? Directory.EnumerateFiles(
+                        Path.Combine(descriptor.PluginDirectory, "Config"),
+                        "*.module.json",
+                        SearchOption.TopDirectoryOnly)
+                    : []);
+            var result = new List<string>();
+            foreach (var candidate in candidates.OrderBy(static path => path, StringComparer.OrdinalIgnoreCase))
+            {
+                var physicalPath = PluginPathBoundary.ResolveExistingPhysicalPath(candidate);
+                if (!PluginPathBoundary.IsWithin(descriptor.PluginDirectory, physicalPath))
+                {
+                    issues.Add(StartupDiagnosticIssueFactory.Create(
+                        "PLUGIN_DEFAULT_PATH_ESCAPE",
+                        $"插件“{descriptor.ModuleId}”的默认配置真实路径越出 staged 目录，已忽略：{candidate}",
+                        descriptor.ModuleId));
+                    continue;
+                }
 
-    private static void TryInitializeExternalMachineProfile(string? sourcePath, string targetPath)
+                result.Add(physicalPath);
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            issues.Add(StartupDiagnosticIssueFactory.Create(
+                "PLUGIN_DEFAULT_ENUMERATION_FAILED",
+                $"无法枚举插件“{descriptor.ModuleId}”的默认配置，已继续启动：{ex.Message}",
+                descriptor.ModuleId));
+            return [];
+        }
+    }
+
+    private static IReadOnlyDictionary<string, string?> ReadOptionalProfileSettings(
+        string? path,
+        string issueCode,
+        ICollection<StartupDiagnosticIssue> issues,
+        out bool loaded)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            loaded = false;
+            return new Dictionary<string, string?>();
+        }
+
+        var issueCount = issues.Count;
+        var settings = ReadJsonSettings(path, issueCode, required: true, issues);
+        loaded = issues.Count == issueCount;
+        return loaded ? settings : new Dictionary<string, string?>();
+    }
+
+    private static IReadOnlyDictionary<string, string?> ReadJsonSettings(
+        string path,
+        string issueCode,
+        bool required,
+        ICollection<StartupDiagnosticIssue> issues)
+    {
+        if (!File.Exists(path))
+        {
+            if (required)
+            {
+                issues.Add(StartupDiagnosticIssueFactory.Create(
+                    issueCode,
+                    $"配置文件不存在，已使用安全空配置继续启动：{path}"));
+            }
+
+            return new Dictionary<string, string?>();
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(path), JsonOptions);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+                throw new JsonException("根节点必须是 JSON 对象。");
+
+            var result = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            Flatten(document.RootElement, parentPath: null, result);
+            return result;
+        }
+        catch (Exception ex) when (ex is IOException
+                                   or UnauthorizedAccessException
+                                   or JsonException)
+        {
+            issues.Add(StartupDiagnosticIssueFactory.Create(
+                issueCode,
+                $"配置文件无法读取或解析，已忽略并继续启动：{path}；{ex.Message}"));
+            return new Dictionary<string, string?>();
+        }
+    }
+
+    private static void Flatten(
+        JsonElement element,
+        string? parentPath,
+        IDictionary<string, string?> result)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (var property in element.EnumerateObject())
+                {
+                    Flatten(
+                        property.Value,
+                        string.IsNullOrEmpty(parentPath)
+                            ? property.Name
+                            : $"{parentPath}:{property.Name}",
+                        result);
+                }
+                break;
+            case JsonValueKind.Array:
+                var index = 0;
+                foreach (var item in element.EnumerateArray())
+                {
+                    Flatten(item, $"{parentPath}:{index}", result);
+                    index++;
+                }
+                break;
+            case JsonValueKind.Null:
+                if (!string.IsNullOrEmpty(parentPath))
+                    result[parentPath] = null;
+                break;
+            case JsonValueKind.String:
+                if (!string.IsNullOrEmpty(parentPath))
+                    result[parentPath] = element.GetString();
+                break;
+            default:
+                if (!string.IsNullOrEmpty(parentPath))
+                    result[parentPath] = element.GetRawText();
+                break;
+        }
+    }
+
+    private static string? TryResolveExternalMachineProfilePath(
+        string machineProfile,
+        string baseDirectory,
+        ICollection<StartupDiagnosticIssue> issues)
+    {
+        try
+        {
+            return EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(machineProfile, baseDirectory);
+        }
+        catch (Exception ex)
+        {
+            issues.Add(StartupDiagnosticIssueFactory.Create(
+                "MACHINE_PROFILE_EXTERNAL_PATH_INVALID",
+                $"无法解析外部机型配置路径，已继续使用基础配置：{ex.Message}"));
+            return null;
+        }
+    }
+
+    private static void TryInitializeExternalMachineProfile(
+        string? sourcePath,
+        string targetPath,
+        ICollection<StartupDiagnosticIssue> issues)
     {
         if (string.IsNullOrWhiteSpace(sourcePath)
             || !File.Exists(sourcePath)
@@ -159,17 +450,29 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
         {
             var directory = Path.GetDirectoryName(targetPath);
             if (!string.IsNullOrWhiteSpace(directory))
-            {
                 Directory.CreateDirectory(directory);
-            }
 
             File.Copy(sourcePath, targetPath, overwrite: false);
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            issues.Add(StartupDiagnosticIssueFactory.Create(
+                "MACHINE_PROFILE_EXTERNAL_INITIALIZATION_FAILED",
+                $"无法初始化外部机型配置，将继续使用可读配置：{ex.Message}"));
         }
-        catch (UnauthorizedAccessException)
+    }
+
+    private static bool IsSafeFileNameSegment(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)
+            || value is "." or ".."
+            || value.Contains("..", StringComparison.Ordinal)
+            || value.IndexOfAny([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar]) >= 0)
         {
+            return false;
         }
+
+        return value.All(static character =>
+            char.IsLetterOrDigit(character) || character is '-' or '_' or '.');
     }
 }

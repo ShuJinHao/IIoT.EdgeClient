@@ -37,15 +37,19 @@ public static class SystemConfigParamSaveHelper
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (keys.Count > 0)
         {
-            await repo.ExecuteDeleteAsync(config => keys.Contains(config.Key), cancellationToken);
+            var existing = await repo
+                .GetListAsync(config => keys.Contains(config.Key), cancellationToken)
+                .ConfigureAwait(false);
+            foreach (var config in existing)
+            {
+                repo.Delete(config);
+            }
         }
 
         foreach (var config in configs)
         {
             repo.Add(config);
         }
-
-        await repo.SaveChangesAsync(cancellationToken);
     }
 
     private static string NormalizeKey(string? key)

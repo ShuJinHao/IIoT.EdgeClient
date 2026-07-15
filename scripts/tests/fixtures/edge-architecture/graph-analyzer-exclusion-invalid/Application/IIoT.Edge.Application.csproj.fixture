@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsEdgePluginTestFixture>true</IsEdgePluginTestFixture>
+    <IsEdgeArchitectureGraphFixture>true</IsEdgeArchitectureGraphFixture>
+    <EdgeArchitectureFixtureRepositoryRoot>$(MSBuildThisFileDirectory)..</EdgeArchitectureFixtureRepositoryRoot>
+    <EdgeArchitectureFixtureSolutionPath>$(MSBuildThisFileDirectory)..\EdgeArchitecture.Invalid.slnx</EdgeArchitectureFixtureSolutionPath>
+  </PropertyGroup>
+</Project>

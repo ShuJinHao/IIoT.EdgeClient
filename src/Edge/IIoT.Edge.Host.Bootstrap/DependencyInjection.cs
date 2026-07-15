@@ -7,6 +7,7 @@ using IIoT.Edge.Application.Abstractions.Context;
 using IIoT.Edge.Application.Abstractions.DataPipeline;
 using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Abstractions.Plc;
@@ -68,13 +69,9 @@ public static class DependencyInjection
 
         var enabledModules = modules.ToList();
         var discoveredModuleList = discoveredModules.ToArray();
-        var moduleCatalogIssueList = moduleCatalogIssues.ToArray();
-        var bootstrapDiagnosticIssueList = bootstrapDiagnosticIssues?.ToArray() ?? [];
+        var moduleCatalogIssueList = moduleCatalogIssues.ToList();
+        var bootstrapDiagnosticIssueList = bootstrapDiagnosticIssues?.ToList() ?? [];
         var configuredEnabledModuleList = configuredEnabledModuleIds.ToArray();
-        var moduleAssemblies = enabledModules
-            .Select(static module => module.GetType().Assembly)
-            .Distinct()
-            .ToArray();
         var efDbPath = Path.Combine(runtimePaths.DatabaseDirectory, "edge.db");
 
         services.AddSingleton(configuration);
@@ -87,7 +84,14 @@ public static class DependencyInjection
         var productionTimeOptions =
             configuration.GetSection(ProductionTimeOptions.SectionName).Get<ProductionTimeOptions>()
             ?? new ProductionTimeOptions();
-        productionTimeOptions.Validate();
+        if (!ProductionTimeProvider.IsTimeZoneAvailable(productionTimeOptions.TimeZoneId))
+        {
+            var invalidTimeZoneId = productionTimeOptions.TimeZoneId;
+            productionTimeOptions.TimeZoneId = "Asia/Shanghai";
+            bootstrapDiagnosticIssueList.Add(StartupDiagnosticIssueFactory.Create(
+                "PRODUCTION_TIME_ZONE_INVALID",
+                $"ProductionTime:TimeZoneId 无效，已回退到 Asia/Shanghai 并继续启动：{invalidTimeZoneId ?? "<null>"}。"));
+        }
         services.AddSingleton(productionTimeOptions);
         services.AddSingleton<IProductionTimeProvider, ProductionTimeProvider>();
         services.AddSingleton(viewRegistry);
@@ -123,6 +127,25 @@ public static class DependencyInjection
         services.AddDeviceCommInfrastructure();
         services.AddEdgeRuntime(runtimePaths);
 
+        services.AddShellPresentation();
+        services.AddNavigationPresentation();
+        services.AddPanelPresentation();
+#if DEBUG
+        services.AddVisualTestDataPresentation(configuration);
+#endif
+
+        RegisterHostViews(new HostViewRegistry(viewRegistry));
+        enabledModules = RegisterModules(
+            services,
+            viewRegistry,
+            configuration,
+            enabledModules,
+            cellDataTypeRegistry,
+            moduleCatalogIssueList);
+        var moduleAssemblies = enabledModules
+            .Select(static module => module.GetType().Assembly)
+            .Distinct()
+            .ToArray();
         services.AddMediatR(cfg =>
         {
             var licenseKey = ResolveMediatRLicenseKey(configuration);
@@ -139,16 +162,6 @@ public static class DependencyInjection
                     ..moduleAssemblies
                 ]);
         });
-
-        services.AddShellPresentation();
-        services.AddNavigationPresentation();
-        services.AddPanelPresentation();
-#if DEBUG
-        services.AddVisualTestDataPresentation(configuration);
-#endif
-
-        RegisterHostViews(new HostViewRegistry(viewRegistry));
-        RegisterModules(services, viewRegistry, configuration, enabledModules, cellDataTypeRegistry);
         viewRegistry.RegisterPanelViews();
 
         AddLongRunningManagedBackgroundTask(
@@ -241,12 +254,17 @@ public static class DependencyInjection
 
     private static void AddLongRunningManagedBackgroundTask(IServiceCollection services, Func<IServiceProvider, IBackgroundTask> taskFactory)
         => services.AddSingleton<IManagedBackgroundService>(sp =>
-            new LongRunningBackgroundTaskService(taskFactory(sp)));
+            new LongRunningBackgroundTaskService(
+                taskFactory(sp),
+                sp.GetRequiredService<ILogService>()));
 
     private static void AddLongRunningManagedBackgroundTaskGroup(IServiceCollection services, string serviceName,
         Func<IServiceProvider, IEnumerable<IBackgroundTask>> taskFactory)
         => services.AddSingleton<IManagedBackgroundService>(sp =>
-            new LongRunningBackgroundTaskGroupService(serviceName, taskFactory(sp)));
+            new LongRunningBackgroundTaskGroupService(
+                serviceName,
+                taskFactory(sp),
+                sp.GetRequiredService<ILogService>()));
 
     private static string? FirstNonEmpty(params string?[] values)
         => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
@@ -269,12 +287,13 @@ public static class DependencyInjection
         });
     }
 
-    private static void RegisterModules(
+    private static List<IEdgeProcessModule> RegisterModules(
         IServiceCollection services,
         IViewRegistry viewRegistry,
         IConfiguration configuration,
         IReadOnlyCollection<IEdgeProcessModule> modules,
-        ICellDataTypeRegistry cellDataTypeRegistry)
+        ICellDataTypeRegistry cellDataTypeRegistry,
+        ICollection<ModuleCatalogIssue> issues)
     {
         var cellDataRegistry = new CellDataRegistry(cellDataTypeRegistry);
         var runtimeRegistry = new StationRuntimeRegistry();
@@ -286,46 +305,56 @@ public static class DependencyInjection
         services.AddSingleton<IProcessIntegrationRegistry>(integrationRegistry);
         services.AddSingleton<IModuleParamRegistry>(moduleParamRegistry);
 
-        ValidateModuleIdentity(modules);
+        var duplicateModuleIds = modules
+            .GroupBy(static module => module.ModuleId, StringComparer.OrdinalIgnoreCase)
+            .Where(static group => group.Count() > 1)
+            .Select(static group => group.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var duplicateProcessTypes = modules
+            .GroupBy(static module => module.ProcessType, StringComparer.OrdinalIgnoreCase)
+            .Where(static group => group.Count() > 1)
+            .Select(static group => group.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var transaction = new ModuleRegistrationTransaction(
+            services,
+            viewRegistry,
+            configuration,
+            cellDataRegistry,
+            runtimeRegistry,
+            integrationRegistry,
+            moduleParamRegistry);
+        var registeredModules = new List<IEdgeProcessModule>(modules.Count);
 
         foreach (var module in modules)
         {
-            services.AddSingleton<IEdgeProcessModule>(module);
-            var builder = new EdgeProcessModuleBuilder(
-                module.ModuleId,
-                module.ProcessType,
-                services,
-                configuration,
-                new ModuleViewRegistry(viewRegistry, module.ModuleId),
-                cellDataRegistry,
-                runtimeRegistry,
-                integrationRegistry,
-                moduleParamRegistry);
-
-            module.Configure(builder);
-        }
-    }
-
-    private static void ValidateModuleIdentity(IEnumerable<IEdgeProcessModule> modules)
-    {
-        var moduleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var processTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var module in modules)
-        {
-            if (!moduleIds.Add(module.ModuleId))
+            if (duplicateModuleIds.Contains(module.ModuleId)
+                || duplicateProcessTypes.Contains(module.ProcessType))
             {
-                throw new InvalidOperationException($"Duplicate ModuleId detected: {module.ModuleId}");
+                issues.Add(new ModuleCatalogIssue(
+                    "PLUGIN_IDENTITY_DUPLICATE",
+                    $"插件“{module.ModuleId}”的 ModuleId 或 ProcessType 重复，已拒绝注册。",
+                    module.ModuleId));
+                continue;
             }
 
-            if (!processTypes.Add(module.ProcessType))
+            try
             {
-                throw new InvalidOperationException($"Duplicate ProcessType detected: {module.ProcessType}");
+                transaction.Register(module);
+                registeredModules.Add(module);
+            }
+            catch (Exception ex)
+            {
+                issues.Add(new ModuleCatalogIssue(
+                    "PLUGIN_CONFIGURE_FAILED",
+                    $"插件“{module.ModuleId}”配置失败，已丢弃该插件的全部注册：{ex.Message}",
+                    module.ModuleId));
             }
         }
+
+        return registeredModules;
     }
 
-    private sealed class DelegatingBackgroundTask : IBackgroundTask
+    private sealed class DelegatingBackgroundTask : IStartupAwareBackgroundTask
     {
         private readonly Func<CancellationToken, Task> _startAsync;
         private readonly Func<CancellationToken, Task> _stopAsync;
@@ -343,6 +372,12 @@ public static class DependencyInjection
         public string TaskName { get; }
 
         public Task StartAsync(CancellationToken ct) => _startAsync(ct);
+
+        public BackgroundTaskRun StartWithStartup(CancellationToken cancellationToken)
+        {
+            var execution = _startAsync(cancellationToken);
+            return new BackgroundTaskRun(Task.CompletedTask, execution);
+        }
 
         public Task StopAsync(CancellationToken ct) => _stopAsync(ct);
     }

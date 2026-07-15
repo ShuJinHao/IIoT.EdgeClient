@@ -7,6 +7,11 @@ using System.Reflection;
 
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper;
 
+public sealed record DapperTableInitializationFailure(
+    string DbName,
+    string InitializerType,
+    Exception Exception);
+
 public static class DependencyInjection
 {
     /// <summary>
@@ -75,22 +80,62 @@ public static class DependencyInjection
     /// <summary>
     /// 容器构建后调用：初始化所有已注册的表
     /// </summary>
-    public static async Task InitializeDapperTablesAsync(
-        this IServiceProvider serviceProvider)
+    public static async Task<IReadOnlyList<DapperTableInitializationFailure>> InitializeDapperTablesAsync(
+        this IServiceProvider serviceProvider,
+        CancellationToken cancellationToken = default)
     {
         var factory = serviceProvider.GetRequiredService<SqliteConnectionFactory>();
         var initializers = serviceProvider.GetServices<ITableInitializer>();
+        var failures = new List<DapperTableInitializationFailure>();
 
         var groups = initializers.GroupBy(x => x.DbName);
 
         foreach (var group in groups)
         {
-            using var connection = factory.Create(group.Key);
-
-            foreach (var initializer in group)
+            cancellationToken.ThrowIfCancellationRequested();
+            System.Data.IDbConnection connection;
+            try
             {
-                await initializer.InitializeTableAsync(connection);
+                connection = factory.Create(group.Key);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                failures.AddRange(group.Select(initializer => new DapperTableInitializationFailure(
+                    group.Key,
+                    initializer.GetType().FullName ?? initializer.GetType().Name,
+                    ex)));
+                continue;
+            }
+
+            using (connection)
+            {
+                foreach (var initializer in group)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    try
+                    {
+                        await initializer.InitializeTableAsync(connection).ConfigureAwait(false);
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        failures.Add(new DapperTableInitializationFailure(
+                            group.Key,
+                            initializer.GetType().FullName ?? initializer.GetType().Name,
+                            ex));
+                    }
+                }
             }
         }
+
+        return failures;
     }
 }

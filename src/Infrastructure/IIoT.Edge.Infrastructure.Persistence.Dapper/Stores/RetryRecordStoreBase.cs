@@ -36,11 +36,12 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
     public async Task SaveAsync(
         CellCompletedRecord record,
         string failedTarget,
-        string errorMessage)
+        string errorMessage,
+        CancellationToken cancellationToken = default)
     {
         var cellData = record.CellData;
         var cellDataJson = _cellDataJsonSerializer.Serialize(cellData);
-        await SaveRawCoreAsync(cellData.ProcessType, cellDataJson, failedTarget, errorMessage, record).ConfigureAwait(false);
+        await SaveRawCoreAsync(cellData.ProcessType, cellDataJson, failedTarget, errorMessage, record, cancellationToken).ConfigureAwait(false);
     }
 
     public Task SaveRawAsync(
@@ -55,7 +56,8 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
         string cellDataJson,
         string failedTarget,
         string errorMessage,
-        CellCompletedRecord? sourceRecord)
+        CellCompletedRecord? sourceRecord,
+        CancellationToken cancellationToken = default)
     {
         var nowUtc = DateTime.UtcNow;
         var context = CreateContextRow(sourceRecord);
@@ -85,7 +87,7 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
             context.PlanSessionId,
             context.MainPlanCode,
             context.TraceBatchNumber
-        });
+        }, cancellationToken).ConfigureAwait(false);
 
         if (affectedRows <= 0)
         {

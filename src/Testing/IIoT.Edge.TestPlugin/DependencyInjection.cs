@@ -3,6 +3,7 @@ using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
 using IIoT.Edge.Application.Abstractions.Tasks;
 using IIoT.Edge.Application.Modules.Descriptors;
+using IIoT.Edge.Module.TestPlugin.Companion;
 using IIoT.Edge.SharedKernel.Context;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
 using Microsoft.Extensions.DependencyInjection;
@@ -51,3 +52,8 @@ public sealed class TestPluginCellData : CellDataBase
 public sealed class TestPluginView;
 
 public sealed class TestPluginViewModel;
+
+public static class TestPluginCompanionBridge
+{
+    public static string Identity => TestPluginCompanionMarker.Identity;
+}

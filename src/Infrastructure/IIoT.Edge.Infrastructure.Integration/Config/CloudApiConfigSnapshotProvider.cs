@@ -19,7 +19,6 @@ public sealed class CloudApiConfigSnapshotProvider(
             paths.IdentityDeviceLogin ?? string.Empty,
             paths.HumanIdentityRefresh ?? string.Empty,
             paths.DeviceLog ?? string.Empty,
-            paths.ProcessUpload ?? string.Empty,
             paths.PassStationBatchTemplate ?? string.Empty,
             paths.CapacityHourly ?? string.Empty,
             paths.CapacitySummary ?? string.Empty,

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable><IsTestProject>true</IsTestProject>
+    <TestKind>Conformance</TestKind><TestRuntime>Filesystem</TestRuntime><TestRuntimeDependencies>AssemblyLoad</TestRuntimeDependencies><TestRunnerMode>Serial</TestRunnerMode><TestCadence>PR</TestCadence><TestCapability>Plugins.HostConformance</TestCapability><TestRisk>P0</TestRisk><TestConcern>Compatibility</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Plugins</TestOwner><TestRuleId>EDGE-PLUGIN-TEST-SEAM-001</TestRuleId><TestRequired>true</TestRequired><UseEdgeTestingCore>true</UseEdgeTestingCore>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Edge\IIoT.Edge.Host.Bootstrap\IIoT.Edge.Host.Bootstrap.csproj" />
+    <ProjectReference Include="..\..\Edge\IIoT.Edge.Shell\IIoT.Edge.Shell.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.DeviceComm\IIoT.Edge.Infrastructure.DeviceComm.csproj" />
+    <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Sdk\IIoT.Edge.Module.Sdk.csproj" />
+    <ProjectReference Include="..\..\Testing\IIoT.Edge.TestPlugin\IIoT.Edge.TestPlugin.csproj">
+      <ExternallyResolved>true</ExternallyResolved>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Testing\IIoT.Edge.Testing.Core\IIoT.Edge.Testing.Core.csproj" />
+    <ProjectReference Include="..\..\Testing\IIoT.Edge.Testing.Modules\IIoT.Edge.Testing.Modules.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(EdgeTestForceEmptyPluginArtifacts)' != 'true'">
+    <PluginModuleProject Include="..\..\Testing\IIoT.Edge.TestPlugin\IIoT.Edge.TestPlugin.csproj" />
+  </ItemGroup>
+  <Target Name="ResolvePluginModuleArtifacts">
+    <MSBuild Projects="@(PluginModuleProject)" Targets="GetPluginArtifacts" BuildInParallel="false" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="PluginModuleArtifact" />
+    </MSBuild>
+  </Target>
+  <Target Name="CopyPluginModulesToTestOutput" AfterTargets="Build" DependsOnTargets="ResolvePluginModuleArtifacts">
+    <Error Condition="'@(PluginModuleArtifact)' == ''" Text="EDGE-PLUGIN-STAGING-001 no plugin module artifacts were resolved for the conformance-test runtime layout." />
+    <RemoveDir Directories="$(TargetDir)Modules" />
+    <Copy SourceFiles="@(PluginModuleArtifact)" DestinationFiles="@(PluginModuleArtifact -> '$(TargetDir)Modules\%(ModuleId)\%(ArtifactRelativePath)')" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

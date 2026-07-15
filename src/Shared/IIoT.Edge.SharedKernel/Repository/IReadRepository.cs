@@ -10,8 +10,6 @@ namespace IIoT.Edge.SharedKernel.Repository;
 /// </summary>
 public interface IReadRepository<T> where T : class, IAggregateRoot
 {
-    IQueryable<T> GetQueryable();
-
     Task<T?> GetByIdAsync<TKey>(TKey id, CancellationToken cancellationToken = default)
         where TKey : notnull;
 

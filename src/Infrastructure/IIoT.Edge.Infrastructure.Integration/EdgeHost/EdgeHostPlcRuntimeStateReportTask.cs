@@ -8,7 +8,7 @@ namespace IIoT.Edge.Infrastructure.Integration.EdgeHost;
 public sealed class EdgeHostPlcRuntimeStateReportTask(
     IEdgeHostPlcRuntimeStateReporter reporter,
     ILocalSystemRuntimeConfigService runtimeConfig,
-    ILogService logger) : IBackgroundTask
+    ILogService logger) : IStartupAwareBackgroundTask
 {
     private static readonly TimeSpan DefaultInterval = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan MinimumInterval = TimeSpan.FromSeconds(10);
@@ -17,9 +17,19 @@ public sealed class EdgeHostPlcRuntimeStateReportTask(
 
     public string TaskName => "Cloud.PlcRuntimeState";
 
-    public async Task StartAsync(CancellationToken ct)
+    public Task StartAsync(CancellationToken ct)
+        => StartWithStartup(ct).Execution;
+
+    public BackgroundTaskRun StartWithStartup(CancellationToken cancellationToken)
+    {
+        var startup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        return new BackgroundTaskRun(startup.Task, RunAsync(cancellationToken, startup));
+    }
+
+    private async Task RunAsync(CancellationToken ct, TaskCompletionSource startup)
     {
         logger.Info($"[PLC 状态上报] 已启动，间隔：{ResolveInterval().TotalSeconds:0}s");
+        startup.TrySetResult();
 
         while (!ct.IsCancellationRequested)
         {

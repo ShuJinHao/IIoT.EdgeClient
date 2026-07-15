@@ -101,7 +101,7 @@ public class SyncRecipeFromCloudHandler(IRecipeService recipeService)
     : IRequestHandler<SyncRecipeFromCloudCommand, bool>
 {
     public Task<bool> Handle(SyncRecipeFromCloudCommand request, CancellationToken cancellationToken)
-        => recipeService.PullFromCloudAsync();
+        => recipeService.PullFromCloudAsync(cancellationToken);
 }
 
 /// <summary>

@@ -1,0 +1,17 @@
+{
+  "stryker-config": {
+    "project": "IIoT.Edge.Domain.csproj",
+    "test-projects": [
+      "IIoT.Edge.Domain.Tests.csproj"
+    ],
+    "mutate": [
+      "Config/Aggregates/*.cs",
+      "Hardware/Aggregates/*.cs"
+    ],
+    "reporters": [
+      "json"
+    ],
+    "test-runner": "mtp",
+    "concurrency": 1
+  }
+}

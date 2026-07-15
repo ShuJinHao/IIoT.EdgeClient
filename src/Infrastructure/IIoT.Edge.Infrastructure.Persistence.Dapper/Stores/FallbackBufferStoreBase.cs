@@ -35,7 +35,11 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
         _cellDataJsonSerializer = cellDataJsonSerializer;
     }
 
-    public async Task SaveAsync(CellCompletedRecord record, string failedTarget, string errorMessage)
+    public async Task SaveAsync(
+        CellCompletedRecord record,
+        string failedTarget,
+        string errorMessage,
+        CancellationToken cancellationToken = default)
     {
         var cellData = record.CellData;
         var cellDataJson = _cellDataJsonSerializer.Serialize(cellData);
@@ -63,7 +67,7 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
             context.PlanSessionId,
             context.MainPlanCode,
             context.TraceBatchNumber
-        }).ConfigureAwait(false);
+        }, cancellationToken).ConfigureAwait(false);
 
         if (affectedRows <= 0)
         {

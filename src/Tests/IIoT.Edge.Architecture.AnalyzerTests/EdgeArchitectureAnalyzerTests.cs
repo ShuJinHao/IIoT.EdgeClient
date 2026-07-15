@@ -88,6 +88,29 @@ public sealed class EdgeArchitectureAnalyzerTests
     }
 
     [Fact]
+    public async Task GenericHelperConstructedRepositoryTypeArgument_ReportsDdd004()
+    {
+        var source = RepositoryPrelude(
+            "IIoT.Edge.Domain.Config.Aggregates",
+            "DeviceParamEntity") + """
+            public static class Resolver
+            {
+                public static object Resolve<T>() => new object();
+            }
+            public sealed class Consumer
+            {
+                public object Run() => Resolver.Resolve<
+                    IIoT.Edge.SharedKernel.Repository.IRepository<
+                        IIoT.Edge.Domain.Config.Aggregates.DeviceParamEntity>>();
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Application", [source]);
+
+        AssertSingle(diagnostics, "DDD004");
+    }
+
+    [Fact]
     public async Task EfNavigationAndMediatRNotification_DoNotInferAggregateOwnership()
     {
         var source = """
@@ -291,6 +314,23 @@ public sealed class EdgeArchitectureAnalyzerTests
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "WSARCH004");
     }
 
+    [Theory]
+    [InlineData("nested-generic")]
+    [InlineData("tuple")]
+    public async Task NestedRoleTypeReferences_ReportWsarch004(string form)
+    {
+        var infrastructure = CreateReference(
+            "IIoT.Edge.Infrastructure.Integration",
+            "namespace IIoT.Edge.Infrastructure.Integration { public sealed class CloudClient { } }");
+        var source = form == "nested-generic"
+            ? "public sealed class Handler { private System.Collections.Generic.List<IIoT.Edge.Infrastructure.Integration.CloudClient> clients = new(); }"
+            : "public sealed class Handler { private (int Count, IIoT.Edge.Infrastructure.Integration.CloudClient Client) state; }";
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Application", [source], infrastructure);
+
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "WSARCH004");
+    }
+
     [Fact]
     public async Task DomainUseOfApplicationSymbol_ReportsDdd001()
     {
@@ -427,15 +467,455 @@ public sealed class EdgeArchitectureAnalyzerTests
     public async Task ProductionTaskDirectUploader_ReportsEdgeOut001()
     {
         var source = PluginMetadata + TaskPrelude + """
-            public interface IProcessMesUploader
+            namespace IIoT.Edge.Application.Abstractions.Mes
             {
-                System.Threading.Tasks.Task UploadAsync();
+                public interface IProcessMesUploader
+                {
+                    System.Threading.Tasks.Task UploadAsync();
+                }
             }
             public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
             {
-                private readonly IProcessMesUploader uploader;
-                public Task(IProcessMesUploader uploader) => this.uploader = uploader;
+                private readonly IIoT.Edge.Application.Abstractions.Mes.IProcessMesUploader uploader;
+                public Task(IIoT.Edge.Application.Abstractions.Mes.IProcessMesUploader uploader) => this.uploader = uploader;
                 public System.Threading.Tasks.Task RunAsync() => uploader.UploadAsync();
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "EDGEOUT001");
+    }
+
+    [Fact]
+    public async Task ProductionTaskPropertyGetterUploader_ReportsEdgeOut001()
+    {
+        var source = PluginMetadata + TaskPrelude + """
+            namespace IIoT.Edge.Application.Abstractions.Cloud
+            {
+                public interface IProcessCloudUploader { System.Threading.Tasks.Task UploadAsync(); }
+            }
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader uploader;
+                public Task(IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader uploader) => this.uploader = uploader;
+                private System.Threading.Tasks.Task Trigger => uploader.UploadAsync();
+                public System.Threading.Tasks.Task RunAsync() => Trigger;
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "EDGEOUT001");
+    }
+
+    [Fact]
+    public async Task ProductionTaskPropertyGetterUnprotectedEnqueue_ReportsEdgeOut002()
+    {
+        var source = PluginMetadata + TaskPrelude + """
+            namespace IIoT.Edge.Application.Abstractions.DataPipeline
+            {
+                public interface IDataPipelineService { System.Threading.Tasks.Task EnqueueAsync(object record); }
+            }
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline;
+                public Task(IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline) => this.pipeline = pipeline;
+                private System.Threading.Tasks.Task Trigger => pipeline.EnqueueAsync(new object());
+                public System.Threading.Tasks.Task RunAsync() => Trigger;
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        AssertSingle(diagnostics, "EDGEOUT002");
+    }
+
+    [Fact]
+    public async Task ProductionTaskSafePropertyGetter_DoesNotReportEdgeOutDiagnostics()
+    {
+        var source = PluginMetadata + TaskPrelude + """
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private System.Threading.Tasks.Task Trigger => System.Threading.Tasks.Task.CompletedTask;
+                public System.Threading.Tasks.Task RunAsync() => Trigger;
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id is "EDGEOUT001" or "EDGEOUT002");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ProductionTaskDelegateUploader_ReportsEdgeOut001(bool useLambda)
+    {
+        var delegateValue = useLambda ? "() => uploader.UploadAsync()" : "uploader.UploadAsync";
+        var source = PluginMetadata + TaskPrelude + $$"""
+            namespace IIoT.Edge.Application.Abstractions.Cloud
+            {
+                public interface IProcessCloudUploader { System.Threading.Tasks.Task UploadAsync(); }
+            }
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader uploader;
+                public Task(IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader uploader) => this.uploader = uploader;
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    System.Func<System.Threading.Tasks.Task> send = {{delegateValue}};
+                    await send();
+                }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "EDGEOUT001");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ProductionTaskDelegateEnqueue_ReportsEdgeOut002(bool useLambda)
+    {
+        var delegateValue = useLambda ? "record => pipeline.EnqueueAsync(record)" : "pipeline.EnqueueAsync";
+        var source = PluginMetadata + TaskPrelude + $$"""
+            namespace IIoT.Edge.Application.Abstractions.DataPipeline
+            {
+                public interface IDataPipelineService { System.Threading.Tasks.Task EnqueueAsync(object record); }
+            }
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline;
+                public Task(IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline) => this.pipeline = pipeline;
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    System.Func<object, System.Threading.Tasks.Task> send = {{delegateValue}};
+                    await send(new object());
+                }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        AssertSingle(diagnostics, "EDGEOUT002");
+    }
+
+    [Fact]
+    public async Task ProductionTaskOrdinaryDelegate_DoesNotReportEdgeOutDiagnostics()
+    {
+        var source = PluginMetadata + TaskPrelude + """
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    System.Func<System.Threading.Tasks.Task> work = () => System.Threading.Tasks.Task.CompletedTask;
+                    await work();
+                }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id is "EDGEOUT001" or "EDGEOUT002");
+    }
+
+    [Theory]
+    [InlineData("System.Func<System.Threading.Tasks.Task>", "_ = work();")]
+    [InlineData("System.Action", "work();")]
+    [InlineData("System.Func<int>", "_ = work();")]
+    public async Task ProductionTaskUnresolvedDelegate_FailsClosedWithEdgeOut001(
+        string delegateType,
+        string invocation)
+    {
+        var source = PluginMetadata + TaskPrelude + $$"""
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly {{delegateType}} work;
+                public Task({{delegateType}} work) => this.work = work;
+                public System.Threading.Tasks.Task RunAsync()
+                {
+                    {{invocation}}
+                    return System.Threading.Tasks.Task.CompletedTask;
+                }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "EDGEOUT001");
+    }
+
+    [Fact]
+    public async Task ProductionTaskSafeDelegateReassignedFromUnknown_FailsClosedWithEdgeOut001()
+    {
+        var source = PluginMetadata + TaskPrelude + """
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly System.Func<System.Threading.Tasks.Task> injected;
+                public Task(System.Func<System.Threading.Tasks.Task> injected) => this.injected = injected;
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    System.Func<System.Threading.Tasks.Task> work = () => System.Threading.Tasks.Task.CompletedTask;
+                    work = injected;
+                    await work();
+                }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "EDGEOUT001");
+    }
+
+    [Fact]
+    public async Task ProductionTaskSafeDelegateCombinedWithUploader_ReportsEdgeOut001()
+    {
+        var source = PluginMetadata + TaskPrelude + """
+            namespace IIoT.Edge.Application.Abstractions.Cloud
+            {
+                public interface IProcessCloudUploader { System.Threading.Tasks.Task UploadAsync(); }
+            }
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader uploader;
+                public Task(IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader uploader) => this.uploader = uploader;
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    System.Func<System.Threading.Tasks.Task> work = () => System.Threading.Tasks.Task.CompletedTask;
+                    work += uploader.UploadAsync;
+                    await work();
+                }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "EDGEOUT001");
+    }
+
+    [Fact]
+    public async Task ProductionTaskSafeDelegateCombinedWithEnqueue_ReportsEdgeOut002()
+    {
+        var source = PluginMetadata + TaskPrelude + """
+            namespace IIoT.Edge.Application.Abstractions.DataPipeline
+            {
+                public interface IDataPipelineService { System.Threading.Tasks.Task EnqueueAsync(object record); }
+            }
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline;
+                public Task(IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline) => this.pipeline = pipeline;
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    System.Func<object, System.Threading.Tasks.Task> work = _ => System.Threading.Tasks.Task.CompletedTask;
+                    work += pipeline.EnqueueAsync;
+                    await work(new object());
+                }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "EDGEOUT002");
+    }
+
+    [Fact]
+    public async Task ProductionTaskSafeDelegateReassignment_DoesNotReportEdgeOutDiagnostics()
+    {
+        var source = PluginMetadata + TaskPrelude + """
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    System.Func<System.Threading.Tasks.Task> work = () => System.Threading.Tasks.Task.CompletedTask;
+                    work = static () => System.Threading.Tasks.Task.CompletedTask;
+                    await work();
+                }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id is "EDGEOUT001" or "EDGEOUT002");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ProductionTaskConditionalDelegateWithUnknownBranch_FailsClosed(bool enqueue)
+    {
+        var contract = enqueue
+            ? "namespace IIoT.Edge.Application.Abstractions.DataPipeline { public interface IDataPipelineService { System.Threading.Tasks.Task EnqueueAsync(object value); } }"
+            : string.Empty;
+        var known = enqueue
+            ? "() => pipeline.EnqueueAsync(new object())"
+            : "static () => System.Threading.Tasks.Task.CompletedTask";
+        var field = enqueue
+            ? "private readonly IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline;"
+            : string.Empty;
+        var constructor = enqueue
+            ? "public Task(IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline, System.Func<System.Threading.Tasks.Task> injected) { this.pipeline = pipeline; this.injected = injected; }"
+            : "public Task(System.Func<System.Threading.Tasks.Task> injected) => this.injected = injected;";
+        var source = PluginMetadata + TaskPrelude + $$"""
+            {{contract}}
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                {{field}}
+                private readonly System.Func<System.Threading.Tasks.Task> injected;
+                {{constructor}}
+                public async System.Threading.Tasks.Task RunAsync(bool flag)
+                {
+                    System.Func<System.Threading.Tasks.Task> work = flag ? {{known}} : injected;
+                    await work();
+                }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "EDGEOUT001");
+    }
+
+    [Fact]
+    public async Task ProductionTaskConditionalDelegateWithKnownSafeBranches_Passes()
+    {
+        var source = PluginMetadata + TaskPrelude + """
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                public async System.Threading.Tasks.Task RunAsync(bool flag)
+                {
+                    System.Func<System.Threading.Tasks.Task> work = flag
+                        ? static () => System.Threading.Tasks.Task.CompletedTask
+                        : static async () => { await System.Threading.Tasks.Task.Yield(); };
+                    await work();
+                }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id is "EDGEOUT001" or "EDGEOUT002");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ProductionTaskIndirectConstructorOrSetterUploader_ReportsEdgeOut001(bool useSetter)
+    {
+        var action = useSetter ? "helper.Trigger = true;" : "_ = new Helper(uploader);";
+        var helperBody = useSetter
+            ? "public bool Trigger { set { _ = uploader.UploadAsync(); } }"
+            : "public Helper(IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader uploader) { _ = uploader.UploadAsync(); }";
+        var helperConstructor = useSetter
+            ? "public Helper(IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader uploader) => this.uploader = uploader;"
+            : string.Empty;
+        var source = PluginMetadata + TaskPrelude + $$"""
+            namespace IIoT.Edge.Application.Abstractions.Cloud
+            {
+                public interface IProcessCloudUploader { System.Threading.Tasks.Task UploadAsync(); }
+            }
+            public sealed class Helper
+            {
+                private readonly IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader uploader;
+                {{helperConstructor}}
+                {{helperBody}}
+            }
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader uploader;
+                private readonly Helper helper;
+                public Task(IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader uploader)
+                {
+                    this.uploader = uploader;
+                    helper = new Helper(uploader);
+                }
+                public System.Threading.Tasks.Task RunAsync()
+                {
+                    {{action}}
+                    return System.Threading.Tasks.Task.CompletedTask;
+                }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "EDGEOUT001");
+    }
+
+    [Fact]
+    public async Task ProductionTaskFieldInitializerOutbound_ReportsEdgeOut001()
+    {
+        var source = PluginMetadata + TaskPrelude + """
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly System.Threading.Tasks.Task pending =
+                    new System.Net.Http.HttpClient().GetAsync("https://127.0.0.1/");
+                public System.Threading.Tasks.Task RunAsync() => pending;
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "EDGEOUT001");
+    }
+
+    [Fact]
+    public async Task ProductionTaskConstructorUploader_ReportsEdgeOut001()
+    {
+        var source = PluginMetadata + TaskPrelude + """
+            namespace IIoT.Edge.Application.Abstractions.Cloud
+            {
+                public interface IProcessCloudUploader { System.Threading.Tasks.Task UploadAsync(); }
+            }
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                public Task(IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader uploader) { _ = uploader.UploadAsync(); }
+                public System.Threading.Tasks.Task RunAsync() => System.Threading.Tasks.Task.CompletedTask;
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "EDGEOUT001");
+    }
+
+    [Fact]
+    public async Task ProductionTaskConstructorUnprotectedEnqueue_ReportsEdgeOut002()
+    {
+        var source = PluginMetadata + TaskPrelude + """
+            namespace IIoT.Edge.Application.Abstractions.DataPipeline
+            {
+                public interface IDataPipelineService { System.Threading.Tasks.Task EnqueueAsync(object record); }
+            }
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                public Task(IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline) { _ = pipeline.EnqueueAsync(new object()); }
+                public System.Threading.Tasks.Task RunAsync() => System.Threading.Tasks.Task.CompletedTask;
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "EDGEOUT002");
+    }
+
+    [Fact]
+    public async Task ProductionTaskUnreferencedPropertyAccessorUploader_ReportsEdgeOut001()
+    {
+        var source = PluginMetadata + TaskPrelude + """
+            namespace IIoT.Edge.Application.Abstractions.Cloud
+            {
+                public interface IProcessCloudUploader { System.Threading.Tasks.Task UploadAsync(); }
+            }
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader uploader;
+                public Task(IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader uploader) => this.uploader = uploader;
+                private System.Threading.Tasks.Task Hidden => uploader.UploadAsync();
+                public System.Threading.Tasks.Task RunAsync() => System.Threading.Tasks.Task.CompletedTask;
             }
             """;
 
@@ -457,11 +937,14 @@ public sealed class EdgeArchitectureAnalyzerTests
             }
             """;
         var helper = """
-            public interface IProcessCloudUploader { System.Threading.Tasks.Task UploadAsync(); }
+            namespace IIoT.Edge.Application.Abstractions.Cloud
+            {
+                public interface IProcessCloudUploader { System.Threading.Tasks.Task UploadAsync(); }
+            }
             public sealed class Helper : IHelper
             {
-                private readonly IProcessCloudUploader uploader;
-                public Helper(IProcessCloudUploader uploader) => this.uploader = uploader;
+                private readonly IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader uploader;
+                public Helper(IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader uploader) => this.uploader = uploader;
                 public System.Threading.Tasks.Task SendAsync() => uploader.UploadAsync();
             }
             """;
@@ -475,17 +958,21 @@ public sealed class EdgeArchitectureAnalyzerTests
     public async Task ProductionTaskGenericHelperAndPropertyIndirection_ReportEdgeOut001()
     {
         var source = PluginMetadata + TaskPrelude + """
-            public interface IProcessCloudUploader { System.Threading.Tasks.Task UploadAsync(); }
+            namespace IIoT.Edge.Application.Abstractions.Cloud
+            {
+                public interface IProcessCloudUploader { System.Threading.Tasks.Task UploadAsync(); }
+            }
             public sealed class Holder<T> { public Holder(T value) => Value = value; public T Value { get; } }
             public static class GenericHelper
             {
-                public static System.Threading.Tasks.Task Send<T>(Holder<T> holder) where T : IProcessCloudUploader
+                public static System.Threading.Tasks.Task Send<T>(Holder<T> holder)
+                    where T : IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader
                     => holder.Value.UploadAsync();
             }
             public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
             {
-                private readonly Holder<IProcessCloudUploader> holder;
-                public Task(Holder<IProcessCloudUploader> holder) => this.holder = holder;
+                private readonly Holder<IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader> holder;
+                public Task(Holder<IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader> holder) => this.holder = holder;
                 public System.Threading.Tasks.Task RunAsync() => GenericHelper.Send(holder);
             }
             """;
@@ -499,7 +986,10 @@ public sealed class EdgeArchitectureAnalyzerTests
     public async Task ProductionTaskOverrideDispatch_ReportsEdgeOut001()
     {
         var source = PluginMetadata + TaskPrelude + """
-            public interface IProcessMesUploader { System.Threading.Tasks.Task UploadAsync(); }
+            namespace IIoT.Edge.Application.Abstractions.Mes
+            {
+                public interface IProcessMesUploader { System.Threading.Tasks.Task UploadAsync(); }
+            }
             public abstract class BaseTask : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
             {
                 public System.Threading.Tasks.Task RunAsync() => SendCoreAsync();
@@ -507,8 +997,8 @@ public sealed class EdgeArchitectureAnalyzerTests
             }
             public sealed class Task : BaseTask
             {
-                private readonly IProcessMesUploader uploader;
-                public Task(IProcessMesUploader uploader) => this.uploader = uploader;
+                private readonly IIoT.Edge.Application.Abstractions.Mes.IProcessMesUploader uploader;
+                public Task(IIoT.Edge.Application.Abstractions.Mes.IProcessMesUploader uploader) => this.uploader = uploader;
                 protected override System.Threading.Tasks.Task SendCoreAsync() => uploader.UploadAsync();
             }
             """;
@@ -519,7 +1009,306 @@ public sealed class EdgeArchitectureAnalyzerTests
     }
 
     [Fact]
+    public async Task ForeignSimpleNameUploader_DoesNotReportEdgeOut001()
+    {
+        var source = PluginMetadata + TaskPrelude + """
+            namespace Fixture.Transport
+            {
+                public interface IProcessCloudUploader { System.Threading.Tasks.Task UploadAsync(); }
+            }
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly Fixture.Transport.IProcessCloudUploader uploader;
+                public Task(Fixture.Transport.IProcessCloudUploader uploader) => this.uploader = uploader;
+                public System.Threading.Tasks.Task RunAsync() => uploader.UploadAsync();
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "EDGEOUT001");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task HttpMessageInvoker_IsOutboundOnlyWhenReachableFromProductionTask(bool productionTask)
+    {
+        var declaration = productionTask
+            ? "public sealed class Worker : IIoT.Edge.Application.Abstractions.Plc.IPlcTask"
+            : "public sealed class Worker";
+        var source = PluginMetadata + TaskPrelude + $$"""
+            {{declaration}}
+            {
+                private readonly System.Net.Http.HttpMessageInvoker invoker;
+                public Worker(System.Net.Http.HttpMessageHandler handler)
+                    => invoker = new System.Net.Http.HttpMessageInvoker(handler);
+                public System.Threading.Tasks.Task RunAsync()
+                    => invoker.SendAsync(
+                        new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, "https://127.0.0.1/"),
+                        System.Threading.CancellationToken.None);
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        if (productionTask)
+            Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "EDGEOUT001");
+        else
+            Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "EDGEOUT001");
+    }
+
+    [Fact]
     public async Task ProductionTaskDataPipelineEnqueue_IsAllowed()
+    {
+        var source = PluginMetadata + TaskPrelude + """
+            namespace IIoT.Edge.Application.Abstractions.DataPipeline
+            {
+                public interface IDataPipelineService
+                {
+                    System.Threading.Tasks.Task EnqueueAsync(object record);
+                }
+            }
+
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline;
+                public Task(IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline) => this.pipeline = pipeline;
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    try
+                    {
+                        await pipeline.EnqueueAsync(new object());
+                    }
+                    catch (System.Exception)
+                    {
+                    }
+                }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "EDGEOUT001");
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "EDGEOUT002");
+    }
+
+    [Theory]
+    [InlineData("Socket")]
+    [InlineData("UdpClient")]
+    [InlineData("TcpListener")]
+    public async Task ProductionTaskRawSocketTransport_ReportsEdgeOut001(string transportType)
+    {
+        var source = PluginMetadata + TaskPrelude + $$"""
+            namespace System.Net.Sockets
+            {
+                public sealed class {{transportType}}
+                {
+                    public void Send() { }
+                }
+            }
+            public sealed class ProductionTask : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                public void Execute(System.Net.Sockets.{{transportType}} transport) => transport.Send();
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "EDGEOUT001");
+    }
+
+    [Theory]
+    [InlineData("direct")]
+    [InlineData("delegate")]
+    public async Task ProductionTaskExternalHelperBoundary_FailsClosedForOutboundAndGuard(
+        string form)
+    {
+        var application = CreateReference(
+            "IIoT.Edge.Application",
+            """
+            namespace IIoT.Edge.Application.Abstractions.Cloud
+            {
+                public interface ICloudHttpClient
+                {
+                    System.Threading.Tasks.Task SendAsync();
+                }
+            }
+            namespace IIoT.Edge.Application.External
+            {
+                public interface IPublishHelper
+                {
+                    System.Threading.Tasks.Task PublishAsync();
+                }
+                public sealed class PublishHelper(
+                    IIoT.Edge.Application.Abstractions.Cloud.ICloudHttpClient cloud) : IPublishHelper
+                {
+                    public System.Threading.Tasks.Task PublishAsync() => cloud.SendAsync();
+                }
+            }
+            """);
+        var call = form == "direct"
+            ? "await helper.PublishAsync();"
+            : "System.Func<System.Threading.Tasks.Task> publish = helper.PublishAsync; await publish();";
+        var source = PluginMetadata + TaskPrelude + $$"""
+            public sealed class ProductionTask : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly IIoT.Edge.Application.External.IPublishHelper helper;
+                public ProductionTask(IIoT.Edge.Application.External.IPublishHelper helper)
+                    => this.helper = helper;
+                public async System.Threading.Tasks.Task ExecuteAsync()
+                {
+                    {{call}}
+                }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source], application);
+
+        AssertSingle(diagnostics, "EDGEOUT001");
+        AssertSingle(diagnostics, "EDGEOUT002");
+    }
+
+    [Theory]
+    [InlineData("IIoT.Edge.Application", "void", "helper.Invoke();")]
+    [InlineData("IIoT.Edge.Application", "int", "_ = helper.Invoke();")]
+    [InlineData("IIoT.Edge.Application", "ExternalBoundary.CustomAwaitable", "_ = helper.Invoke();")]
+    [InlineData("IIoT.Edge.Module.Sdk", "void", "helper.Invoke();")]
+    [InlineData("IIoT.Edge.Module.Sdk", "int", "_ = helper.Invoke();")]
+    [InlineData("IIoT.Edge.Module.Sdk", "ExternalBoundary.CustomAwaitable", "_ = helper.Invoke();")]
+    [InlineData("IIoT.Edge.SharedKernel", "void", "helper.Invoke();")]
+    [InlineData("IIoT.Edge.SharedKernel", "int", "_ = helper.Invoke();")]
+    [InlineData("IIoT.Edge.SharedKernel", "ExternalBoundary.CustomAwaitable", "_ = helper.Invoke();")]
+    public async Task ProductionTaskExternalHelperMetadataReference_AllReturnShapesFailClosed(
+        string helperAssemblyName,
+        string returnType,
+        string invocation)
+    {
+        var helperReference = CreateReference(
+            helperAssemblyName,
+            $$"""
+            namespace ExternalBoundary
+            {
+                public readonly struct CustomAwaitable { }
+                public interface IExternalHelper
+                {
+                    {{returnType}} Invoke();
+                }
+            }
+            """);
+        var source = PluginMetadata + TaskPrelude + $$"""
+            public sealed class ProductionTask : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly ExternalBoundary.IExternalHelper helper;
+                public ProductionTask(ExternalBoundary.IExternalHelper helper) => this.helper = helper;
+
+                public System.Threading.Tasks.Task ExecuteAsync()
+                {
+                    {{invocation}}
+                    return System.Threading.Tasks.Task.CompletedTask;
+                }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync(
+            "IIoT.Edge.Module.Fixture",
+            [source],
+            helperReference);
+
+        AssertSingle(diagnostics, "EDGEOUT001");
+        AssertSingle(diagnostics, "EDGEOUT002");
+    }
+
+    [Fact]
+    public async Task ProductionTaskApprovedExternalPipelineConfigDiagnosticsCalls_AreAllowed()
+    {
+        var application = CreateReference(
+            "IIoT.Edge.Application",
+            """
+            namespace IIoT.Edge.Application.Abstractions.DataPipeline
+            {
+                public interface IDataPipelineService
+                {
+                    System.Threading.Tasks.Task EnqueueAsync(object record);
+                }
+            }
+            namespace IIoT.Edge.Application.Abstractions.Logging
+            {
+                public interface ILogService { void Info(string message); }
+            }
+            namespace IIoT.Edge.Application.Abstractions.Config
+            {
+                public interface IRuntimeConfig { string Read(); }
+            }
+            namespace IIoT.Edge.Application.Abstractions.Diagnostics
+            {
+                public interface IDiagnosticsRecorder { void Record(string value); }
+            }
+            """);
+        var source = PluginMetadata + TaskPrelude + """
+            public sealed class ProductionTask : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                public async System.Threading.Tasks.Task ExecuteAsync(
+                    IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline,
+                    IIoT.Edge.Application.Abstractions.Logging.ILogService logger,
+                    IIoT.Edge.Application.Abstractions.Config.IRuntimeConfig config,
+                    IIoT.Edge.Application.Abstractions.Diagnostics.IDiagnosticsRecorder diagnostics)
+                {
+                    var value = config.Read();
+                    logger.Info(value);
+                    diagnostics.Record(value);
+                    try
+                    {
+                        await pipeline.EnqueueAsync(new object());
+                    }
+                    catch (System.Exception)
+                    {
+                    }
+                }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source], application);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id is "EDGEOUT001" or "EDGEOUT002");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ProductionTaskUnawaitedEnqueueInsideTry_ReportsEdgeOut002(bool useValueTask)
+    {
+        var returnType = useValueTask
+            ? "System.Threading.Tasks.ValueTask"
+            : "System.Threading.Tasks.Task";
+        var source = PluginMetadata + TaskPrelude + $$"""
+            namespace IIoT.Edge.Application.Abstractions.DataPipeline
+            {
+                public interface IDataPipelineService
+                {
+                    {{returnType}} EnqueueAsync(object record);
+                }
+            }
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline;
+                public Task(IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline) => this.pipeline = pipeline;
+                public System.Threading.Tasks.Task RunAsync()
+                {
+                    try { _ = pipeline.EnqueueAsync(new object()); }
+                    catch (System.Exception) { }
+                    return System.Threading.Tasks.Task.CompletedTask;
+                }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        AssertSingle(diagnostics, "EDGEOUT002");
+    }
+
+    [Fact]
+    public async Task ProductionTaskUnprotectedEnqueue_ReportsEdgeOut002()
     {
         var source = PluginMetadata + TaskPrelude + """
             namespace IIoT.Edge.Application.Abstractions.DataPipeline
@@ -539,7 +1328,463 @@ public sealed class EdgeArchitectureAnalyzerTests
 
         var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
 
-        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "EDGEOUT001");
+        AssertSingle(diagnostics, "EDGEOUT002");
+    }
+
+    [Fact]
+    public async Task ProductionTaskEnqueueCaughtOnlyAsCancellation_ReportsEdgeOut002()
+    {
+        var source = PluginMetadata + TaskPrelude + """
+            namespace IIoT.Edge.Application.Abstractions.DataPipeline
+            {
+                public interface IDataPipelineService
+                {
+                    System.Threading.Tasks.Task EnqueueAsync(object record);
+                }
+            }
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline;
+                public Task(IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline) => this.pipeline = pipeline;
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    try { await pipeline.EnqueueAsync(new object()); }
+                    catch (System.OperationCanceledException) { }
+                }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        AssertSingle(diagnostics, "EDGEOUT002");
+    }
+
+    [Fact]
+    public async Task ProductionTaskHelperWrappedUnprotectedEnqueue_ReportsEdgeOut002()
+    {
+        var task = PluginMetadata + TaskPrelude + """
+            public interface IEnqueueHelper { System.Threading.Tasks.Task SendAsync(); }
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly IEnqueueHelper helper;
+                public Task(IEnqueueHelper helper) => this.helper = helper;
+                public System.Threading.Tasks.Task RunAsync() => helper.SendAsync();
+            }
+            """;
+        var helper = """
+            namespace IIoT.Edge.Application.Abstractions.DataPipeline
+            {
+                public interface IDataPipelineService
+                {
+                    System.Threading.Tasks.Task EnqueueAsync(object record);
+                }
+            }
+            public sealed class EnqueueHelper : IEnqueueHelper
+            {
+                private readonly IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline;
+                public EnqueueHelper(IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline)
+                    => this.pipeline = pipeline;
+                public System.Threading.Tasks.Task SendAsync() => pipeline.EnqueueAsync(new object());
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [task, helper]);
+
+        AssertSingle(diagnostics, "EDGEOUT002");
+    }
+
+    [Fact]
+    public async Task ProductionTaskEnqueueCatchAndRethrow_ReportsEdgeOut002()
+    {
+        var source = PluginMetadata + TaskPrelude + """
+            namespace IIoT.Edge.Application.Abstractions.DataPipeline
+            {
+                public interface IDataPipelineService
+                {
+                    System.Threading.Tasks.Task EnqueueAsync(object record);
+                }
+            }
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline;
+                public Task(IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline) => this.pipeline = pipeline;
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    try { await pipeline.EnqueueAsync(new object()); }
+                    catch (System.Exception) { throw; }
+                }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        AssertSingle(diagnostics, "EDGEOUT002");
+    }
+
+    [Fact]
+    public async Task ProductionTaskEnqueueCatchAndExceptionDispatchRethrow_ReportsEdgeOut002()
+    {
+        var source = PluginMetadata + TaskPrelude + """
+            namespace IIoT.Edge.Application.Abstractions.DataPipeline
+            {
+                public interface IDataPipelineService { System.Threading.Tasks.Task EnqueueAsync(object record); }
+            }
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline;
+                public Task(IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline) => this.pipeline = pipeline;
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    try { await pipeline.EnqueueAsync(new object()); }
+                    catch (System.Exception ex)
+                    {
+                        System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex).Throw();
+                    }
+                }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        AssertSingle(diagnostics, "EDGEOUT002");
+    }
+
+    [Fact]
+    public async Task ProductionTaskEnqueueCatchWithFalseFilter_ReportsEdgeOut002()
+    {
+        var source = PluginMetadata + TaskPrelude + """
+            namespace IIoT.Edge.Application.Abstractions.DataPipeline
+            {
+                public interface IDataPipelineService
+                {
+                    System.Threading.Tasks.Task EnqueueAsync(object record);
+                }
+            }
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline;
+                public Task(IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline) => this.pipeline = pipeline;
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    try { await pipeline.EnqueueAsync(new object()); }
+                    catch (System.Exception) when (false) { }
+                }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        AssertSingle(diagnostics, "EDGEOUT002");
+    }
+
+    [Fact]
+    public async Task ProductionTaskCaughtHelperCall_PassesEdgeOut002()
+    {
+        var task = PluginMetadata + TaskPrelude + """
+            public interface IEnqueueHelper { System.Threading.Tasks.Task SendAsync(); }
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly IEnqueueHelper helper;
+                public Task(IEnqueueHelper helper) => this.helper = helper;
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    try { await helper.SendAsync(); }
+                    catch (System.Exception) { }
+                }
+            }
+            """;
+        var helper = """
+            namespace IIoT.Edge.Application.Abstractions.DataPipeline
+            {
+                public interface IDataPipelineService
+                {
+                    System.Threading.Tasks.Task EnqueueAsync(object record);
+                }
+            }
+            public sealed class EnqueueHelper : IEnqueueHelper
+            {
+                private readonly IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline;
+                public EnqueueHelper(IIoT.Edge.Application.Abstractions.DataPipeline.IDataPipelineService pipeline)
+                    => this.pipeline = pipeline;
+                public System.Threading.Tasks.Task SendAsync() => pipeline.EnqueueAsync(new object());
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [task, helper]);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "EDGEOUT002");
+    }
+
+    [Fact]
+    public async Task ExactRemovedCompatibilityTypeDeclarations_ReportEdgeComp001()
+    {
+        var source = """
+            namespace IIoT.Edge.Application.Modules
+            {
+                public class ProcessCloudUploaderBase<TRecord, TPayload> { }
+                public class ProcessMesUploaderBase<TRecord> { }
+            }
+            namespace IIoT.Edge.Application.Modules.Mes
+            {
+                public class MesUploadChannelBase<TRecord> { }
+            }
+            namespace IIoT.Edge.Application.Abstractions.Plc
+            {
+                public interface ISignalInteraction { }
+            }
+            namespace IIoT.Edge.Infrastructure.DeviceComm.Signals
+            {
+                public class SignalInteraction { }
+            }
+            namespace IIoT.Edge.Application.Abstractions.Plc.Signals
+            {
+                public interface ILogicalSignalAccessor { }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Application", [source]);
+
+        Assert.Equal(6, diagnostics.Count(diagnostic => diagnostic.Id == "EDGECOMP001"));
+    }
+
+    [Fact]
+    public async Task RemovedCompatibilityAliasAcrossSourceFiles_ReportsEdgeComp001()
+    {
+        var declaration = "namespace IIoT.Edge.Application.Modules { public class ProcessCloudUploaderBase<TRecord, TPayload> { } }";
+        var use = "using Legacy = IIoT.Edge.Application.Modules.ProcessCloudUploaderBase<object, object>; public sealed class Consumer { private Legacy value = new(); }";
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Application", [declaration, use]);
+
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "EDGECOMP001");
+    }
+
+    [Fact]
+    public async Task ForeignTypesWithRemovedSimpleNames_DoNotReportEdgeComp001()
+    {
+        var source = """
+            namespace Fixture
+            {
+                public class ProcessCloudUploaderBase<TRecord, TPayload> { }
+                public class ProcessMesUploaderBase<TRecord> { }
+                public class MesUploadChannelBase<TRecord> { }
+                public interface ISignalInteraction { }
+                public class SignalInteraction { }
+                public interface ILogicalSignalAccessor { }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Application", [source]);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "EDGECOMP001");
+    }
+
+    [Fact]
+    public async Task StronglyTypedLogicalSignalAccessor_DoesNotReportEdgeComp001()
+    {
+        var source = "namespace IIoT.Edge.Application.Abstractions.Plc.Signals { public interface ILogicalSignalAccessor<TSignalKey> { } } public enum Signals { Ready } public sealed class Consumer { private IIoT.Edge.Application.Abstractions.Plc.Signals.ILogicalSignalAccessor<Signals> value = null!; }";
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [PluginMetadata + source]);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "EDGECOMP001");
+    }
+
+    [Fact]
+    public async Task PluginClassNamedCloudUploaderWithoutUploaderContract_PassesPlug005()
+    {
+        var diagnostics = await AnalyzeAsync(
+            "IIoT.Edge.Module.Fixture",
+            [PluginMetadata + "public sealed class FixtureCloudUploader { }"]);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PLUG005");
+    }
+
+    [Fact]
+    public async Task PluginUploaderContractWithoutStandardChannelBase_ReportsPlug005RegardlessOfClassName()
+    {
+        var source = PluginMetadata + """
+            namespace IIoT.Edge.Application.Abstractions.Cloud
+            {
+                public interface IProcessCloudUploader { }
+            }
+            public sealed class Transport
+                : IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader { }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        AssertSingle(diagnostics, "PLUG005");
+    }
+
+    [Fact]
+    public async Task PluginCloudUploaderWithStandardChannelBase_PassesPlug005()
+    {
+        var source = PluginMetadata + """
+            namespace IIoT.Edge.Application.Abstractions.Cloud
+            {
+                public interface IProcessCloudUploader { }
+            }
+            namespace IIoT.Edge.Application.Modules.Cloud
+            {
+                public abstract class CloudUploadChannelBase<TCellData, TPayload> { }
+            }
+            public sealed class FixtureCloudUploader
+                : IIoT.Edge.Application.Modules.Cloud.CloudUploadChannelBase<object, object>,
+                  IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader { }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PLUG005");
+    }
+
+    [Fact]
+    public async Task PluginDirectHardwareProfileServiceRegistration_ReportsPlug005()
+    {
+        var source = PluginMetadata + """
+            namespace IIoT.Edge.Application.Abstractions.Modules
+            {
+                public interface IModuleHardwareProfileProvider { }
+            }
+            namespace Microsoft.Extensions.DependencyInjection
+            {
+                public interface IServiceCollection { }
+                public static class ServiceCollectionServiceExtensions
+                {
+                    public static IServiceCollection AddSingleton<T>(IServiceCollection services) => services;
+                }
+            }
+            public sealed class Registration
+            {
+                public void Configure(Microsoft.Extensions.DependencyInjection.IServiceCollection services)
+                    => Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions
+                        .AddSingleton<IIoT.Edge.Application.Abstractions.Modules.IModuleHardwareProfileProvider>(services);
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        AssertSingle(diagnostics, "PLUG005");
+    }
+
+    [Fact]
+    public async Task ForeignSimpleNameHardwareProfileRegistration_PassesPlug005()
+    {
+        var source = PluginMetadata + """
+            namespace Fixture.Contracts
+            {
+                public interface IModuleHardwareProfileProvider { }
+            }
+            namespace Microsoft.Extensions.DependencyInjection
+            {
+                public interface IServiceCollection { }
+                public static class ServiceCollectionServiceExtensions
+                {
+                    public static IServiceCollection AddSingleton<T>(IServiceCollection services) => services;
+                }
+            }
+            public sealed class Registration
+            {
+                public void Configure(Microsoft.Extensions.DependencyInjection.IServiceCollection services)
+                    => Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions
+                        .AddSingleton<Fixture.Contracts.IModuleHardwareProfileProvider>(services);
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PLUG005");
+    }
+
+    [Theory]
+    [InlineData("try-add")]
+    [InlineData("descriptor-add")]
+    [InlineData("replace")]
+    [InlineData("insert")]
+    public async Task PluginServiceCollectionMutationBypasses_ReportPlug005(string form)
+    {
+        var expression = form switch
+        {
+            "try-add" => "Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<IIoT.Edge.Application.Abstractions.Modules.IModuleHardwareProfileProvider>(services)",
+            "descriptor-add" => "services.Add(Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton<IIoT.Edge.Application.Abstractions.Modules.IModuleHardwareProfileProvider>())",
+            "replace" => "Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.Replace(services, Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton<IIoT.Edge.Application.Abstractions.Modules.IModuleHardwareProfileProvider>())",
+            "insert" => "services.Insert(0, Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton<IIoT.Edge.Application.Abstractions.Modules.IModuleHardwareProfileProvider>())",
+            _ => throw new ArgumentOutOfRangeException(nameof(form))
+        };
+        var source = PluginMetadata + $$"""
+            namespace IIoT.Edge.Application.Abstractions.Modules
+            {
+                public interface IModuleHardwareProfileProvider { }
+            }
+            namespace Microsoft.Extensions.DependencyInjection
+            {
+                public sealed class ServiceDescriptor
+                {
+                    public static ServiceDescriptor Singleton<T>() => new();
+                }
+                public interface IServiceCollection
+                {
+                    void Add(ServiceDescriptor descriptor);
+                    void Insert(int index, ServiceDescriptor descriptor);
+                }
+            }
+            namespace Microsoft.Extensions.DependencyInjection.Extensions
+            {
+                public static class ServiceCollectionDescriptorExtensions
+                {
+                    public static Microsoft.Extensions.DependencyInjection.IServiceCollection TryAddSingleton<T>(
+                        Microsoft.Extensions.DependencyInjection.IServiceCollection services) => services;
+                    public static Microsoft.Extensions.DependencyInjection.IServiceCollection Replace(
+                        Microsoft.Extensions.DependencyInjection.IServiceCollection services,
+                        Microsoft.Extensions.DependencyInjection.ServiceDescriptor descriptor) => services;
+                }
+            }
+            public sealed class Registration
+            {
+                public void Configure(Microsoft.Extensions.DependencyInjection.IServiceCollection services)
+                    => {{expression}};
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        AssertSingle(diagnostics, "PLUG005");
+    }
+
+    [Theory]
+    [InlineData("\"/api/v1/edge/device\"")]
+    [InlineData("\"/api/\" + \"v1/edge/device\"")]
+    public async Task ProductionCloudRouteLiteral_ReportsEdgeCloudCfg001(string expression)
+    {
+        var diagnostics = await AnalyzeAsync(
+            "IIoT.Edge.Infrastructure.Integration",
+            [$"public static class Routes {{ public const string Device = {expression}; }}"]);
+
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "EDGECLOUDCFG001");
+    }
+
+    [Theory]
+    [InlineData("interpolated")]
+    [InlineData("format")]
+    public async Task ComposedProductionCloudRoute_ReportsEdgeCloudCfg001(string form)
+    {
+        var body = form == "interpolated"
+            ? "public string Build(string id) => $\"/api/v1/device/{id}\";"
+            : "public string Build() => string.Format(\"/api/{0}/{1}\", \"v1\", \"device\");";
+        var diagnostics = await AnalyzeAsync(
+            "IIoT.Edge.Infrastructure.Integration",
+            [$"public sealed class Routes {{ {body} }}"]);
+
+        AssertSingle(diagnostics, "EDGECLOUDCFG001");
+    }
+
+    [Fact]
+    public async Task ConfiguredCloudRouteValue_DoesNotReportEdgeCloudCfg001()
+    {
+        var source = "public sealed class Routes { public string Device(string configuredPath) => configuredPath; }";
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Infrastructure.Integration", [source]);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "EDGECLOUDCFG001");
     }
 
     [Theory]
@@ -595,11 +1840,24 @@ public sealed class EdgeArchitectureAnalyzerTests
     [InlineData("task.Wait()")]
     [InlineData("task.Result")]
     [InlineData("task.GetAwaiter().GetResult()")]
+    [InlineData("System.Threading.Tasks.Task.WaitAll(task)")]
+    [InlineData("System.Threading.Tasks.Task.WaitAny(task)")]
     public async Task SyncOverAsyncForms_ReportEdgeAsync001(string expression)
     {
-        var source = expression == "task.Wait()"
-            ? "public sealed class Service { public void Run(System.Threading.Tasks.Task<int> task) => task.Wait(); }"
+        var returnsVoid = expression is "task.Wait()" or "System.Threading.Tasks.Task.WaitAll(task)";
+        var source = returnsVoid
+            ? $"public sealed class Service {{ public void Run(System.Threading.Tasks.Task<int> task) => {expression}; }}"
             : $"public sealed class Service {{ public int Run(System.Threading.Tasks.Task<int> task) => {expression}; }}";
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Application", [source]);
+
+        AssertSingle(diagnostics, "EDGEASYNC001");
+    }
+
+    [Fact]
+    public async Task ValueTaskResult_ReportsEdgeAsync001()
+    {
+        var source = "public sealed class Service { public int Run(System.Threading.Tasks.ValueTask<int> task) => task.Result; }";
 
         var diagnostics = await AnalyzeAsync("IIoT.Edge.Application", [source]);
 
@@ -646,6 +1904,8 @@ public sealed class EdgeArchitectureAnalyzerTests
         var source = """
             public sealed class Window
             {
+                public event System.EventHandler? Click;
+                public Window() => Click += OnClick;
                 private async void OnClick(object? sender, System.EventArgs e)
                 {
                     await System.Threading.Tasks.Task.Yield();
@@ -656,6 +1916,106 @@ public sealed class EdgeArchitectureAnalyzerTests
         var diagnostics = await AnalyzeAsync("IIoT.Edge.Installer", [source]);
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "EDGEASYNC002");
+    }
+
+    [Fact]
+    public async Task EventShapedButUnregisteredAsyncVoid_ReportsEdgeAsync002()
+    {
+        var source = """
+            public sealed class Window
+            {
+                private async void OnClick(object? sender, System.EventArgs e)
+                {
+                    await System.Threading.Tasks.Task.Yield();
+                }
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Installer", [source]);
+
+        AssertSingle(diagnostics, "EDGEASYNC002");
+    }
+
+    [Theory]
+    [InlineData("public sealed record Query() : MediatR.IRequest<string>;")]
+    [InlineData("public sealed class ViewModel { private MediatR.ISender sender = null!; }")]
+    [InlineData("public sealed class Handler : MediatR.IRequestHandler<Query, string> { public System.Threading.Tasks.Task<string> Handle(Query request, System.Threading.CancellationToken token) => System.Threading.Tasks.Task.FromResult(string.Empty); } public sealed record Query() : MediatR.IRequest<string>;")]
+    public async Task PresentationMediatRUseCases_ReportEdgePres001(string consumer)
+    {
+        var source = """
+            namespace MediatR
+            {
+                public interface IRequest<T> { }
+                public interface IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TResponse>
+                {
+                    System.Threading.Tasks.Task<TResponse> Handle(TRequest request, System.Threading.CancellationToken token);
+                }
+                public interface ISender { }
+            }
+            """ + consumer;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Presentation.Navigation", [source]);
+
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "EDGEPRES001");
+    }
+
+    [Fact]
+    public async Task PresentationNotificationHandler_DoesNotReportEdgePres001()
+    {
+        var source = """
+            namespace MediatR
+            {
+                public interface INotification { }
+                public interface INotificationHandler<T> where T : INotification { }
+            }
+            public sealed record Updated() : MediatR.INotification;
+            public sealed class RefreshHandler : MediatR.INotificationHandler<Updated> { }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Presentation.Navigation", [source]);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "EDGEPRES001");
+    }
+
+    [Fact]
+    public async Task PresentationDirectChineseValidationIssue_ReportsEdgePres002()
+    {
+        var source = """
+            namespace IIoT.Edge.Application.Common.Crud
+            {
+                public sealed record ValidationIssue(string Message, string? Field = null);
+            }
+            public sealed class Validator
+            {
+                public IIoT.Edge.Application.Common.Crud.ValidationIssue Validate()
+                    => new("请修正无效字段");
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Presentation.Navigation", [source]);
+
+        AssertSingle(diagnostics, "EDGEPRES002");
+    }
+
+    [Fact]
+    public async Task PresentationLocalizedValidationIssue_DoesNotReportEdgePres002()
+    {
+        var source = """
+            namespace IIoT.Edge.Application.Common.Crud
+            {
+                public sealed record ValidationIssue(string Message, string? Field = null);
+            }
+            public sealed class Resources { public string Get(string key) => key; }
+            public sealed class Validator
+            {
+                public IIoT.Edge.Application.Common.Crud.ValidationIssue Validate(Resources resources)
+                    => new(resources.Get("Validation_InvalidField"));
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Presentation.Navigation", [source]);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "EDGEPRES002");
     }
 
     private const string PluginMetadata = """

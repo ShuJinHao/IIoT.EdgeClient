@@ -4,5 +4,5 @@ namespace IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
 
 public interface IDeadLetterStore : IDeadLetterDiagnosticsStore
 {
-    Task SaveAsync(DeadLetterRecord record);
+    Task SaveAsync(DeadLetterRecord record, CancellationToken cancellationToken = default);
 }

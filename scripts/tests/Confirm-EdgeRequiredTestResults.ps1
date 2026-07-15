@@ -2,6 +2,7 @@
 param(
     [string]$RepositoryRoot,
     [string]$InventoryPath,
+    [string]$DiscoveredInventoryPath,
     [string]$CountsPath,
     [string]$ResultsDirectory = 'artifacts/test-results',
     [string]$SummaryPath,
@@ -61,17 +62,34 @@ if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
 if ([string]::IsNullOrWhiteSpace($InventoryPath)) {
     $InventoryPath = Join-Path $PSScriptRoot 'edge-test-inventory.json'
 }
+if ([string]::IsNullOrWhiteSpace($DiscoveredInventoryPath)) {
+    $DiscoveredInventoryPath = Join-Path $PSScriptRoot 'discovered-test-inventory.json'
+}
 if ([string]::IsNullOrWhiteSpace($CountsPath)) {
     $CountsPath = Join-Path $PSScriptRoot 'required-test-counts.json'
 }
 $ResultsDirectory = Resolve-RepositoryPath $ResultsDirectory
 
-& (Join-Path $PSScriptRoot 'Get-EdgeTestInventory.ps1') -RepositoryRoot $RepositoryRoot -InventoryPath $InventoryPath
+& (Join-Path $PSScriptRoot 'Get-EdgeDiscoveredTestInventory.ps1') `
+    -RepositoryRoot $RepositoryRoot `
+    -InventoryPath $InventoryPath `
+    -DiscoveredInventoryPath $DiscoveredInventoryPath `
+    -Configuration $Configuration
 
 $inventory = Get-Content $InventoryPath -Raw | ConvertFrom-Json -Depth 20
+$discoveredInventory = Get-Content $DiscoveredInventoryPath -Raw | ConvertFrom-Json -Depth 30
 $counts = Get-Content $CountsPath -Raw | ConvertFrom-Json -Depth 20
-if ([int]$counts.schemaVersion -ne 1 -or [string]$counts.configuration -ne $Configuration) {
+if ([int]$inventory.schemaVersion -ne 3 -or [int]$discoveredInventory.schemaVersion -ne 3 -or
+    [int]$counts.schemaVersion -ne 3 -or
+    [string]$counts.configuration -ne $Configuration) {
     throw 'EDGE-TEST-RESULT-001 required count schema or configuration is invalid.'
+}
+$invalidRegressionIds = @($discoveredInventory.cases | Where-Object {
+    [string]::IsNullOrWhiteSpace([string]$_.regressionId) -or
+    [string]$_.regressionId -notmatch '^[A-Z0-9][A-Z0-9._-]+$'
+})
+if ([string]$discoveredInventory.defaultRegressionIdSource -cne 'project.ruleId' -or $invalidRegressionIds.Count -gt 0) {
+    throw "EDGE-TEST-RESULT-001 discovered inventory regressionId contract is invalid; invalid=$($invalidRegressionIds.Count)."
 }
 
 $expectedByProject = @{}
@@ -81,6 +99,9 @@ foreach ($entry in @($counts.projects)) {
         throw "EDGE-TEST-RESULT-001 invalid count entry for $path."
     }
     $expectedByProject[$path] = [int]$entry.discovered
+}
+if ([int]$counts.caseCount -ne [int]$discoveredInventory.caseCount) {
+    throw 'EDGE-TEST-RESULT-001 required total count differs from discovered case inventory.'
 }
 
 $inventoryPaths = @($inventory.projects | ForEach-Object { [string]$_.projectPath } | Sort-Object)
@@ -95,16 +116,17 @@ foreach ($project in @($inventory.projects)) {
     $projectName = [string]$project.projectName
     $expected = [int]$expectedByProject[$projectPath]
 
-    $listOutput = & dotnet test $projectPath -c $Configuration --no-build --no-restore --list-tests --nologo -noAutoResponse 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "EDGE-TEST-RESULT-001 discovery failed for ${projectName}:`n$(($listOutput | Out-String).Trim())"
+    $discoveredEntry = @($discoveredInventory.projects | Where-Object { [string]$_.projectPath -eq $projectPath })
+    if ($discoveredEntry.Count -ne 1) {
+        throw "EDGE-TEST-RESULT-001 discovered project entry is not unique for $projectPath."
     }
-    $discovered = @(Get-ListedTests -Output ($listOutput | Out-String)).Count
+    $discovered = [int]$discoveredEntry[0].discovered
 
-    $trxPath = Join-Path $ResultsDirectory "$projectName.trx"
-    if (-not (Test-Path $trxPath -PathType Leaf)) {
-        throw "EDGE-TEST-RESULT-001 missing TRX for ${projectName}: $trxPath"
+    $trxCandidates = @(Get-ChildItem $ResultsDirectory -Recurse -Filter "$projectName.trx" -File -ErrorAction SilentlyContinue)
+    if ($trxCandidates.Count -ne 1) {
+        throw "EDGE-TEST-RESULT-001 TRX count mismatch for ${projectName}: expected=1 actual=$($trxCandidates.Count)."
     }
+    $trxPath = $trxCandidates[0].FullName
     [xml]$trx = Get-Content $trxPath -Raw
     $namespace = [string]$trx.DocumentElement.NamespaceURI
     $manager = [Xml.XmlNamespaceManager]::new($trx.NameTable)
@@ -114,6 +136,7 @@ foreach ($project in @($inventory.projects)) {
         throw "EDGE-TEST-RESULT-001 TRX does not contain one counter summary: $trxPath"
     }
     $counters = [System.Xml.XmlElement]$counterNodes[0]
+    $trxTotal = Get-CounterValue -Counters $counters -Name 'total'
     $executed = Get-CounterValue -Counters $counters -Name 'executed'
     $passed = Get-CounterValue -Counters $counters -Name 'passed'
     $failed = Get-CounterValue -Counters $counters -Name 'failed'
@@ -122,36 +145,47 @@ foreach ($project in @($inventory.projects)) {
         (Get-CounterValue -Counters $counters -Name 'notRunnable')
 
     if ($discovered -ne $expected -or
+        $trxTotal -ne $discovered -or
         $executed -ne $discovered -or
         $passed -ne $executed -or
         $failed -ne 0 -or
         $skipped -ne 0) {
-        throw "EDGE-TEST-RESULT-001 $projectName mismatch: expected=$expected discovered=$discovered executed=$executed passed=$passed failed=$failed skipped=$skipped."
+        throw "EDGE-TEST-RESULT-001 $projectName mismatch: expected=$expected discovered=$discovered trxTotal=$trxTotal executed=$executed passed=$passed failed=$failed skipped=$skipped."
     }
 
     $row = [pscustomobject][ordered]@{
         project = $projectName
         discovered = $discovered
+        trxTotal = $trxTotal
         executed = $executed
         passed = $passed
         failed = $failed
         skipped = $skipped
     }
     $rows.Add($row)
-    Write-Host "TEST_RESULT project=$projectName discovered=$discovered executed=$executed passed=$passed failed=$failed skipped=$skipped"
+    Write-Host "TEST_RESULT project=$projectName discovered=$discovered trxTotal=$trxTotal executed=$executed passed=$passed failed=$failed skipped=$skipped"
 }
 
 $summary = [pscustomobject][ordered]@{
-    schemaVersion = 1
+    schemaVersion = 3
     configuration = $Configuration
     projects = [object[]]$rows
     totals = [pscustomobject][ordered]@{
         discovered = [int](($rows | Measure-Object discovered -Sum).Sum)
+        trxTotal = [int](($rows | Measure-Object trxTotal -Sum).Sum)
         executed = [int](($rows | Measure-Object executed -Sum).Sum)
         passed = [int](($rows | Measure-Object passed -Sum).Sum)
         failed = [int](($rows | Measure-Object failed -Sum).Sum)
         skipped = [int](($rows | Measure-Object skipped -Sum).Sum)
     }
+}
+$totals = $summary.totals
+if ($totals.discovered -ne $totals.trxTotal -or
+    $totals.discovered -ne $totals.executed -or
+    $totals.executed -ne $totals.passed -or
+    $totals.failed -ne 0 -or
+    $totals.skipped -ne 0) {
+    throw "EDGE-TEST-RESULT-001 total mismatch: discovered=$($totals.discovered) trxTotal=$($totals.trxTotal) executed=$($totals.executed) passed=$($totals.passed) failed=$($totals.failed) skipped=$($totals.skipped)."
 }
 if (-not [string]::IsNullOrWhiteSpace($SummaryPath)) {
     $resolvedSummary = Resolve-RepositoryPath $SummaryPath
@@ -162,4 +196,4 @@ if (-not [string]::IsNullOrWhiteSpace($SummaryPath)) {
         [Text.UTF8Encoding]::new($false))
 }
 
-Write-Host "TEST_TOTAL discovered=$($summary.totals.discovered) executed=$($summary.totals.executed) passed=$($summary.totals.passed) failed=$($summary.totals.failed) skipped=$($summary.totals.skipped)"
+Write-Host "TEST_TOTAL discovered=$($summary.totals.discovered) trxTotal=$($summary.totals.trxTotal) executed=$($summary.totals.executed) passed=$($summary.totals.passed) failed=$($summary.totals.failed) skipped=$($summary.totals.skipped)"

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable><IsTestProject>true</IsTestProject>
+    <TestKind>Integration</TestKind><TestRuntime>SQLite</TestRuntime><TestRuntimeDependencies>Filesystem;PluginLoad;ProcessEnvironment;IsolatedDatabase</TestRuntimeDependencies><TestRunnerMode>Serial</TestRunnerMode><TestCadence>PR</TestCadence><TestCapability>Startup.HostLifecycle</TestCapability><TestRisk>P0</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Startup</TestOwner><TestRuleId>EDGE-STARTUP-NONBLOCKING-001</TestRuleId><TestRequired>true</TestRequired><UseEdgeTestingCore>true</UseEdgeTestingCore>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Edge\IIoT.Edge.Host.Bootstrap\IIoT.Edge.Host.Bootstrap.csproj" />
+    <ProjectReference Include="..\..\Edge\IIoT.Edge.Shell\IIoT.Edge.Shell.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.DeviceComm\IIoT.Edge.Infrastructure.DeviceComm.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.Persistence.Dapper\IIoT.Edge.Infrastructure.Persistence.Dapper.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.Persistence.EfCore\IIoT.Edge.Infrastructure.Persistence.EfCore.csproj" />
+    <ProjectReference Include="..\..\Testing\IIoT.Edge.Testing.Core\IIoT.Edge.Testing.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(EdgeTestForceEmptyPluginArtifacts)' != 'true'">
+    <PluginModuleProject Include="..\..\Testing\IIoT.Edge.TestPlugin\IIoT.Edge.TestPlugin.csproj" />
+  </ItemGroup>
+  <Target Name="ResolvePluginModuleArtifacts">
+    <MSBuild Projects="@(PluginModuleProject)" Targets="GetPluginArtifacts" BuildInParallel="false" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)"><Output TaskParameter="TargetOutputs" ItemName="PluginModuleArtifact" /></MSBuild>
+  </Target>
+  <Target Name="CopyPluginModulesToTestOutput" AfterTargets="Build" DependsOnTargets="ResolvePluginModuleArtifacts">
+    <Error Condition="'@(PluginModuleArtifact)' == ''" Text="EDGE-PLUGIN-STAGING-001 no plugin module artifacts were resolved for startup integration." />
+    <RemoveDir Directories="$(TargetDir)..\plugins" />
+    <Copy SourceFiles="@(PluginModuleArtifact)" DestinationFiles="@(PluginModuleArtifact -> '$(TargetDir)..\plugins\%(ModuleId)\%(ArtifactRelativePath)')" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

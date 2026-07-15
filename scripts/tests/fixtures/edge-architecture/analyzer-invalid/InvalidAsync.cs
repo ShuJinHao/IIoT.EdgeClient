@@ -6,4 +6,7 @@ internal sealed class InvalidAsync
     {
         await Task.Yield();
     }
+
+    internal int BlockOnTask(Task<int> task)
+        => task.GetAwaiter().GetResult();
 }

@@ -6,7 +6,6 @@ namespace IIoT.Edge.Application.Abstractions.Cloud;
 /// </summary>
 public interface ICloudApiPathProvider
 {
-    string GetProcessUploadPath();
     string GetPassStationBatchPath(string typeKey);
     string GetCapacityHourlyPath();
     string GetCapacitySummaryPath();

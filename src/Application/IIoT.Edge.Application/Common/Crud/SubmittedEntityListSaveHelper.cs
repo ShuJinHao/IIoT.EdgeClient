@@ -6,6 +6,28 @@ namespace IIoT.Edge.Application.Common.Crud;
 
 internal static class SubmittedEntityListSaveHelper
 {
+    public static async Task<Result> ExecuteInUnitOfWorkAsync<TEntity>(
+        IEdgeUnitOfWorkFactory unitOfWorkFactory,
+        Func<IRepository<TEntity>, CancellationToken, Task<Result>> applyAsync,
+        CancellationToken cancellationToken)
+        where TEntity : class, IEntity, IAggregateRoot
+    {
+        await using var unitOfWork = await unitOfWorkFactory
+            .BeginAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var result = await applyAsync(
+                unitOfWork.Repository<TEntity>(),
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (!result.IsSuccess)
+        {
+            return result;
+        }
+
+        await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
     public static async Task<Result> ReplaceSubmittedAsync<TEntity, TDto>(
         IRepository<TEntity> repo,
         IReadOnlyCollection<TDto> submittedItems,
@@ -61,7 +83,6 @@ internal static class SubmittedEntityListSaveHelper
             }
         }
 
-        await repo.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return Result.Success();
     }
 }

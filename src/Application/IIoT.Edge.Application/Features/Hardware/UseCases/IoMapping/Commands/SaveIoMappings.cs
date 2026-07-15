@@ -35,13 +35,25 @@ public record SaveIoMappingsCommand(
 /// 处理器：保存指定网络设备的 IO 映射配置。
 /// </summary>
 public class SaveIoMappingsHandler(
-    IRepository<IoMappingEntity> repo
+    IEdgeUnitOfWorkFactory unitOfWorkFactory
 ) : ICommandHandler<SaveIoMappingsCommand, Result>
 {
     public async Task<Result> Handle(
         SaveIoMappingsCommand request,
         CancellationToken cancellationToken)
-        => await SubmittedEntityListSaveHelper.ReplaceSubmittedAsync(
+    {
+        return await SubmittedEntityListSaveHelper.ExecuteInUnitOfWorkAsync<IoMappingEntity>(
+            unitOfWorkFactory,
+            (repo, ct) => ApplyAsync(repo, request, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static async Task<Result> ApplyAsync(
+        IRepository<IoMappingEntity> repo,
+        SaveIoMappingsCommand request,
+        CancellationToken cancellationToken)
+    {
+        return await SubmittedEntityListSaveHelper.ReplaceSubmittedAsync(
             repo,
             request.Mappings,
             ct => repo.GetListAsync(x => x.NetworkDeviceId == request.NetworkDeviceId, ct),
@@ -50,6 +62,7 @@ public class SaveIoMappingsHandler(
             dto => Create(request.NetworkDeviceId, dto),
             (entity, dto) => Apply(entity, request.NetworkDeviceId, dto),
             cancellationToken).ConfigureAwait(false);
+    }
 
     private static IoMappingEntity Create(int networkDeviceId, IoMappingDto dto)
         => IoMappingEntity.Create(
