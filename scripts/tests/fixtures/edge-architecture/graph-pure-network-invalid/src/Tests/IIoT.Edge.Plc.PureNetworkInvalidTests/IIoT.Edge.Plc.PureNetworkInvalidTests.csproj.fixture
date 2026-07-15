@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsTestProject>true</IsTestProject>
+    <IsEdgeArchitectureGraphFixture>true</IsEdgeArchitectureGraphFixture>
+    <EdgeArchitectureFixtureRepositoryRoot>$(MSBuildThisFileDirectory)..\..\..</EdgeArchitectureFixtureRepositoryRoot>
+    <EdgeArchitectureFixtureSolutionPath>$(MSBuildThisFileDirectory)..\..\..\EdgeArchitecture.Invalid.slnx</EdgeArchitectureFixtureSolutionPath>
+    <TestKind>Contract</TestKind><TestRuntime>Pure</TestRuntime><TestRuntimeDependencies>ControlledConcurrency</TestRuntimeDependencies><TestRunnerMode>Parallel</TestRunnerMode><TestCadence>PR</TestCadence><TestCapability>PLC.Protocol</TestCapability><TestRisk>P0</TestRisk><TestConcern>Compatibility</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.PLC</TestOwner><TestRuleId>EDGE-PLC-CONTRACT-001</TestRuleId><TestRequired>true</TestRequired>
+  </PropertyGroup>
+</Project>

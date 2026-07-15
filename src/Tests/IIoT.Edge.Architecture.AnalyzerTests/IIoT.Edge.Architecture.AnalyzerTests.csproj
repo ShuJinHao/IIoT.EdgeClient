@@ -6,17 +6,13 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <TestKind>Architecture</TestKind>
-    <TestRuntime>Pure/Roslyn</TestRuntime>
+    <TestRuntime>Pure</TestRuntime><TestRuntimeDependencies>Roslyn</TestRuntimeDependencies>
+    <TestRunnerMode>Parallel</TestRunnerMode>
+    <TestCadence>PR</TestCadence><TestCapability>Architecture.Analyzers</TestCapability><TestRisk>P1</TestRisk><TestConcern>Compatibility</TestConcern><TestProfile>Default</TestProfile><TestOwner>Edge.Architecture</TestOwner><TestRuleId>EDGE-QUALITY-001</TestRuleId><TestRequired>true</TestRequired>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="xunit.v3" />
-    <PackageReference Include="xunit.runner.visualstudio">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>

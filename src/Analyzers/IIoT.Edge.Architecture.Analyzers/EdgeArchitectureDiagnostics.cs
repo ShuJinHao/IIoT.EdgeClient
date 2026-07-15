@@ -70,6 +70,20 @@ internal static class EdgeArchitectureDiagnostics
         "Dapper write operations are limited to the registered Dapper owner.",
         "#data006");
 
+    internal static readonly DiagnosticDescriptor PresentationMediatRUseCase = Create(
+        "EDGEPRES001",
+        "Presentation 不得定义或发送 MediatR use case",
+        "展示层符号 '{0}' 使用了 MediatR use-case 类型 '{1}'。原因：Command/Query 与 handler 属于 Application，ViewModel 只能依赖窄 facade；最短修复：把 use case 下沉到 Application 并注入窄展示端口；精确例外：INotificationHandler<T> 展示刷新",
+        "Presentation cannot define IRequest/IRequestHandler use cases or inject ISender; notification handlers remain allowed.",
+        "#edgepres001");
+
+    internal static readonly DiagnosticDescriptor DirectVisibleValidationText = Create(
+        "EDGEPRES002",
+        "Presentation 校验消息必须走资源键",
+        "展示层符号 '{0}' 直接构造了可见中文校验消息 '{1}'。原因：可见文本必须可本地化；最短修复：通过资源服务解析消息后再构造 ValidationIssue；精确例外：无",
+        "Presentation ValidationIssue messages cannot embed visible Chinese literals.",
+        "#edgepres002");
+
     internal static readonly DiagnosticDescriptor PluginForbiddenReference = Create(
         "PLUG001",
         "插件使用了禁止的宿主实现",
@@ -98,12 +112,40 @@ internal static class EdgeArchitectureDiagnostics
         "Concrete plugin entries and Module SDK assemblies must expose explicit, stable role metadata.",
         "#plug004");
 
+    internal static readonly DiagnosticDescriptor PluginChannelRegistration = Create(
+        "PLUG005",
+        "插件通道和宿主契约必须走模块 builder",
+        "插件符号 '{0}' 使用了非标准模块注册或通道基类 '{1}'。原因：硬件 profile、信号 profile、开发样例和 Cloud 通道只能经 IEdgeProcessModuleBuilder/CloudUploadChannelBase 注册；最短修复：改用对应 builder 方法或标准通道基类；精确例外：普通插件私有服务注册",
+        "Plugin hardware/sample contracts must use IEdgeProcessModuleBuilder and plugin Cloud uploaders must use CloudUploadChannelBase.",
+        "#plug005");
+
     internal static readonly DiagnosticDescriptor ProductionTaskOutbound = Create(
         "EDGEOUT001",
         "模块生产任务绕过 DataPipeline",
         "生产任务 '{0}' 经调用 '{1}' 到达外部出口 '{2}'。原因：生产任务只能创建记录并调用 IDataPipelineService.EnqueueAsync；最短修复：删除 HTTP/uploader 调用并经 DataPipeline 入队；精确例外：IDataPipelineService.EnqueueAsync",
         "Production PLC tasks cannot reach HTTP, MES/Cloud clients, request executors, or uploaders, including through helpers and interface dispatch.",
         "#edgeout001");
+
+    internal static readonly DiagnosticDescriptor ProductionTaskEnqueueGuard = Create(
+        "EDGEOUT002",
+        "模块生产任务必须处理入队异常",
+        "生产任务 '{0}' 的 DataPipeline 入队调用未由 Exception catch 保护。原因：队列或持久化异常不得逃逸并中断 PLC 任务；最短修复：在任务边界捕获 Exception 并记录明确失败结果；精确例外：无",
+        "Production PLC tasks must translate IDataPipelineService.EnqueueAsync exceptions at the task boundary.",
+        "#edgeout002");
+
+    internal static readonly DiagnosticDescriptor RemovedCompatibilityContract = Create(
+        "EDGECOMP001",
+        "已删除兼容契约不得回流",
+        "符号 '{0}' 使用或重新声明了已删除兼容契约 '{1}'。原因：无真实调用方的 alias/wrapper/fallback 已物理删除；最短修复：使用当前强类型通道、信号契约或模块 builder；精确例外：无",
+        "Removed uploader, signal-interaction, static PLC profile, and untyped signal-accessor contracts cannot be reintroduced.",
+        "#edgecomp001");
+
+    internal static readonly DiagnosticDescriptor CloudRouteLiteral = Create(
+        "EDGECLOUDCFG001",
+        "Cloud API 路由不得硬编码在生产 C#",
+        "符号 '{0}' 硬编码 Cloud API 路由 '{1}'。原因：生产路由只能来自 CloudApi 配置快照；最短修复：通过 ICloudApiPathProvider/CloudApiConfigSnapshot 获取路径；精确例外：测试程序集",
+        "Production C# code cannot hard-code /api/v1 routes; paths must come from the Cloud API configuration snapshot.",
+        "#edgecloudcfg001");
 
     internal static readonly DiagnosticDescriptor PlcTransportOwner = Create(
         "EDGEPLCOWN001",

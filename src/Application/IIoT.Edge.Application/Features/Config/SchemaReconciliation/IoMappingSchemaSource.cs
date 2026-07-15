@@ -7,7 +7,7 @@ using IIoT.Edge.SharedKernel.Repository;
 namespace IIoT.Edge.Application.Features.Config.SchemaReconciliation;
 
 public sealed class IoMappingSchemaSource(
-    IRepository<NetworkDeviceEntity> networkDevices,
+    IReadRepository<NetworkDeviceEntity> networkDevices,
     ModuleHardwareProfileResolver hardwareProfileResolver) : IConfigSchemaSource
 {
     public string SchemaId => IoMappingSchemaIds.Signals;

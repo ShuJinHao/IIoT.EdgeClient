@@ -37,10 +37,21 @@ public record SaveNetworkDevicesCommand(
 /// 处理器：保存网络设备配置。
 /// </summary>
 public class SaveNetworkDevicesHandler(
-    IRepository<NetworkDeviceEntity> repo
+    IEdgeUnitOfWorkFactory unitOfWorkFactory
 ) : ICommandHandler<SaveNetworkDevicesCommand, Result>
 {
     public async Task<Result> Handle(
+        SaveNetworkDevicesCommand request,
+        CancellationToken cancellationToken)
+    {
+        return await SubmittedEntityListSaveHelper.ExecuteInUnitOfWorkAsync<NetworkDeviceEntity>(
+            unitOfWorkFactory,
+            (repo, ct) => ApplyAsync(repo, request, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static async Task<Result> ApplyAsync(
+        IRepository<NetworkDeviceEntity> repo,
         SaveNetworkDevicesCommand request,
         CancellationToken cancellationToken)
     {

@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="src/Tests/IIoT.Edge.Domain.AggregateTests/IIoT.Edge.Domain.AggregateTests.csproj" />
+  <Project Path="src/Testing/IIoT.Edge.Testing.Core/IIoT.Edge.Testing.Core.csproj" />
+  <Project Path="src/Edge/IIoT.Edge.Host.Bootstrap/IIoT.Edge.Host.Bootstrap.csproj" />
+</Solution>

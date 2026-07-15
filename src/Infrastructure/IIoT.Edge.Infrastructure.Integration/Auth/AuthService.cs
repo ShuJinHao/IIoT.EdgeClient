@@ -20,6 +20,7 @@ public class AuthService : IAuthService
     private readonly LocalAdminConfig _localAdminConfig;
     private readonly ILocalAdminCredentialStore _localAdminCredentialStore;
     private readonly CloudJwtValidationConfig _jwtValidationConfig;
+    private readonly TimeProvider _timeProvider;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private UserSession? _currentUser;
     private int _backgroundRefreshStarted;
@@ -34,13 +35,15 @@ public class AuthService : IAuthService
         ICloudApiEndpointProvider endpointProvider,
         LocalAdminConfig localAdminConfig,
         ILocalAdminCredentialStore localAdminCredentialStore,
-        CloudJwtValidationConfig jwtValidationConfig)
+        CloudJwtValidationConfig jwtValidationConfig,
+        TimeProvider? timeProvider = null)
     {
         _httpClientFactory = httpClientFactory;
         _endpointProvider = endpointProvider;
         _localAdminConfig = localAdminConfig;
         _localAdminCredentialStore = localAdminCredentialStore;
         _jwtValidationConfig = jwtValidationConfig;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public bool HasPermission(string permission)
@@ -242,7 +245,7 @@ public class AuthService : IAuthService
         }
 
         if (_currentUser.ExpiresAtUtc.HasValue
-            && _currentUser.ExpiresAtUtc.Value <= DateTimeOffset.UtcNow)
+            && _currentUser.ExpiresAtUtc.Value <= _timeProvider.GetUtcNow())
         {
             if (!CanRefreshCloudSession(_currentUser))
             {
@@ -277,10 +280,10 @@ public class AuthService : IAuthService
         });
     }
 
-    private static bool CanRefreshCloudSession(UserSession session)
+    private bool CanRefreshCloudSession(UserSession session)
         => !string.IsNullOrWhiteSpace(session.RefreshToken)
             && (!session.RefreshTokenExpiresAtUtc.HasValue
-                || session.RefreshTokenExpiresAtUtc.Value > DateTimeOffset.UtcNow);
+                || session.RefreshTokenExpiresAtUtc.Value > _timeProvider.GetUtcNow());
 
     private async Task<bool> RefreshCloudSessionAsync(CancellationToken ct = default)
     {
@@ -298,7 +301,7 @@ public class AuthService : IAuthService
             }
 
             if (_currentUser.ExpiresAtUtc.HasValue
-                && _currentUser.ExpiresAtUtc.Value > DateTimeOffset.UtcNow)
+                && _currentUser.ExpiresAtUtc.Value > _timeProvider.GetUtcNow())
             {
                 return true;
             }

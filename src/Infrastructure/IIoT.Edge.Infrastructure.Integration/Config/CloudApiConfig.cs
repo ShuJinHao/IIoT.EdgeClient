@@ -17,7 +17,6 @@ public class CloudApiPaths
     public string IdentityDeviceLogin { get; set; } = string.Empty;
     public string HumanIdentityRefresh { get; set; } = string.Empty;
     public string DeviceLog { get; set; } = string.Empty;
-    public string ProcessUpload { get; set; } = string.Empty;
     public string PassStationBatchTemplate { get; set; } = string.Empty;
     public string CapacityHourly { get; set; } = string.Empty;
     public string CapacitySummary { get; set; } = string.Empty;

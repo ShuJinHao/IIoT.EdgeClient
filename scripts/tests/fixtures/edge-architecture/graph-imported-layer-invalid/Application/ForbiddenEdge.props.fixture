@@ -1,0 +1,6 @@
+<Project>
+  <ItemGroup>
+    <ProjectReference Include="../Infrastructure/IIoT.Edge.Infrastructure.Persistence.EfCore.csproj"
+                      Condition="'$(Configuration)' == 'Debug' and '$(EnableImportedForbiddenEdge)' == 'true'" />
+  </ItemGroup>
+</Project>

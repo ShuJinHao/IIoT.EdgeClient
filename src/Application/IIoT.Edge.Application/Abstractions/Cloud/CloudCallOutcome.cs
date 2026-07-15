@@ -7,5 +7,6 @@ public enum CloudCallOutcome
     UnauthorizedAfterRetry = 2,
     HttpFailure = 3,
     NetworkFailure = 4,
-    Exception = 5
+    Exception = 5,
+    InvalidPayload = 6
 }

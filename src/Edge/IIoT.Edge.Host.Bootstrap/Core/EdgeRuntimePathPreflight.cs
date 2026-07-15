@@ -14,16 +14,26 @@ public static class EdgeRuntimePathPreflight
     private const string FallbackDirectoryName = "runtime-fallback";
 
     public static EdgeRuntimePathPreflightResult EnsureWritable(EdgeRuntimePaths runtimePaths)
+        => EnsureWritable(runtimePaths, ProbeWriteAndReplace);
+
+    internal static EdgeRuntimePathPreflightResult EnsureWritable(
+        EdgeRuntimePaths runtimePaths,
+        Func<string, Exception?> directoryProbe)
     {
         ArgumentNullException.ThrowIfNull(runtimePaths);
+        ArgumentNullException.ThrowIfNull(directoryProbe);
 
-        if (TryCreateRuntimeDirectories(runtimePaths, out var failedPath, out var primaryException))
+        if (TryPrepareRuntimeDirectories(
+                runtimePaths,
+                directoryProbe,
+                out var failedPath,
+                out var primaryException))
         {
             return new EdgeRuntimePathPreflightResult(runtimePaths, []);
         }
 
         var fallbackPaths = CreateFallbackRuntimePaths(runtimePaths);
-        if (TryCreateRuntimeDirectories(fallbackPaths, out _, out _))
+        if (TryPrepareRuntimeDirectories(fallbackPaths, directoryProbe, out _, out _))
         {
             return new EdgeRuntimePathPreflightResult(
                 fallbackPaths,
@@ -36,7 +46,11 @@ public static class EdgeRuntimePathPreflight
                 ]);
         }
 
-        TryCreateRuntimeDirectories(fallbackPaths, out var fallbackFailedPath, out var fallbackException);
+        TryPrepareRuntimeDirectories(
+            fallbackPaths,
+            directoryProbe,
+            out var fallbackFailedPath,
+            out var fallbackException);
         return new EdgeRuntimePathPreflightResult(
             runtimePaths,
             [
@@ -50,8 +64,9 @@ public static class EdgeRuntimePathPreflight
             ]);
     }
 
-    private static bool TryCreateRuntimeDirectories(
+    private static bool TryPrepareRuntimeDirectories(
         EdgeRuntimePaths runtimePaths,
+        Func<string, Exception?> directoryProbe,
         out string? failedPath,
         out Exception? exception)
     {
@@ -60,6 +75,9 @@ public static class EdgeRuntimePathPreflight
             try
             {
                 Directory.CreateDirectory(directory);
+                var probeFailure = directoryProbe(directory);
+                if (probeFailure is not null)
+                    throw probeFailure;
             }
             catch (Exception ex)
             {
@@ -72,6 +90,60 @@ public static class EdgeRuntimePathPreflight
         failedPath = null;
         exception = null;
         return true;
+    }
+
+    private static Exception? ProbeWriteAndReplace(string directory)
+    {
+        var probeId = Guid.NewGuid().ToString("N");
+        var sourcePath = Path.Combine(directory, $".iiot-edge-write-probe-{probeId}.tmp");
+        var targetPath = Path.Combine(directory, $".iiot-edge-write-probe-{probeId}.replace");
+        Exception? failure = null;
+        try
+        {
+            WriteProbeFile(sourcePath, 0x31);
+            WriteProbeFile(targetPath, 0x32);
+            File.Move(sourcePath, targetPath, overwrite: true);
+            if (File.ReadAllBytes(targetPath) is not [0x31])
+                throw new IOException($"运行目录原子替换验证失败：{directory}");
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+        finally
+        {
+            failure ??= TryDeleteProbe(sourcePath);
+            failure ??= TryDeleteProbe(targetPath);
+        }
+
+        return failure;
+    }
+
+    private static void WriteProbeFile(string path, byte value)
+    {
+        using var stream = new FileStream(
+            path,
+            FileMode.CreateNew,
+            FileAccess.Write,
+            FileShare.None,
+            bufferSize: 1,
+            FileOptions.WriteThrough);
+        stream.WriteByte(value);
+        stream.Flush(flushToDisk: true);
+    }
+
+    private static Exception? TryDeleteProbe(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return ex;
+        }
     }
 
     private static IEnumerable<string> EnumerateRuntimeDirectories(EdgeRuntimePaths runtimePaths)

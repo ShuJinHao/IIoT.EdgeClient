@@ -6,17 +6,15 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <TestKind>UI</TestKind>
+    <TestRuntime>Avalonia</TestRuntime><TestRuntimeDependencies>Headless</TestRuntimeDependencies>
+    <TestRunnerMode>Serial</TestRunnerMode>
+    <TestCadence>PR</TestCadence><TestCapability>UI.SharedControls</TestCapability><TestRisk>P2</TestRisk><TestConcern>Accessibility</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.UI</TestOwner><TestRuleId>EDGE-UI-001</TestRuleId><TestRequired>true</TestRequired>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia.Headless.XUnit" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="xunit.v3" />
-    <PackageReference Include="xunit.runner.visualstudio">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>

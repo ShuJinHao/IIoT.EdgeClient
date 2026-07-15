@@ -271,18 +271,6 @@ internal sealed class LocalizedSyncDiagnosticsText(
         };
     }
 
-    public static string FormatTimestampFallback(DateTime? value)
-        => value is null
-            ? "--"
-            : NormalizeTimestampFallback(value.Value).ToString("yyyy-MM-dd HH:mm:ss");
-
-    private static DateTime NormalizeTimestampFallback(DateTime value) => value.Kind switch
-    {
-        DateTimeKind.Utc => DateTime.SpecifyKind(value, DateTimeKind.Unspecified),
-        DateTimeKind.Local => DateTime.SpecifyKind(value, DateTimeKind.Unspecified),
-        _ => value
-    };
-
     private static string NormalizeText(string? value)
         => string.IsNullOrWhiteSpace(value)
             ? "--"

@@ -18,7 +18,7 @@ public sealed record SaveCloudApiConfigParamsCommand(
     List<CloudApiConfigParamDto> Params) : ICommand<Result>;
 
 public sealed class SaveCloudApiConfigParamsHandler(
-    IRepository<SystemConfigEntity> repo,
+    IEdgeUnitOfWorkFactory unitOfWorkFactory,
     IEdgeCacheService cache,
     ILocalParameterConfigChangePublisher changePublisher,
     ILocalSystemRuntimeConfigService runtimeConfig,
@@ -67,10 +67,16 @@ public sealed class SaveCloudApiConfigParamsHandler(
             return Result.Failure("Cloud 系统开关投影写入失败，已保持原配置。");
         }
 
-        await SystemConfigParamSaveHelper.ReplaceByKeysAsync(
-            repo,
-            configsResult.Value ?? [],
-            cancellationToken);
+        await using (var unitOfWork = await unitOfWorkFactory
+                         .BeginAsync(cancellationToken)
+                         .ConfigureAwait(false))
+        {
+            await SystemConfigParamSaveHelper.ReplaceByKeysAsync(
+                unitOfWork.Repository<SystemConfigEntity>(),
+                configsResult.Value ?? [],
+                cancellationToken).ConfigureAwait(false);
+            await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
 
         cache.Remove(ParameterCacheKeys.SystemAll);
         await runtimeConfig.RefreshAsync(cancellationToken).ConfigureAwait(false);
@@ -113,10 +119,16 @@ public sealed class SaveCloudApiConfigParamsHandler(
             "false",
             "Cloud 系统开关投影写入失败，已自动回滚。");
         disabled.UpdateSortOrder(descriptor.SortOrder);
-        await SystemConfigParamSaveHelper.ReplaceByKeysAsync(
-            repo,
-            [disabled],
-            cancellationToken).ConfigureAwait(false);
+        await using (var unitOfWork = await unitOfWorkFactory
+                         .BeginAsync(cancellationToken)
+                         .ConfigureAwait(false))
+        {
+            await SystemConfigParamSaveHelper.ReplaceByKeysAsync(
+                unitOfWork.Repository<SystemConfigEntity>(),
+                [disabled],
+                cancellationToken).ConfigureAwait(false);
+            await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
         cache.Remove(ParameterCacheKeys.SystemAll);
         await runtimeConfig.RefreshAsync(cancellationToken).ConfigureAwait(false);
     }

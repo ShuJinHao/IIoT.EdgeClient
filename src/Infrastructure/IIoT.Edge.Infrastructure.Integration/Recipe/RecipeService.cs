@@ -16,6 +16,7 @@ public class RecipeService : IRecipeService
     private readonly ICloudApiEndpointProvider _endpointProvider;
     private readonly IDeviceService _deviceService;
     private readonly ILogService _logger;
+    private readonly IRecipePersistenceFileSystem _fileSystem;
     private readonly string _recipeDir;
 
     private RecipeData? _cloudRecipe;
@@ -37,11 +38,29 @@ public class RecipeService : IRecipeService
         IDeviceService deviceService,
         ILogService logger,
         string? recipeDirectory = null)
+        : this(
+            cloudHttp,
+            endpointProvider,
+            deviceService,
+            logger,
+            new RecipePersistenceFileSystem(),
+            recipeDirectory)
+    {
+    }
+
+    internal RecipeService(
+        ICloudHttpClient cloudHttp,
+        ICloudApiEndpointProvider endpointProvider,
+        IDeviceService deviceService,
+        ILogService logger,
+        IRecipePersistenceFileSystem fileSystem,
+        string? recipeDirectory = null)
     {
         _cloudHttp = cloudHttp;
         _endpointProvider = endpointProvider;
         _deviceService = deviceService;
         _logger = logger;
+        _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
 
         _recipeDir = recipeDirectory
             ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "recipe");
@@ -83,8 +102,9 @@ public class RecipeService : IRecipeService
     public RecipeData? CloudRecipe => _cloudRecipe;
     public RecipeData? LocalRecipe => _localRecipe;
 
-    public async Task<bool> PullFromCloudAsync()
+    public async Task<bool> PullFromCloudAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var device = _deviceService.CurrentDevice;
         if (device is null)
         {
@@ -100,7 +120,11 @@ public class RecipeService : IRecipeService
         }
 
         var url = _endpointProvider.BuildRecipeByDevicePath(device.DeviceId);
-        var result = await _cloudHttp.GetAsync(url);
+        var result = await _cloudHttp.GetAsync(
+                url,
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         if (!result.IsSuccess || string.IsNullOrWhiteSpace(result.Payload))
         {
             _logger.Error($"[配方] 云端配方拉取失败。结果：{result.Outcome}，原因：{result.ReasonCode}");
@@ -116,11 +140,16 @@ public class RecipeService : IRecipeService
                 return false;
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
+            SaveSingleFile(recipe, GetCloudFilePath());
             _cloudRecipe = recipe;
-            SaveSingleFile(_cloudRecipe, GetCloudFilePath());
             _logger.Info($"[配方] 云端配方已加载：{recipe.RecipeName} {recipe.Version}，参数数：{recipe.Parameters.Count}");
             RecipeChanged?.Invoke();
             return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -131,14 +160,16 @@ public class RecipeService : IRecipeService
 
     public void SetLocalParam(string name, double? min, double? max, string unit)
     {
-        _localRecipe ??= new RecipeData
-        {
-            RecipeName = "Local Emergency Recipe",
-            Version = "LOCAL",
-            UpdatedAt = CurrentUtcTimestamp()
-        };
+        var candidate = _localRecipe is null
+            ? new RecipeData
+            {
+                RecipeName = "Local Emergency Recipe",
+                Version = "LOCAL",
+                UpdatedAt = CurrentUtcTimestamp()
+            }
+            : CloneRecipe(_localRecipe);
 
-        _localRecipe.Parameters[name] = new RecipeParam
+        candidate.Parameters[name] = new RecipeParam
         {
             Id = Guid.NewGuid().ToString(),
             Name = name,
@@ -147,8 +178,9 @@ public class RecipeService : IRecipeService
             Unit = unit
         };
 
-        _localRecipe.UpdatedAt = CurrentUtcTimestamp();
-        SaveSingleFile(_localRecipe, GetLocalFilePath());
+        candidate.UpdatedAt = CurrentUtcTimestamp();
+        SaveSingleFile(candidate, GetLocalFilePath());
+        _localRecipe = candidate;
         _logger.Info($"[配方] 本地参数已更新：{name} [{min} ~ {max}] {unit}");
 
         if (_activeSource == RecipeSource.Local)
@@ -164,10 +196,12 @@ public class RecipeService : IRecipeService
             return;
         }
 
-        if (_localRecipe.Parameters.Remove(name))
+        var candidate = CloneRecipe(_localRecipe);
+        if (candidate.Parameters.Remove(name))
         {
-            _localRecipe.UpdatedAt = CurrentUtcTimestamp();
-            SaveSingleFile(_localRecipe, GetLocalFilePath());
+            candidate.UpdatedAt = CurrentUtcTimestamp();
+            SaveSingleFile(candidate, GetLocalFilePath());
+            _localRecipe = candidate;
             _logger.Info($"[配方] 本地参数已删除：{name}");
 
             if (_activeSource == RecipeSource.Local)
@@ -207,14 +241,14 @@ public class RecipeService : IRecipeService
 
     private RecipeData? LoadSingleFile(string path)
     {
-        if (!File.Exists(path))
+        if (!_fileSystem.FileExists(path))
         {
             return null;
         }
 
         try
         {
-            var json = File.ReadAllText(path);
+            var json = _fileSystem.ReadAllText(path);
             return JsonSerializer.Deserialize<RecipeData>(json, _jsonOptions);
         }
         catch (Exception ex)
@@ -226,16 +260,60 @@ public class RecipeService : IRecipeService
 
     private void SaveSingleFile(RecipeData data, string path)
     {
+        var tempPath = path + ".tmp";
         try
         {
             var json = JsonSerializer.Serialize(data, _jsonOptions);
-            File.WriteAllText(path, json);
+            _fileSystem.WriteAllText(tempPath, json);
+            _fileSystem.ReplaceFile(tempPath, path);
         }
         catch (Exception ex)
         {
-            _logger.Error($"[配方] 保存配方文件失败 {path}：{ex.Message}");
+            var cleanup = CleanupTempFile(tempPath);
+            var message = $"[配方] 原子保存配方文件失败 {Path.GetFileName(path)}：{ex.Message}。{cleanup}";
+            _logger.Error(message);
+            throw new RecipePersistenceException(message, ex);
         }
     }
+
+    private string CleanupTempFile(string tempPath)
+    {
+        try
+        {
+            if (!_fileSystem.FileExists(tempPath))
+                return "临时文件清理：无残留 .tmp 文件。";
+
+            _fileSystem.DeleteFile(tempPath);
+            return "临时文件清理：已删除残留 .tmp 文件。";
+        }
+        catch (Exception ex)
+        {
+            return $"临时文件清理：删除失败（{ex.Message}）。";
+        }
+    }
+
+    private static RecipeData CloneRecipe(RecipeData source)
+        => new()
+        {
+            RecipeId = source.RecipeId,
+            RecipeName = source.RecipeName,
+            Version = source.Version,
+            ProcessName = source.ProcessName,
+            Status = source.Status,
+            UpdatedAt = source.UpdatedAt,
+            Parameters = source.Parameters.ToDictionary(
+                static pair => pair.Key,
+                static pair => new RecipeParam
+                {
+                    Id = pair.Value.Id,
+                    Name = pair.Value.Name,
+                    Min = pair.Value.Min,
+                    Max = pair.Value.Max,
+                    Unit = pair.Value.Unit,
+                    CustomValue = pair.Value.CustomValue
+                },
+                source.Parameters.Comparer)
+        };
 
     private RecipeData? ParseCloudResponse(string json)
     {

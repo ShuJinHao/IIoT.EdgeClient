@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable><IsTestProject>true</IsTestProject>
+    <TestKind>Aggregate</TestKind><TestRuntime>Pure</TestRuntime><TestRuntimeDependencies /><TestRunnerMode>Parallel</TestRunnerMode><TestCadence>PR</TestCadence><TestCapability>Domain.Aggregates</TestCapability><TestRisk>P1</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Domain</TestOwner><TestRuleId>EDGE-DOMAIN-001</TestRuleId><TestRequired>true</TestRequired>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="..\..\Core\IIoT.Edge.Domain\IIoT.Edge.Domain.csproj" /></ItemGroup>
+</Project>

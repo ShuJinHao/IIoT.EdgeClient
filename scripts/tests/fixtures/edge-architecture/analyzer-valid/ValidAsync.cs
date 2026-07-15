@@ -6,4 +6,9 @@ internal static class ValidAsync
     {
         await Task.Delay(1, cancellationToken);
     }
+
+    internal static string ReadBusinessResult(BusinessOutcome outcome)
+        => outcome.Result;
 }
+
+internal sealed record BusinessOutcome(string Result);

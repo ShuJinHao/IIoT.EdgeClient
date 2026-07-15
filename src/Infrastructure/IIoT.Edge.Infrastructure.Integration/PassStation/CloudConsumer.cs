@@ -45,12 +45,23 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
     }
 
     public async Task<bool> ProcessAsync(CellCompletedRecord record, CancellationToken cancellationToken = default)
-        => (await ProcessWithResultAsync(record, cancellationToken).ConfigureAwait(false)).IsSuccess;
+    {
+        var result = await ProcessWithResultAsync(record, cancellationToken).ConfigureAwait(false);
+        if (result.Outcome == CloudCallOutcome.InvalidPayload)
+        {
+            throw new DataPipelineNonRetryableException(result.ReasonCode);
+        }
+
+        return result.IsSuccess;
+    }
 
     public Task<CloudCallResult> ProcessWithResultAsync(
         CellCompletedRecord record,
         CancellationToken cancellationToken = default)
         => ProcessBatchAsync([record], cancellationToken);
+
+    public CloudCallResult ValidateBatchRecord(CellCompletedRecord record)
+        => StandardPassStationCloudUploader.ValidateRecord(record.CellData.ProcessType, record);
 
     public async Task<CloudCallResult> ProcessBatchAsync(
         IReadOnlyList<CellCompletedRecord> records,
@@ -67,6 +78,25 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
         if (cloudRecords.Count == 0)
         {
             return CloudCallResult.Success();
+        }
+
+        var deviceStatusRecords = cloudRecords
+            .Where(UploadDiagnosticsContextFactory.IsDeviceStatusRecord)
+            .ToList();
+        if (deviceStatusRecords.Count > 0)
+        {
+            const string reasonCode = "cloud_plc_device_status_endpoint_missing";
+            var blockedResult = CloudCallResult.Failure(
+                CloudCallOutcome.SkippedUploadNotReady,
+                reasonCode);
+            _logger.Warn(
+                $"[PLC-{UploadDiagnosticsContextFactory.ResolveLogDeviceName(deviceStatusRecords)}][云端] PLC 设备状态专用接口未就绪，{deviceStatusRecords.Count} 条设备状态记录保持待传。");
+            _diagnosticsStore.RecordBlocked(
+                deviceStatusRecords[0].CellData.ProcessType,
+                reasonCode,
+                "PLC 设备状态 Cloud 专用接口未就绪，记录保持待传。",
+                UploadDiagnosticsContextFactory.CreateCloudContext(deviceStatusRecords));
+            return blockedResult;
         }
 
         foreach (var group in cloudRecords.GroupBy(x => x.CellData.ProcessType, StringComparer.OrdinalIgnoreCase))
@@ -121,28 +151,6 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
             foreach (var sourceGroup in group.GroupBy(UploadDiagnosticsContextFactory.CreateSourceKey))
             {
                 var groupRecords = sourceGroup.ToList();
-                var deviceStatusRecords = groupRecords
-                    .Where(UploadDiagnosticsContextFactory.IsDeviceStatusRecord)
-                    .ToList();
-                if (deviceStatusRecords.Count > 0)
-                {
-                    const string reasonCode = "cloud_plc_device_status_endpoint_missing";
-                    _logger.Warn(
-                        $"[PLC-{UploadDiagnosticsContextFactory.ResolveLogDeviceName(deviceStatusRecords)}][云端] PLC 设备状态专用接口未就绪，{deviceStatusRecords.Count} 条设备状态记录已跳过标准过站上传。");
-                    _diagnosticsStore.RecordBlocked(
-                        group.Key,
-                        reasonCode,
-                        "PLC 设备状态 Cloud 专用接口未就绪，已跳过标准过站上传。",
-                        UploadDiagnosticsContextFactory.CreateCloudContext(deviceStatusRecords));
-                    groupRecords = groupRecords
-                        .Where(static record => !UploadDiagnosticsContextFactory.IsDeviceStatusRecord(record))
-                        .ToList();
-                    if (groupRecords.Count == 0)
-                    {
-                        continue;
-                    }
-                }
-
                 var device = ResolveUploadDevice(groupRecords, _deviceService.CurrentDevice);
                 if (device is null)
                 {

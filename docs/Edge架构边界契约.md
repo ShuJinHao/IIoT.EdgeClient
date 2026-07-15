@@ -14,7 +14,7 @@
 
 ## 2. 当前项目图与角色
 
-当前 solution 与仓库项目图均为 32 个项目，其中 8 个是 required 测试项目，1 个是位于 `src/Testing` 的中性插件 fixture，新增的 Analyzer 实现项目不是测试项目。生产项目不得直接或传递引用 Tests/Testing/TestKit；`Host.Bootstrap -> Presentation.VisualTestData` 仅在 Debug 生效，Release 图不得包含该边。项目数只是 inventory，不是永久冻结；任何增减必须同时更新清单、构建图、真实发现数和滚动复盘。
+当前 solution 与仓库项目图均为 61 个项目，其中 32 个是 required 测试 runner，1 个是位于 `src/Testing` 的中性插件 fixture，Analyzer 实现项目不是测试项目。`IIoT.Edge.Module.TestPlugin.Companion` 是该 fixture artifact 的 plugin-owned TestSupport，不是第二个 fixture，也不计入 32 个 required runner。当前数量不得由历史文档回填。生产项目不得直接或传递引用 Tests/Testing/TestKit；`Host.Bootstrap -> Presentation.VisualTestData` 仅在 Debug 生效，Release 图不得包含该边。项目数只是 inventory，不是永久冻结；任何增减必须同时更新清单、构建图、真实发现数和滚动复盘。
 
 角色不是仅按目录推断，当前登记如下：
 
@@ -31,8 +31,9 @@
 | Plugin SDK | `Module.Sdk`，只提供通用 contract 和基础能力，不承载具体工序 |
 | Concrete plugin | 只作当前实现库存；任何具体工序都不是宿主规则来源，未来仓库归属由下一份独立计划裁决 |
 | Analyzer | `IIoT.Edge.Architecture.Analyzers`；只作为生产构建的 Analyzer 引用 |
-| Test | 当前 8 个 `src/Tests` required 项目；物理迁移时必须同步更新 inventory 与真实 runner 对账 |
+| Test | 当前 32 个 `src/Tests` required runner；物理迁移时必须同步更新 inventory 与真实 runner 对账 |
 | Test fixture | `src/Testing/IIoT.Edge.TestPlugin`；只用于测试构建与 staging，禁止成为生产发布输入 |
+| TestSupport | `IIoT.Edge.Testing.*` 及 `IIoT.Edge.Module.TestPlugin.Companion`；不包含 case，后者只能随中性 fixture staged artifact 消费 |
 
 ### 2.1 允许的直接依赖方向
 
@@ -91,7 +92,7 @@ EF navigation、`DbSet` 和 cascade 只表达 ORM 关系，不自动证明 DDD o
 
 - Model/DbSet：`Infrastructure.Persistence.EfCore/EdgeDbContext`。
 - Read：`EfReadRepository<T>`；不得向调用方泄漏无法释放 context 的 `IQueryable`。
-- Write/commit：当前仅 `EfRepository<T>` 可调用具体 `DbContext.SaveChanges*`；Application 调用 `IRepository.SaveChangesAsync`/`ExecuteDeleteAsync` 是批准端口，不得按方法名误报。
+- Write/commit：`EdgeUnitOfWorkFactory` 为每个 session 创建独占 `EdgeDbContext` 与 transaction，`EfUnitOfWorkRepository<T>` 只在该 session 内跟踪 Add/Update/Delete，只有 `EdgeUnitOfWork.FlushAsync`/`CommitAsync` 可调用 `DbContext.SaveChangesAsync`。旧 `EfRepository<T>`、repository `SaveChangesAsync`/`ExecuteDeleteAsync`/replace 端口和 open-generic 写 repository DI 已物理删除。
 - Runtime migration：`ApplyMigrations`，唯一 composition caller 为 `AppStartupInitializer`。
 - Design-time：`EdgeDbContextFactory`。
 - `EdgeSqliteSchemaRepair` 是有期限的历史例外；目标是迁成真实 migration 后物理删除，不能成为第二套 schema 演进机制。
@@ -108,18 +109,18 @@ EF navigation、`DbSet` 和 cascade 只表达 ORM 关系，不自动证明 DDD o
 
 宿主契约当前不批准任何具体工序的模块本地 raw SQLite owner。具体插件确需持久化时，应由插件业务文档裁决窄 persistence port、schema、migration、transaction 和 UI 查询边界，并由插件仓测试负责；宿主只验证包隔离和 contract，不复制已移除工序的数据库实现，也不得把历史实现当作新插件正例。
 
-### 4.4 目标写事务边界
+### 4.4 已落地的写事务边界
 
-只把 `IRepository<T>` 从 Singleton 改为 Scoped 不是修复：Shell 由根 `ServiceProvider` 解析服务，Scoped 实例会被根作用域长驻；`SaveHardwareConfigHandler` 通过三次 `ISender.Send` 仍会形成三个独立提交。目标必须是显式、一次性、禁止 ambient/`AsyncLocal` 的 Unit of Work session：
+当前写路径使用显式、一次性、禁止 ambient/`AsyncLocal` 的 Unit of Work session：
 
 - `IEdgeUnitOfWorkFactory.BeginAsync(ct)` 创建独占一个 `EdgeDbContext` 和一个 provider-supported non-deferred SQLite transaction 的 `IEdgeUnitOfWork : IAsyncDisposable`。
 - 写 repository 只能由 `IEdgeUnitOfWork.Repository<T>()` 获取；删除 open-generic `IRepository<>` 的直接 DI 注册，Application handler 不得跨 session 缓存写 repository。
 - session 可提供 `FlushAsync(ct)` 仅用于同一事务内生成 identity；它不是 durable commit，其他 connection 不得看到，session 未 `CommitAsync` 即 Dispose/取消必须整体 rollback。
-- `CommitAsync` 只能成功一次。Save 失败不得预先清空状态；transaction commit 异常进入 faulted/commit-unknown，禁止盲目重试或返回成功。缓存失效、PLC stop/reload 和成功文案只能在 commit 成功后发生。
+- `CommitAsync` 只能成功一次。Save/commit 失败后 session 进入 faulted，使用 `CancellationToken.None` 尝试 rollback；rollback 再失败时只通过 `Exception.Data["IIoT.Edge.Persistence.RollbackException"]` 附着证据，不覆盖主失败。禁止盲目重试或返回成功；缓存失效、PLC stop/reload 和成功文案只能在 commit 成功后发生。
 - SystemConfig、TaskBinding 的 delete+insert 以及 Hardware 的 Network/Serial/IO 必须在同一 session/transaction 中完成；小配置集使用同 context query + tracked remove/add，不用另一个 context 的 bulk delete 绕过事务和 ChangeTracker。
 - `Update` 继续按主键 load 后 `CurrentValues.SetValues`，不得退化为 `DbContext.Update`，避免不存在记录被插入或 navigation graph 被错误追踪。
-- Stateless `IReadRepository<T>` 可保持 Singleton，但必须物理删除无人消费且泄漏 context 的 `GetQueryable()`；任何跨多步一致性读取必须从当前 UoW session 获取。
-- 每个 UoW connection 必须实际证明 `PRAGMA foreign_keys=1`，并验证 busy timeout/并发错误映射；当前只在一次临时 connection 上设置 `foreign_keys` 不构成每连接保证。
+- Stateless `IReadRepository<T>` 保持独立只读端口，泄漏 context 的 `GetQueryable()` 已物理删除；任何跨多步一致性读取必须从当前 UoW session 获取。
+- 每个 UoW connection 在 transaction 前设置 `PRAGMA foreign_keys=ON` 和 busy timeout，并由真实临时 SQLite 测试验证连接隔离、并发串行、flush 后 rollback、跨聚合 commit、外键、replace rollback 和主异常/rollback 异常优先级。
 - Cloud 文件 projection 不放进 SQLite transaction。保留 fail-closed saga：数据库与文件任一步失败都不得报告成功，并以独立原子补偿恢复禁用状态。
 
 ## 5. 插件、Outbound 与 PLC Owner
@@ -146,7 +147,7 @@ EF navigation、`DbSet` 和 cascade 只表达 ORM 关系，不自动证明 DDD o
 
 ### 5.4 插件包动态边界
 
-当前打包和 runtime sync 复制整个 module build output，实际插件目录包含 Application、Domain、Presentation、SharedKernel、UI Shared、Module SDK 等宿主程序集；现有包测试只拦现场数据，没有拦重复宿主 runtime。目标包必须使用静态 pack allowlist，只携带 entry、plugin-owned assembly/resources/config 和声明的非宿主依赖；真实包内容由 `EDGEPLUGCON001` 阻断验证。
+当前宿主加载边界允许 `entry + plugin-owned assembly/resources/config + 声明的非宿主依赖`。中性正例使用常规插件命名的 `IIoT.Edge.Module.TestPlugin.Companion`：入口程序集真实引用 companion 类型，触发时必须由同一 plugin ALC 从 staged 目录加载。预检使用 PE metadata 校验引用，并精确拒绝当前已知 Host、Infrastructure、非共享 Presentation、Shell/Launcher/Installer/RuntimeLayoutSync 程序集；不得通配拒绝所有 `IIoT.Edge.Module.*`，也不得回退到默认 ALC、测试输出根或源项目 `bin`。生产打包仍需静态 pack allowlist 收紧全量 module build output，真实包内容由 `EDGEPLUGCON001` 持续阻断验证。
 
 ## 6. 稳定 Rule ID 与启用状态
 
@@ -177,12 +178,17 @@ EF navigation、`DbSet` 和 cascade 只表达 ORM 关系，不自动证明 DDD o
 | `PLUG002` | 具体插件禁止互引，禁止插件族 Shared 业务工程 | 已启用 error；通用能力只能进入 SDK/contract |
 | `PLUG003` | Host/Application/Core/Shared/Infra/Presentation 禁具体插件 symbol | 已启用 error，动态发现全部入口 |
 | `PLUG004` | 插件/Shared/SDK 角色、manifest、identity metadata 完整 | 已补 metadata 并启用 Analyzer + project-graph error |
-| `PLUG005` | 插件公开签名/注册不得泄漏 forbidden implementation type | 可立即 error |
+| `PLUG005` | 插件硬件/样例契约必须经 module builder，Cloud uploader 必须使用标准通道基类 | 已启用 error；普通插件私有服务注册为正例 |
 | `PLUG006` | 静态 pack item/metadata/dependency allowlist | 改打包入口后 error |
 | `EDGEOUT001` | 模块 Task 禁直接 outbound，允许 DataPipeline | 已启用 error |
+| `EDGEOUT002` | 模块 Task 必须在任务边界处理 DataPipeline 入队异常 | 已启用 error |
+| `EDGECOMP001` | 已物理删除且无真实调用方的兼容契约不得回流 | 已启用 error |
+| `EDGECLOUDCFG001` | 生产 C# 的 Cloud API 路由只能来自配置快照 | 已启用 error |
 | `EDGEPLCOWN001` | PLC driver/transport 只在登记 owner 构造/持有/释放 | 已启用 error |
 | `EDGEASYNC001` | 禁同步等待 Task | 已启用 error；已删除 Cloud endpoint 配置读取的真实阻塞路径 |
 | `EDGEASYNC002` | 禁非事件 `async void` | 已修 Installer helper 并启用 error |
+| `EDGEPRES001` | Presentation 禁止定义/发送 MediatR request 或 handler，事件 notification handler 可保留 | 已启用 error；用例必须回归 Application |
+| `EDGEPRES002` | Presentation 禁止直接构造可见中文 `ValidationIssue` 文案 | 已启用 error；必须使用稳定 key/本地化边界 |
 | `EDGEFRIEND001` | `InternalsVisibleTo` exact ledger、目标存在、无 wildcard/stale friend | 删除 stale friend 后 error |
 | `QUALITY001` | 生产、测试基础设施、测试 case 三条重复代码 ratchet | PR hard gate，不冒充编译错误 |
 | `COMPAT001` | 旧 alias/adapter/wrapper/fallback/双轨路径必须有真实 consumer、到期和测试 | 无 consumer 或到期项物理删除；禁止新增调用方 |
@@ -206,105 +212,75 @@ EF navigation、`DbSet` 和 cascade 只表达 ORM 关系，不自动证明 DDD o
 
 AnalyzerTests 必须是 Pure/Architecture 测试，不得启动 Shell、SQLite、PLC、MES、Cloud、容器或 UI。project graph/MSBuild 负例使用隔离临时 fixture，并断言 `dotnet build` 以指定 Rule ID 失败。
 
-当前实现有 17 个默认 error compiler diagnostics：`WSARCH003/004`、`DDD001/004/007`、`DATA001/002/005/006`、`PLUG001/002/003/004`、`EDGEOUT001`、`EDGEPLCOWN001`、`EDGEASYNC001/002`；`WSARCH001` 由同次 build 的 project-graph gate 执行。AnalyzerTests 当前 51 条，隔离 build fixture 当前 2 个正例、5 个反例。其余 Rule ID 仍是后续实施范围，不得把本次语义门禁扩张解读为 Persistence 事务、插件包隔离或全部测试物理拆分已完成。
+当前实现有 23 个默认 error compiler diagnostics：`WSARCH003/004`、`DDD001/004/007`、`DATA001/002/005/006`、`PLUG001/002/003/004/005`、`EDGEOUT001/002`、`EDGECOMP001`、`EDGECLOUDCFG001`、`EDGEPLCOWN001`、`EDGEASYNC001/002`、`EDGEPRES001/002`；`WSARCH001` 由同次 build 的 project-graph gate 执行。AnalyzerTests 当前 133 条，隔离 build fixture 当前 4 个正例、21 个反例，另有 2 项 CLI/图路径 bypass check。Task 到 outbound/DataPipeline sink 的 invocation graph 必须穿透 helper/interface/override/delegate；Application、ModuleSdk、SharedKernel 外部边界除精确 allowlist 外对 `Task`、`void`、同步值和 custom awaitable 统一 fail-closed，无法解析的非 Task delegate 也不例外；`catch` 后重抛、恒 false filter 或非通用异常捕获不能伪装为已处理。其余 Rule ID 仍是后续实施范围，不得把本次语义门禁扩张解读为生产 pack allowlist 已完成。
 
-## 8. Edge 目标测试分类与物理归口
+## 8. Edge 当前测试分类与物理归口
 
-`Regression` 是 cross-cutting `RegressionId`，不是新垃圾桶；任何回归 case 必须归入真实 TestKind。一个测试项目只有一个主 TestKind 和受控 Runtime/依赖集合。
+`Regression` 只是 cross-cutting `RegressionId`，不是 TestKind 或物理项目。当前机器真值为 61 个 solution 项目、32 个 required runner、1 个中性插件 fixture，Release 发现 1232 case。Unit 只允许 `Pure + Parallel`；其他 Pure runner 也受控并行；Filesystem、SQLite、Avalonia 和 Windows runner 必须物理命名且串行。
 
-`IIoT.Edge.Architecture.Analyzers` 是随构建运行的 Analyzer 实现项目，不是测试项目、不得声明 TestKind；它只由 `IIoT.Edge.Architecture.AnalyzerTests` 负责正反例验证。
+| Required runner | TestKind | Runtime / mode | Cases |
+|---|---|---|---:|
+| `IIoT.Edge.Application.Tests` | Application | Pure / Parallel | 47 |
+| `IIoT.Edge.Architecture.AnalyzerTests` | Architecture | Pure / Parallel | 133 |
+| `IIoT.Edge.Architecture.Tests` | Architecture | Filesystem / Serial | 5 |
+| `IIoT.Edge.Caching.UnitTests` | Unit | Pure / Parallel | 12 |
+| `IIoT.Edge.Cloud.ContractFilesystemTests` | Contract | Filesystem / Serial | 6 |
+| `IIoT.Edge.Cloud.ContractTests` | Contract | Pure / Parallel | 87 |
+| `IIoT.Edge.Deployment.Tests` | Deployment | Filesystem / Serial | 8 |
+| `IIoT.Edge.DeviceBootstrap.IntegrationTests` | Integration | Filesystem / Serial | 9 |
+| `IIoT.Edge.Domain.Tests` | Aggregate | Pure / Parallel | 22 |
+| `IIoT.Edge.Excel.IntegrationTests` | Integration | Filesystem / Serial | 3 |
+| `IIoT.Edge.Installer.UiTests` | UI | Avalonia / Serial | 2 |
+| `IIoT.Edge.Installer.UnitTests` | Unit | Pure / Parallel | 6 |
+| `IIoT.Edge.Launcher.FilesystemTests` | Integration | Filesystem / Serial | 67 |
+| `IIoT.Edge.Launcher.UiTests` | UI | Avalonia / Serial | 13 |
+| `IIoT.Edge.Launcher.UnitTests` | Unit | Pure / Parallel | 33 |
+| `IIoT.Edge.Mes.ContractTests` | Contract | Pure / Parallel | 21 |
+| `IIoT.Edge.Module.ConformanceTests` | Conformance | Filesystem / Serial | 59 |
+| `IIoT.Edge.Module.Homogenization.ConformanceFilesystemTests` | Conformance | Filesystem / Serial | 24 |
+| `IIoT.Edge.Module.Homogenization.ConformanceTests` | Conformance | Pure / Parallel | 13 |
+| `IIoT.Edge.Module.Homogenization.WorkflowFilesystemTests` | Workflow | Filesystem / Serial | 8 |
+| `IIoT.Edge.Module.Homogenization.WorkflowTests` | Workflow | Pure / Parallel | 101 |
+| `IIoT.Edge.Persistence.FilesystemTests` | Persistence | Filesystem / Serial | 10 |
+| `IIoT.Edge.Persistence.Tests` | Persistence | SQLite / Serial | 32 |
+| `IIoT.Edge.Platform.WindowsTests` | Deployment | Windows / Serial | 1 |
+| `IIoT.Edge.Plc.ContractNetworkTests` | Contract | Network / Serial | 5 |
+| `IIoT.Edge.Plc.ContractTests` | Contract | Pure / Parallel | 40 |
+| `IIoT.Edge.Runtime.WorkflowTests` | Workflow | Pure / Parallel | 235 |
+| `IIoT.Edge.Shell.FilesystemTests` | Integration | Filesystem / Serial | 32 |
+| `IIoT.Edge.Shell.UiTests` | UI | Avalonia / Serial | 122 |
+| `IIoT.Edge.Startup.IntegrationTests` | Integration | SQLite / Serial | 42 |
+| `IIoT.Edge.UI.Shared.Tests` | UI | Avalonia / Serial | 17 |
+| `IIoT.Edge.Update.ContractTests` | Contract | Filesystem / Serial | 17 |
 
-| 目标项目/测试域 | 主 TestKind | 允许 Runtime | 主要职责 |
-|---|---|---|---|
-| `IIoT.Edge.Architecture.AnalyzerTests` | Architecture | Pure/Roslyn | 每条 compiler rule 正反例、别名/helper/泛型/跨文件 |
-| `IIoT.Edge.Architecture.Tests` | Architecture | Filesystem/MSBuild/Reflection | 32 项目图、隐藏 build edge、friend ledger、EF model registry、Release closure |
-| `IIoT.Edge.Domain.Tests` | Aggregate | Pure | 5 个批准 root 的创建、mutation、不变量；DeviceParam 只保留裁决证据，不扩写路径 |
-| `IIoT.Edge.Application.Tests` | Application | Pure/FakeTime | Command/Query/Policy/Handler，不引用 EF/Dapper/Avalonia/真实 HTTP |
-| `IIoT.Edge.Plc.ContractTests` | Contract | Pure/Loopback | PLC frame、address、byte order、错误码和版本化 fixture |
-| `IIoT.Edge.Mes.ContractTests` | Contract | Pure/Loopback | MES payload、签名、endpoint 和错误映射 |
-| `IIoT.Edge.Cloud.ContractTests` | Contract | Pure/Loopback | Cloud paths、DeviceId 身份链、release catalog/download contract |
-| `IIoT.Edge.Update.ContractTests` | Contract | Pure/Filesystem | update source、catalog、package、hash/size 和安全 contract |
-| `IIoT.Edge.Module.ConformanceTests` | Conformance | Filesystem/AssemblyLoad | manifest、identity、依赖环、capability、ViewId、装载、包内容 |
-| `IIoT.Edge.Persistence.Tests` | Persistence | SQLite isolated | EF/Dapper transaction、migration、cascade policy、并发/失败恢复 |
-| `IIoT.Edge.Runtime.WorkflowTests` | Workflow | FakeTime/SQLite isolated | PLC lifecycle、DataPipeline、retry/fallback/deadletter、Cloud/MES 分离、取消/竞争 |
-| 插件仓自有 WorkflowTests | Workflow | 由插件业务契约确定 | 具体工序采集、门禁、上传、补偿和恢复；不属于宿主测试项目模板或工作区统一硬前置 |
-| `IIoT.Edge.Startup.IntegrationTests` | Integration | IsolatedProcess | 缺配置/PLC/MES/Cloud/IO/module profile 均非阻断，真实 Shell 组合路径 |
-| `IIoT.Edge.Shell.UnitTests` | Unit | Pure/InProcess | Shell ViewModel 和纯宿主策略，不再承载仓库治理 |
-| `IIoT.Edge.Shell.UiTests` | UI | Avalonia Headless | Shell 窗口、绑定、焦点和 automation |
-| `IIoT.Edge.Launcher.UnitTests` | Unit | Pure/InProcess | Launcher 账号、进程、更新策略 |
-| `IIoT.Edge.Launcher.UiTests` | UI | Avalonia Headless | Launcher 窗口、交互和 automation |
-| `IIoT.Edge.Installer.UnitTests` | Unit | Pure/InProcess | 参数、布局和安装策略 |
-| `IIoT.Edge.Installer.UiTests` | UI | Avalonia Headless | Installer 窗口、交互和 automation |
-| `IIoT.Edge.UI.Shared.Tests` | UI | Avalonia Headless | 共享控件、资源、automation、主题生命周期 |
-| `IIoT.Edge.GoldenTests` | GoldenEval | Pure | PLC/MES/manifest/package versioned fixture；禁止自证输入和生产现场数据 |
-| `IIoT.Edge.Deployment.Tests` | Deployment | Filesystem/PowerShell/Loopback | staging、manifest、hash、resume、rollback、禁止生产数据泄漏 |
-| `IIoT.Edge.Platform.WindowsTests` | Deployment | Windows Release | Velopack、Installer、快捷方式、ProgramData、DPI 和真实 artifact 边界 |
+`IIoT.Edge.Testing.Core`、`Testing.Homogenization`、`Testing.Modules` 和 `Testing.Protocols` 只承载共享测试能力，不包含 case；`IIoT.Edge.Module.TestPlugin.Companion` 只承载中性 fixture 自有类型，同样不包含 case。`IIoT.Edge.TestPlugin` 是 `IsPackable=false` 的唯一中性 fixture。旧 NonUI、Shell、Module Contract、Launcher、Installer、Update 大桶已迁空并物理删除；`RepositoryHygieneTests` 73 条与 `ArchitectureBoundaryContractTests` 13 条源文本大桶亦已物理删除，发现清单两类 identity 均为 0。历史基线固定为 1091 runner case / 964 声明，由 regression ledger 精确映射到当前 case、Analyzer、static gate、行为测试或已授权退役决策，unknown 必须为 0。
 
-共享测试基础设施只按 runtime capability 拆为 `IIoT.Edge.Testing.Core`、`IIoT.Edge.Testing.Persistence`、`IIoT.Edge.Testing.Protocols`、`IIoT.Edge.Testing.Avalonia`。这些 TestKit 不包含 `[Fact]`/`[Theory]` 或任何测试 case，生产项目不得引用，也不得重新形成全仓 `TestDoubles.cs` 巨石。
+## 9. 已落地的高风险语义
 
-当前旧桶迁移方向：
+- 通用插件生命周期只使用中性 `TestPlugin`，覆盖发现、装载、start/stop、DI release/dispose、capture → enqueue → callback 与取消。具体工序配置与打包契约只留在对应插件 runner。
+- SQLite/Persistence 已物理分为 Filesystem 与 SQLite isolated runner，并落地第 4 节的显式 UoW；覆盖 session 隔离/串行、flush rollback、跨聚合 commit、一次提交、每连接 pragma、外键、replace rollback 和主异常优先级。
+- DataPipeline 覆盖 accepted record 到 durable consumer、Cloud/MES active+queued 取消的逐项零丢失/零重复 shutdown 持久化、每通道单一总 deadline、完整 critical payload 反序列化、critical 写失败 runtime fault、provider 自取消补偿、non-retryable exception、retry/fallback/deadletter 与 Cloud/MES 分离。
+- 启动链对缺配置、PLC/MES/Cloud 不可达、IO/module profile 问题保持非阻断；取消测试使用 `TaskCompletionSource`/barrier 后显式 `Cancel`，不用几十毫秒机器时钟碰运气。
+- 同一启动批中的背景服务彼此独立，单服务失败后继续启动后续服务并汇总诊断；已 claim record 的 caller cancellation 必须先释放 claim 再原样重抛。PassStation retry 按 record 验证，混合批次保留有效源、只 deadletter 无效源；device-status endpoint 缺失保持 pending。
+- 内存缓存覆盖 typed hit/miss、single-flight、null cache、expiration、factory failure 与 invalidation；内部只保留单一 `CacheEntry` 存储路径，无调用方的 raw-value 兼容分支已物理删除。
 
-- `RepositoryHygieneTests` 已删除 4 条被 Analyzer/project-graph 等价或更强覆盖的 layer/project/plugin metadata case；余下安全/部署/UI/source golden 动态事实继续按 Security/Deployment/UI/Golden 物理迁移，旧类型尚未整体删除。
-- `ArchitectureBoundaryContractTests` 已物理删除；其中 6 条 layer/plugin/outbound 源码 Regex case 已由 Analyzer/project graph 取代，7 条仍需文件系统或运行时事实的 case 迁入 `ModuleDynamicConformanceTests`。
-- `NonUiRegressionTests` 当前 590 case：按 Aggregate/Application/Persistence/Workflow/Contract 真实依赖拆分，`RegressionId` 保留迁移对账。
-- `Shell.Tests` 当前 207 case：Architecture、Startup、UI、Workflow 继续分开；不再新增仓库卫生正则 case。
-- Update、Installer、Launcher、UI.Shared：保留正确项目职责，跨职责 case 逐条迁移；功能退役引起的专属 case 删除按 before/after inventory 说明，通用回归不得随之丢失。
+## 10. 清单、质量与兼容对账
 
-## 9. 必须先建立的失败测试
+- `edge-test-inventory.json`、`discovered-test-inventory.json` 和 `required-test-counts.json` 是唯一机器清单；普通 CI 只验证，不自动改写。
+- required 执行必须每项目独立 TRX/coverage，最终证明 `discovered = trxTotal = executed = passed = 1232`、`failed = skipped = 0`。
+- compatibility inventory 必须对 alias/adapter/wrapper/compat/legacy/shadow/obsolete/fallback/双写/影子候选逐项提供真实 consumer 证据与有期迁移窗口，并对每个真实声明精确登记 symbol/path/调用证据；宽 token disposition 不得掩护未登记 symbol。零 consumer、新增 consumer、未分类或未登记候选直接失败。
+- duplication 分 production/test-support/tests 的 exact/near ratchet；coverage 覆盖所有 32 runner，并对 `EdgeMemoryCacheService` 和 `DataPipelineNonRetryableException` 设高风险阈值；mutation 固定 Domain Aggregate + MTP report-only 范围与证据。
+- 项目/case 变化必须先复核授权和完整 diff，再显式更新 inventory，并记录 before/after 原因。仅用户授权时才 commit、push 或修改远端。
 
-下列 Persistence/Conformance tests 应先在旧实现上稳定失败，再修生产代码；禁止先写宽松断言让现状变绿：
+## 11. CI 退出条件
 
-1. 两个调用方共享旧 `EfRepository<T>` 时，A 的 Save 不得提交 B 的 pending operation。
-2. 通过 fail-once `SaveChangesInterceptor` 让第一次保存失败后，第二次受控保存不得丢失 pending operation。
-3. SystemConfig replace 的 insert 失败时，旧值必须仍存在。
-4. PlcTaskBinding replace 的 insert 失败时，旧 rows 必须仍存在。
-5. Network/Serial/IO 任一步被确定性 command/interceptor 拒绝时，硬件配置三表整体不得部分落库。
-6. UoW 在未 Commit 时 Dispose 或取消必须整体 rollback。
-7. `FlushAsync` 可生成 identity，但其他 connection 在 Commit 前不可见，session Dispose 后该 identity/row 必须消失。
-8. 两个并发 replace 用 `Barrier`/`TaskCompletionSource` 编排，最终只能是完整 A 或完整 B，禁止空档、混合结果和 `sleep` 竞争测试。
-9. 一个 UoW 只能 Commit 一次；二次 Commit、Commit 后继续写和 commit-unknown 后盲重试必须失败。
-10. 每个真实 UoW connection 都必须断言 `PRAGMA foreign_keys=1`，不能用初始化临时 connection 的结果代替。
-11. 删除 NetworkDevice 对 IO/binding/device-param 的生命周期必须符合显式 policy，且不得伤及无关设备，而不是仅接受 cascade 结果。
-12. API/DI 架构测试必须证明没有直接注入式 `IRepository<>`、没有 `GetQueryable()`，所有写入经显式 UoW session。
-13. `HardwareConfigCrudService.ApplyModuleTemplateAsync` 在 `SaveIoMappingsCommand` 返回 Failure 或持久化异常时不得返回“重置成功”，成功文案只能在真实保存成功后产生。
-14. EF model 中批准 root 精确 5 个、未裁决 1 个，projection/state/store owner 精确对账。
-15. 插件包不得包含 host/application/domain/presentation/test/dev/runtime-data assemblies/files。
-16. 插件经 Navigation 不得获得未批准的 Panels implementation symbol。
-17. Installer 非事件 helper 异常必须可由调用方观察。
+Windows required CI 必须在 25 分钟 hard timeout 内完成 Release build、Analyzer/project graph、正反 build fixture、source-quality、inventory/discovery、32 runner 执行、TRX/Skip 对账、coverage、compatibility、duplication 和 regression ledger；mutation 使用独立 report job，不伪装成编译错误。当前 macOS 工作树的 32 runner/TRX 对账已实测全绿；Windows 远端 job 与 Windows 实机 Installer/Velopack/DPI 验收在取得对应证据前不得写成已验证。
 
-当前 `EfRepository<T>` 以 Singleton 注册且每个闭合泛型共享 `_pendingOps`；任一调用方 Save 会取走所有调用方操作，并在真实 commit 前清空队列。`ExecuteDeleteAsync` 与后续 Add/Save 使用不同 DbContext，多处 replace/hardware save 不是原子事务。这些是生产缺陷候选，不属于 Analyzer 例外，必须由上述确定性 Persistence tests 和独立生产修复批次关闭。
-
-红灯用例先在隔离 candidate worktree 中对旧生产实现运行并保留失败输出和命令；不得把故意失败的提交推入 main。功能退役和生产修复完成后，按真实剩余 project/test/count 建立 after inventory，并执行全部 required runner 与 0 Skip 对账。
-
-## 10. 测试清单与计数的单维护者演进
-
-当前清单记录 32 个 solution/仓库项目、8 个 required 测试项目和 1 个非生产插件 fixture；当前 Release 真实发现数为 Analyzer 51、Update 17、Installer 15、Launcher 112、Module Contract 53、NonUI 590、Shell 207、UI Shared 14，合计 1059。清单只表达当前可执行事实，不冻结源码正文、程序集哈希、所有权或审批关系。
-
-项目或测试资产合法演进时：
-
-1. 记录当前任务授权、允许路径、开始 commit、完整 before inventory 和既有脏改动。
-2. 准备候选并复核完整 diff；生产语义、测试迁移和机械 inventory/count 更新在记录中分别列明。
-3. 运行 Release build、真实 discovery、全部 required runner 和 0 Skip 对账。
-4. 生成 after inventory，逐项说明项目和 runner 的增减原因；计数下降必须能映射到物理删除或已说明的测试归口变化。
-5. 已退役功能的专属测试可以删除；通用插件、DataPipeline、启动和安全 RegressionId 必须证明仍有有效覆盖。
-6. `required-test-counts.json` 不得由普通 CI 运行中自动重写；只有本批候选经完整验证后才显式更新。
-7. 只有当前任务明确授权时才 commit、push 或修改 workflow/远端设置。
-
-## 11. 实施批次与退出条件
-
-1. **中性插件测试 seam**：宿主/SDK 只使用 TestPlugin 验证发现、装载、真实后台服务 start/stop、DI release/dispose、capture → `EnqueueAsync` 返回 → callback、入队等待取消、UI 注册和包隔离；通用生命周期不得借用具体工序。真实 `DataPipelineService + ProcessQueueTask` 另行验证 accepted record 到 durable consumer 完成、runtime 取消时 active/queued 两项均结清且不补偿，以及 provider 自取消按失败只补偿一次；取消 drain 只清理内存 outlet/pending，不证明 shutdown durable。`IDataPipelineService` 没有下游完成句柄，禁止把两层拼成一个同步 completion contract；具体工序测试不代表宿主门禁。fixture 必须保持 `IsPackable=false` 且不进入任何生产 catalog/bundle/release。
-2. **EDGE-ARCH-001（已完成本批启用范围）**：Edge 专属 Analyzer/AnalyzerTests、project graph 和 owner registry 已建立；17 个 compiler diagnostics 默认 error，`WSARCH001` 项目图无环门禁与 2 正/5 反真实 build fixture 已进入两份 Windows required CI。未启用 Rule ID 留在后续批次，不冒充完成。
-3. **EDGE-PERSIST-001/002**：先建立跨调用方污染、commit 失败恢复、replace 原子性、cascade policy 等确定性红测，再以显式一次性 UoW session 修复。
-4. **EDGE-BOUNDARY-002 / EDGE-PLUG-CON-001**：收口 Panels/SDK/async/schema/navigation 越界，建立 manifest/load/dependency/capability/ViewId/package conformance。
-5. **EDGE-TEST-PHYSICAL-001+ / EDGE-QUALITY-001**：物理迁移测试并建立 duplication、coverage、mutation ratchet；每批对账 discovery、runner、Skip 和 RegressionId。
-6. **EDGE-COMPAT-001**：清点并删除没有真实 consumer 或已经到期的旧 alias、adapter、wrapper、fallback、双写和影子路径；不得以 `Legacy/Compat` 目录或专门兼容测试延续死代码。
-7. **最终终审**：Windows Release build/test、全部 required runner、annotations、artifact 和 25 分钟 p95；禁止以无说明删测、Skip、过滤或放宽断言换绿。
-
-宿主仓与插件仓拆分属于用户下一份独立计划，不是本契约当前实施批次、依赖或进度项。
+宿主仓与插件仓拆分属于用户下一份独立计划，不是当前测试批次、依赖或进度项。`deploy/Deploy-Changed.ps1` 是生产 CD 入口，不属于 required 测试 CI；本批不运行发布或部署。
 
 ## 12. 非声明范围
 
-- 本契约不改变 PLC/MES/Cloud、设备身份、生产数据、UI、配置、数据库或部署行为。
-- 本契约不证明当前 EF transaction、插件包隔离或启动链已经正确；它明确登记了必须由后续失败测试关闭的风险。
-- `ArchitectureBoundaryContractTests` 旧入口已在等价或更强 semantic gate 落地后物理删除且源码零引用；`RepositoryHygieneTests` 仍只保留未完成物理归口的动态事实，不得再新增 Analyzer 可证明的正则边界 case。
+- 本契约不改变 PLC/MES/Cloud、设备身份、生产数据、UI 或部署行为。
+- 本批显式 UoW 关闭不等于第 5 节的插件包隔离和其他临时 seam 已修复；这些必须在各自生产批次独立关闭。
+- 文件系统/源码动态事实已归入 `IIoT.Edge.Architecture.Tests`；Analyzer 可静态证明的边界不得新增重复 Regex case。
 - 本契约不授权部署、发布、生产数据操作、创建新仓库或修改 remote。

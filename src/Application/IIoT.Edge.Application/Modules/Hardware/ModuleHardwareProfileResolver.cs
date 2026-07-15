@@ -8,7 +8,6 @@ namespace IIoT.Edge.Application.Modules.Hardware;
 public sealed class ModuleHardwareProfileResolver(IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles)
 {
     private readonly IModuleHardwareProfileProvider[] _hardwareProfiles = hardwareProfiles
-        .OrderBy(static x => x.ModuleId, StringComparer.OrdinalIgnoreCase)
         .ToArray();
 
     public IModuleHardwareProfileProvider? Resolve()

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <TestKind>Persistence</TestKind>
+    <TestRuntime>Filesystem</TestRuntime><TestRuntimeDependencies />
+    <TestRunnerMode>Serial</TestRunnerMode>
+    <TestCadence>PR</TestCadence><TestCapability>Persistence.ProductionContext</TestCapability><TestRisk>P0</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Persistence</TestOwner><TestRuleId>EDGE-PERSISTENCE-001</TestRuleId><TestRequired>true</TestRequired>
+    <UseEdgeTestingCore>true</UseEdgeTestingCore>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
+    <ProjectReference Include="..\..\Edge\IIoT.Edge.Host.DataPipeline\IIoT.Edge.Host.DataPipeline.csproj" />
+    <ProjectReference Include="..\..\Testing\IIoT.Edge.Testing.Core\IIoT.Edge.Testing.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "contractId": "edge-pass-station-batch-v1",
+  "provider": "IIoT.CloudPlatform",
+  "consumer": "IIoT.EdgeClient",
+  "http": {
+    "method": "POST",
+    "routeTemplate": "/api/v1/edge/pass-stations/{typeKey}/batch"
+  },
+  "route": {
+    "typeKey": {
+      "type": "string",
+      "required": true,
+      "normalization": "trim-lowercase",
+      "mustResolveConfiguredSchema": true
+    }
+  },
+  "request": {
+    "type": "object",
+    "fields": {
+      "deviceId": {
+        "type": "uuid",
+        "required": true,
+        "nonEmpty": true
+      },
+      "items": {
+        "type": "array",
+        "required": true,
+        "minItems": 1,
+        "maxItems": 1000
+      },
+      "requestId": {
+        "type": "string",
+        "required": false,
+        "maxLength": 128,
+        "edgeFormat": "sha256-uppercase-hex",
+        "edgeLength": 64
+      },
+      "schemaVersion": {
+        "type": "integer",
+        "providerDefault": 1,
+        "edgeSends": 1
+      },
+      "processType": {
+        "type": "string",
+        "required": false,
+        "maxLength": 32,
+        "edgeSendsRouteTypeKey": true,
+        "mustEqualRouteTypeKey": true
+      }
+    }
+  },
+  "item": {
+    "type": "object",
+    "fields": {
+      "barcode": {
+        "type": "string",
+        "required": true,
+        "nonBlank": true,
+        "maxLength": 128
+      },
+      "cellResult": {
+        "type": "string",
+        "required": true,
+        "nonBlank": true,
+        "maxLength": 32,
+        "edgeEmittedValues": [
+          "OK",
+          "NG"
+        ]
+      },
+      "completedTime": {
+        "type": "date-time",
+        "required": true,
+        "minimumUtc": "2000-01-01T00:00:00Z",
+        "maximumUtc": "utc-now-plus-1-day"
+      },
+      "payload": {
+        "type": "object",
+        "required": true,
+        "maxProperties": 64
+      }
+    }
+  }
+}

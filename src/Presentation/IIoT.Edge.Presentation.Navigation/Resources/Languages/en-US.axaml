@@ -206,8 +206,6 @@
     <sys:String x:Key="Navigation_Param_CloudApi_HumanIdentityRefreshPath_Description">API path for refreshing user login identity.</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_DeviceLogPath_DisplayName">Device Log Path</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_DeviceLogPath_Description">API path used to upload device logs.</sys:String>
-    <sys:String x:Key="Navigation_Param_CloudApi_ProcessUploadPath_DisplayName">Process Upload Path</sys:String>
-    <sys:String x:Key="Navigation_Param_CloudApi_ProcessUploadPath_Description">API path used to upload process production records.</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_PassStationBatchTemplatePath_DisplayName">Pass Station Batch Path Template</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_PassStationBatchTemplatePath_Description">API path template used to upload process pass-station batches. It must contain {typeKey}.</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_CapacityHourlyPath_DisplayName">Hourly Capacity Path</sys:String>

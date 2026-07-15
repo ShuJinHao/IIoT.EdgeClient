@@ -121,15 +121,15 @@ public class CapacitySyncTask : ICapacitySyncTask
                 break;
             }
 
-            await ExecuteOnceAsync();
+            await ExecuteOnceAsync(ct);
         }
 
         _logger.Info("[产能同步] 已停止。");
     }
 
-    private async Task ExecuteOnceAsync()
+    private async Task ExecuteOnceAsync(CancellationToken cancellationToken)
     {
-        await _syncGate.WaitAsync().ConfigureAwait(false);
+        await _syncGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             if (!TryGetCloudDeviceId(out var deviceId))
@@ -139,7 +139,11 @@ public class CapacitySyncTask : ICapacitySyncTask
 
             try
             {
-                await SyncAllDevicesAsync(deviceId).ConfigureAwait(false);
+                await SyncAllDevicesAsync(deviceId, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -152,11 +156,12 @@ public class CapacitySyncTask : ICapacitySyncTask
         }
     }
 
-    private async Task SyncAllDevicesAsync(Guid cloudDeviceId)
+    private async Task SyncAllDevicesAsync(Guid cloudDeviceId, CancellationToken cancellationToken)
     {
         var contexts = _contextStore.GetAll();
         foreach (var ctx in contexts)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var capacity = ctx.TodayCapacity.CreateSnapshot();
             if (string.IsNullOrWhiteSpace(capacity.Date) || capacity.TotalAll == 0)
             {
@@ -175,7 +180,8 @@ public class CapacitySyncTask : ICapacitySyncTask
                     slot.Total,
                     slot.OkCount,
                     slot.NgCount,
-                    ctx.DeviceName).ConfigureAwait(false);
+                    ctx.DeviceName,
+                    cancellationToken).ConfigureAwait(false);
             }
         }
     }
@@ -189,7 +195,8 @@ public class CapacitySyncTask : ICapacitySyncTask
         int totalCount,
         int okCount,
         int ngCount,
-        string plcName)
+        string plcName,
+        CancellationToken cancellationToken)
     {
         var result = await PostCapacityAsync(
             deviceId,
@@ -200,7 +207,8 @@ public class CapacitySyncTask : ICapacitySyncTask
             totalCount,
             okCount,
             ngCount,
-            plcName).ConfigureAwait(false);
+            plcName,
+            cancellationToken).ConfigureAwait(false);
         var slotLabel = FormatCapacitySlot(date, hour, minute, shiftCode);
         if (result.IsSuccess)
         {
@@ -348,10 +356,15 @@ public class CapacitySyncTask : ICapacitySyncTask
         int totalCount,
         int okCount,
         int ngCount,
-        string plcName)
+        string plcName,
+        CancellationToken cancellationToken = default)
     {
         var payload = CreatePayload(deviceId, date, hour, minute, shiftCode, totalCount, okCount, ngCount, plcName);
-        var result = await _cloudHttp.PostAsync(_endpointProvider.GetCapacityHourlyPath(), payload).ConfigureAwait(false);
+        var result = await _cloudHttp.PostAsync(
+                _endpointProvider.GetCapacityHourlyPath(),
+                payload,
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
         _diagnosticsStore.RecordResult("Capacity", result);
         return result;
     }

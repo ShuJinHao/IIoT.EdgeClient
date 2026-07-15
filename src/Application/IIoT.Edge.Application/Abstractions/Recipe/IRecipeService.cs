@@ -33,7 +33,7 @@ public interface IRecipeService
 
     // 云端同步能力。
 
-    Task<bool> PullFromCloudAsync();
+    Task<bool> PullFromCloudAsync(CancellationToken cancellationToken = default);
 
     // 本地应急维护能力。
 

@@ -88,11 +88,6 @@ public class CloudApiEndpointProvider : ICloudApiEndpointProvider
                 ?? _cloudApiOptions.CurrentValue.Paths.EdgeHostPlcRuntimeStates,
             "CloudApi:Paths:EdgeHostPlcRuntimeStates");
 
-    public string GetProcessUploadPath()
-        => RequirePath(
-            FirstLocalConfigString(CloudApiConfigParamSchema.ProcessUploadPath) ?? _cloudApiOptions.CurrentValue.Paths.ProcessUpload,
-            "CloudApi:Paths:ProcessUpload");
-
     public string GetPassStationBatchPath(string typeKey)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(typeKey);

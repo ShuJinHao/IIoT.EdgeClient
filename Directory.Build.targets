@@ -1,12 +1,20 @@
 <Project>
 
+  <ItemGroup Condition="'$(IsTestProject)' == 'true' and '$(TestRunnerMode)' == 'Serial'">
+    <None Remove="$(MSBuildThisFileDirectory)src/Tests/xunit.runner.json" />
+    <None Include="$(MSBuildThisFileDirectory)src/Tests/xunit.runner.serial.json"
+          Link="xunit.runner.json"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <PropertyGroup>
     <EdgeArchitectureAnalyzerProject>$(MSBuildThisFileDirectory)src/Analyzers/IIoT.Edge.Architecture.Analyzers/IIoT.Edge.Architecture.Analyzers.csproj</EdgeArchitectureAnalyzerProject>
   </PropertyGroup>
 
-  <ItemGroup Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(MSBuildProjectFullPath)', '[/\\]src[/\\]Tests[/\\]'))
-                        and '$(MSBuildProjectName)' != 'IIoT.Edge.Architecture.Analyzers'
-                        and '$(MSBuildProjectName)' != 'IIoT.Edge.TestPlugin'">
+  <ItemGroup Condition="'$(IsTestProject)' != 'true'
+                        and '$(MSBuildProjectFullPath)' != '$(EdgeArchitectureAnalyzerProject)'
+                        and '$(IsEdgePluginTestFixture)' != 'true'">
     <ProjectReference Include="$(EdgeArchitectureAnalyzerProject)"
                       ReferenceOutputAssembly="false"
                       OutputItemType="Analyzer"

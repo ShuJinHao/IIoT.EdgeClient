@@ -14,8 +14,6 @@ public interface IModuleCatalog
         string sectionName,
         IReadOnlyList<ModulePluginDescriptor> discoveredModules);
 
-    IReadOnlyList<IEdgeProcessModule> CreateAllModules(IReadOnlyList<ModulePluginDescriptor> discoveredModules);
-
     bool IsDiscoveredModule(string moduleId, IReadOnlyList<ModulePluginDescriptor> discoveredModules);
 }
 
@@ -52,26 +50,45 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
                 ]);
         }
 
-        var descriptors = new List<ModulePluginDescriptor>();
         var issues = new List<ModuleCatalogIssue>();
-        foreach (var pluginDirectory in Directory.EnumerateDirectories(pluginRootPath))
+        string physicalPluginRoot;
+        string[] pluginDirectories;
+        try
         {
-            var manifestPath = ResolvePluginManifestPath(pluginDirectory);
-            if (manifestPath is null)
-            {
-                continue;
-            }
+            physicalPluginRoot = PluginPathBoundary.ResolveExistingPhysicalPath(pluginRootPath);
+            pluginDirectories = Directory.EnumerateDirectories(pluginRootPath).ToArray();
+        }
+        catch (Exception ex)
+        {
+            return new ModuleCatalogDiscoveryResult(
+                [],
+                [new ModuleCatalogIssue("PLUGIN_ROOT_UNREADABLE", $"无法枚举插件根目录“{pluginRootPath}”：{ex.Message}")]);
+        }
 
+        var descriptors = new List<ModulePluginDescriptor>();
+        foreach (var pluginDirectory in pluginDirectories)
+        {
             try
             {
-                descriptors.Add(LoadDescriptor(Path.GetDirectoryName(manifestPath)!, manifestPath));
+                var physicalPluginDirectory = PluginPathBoundary.ResolveExistingPhysicalPath(pluginDirectory);
+                if (!PluginPathBoundary.IsWithin(physicalPluginRoot, physicalPluginDirectory))
+                {
+                    throw new InvalidOperationException(
+                        $"插件目录的真实路径越出插件根目录：{pluginDirectory}。");
+                }
+
+                var manifestPath = ResolvePluginManifestPath(physicalPluginDirectory);
+                if (manifestPath is null)
+                    continue;
+
+                descriptors.Add(LoadDescriptor(physicalPluginDirectory, manifestPath));
             }
             catch (Exception ex)
             {
                 issues.Add(new ModuleCatalogIssue(
                     "PLUGIN_MANIFEST_INVALID",
                     ex.Message,
-                    ManifestPath: manifestPath,
+                    ManifestPath: Path.Combine(pluginDirectory, "plugin.json"),
                     PluginDirectoryName: Path.GetFileName(pluginDirectory)));
             }
         }
@@ -225,12 +242,6 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
         return new ModuleCatalogActivationResult(modules, configuredEnabledModuleIds, issues);
     }
 
-    public IReadOnlyList<IEdgeProcessModule> CreateAllModules(IReadOnlyList<ModulePluginDescriptor> discoveredModules)
-    {
-        ArgumentNullException.ThrowIfNull(discoveredModules);
-        return discoveredModules.Select(_modulePluginLoader.CreateModule).ToArray();
-    }
-
     public bool IsDiscoveredModule(
         string moduleId,
         IReadOnlyList<ModulePluginDescriptor> discoveredModules)
@@ -284,15 +295,23 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
 
     private ModulePluginDescriptor LoadDescriptor(string pluginDirectory, string manifestPath)
     {
+        var physicalPluginDirectory = PluginPathBoundary.ResolveExistingPhysicalPath(pluginDirectory);
+        var physicalManifestPath = PluginPathBoundary.ResolveExistingPhysicalPath(manifestPath);
+        if (!PluginPathBoundary.IsWithin(physicalPluginDirectory, physicalManifestPath))
+        {
+            throw new InvalidOperationException(
+                $"插件清单的真实路径越出 staged 目录：{manifestPath}。");
+        }
+
         var manifest = JsonSerializer.Deserialize<ModulePluginManifest>(
-            File.ReadAllText(manifestPath),
+            File.ReadAllText(physicalManifestPath),
             JsonOptions)
             ?? throw new InvalidOperationException(
-                $"插件清单“{manifestPath}”无法解析。");
+                $"插件清单“{physicalManifestPath}”无法解析。");
 
-        ValidateManifest(manifest, manifestPath);
+        ValidateManifest(manifest, physicalManifestPath);
 
-        var entryAssemblyPath = Path.Combine(pluginDirectory, manifest.EntryAssembly);
+        var entryAssemblyPath = ResolveEntryAssemblyPath(physicalPluginDirectory, manifest.EntryAssembly, manifest.ModuleId);
         if (!File.Exists(entryAssemblyPath))
         {
             throw new InvalidOperationException(
@@ -314,9 +333,39 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
                 .ToArray(),
             Path.GetFileNameWithoutExtension(manifest.EntryAssembly),
             manifest.EntryType,
-            pluginDirectory,
-            manifestPath,
+            physicalPluginDirectory,
+            physicalManifestPath,
             entryAssemblyPath);
+    }
+
+    private static string ResolveEntryAssemblyPath(
+        string pluginDirectory,
+        string entryAssembly,
+        string moduleId)
+    {
+        var trimmedEntryAssembly = entryAssembly.Trim();
+        if (Path.IsPathRooted(trimmedEntryAssembly) ||
+            !trimmedEntryAssembly.Equals(Path.GetFileName(trimmedEntryAssembly), StringComparison.Ordinal) ||
+            !Path.GetExtension(trimmedEntryAssembly).Equals(".dll", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"插件“{moduleId}”的 entryAssembly 必须是插件 staged 目录内的 DLL 单文件名：{entryAssembly}。");
+        }
+
+        var normalizedPluginDirectory = PluginPathBoundary.ResolveExistingPhysicalPath(pluginDirectory);
+        var lexicalEntryAssemblyPath = Path.GetFullPath(
+            Path.Combine(normalizedPluginDirectory, trimmedEntryAssembly));
+        if (!File.Exists(lexicalEntryAssemblyPath))
+            return lexicalEntryAssemblyPath;
+
+        var entryAssemblyPath = PluginPathBoundary.ResolveExistingPhysicalPath(lexicalEntryAssemblyPath);
+        if (!PluginPathBoundary.IsWithin(normalizedPluginDirectory, entryAssemblyPath))
+        {
+            throw new InvalidOperationException(
+                $"插件“{moduleId}”的 entryAssembly 越出 staged 目录：{entryAssembly}。");
+        }
+
+        return entryAssemblyPath;
     }
 
     private void ValidateManifest(ModulePluginManifest manifest, string manifestPath)

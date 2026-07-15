@@ -137,7 +137,8 @@ public abstract class CloudUploadChannelBase<TCellData, TPayload>
                     new CloudRequestOptions
                     {
                         IdempotencyKey = CloudIdempotencyKeyBuilder.ForRecord(ProcessType, UploaderName, records[index])
-                    })
+                    },
+                    cancellationToken)
                 .ConfigureAwait(false);
 
             if (!result.IsSuccess)
@@ -167,7 +168,8 @@ public abstract class CloudUploadChannelBase<TCellData, TPayload>
                 new CloudRequestOptions
                 {
                     IdempotencyKey = CloudIdempotencyKeyBuilder.ForBatch(ProcessType, UploaderName, records)
-                })
+                },
+                cancellationToken)
             .ConfigureAwait(false);
 
         if (!result.IsSuccess)

@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="src/Tests/IIoT.Edge.PersistenceBoundary.UnitTests/IIoT.Edge.PersistenceBoundary.UnitTests.csproj" />
+  <Project Path="src/Testing/IIoT.Edge.Testing.Core/IIoT.Edge.Testing.Core.csproj" />
+  <Project Path="src/Infrastructure/IIoT.Edge.Infrastructure.Persistence.EfCore/IIoT.Edge.Infrastructure.Persistence.EfCore.csproj" />
+</Solution>

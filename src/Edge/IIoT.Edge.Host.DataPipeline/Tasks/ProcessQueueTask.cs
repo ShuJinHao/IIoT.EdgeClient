@@ -20,6 +20,8 @@ public class ProcessQueueTask : ScheduledTaskBase
     private readonly DataPipelineCascadingPersistenceWriter _persistenceWriter;
     private readonly IDataPipelineConsumerInvoker _consumerInvoker;
     private readonly TimeSpan _consumerCallTimeout;
+    private readonly TimeSpan _durableShutdownTimeout;
+    private readonly TimeProvider _shutdownTimeProvider;
     private readonly int _durableOutletQueueCapacity;
     private readonly Channel<DurableConsumerWorkItem> _cloudDurableQueue;
     private readonly Channel<DurableConsumerWorkItem> _mesDurableQueue;
@@ -30,11 +32,19 @@ public class ProcessQueueTask : ScheduledTaskBase
     private Task? _mesDurableWorker;
     private bool _cloudDurableWorkerStopped;
     private bool _mesDurableWorkerStopped;
+    private CancellationToken _durableWorkersCancellationToken;
+    private bool _durableWorkersTokenInitialized;
     private int _cloudPendingCount;
     private int _mesPendingCount;
 
     public override string TaskName => "ProcessQueueTask";
     protected override int ExecuteInterval => 0;
+
+    protected override bool ShouldPropagateExecutionFailure(
+        Exception exception,
+        CancellationToken cancellationToken)
+        => cancellationToken.IsCancellationRequested
+           && exception is DurableShutdownPersistenceException;
 
     public ProcessQueueTask(
         ILogService logger,
@@ -43,7 +53,8 @@ public class ProcessQueueTask : ScheduledTaskBase
         ICriticalPersistenceFallbackWriter criticalFallbackWriter,
         DataPipelineCascadingPersistenceWriter persistenceWriter,
         IDataPipelineConsumerInvoker consumerInvoker,
-        DataPipelineRuntimeOptions? runtimeOptions = null)
+        DataPipelineRuntimeOptions? runtimeOptions = null,
+        TimeProvider? shutdownTimeProvider = null)
         : base(logger)
     {
         ArgumentNullException.ThrowIfNull(persistenceWriter);
@@ -56,6 +67,8 @@ public class ProcessQueueTask : ScheduledTaskBase
         _consumerInvoker = consumerInvoker;
         var options = runtimeOptions ?? new DataPipelineRuntimeOptions();
         _consumerCallTimeout = options.GetConsumerCallTimeout();
+        _durableShutdownTimeout = options.GetDurableShutdownTimeout();
+        _shutdownTimeProvider = shutdownTimeProvider ?? TimeProvider.System;
         _durableOutletQueueCapacity = options.GetDurableOutletQueueCapacity();
         _cloudDurableQueue = CreateDurableQueue(_durableOutletQueueCapacity);
         _mesDurableQueue = CreateDurableQueue(_durableOutletQueueCapacity);
@@ -63,21 +76,37 @@ public class ProcessQueueTask : ScheduledTaskBase
 
     protected override async Task ExecuteAsync()
     {
-        EnsureDurableWorkersStarted(CurrentCancellationToken);
-
-        var drainedCount = 0;
-        while (drainedCount < MaxDrainBatchSize
-               && _pipelineService.TryDequeue(out var record)
-               && record is not null)
+        try
         {
-            await ProcessOneAsync(record, CurrentCancellationToken).ConfigureAwait(false);
-            drainedCount++;
+            await EnsureDurableWorkersStartedAsync(CurrentCancellationToken).ConfigureAwait(false);
+
+            var drainedCount = 0;
+            while (drainedCount < MaxDrainBatchSize
+                   && _pipelineService.TryDequeue(out var record)
+                   && record is not null)
+            {
+                await ProcessOneAsync(record, CurrentCancellationToken).ConfigureAwait(false);
+                drainedCount++;
+            }
+        }
+        catch (OperationCanceledException) when (CurrentCancellationToken.IsCancellationRequested)
+        {
+            await WaitForDurableWorkersStoppedAsync().ConfigureAwait(false);
+            throw;
         }
     }
 
     protected override async Task WaitForNextIterationAsync(CancellationToken ct)
     {
-        await _pipelineService.WaitToReadAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await _pipelineService.WaitToReadAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            await WaitForDurableWorkersStoppedAsync().ConfigureAwait(false);
+            throw;
+        }
     }
 
     private async Task ProcessOneAsync(CellCompletedRecord record, CancellationToken cancellationToken)
@@ -115,24 +144,46 @@ public class ProcessQueueTask : ScheduledTaskBase
                 .ConfigureAwait(false);
             if (!success)
             {
-                await HandleFailureAsync(record, consumer, "消费者返回失败。").ConfigureAwait(false);
+                await HandleFailureAsync(record, consumer, "消费者返回失败。", cancellationToken).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
+        catch (DataPipelineNonRetryableException ex)
+        {
+            var sourceTable = DataPipelineRetryChannelMetadata.TryGetFailedRecordSourceTable(consumer.RetryChannel);
+            if (string.IsNullOrWhiteSpace(sourceTable))
+            {
+                _criticalFallbackWriter.Write(
+                    "DataPipeline.ProcessQueue.InvalidNonRetryableChannel",
+                    $"工序 {record.CellData.ProcessType} 的永久失败记录无死信通道：{ex.ReasonCode}。");
+                return;
+            }
+
+            await _persistenceWriter.PersistNonRetryableAsync(
+                    record,
+                    consumer.RetryChannel,
+                    consumer.Name,
+                    ex.ReasonCode,
+                    sourceTable,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
         catch (Exception ex)
         {
-            await HandleFailureAsync(record, consumer, ResolveFailureMessage(ex)).ConfigureAwait(false);
+            await HandleFailureAsync(record, consumer, ResolveFailureMessage(ex), cancellationToken).ConfigureAwait(false);
         }
     }
 
     private async Task HandleFailureAsync(
         CellCompletedRecord record,
         ICellDataConsumer consumer,
-        string errorMessage)
+        string errorMessage,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var label = record.CellData.DisplayLabel;
         var deviceName = record.ResolveDeviceName();
 
@@ -171,7 +222,8 @@ public class ProcessQueueTask : ScheduledTaskBase
                 consumer.Name,
                 errorMessage,
                 sourceTable,
-                DeadLetterStage.FallbackPersist)
+                DeadLetterStage.FallbackPersist,
+                cancellationToken: cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -209,17 +261,73 @@ public class ProcessQueueTask : ScheduledTaskBase
             SingleWriter = false
         });
 
-    private void EnsureDurableWorkersStarted(CancellationToken cancellationToken)
+    private async Task EnsureDurableWorkersStartedAsync(CancellationToken cancellationToken)
     {
+        Task[] previousWorkers;
         lock (_workerSync)
         {
-            _cloudDurableWorker ??= Task.Run(
+            if (_durableWorkersTokenInitialized &&
+                _durableWorkersCancellationToken == cancellationToken)
+            {
+                StartMissingDurableWorkers(cancellationToken);
+                return;
+            }
+
+            previousWorkers = new[] { _cloudDurableWorker, _mesDurableWorker }
+                .Where(static worker => worker is not null && !worker.IsCompleted)
+                .Cast<Task>()
+                .ToArray();
+            if (previousWorkers.Length == 0)
+            {
+                ResetAndStartDurableWorkers(cancellationToken);
+                return;
+            }
+        }
+
+        await Task.WhenAll(previousWorkers).WaitAsync(cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_workerSync)
+        {
+            if (_durableWorkersTokenInitialized &&
+                _durableWorkersCancellationToken == cancellationToken)
+            {
+                StartMissingDurableWorkers(cancellationToken);
+                return;
+            }
+
+            ResetAndStartDurableWorkers(cancellationToken);
+        }
+    }
+
+    private void ResetAndStartDurableWorkers(CancellationToken cancellationToken)
+    {
+        _durableWorkersCancellationToken = cancellationToken;
+        _durableWorkersTokenInitialized = true;
+        _cloudDurableWorker = null;
+        _mesDurableWorker = null;
+        _cloudDurableWorkerStopped = false;
+        _mesDurableWorkerStopped = false;
+        StartMissingDurableWorkers(cancellationToken);
+    }
+
+    private void StartMissingDurableWorkers(CancellationToken cancellationToken)
+    {
+        if (_cloudDurableWorker is null || _cloudDurableWorker.IsCompleted)
+        {
+            _cloudDurableWorkerStopped = false;
+            _cloudDurableWorker = Task.Run(
                 () => RunDurableWorkerAsync(
                     DataPipelineRetryChannel.Cloud,
                     _cloudDurableQueue.Reader,
                     cancellationToken),
                 CancellationToken.None);
-            _mesDurableWorker ??= Task.Run(
+        }
+
+        if (_mesDurableWorker is null || _mesDurableWorker.IsCompleted)
+        {
+            _mesDurableWorkerStopped = false;
+            _mesDurableWorker = Task.Run(
                 () => RunDurableWorkerAsync(
                     DataPipelineRetryChannel.Mes,
                     _mesDurableQueue.Reader,
@@ -237,7 +345,7 @@ public class ProcessQueueTask : ScheduledTaskBase
         var writer = ResolveDurableQueueWriter(consumer.RetryChannel);
         if (writer is null)
         {
-            await HandleFailureAsync(record, consumer, "关键消费者未配置有效目标出口队列。").ConfigureAwait(false);
+            await HandleFailureAsync(record, consumer, "关键消费者未配置有效目标出口队列。", cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -269,7 +377,7 @@ public class ProcessQueueTask : ScheduledTaskBase
         var failureMessage = workerStopped
             ? "目标出口后台任务已停止。"
             : "目标出口队列已满。";
-        await HandleFailureAsync(record, consumer, failureMessage).ConfigureAwait(false);
+        await HandleFailureAsync(record, consumer, failureMessage, cancellationToken).ConfigureAwait(false);
     }
 
     private bool IsDurableWorkerStopped(DataPipelineRetryChannel channel)
@@ -293,6 +401,8 @@ public class ProcessQueueTask : ScheduledTaskBase
         ChannelReader<DurableConsumerWorkItem> reader,
         CancellationToken cancellationToken)
     {
+        var shutdownFailures = new List<Exception>();
+        CancellationTokenSource? shutdownDeadline = null;
         try
         {
             await foreach (var item in reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
@@ -300,6 +410,20 @@ public class ProcessQueueTask : ScheduledTaskBase
                 try
                 {
                     await ProcessConsumerAsync(item.Record, item.Consumer, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    shutdownDeadline ??= CreateShutdownDeadline();
+                    if (await PersistShutdownWorkItemAsync(channel, item, shutdownDeadline.Token).ConfigureAwait(false) is { } failure)
+                    {
+                        shutdownFailures.Add(failure);
+                    }
+
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    TryWriteUnexpectedDurableFailure(channel, item, ex);
                 }
                 finally
                 {
@@ -312,6 +436,7 @@ public class ProcessQueueTask : ScheduledTaskBase
         }
         finally
         {
+            var queuedItems = new List<DurableConsumerWorkItem>();
             lock (_workerSync)
             {
                 switch (channel)
@@ -324,11 +449,145 @@ public class ProcessQueueTask : ScheduledTaskBase
                         break;
                 }
 
-                while (reader.TryRead(out _))
+                while (reader.TryRead(out var queuedItem))
                 {
-                    DecrementPending(channel);
+                    queuedItems.Add(queuedItem);
                 }
             }
+
+            if (queuedItems.Count > 0)
+            {
+                shutdownDeadline ??= CreateShutdownDeadline();
+                foreach (var queuedItem in queuedItems)
+                {
+                    try
+                    {
+                        if (await PersistShutdownWorkItemAsync(channel, queuedItem, shutdownDeadline.Token).ConfigureAwait(false) is { } failure)
+                        {
+                            shutdownFailures.Add(failure);
+                        }
+                    }
+                    finally
+                    {
+                        DecrementPending(channel);
+                    }
+                }
+            }
+
+            shutdownDeadline?.Dispose();
+            if (shutdownFailures.Count > 0)
+            {
+                throw new DurableShutdownPersistenceException(
+                    $"{DataPipelineRetryChannelMetadata.Format(channel)} durable shutdown 恢复证据写入失败。",
+                    new AggregateException(shutdownFailures));
+            }
+        }
+    }
+
+    private CancellationTokenSource CreateShutdownDeadline()
+        => new(_durableShutdownTimeout, _shutdownTimeProvider);
+
+    private async Task<Exception?> PersistShutdownWorkItemAsync(
+        DataPipelineRetryChannel channel,
+        DurableConsumerWorkItem item,
+        CancellationToken shutdownToken)
+    {
+        const string failureReason = "运行时取消前 durable consumer 未完成，转入 shutdown 级联持久化。";
+        var sourceTable = DataPipelineRetryChannelMetadata.TryGetFailedRecordSourceTable(channel);
+        if (string.IsNullOrWhiteSpace(sourceTable))
+        {
+            return new InvalidOperationException(
+                $"无法为 {DataPipelineRetryChannelMetadata.Format(channel)} durable shutdown 解析补偿表。");
+        }
+
+        try
+        {
+            await _persistenceWriter.PersistAsync(
+                    item.Record,
+                    channel,
+                    item.Consumer.Name,
+                    failureReason,
+                    sourceTable,
+                    DeadLetterStage.DurableShutdownPersist,
+                    cancellationToken: shutdownToken)
+                .ConfigureAwait(false);
+            return null;
+        }
+        catch (OperationCanceledException ex) when (shutdownToken.IsCancellationRequested)
+        {
+            var timeout = new TimeoutException(
+                $"{DataPipelineRetryChannelMetadata.Format(channel)} durable shutdown 级联持久化超过总时限 {_durableShutdownTimeout}。",
+                ex);
+            return TryWriteShutdownCriticalEvidence(channel, item, failureReason, timeout);
+        }
+        catch (Exception ex)
+        {
+            return TryWriteShutdownCriticalEvidence(channel, item, failureReason, ex);
+        }
+    }
+
+    private Exception? TryWriteShutdownCriticalEvidence(
+        DataPipelineRetryChannel channel,
+        DurableConsumerWorkItem item,
+        string failureReason,
+        Exception persistenceFailure)
+    {
+        try
+        {
+            _persistenceWriter.WriteDurableShutdownCriticalEvidence(
+                item.Record,
+                channel,
+                item.Consumer.Name,
+                failureReason,
+                persistenceFailure);
+            return null;
+        }
+        catch (Exception criticalFailure)
+        {
+            return new AggregateException(
+                $"{DataPipelineRetryChannelMetadata.Format(channel)} durable shutdown 无法写入可恢复 critical 证据。",
+                persistenceFailure,
+                criticalFailure);
+        }
+    }
+
+    private async Task WaitForDurableWorkersStoppedAsync()
+    {
+        Task[] workers;
+        lock (_workerSync)
+        {
+            workers = new[] { _cloudDurableWorker, _mesDurableWorker }
+                .Where(static worker => worker is not null)
+                .Cast<Task>()
+                .ToArray();
+        }
+
+        if (workers.Length > 0)
+        {
+            await Task.WhenAll(workers).ConfigureAwait(false);
+        }
+    }
+
+    private void TryWriteUnexpectedDurableFailure(
+        DataPipelineRetryChannel channel,
+        DurableConsumerWorkItem item,
+        Exception exception)
+    {
+        var record = item.Record;
+        var details =
+            $"[PLC-{record.ResolveDeviceName()}][数据管道] 工序={record.CellData.ProcessType} " +
+            $"后台出口={DataPipelineRetryChannelMetadata.Format(channel)} 消费异常，" +
+            $"模块={record.ModuleId ?? "<unknown>"}，任务={record.TaskKey ?? "<unknown>"}：{exception.Message}";
+        try
+        {
+            _criticalFallbackWriter.Write(
+                $"DataPipeline.ProcessQueue.{channel}.UnexpectedConsumerFailure",
+                details,
+                exception);
+        }
+        catch (Exception criticalEx)
+        {
+            Logger.Error($"{details}；critical fallback 写入失败：{criticalEx.Message}");
         }
     }
 
@@ -377,4 +636,8 @@ public class ProcessQueueTask : ScheduledTaskBase
     private sealed record DurableConsumerWorkItem(
         CellCompletedRecord Record,
         ICellDataConsumer Consumer);
+
+    private sealed class DurableShutdownPersistenceException(
+        string message,
+        Exception innerException) : Exception(message, innerException);
 }

@@ -8,8 +8,6 @@ public interface ICrashLogWriter
 {
     string LogPath { get; }
 
-    string FallbackLogPath { get; }
-
     void ConfigurePaths(string primaryLogPath, string fallbackLogPath);
 
     void Write(string source, Exception? exception = null, string? details = null);
@@ -55,7 +53,7 @@ public sealed class CrashLogWriter : ICrashLogWriter
 
     public string LogPath => _primaryLogPath ?? _defaultPrimaryLogPathProvider();
 
-    public string FallbackLogPath => _fallbackLogPath ?? _defaultFallbackLogPathProvider();
+    private string FallbackLogPath => _fallbackLogPath ?? _defaultFallbackLogPathProvider();
 
     public void ConfigurePaths(string primaryLogPath, string fallbackLogPath)
     {

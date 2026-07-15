@@ -1,0 +1,3 @@
+#pragma warning disable WSARCH003
+namespace Fixture;
+public sealed class Suppressed;

@@ -17,6 +17,7 @@ using IIoT.Edge.Presentation.Shell;
 using IIoT.Edge.Shell.Core;
 using IIoT.Edge.Shell.Modules;
 using IIoT.Edge.Shell.ViewModels;
+using IIoT.Edge.SharedKernel.Configuration;
 using IIoT.Edge.UI.Shared;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Modularity;
@@ -73,11 +74,18 @@ public partial class App : global::Avalonia.Application
 
             var configurationResult = _configurationLoader.Load(AppDomain.CurrentDomain.BaseDirectory);
             var configuration = configurationResult.Configuration;
-            var runtimePaths = _runtimePathResolver.Resolve(AppDomain.CurrentDomain.BaseDirectory, configuration);
+            var runtimePathResolution = _runtimePathResolver.ResolveWithDiagnostics(
+                AppDomain.CurrentDomain.BaseDirectory,
+                configuration);
+            var runtimePaths = runtimePathResolution.RuntimePaths;
             var runtimePathPreflight = EdgeRuntimePathPreflight.EnsureWritable(runtimePaths);
             runtimePaths = runtimePathPreflight.RuntimePaths;
+            var bootstrapDiagnosticIssues = configurationResult.Issues
+                .Concat(runtimePathResolution.Issues)
+                .Concat(runtimePathPreflight.Issues)
+                .ToArray();
             ConfigureCrashLogging(runtimePaths);
-            WriteRuntimePathPreflightIssues(runtimePathPreflight.Issues);
+            WriteBootstrapDiagnosticIssues(bootstrapDiagnosticIssues);
 
             if (!TryAcquireInstanceLock(configuration, desktop))
             {
@@ -88,14 +96,14 @@ public partial class App : global::Avalonia.Application
                 configuration,
                 runtimePaths,
                 configurationResult.EnvironmentName,
-                runtimePathPreflight.Issues).BuildServiceProvider();
+                bootstrapDiagnosticIssues).BuildServiceProvider();
             _serviceProvider.GetRequiredService<IAppLanguageService>().Initialize();
 
             var lifecycle = _serviceProvider.GetRequiredService<IAppLifecycleCoordinator>();
             var startupResult = await lifecycle.StartAsync(_appCts.Token).ConfigureAwait(true);
             if (!startupResult.Success)
             {
-                ShowStartupError(desktop, startupResult.Message ?? "应用启动失败。");
+                ShowStartupError(desktop, "应用启动失败，详细信息已写入诊断日志。");
                 return;
             }
 
@@ -106,8 +114,8 @@ public partial class App : global::Avalonia.Application
         }
         catch (Exception ex)
         {
-            _crashLogWriter?.Write("Shell 启动失败。", ex);
-            ShowStartupError(desktop, $"启动服务配置失败：{ex.Message}");
+            TryWriteCrashLog("Shell 启动失败。", ex);
+            ShowStartupError(desktop, "Shell 启动失败，详细信息已写入 crash.log。");
         }
     }
 
@@ -309,7 +317,7 @@ public partial class App : global::Avalonia.Application
 
     private void HandleFatalException(string source, Exception exception, bool requestShutdown)
     {
-        _crashLogWriter?.Write(source, exception);
+        TryWriteCrashLog(source, exception);
 
         if (Interlocked.Exchange(ref _fatalDialogShown, 1) != 0)
         {
@@ -328,16 +336,27 @@ public partial class App : global::Avalonia.Application
 
     private bool TryAcquireInstanceLock(IConfiguration configuration, IClassicDesktopStyleApplicationLifetime desktop)
     {
-        var instanceId = configuration["InstanceId"] ?? "IIoT-Edge-Default";
-        var mutexName = $"Global\\IIoT.EdgeClient_{instanceId}";
+        var instanceId = EdgeClientInstanceMutexName.NormalizeInstanceId(configuration["InstanceId"]);
+        var mutexName = EdgeClientInstanceMutexName.Create(instanceId);
 
-        if (_instanceLock.TryAcquire(mutexName))
+        var acquireResult = _instanceLock.TryAcquireNonBlocking(mutexName, out var lockFailure);
+        if (acquireResult == SingleInstanceMutexAcquireResult.Acquired)
         {
             return true;
         }
 
-        _crashLogWriter?.Write(
+        if (acquireResult == SingleInstanceMutexAcquireResult.Unavailable)
+        {
+            TryWriteCrashLog(
+                "单实例锁不可用，已按非阻断启动。",
+                lockFailure,
+                $"实例 [{instanceId}] 无法创建或访问命名互斥量。");
+            return true;
+        }
+
+        TryWriteCrashLog(
             "单实例锁已占用。",
+            exception: null,
             details: $"实例 [{instanceId}] 已在运行，当前进程退出。");
         desktop.Shutdown(0);
         Environment.Exit(0);
@@ -392,16 +411,29 @@ public partial class App : global::Avalonia.Application
             runtimePaths.FallbackCrashLogPath);
     }
 
-    private void WriteRuntimePathPreflightIssues(IReadOnlyCollection<StartupDiagnosticIssue> issues)
+    private void WriteBootstrapDiagnosticIssues(IReadOnlyCollection<StartupDiagnosticIssue> issues)
     {
         if (issues.Count == 0)
         {
             return;
         }
 
-        _crashLogWriter?.Write(
-            "运行目录预检发现问题。",
+        TryWriteCrashLog(
+            "Shell 启动预检发现问题。",
+            exception: null,
             details: string.Join(Environment.NewLine, issues.Select(issue => $"- [{issue.Code}] {issue.Message}")));
+    }
+
+    private void TryWriteCrashLog(string source, Exception? exception = null, string? details = null)
+    {
+        try
+        {
+            _crashLogWriter?.Write(source, exception, details);
+        }
+        catch
+        {
+            // 日志通道失效不得阻断 UI 启动或异常收口。
+        }
     }
 
     private static void ShowStartupError(IClassicDesktopStyleApplicationLifetime desktop, string message)

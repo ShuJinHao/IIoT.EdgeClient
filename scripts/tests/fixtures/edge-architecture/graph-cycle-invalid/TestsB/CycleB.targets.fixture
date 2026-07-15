@@ -1,0 +1,5 @@
+<Project>
+  <Target Name="FixtureHiddenEdgeLedger">
+    <MSBuild Projects="../TestsA/IIoT.Edge.Host.CycleA.csproj" Targets="Build" />
+  </Target>
+</Project>

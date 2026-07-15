@@ -22,6 +22,54 @@ function Resolve-FullPath {
     return [IO.Path]::GetFullPath((Join-Path $BasePath $normalized))
 }
 
+function Resolve-PhysicalPath {
+    param([Parameter(Mandatory)][string]$PathValue)
+
+    $fullPath = [IO.Path]::GetFullPath($PathValue)
+    $root = [IO.Path]::GetPathRoot($fullPath)
+    if ([string]::IsNullOrWhiteSpace($root)) { return $fullPath }
+
+    $current = $root
+    $relative = $fullPath.Substring($root.Length)
+    foreach ($segment in $relative.Split(
+        [char[]]@([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar),
+        [StringSplitOptions]::RemoveEmptyEntries)) {
+        $candidate = Join-Path $current $segment
+        if (-not (Test-Path $candidate)) {
+            $current = $candidate
+            continue
+        }
+
+        $entry = Get-Item $candidate -Force
+        if ($null -ne $entry.LinkType) {
+            $target = $entry.ResolveLinkTarget($true)
+            if ($null -ne $target) {
+                $current = $target.FullName
+                continue
+            }
+        }
+        $current = $entry.FullName
+    }
+
+    return [IO.Path]::GetFullPath($current)
+}
+
+function Test-IsPathInside {
+    param(
+        [Parameter(Mandatory)][string]$PathValue,
+        [Parameter(Mandatory)][string]$RootPath
+    )
+
+    $physicalPath = Resolve-PhysicalPath $PathValue
+    $physicalRoot = (Resolve-PhysicalPath $RootPath).TrimEnd(
+        [IO.Path]::DirectorySeparatorChar,
+        [IO.Path]::AltDirectorySeparatorChar)
+    return $physicalPath.Equals($physicalRoot, [StringComparison]::OrdinalIgnoreCase) -or
+        $physicalPath.StartsWith(
+            $physicalRoot + [IO.Path]::DirectorySeparatorChar,
+            [StringComparison]::OrdinalIgnoreCase)
+}
+
 function Get-RepositoryPath {
     param([Parameter(Mandatory)][string]$FullPath)
     return [IO.Path]::GetRelativePath($RepositoryRoot, $FullPath).Replace('\', '/')
@@ -45,6 +93,13 @@ function Test-TrueValue {
     return $Value.Equals('true', [StringComparison]::OrdinalIgnoreCase)
 }
 
+function Remove-CSharpNonCodeText {
+    param([Parameter(Mandatory)][string]$SourceText)
+
+    $nonCodePattern = '(?s)(?:\$*)"{3,}.*?"{3,}|(?:\$@|@\$|@)"(?:""|[^"])*"|\$?"(?:\\.|[^"\\])*"|/\*.*?\*/|//[^\r\n]*'
+    return [regex]::Replace($SourceText, $nonCodePattern, ' ')
+}
+
 function Get-ProjectRole {
     param(
         [Parameter(Mandatory)][string]$ProjectPath,
@@ -52,8 +107,15 @@ function Get-ProjectRole {
         [Parameter(Mandatory)][xml]$Project
     )
 
-    if (Test-TrueValue (Get-ProjectProperty $Project 'IsEdgePluginTestFixture')) { return 'TestFixture' }
-    if (Test-TrueValue (Get-ProjectProperty $Project 'IsTestProject')) { return 'Test' }
+    if ($ProjectPath -match '(^|/)src/Tests/') {
+        if (Test-TrueValue (Get-ProjectProperty $Project 'IsTestProject')) { return 'Test' }
+        return 'Unknown'
+    }
+    if ($ProjectPath -match '(^|/)src/Testing/IIoT\.Edge\.Testing\.') { return 'TestSupport' }
+    if ($ProjectPath -match '(^|/)src/Testing/' -and
+        (Test-TrueValue (Get-ProjectProperty $Project 'IsEdgePluginOwnedCompanion'))) { return 'TestSupport' }
+    if ($ProjectPath -match '(^|/)src/Testing/IIoT\.Edge\.TestPlugin/' -and
+        (Test-TrueValue (Get-ProjectProperty $Project 'IsEdgePluginTestFixture'))) { return 'TestFixture' }
     if ($ProjectPath -match '(^|/)src/Analyzers/') { return 'Analyzer' }
     if ($ProjectName -eq 'IIoT.Edge.Domain') { return 'Domain' }
     if ($ProjectName -eq 'IIoT.Edge.Application' -or $ProjectName.StartsWith('IIoT.Edge.Application.', [StringComparison]::Ordinal)) { return 'Application' }
@@ -84,22 +146,62 @@ function Test-IsExactDebugCondition {
 function Test-IsActiveEdge {
     param([AllowEmptyString()][string]$Condition)
     if ([string]::IsNullOrWhiteSpace($Condition)) { return $true }
-    if (Test-IsExactDebugCondition $Condition) { return $Configuration -eq 'Debug' }
-
     $compact = [regex]::Replace($Condition, '\s+', '')
-    if ($compact -match [regex]::Escape('$(Configuration)')) {
-        if ($compact.IndexOf('Release', [StringComparison]::OrdinalIgnoreCase) -ge 0) {
-            if ($compact.Contains('!=')) { return $Configuration -ne 'Release' }
-            if ($compact.Contains('==') -or $compact.Contains('Equals(')) { return $Configuration -eq 'Release' }
-        }
-        if ($compact.IndexOf('Debug', [StringComparison]::OrdinalIgnoreCase) -ge 0) {
-            if ($compact.Contains('!=')) { return $Configuration -ne 'Debug' }
-            if ($compact.Contains('==') -or $compact.Contains('Equals(')) { return $Configuration -eq 'Debug' }
-        }
+    if ($compact -match '^(?:''\$\(Configuration\)''|"\$\(Configuration\)")(?<operator>==|!=)(?:''(?<value>Debug|Release)''|"(?<value>Debug|Release)")$') {
+        $equals = $Configuration.Equals($Matches['value'], [StringComparison]::OrdinalIgnoreCase)
+        if ($Matches['operator'] -eq '==') { return $equals }
+        return -not $equals
     }
 
-    # Unknown conditions remain visible to the graph; fail-closed is safer than hiding an edge.
+    # Compound and unknown conditions remain visible; only exact simple configuration predicates may hide an edge.
     return $true
+}
+
+function Test-IsApprovedAnalyzerToolEdge {
+    param(
+        [Parameter(Mandatory)][object]$Item,
+        [Parameter(Mandatory)][string]$TargetPath
+    )
+
+    $expectedTarget = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../src/Analyzers/IIoT.Edge.Architecture.Analyzers/IIoT.Edge.Architecture.Analyzers.csproj'))
+    $expectedTargetsFile = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../Directory.Build.targets'))
+    return [IO.Path]::GetFullPath($TargetPath).Equals($expectedTarget, [StringComparison]::OrdinalIgnoreCase) -and
+        $Item.GetMetadataValue('OutputItemType').Equals('Analyzer', [StringComparison]::OrdinalIgnoreCase) -and
+        $Item.GetMetadataValue('ReferenceOutputAssembly').Equals('false', [StringComparison]::OrdinalIgnoreCase) -and
+        $Item.GetMetadataValue('PrivateAssets').Equals('all', [StringComparison]::OrdinalIgnoreCase) -and
+        [IO.Path]::GetFullPath($Item.GetMetadataValue('DefiningProjectFullPath')).Equals(
+            $expectedTargetsFile,
+            [StringComparison]::OrdinalIgnoreCase)
+}
+
+function Test-IsArchitectureDiagnosticText {
+    param([AllowEmptyString()][string]$Value)
+    return $Value -match '(?i)\b(?:WSARCH|DDD|DATA|PLUG|EDGEOUT|EDGECOMP|EDGECLOUDCFG|EDGEPLCOWN|EDGEASYNC)\d{3}\b'
+}
+
+function Test-IsApprovedAnalyzerToolDeclaration {
+    param(
+        [Parameter(Mandatory)][System.Xml.XmlElement]$Item,
+        [Parameter(Mandatory)][string]$DefiningFile,
+        [Parameter(Mandatory)][string]$TargetPath
+    )
+
+    function Get-ItemMetadataValue {
+        param([Parameter(Mandatory)][string]$Name)
+        $attributeValue = $Item.GetAttribute($Name).Trim()
+        if (-not [string]::IsNullOrWhiteSpace($attributeValue)) { return $attributeValue }
+        $child = $Item.SelectSingleNode($Name)
+        if ($null -eq $child) { return '' }
+        return ([string]$child.InnerText).Trim()
+    }
+
+    $expectedTarget = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../src/Analyzers/IIoT.Edge.Architecture.Analyzers/IIoT.Edge.Architecture.Analyzers.csproj'))
+    $expectedTargetsFile = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../Directory.Build.targets'))
+    return [IO.Path]::GetFullPath($TargetPath).Equals($expectedTarget, [StringComparison]::OrdinalIgnoreCase) -and
+        (Get-ItemMetadataValue 'OutputItemType').Equals('Analyzer', [StringComparison]::OrdinalIgnoreCase) -and
+        (Get-ItemMetadataValue 'ReferenceOutputAssembly').Equals('false', [StringComparison]::OrdinalIgnoreCase) -and
+        (Get-ItemMetadataValue 'PrivateAssets').Equals('all', [StringComparison]::OrdinalIgnoreCase) -and
+        [IO.Path]::GetFullPath($DefiningFile).Equals($expectedTargetsFile, [StringComparison]::OrdinalIgnoreCase)
 }
 
 function Add-Finding {
@@ -223,8 +325,47 @@ function Test-IsAllowedDirectEdge {
             return $true
         }
         'Tool' { return $false }
-        'TestFixture' { return $Target.Role -in @('Application', 'ModuleSdk', 'SharedKernel', 'UiShared') }
-        'Test' { return $Target.Role -ne 'Unknown' }
+        'TestSupport' { return $Target.Role -notin @('Unknown', 'Test', 'TestFixture', 'Analyzer') }
+        'TestFixture' { return $Target.Role -in @('Application', 'ModuleSdk', 'SharedKernel', 'UiShared', 'TestSupport') }
+        'Test' { return Test-IsAllowedTestEdge -Source $Source -Target $Target }
+        default { return $false }
+    }
+}
+
+function Test-IsAllowedTestEdge {
+    param(
+        [Parameter(Mandatory)][object]$Source,
+        [Parameter(Mandatory)][object]$Target
+    )
+
+    if ($Target.Role -in @('Unknown', 'Test')) { return $false }
+
+    switch ($Source.TestKind) {
+        'Aggregate' { return $Target.Role -in @('Domain', 'SharedKernel', 'TestSupport') }
+        'Application' { return $Target.Role -in @('Application', 'Domain', 'SharedKernel', 'TestSupport') }
+        'Architecture' { return $Target.Role -in @('Analyzer', 'TestSupport') }
+        'Contract' { return $Target.Role -in @('Application', 'Infrastructure', 'SharedKernel', 'TestSupport') }
+        'Unit' { return $Target.Role -in @('Application', 'Domain', 'Infrastructure', 'Host', 'SharedKernel', 'TestSupport') }
+        'Deployment' { return $Target.Role -in @('Host', 'Tool', 'SharedKernel', 'TestSupport') }
+        'UI' { return $Target.Role -in @('Application', 'Host', 'Infrastructure', 'Presentation', 'VisualTestData', 'UiShared', 'SharedKernel', 'TestSupport') }
+        'Conformance' {
+            if ($Target.Role -eq 'ConcretePlugin') {
+                return $Source.Name -in @(
+                    'IIoT.Edge.Module.Homogenization.ConformanceTests',
+                    'IIoT.Edge.Module.Homogenization.ConformanceFilesystemTests')
+            }
+            return $Target.Role -in @('Application', 'Host', 'Infrastructure', 'ModuleSdk', 'TestFixture', 'TestSupport', 'SharedKernel', 'UiShared')
+        }
+        'Workflow' {
+            if ($Target.Role -eq 'ConcretePlugin') {
+                return $Source.Name -in @(
+                    'IIoT.Edge.Module.Homogenization.WorkflowTests',
+                    'IIoT.Edge.Module.Homogenization.WorkflowFilesystemTests')
+            }
+            return $Target.Role -in @('Application', 'Host', 'Infrastructure', 'ModuleSdk', 'SharedKernel', 'TestSupport')
+        }
+        'Persistence' { return $Target.Role -in @('Application', 'Host', 'Infrastructure', 'SharedKernel', 'TestSupport') }
+        'Integration' { return $Target.Role -in @('Application', 'Host', 'Infrastructure', 'ModuleSdk', 'TestFixture', 'SharedKernel', 'TestSupport') }
         default { return $false }
     }
 }
@@ -241,7 +382,7 @@ function Get-ReachableTestAsset {
         foreach ($edge in @($current.ActiveEdges)) {
             $target = $null
             if (-not $projectsByPath.TryGetValue($edge.TargetPath, [ref]$target)) { continue }
-            if ($target.Role -in @('Test', 'TestFixture')) { return $target }
+            if ($target.Role -in @('Test', 'TestFixture', 'TestSupport')) { return $target }
             if ($visited.Add($target.FullPath)) { $queue.Enqueue($target) }
         }
     }
@@ -280,6 +421,21 @@ if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
     $RepositoryRoot = [IO.Path]::GetFullPath($RepositoryRoot)
 }
 
+$dotnetCommandPath = (Get-Command dotnet).Source
+$dotnetExecutable = (Get-Item $dotnetCommandPath).Target
+if ([string]::IsNullOrWhiteSpace($dotnetExecutable)) {
+    $dotnetExecutable = $dotnetCommandPath
+}
+$sdkDirectory = Join-Path (Split-Path $dotnetExecutable -Parent) "sdk/$(dotnet --version)"
+$microsoftBuildAssembly = Join-Path $sdkDirectory 'Microsoft.Build.dll'
+if (-not (Test-Path $microsoftBuildAssembly -PathType Leaf)) {
+    throw "WSARCH004 Microsoft.Build evaluation assembly does not exist: $microsoftBuildAssembly"
+}
+[void][Reflection.Assembly]::LoadFrom($microsoftBuildAssembly)
+$globalProperties = [Collections.Generic.Dictionary[string, string]]::new([StringComparer]::OrdinalIgnoreCase)
+$globalProperties['Configuration'] = $Configuration
+$projectCollection = [Microsoft.Build.Evaluation.ProjectCollection]::new($globalProperties)
+
 $projectPaths = [System.Collections.Generic.List[string]]::new()
 if (-not [string]::IsNullOrWhiteSpace($SolutionPath)) {
     $resolvedSolution = Resolve-FullPath $RepositoryRoot $SolutionPath
@@ -302,12 +458,26 @@ $findings = [System.Collections.Generic.List[string]]::new()
 $projectsByPath = [System.Collections.Generic.Dictionary[string, object]]::new([StringComparer]::OrdinalIgnoreCase)
 $projects = [System.Collections.Generic.List[object]]::new()
 
+foreach ($editorConfig in @(Get-ChildItem $RepositoryRoot -Recurse -File -Filter '.editorconfig' |
+    Where-Object { $_.FullName -notmatch '[/\\](?:bin|obj)[/\\]' })) {
+    $editorConfigText = Get-Content $editorConfig.FullName -Raw
+    if ($editorConfigText -match '(?im)^\s*dotnet_diagnostic\.(?:WSARCH|DDD|DATA|PLUG|EDGEOUT|EDGECOMP|EDGECLOUDCFG|EDGEPLCOWN|EDGEASYNC)\d{3}\.severity\s*=\s*(?:none|silent)\s*$' -or
+        $editorConfigText -match '(?im)^\s*dotnet_analyzer_diagnostic\.category-IIoT\.Architecture\.severity\s*=\s*(?:none|silent)\s*$') {
+        Add-Finding 'WSARCH006' "$(Get-RepositoryPath $editorConfig.FullName) suppresses mandatory Edge architecture diagnostics."
+    }
+}
+
 foreach ($projectPath in @($projectPaths | Sort-Object -Unique)) {
     if (-not (Test-Path $projectPath -PathType Leaf)) {
         Add-Finding 'WSARCH004' "registered project does not exist: $(Get-RepositoryPath $projectPath)"
         continue
     }
     [xml]$projectXml = Get-Content $projectPath -Raw
+    $evaluatedProject = [Microsoft.Build.Evaluation.Project]::new(
+        $projectPath,
+        $globalProperties,
+        'Current',
+        $projectCollection)
     $name = [IO.Path]::GetFileNameWithoutExtension($projectPath)
     $relative = Get-RepositoryPath $projectPath
     $info = [pscustomobject]@{
@@ -316,8 +486,14 @@ foreach ($projectPath in @($projectPaths | Sort-Object -Unique)) {
         Directory = Split-Path $projectPath -Parent
         Name = $name
         Role = Get-ProjectRole $relative $name $projectXml
+        TestKind = Get-ProjectProperty -Project $projectXml -Name 'TestKind'
+        TestRuntime = Get-ProjectProperty -Project $projectXml -Name 'TestRuntime'
+        EffectiveAssemblyName = $evaluatedProject.GetPropertyValue('AssemblyName')
+        EffectiveIsTestProject = $evaluatedProject.GetPropertyValue('IsTestProject')
         Xml = $projectXml
+        EvaluatedProject = $evaluatedProject
         ActiveEdges = [System.Collections.Generic.List[object]]::new()
+        CompileSources = [System.Collections.Generic.List[object]]::new()
     }
     if ($projectsByPath.ContainsKey($projectPath)) {
         Add-Finding 'WSARCH004' "duplicate project registry path: $relative"
@@ -332,42 +508,266 @@ foreach ($project in $projects) {
         Add-Finding 'WSARCH004' "$($project.RelativePath) has no registered project role."
     }
 
-    foreach ($package in @($project.Xml.SelectNodes('/Project/ItemGroup/PackageReference'))) {
-        $packageName = ([System.Xml.XmlElement]$package).GetAttribute('Include').Trim()
+    $canonicalTestPath = "src/Tests/$($project.Name)/$($project.Name).csproj"
+    $canonicalSupportPath = "src/Testing/$($project.Name)/$($project.Name).csproj"
+    $isEffectiveTest = Test-TrueValue $project.EffectiveIsTestProject
+    $isTestLikeAssemblyName = $project.EffectiveAssemblyName -match '(?i)(?:Tests?|Testing|TestKit)$|(?:^|\.)(?:Tests?|Testing|TestKit)(?:\.|$)'
+    if ($project.Role -eq 'Test') {
+        if ($project.RelativePath -ne $canonicalTestPath -or -not $isEffectiveTest -or
+            $project.EffectiveAssemblyName -ne $project.Name -or -not $isTestLikeAssemblyName) {
+            Add-Finding 'WSARCH005' "$($project.RelativePath) test identity/path mismatch: AssemblyName='$($project.EffectiveAssemblyName)', IsTestProject='$($project.EffectiveIsTestProject)', expectedPath='$canonicalTestPath'."
+        }
+    } elseif ($project.Role -eq 'TestSupport') {
+        $isPluginOwnedCompanion = Test-TrueValue (Get-ProjectProperty -Project ($project.Xml) -Name 'IsEdgePluginOwnedCompanion')
+        $hasValidSupportIdentity = $project.Name.StartsWith('IIoT.Edge.Testing.', [StringComparison]::Ordinal) -or
+            ($isPluginOwnedCompanion -and
+             $project.Name -match '^IIoT\.Edge\.Module\.[A-Za-z0-9]+\.Companion$')
+        if ($project.RelativePath -ne $canonicalSupportPath -or $isEffectiveTest -or
+            $project.EffectiveAssemblyName -ne $project.Name -or
+            -not $hasValidSupportIdentity) {
+            Add-Finding 'WSARCH005' "$($project.RelativePath) TestSupport identity/path mismatch: AssemblyName='$($project.EffectiveAssemblyName)', IsTestProject='$($project.EffectiveIsTestProject)'."
+        }
+    } elseif ($project.Role -eq 'TestFixture') {
+        if ($project.RelativePath -ne 'src/Testing/IIoT.Edge.TestPlugin/IIoT.Edge.TestPlugin.csproj' -or
+            $project.Name -ne 'IIoT.Edge.TestPlugin' -or $isEffectiveTest -or
+            $project.EffectiveAssemblyName -ne $project.Name) {
+            Add-Finding 'WSARCH005' "$($project.RelativePath) plugin fixture identity/path mismatch."
+        }
+    } elseif ($isEffectiveTest -or $isTestLikeAssemblyName) {
+        Add-Finding 'WSARCH005' "$($project.RelativePath) production role '$($project.Role)' cannot use test identity: AssemblyName='$($project.EffectiveAssemblyName)', IsTestProject='$($project.EffectiveIsTestProject)'."
+    }
+
+    foreach ($package in @($project.EvaluatedProject.GetItems('PackageReference'))) {
+        $packageName = $package.EvaluatedInclude.Trim()
         if ($project.Role -notin @('Test', 'Analyzer') -and
             ($packageName -match '(?i)(^xunit|Test\.Sdk|TestPlatform|Moq|NSubstitute|FluentAssertions)')) {
-            Add-Finding 'WSARCH003' "$($project.RelativePath) references test package '$packageName'."
+            $definingPath = $package.GetMetadataValue('DefiningProjectFullPath')
+            Add-Finding 'WSARCH003' "$($project.RelativePath) references test package '$packageName' from $(Get-RepositoryPath $definingPath)."
         }
     }
 
-    $edgeNodes = @($project.Xml.SelectNodes('/Project/ItemGroup/ProjectReference'))
-    foreach ($node in $edgeNodes) {
-        $include = ([System.Xml.XmlElement]$node).GetAttribute('Include').Trim()
-        if ([string]::IsNullOrWhiteSpace($include)) { continue }
-        $condition = ([System.Xml.XmlElement]$node).GetAttribute('Condition').Trim()
-        $targetPath = Resolve-FullPath $project.Directory $include
+    $requiresArchitectureAnalyzer = $project.Role -notin @('Test', 'Analyzer', 'TestFixture')
+    if ($requiresArchitectureAnalyzer) {
+        foreach ($propertyName in @('RunAnalyzers', 'RunAnalyzersDuringBuild')) {
+            $propertyValue = $project.EvaluatedProject.GetPropertyValue($propertyName).Trim()
+            if ($propertyValue.Equals('false', [StringComparison]::OrdinalIgnoreCase)) {
+                Add-Finding 'WSARCH006' "$($project.RelativePath) disables mandatory analyzers through $propertyName=false."
+            }
+        }
+        foreach ($propertyName in @('NoWarn', 'WarningsNotAsErrors')) {
+            $propertyValue = $project.EvaluatedProject.GetPropertyValue($propertyName)
+            if (Test-IsArchitectureDiagnosticText $propertyValue) {
+                Add-Finding 'WSARCH006' "$($project.RelativePath) suppresses/downgrades mandatory architecture diagnostics through $propertyName."
+            }
+        }
+    }
+
+    $registeredProjectReferencePaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $approvedAnalyzerReferenceCount = 0
+    foreach ($item in @($project.EvaluatedProject.GetItems('ProjectReference'))) {
+        $targetPath = $item.GetMetadataValue('FullPath')
+        if ([string]::IsNullOrWhiteSpace($targetPath)) {
+            $targetPath = Resolve-FullPath $project.Directory $item.EvaluatedInclude
+        } else {
+            $targetPath = [IO.Path]::GetFullPath($targetPath)
+        }
+
+        if (Test-IsApprovedAnalyzerToolEdge -Item $item -TargetPath $targetPath) {
+            $approvedAnalyzerReferenceCount++
+            continue
+        }
+
         $edge = [pscustomobject]@{
             Kind = 'ProjectReference'
             TargetPath = $targetPath
-            Condition = $condition
-            ReferenceOutputAssembly = ([System.Xml.XmlElement]$node).GetAttribute('ReferenceOutputAssembly').Trim()
+            Condition = ''
+            ReferenceOutputAssembly = $item.GetMetadataValue('ReferenceOutputAssembly')
         }
 
         $target = $null
         if ($projectsByPath.TryGetValue($targetPath, [ref]$target) -and $target.Role -eq 'VisualTestData') {
+            $definingFile = $item.GetMetadataValue('DefiningProjectFullPath')
+            [xml]$definingXml = Get-Content $definingFile -Raw
+            $matchingNode = @($definingXml.SelectNodes('//ProjectReference')) |
+                Where-Object {
+                    $include = ([System.Xml.XmlElement]$_).GetAttribute('Include')
+                    -not [string]::IsNullOrWhiteSpace($include) -and
+                    (Resolve-FullPath (Split-Path $definingFile -Parent) $include) -eq $targetPath
+                } |
+                Select-Object -First 1
+            $condition = if ($null -eq $matchingNode) { '' } else { ([System.Xml.XmlElement]$matchingNode).GetAttribute('Condition').Trim() }
             $isExactDebugEdge = $project.Name -eq 'IIoT.Edge.Host.Bootstrap' -and (Test-IsExactDebugCondition $condition)
             if (-not $isExactDebugEdge -and $project.Role -ne 'Test') {
                 Add-Finding 'WSARCH003' "$($project.RelativePath) -> $($target.RelativePath) must be the exact Debug-only Host.Bootstrap edge; condition='$condition'."
             }
         }
 
-        if (Test-IsActiveEdge $condition) { $project.ActiveEdges.Add($edge) }
+        $project.ActiveEdges.Add($edge)
+        [void]$registeredProjectReferencePaths.Add($targetPath)
     }
 
-    foreach ($msbuildNode in @($project.Xml.SelectNodes('//*[local-name()="MSBuild"][@Projects]'))) {
-        $condition = ([System.Xml.XmlElement]$msbuildNode).GetAttribute('Condition').Trim()
-        foreach ($targetPath in @(Resolve-ProjectExpression $project ([System.Xml.XmlElement]$msbuildNode).GetAttribute('Projects'))) {
-            if (Test-IsActiveEdge $condition) {
+
+    if ($requiresArchitectureAnalyzer -and $approvedAnalyzerReferenceCount -ne 1) {
+        Add-Finding 'WSARCH006' "$($project.RelativePath) must receive exactly one pinned Edge Analyzer reference; actual=$approvedAnalyzerReferenceCount."
+    }
+    if (-not $requiresArchitectureAnalyzer -and $approvedAnalyzerReferenceCount -ne 0) {
+        Add-Finding 'WSARCH006' "$($project.RelativePath) Analyzer exclusion does not match its validated role '$($project.Role)'."
+    }
+
+    $ownedCompileItems = $project.CompileSources
+    foreach ($compileItem in @($project.EvaluatedProject.GetItems('Compile'))) {
+        $compilePath = $compileItem.GetMetadataValue('FullPath')
+        if ([string]::IsNullOrWhiteSpace($compilePath)) {
+            $compilePath = Resolve-FullPath $project.Directory $compileItem.EvaluatedInclude
+        } else {
+            $compilePath = [IO.Path]::GetFullPath($compilePath)
+        }
+
+        $isInsideProject = Test-IsPathInside $compilePath $project.Directory
+        if (-not $isInsideProject) {
+            $ruleId = if ($project.Role -in @('Test', 'TestSupport', 'TestFixture')) { 'WSTEST003' } else { 'WSARCH007' }
+            $definingPath = $compileItem.GetMetadataValue('DefiningProjectFullPath')
+            Add-Finding $ruleId "$($project.RelativePath) compiles source outside its physical project root: $(Get-RepositoryPath $compilePath), declared by $(Get-RepositoryPath $definingPath)."
+            continue
+        }
+
+        $relativeCompilePath = [IO.Path]::GetRelativePath($project.Directory, $compilePath)
+        if ($relativeCompilePath -match '^(?:bin|obj)[/\\]') {
+            $isExplicitGenerated =
+                $compileItem.GetMetadataValue('AutoGen').Equals('true', [StringComparison]::OrdinalIgnoreCase) -or
+                $compileItem.GetMetadataValue('Generated').Equals('true', [StringComparison]::OrdinalIgnoreCase) -or
+                $compileItem.GetMetadataValue('DesignTime').Equals('true', [StringComparison]::OrdinalIgnoreCase)
+            if (-not $isExplicitGenerated) {
+                $ruleId = if ($project.Role -in @('Test', 'TestSupport', 'TestFixture')) { 'WSTEST003' } else { 'WSARCH007' }
+                Add-Finding $ruleId "$($project.RelativePath) compiles a non-generated bin/obj source '$relativeCompilePath'."
+            }
+            continue
+        }
+
+        if (Test-Path $compilePath -PathType Leaf) {
+            $ownedCompileItems.Add([pscustomobject]@{
+                FullName = $compilePath
+            })
+        }
+    }
+
+    if ($requiresArchitectureAnalyzer) {
+        foreach ($source in $ownedCompileItems) {
+            $sourceText = Get-Content $source.FullName -Raw
+            $sourceCode = Remove-CSharpNonCodeText $sourceText
+            if ($sourceCode -match '(?im)^\s*#pragma\s+warning\s+disable(?:\s*(?:$|(?:(?:WSARCH|DDD|DATA|PLUG|EDGEOUT|EDGECOMP|EDGECLOUDCFG|EDGEPLCOWN|EDGEASYNC)\d{3}\b)))' -or
+                ($sourceCode -match '\bSuppressMessage\s*\(' -and (Test-IsArchitectureDiagnosticText $sourceCode))) {
+                Add-Finding 'WSARCH006' "$(Get-RepositoryPath $source.FullName) suppresses mandatory Edge architecture diagnostics in source."
+            }
+        }
+    }
+
+    # Evaluated items alone omit false conditional declarations. Read the root and every
+    # repository-owned import as well: only an exact Configuration equality/inequality may
+    # hide a declaration; compound or unknown predicates remain visible (fail closed).
+    $projectDeclarationFiles = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    [void]$projectDeclarationFiles.Add($project.FullPath)
+    foreach ($import in @($project.EvaluatedProject.Imports)) {
+        $importPath = [IO.Path]::GetFullPath($import.ImportedProject.FullPath)
+        if ($importPath.StartsWith(
+            $RepositoryRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar,
+            [StringComparison]::OrdinalIgnoreCase)) {
+            [void]$projectDeclarationFiles.Add($importPath)
+        }
+    }
+
+    foreach ($declarationFile in $projectDeclarationFiles) {
+        [xml]$declarationXml = Get-Content $declarationFile -Raw
+        foreach ($rawItem in @($declarationXml.SelectNodes('//ProjectReference'))) {
+            $itemElement = [System.Xml.XmlElement]$rawItem
+            $itemCondition = $itemElement.GetAttribute('Condition').Trim()
+            $groupCondition = if ($itemElement.ParentNode -is [System.Xml.XmlElement]) {
+                ([System.Xml.XmlElement]$itemElement.ParentNode).GetAttribute('Condition').Trim()
+            } else { '' }
+            $condition = @($groupCondition, $itemCondition) |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+                Join-String -Separator ' and '
+            if (-not (Test-IsActiveEdge $condition)) { continue }
+
+            $include = $itemElement.GetAttribute('Include').Trim()
+            if ([string]::IsNullOrWhiteSpace($include)) { continue }
+            $definingDirectory = Split-Path $declarationFile -Parent
+            $include = $include.Replace(
+                '$(MSBuildThisFileDirectory)',
+                $definingDirectory.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar)
+            $expandedInclude = $project.EvaluatedProject.ExpandString($include)
+            if ($expandedInclude -match '%\(' -or $expandedInclude -match '@\(' -or $expandedInclude -match '\$\(') {
+                Add-Finding 'WSARCH004' "$($project.RelativePath) contains unresolved ProjectReference '$expandedInclude' from $(Get-RepositoryPath $declarationFile)."
+                continue
+            }
+
+            foreach ($candidate in $expandedInclude.Split(';', [StringSplitOptions]::RemoveEmptyEntries)) {
+                $targetPath = Resolve-FullPath $project.Directory $candidate.Trim()
+                if (Test-IsApprovedAnalyzerToolDeclaration -Item $itemElement -DefiningFile $declarationFile -TargetPath $targetPath) {
+                    continue
+                }
+                if ($registeredProjectReferencePaths.Add($targetPath)) {
+                    $project.ActiveEdges.Add([pscustomobject]@{
+                        Kind = 'ProjectReference'
+                        TargetPath = $targetPath
+                        Condition = $condition
+                        ReferenceOutputAssembly = $itemElement.GetAttribute('ReferenceOutputAssembly').Trim()
+                    })
+                }
+            }
+        }
+    }
+
+    $projectInstance = $project.EvaluatedProject.CreateProjectInstance()
+    foreach ($targetInstance in @($projectInstance.Targets.Values)) {
+        foreach ($task in @($targetInstance.Children | Where-Object {
+            $_.GetType().Name -eq 'ProjectTaskInstance' -and $_.Name -eq 'MSBuild'
+        })) {
+            $taskFile = [IO.Path]::GetFullPath($task.Location.File)
+            if (-not $taskFile.StartsWith(
+                $RepositoryRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar,
+                [StringComparison]::OrdinalIgnoreCase)) {
+                continue
+            }
+
+            $condition = "$($targetInstance.Condition) $($task.Condition)"
+            if (-not (Test-IsActiveEdge $condition)) { continue }
+            $projectsExpression = $task.Parameters['Projects']
+            if ([string]::IsNullOrWhiteSpace($projectsExpression)) {
+                Add-Finding 'WSARCH004' "$($project.RelativePath) contains a repository MSBuild task with an empty Projects expression in $(Get-RepositoryPath $taskFile)."
+                continue
+            }
+
+            if ($projectsExpression -match '%\(' -or
+                ($projectsExpression -match '@\(' -and $projectsExpression -notmatch '^\s*@\([A-Za-z_][A-Za-z0-9_.-]*\)\s*$')) {
+                Add-Finding 'WSARCH004' "$($project.RelativePath) contains a dynamic MSBuild Projects expression '$projectsExpression' in $(Get-RepositoryPath $taskFile)."
+                continue
+            }
+
+            if ($projectsExpression -match '^\s*@\((?<itemName>[A-Za-z_][A-Za-z0-9_.-]*)\)\s*$') {
+                $projectItems = @($project.EvaluatedProject.GetItems($Matches['itemName']))
+                if ($projectItems.Count -eq 0) {
+                    Add-Finding 'WSARCH004' "$($project.RelativePath) MSBuild Projects item '$projectsExpression' is unresolved or target-local in $(Get-RepositoryPath $taskFile)."
+                    continue
+                }
+                $expandedProjects = ($projectItems | ForEach-Object {
+                    $fullPath = $_.GetMetadataValue('FullPath')
+                    if ([string]::IsNullOrWhiteSpace($fullPath)) { $_.EvaluatedInclude } else { $fullPath }
+                }) -join ';'
+            } else {
+                $expandedProjects = $project.EvaluatedProject.ExpandString($projectsExpression)
+            }
+            if ([string]::IsNullOrWhiteSpace($expandedProjects)) {
+                Add-Finding 'WSARCH004' "$($project.RelativePath) MSBuild Projects expression '$projectsExpression' evaluated empty in $(Get-RepositoryPath $taskFile)."
+                continue
+            }
+            if ($expandedProjects -match '%\(' -or $expandedProjects -match '@\(' -or $expandedProjects -match '\$\(') {
+                Add-Finding 'WSARCH004' "$($project.RelativePath) contains unresolved evaluated MSBuild edge '$expandedProjects' from $(Get-RepositoryPath $taskFile)."
+                continue
+            }
+
+            foreach ($candidate in $expandedProjects.Split(';', [StringSplitOptions]::RemoveEmptyEntries)) {
+                $targetPath = Resolve-FullPath $project.Directory $candidate.Trim()
                 $project.ActiveEdges.Add([pscustomobject]@{
                     Kind = 'MSBuild'
                     TargetPath = $targetPath
@@ -387,7 +787,8 @@ foreach ($project in $projects) {
             continue
         }
 
-        if ($project.Role -notin @('Test', 'TestFixture', 'Analyzer') -and $target.Role -in @('Test', 'TestFixture')) {
+        if ($project.Role -notin @('Test', 'TestFixture', 'TestSupport', 'Analyzer') -and
+            $target.Role -in @('Test', 'TestFixture', 'TestSupport')) {
             Add-Finding 'WSARCH003' "$($project.RelativePath) -> $($target.RelativePath) is a production-to-test edge."
             continue
         }
@@ -404,7 +805,7 @@ foreach ($project in $projects) {
         }
     }
 
-    if ($project.Role -notin @('Test', 'TestFixture', 'Analyzer')) {
+    if ($project.Role -notin @('Test', 'TestFixture', 'TestSupport', 'Analyzer')) {
         $reachable = Get-ReachableTestAsset $project
         if ($null -ne $reachable) {
             Add-Finding 'WSARCH003' "$($project.RelativePath) reaches test asset $($reachable.RelativePath) transitively."
@@ -446,6 +847,212 @@ foreach ($project in $projects) {
             -not (Test-Path (Join-Path $project.Directory 'plugin.json') -PathType Leaf)) {
             Add-Finding 'PLUG004' "$($project.RelativePath) fixture metadata/plugin.json must declare EdgeModuleRole=Fixture, IsEdgePluginModule=true, PluginModuleId, IsPackable=false."
         }
+    }
+
+    if ($project.Role -eq 'Test') {
+        $metadataNames = @(
+            'TestKind', 'TestRuntime', 'TestRuntimeDependencies', 'TestRunnerMode', 'TestCadence',
+            'TestCapability', 'TestRisk', 'TestConcern', 'TestProfile', 'TestOwner', 'TestRuleId', 'TestRequired')
+        foreach ($metadataName in $metadataNames) {
+            $metadataNodes = @($project.Xml.SelectNodes("/Project/PropertyGroup/$metadataName"))
+            if ($metadataNodes.Count -ne 1) {
+                Add-Finding 'WSTEST001' "$($project.RelativePath) must declare direct $metadataName exactly once; actual=$($metadataNodes.Count)."
+            } elseif ($metadataName -ne 'TestRuntimeDependencies' -and
+                      [string]::IsNullOrWhiteSpace(([string]$metadataNodes[0].InnerText).Trim())) {
+                Add-Finding 'WSTEST001' "$($project.RelativePath) direct $metadataName cannot be empty."
+            }
+        }
+
+        $testRuntime = Get-ProjectProperty -Project ($project.Xml) -Name 'TestRuntime'
+        $testKind = Get-ProjectProperty -Project ($project.Xml) -Name 'TestKind'
+        $runtimeDependenciesText = Get-ProjectProperty -Project ($project.Xml) -Name 'TestRuntimeDependencies'
+        $runtimeDependencies = @($runtimeDependenciesText.Split(';', [StringSplitOptions]::RemoveEmptyEntries) |
+            ForEach-Object { $_.Trim() })
+        $runnerMode = Get-ProjectProperty -Project ($project.Xml) -Name 'TestRunnerMode'
+        $testCadence = Get-ProjectProperty -Project ($project.Xml) -Name 'TestCadence'
+        $testRisk = Get-ProjectProperty -Project ($project.Xml) -Name 'TestRisk'
+        $testConcern = Get-ProjectProperty -Project ($project.Xml) -Name 'TestConcern'
+        $testProfile = Get-ProjectProperty -Project ($project.Xml) -Name 'TestProfile'
+        $testRequired = Get-ProjectProperty -Project ($project.Xml) -Name 'TestRequired'
+        $allowedTestKinds = @('Aggregate', 'Application', 'Architecture', 'Conformance', 'Contract', 'Deployment', 'Integration', 'Persistence', 'UI', 'Unit', 'Workflow')
+        $allowedRuntimes = @('Pure', 'Filesystem', 'Network', 'Avalonia', 'SQLite', 'Windows')
+        $allowedRuntimeDependencies = @(
+            'AssemblyLoad', 'ControlledConcurrency', 'FakeHttp', 'FakeTime', 'Filesystem', 'Headless',
+            'IsolatedDatabase', 'Loopback', 'MSBuild', 'PluginLoad', 'PowerShell', 'ProcessEnvironment',
+            'Reflection', 'Release', 'Roslyn', 'SharedOutputDirectory')
+        if ($testKind -notin $allowedTestKinds -or $testRuntime -notin $allowedRuntimes -or
+            $runnerMode -notin @('Parallel', 'Serial') -or $testCadence -notin @('PR', 'Nightly', 'Release', 'Manual') -or
+            $testRisk -notin @('P0', 'P1', 'P2') -or
+            $testConcern -notin @('Security', 'Reliability', 'Compatibility', 'Accessibility', 'Performance') -or
+            $testProfile -notin @('Default', 'Simulation', 'GoldenDataset', 'LiveExternal') -or
+            $testRequired -notin @('true', 'false')) {
+            Add-Finding 'WSTEST001' "$($project.RelativePath) has unsupported test taxonomy metadata."
+        }
+        if ($runtimeDependencies.Count -ne (@($runtimeDependencies | Sort-Object -Unique)).Count -or
+            @($runtimeDependencies | Where-Object { $_ -eq 'None' -or $_ -notin $allowedRuntimeDependencies }).Count -gt 0) {
+            Add-Finding 'WSTEST001' "$($project.RelativePath) has duplicate/unsupported TestRuntimeDependencies='$runtimeDependenciesText'."
+        }
+
+        $allowedRuntimesByKind = @{
+            Aggregate = @('Pure')
+            Application = @('Pure')
+            Architecture = @('Pure', 'Filesystem')
+            Conformance = @('Pure', 'Filesystem')
+            Contract = @('Pure', 'Filesystem', 'Network')
+            Deployment = @('Filesystem', 'Windows')
+            Integration = @('Pure', 'Filesystem', 'Network', 'SQLite')
+            Persistence = @('Filesystem', 'SQLite')
+            UI = @('Avalonia')
+            Unit = @('Pure')
+            Workflow = @('Pure', 'Filesystem', 'SQLite')
+        }
+        if ($allowedRuntimesByKind.ContainsKey($testKind) -and $testRuntime -notin $allowedRuntimesByKind[$testKind]) {
+            Add-Finding 'WSTEST002' "$($project.RelativePath) TestKind=$testKind is incompatible with TestRuntime=$testRuntime."
+        }
+
+        if ($testRuntime -eq 'Pure' -and $runnerMode -ne 'Parallel') {
+            Add-Finding 'WSTEST002' "$($project.RelativePath) is Pure and must use TestRunnerMode=Parallel."
+        }
+        if ($testRuntime -ne 'Pure' -and $runnerMode -ne 'Serial') {
+            Add-Finding 'WSTEST002' "$($project.RelativePath) is resource-backed and must use TestRunnerMode=Serial."
+        }
+        if ($testRuntime -eq 'Pure' -and $runtimeDependencies -contains 'Loopback') {
+            Add-Finding 'WSTEST002' "$($project.RelativePath) is Pure and cannot declare Loopback."
+        }
+        if ($testRuntime -eq 'Avalonia' -and
+            ($testKind -ne 'UI' -or $runnerMode -ne 'Serial' -or $runtimeDependencies -notcontains 'Headless')) {
+            Add-Finding 'WSTEST002' "$($project.RelativePath) Avalonia runners must be UI/Serial and declare Headless."
+        }
+        if ($testRuntime -eq 'SQLite' -and $runtimeDependencies -notcontains 'IsolatedDatabase') {
+            Add-Finding 'WSTEST002' "$($project.RelativePath) SQLite runners must declare IsolatedDatabase."
+        }
+        if ($testRuntime -eq 'Network' -and $runtimeDependencies -notcontains 'Loopback' -and $testProfile -ne 'LiveExternal') {
+            Add-Finding 'WSTEST002' "$($project.RelativePath) Network runners must declare Loopback or LiveExternal."
+        }
+        $testSources = @($project.CompileSources)
+        $testCases = @($testSources | Where-Object {
+            (Get-Content $_.FullName -Raw) -match '\[(?:Xunit\.)?(?:AvaloniaFact|Fact|Theory)\b'
+        })
+        if ($testCases.Count -eq 0) {
+            Add-Finding 'WSTEST004' "$($project.RelativePath) contains no executable test cases. Remove empty runners."
+        }
+
+        foreach ($source in $testSources) {
+            $sourceText = Get-Content $source.FullName -Raw
+            $sourceCode = Remove-CSharpNonCodeText $sourceText
+            if ($testRuntime -eq 'Pure') {
+                $declaresFileType = $sourceCode -match '\b(?:class|struct|record|interface)\s+File\b'
+                $declaresDirectoryType = $sourceCode -match '\b(?:class|struct|record|interface)\s+Directory\b'
+                $declaresProcessType = $sourceCode -match '\b(?:class|struct|record|interface)\s+Process\b'
+                $usesFileSystem =
+                    $sourceCode -match '\bSystem\.IO\.(?:File|Directory)\s*\.' -or
+                    (-not $declaresFileType -and $sourceCode -match '\bFile\.(?:Append|Copy|Create|Delete|Move|Open|Read|Replace|Set|Write)[A-Za-z0-9_]*\s*\(') -or
+                    (-not $declaresDirectoryType -and $sourceCode -match '\bDirectory\.(?:Create|Delete|Enumerate|Get|Move|Set)[A-Za-z0-9_]*\s*\(')
+                $usesProcess =
+                    $sourceCode -match '\bSystem\.Diagnostics\.Process\s*\.' -or
+                    (-not $declaresProcessType -and $sourceCode -match '\bProcess\.(?:Start|GetProcess|Kill|WaitForExit)[A-Za-z0-9_]*\s*\(')
+                $usesNetwork = $sourceCode -match '\b(?:System\.Net\.Sockets|Socket|TcpListener|TcpClient|UdpClient)\b'
+                $usesDefaultHttpClient = $sourceCode -match '\bnew\s+(?:System\.Net\.Http\.)?HttpClient\s*\(\s*\)'
+                if ($usesFileSystem -or $usesProcess -or $usesNetwork -or $usesDefaultHttpClient) {
+                    Add-Finding 'WSTEST009' "$(Get-RepositoryPath $source.FullName) uses a real Filesystem/Process/Network resource inside a Pure runner. Move it to a resource-backed Serial runner or inject a deterministic fake."
+                }
+            }
+            if ($sourceText -match '\bSkip\s*=' -or $sourceText -match '\[(?:Xunit\.)?Explicit\b') {
+                Add-Finding 'WSTEST005' "$(Get-RepositoryPath $source.FullName) contains skipped/explicit test behavior."
+            }
+
+            # A cancellable infinite wait models an externally blocked dependency without sleeping for wall time.
+            # Every finite delay must instead be driven by an observable completion, barrier, or fake clock.
+            $withoutCancellableInfiniteWaits = [regex]::Replace(
+                $sourceText,
+                '\bTask\.Delay\s*\(\s*Timeout\.InfiniteTimeSpan\s*,\s*[A-Za-z_][A-Za-z0-9_.]*\s*\)',
+                '')
+            if ($withoutCancellableInfiniteWaits -match '\bTask\.Delay\s*\(' -or
+                $sourceText -match '\bThread\.Sleep\s*\(' -or
+                $sourceText -match '\bSpinWait\.SpinUntil\s*\(' -or
+                ($sourceCode -match '\bStopwatch\b' -and
+                 $sourceCode -match '(?:Assert\.[A-Za-z]+\s*\([^;]*\bElapsed|\bElapsed(?:Milliseconds|Ticks|\.TotalMilliseconds)\s*(?:<|>|<=|>=))') -or
+                ($sourceCode -match '\bDateTime(?:Offset)?\.UtcNow\b' -and
+                 $sourceCode -match '\b(?:deadline|timeoutAt|expiresAt)\b' -and
+                 $sourceCode -match '\bTask\.Yield\s*\(') -or
+                ($sourceCode -match '\bHttpClient\b[\s\S]{0,240}\bTimeout\s*=\s*TimeSpan\.(?:From|Parse)' -and
+                 $sourceCode -match 'Timeout\.InfiniteTimeSpan|WaitForCancellation')) {
+                Add-Finding 'WSTEST008' "$(Get-RepositoryPath $source.FullName) contains a fixed wall-clock wait. Use observable completion/barriers/fake time; only cancellable Timeout.InfiniteTimeSpan dependency doubles are allowed."
+            }
+        }
+    }
+
+    if ($project.Role -eq 'TestSupport') {
+        $supportCases = @($project.CompileSources |
+            Where-Object { (Get-Content $_.FullName -Raw) -match '\[(?:Xunit\.)?(?:AvaloniaFact|Fact|Theory)\b' })
+        if ($supportCases.Count -gt 0) {
+            Add-Finding 'WSTEST006' "$($project.RelativePath) test support contains executable [Fact]/[Theory] cases."
+        }
+    }
+}
+
+$pureTests = @($projects | Where-Object {
+    $_.Role -eq 'Test' -and $_.TestRuntime -eq 'Pure'
+})
+foreach ($testProject in @($projects | Where-Object { $_.Role -eq 'Test' })) {
+    $visited = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $queue = [System.Collections.Generic.Queue[object]]::new()
+    $queue.Enqueue($testProject)
+    [void]$visited.Add($testProject.FullPath)
+    while ($queue.Count -gt 0) {
+        $current = $queue.Dequeue()
+        foreach ($edge in @($current.ActiveEdges)) {
+            $target = $null
+            if (-not $projectsByPath.TryGetValue($edge.TargetPath, [ref]$target)) { continue }
+            if (-not $visited.Add($target.FullPath)) { continue }
+            $queue.Enqueue($target)
+            if ($current.Role -eq 'TestSupport' -and $target.Role -ne 'TestSupport' -and
+                -not (Test-IsAllowedTestEdge -Source $testProject -Target $target)) {
+                Add-Finding 'WSTEST010' "$($testProject.Name) transitive closure reaches $($target.RelativePath) [$($target.Role)] outside TestKind=$($testProject.TestKind) ownership."
+            }
+            if ($current.Role -eq 'TestSupport' -and $testProject.TestRuntime -eq 'Pure' -and
+                $target.Name -in @(
+                    'IIoT.Edge.Infrastructure.Persistence.EfCore',
+                    'IIoT.Edge.Infrastructure.Persistence.Dapper')) {
+                Add-Finding 'WSTEST007' "$($testProject.Name) Pure runner reaches forbidden persistence through TestSupport $($current.RelativePath) -> $($target.RelativePath)."
+            }
+        }
+    }
+}
+
+$persistenceFreePureRunnerNames = @(
+    'IIoT.Edge.Application.Tests',
+    'IIoT.Edge.Architecture.AnalyzerTests',
+    'IIoT.Edge.Caching.UnitTests',
+    'IIoT.Edge.Cloud.ContractTests',
+    'IIoT.Edge.Domain.Tests',
+    'IIoT.Edge.Installer.UnitTests',
+    'IIoT.Edge.Mes.ContractTests',
+    'IIoT.Edge.Module.Homogenization.ConformanceTests',
+    'IIoT.Edge.Module.Homogenization.WorkflowTests',
+    'IIoT.Edge.Plc.ContractTests',
+    'IIoT.Edge.Runtime.WorkflowTests')
+foreach ($pureTest in @($pureTests | Where-Object { $_.Name -in $persistenceFreePureRunnerNames })) {
+    $visited = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $queue = [System.Collections.Generic.Queue[object]]::new()
+    $queue.Enqueue($pureTest)
+    [void]$visited.Add($pureTest.FullPath)
+    while ($queue.Count -gt 0) {
+        $current = $queue.Dequeue()
+        foreach ($edge in @($current.ActiveEdges)) {
+            $target = $null
+            if (-not $projectsByPath.TryGetValue($edge.TargetPath, [ref]$target)) { continue }
+            if ($visited.Add($target.FullPath)) { $queue.Enqueue($target) }
+        }
+    }
+    $forbiddenPureClosure = @($projects | Where-Object {
+        $visited.Contains($_.FullPath) -and
+        $_.Name -in @(
+            'IIoT.Edge.Infrastructure.Persistence.EfCore',
+            'IIoT.Edge.Infrastructure.Persistence.Dapper')
+    })
+    foreach ($forbidden in $forbiddenPureClosure) {
+        Add-Finding 'WSTEST007' "$($pureTest.Name) pure closure reaches forbidden project $($forbidden.RelativePath)."
     }
 }
 

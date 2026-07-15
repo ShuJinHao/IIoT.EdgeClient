@@ -13,7 +13,7 @@ public abstract class DevelopmentSampleContributorBase : IDevelopmentSampleContr
         IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles)
     {
         Configuration = configuration;
-        _hardwareProfiles = hardwareProfiles.ToDictionary(x => x.ModuleId, StringComparer.OrdinalIgnoreCase);
+        _hardwareProfiles = BuildUniqueHardwareProfiles(hardwareProfiles);
     }
 
     public abstract string ModuleId { get; }
@@ -79,4 +79,34 @@ public abstract class DevelopmentSampleContributorBase : IDevelopmentSampleContr
 
     protected virtual Task EnsureRuntimeSamplesCoreAsync(CancellationToken cancellationToken)
         => Task.CompletedTask;
+
+    private static IReadOnlyDictionary<string, IModuleHardwareProfileProvider> BuildUniqueHardwareProfiles(
+        IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles)
+    {
+        var result = new Dictionary<string, IModuleHardwareProfileProvider>(StringComparer.OrdinalIgnoreCase);
+        var duplicates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var provider in hardwareProfiles)
+        {
+            string moduleId;
+            try
+            {
+                moduleId = provider.ModuleId;
+            }
+            catch
+            {
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(moduleId) || duplicates.Contains(moduleId))
+                continue;
+
+            if (!result.TryAdd(moduleId, provider))
+            {
+                result.Remove(moduleId);
+                duplicates.Add(moduleId);
+            }
+        }
+
+        return result;
+    }
 }

@@ -1,11 +1,12 @@
 ﻿using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Plc;
 using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Application.Abstractions.Tasks;
 using IIoT.Edge.SharedKernel.Context;
 
 namespace IIoT.Edge.Module.Sdk.Base;
 
-public abstract class PlcTaskBase : IPlcTask
+public abstract class PlcTaskBase : IPlcTask, IStartupAwareBackgroundTask
 {
     protected readonly IPlcBuffer Buffer;
     protected readonly ProductionContext Context;
@@ -16,6 +17,10 @@ public abstract class PlcTaskBase : IPlcTask
 
     protected virtual int TaskLoopInterval => 10;
     protected virtual int ErrorRetryInterval => 1000;
+    protected virtual Task WaitForNextIterationAsync(CancellationToken ct)
+        => Task.Delay(TaskLoopInterval, ct);
+    protected virtual Task WaitForErrorRetryAsync(CancellationToken ct)
+        => Task.Delay(ErrorRetryInterval, ct);
 
     protected int Step
     {
@@ -37,28 +42,30 @@ public abstract class PlcTaskBase : IPlcTask
         TaskCancellationToken = cancellationToken;
     }
 
-    public async Task StartAsync(CancellationToken ct)
+    public Task StartAsync(CancellationToken ct)
+        => StartWithStartup(ct).Execution;
+
+    public BackgroundTaskRun StartWithStartup(CancellationToken cancellationToken)
     {
-        await Task.Factory.StartNew(
-            () => TaskCoreAsync(ct),
-            ct,
-            TaskCreationOptions.LongRunning,
-            TaskScheduler.Default).Unwrap();
+        var startup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var execution = TaskCoreAsync(cancellationToken, startup);
+        return new BackgroundTaskRun(startup.Task, execution);
     }
 
-    private async Task TaskCoreAsync(CancellationToken ct)
+    private async Task TaskCoreAsync(CancellationToken ct, TaskCompletionSource startup)
     {
         SetTaskCancellationToken(ct);
         Logger.Info($"[{Context.DeviceName}] {TaskName} 已启动，当前步骤：{Step}");
+        startup.TrySetResult();
 
         while (!ct.IsCancellationRequested)
         {
             try
             {
                 await DoCoreAsync();
-                await Task.Delay(TaskLoopInterval, ct);
+                await WaitForNextIterationAsync(ct);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 break;
             }
@@ -67,11 +74,15 @@ public abstract class PlcTaskBase : IPlcTask
                 Logger.Error($"[{Context.DeviceName}] {TaskName} 执行失败：{ex.Message}");
                 try
                 {
-                    await Task.Delay(ErrorRetryInterval, ct);
+                    await WaitForErrorRetryAsync(ct);
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
                     break;
+                }
+                catch (Exception retryException)
+                {
+                    Logger.Error($"[{Context.DeviceName}] {TaskName} 重试等待失败：{retryException.Message}");
                 }
             }
         }

@@ -31,14 +31,16 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
     ];
 
     private readonly ILogService _logger;
-    private readonly IRepository<NetworkDeviceEntity> _networkDevices;
-    private readonly IRepository<IoMappingEntity> _ioMappings;
+    private readonly IReadRepository<NetworkDeviceEntity> _networkDevices;
+    private readonly IReadRepository<IoMappingEntity> _ioMappings;
+    private readonly IEdgeUnitOfWorkFactory _unitOfWorkFactory;
     private readonly HomogenizationDeviceSeedOptions _options;
 
     public HomogenizationDevelopmentSampleContributor(
         IConfiguration configuration,
-        IRepository<NetworkDeviceEntity> networkDevices,
-        IRepository<IoMappingEntity> ioMappings,
+        IReadRepository<NetworkDeviceEntity> networkDevices,
+        IReadRepository<IoMappingEntity> ioMappings,
+        IEdgeUnitOfWorkFactory unitOfWorkFactory,
         ILogService logger,
         IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles,
         EdgeRuntimePaths? runtimePaths = null)
@@ -46,6 +48,7 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
     {
         _networkDevices = networkDevices;
         _ioMappings = ioMappings;
+        _unitOfWorkFactory = unitOfWorkFactory;
         _logger = logger;
         _options = BindOptions<HomogenizationDeviceSeedOptions>($"Modules:{DependencyInjection.ModuleKey}:DeviceSeed");
     }
@@ -97,7 +100,12 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
 
     private async Task ResetHomogenizationConfigurationAsync(CancellationToken cancellationToken)
     {
-        var existingDevices = await _networkDevices.GetListAsync(
+        await using var unitOfWork = await _unitOfWorkFactory
+            .BeginAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var networkDevices = unitOfWork.Repository<NetworkDeviceEntity>();
+        var ioMappings = unitOfWork.Repository<IoMappingEntity>();
+        var existingDevices = await networkDevices.GetListAsync(
             _ => true,
             cancellationToken).ConfigureAwait(false);
 
@@ -109,24 +117,19 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
         var deviceIds = existingDevices.Select(x => x.Id).ToHashSet();
         var mappings = deviceIds.Count == 0
             ? []
-            : await _ioMappings.GetListAsync(x => deviceIds.Contains(x.NetworkDeviceId), cancellationToken).ConfigureAwait(false);
+            : await ioMappings.GetListAsync(x => deviceIds.Contains(x.NetworkDeviceId), cancellationToken).ConfigureAwait(false);
 
         foreach (var mapping in mappings)
         {
-            _ioMappings.Delete(mapping);
+            ioMappings.Delete(mapping);
         }
 
         foreach (var device in existingDevices)
         {
-            _networkDevices.Delete(device);
+            networkDevices.Delete(device);
         }
 
-        if (mappings.Count > 0)
-        {
-            await _ioMappings.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        }
-
-        await _networkDevices.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
         _logger.Info($"[匀浆][设备样本] 已重置 {existingDevices.Count} 台设备和 {mappings.Count} 条映射。");
     }
 
@@ -162,8 +165,13 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
         device.SetEnabled(seedDevice.IsEnabled);
         device.UpdateRemark(string.IsNullOrWhiteSpace(seedDevice.Remark) ? SeedRemark : seedDevice.Remark);
 
-        _networkDevices.Add(device);
-        await _networkDevices.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await using (var unitOfWork = await _unitOfWorkFactory
+                         .BeginAsync(cancellationToken)
+                         .ConfigureAwait(false))
+        {
+            unitOfWork.Repository<NetworkDeviceEntity>().Add(device);
+            await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
 
         _logger.Info($"[匀浆][设备样本] 已写入设备“{device.DeviceName}”。");
         return device;
@@ -190,13 +198,17 @@ public sealed class HomogenizationDevelopmentSampleContributor : DevelopmentSamp
             return 0;
         }
 
+        await using var unitOfWork = await _unitOfWorkFactory
+            .BeginAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var ioMappings = unitOfWork.Repository<IoMappingEntity>();
         foreach (var template in templates)
         {
             var entity = CreateMappingFromTemplate(device.Id, template);
-            _ioMappings.Add(entity);
+            ioMappings.Add(entity);
         }
 
-        await _ioMappings.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
         _logger.Info($"[匀浆][设备样本] 设备“{device.DeviceName}”首次初始化 IO 映射，已播种 {templates.Length} 条标准点位。");
         return templates.Length;
     }

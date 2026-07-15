@@ -8,7 +8,7 @@ namespace IIoT.Edge.Infrastructure.DeviceComm.Plc;
 
 public sealed class PlcLifecycleCoordinator
 {
-    private readonly IRepository<NetworkDeviceEntity> _networkDevices;
+    private readonly IReadRepository<NetworkDeviceEntity> _networkDevices;
     private readonly IProductionContextStore _contextStore;
     private readonly ILogService _logger;
     private readonly PlcRuntimeRegistry _runtimeRegistry;
@@ -20,7 +20,7 @@ public sealed class PlcLifecycleCoordinator
     private Task? _disposeTask;
 
     public PlcLifecycleCoordinator(
-        IRepository<NetworkDeviceEntity> networkDevices,
+        IReadRepository<NetworkDeviceEntity> networkDevices,
         IProductionContextStore contextStore,
         ILogService logger,
         PlcRuntimeRegistry runtimeRegistry,
@@ -145,11 +145,35 @@ public sealed class PlcLifecycleCoordinator
         await _lifecycleGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            _contextStore.SaveToFile();
+            List<Exception>? failures = null;
+            try
+            {
+                _contextStore.SaveToFile();
+            }
+            catch (Exception ex)
+            {
+                (failures ??= []).Add(ex);
+                _logger.Error($"[PLC] 关闭前运行上下文保存失败：{ex.Message}");
+            }
+
             foreach (var deviceId in _runtimeRegistry.GetTrackedDeviceIdsSnapshot())
             {
-                await StopDeviceCoreAsync(deviceId, ct).ConfigureAwait(false);
+                try
+                {
+                    await StopDeviceCoreAsync(deviceId, ct).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    (failures ??= []).Add(ex);
+                    _logger.Error($"[PLC] 停止 DeviceId={deviceId} 失败：{ex.Message}");
+                }
             }
+
+            if (failures is { Count: 1 })
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failures[0]).Throw();
+
+            if (failures is { Count: > 1 })
+                throw new AggregateException(failures);
         }
         finally
         {

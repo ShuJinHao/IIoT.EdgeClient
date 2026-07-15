@@ -35,13 +35,25 @@ public record SaveSerialDevicesCommand(
 /// 处理器：保存串口设备配置。
 /// </summary>
 public class SaveSerialDevicesHandler(
-    IRepository<SerialDeviceEntity> repo
+    IEdgeUnitOfWorkFactory unitOfWorkFactory
 ) : ICommandHandler<SaveSerialDevicesCommand, Result>
 {
     public async Task<Result> Handle(
         SaveSerialDevicesCommand request,
         CancellationToken cancellationToken)
-        => await SubmittedEntityListSaveHelper.ReplaceSubmittedAsync(
+    {
+        return await SubmittedEntityListSaveHelper.ExecuteInUnitOfWorkAsync<SerialDeviceEntity>(
+            unitOfWorkFactory,
+            (repo, ct) => ApplyAsync(repo, request, ct),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static async Task<Result> ApplyAsync(
+        IRepository<SerialDeviceEntity> repo,
+        SaveSerialDevicesCommand request,
+        CancellationToken cancellationToken)
+    {
+        return await SubmittedEntityListSaveHelper.ReplaceSubmittedAsync(
             repo,
             request.Devices,
             ct => repo.GetListAsync(_ => true, ct),
@@ -50,6 +62,7 @@ public class SaveSerialDevicesHandler(
             Create,
             Apply,
             cancellationToken).ConfigureAwait(false);
+    }
 
     private static SerialDeviceEntity Create(SerialDeviceDto dto)
         => SerialDeviceEntity.Create(

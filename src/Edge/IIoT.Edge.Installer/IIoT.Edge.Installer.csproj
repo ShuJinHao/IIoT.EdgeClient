@@ -14,7 +14,16 @@
 
   <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
-      <_Parameter1>IIoT.Edge.Installer.Tests</_Parameter1>
+      <_Parameter1>IIoT.Edge.Installer.UnitTests</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>IIoT.Edge.Installer.UiTests</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>IIoT.Edge.Deployment.Tests</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>IIoT.Edge.Platform.WindowsTests</_Parameter1>
     </AssemblyAttribute>
   </ItemGroup>
 

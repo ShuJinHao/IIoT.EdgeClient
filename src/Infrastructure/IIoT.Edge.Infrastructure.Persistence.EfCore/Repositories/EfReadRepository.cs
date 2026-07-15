@@ -15,14 +15,6 @@ public class EfReadRepository<T>(
     protected readonly IDbContextFactory<EdgeDbContext>
         _factory = factory;
 
-    public IQueryable<T> GetQueryable()
-    {
-// 说明：调用方需要自行管理 DbContext 生命周期。
-        // 一般场景建议用下面的 GetListAsync 等方法
-        var db = _factory.CreateDbContext();
-        return db.Set<T>().AsQueryable();
-    }
-
     public async Task<T?> GetByIdAsync<TKey>(
         TKey id,
         CancellationToken cancellationToken = default)

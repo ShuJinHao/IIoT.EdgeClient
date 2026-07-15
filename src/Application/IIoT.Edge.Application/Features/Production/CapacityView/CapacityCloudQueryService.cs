@@ -318,7 +318,10 @@ public class CapacityCloudQueryService
         CloudCallResult<string> response;
         try
         {
-            response = await _cloudHttpClient.GetAsync(url);
+            response = await _cloudHttpClient.GetAsync(
+                    url,
+                    cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
