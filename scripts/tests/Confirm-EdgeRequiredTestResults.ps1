@@ -21,26 +21,6 @@ function Resolve-RepositoryPath {
     return [IO.Path]::GetFullPath((Join-Path $RepositoryRoot $PathValue))
 }
 
-function Get-ListedTests {
-    param([Parameter(Mandatory)][string]$Output)
-
-    $collect = $false
-    $tests = [System.Collections.Generic.List[string]]::new()
-    foreach ($line in [regex]::Split($Output, '\r?\n')) {
-        if ($line -match 'Tests are available\s*:|测试可用\s*:|Tests disponibles\s*:|Tests disponibles sont\s*:') {
-            $collect = $true
-            continue
-        }
-        if ($collect -and $line -match '^\s{2,}\S') {
-            $trimmed = $line.Trim()
-            if ($trimmed -notmatch '^(Test Run|Total tests|Passed!|Failed!|警告|Warning)') {
-                $tests.Add($trimmed)
-            }
-        }
-    }
-    return [string[]]@($tests | Sort-Object)
-}
-
 function Get-CounterValue {
     param(
         [Parameter(Mandatory)][System.Xml.XmlElement]$Counters,
