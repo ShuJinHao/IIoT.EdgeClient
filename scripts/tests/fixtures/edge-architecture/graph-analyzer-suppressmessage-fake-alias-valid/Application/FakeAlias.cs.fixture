@@ -1,0 +1,12 @@
+using SM = Fixture.SuppressMessageAttribute;
+
+namespace Fixture
+{
+    public sealed class SuppressMessageAttribute : System.Attribute
+    {
+        public SuppressMessageAttribute(string category, string checkId) { }
+    }
+}
+
+[SM("Fake", "EDGEASYNC001")]
+public sealed class OrdinaryType;

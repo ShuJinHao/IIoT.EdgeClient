@@ -16,7 +16,8 @@ if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
 
 $fixtureSourceRoot = Join-Path $PSScriptRoot 'fixtures/edge-architecture'
 $workingRoot = Join-Path $RepositoryRoot 'obj/EdgeArchitectureFixtures'
-$architectureIdPattern = '\b(?:WSARCH|DDD|DATA|PLUG|EDGEOUT|EDGEPLCOWN|EDGEASYNC)\d{3}\b'
+$architectureCatalog = & (Join-Path $PSScriptRoot 'Get-EdgeArchitectureDiagnosticCatalog.ps1')
+$architectureIdPattern = [string]$architectureCatalog.GateIdPattern
 $inventoryPath = Join-Path $PSScriptRoot 'edge-test-inventory.json'
 $expectedMainProjectCount = [int]((Get-Content $inventoryPath -Raw | ConvertFrom-Json -Depth 16).solutionProjectCount)
 $fixtureGraphProjectCount = @(
@@ -184,6 +185,44 @@ Invoke-FixtureBuild -Name 'analyzer-generated-invalid' `
     -ProjectPath 'analyzer-generated-invalid/IIoT.Edge.Installer.GeneratedInvalidFixture.csproj' `
     -ShouldSucceed $false `
     -ExpectedDiagnosticIds @('EDGEASYNC001')
+Invoke-FixtureBuild -Name 'graph-analyzer-target-time-disable-invalid' `
+    -ProjectPath 'graph-analyzer-target-time-disable-invalid/Application/IIoT.Edge.Installer.csproj' `
+    -ShouldSucceed $false `
+    -ExpectedDiagnosticIds @('WSARCH006')
+Invoke-FixtureBuild -Name 'graph-analyzer-conditional-msbuild-invalid' `
+    -ProjectPath 'graph-analyzer-conditional-msbuild-invalid/Application/IIoT.Edge.Application.csproj' `
+    -ShouldSucceed $false `
+    -ExpectedDiagnosticIds @('WSARCH006')
+Invoke-FixtureBuild -Name 'graph-analyzer-imported-target-time-invalid' `
+    -ProjectPath 'graph-analyzer-imported-target-time-invalid/Application/IIoT.Edge.Application.csproj' `
+    -ShouldSucceed $false `
+    -ExpectedDiagnosticIds @('WSARCH006')
+Invoke-FixtureBuild -Name 'graph-analyzer-edgpres-config-invalid' `
+    -ProjectPath 'graph-analyzer-edgpres-config-invalid/Application/IIoT.Edge.Application.csproj' `
+    -ShouldSucceed $false `
+    -ExpectedDiagnosticIds @('WSARCH006')
+Invoke-FixtureBuild -Name 'graph-analyzer-pragma-multi-invalid' `
+    -ProjectPath 'graph-analyzer-pragma-multi-invalid/Application/IIoT.Edge.Application.csproj' `
+    -ShouldSucceed $false `
+    -ExpectedDiagnosticIds @('WSARCH006')
+Invoke-FixtureBuild -Name 'graph-analyzer-suppressmessage-qualified-invalid' `
+    -ProjectPath 'graph-analyzer-suppressmessage-qualified-invalid/Application/IIoT.Edge.Installer.csproj' `
+    -ShouldSucceed $false `
+    -ExpectedDiagnosticIds @('WSARCH006')
+Invoke-FixtureBuild -Name 'graph-analyzer-suppressmessage-alias-invalid' `
+    -ProjectPath 'graph-analyzer-suppressmessage-alias-invalid/Application/IIoT.Edge.Installer.csproj' `
+    -ShouldSucceed $false `
+    -ExpectedDiagnosticIds @('WSARCH006')
+Invoke-FixtureBuild -Name 'graph-analyzer-suppressmessage-global-alias-invalid' `
+    -ProjectPath 'graph-analyzer-suppressmessage-global-alias-invalid/Application/IIoT.Edge.Installer.csproj' `
+    -ShouldSucceed $false `
+    -ExpectedDiagnosticIds @('WSARCH006')
+Invoke-FixtureBuild -Name 'graph-analyzer-suppressmessage-fake-alias-valid' `
+    -ProjectPath 'graph-analyzer-suppressmessage-fake-alias-valid/Application/IIoT.Edge.Application.csproj' `
+    -ShouldSucceed $true
+Invoke-FixtureBuild -Name 'graph-analyzer-suppressmessage-fake-bare-valid' `
+    -ProjectPath 'graph-analyzer-suppressmessage-fake-bare-valid/Application/IIoT.Edge.Application.csproj' `
+    -ShouldSucceed $true
 Invoke-FixtureBuild -Name 'graph-valid' `
     -ProjectPath 'graph-valid/Host/IIoT.Edge.Host.Bootstrap.csproj' `
     -ShouldSucceed $true
@@ -302,4 +341,4 @@ Invoke-FixtureBuild -Name 'graph-analyzer-exclusion-invalid' `
     -ShouldSucceed $false `
     -ExpectedDiagnosticIds @('WSARCH006')
 
-Write-Host 'Edge architecture analyzer/build fixtures passed: valid=4, invalid=29, bypass-checks=2.'
+Write-Host 'Edge architecture analyzer/build fixtures passed: valid=6, invalid=37, bypass-checks=2.'

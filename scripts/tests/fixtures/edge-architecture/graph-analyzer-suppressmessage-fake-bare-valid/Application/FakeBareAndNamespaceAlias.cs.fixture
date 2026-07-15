@@ -1,0 +1,16 @@
+using Fixture;
+using FakeCodeAnalysis = Fixture;
+
+namespace Fixture
+{
+    public sealed class SuppressMessageAttribute : System.Attribute
+    {
+        public SuppressMessageAttribute(string category, string checkId) { }
+    }
+}
+
+[SuppressMessage("Fake", "EDGEASYNC001")]
+public sealed class BareFakeAttributeTarget;
+
+[FakeCodeAnalysis.SuppressMessageAttribute("Fake", "EDGEPRES001")]
+public sealed class NamespaceAliasFakeAttributeTarget;

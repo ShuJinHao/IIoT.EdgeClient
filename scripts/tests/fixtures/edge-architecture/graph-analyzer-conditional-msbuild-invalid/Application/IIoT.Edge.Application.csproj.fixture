@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsEdgeArchitectureGraphFixture>true</IsEdgeArchitectureGraphFixture>
+    <EdgeArchitectureFixtureRepositoryRoot>$(MSBuildThisFileDirectory)..</EdgeArchitectureFixtureRepositoryRoot>
+    <EdgeArchitectureFixtureSolutionPath>$(MSBuildThisFileDirectory)..\EdgeArchitecture.Invalid.slnx</EdgeArchitectureFixtureSolutionPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <RunAnalyzers>false</RunAnalyzers>
+    <NoWarn>$(NoWarn);EDGEPRES001</NoWarn>
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);EDGEPRES002</WarningsNotAsErrors>
+  </PropertyGroup>
+</Project>
