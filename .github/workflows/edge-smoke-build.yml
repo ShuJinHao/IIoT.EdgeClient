@@ -113,6 +113,7 @@ jobs:
         with:
           name: edge-required-test-evidence
           path: |
+            artifacts/discovered-test-inventory.actual.json
             artifacts/test-results/**/*.trx
             artifacts/test-results/**/coverage.cobertura.xml
             artifacts/test-results/summary.json

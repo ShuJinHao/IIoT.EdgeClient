@@ -178,6 +178,11 @@ $document = [pscustomobject][ordered]@{
     cases = [object[]]$cases
 }
 $serialized = ($document | ConvertTo-Json -Depth 30) + "`n"
+if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
+    $resolvedOutputPath = Resolve-RepositoryPath $OutputPath
+    [void][IO.Directory]::CreateDirectory((Split-Path $resolvedOutputPath -Parent))
+    [IO.File]::WriteAllText($resolvedOutputPath, $serialized, [Text.UTF8Encoding]::new($false))
+}
 if ($Update) {
     [IO.File]::WriteAllText((Resolve-RepositoryPath $DiscoveredInventoryPath), $serialized, [Text.UTF8Encoding]::new($false))
 } else {
@@ -185,11 +190,22 @@ if ($Update) {
     if ([int]$committed.schemaVersion -ne 3 -or [string]$committed.configuration -ne $Configuration -or
         [int]$committed.caseCount -ne $cases.Count -or
         ((@($committed.cases) | ConvertTo-Json -Depth 30) -cne ((@($cases) | ConvertTo-Json -Depth 30)))) {
-        throw 'EDGE-TEST-DISCOVERY-001 committed discovered test inventory is stale or classification changed.'
+        $actualByKey = [Collections.Generic.Dictionary[string, object]]::new([StringComparer]::Ordinal)
+        foreach ($case in @($cases)) { $actualByKey[[string]$case.caseKey] = $case }
+        $committedByKey = [Collections.Generic.Dictionary[string, object]]::new([StringComparer]::Ordinal)
+        foreach ($case in @($committed.cases)) { $committedByKey[[string]$case.caseKey] = $case }
+        $missing = @($committedByKey.Keys | Where-Object { -not $actualByKey.ContainsKey($_) } | Sort-Object)
+        $unexpected = @($actualByKey.Keys | Where-Object { -not $committedByKey.ContainsKey($_) } | Sort-Object)
+        $changed = @($committedByKey.Keys | Where-Object {
+            $actualByKey.ContainsKey($_) -and
+            (($committedByKey[$_] | ConvertTo-Json -Depth 30 -Compress) -cne
+                ($actualByKey[$_] | ConvertTo-Json -Depth 30 -Compress))
+        } | Sort-Object)
+        $firstMissing = if ($missing.Count -eq 0) { '<none>' } else { $missing[0] }
+        $firstUnexpected = if ($unexpected.Count -eq 0) { '<none>' } else { $unexpected[0] }
+        $firstChanged = if ($changed.Count -eq 0) { '<none>' } else { $changed[0] }
+        throw "EDGE-TEST-DISCOVERY-001 committed discovered test inventory is stale or classification changed: committedCases=$($committed.caseCount), actualCases=$($cases.Count), missing=$($missing.Count), unexpected=$($unexpected.Count), changed=$($changed.Count), firstMissing='$firstMissing', firstUnexpected='$firstUnexpected', firstChanged='$firstChanged'."
     }
-}
-if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
-    [IO.File]::WriteAllText((Resolve-RepositoryPath $OutputPath), $serialized, [Text.UTF8Encoding]::new($false))
 }
 
 Write-Host "Edge discovered test inventory passed: projects=$($projectSummaries.Count), cases=$($cases.Count), duplicates=0, emptyRegressionIds=0."
