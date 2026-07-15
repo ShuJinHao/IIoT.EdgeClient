@@ -84,11 +84,8 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
             new(SymbolEqualityComparer.Default);
         private readonly ConcurrentDictionary<IMethodSymbol, byte> _productionTaskRoots =
             new(SymbolEqualityComparer.Default);
-        private readonly ConcurrentDictionary<ISymbol, ConcurrentBag<IMethodSymbol>> _delegateTargets =
+        private readonly ConcurrentDictionary<ISymbol, ConcurrentBag<DelegateValue>> _delegateAssignments =
             new(SymbolEqualityComparer.Default);
-        private readonly ConcurrentDictionary<ISymbol, byte> _unknownDelegateSources =
-            new(SymbolEqualityComparer.Default);
-        private readonly ConcurrentBag<DelegateInvocation> _delegateInvocations = new();
         private readonly ConcurrentDictionary<IMethodSymbol, byte> _asyncVoidCandidates =
             new(SymbolEqualityComparer.Default);
         private readonly ConcurrentDictionary<IMethodSymbol, byte> _registeredEventHandlers =
@@ -149,33 +146,33 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
         internal void AnalyzeInvocation(OperationAnalysisContext context)
         {
             var invocation = (IInvocationOperation)context.Operation;
-            CaptureDelegateInvocationArguments(invocation);
             var caller = ResolveCaller(context.ContainingSymbol);
             var target = NormalizeMethod(invocation.TargetMethod);
             if (caller is not null && target is not null && IsDelegateInvoke(invocation.TargetMethod))
             {
-                _delegateInvocations.Add(new DelegateInvocation(
+                AddDelegateInvocationEdge(
                     caller,
                     target,
-                    TryGetDelegateSourceSymbol(invocation.Instance),
-                    GetDelegateTargets(invocation.Instance),
-                    IsDelegateTargetResolutionComplete(invocation.Instance),
+                    CreateDelegateValue(invocation.Instance),
                     invocation.Syntax.GetLocation(),
-                    IsProtectedByExceptionCatch(invocation)));
+                    IsProtectedByExceptionCatch(invocation));
             }
             else if (caller is not null && target is not null)
             {
-                var unverifiedExternalBoundary = IsUnverifiedExternalProductionTaskBoundary(target);
-                _callGraph.GetOrAdd(caller, static _ => new ConcurrentBag<InvocationEdge>())
-                    .Add(new InvocationEdge(
+                AddCallEdge(
+                    caller,
+                    target,
+                    invocation,
+                    CreateDelegateArgumentBindings(
+                        invocation.TargetMethod,
                         target,
-                        invocation.Syntax.GetLocation(),
-                        IsOutboundSink(invocation.TargetMethod) || unverifiedExternalBoundary,
-                        IsDataPipelineEnqueue(invocation.TargetMethod) || unverifiedExternalBoundary,
-                        IsProtectedByExceptionCatch(invocation),
-                        unverifiedExternalBoundary
-                            ? $"unverified external boundary {invocation.TargetMethod.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)}"
-                            : invocation.TargetMethod.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)));
+                        invocation.Arguments));
+                CaptureApprovedExternalDelegateCallbacks(
+                    caller,
+                    target,
+                    invocation.Arguments,
+                    invocation.Syntax.GetLocation(),
+                    IsProtectedByExceptionCatch(invocation));
             }
 
             AnalyzeRepositoryOperation(context, invocation);
@@ -203,7 +200,23 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
             var creation = (IObjectCreationOperation)context.Operation;
             var caller = ResolveCaller(context.ContainingSymbol);
             var constructor = NormalizeMethod(creation.Constructor);
-            AddCallEdge(caller, constructor, creation);
+            if (caller is not null && constructor is not null && creation.Constructor is not null)
+            {
+                AddCallEdge(
+                    caller,
+                    constructor,
+                    creation,
+                    CreateDelegateArgumentBindings(
+                        creation.Constructor,
+                        constructor,
+                        creation.Arguments));
+                CaptureApprovedExternalDelegateCallbacks(
+                    caller,
+                    constructor,
+                    creation.Arguments,
+                    creation.Syntax.GetLocation(),
+                    IsProtectedByExceptionCatch(creation));
+            }
             AnalyzeRepositoryOperation(context, creation);
             AnalyzeRoleUse(context, creation.Type, creation.Syntax.GetLocation());
             AnalyzePresentationMediatROperation(context, creation.Type, creation.Syntax.GetLocation());
@@ -242,7 +255,7 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
         {
             var variable = (IVariableDeclaratorOperation)context.Operation;
             AnalyzeRepositoryOperation(context, variable);
-            CaptureDelegateTargets(variable.Symbol, variable.Initializer?.Value);
+            CaptureDelegateAssignment(variable.Symbol, variable.Initializer?.Value);
             if (variable.Symbol is ILocalSymbol local)
             {
                 AnalyzeRoleUse(context, local.Type, variable.Syntax.GetLocation());
@@ -263,7 +276,7 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
                 _ => null
             };
             if (symbol is not null)
-                CaptureDelegateTargets(symbol, assignment.Value);
+                CaptureDelegateAssignment(symbol, assignment.Value);
         }
 
         internal void AnalyzeCompoundAssignment(OperationAnalysisContext context)
@@ -277,7 +290,7 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
                 _ => null
             };
             if (symbol is not null)
-                CaptureDelegateTargets(symbol, assignment.Value);
+                CaptureDelegateAssignment(symbol, assignment.Value);
         }
 
         internal void AnalyzeLiteral(OperationAnalysisContext context)
@@ -324,7 +337,6 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
 
         internal void AnalyzeCompilationEnd(CompilationAnalysisContext context)
         {
-            MaterializeDelegateInvocationEdges();
             AnalyzeProductionTestReferences(context);
             AnalyzePluginRoleMetadata(context);
             AnalyzeProductionTaskOutboundPaths(context);
@@ -332,92 +344,33 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
             AnalyzeAsyncVoidCandidates(context);
         }
 
-        private void CaptureDelegateTargets(ISymbol source, IOperation? value)
+        private void CaptureDelegateAssignment(ISymbol source, IOperation? value)
         {
-            var targets = GetDelegateTargets(value);
-            if (!IsDelegateTargetResolutionComplete(value))
-                _unknownDelegateSources.TryAdd(source, 0);
-
-            if (targets.IsDefaultOrEmpty)
+            var sourceType = source switch
+            {
+                ILocalSymbol local => local.Type,
+                IFieldSymbol field => field.Type,
+                IPropertySymbol property => property.Type,
+                IParameterSymbol parameter => parameter.Type,
+                _ => null
+            };
+            if (value is null || sourceType?.TypeKind != TypeKind.Delegate)
                 return;
 
-            foreach (var target in targets)
-            {
-                _delegateTargets.GetOrAdd(source, static _ => new ConcurrentBag<IMethodSymbol>())
-                    .Add(target);
-            }
-        }
-
-        private void CaptureDelegateInvocationArguments(IInvocationOperation invocation)
-        {
-            foreach (var argument in invocation.Arguments)
-            {
-                if (argument.Parameter?.OriginalDefinition is not IParameterSymbol parameter ||
-                    parameter.Type.TypeKind != TypeKind.Delegate)
-                {
-                    continue;
-                }
-
-                CaptureDelegateTargets(parameter, argument.Value);
-            }
-        }
-
-        private void MaterializeDelegateInvocationEdges()
-        {
-            foreach (var invocation in _delegateInvocations)
-            {
-                var targets = new HashSet<IMethodSymbol>(SymbolEqualityComparer.Default);
-                foreach (var target in invocation.InlineTargets)
-                    targets.Add(target);
-
-                if (invocation.Source is not null &&
-                    _delegateTargets.TryGetValue(invocation.Source, out var registeredTargets))
-                {
-                    foreach (var target in registeredTargets)
-                        targets.Add(target);
-                }
-
-                var hasUnknownTarget = invocation.Source is null
-                    ? !invocation.InlineResolutionComplete
-                    : _unknownDelegateSources.ContainsKey(invocation.Source);
-
-                var edges = _callGraph.GetOrAdd(
-                    invocation.Caller,
-                    static _ => new ConcurrentBag<InvocationEdge>());
-                if (hasUnknownTarget || targets.Count == 0)
-                {
-                    edges.Add(new InvocationEdge(
-                        invocation.DelegateInvokeTarget,
-                        invocation.Location,
-                        isOutboundSink: true,
-                        isDataPipelineEnqueue: false,
-                        invocation.IsExceptionHandled,
-                        $"unresolved delegate {invocation.DelegateInvokeTarget.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)}"));
-                }
-
-                if (targets.Count == 0)
-                    continue;
-
-                foreach (var target in targets)
-                {
-                    var unverifiedExternalBoundary = IsUnverifiedExternalProductionTaskBoundary(target);
-                    edges.Add(new InvocationEdge(
-                        target,
-                        invocation.Location,
-                        IsOutboundSink(target) || unverifiedExternalBoundary,
-                        IsDataPipelineEnqueue(target) || unverifiedExternalBoundary,
-                        invocation.IsExceptionHandled,
-                        unverifiedExternalBoundary
-                            ? $"unverified external boundary {target.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)}"
-                            : target.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)));
-                }
-            }
+            _delegateAssignments.GetOrAdd(source, static _ => new ConcurrentBag<DelegateValue>())
+                .Add(CreateDelegateValue(value));
         }
 
         private static ImmutableArray<IMethodSymbol> GetDelegateTargets(IOperation? operation)
+            => CreateDelegateValue(operation).Targets;
+
+        private static DelegateValue CreateDelegateValue(IOperation? operation)
         {
             var targets = ImmutableArray.CreateBuilder<IMethodSymbol>();
-            CollectDelegateTargets(operation, targets);
+            var sources = ImmutableArray.CreateBuilder<ISymbol>();
+            var hasUnknownTarget = false;
+            CollectDelegateValue(operation, targets, sources, ref hasUnknownTarget);
+
             var normalized = new HashSet<IMethodSymbol>(SymbolEqualityComparer.Default);
             foreach (var target in targets)
             {
@@ -425,19 +378,29 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
                     normalized.Add(method);
             }
 
-            return normalized.ToImmutableArray();
+            var distinctSources = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+            foreach (var source in sources)
+                distinctSources.Add(source);
+
+            return new DelegateValue(
+                normalized.ToImmutableArray(),
+                distinctSources.ToImmutableArray(),
+                hasUnknownTarget);
         }
 
-        private static void CollectDelegateTargets(
+        private static void CollectDelegateValue(
             IOperation? operation,
-            ImmutableArray<IMethodSymbol>.Builder targets)
+            ImmutableArray<IMethodSymbol>.Builder targets,
+            ImmutableArray<ISymbol>.Builder sources,
+            ref bool hasUnknownTarget)
         {
             switch (operation)
             {
                 case null:
+                    hasUnknownTarget = true;
                     return;
                 case IDelegateCreationOperation creation:
-                    CollectDelegateTargets(creation.Target, targets);
+                    CollectDelegateValue(creation.Target, targets, sources, ref hasUnknownTarget);
                     return;
                 case IMethodReferenceOperation methodReference:
                     targets.Add(methodReference.Method);
@@ -446,47 +409,83 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
                     targets.Add(anonymousFunction.Symbol);
                     return;
                 case IConversionOperation conversion:
-                    CollectDelegateTargets(conversion.Operand, targets);
+                    CollectDelegateValue(conversion.Operand, targets, sources, ref hasUnknownTarget);
                     return;
                 case IParenthesizedOperation parenthesized:
-                    CollectDelegateTargets(parenthesized.Operand, targets);
+                    CollectDelegateValue(parenthesized.Operand, targets, sources, ref hasUnknownTarget);
                     return;
                 case IConditionalOperation conditional:
-                    CollectDelegateTargets(conditional.WhenTrue, targets);
-                    CollectDelegateTargets(conditional.WhenFalse, targets);
+                    CollectDelegateValue(conditional.WhenTrue, targets, sources, ref hasUnknownTarget);
+                    CollectDelegateValue(conditional.WhenFalse, targets, sources, ref hasUnknownTarget);
+                    return;
+                case ILocalReferenceOperation local:
+                    sources.Add(local.Local);
+                    return;
+                case IFieldReferenceOperation field:
+                    sources.Add(field.Field);
+                    return;
+                case IPropertyReferenceOperation property:
+                    sources.Add(property.Property);
+                    return;
+                case IParameterReferenceOperation parameter:
+                    sources.Add(parameter.Parameter.OriginalDefinition);
+                    return;
+                default:
+                    hasUnknownTarget = true;
                     return;
             }
         }
 
-        private static bool IsDelegateTargetResolutionComplete(IOperation? operation)
+        private static ImmutableArray<DelegateArgumentBinding> CreateDelegateArgumentBindings(
+            IMethodSymbol invokedMethod,
+            IMethodSymbol normalizedTarget,
+            ImmutableArray<IArgumentOperation> arguments)
         {
-            return operation switch
+            var bindings = ImmutableArray.CreateBuilder<DelegateArgumentBinding>();
+            foreach (var argument in arguments)
             {
-                IDelegateCreationOperation creation => IsDelegateTargetResolutionComplete(creation.Target),
-                IMethodReferenceOperation => true,
-                IAnonymousFunctionOperation => true,
-                IConversionOperation conversion => IsDelegateTargetResolutionComplete(conversion.Operand),
-                IParenthesizedOperation parenthesized => IsDelegateTargetResolutionComplete(parenthesized.Operand),
-                IConditionalOperation conditional =>
-                    IsDelegateTargetResolutionComplete(conditional.WhenTrue) &&
-                    IsDelegateTargetResolutionComplete(conditional.WhenFalse),
-                _ => false
-            };
+                if (argument.Parameter is not IParameterSymbol parameter ||
+                    parameter.Type.TypeKind != TypeKind.Delegate)
+                    continue;
+
+                var ordinal = parameter.Ordinal + (invokedMethod.ReducedFrom is null ? 0 : 1);
+                var normalizedParameter = ordinal >= 0 && ordinal < normalizedTarget.Parameters.Length
+                    ? normalizedTarget.Parameters[ordinal].OriginalDefinition
+                    : parameter.OriginalDefinition;
+                bindings.Add(new DelegateArgumentBinding(
+                    normalizedParameter,
+                    CreateDelegateValue(argument.Value)));
+            }
+
+            return bindings.ToImmutable();
         }
 
-        private static ISymbol? TryGetDelegateSourceSymbol(IOperation? operation)
+        private void CaptureApprovedExternalDelegateCallbacks(
+            IMethodSymbol caller,
+            IMethodSymbol target,
+            ImmutableArray<IArgumentOperation> arguments,
+            Location location,
+            bool isExceptionHandled)
         {
-            while (operation is IConversionOperation conversion)
-                operation = conversion.Operand;
+            if (!IsApprovedExternalProductionTaskBoundary(target))
+                return;
 
-            return operation switch
+            foreach (var argument in arguments)
             {
-                ILocalReferenceOperation local => local.Local,
-                IFieldReferenceOperation field => field.Field,
-                IPropertyReferenceOperation property => property.Property,
-                IParameterReferenceOperation parameter => parameter.Parameter.OriginalDefinition,
-                _ => null
-            };
+                if (argument.Parameter?.Type is not INamedTypeSymbol delegateType ||
+                    delegateType.TypeKind != TypeKind.Delegate ||
+                    delegateType.DelegateInvokeMethod is not { } invokeMethod)
+                {
+                    continue;
+                }
+
+                AddDelegateInvocationEdge(
+                    caller,
+                    NormalizeMethod(invokeMethod)!,
+                    CreateDelegateValue(argument.Value),
+                    argument.Syntax.GetLocation(),
+                    isExceptionHandled);
+            }
         }
 
         private static bool IsDelegateInvoke(IMethodSymbol method)
@@ -511,7 +510,29 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
             return NormalizeMethod(constructor);
         }
 
-        private void AddCallEdge(IMethodSymbol? caller, IMethodSymbol? target, IOperation operation)
+        private void AddDelegateInvocationEdge(
+            IMethodSymbol caller,
+            IMethodSymbol delegateInvokeTarget,
+            DelegateValue delegateValue,
+            Location location,
+            bool isExceptionHandled)
+        {
+            _callGraph.GetOrAdd(caller, static _ => new ConcurrentBag<InvocationEdge>())
+                .Add(new InvocationEdge(
+                    delegateInvokeTarget,
+                    location,
+                    isOutboundSink: false,
+                    isDataPipelineEnqueue: false,
+                    isExceptionHandled,
+                    delegateInvokeTarget.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                    delegateInvocation: delegateValue));
+        }
+
+        private void AddCallEdge(
+            IMethodSymbol? caller,
+            IMethodSymbol? target,
+            IOperation operation,
+            ImmutableArray<DelegateArgumentBinding> delegateArguments = default)
         {
             if (caller is null || target is null ||
                 SymbolEqualityComparer.Default.Equals(caller, target))
@@ -520,10 +541,13 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
             }
 
             _callGraph.GetOrAdd(caller, static _ => new ConcurrentBag<InvocationEdge>())
-                .Add(CreateInvocationEdge(target, operation));
+                .Add(CreateInvocationEdge(target, operation, delegateArguments));
         }
 
-        private InvocationEdge CreateInvocationEdge(IMethodSymbol target, IOperation operation)
+        private InvocationEdge CreateInvocationEdge(
+            IMethodSymbol target,
+            IOperation operation,
+            ImmutableArray<DelegateArgumentBinding> delegateArguments = default)
         {
             var unverifiedExternalBoundary = IsUnverifiedExternalProductionTaskBoundary(target);
             return new InvocationEdge(
@@ -534,7 +558,8 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
                 IsProtectedByExceptionCatch(operation),
                 unverifiedExternalBoundary
                     ? $"unverified external boundary {target.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)}"
-                    : target.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat));
+                    : target.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                delegateArguments);
         }
 
         private static bool IsPropertyWrite(IPropertyReferenceOperation property)
@@ -1860,6 +1885,7 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
         private void AnalyzeProductionTaskOutboundPaths(CompilationAnalysisContext context)
         {
             foreach (var root in _productionTaskRoots.Keys
+                         .Where(ShouldAnalyzeAsIndependentProductionTaskRoot)
                          .OrderBy(static method => method.ToDisplayString(), StringComparer.Ordinal))
             {
                 if (!TryFindOutboundPath(root, out var firstEdge, out var sink))
@@ -1881,12 +1907,27 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
         {
             firstEdge = null!;
             sink = null!;
-            var visited = new HashSet<IMethodSymbol>(SymbolEqualityComparer.Default) { root };
+            var rootEnvironment = DelegateFlowEnvironment.Empty;
+            var visited = new HashSet<string>(StringComparer.Ordinal)
+            {
+                CreateDelegateFlowVisitKey(root, rootEnvironment)
+            };
             var queue = new Queue<PathNode>();
             if (_callGraph.TryGetValue(root, out var rootEdges))
             {
-                foreach (var edge in rootEdges.OrderBy(static item => item.Display, StringComparer.Ordinal))
-                    queue.Enqueue(new PathNode(edge.Target, edge, edge));
+                foreach (var edge in rootEdges
+                             .OrderBy(static item => item.Display, StringComparer.Ordinal)
+                             .ThenBy(static item => LocationKey(item.Location), StringComparer.Ordinal))
+                {
+                    foreach (var transition in ResolveInvocationTransitions(edge, rootEnvironment))
+                    {
+                        queue.Enqueue(new PathNode(
+                            transition.Edge.Target,
+                            transition.Edge,
+                            transition.Edge,
+                            transition.Environment));
+                    }
+                }
             }
 
             while (queue.Count > 0)
@@ -1899,11 +1940,23 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
                     return true;
                 }
 
-                if (!visited.Add(current.Method) || !_callGraph.TryGetValue(current.Method, out var edges))
+                if (!visited.Add(CreateDelegateFlowVisitKey(current.Method, current.Environment)) ||
+                    !_callGraph.TryGetValue(current.Method, out var edges))
                     continue;
 
-                foreach (var edge in edges.OrderBy(static item => item.Display, StringComparer.Ordinal))
-                    queue.Enqueue(new PathNode(edge.Target, current.FirstEdge, edge));
+                foreach (var edge in edges
+                             .OrderBy(static item => item.Display, StringComparer.Ordinal)
+                             .ThenBy(static item => LocationKey(item.Location), StringComparer.Ordinal))
+                {
+                    foreach (var transition in ResolveInvocationTransitions(edge, current.Environment))
+                    {
+                        queue.Enqueue(new PathNode(
+                            transition.Edge.Target,
+                            current.FirstEdge,
+                            transition.Edge,
+                            transition.Environment));
+                    }
+                }
             }
 
             return false;
@@ -1913,43 +1966,318 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
         {
             var reportedLocations = new HashSet<string>(StringComparer.Ordinal);
             foreach (var root in _productionTaskRoots.Keys
+                         .Where(ShouldAnalyzeAsIndependentProductionTaskRoot)
                          .OrderBy(static method => method.ToDisplayString(), StringComparer.Ordinal))
             {
-                var visitedHandled = new HashSet<IMethodSymbol>(SymbolEqualityComparer.Default);
-                var visitedUnhandled = new HashSet<IMethodSymbol>(SymbolEqualityComparer.Default);
+                var visited = new HashSet<string>(StringComparer.Ordinal);
                 var queue = new Queue<EnqueuePathNode>();
-                queue.Enqueue(new EnqueuePathNode(root, isExceptionHandled: false));
+                queue.Enqueue(new EnqueuePathNode(
+                    root,
+                    isExceptionHandled: false,
+                    DelegateFlowEnvironment.Empty));
 
                 while (queue.Count > 0)
                 {
                     var current = queue.Dequeue();
-                    var visited = current.IsExceptionHandled ? visitedHandled : visitedUnhandled;
-                    if (!visited.Add(current.Method) ||
+                    var visitKey = $"{current.IsExceptionHandled}:{CreateDelegateFlowVisitKey(current.Method, current.Environment)}";
+                    if (!visited.Add(visitKey) ||
                         !_callGraph.TryGetValue(current.Method, out var edges))
                     {
                         continue;
                     }
 
-                    foreach (var edge in edges.OrderBy(static item => item.Display, StringComparer.Ordinal))
+                    foreach (var edge in edges
+                                 .OrderBy(static item => item.Display, StringComparer.Ordinal)
+                                 .ThenBy(static item => LocationKey(item.Location), StringComparer.Ordinal))
                     {
-                        var isExceptionHandled = current.IsExceptionHandled || edge.IsExceptionHandled;
-                        if (edge.IsDataPipelineEnqueue)
+                        foreach (var transition in ResolveInvocationTransitions(edge, current.Environment))
                         {
-                            if (!isExceptionHandled && reportedLocations.Add(LocationKey(edge.Location)))
+                            var resolvedEdge = transition.Edge;
+                            var isExceptionHandled = current.IsExceptionHandled || resolvedEdge.IsExceptionHandled;
+                            if (resolvedEdge.IsDataPipelineEnqueue)
                             {
-                                context.ReportDiagnostic(Diagnostic.Create(
-                                    EdgeArchitectureDiagnostics.ProductionTaskEnqueueGuard,
-                                    edge.Location,
-                                    root.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)));
+                                if (!isExceptionHandled && reportedLocations.Add(LocationKey(resolvedEdge.Location)))
+                                {
+                                    context.ReportDiagnostic(Diagnostic.Create(
+                                        EdgeArchitectureDiagnostics.ProductionTaskEnqueueGuard,
+                                        resolvedEdge.Location,
+                                        root.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)));
+                                }
+
+                                continue;
                             }
 
-                            continue;
+                            queue.Enqueue(new EnqueuePathNode(
+                                resolvedEdge.Target,
+                                isExceptionHandled,
+                                transition.Environment));
                         }
-
-                        queue.Enqueue(new EnqueuePathNode(edge.Target, isExceptionHandled));
                     }
                 }
             }
+        }
+
+        private bool ShouldAnalyzeAsIndependentProductionTaskRoot(IMethodSymbol method)
+        {
+            var delegateParameters = method.Parameters
+                .Where(static parameter => parameter.Type.TypeKind == TypeKind.Delegate)
+                .Select(static parameter => parameter.OriginalDefinition)
+                .ToArray();
+            if (delegateParameters.Length == 0)
+                return true;
+
+            // Only closed, ordinary source helpers can inherit delegate bindings from every
+            // source call site. Public/virtual/override/interface/constructor entry points
+            // remain independent fail-closed roots because callers can exist outside this
+            // compilation and therefore cannot be proven by the local call graph.
+            if (!IsClosedSourceHelper(method))
+                return true;
+
+            var hasIncomingCall = false;
+            foreach (var pair in _callGraph)
+            {
+                foreach (var edge in pair.Value)
+                {
+                    if (!SymbolEqualityComparer.Default.Equals(edge.Target, method))
+                        continue;
+
+                    if (!IsSourceSymbol(pair.Key))
+                        return true;
+
+                    hasIncomingCall = true;
+                    foreach (var parameter in delegateParameters)
+                    {
+                        if (!edge.DelegateArguments.Any(binding =>
+                                SymbolEqualityComparer.Default.Equals(binding.Parameter, parameter)))
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            return !hasIncomingCall;
+        }
+
+        private static bool IsClosedSourceHelper(IMethodSymbol method)
+        {
+            if (!IsSourceSymbol(method) ||
+                method.MethodKind != MethodKind.Ordinary ||
+                method.IsAbstract ||
+                method.IsVirtual ||
+                method.IsOverride ||
+                IsInterfaceImplementation(method))
+            {
+                return false;
+            }
+
+            if (method.DeclaredAccessibility == Accessibility.Private)
+                return true;
+
+            if (method.DeclaredAccessibility is not Accessibility.Internal and
+                not Accessibility.Protected and
+                not Accessibility.ProtectedAndInternal and
+                not Accessibility.ProtectedOrInternal)
+            {
+                return false;
+            }
+
+            return method.ContainingType.IsSealed || !IsExternallyVisible(method.ContainingType);
+        }
+
+        private static bool IsInterfaceImplementation(IMethodSymbol method)
+        {
+            if (!method.ExplicitInterfaceImplementations.IsDefaultOrEmpty)
+                return true;
+
+            var containingType = method.ContainingType;
+            foreach (var @interface in containingType.AllInterfaces)
+            {
+                foreach (var member in @interface.GetMembers().OfType<IMethodSymbol>())
+                {
+                    if (containingType.FindImplementationForInterfaceMember(member) is IMethodSymbol implementation &&
+                        SymbolEqualityComparer.Default.Equals(
+                            NormalizeMethod(implementation),
+                            NormalizeMethod(method)))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsExternallyVisible(INamedTypeSymbol type)
+        {
+            for (var current = type; current is not null; current = current.ContainingType)
+            {
+                if (current.DeclaredAccessibility is not Accessibility.Public and
+                    not Accessibility.Protected and
+                    not Accessibility.ProtectedOrInternal)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private IEnumerable<ResolvedInvocationTransition> ResolveInvocationTransitions(
+            InvocationEdge edge,
+            DelegateFlowEnvironment environment)
+        {
+            if (edge.DelegateInvocation is null)
+            {
+                yield return new ResolvedInvocationTransition(
+                    edge,
+                    ApplyDelegateArgumentBindings(environment, edge.DelegateArguments));
+                yield break;
+            }
+
+            var resolved = ResolveDelegateValue(edge.DelegateInvocation, environment);
+            if (resolved.HasUnknownTarget || resolved.Targets.IsDefaultOrEmpty)
+            {
+                yield return new ResolvedInvocationTransition(
+                    new InvocationEdge(
+                        edge.Target,
+                        edge.Location,
+                        isOutboundSink: true,
+                        isDataPipelineEnqueue: false,
+                        edge.IsExceptionHandled,
+                        $"unresolved delegate {edge.Target.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)}"),
+                    environment);
+            }
+
+            foreach (var target in resolved.Targets
+                         .OrderBy(static method => method.ToDisplayString(), StringComparer.Ordinal)
+                         .ThenBy(static method => CreateDelegateFlowSymbolKey(method), StringComparer.Ordinal))
+            {
+                var unverifiedExternalBoundary = IsUnverifiedExternalProductionTaskBoundary(target);
+                yield return new ResolvedInvocationTransition(
+                    new InvocationEdge(
+                        target,
+                        edge.Location,
+                        IsOutboundSink(target) || unverifiedExternalBoundary,
+                        IsDataPipelineEnqueue(target) || unverifiedExternalBoundary,
+                        edge.IsExceptionHandled,
+                        unverifiedExternalBoundary
+                            ? $"unverified external boundary {target.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)}"
+                            : target.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)),
+                    environment);
+            }
+        }
+
+        private DelegateFlowEnvironment ApplyDelegateArgumentBindings(
+            DelegateFlowEnvironment environment,
+            ImmutableArray<DelegateArgumentBinding> bindings)
+        {
+            if (bindings.IsDefaultOrEmpty)
+                return environment;
+
+            var resolvedBindings = new List<KeyValuePair<ISymbol, ResolvedDelegateValue>>(bindings.Length);
+            foreach (var binding in bindings)
+            {
+                resolvedBindings.Add(new KeyValuePair<ISymbol, ResolvedDelegateValue>(
+                    binding.Parameter,
+                    ResolveDelegateValue(binding.Value, environment)));
+            }
+
+            return environment.WithBindings(resolvedBindings);
+        }
+
+        private ResolvedDelegateValue ResolveDelegateValue(
+            DelegateValue value,
+            DelegateFlowEnvironment environment)
+        {
+            var targets = new HashSet<IMethodSymbol>(SymbolEqualityComparer.Default);
+            var visitingSources = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+            var hasUnknownTarget = false;
+            ResolveDelegateValueCore(
+                value,
+                environment,
+                targets,
+                visitingSources,
+                ref hasUnknownTarget);
+            return new ResolvedDelegateValue(targets.ToImmutableArray(), hasUnknownTarget);
+        }
+
+        private void ResolveDelegateValueCore(
+            DelegateValue value,
+            DelegateFlowEnvironment environment,
+            HashSet<IMethodSymbol> targets,
+            HashSet<ISymbol> visitingSources,
+            ref bool hasUnknownTarget)
+        {
+            foreach (var target in value.Targets)
+                targets.Add(target);
+            hasUnknownTarget |= value.HasUnknownTarget;
+
+            foreach (var source in value.Sources)
+            {
+                if (!visitingSources.Add(source))
+                {
+                    hasUnknownTarget = true;
+                    continue;
+                }
+
+                var resolvedSource = false;
+                if (environment.TryGetValue(source, out var environmentValue))
+                {
+                    resolvedSource = true;
+                    foreach (var target in environmentValue.Targets)
+                        targets.Add(target);
+                    hasUnknownTarget |= environmentValue.HasUnknownTarget;
+                }
+
+                if (_delegateAssignments.TryGetValue(source, out var assignments))
+                {
+                    resolvedSource = true;
+                    foreach (var assignment in assignments)
+                    {
+                        ResolveDelegateValueCore(
+                            assignment,
+                            environment,
+                            targets,
+                            visitingSources,
+                            ref hasUnknownTarget);
+                    }
+                }
+
+                if (!resolvedSource)
+                    hasUnknownTarget = true;
+                visitingSources.Remove(source);
+            }
+        }
+
+        private static string CreateDelegateFlowVisitKey(
+            IMethodSymbol method,
+            DelegateFlowEnvironment environment)
+            => $"{CreateDelegateFlowSymbolKey(method)}|{environment.Fingerprint}";
+
+        private static string CreateDelegateFlowSymbolKey(ISymbol symbol)
+        {
+            var sourceLocation = symbol.Locations
+                .Where(static location => location.IsInSource)
+                .OrderBy(static location => location.SourceTree?.FilePath ?? string.Empty, StringComparer.Ordinal)
+                .ThenBy(static location => location.SourceSpan.Start)
+                .ThenBy(static location => location.SourceSpan.Length)
+                .FirstOrDefault();
+            if (sourceLocation is not null)
+            {
+                var sourcePath = (sourceLocation.SourceTree?.FilePath ?? string.Empty)
+                    .Replace('\\', '/');
+                return $"source:{symbol.ContainingAssembly?.Name}:{sourcePath}:{sourceLocation.SourceSpan.Start}:{sourceLocation.SourceSpan.Length}:{symbol.Kind}:{symbol.MetadataName}";
+            }
+
+            var qualifiedIdentity = symbol switch
+            {
+                IMethodSymbol method =>
+                    $"{GetFullMetadataName(method.ContainingType.OriginalDefinition)}:{method.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)}",
+                _ =>
+                    $"{symbol.ContainingSymbol?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}:{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}"
+            };
+            return $"metadata:{symbol.ContainingAssembly?.Name}:{symbol.Kind}:{qualifiedIdentity}";
         }
 
         private static string LocationKey(Location location)
@@ -1993,6 +2321,24 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
             }
 
             return !IsApprovedExternalProductionTaskCall(method);
+        }
+
+        private bool IsApprovedExternalProductionTaskBoundary(IMethodSymbol method)
+        {
+            var assemblyName = method.ContainingAssembly?.Name ?? string.Empty;
+            if (assemblyName.Length == 0 ||
+                assemblyName.Equals(_assemblyName, StringComparison.Ordinal) ||
+                IsOutboundSink(method) ||
+                IsDataPipelineEnqueue(method))
+            {
+                return false;
+            }
+
+            var role = EdgeArchitectureRegistry.ClassifyAssembly(assemblyName);
+            return (role is EdgeProjectRole.Application or
+                    EdgeProjectRole.ModuleSdk or
+                    EdgeProjectRole.SharedKernel) &&
+                IsApprovedExternalProductionTaskCall(method);
         }
 
         private static bool IsApprovedExternalProductionTaskCall(IMethodSymbol method)
@@ -2160,7 +2506,9 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
                 bool isOutboundSink,
                 bool isDataPipelineEnqueue,
                 bool isExceptionHandled,
-                string display)
+                string display,
+                ImmutableArray<DelegateArgumentBinding> delegateArguments = default,
+                DelegateValue? delegateInvocation = null)
             {
                 Target = target;
                 Location = location;
@@ -2168,6 +2516,10 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
                 IsDataPipelineEnqueue = isDataPipelineEnqueue;
                 IsExceptionHandled = isExceptionHandled;
                 Display = display;
+                DelegateArguments = delegateArguments.IsDefault
+                    ? ImmutableArray<DelegateArgumentBinding>.Empty
+                    : delegateArguments;
+                DelegateInvocation = delegateInvocation;
             }
 
             internal IMethodSymbol Target { get; }
@@ -2176,61 +2528,144 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
             internal bool IsDataPipelineEnqueue { get; }
             internal bool IsExceptionHandled { get; }
             internal string Display { get; }
+            internal ImmutableArray<DelegateArgumentBinding> DelegateArguments { get; }
+            internal DelegateValue? DelegateInvocation { get; }
         }
 
-        private sealed class DelegateInvocation
+        private sealed class DelegateArgumentBinding
         {
-            internal DelegateInvocation(
-                IMethodSymbol caller,
-                IMethodSymbol delegateInvokeTarget,
-                ISymbol? source,
-                ImmutableArray<IMethodSymbol> inlineTargets,
-                bool inlineResolutionComplete,
-                Location location,
-                bool isExceptionHandled)
+            internal DelegateArgumentBinding(IParameterSymbol parameter, DelegateValue value)
             {
-                Caller = caller;
-                DelegateInvokeTarget = delegateInvokeTarget;
-                Source = source;
-                InlineTargets = inlineTargets;
-                InlineResolutionComplete = inlineResolutionComplete;
-                Location = location;
-                IsExceptionHandled = isExceptionHandled;
+                Parameter = parameter;
+                Value = value;
             }
 
-            internal IMethodSymbol Caller { get; }
-            internal IMethodSymbol DelegateInvokeTarget { get; }
-            internal ISymbol? Source { get; }
-            internal ImmutableArray<IMethodSymbol> InlineTargets { get; }
-            internal bool InlineResolutionComplete { get; }
-            internal Location Location { get; }
-            internal bool IsExceptionHandled { get; }
+            internal IParameterSymbol Parameter { get; }
+            internal DelegateValue Value { get; }
+        }
+
+        private sealed class DelegateValue
+        {
+            internal DelegateValue(
+                ImmutableArray<IMethodSymbol> targets,
+                ImmutableArray<ISymbol> sources,
+                bool hasUnknownTarget)
+            {
+                Targets = targets;
+                Sources = sources;
+                HasUnknownTarget = hasUnknownTarget;
+            }
+
+            internal ImmutableArray<IMethodSymbol> Targets { get; }
+            internal ImmutableArray<ISymbol> Sources { get; }
+            internal bool HasUnknownTarget { get; }
+        }
+
+        private sealed class ResolvedDelegateValue
+        {
+            internal ResolvedDelegateValue(
+                ImmutableArray<IMethodSymbol> targets,
+                bool hasUnknownTarget)
+            {
+                Targets = targets;
+                HasUnknownTarget = hasUnknownTarget;
+            }
+
+            internal ImmutableArray<IMethodSymbol> Targets { get; }
+            internal bool HasUnknownTarget { get; }
+        }
+
+        private sealed class DelegateFlowEnvironment
+        {
+            private readonly Dictionary<ISymbol, ResolvedDelegateValue> _bindings;
+            private string? _fingerprint;
+
+            private DelegateFlowEnvironment(Dictionary<ISymbol, ResolvedDelegateValue> bindings)
+            {
+                _bindings = bindings;
+            }
+
+            internal static DelegateFlowEnvironment Empty { get; } = new(
+                new Dictionary<ISymbol, ResolvedDelegateValue>(SymbolEqualityComparer.Default));
+
+            internal string Fingerprint => _fingerprint ??= string.Join(
+                ";",
+                _bindings.Select(static pair =>
+                        $"{FormatSymbol(pair.Key)}={FormatResolvedValue(pair.Value)}")
+                    .OrderBy(static value => value, StringComparer.Ordinal));
+
+            internal bool TryGetValue(ISymbol symbol, out ResolvedDelegateValue value)
+                => _bindings.TryGetValue(symbol, out value!);
+
+            internal DelegateFlowEnvironment WithBindings(
+                IEnumerable<KeyValuePair<ISymbol, ResolvedDelegateValue>> bindings)
+            {
+                var merged = new Dictionary<ISymbol, ResolvedDelegateValue>(
+                    _bindings,
+                    SymbolEqualityComparer.Default);
+                foreach (var binding in bindings)
+                    merged[binding.Key] = binding.Value;
+                return new DelegateFlowEnvironment(merged);
+            }
+
+            private static string FormatResolvedValue(ResolvedDelegateValue value)
+                => $"{value.HasUnknownTarget}:{string.Join(",", value.Targets
+                    .Select(static target => CreateDelegateFlowSymbolKey(target))
+                    .OrderBy(static target => target, StringComparer.Ordinal))}";
+
+            private static string FormatSymbol(ISymbol symbol)
+                => CreateDelegateFlowSymbolKey(symbol);
+        }
+
+        private sealed class ResolvedInvocationTransition
+        {
+            internal ResolvedInvocationTransition(
+                InvocationEdge edge,
+                DelegateFlowEnvironment environment)
+            {
+                Edge = edge;
+                Environment = environment;
+            }
+
+            internal InvocationEdge Edge { get; }
+            internal DelegateFlowEnvironment Environment { get; }
         }
 
         private sealed class EnqueuePathNode
         {
-            internal EnqueuePathNode(IMethodSymbol method, bool isExceptionHandled)
+            internal EnqueuePathNode(
+                IMethodSymbol method,
+                bool isExceptionHandled,
+                DelegateFlowEnvironment environment)
             {
                 Method = method;
                 IsExceptionHandled = isExceptionHandled;
+                Environment = environment;
             }
 
             internal IMethodSymbol Method { get; }
             internal bool IsExceptionHandled { get; }
+            internal DelegateFlowEnvironment Environment { get; }
         }
 
         private sealed class PathNode
         {
-            internal PathNode(IMethodSymbol method, InvocationEdge firstEdge, InvocationEdge edge)
+            internal PathNode(
+                IMethodSymbol method,
+                InvocationEdge firstEdge,
+                InvocationEdge edge,
+                DelegateFlowEnvironment environment)
             {
                 Method = method;
                 FirstEdge = firstEdge;
                 Edge = edge;
+                Environment = environment;
             }
 
             internal IMethodSymbol Method { get; }
             internal InvocationEdge FirstEdge { get; }
             internal InvocationEdge Edge { get; }
+            internal DelegateFlowEnvironment Environment { get; }
         }
     }
 }

@@ -160,7 +160,8 @@ public sealed class DataPipelineCascadingPersistenceWriter
         catch (Exception ex)
         {
             retryFailure = ex;
-            _logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] 补传容量检查失败：{ex.Message}");
+            WriteLogBestEffort(logger =>
+                logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] 补传容量检查失败：{ex.Message}"));
         }
 
         if (retryFailure is null)
@@ -182,9 +183,6 @@ public sealed class DataPipelineCascadingPersistenceWriter
             try
             {
                 await operations.SaveRetryAsync(record, failedTarget, errorMessage, cancellationToken).ConfigureAwait(false);
-                cancellationToken.ThrowIfCancellationRequested();
-                _logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 已写入 {operations.DisplayName} 补传队列。");
-                return true;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -193,7 +191,15 @@ public sealed class DataPipelineCascadingPersistenceWriter
             catch (Exception ex)
             {
                 retryFailure = ex;
-                _logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 写入补传队列失败：{ex.Message}");
+                WriteLogBestEffort(logger =>
+                    logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 写入补传队列失败：{ex.Message}"));
+            }
+
+            if (retryFailure is null)
+            {
+                WriteLogBestEffort(logger =>
+                    logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 已写入 {operations.DisplayName} 补传队列。"));
+                return true;
             }
         }
 
@@ -212,7 +218,8 @@ public sealed class DataPipelineCascadingPersistenceWriter
         }
         catch (Exception fallbackGuardEx)
         {
-            _logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] 兜底容量检查失败：{fallbackGuardEx.Message}");
+            WriteLogBestEffort(logger =>
+                logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] 兜底容量检查失败：{fallbackGuardEx.Message}"));
             return await TryPersistDeadLetterAsync(
                 record,
                 failedTarget,
@@ -242,9 +249,6 @@ public sealed class DataPipelineCascadingPersistenceWriter
         try
         {
             await operations.SaveFallbackAsync(record, failedTarget, errorMessage, cancellationToken).ConfigureAwait(false);
-            cancellationToken.ThrowIfCancellationRequested();
-            _logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] 补传队列不可用，{record.CellData.DisplayLabel} 已写入 {operations.DisplayName} 兜底缓存。");
-            return true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -263,6 +267,10 @@ public sealed class DataPipelineCascadingPersistenceWriter
                 fallbackEx,
                 cancellationToken).ConfigureAwait(false);
         }
+
+        WriteLogBestEffort(logger =>
+            logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] 补传队列不可用，{record.CellData.DisplayLabel} 已写入 {operations.DisplayName} 兜底缓存。"));
+        return true;
     }
 
     private async Task<bool> TryPersistDeadLetterAsync(
@@ -288,9 +296,6 @@ public sealed class DataPipelineCascadingPersistenceWriter
                     failureReason),
                     cancellationToken)
                 .ConfigureAwait(false);
-            cancellationToken.ThrowIfCancellationRequested();
-            _logger.Fatal($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 已进入 {operations.DisplayName} 死信。");
-            return true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -310,6 +315,22 @@ public sealed class DataPipelineCascadingPersistenceWriter
                 deadLetterEx,
                 operations.CriticalSource);
             return false;
+        }
+
+        WriteLogBestEffort(logger =>
+            logger.Fatal($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 已进入 {operations.DisplayName} 死信。"));
+        return true;
+    }
+
+    private void WriteLogBestEffort(Action<ILogService> writeLog)
+    {
+        try
+        {
+            writeLog(_logger);
+        }
+        catch (Exception)
+        {
+            // 日志订阅者失败不能改变任一级已提交的恢复状态或中断恢复链。
         }
     }
 

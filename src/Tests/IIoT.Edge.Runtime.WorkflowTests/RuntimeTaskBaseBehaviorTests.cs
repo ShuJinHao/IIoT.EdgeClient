@@ -123,6 +123,89 @@ public sealed class RuntimeTaskBaseBehaviorTests
             entry.Level == "Error" && entry.Message.Contains("operation was canceled", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public async Task ScheduledTaskBase_WhenCanceled_ShouldAwaitStoppingHookBeforeCompleting()
+    {
+        var stoppingRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var logger = new FakeLogService();
+        var task = new StoppingScheduledTask(logger, stoppingRelease.Task);
+        using var cancellation = new CancellationTokenSource();
+
+        var runtime = task.StartAsync(cancellation.Token);
+        await task.ExecutionStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+        await cancellation.CancelAsync();
+        await task.StoppingStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(runtime.IsCompleted);
+        stoppingRelease.TrySetResult();
+        await runtime.WaitAsync(TestContext.Current.CancellationToken);
+        Assert.Contains(logger.Entries, entry => entry.Message.Contains("已停止", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ScheduledTaskBase_WhenStopLogSubscriberThrows_ShouldCompleteSuccessfulStopping()
+    {
+        var logger = CreateStopLogThrowingLogger();
+        var task = new StoppingScheduledTask(logger, Task.CompletedTask);
+        using var cancellation = new CancellationTokenSource();
+
+        var runtime = task.StartAsync(cancellation.Token);
+        await task.ExecutionStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+        await cancellation.CancelAsync();
+        await runtime.WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(runtime.IsCompletedSuccessfully);
+        Assert.Contains(logger.Entries, entry => entry.Message.Contains("已停止", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ScheduledTaskBase_WhenStoppingHookAndStopLogSubscriberThrow_ShouldPreserveStoppingFailure()
+    {
+        var expected = new IOException("durable shutdown evidence failed");
+        var logger = CreateStopLogThrowingLogger();
+        var task = new StoppingScheduledTask(logger, Task.FromException(expected));
+        using var cancellation = new CancellationTokenSource();
+
+        var runtime = task.StartAsync(cancellation.Token);
+        await task.ExecutionStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+        await cancellation.CancelAsync();
+
+        var actual = await Assert.ThrowsAsync<IOException>(
+            () => runtime.WaitAsync(TestContext.Current.CancellationToken));
+        Assert.Same(expected, actual);
+        Assert.Contains(logger.Entries, entry => entry.Message.Contains("已停止", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ScheduledTaskBase_WhenExecutionAndStopLogSubscriberThrow_ShouldPreserveExecutionFailure()
+    {
+        var expected = new InvalidOperationException("critical execution failed");
+        var logger = CreateStopLogThrowingLogger();
+        var task = new StoppingScheduledTask(
+            logger,
+            Task.CompletedTask,
+            executionFailure: expected,
+            propagateExecutionFailure: true);
+
+        var runtime = task.StartAsync(TestContext.Current.CancellationToken);
+
+        var actual = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => runtime.WaitAsync(TestContext.Current.CancellationToken));
+        Assert.Same(expected, actual);
+        Assert.Contains(logger.Entries, entry => entry.Message.Contains("已停止", StringComparison.Ordinal));
+    }
+
+    private static FakeLogService CreateStopLogThrowingLogger()
+    {
+        var logger = new FakeLogService();
+        logger.EntryAdded += entry =>
+        {
+            if (entry.Message.Contains("已停止", StringComparison.Ordinal))
+                throw new IOException("stop log subscriber failed");
+        };
+        return logger;
+    }
+
     private sealed class CountingPlcTask : PlcTaskBase
     {
         private readonly Exception? _firstFailure;
@@ -224,6 +307,54 @@ public sealed class RuntimeTaskBaseBehaviorTests
             }
 
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class StoppingScheduledTask : ScheduledTaskBase
+    {
+        private readonly Task _stoppingTask;
+        private readonly Exception? _executionFailure;
+        private readonly bool _propagateExecutionFailure;
+
+        public StoppingScheduledTask(
+            ILogService logger,
+            Task stoppingTask,
+            Exception? executionFailure = null,
+            bool propagateExecutionFailure = false)
+            : base(logger)
+        {
+            _stoppingTask = stoppingTask;
+            _executionFailure = executionFailure;
+            _propagateExecutionFailure = propagateExecutionFailure;
+        }
+
+        public override string TaskName => "StoppingScheduledTask";
+
+        public TaskCompletionSource ExecutionStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource StoppingStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        protected override int ExecuteInterval => 0;
+
+        protected override Task ExecuteAsync()
+        {
+            ExecutionStarted.TrySetResult();
+            return _executionFailure is null
+                ? Task.Delay(Timeout.InfiniteTimeSpan, CurrentCancellationToken)
+                : Task.FromException(_executionFailure);
+        }
+
+        protected override bool ShouldPropagateExecutionFailure(
+            Exception exception,
+            CancellationToken cancellationToken)
+            => _propagateExecutionFailure;
+
+        protected override async Task OnStoppingAsync()
+        {
+            StoppingStarted.TrySetResult();
+            await _stoppingTask.ConfigureAwait(false);
         }
     }
 

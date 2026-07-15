@@ -355,6 +355,7 @@ public sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryRec
     public Action? ClaimPendingBatchReturning { get; set; }
     public Action? DeleteReturning { get; set; }
     public Action? UpdateRetryReturning { get; set; }
+    public Action? SaveReturning { get; set; }
     public Queue<Exception> SaveExceptions { get; } = new();
     public TaskCompletionSource? SaveStarted { get; set; }
     public Task? SaveWait { get; set; }
@@ -422,6 +423,7 @@ public sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryRec
             MainPlanCode = record.MainPlanCode,
             TraceBatchNumber = record.TraceBatchNumber
         });
+        SaveReturning?.Invoke();
         return Task.CompletedTask;
     }
 
@@ -693,6 +695,7 @@ public sealed class FakeCloudFallbackBufferStore : ICloudFallbackBufferStore
     public Exception? CountException { get; set; }
     public TaskCompletionSource? SaveStarted { get; set; }
     public Task? SaveWait { get; set; }
+    public Action? SaveReturning { get; set; }
     public FakeFailedRecordStore? RetryStore { get; set; }
 
     public async Task SaveAsync(
@@ -732,6 +735,7 @@ public sealed class FakeCloudFallbackBufferStore : ICloudFallbackBufferStore
             MainPlanCode = record.MainPlanCode,
             TraceBatchNumber = record.TraceBatchNumber
         });
+        SaveReturning?.Invoke();
 
     }
 

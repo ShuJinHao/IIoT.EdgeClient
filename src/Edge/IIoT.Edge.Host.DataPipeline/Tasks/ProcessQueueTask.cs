@@ -46,6 +46,9 @@ public class ProcessQueueTask : ScheduledTaskBase
         => cancellationToken.IsCancellationRequested
            && exception is DurableShutdownPersistenceException;
 
+    protected override Task OnStoppingAsync()
+        => WaitForDurableWorkersStoppedAsync();
+
     public ProcessQueueTask(
         ILogService logger,
         IDataPipelineService pipelineService,
@@ -76,38 +79,20 @@ public class ProcessQueueTask : ScheduledTaskBase
 
     protected override async Task ExecuteAsync()
     {
-        try
-        {
-            await EnsureDurableWorkersStartedAsync(CurrentCancellationToken).ConfigureAwait(false);
+        await EnsureDurableWorkersStartedAsync(CurrentCancellationToken).ConfigureAwait(false);
 
-            var drainedCount = 0;
-            while (drainedCount < MaxDrainBatchSize
-                   && _pipelineService.TryDequeue(out var record)
-                   && record is not null)
-            {
-                await ProcessOneAsync(record, CurrentCancellationToken).ConfigureAwait(false);
-                drainedCount++;
-            }
-        }
-        catch (OperationCanceledException) when (CurrentCancellationToken.IsCancellationRequested)
+        var drainedCount = 0;
+        while (drainedCount < MaxDrainBatchSize
+               && _pipelineService.TryDequeue(out var record)
+               && record is not null)
         {
-            await WaitForDurableWorkersStoppedAsync().ConfigureAwait(false);
-            throw;
+            await ProcessOneAsync(record, CurrentCancellationToken).ConfigureAwait(false);
+            drainedCount++;
         }
     }
 
     protected override async Task WaitForNextIterationAsync(CancellationToken ct)
-    {
-        try
-        {
-            await _pipelineService.WaitToReadAsync(ct).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            await WaitForDurableWorkersStoppedAsync().ConfigureAwait(false);
-            throw;
-        }
-    }
+        => await _pipelineService.WaitToReadAsync(ct).ConfigureAwait(false);
 
     private async Task ProcessOneAsync(CellCompletedRecord record, CancellationToken cancellationToken)
     {

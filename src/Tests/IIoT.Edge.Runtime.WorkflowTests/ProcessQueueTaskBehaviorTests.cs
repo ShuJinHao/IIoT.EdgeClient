@@ -369,6 +369,85 @@ public sealed class ProcessQueueTaskBehaviorTests
     }
 
     [Fact]
+    public async Task DurableShutdown_WhenWaitToReadReturnsNormallyAsRuntimeCancels_ShouldAwaitWorkerPersistence()
+    {
+        var consumerStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var retrySaveStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowRetrySaveToReturn = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var neverCompleteConsumer = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var logger = new FakeLogService();
+        var innerPipeline = new DataPipelineService(new FakeIngressOverflowPersistence(), logger);
+        using var runtimeCancellation = new CancellationTokenSource();
+        var pipeline = new CancelWhenWaitToReadReturnsPipeline(
+            innerPipeline,
+            consumerStarted.Task,
+            runtimeCancellation);
+        var cloudRetryStore = new FakeFailedRecordStore
+        {
+            SaveStarted = retrySaveStarted,
+            SaveWait = allowRetrySaveToReturn.Task
+        };
+        var mesRetryStore = new FakeFailedRecordStore();
+        var cloudFallbackStore = new FakeCloudFallbackBufferStore();
+        var mesFallbackStore = new FakeMesFallbackBufferStore();
+        var cloudDeadLetterStore = new FakeCloudDeadLetterStore();
+        var mesDeadLetterStore = new FakeMesDeadLetterStore();
+        var criticalWriter = new FakeCriticalPersistenceFallbackWriter();
+        var cloudConsumer = new FakeCellDataConsumer(
+            name: "Cloud",
+            order: 10,
+            retryChannel: "Cloud",
+            result: true,
+            failureMode: ConsumerFailureMode.Durable,
+            processAsync: async (_, cancellationToken) =>
+            {
+                consumerStarted.TrySetResult();
+                await neverCompleteConsumer.Task.WaitAsync(cancellationToken);
+                return true;
+            });
+        var task = new TestableProcessQueueTask(
+            logger,
+            pipeline,
+            [cloudConsumer],
+            cloudRetryStore,
+            mesRetryStore,
+            cloudFallbackStore,
+            mesFallbackStore,
+            cloudDeadLetterStore,
+            mesDeadLetterStore,
+            criticalWriter);
+        await innerPipeline.EnqueueAsync(
+            CreateTestPluginRecord("TestPlugin.Cloud.WaitToReadRace", DataPipelineUploadTargets.Cloud),
+            TestContext.Current.CancellationToken);
+
+        var runtime = task.StartAsync(runtimeCancellation.Token);
+        try
+        {
+            await retrySaveStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+
+            Assert.True(runtimeCancellation.IsCancellationRequested);
+            Assert.False(runtime.IsCompleted);
+
+            allowRetrySaveToReturn.TrySetResult();
+            await runtime.WaitAsync(TestContext.Current.CancellationToken);
+
+            Assert.True(runtime.IsCompletedSuccessfully);
+            Assert.Equal(1, cloudConsumer.ProcessCallCount);
+            Assert.Equal(1, cloudRetryStore.SaveCallCount);
+            Assert.Single(cloudRetryStore.PendingRecords);
+            Assert.Empty(cloudFallbackStore.Records);
+            Assert.Empty(cloudDeadLetterStore.Records);
+            Assert.Empty(criticalWriter.Writes);
+        }
+        finally
+        {
+            allowRetrySaveToReturn.TrySetResult();
+            await runtimeCancellation.CancelAsync();
+            await runtime.WaitAsync(TestContext.Current.CancellationToken);
+        }
+    }
+
+    [Fact]
     public async Task DurableShutdown_WhenChannelDeadlineExpires_ShouldWriteRecoverableEvidenceWithinOneTotalBudget()
     {
         var consumerStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1138,6 +1217,54 @@ public sealed class ProcessQueueTaskBehaviorTests
     }
 
     [Fact]
+    public async Task CascadingPersistence_WhenDeadlineCancelsAsRetryStoreReturns_ShouldCommitRetryExactlyOnce()
+    {
+        var harness = CreateCascadingPersistenceHarness();
+        using var shutdownBudgetCancellation = new CancellationTokenSource();
+        harness.CloudRetry.SaveReturning = shutdownBudgetCancellation.Cancel;
+
+        var result = await harness.Writer.PersistAsync(
+            CreateRecord(),
+            DataPipelineRetryChannel.Cloud,
+            "Cloud",
+            "failed",
+            "failed_cloud_cells",
+            DeadLetterStage.DurableShutdownPersist,
+            cancellationToken: shutdownBudgetCancellation.Token);
+
+        Assert.True(shutdownBudgetCancellation.IsCancellationRequested);
+        Assert.True(result);
+        Assert.Equal(1, harness.CloudRetry.SaveCallCount);
+        Assert.Single(harness.CloudRetry.PendingRecords);
+        Assert.Equal(0, harness.CloudFallback.SaveCallCount);
+        Assert.Equal(0, harness.CloudDeadLetter.SaveCallCount);
+        Assert.Empty(harness.Critical.Writes);
+    }
+
+    [Fact]
+    public async Task CascadingPersistence_WhenRetryCommitLogSubscriberThrows_ShouldKeepSingleRetryCommit()
+    {
+        var harness = CreateCascadingPersistenceHarness();
+        harness.Logger.EntryAdded += _ => throw new InvalidOperationException("log subscriber failed");
+
+        var result = await harness.Writer.PersistAsync(
+            CreateRecord(),
+            DataPipelineRetryChannel.Cloud,
+            "Cloud",
+            "failed",
+            "failed_cloud_cells",
+            DeadLetterStage.DurableShutdownPersist,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(result);
+        Assert.Equal(1, harness.CloudRetry.SaveCallCount);
+        Assert.Single(harness.CloudRetry.PendingRecords);
+        Assert.Equal(0, harness.CloudFallback.SaveCallCount);
+        Assert.Equal(0, harness.CloudDeadLetter.SaveCallCount);
+        Assert.Empty(harness.Critical.Writes);
+    }
+
+    [Fact]
     public async Task CascadingPersistence_WhenRetryStoreSelfCancels_ShouldPersistFallbackExactlyOnce()
     {
         var harness = CreateCascadingPersistenceHarness();
@@ -1183,6 +1310,80 @@ public sealed class ProcessQueueTaskBehaviorTests
     }
 
     [Fact]
+    public async Task CascadingPersistence_WhenDeadlineCancelsAsFallbackStoreReturns_ShouldCommitFallbackExactlyOnce()
+    {
+        var harness = CreateCascadingPersistenceHarness();
+        harness.CloudRetry.SaveException = new IOException("retry unavailable");
+        using var shutdownBudgetCancellation = new CancellationTokenSource();
+        harness.CloudFallback.SaveReturning = shutdownBudgetCancellation.Cancel;
+
+        var result = await harness.Writer.PersistAsync(
+            CreateRecord(),
+            DataPipelineRetryChannel.Cloud,
+            "Cloud",
+            "failed",
+            "failed_cloud_cells",
+            DeadLetterStage.DurableShutdownPersist,
+            cancellationToken: shutdownBudgetCancellation.Token);
+
+        Assert.True(shutdownBudgetCancellation.IsCancellationRequested);
+        Assert.True(result);
+        Assert.Equal(1, harness.CloudRetry.SaveCallCount);
+        Assert.Equal(1, harness.CloudFallback.SaveCallCount);
+        Assert.Single(harness.CloudFallback.Records);
+        Assert.Equal(0, harness.CloudDeadLetter.SaveCallCount);
+        Assert.Empty(harness.Critical.Writes);
+    }
+
+    [Fact]
+    public async Task CascadingPersistence_WhenRetryFailureAndFallbackCommitLogsThrow_ShouldContinueAndCommitFallbackOnce()
+    {
+        var harness = CreateCascadingPersistenceHarness();
+        harness.CloudRetry.SaveException = new IOException("retry unavailable");
+        harness.Logger.EntryAdded += _ => throw new InvalidOperationException("log subscriber failed");
+
+        var result = await harness.Writer.PersistAsync(
+            CreateRecord(),
+            DataPipelineRetryChannel.Cloud,
+            "Cloud",
+            "failed",
+            "failed_cloud_cells",
+            DeadLetterStage.DurableShutdownPersist,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(result);
+        Assert.Equal(1, harness.CloudRetry.SaveCallCount);
+        Assert.Equal(1, harness.CloudFallback.SaveCallCount);
+        Assert.Single(harness.CloudFallback.Records);
+        Assert.Equal(0, harness.CloudDeadLetter.SaveCallCount);
+        Assert.Empty(harness.Critical.Writes);
+    }
+
+    [Fact]
+    public async Task CascadingPersistence_WhenRetryGuardFailureLogSubscriberThrows_ShouldStillCommitFallbackOnce()
+    {
+        var harness = CreateCascadingPersistenceHarness();
+        harness.CloudRetry.CloudCountException = new IOException("retry guard unavailable");
+        harness.Logger.EntryAdded += _ => throw new InvalidOperationException("log subscriber failed");
+
+        var result = await harness.Writer.PersistAsync(
+            CreateRecord(),
+            DataPipelineRetryChannel.Cloud,
+            "Cloud",
+            "failed",
+            "failed_cloud_cells",
+            DeadLetterStage.DurableShutdownPersist,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(result);
+        Assert.Equal(0, harness.CloudRetry.SaveCallCount);
+        Assert.Equal(1, harness.CloudFallback.SaveCallCount);
+        Assert.Single(harness.CloudFallback.Records);
+        Assert.Equal(0, harness.CloudDeadLetter.SaveCallCount);
+        Assert.Empty(harness.Critical.Writes);
+    }
+
+    [Fact]
     public async Task NonRetryablePersistence_WhenDeadLetterStoreSelfCancels_ShouldInvokeCriticalExactlyOnce()
     {
         var harness = CreateCascadingPersistenceHarness();
@@ -1202,27 +1403,29 @@ public sealed class ProcessQueueTaskBehaviorTests
     }
 
     [Fact]
-    public async Task NonRetryablePersistence_WhenCallerCancelsAsDeadLetterReturns_ShouldPropagateWithoutCritical()
+    public async Task NonRetryablePersistence_WhenDeadlineCancelsAsDeadLetterReturns_ShouldCommitDeadLetterExactlyOnce()
     {
         var harness = CreateCascadingPersistenceHarness();
         using var cancellation = new CancellationTokenSource();
         harness.CloudDeadLetter.SaveReturning = cancellation.Cancel;
 
-        var actual = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            harness.Writer.PersistNonRetryableAsync(
+        var result = await harness.Writer.PersistNonRetryableAsync(
                 CreateRecord(),
                 DataPipelineRetryChannel.Cloud,
                 "Cloud",
                 "invalid_payload",
                 "failed_cloud_cells",
-                cancellation.Token));
+                cancellation.Token);
 
-        Assert.Equal(cancellation.Token, actual.CancellationToken);
+        Assert.True(cancellation.IsCancellationRequested);
+        Assert.True(result);
+        Assert.Equal(1, harness.CloudDeadLetter.SaveCallCount);
+        Assert.Single(harness.CloudDeadLetter.Records);
         Assert.Empty(harness.Critical.Writes);
     }
 
     [Fact]
-    public async Task CascadingPersistence_WhenCallerCancelsAsDeadLetterReturns_ShouldPropagateWithoutCritical()
+    public async Task CascadingPersistence_WhenDeadlineCancelsAsDeadLetterReturns_ShouldNotDoubleWriteCriticalEvidence()
     {
         var harness = CreateCascadingPersistenceHarness();
         harness.CloudRetry.SaveException = new IOException("retry unavailable");
@@ -1230,16 +1433,46 @@ public sealed class ProcessQueueTaskBehaviorTests
         using var cancellation = new CancellationTokenSource();
         harness.CloudDeadLetter.SaveReturning = cancellation.Cancel;
 
-        var actual = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => harness.Writer.PersistAsync(
+        var result = await harness.Writer.PersistAsync(
             CreateRecord(),
             DataPipelineRetryChannel.Cloud,
             "Cloud",
             "failed",
             "failed_cloud_cells",
             DeadLetterStage.FallbackPersist,
-            cancellationToken: cancellation.Token));
+            cancellationToken: cancellation.Token);
 
-        Assert.Equal(cancellation.Token, actual.CancellationToken);
+        Assert.True(cancellation.IsCancellationRequested);
+        Assert.True(result);
+        Assert.Equal(1, harness.CloudRetry.SaveCallCount);
+        Assert.Equal(1, harness.CloudFallback.SaveCallCount);
+        Assert.Equal(1, harness.CloudDeadLetter.SaveCallCount);
+        Assert.Single(harness.CloudDeadLetter.Records);
+        Assert.Empty(harness.Critical.Writes);
+    }
+
+    [Fact]
+    public async Task CascadingPersistence_WhenDeadLetterCommitLogSubscriberThrows_ShouldKeepSingleDeadLetterCommit()
+    {
+        var harness = CreateCascadingPersistenceHarness();
+        harness.CloudRetry.SaveException = new IOException("retry unavailable");
+        harness.CloudFallback.SaveException = new IOException("fallback unavailable");
+        harness.Logger.EntryAdded += _ => throw new InvalidOperationException("log subscriber failed");
+
+        var result = await harness.Writer.PersistAsync(
+            CreateRecord(),
+            DataPipelineRetryChannel.Cloud,
+            "Cloud",
+            "failed",
+            "failed_cloud_cells",
+            DeadLetterStage.DurableShutdownPersist,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(result);
+        Assert.Equal(1, harness.CloudRetry.SaveCallCount);
+        Assert.Equal(1, harness.CloudFallback.SaveCallCount);
+        Assert.Equal(1, harness.CloudDeadLetter.SaveCallCount);
+        Assert.Single(harness.CloudDeadLetter.Records);
         Assert.Empty(harness.Critical.Writes);
     }
 
@@ -1977,6 +2210,33 @@ public sealed class ProcessQueueTaskBehaviorTests
         }
     }
 
+    private sealed class CancelWhenWaitToReadReturnsPipeline(
+        IDataPipelineService inner,
+        Task durableConsumerStarted,
+        CancellationTokenSource runtimeCancellation) : IDataPipelineService
+    {
+        public int PendingCount => inner.PendingCount;
+
+        public int OverflowCount => inner.OverflowCount;
+
+        public int SpillCount => inner.SpillCount;
+
+        public ValueTask<DataPipelineEnqueueResult> EnqueueAsync(
+            CellCompletedRecord record,
+            CancellationToken cancellationToken = default)
+            => inner.EnqueueAsync(record, cancellationToken);
+
+        public bool TryDequeue(out CellCompletedRecord? record)
+            => inner.TryDequeue(out record);
+
+        public async ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken = default)
+        {
+            await durableConsumerStarted.ConfigureAwait(false);
+            await runtimeCancellation.CancelAsync();
+            return true;
+        }
+    }
+
     private static DataPipelineCascadingPersistenceWriter CreatePersistenceWriter(
         FakeLogService logger,
         FakeFailedRecordStore cloudRetryStore,
@@ -2027,6 +2287,7 @@ public sealed class ProcessQueueTaskBehaviorTests
                 mesDeadLetter,
                 critical,
                 capacityGuard: null),
+            logger,
             cloudRetry,
             cloudFallback,
             cloudDeadLetter,
@@ -2035,6 +2296,7 @@ public sealed class ProcessQueueTaskBehaviorTests
 
     private sealed record CascadingPersistenceHarness(
         DataPipelineCascadingPersistenceWriter Writer,
+        FakeLogService Logger,
         FakeFailedRecordStore CloudRetry,
         FakeCloudFallbackBufferStore CloudFallback,
         FakeCloudDeadLetterStore CloudDeadLetter,
