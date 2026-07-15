@@ -100,6 +100,28 @@ function Remove-CSharpNonCodeText {
     return [regex]::Replace($SourceText, $nonCodePattern, ' ')
 }
 
+function Remove-CSharpComments {
+    param([Parameter(Mandatory)][string]$SourceText)
+
+    $literalOrCommentPattern = @'
+(?xs)
+(?<literal>
+    (?:\$*)"{3,}.*?"{3,}
+  | (?:\$@|@\$|@)"(?:""|[^"])*"
+  | \$?"(?:\\.|[^"\\])*"
+  | '(?:\\.|[^'\\])*'
+)
+|
+(?<comment>/\*.*?\*/|//[^\r\n]*)
+'@
+    $evaluator = [Text.RegularExpressions.MatchEvaluator]{
+        param([Text.RegularExpressions.Match]$match)
+        if ($match.Groups['comment'].Success) { return ' ' }
+        return $match.Value
+    }
+    return [regex]::Replace($SourceText, $literalOrCommentPattern, $evaluator)
+}
+
 function Get-ProjectRole {
     param(
         [Parameter(Mandatory)][string]$ProjectPath,
@@ -179,6 +201,13 @@ function Test-IsArchitectureDiagnosticText {
     return $Value -match '(?i)\b(?:WSARCH|DDD|DATA|PLUG|EDGEOUT|EDGECOMP|EDGECLOUDCFG|EDGEPLCOWN|EDGEASYNC)\d{3}\b'
 }
 
+function Test-ContainsArchitectureSeverityConfiguration {
+    param([AllowEmptyString()][string]$Value)
+
+    return $Value -match '(?im)^\s*dotnet_diagnostic\.(?:WSARCH|DDD|DATA|PLUG|EDGEOUT|EDGECOMP|EDGECLOUDCFG|EDGEPLCOWN|EDGEASYNC)\d{3}\.severity\s*=' -or
+        $Value -match '(?im)^\s*dotnet_analyzer_diagnostic\.category-IIoT\.Architecture\.severity\s*='
+}
+
 function Test-IsApprovedAnalyzerToolDeclaration {
     param(
         [Parameter(Mandatory)][System.Xml.XmlElement]$Item,
@@ -231,8 +260,8 @@ function Expand-ProjectPattern {
     $patternRegex = $patternRegex.Replace('\*', '[^/]*')
     $patternRegex = $patternRegex.Replace('\?', '[^/]')
     $patternRegex = '^' + $patternRegex + '$'
-    return [string[]]@(Get-ChildItem $RepositoryRoot -Recurse -Filter '*.csproj' -File |
-        Where-Object { $_.FullName -notmatch '[/\\](?:bin|obj)[/\\]' } |
+    return [string[]]@(Get-ChildItem $RepositoryRoot -Recurse -Filter '*.csproj' -File -Force |
+        Where-Object { (Get-RepositoryPath $_.FullName) -notmatch '(^|/)(?:bin|obj)(?:/|$)' } |
         Where-Object { $_.FullName.Replace('\', '/') -match $patternRegex } |
         ForEach-Object { $_.FullName } |
         Sort-Object -Unique)
@@ -447,8 +476,8 @@ if (-not [string]::IsNullOrWhiteSpace($SolutionPath)) {
         $projectPaths.Add((Resolve-FullPath (Split-Path $resolvedSolution -Parent) ([System.Xml.XmlElement]$projectNode).GetAttribute('Path')))
     }
 } else {
-    foreach ($projectFile in @(Get-ChildItem $RepositoryRoot -Recurse -Filter '*.csproj' -File |
-        Where-Object { $_.FullName -notmatch '[/\\](?:bin|obj)[/\\]' })) {
+    foreach ($projectFile in @(Get-ChildItem $RepositoryRoot -Recurse -Filter '*.csproj' -File -Force |
+        Where-Object { (Get-RepositoryPath $_.FullName) -notmatch '(^|/)(?:bin|obj)(?:/|$)' })) {
         $projectPaths.Add($projectFile.FullName)
     }
 }
@@ -457,14 +486,29 @@ $findingKeys = [System.Collections.Generic.HashSet[string]]::new([StringComparer
 $findings = [System.Collections.Generic.List[string]]::new()
 $projectsByPath = [System.Collections.Generic.Dictionary[string, object]]::new([StringComparer]::OrdinalIgnoreCase)
 $projects = [System.Collections.Generic.List[object]]::new()
+$inspectedAnalyzerConfigPaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 
-foreach ($editorConfig in @(Get-ChildItem $RepositoryRoot -Recurse -File -Filter '.editorconfig' |
-    Where-Object { $_.FullName -notmatch '[/\\](?:bin|obj)[/\\]' })) {
-    $editorConfigText = Get-Content $editorConfig.FullName -Raw
-    if ($editorConfigText -match '(?im)^\s*dotnet_diagnostic\.(?:WSARCH|DDD|DATA|PLUG|EDGEOUT|EDGECOMP|EDGECLOUDCFG|EDGEPLCOWN|EDGEASYNC)\d{3}\.severity\s*=\s*(?:none|silent)\s*$' -or
-        $editorConfigText -match '(?im)^\s*dotnet_analyzer_diagnostic\.category-IIoT\.Architecture\.severity\s*=\s*(?:none|silent)\s*$') {
-        Add-Finding 'WSARCH006' "$(Get-RepositoryPath $editorConfig.FullName) suppresses mandatory Edge architecture diagnostics."
+function Test-ArchitectureAnalyzerConfigFile {
+    param([Parameter(Mandatory)][string]$ConfigPath)
+
+    $fullPath = [IO.Path]::GetFullPath($ConfigPath)
+    if (-not $inspectedAnalyzerConfigPaths.Add($fullPath) -or
+        -not (Test-Path $fullPath -PathType Leaf)) {
+        return
     }
+
+    $configText = Get-Content $fullPath -Raw
+    if (Test-ContainsArchitectureSeverityConfiguration $configText) {
+        Add-Finding 'WSARCH006' "$(Get-RepositoryPath $fullPath) configures mandatory Edge architecture diagnostic severity; all IIoT.Architecture descriptors are build-blocking and NotConfigurable."
+    }
+}
+
+foreach ($analyzerConfig in @(Get-ChildItem $RepositoryRoot -Recurse -File -Force |
+    Where-Object {
+        $_.Name -in @('.editorconfig', '.globalconfig') -and
+        (Get-RepositoryPath $_.FullName) -notmatch '(^|/)(?:bin|obj)(?:/|$)'
+    })) {
+    Test-ArchitectureAnalyzerConfigFile $analyzerConfig.FullName
 }
 
 foreach ($projectPath in @($projectPaths | Sort-Object -Unique)) {
@@ -558,6 +602,25 @@ foreach ($project in $projects) {
             $propertyValue = $project.EvaluatedProject.GetPropertyValue($propertyName)
             if (Test-IsArchitectureDiagnosticText $propertyValue) {
                 Add-Finding 'WSARCH006' "$($project.RelativePath) suppresses/downgrades mandatory architecture diagnostics through $propertyName."
+            }
+        }
+        foreach ($itemName in @('AnalyzerConfigFiles', 'EditorConfigFiles', 'GlobalAnalyzerConfigFiles')) {
+            foreach ($configItem in @($project.EvaluatedProject.GetItems($itemName))) {
+                $configPath = $configItem.GetMetadataValue('FullPath')
+                if ([string]::IsNullOrWhiteSpace($configPath)) {
+                    $configPath = Resolve-FullPath $project.Directory $configItem.EvaluatedInclude
+                }
+                Test-ArchitectureAnalyzerConfigFile $configPath
+            }
+        }
+        foreach ($propertyName in @('AnalyzerConfigFiles', 'EditorConfigFiles', 'GlobalAnalyzerConfigFiles')) {
+            foreach ($configValue in @($project.EvaluatedProject.GetPropertyValue($propertyName).Split(
+                ';',
+                [StringSplitOptions]::RemoveEmptyEntries))) {
+                $expandedConfigValue = $project.EvaluatedProject.ExpandString($configValue.Trim())
+                if ($expandedConfigValue -notmatch '[@$]\(') {
+                    Test-ArchitectureAnalyzerConfigFile (Resolve-FullPath $project.Directory $expandedConfigValue)
+                }
             }
         }
     }
@@ -655,8 +718,10 @@ foreach ($project in $projects) {
         foreach ($source in $ownedCompileItems) {
             $sourceText = Get-Content $source.FullName -Raw
             $sourceCode = Remove-CSharpNonCodeText $sourceText
+            $sourceWithoutComments = Remove-CSharpComments $sourceText
             if ($sourceCode -match '(?im)^\s*#pragma\s+warning\s+disable(?:\s*(?:$|(?:(?:WSARCH|DDD|DATA|PLUG|EDGEOUT|EDGECOMP|EDGECLOUDCFG|EDGEPLCOWN|EDGEASYNC)\d{3}\b)))' -or
-                ($sourceCode -match '\bSuppressMessage\s*\(' -and (Test-IsArchitectureDiagnosticText $sourceCode))) {
+                ($sourceCode -match '\bSuppressMessage\s*\(' -and
+                 $sourceWithoutComments -match '(?is)\bSuppressMessage\s*\([^)]*\b(?:WSARCH|DDD|DATA|PLUG|EDGEOUT|EDGECOMP|EDGECLOUDCFG|EDGEPLCOWN|EDGEASYNC)\d{3}\b')) {
                 Add-Finding 'WSARCH006' "$(Get-RepositoryPath $source.FullName) suppresses mandatory Edge architecture diagnostics in source."
             }
         }

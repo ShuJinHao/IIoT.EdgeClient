@@ -768,6 +768,51 @@ public sealed class ProcessQueueTaskBehaviorTests
         Assert.Empty(fallbackStore.Records);
     }
 
+    [Theory]
+    [InlineData("开始处理", true, 0)]
+    [InlineData("已完成本地处理", true, 0)]
+    [InlineData("准备写入", false, 1)]
+    public async Task ProcessQueue_WhenRecordLogSubscriberThrows_ShouldStillDispatchOrCompensateExactlyOnce(
+        string throwingLogMarker,
+        bool consumerResult,
+        int expectedRetryCount)
+    {
+        var logger = new FakeLogService();
+        logger.EntryAdded += entry =>
+        {
+            if (entry.Message.Contains(throwingLogMarker, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"log subscriber failed at {throwingLogMarker}");
+            }
+        };
+        var pipeline = new FakeDataPipelineService();
+        var cloudRetryStore = new FakeFailedRecordStore();
+        var consumer = new FakeCellDataConsumer(
+            name: "Cloud",
+            order: 10,
+            retryChannel: "Cloud",
+            result: consumerResult,
+            failureMode: ConsumerFailureMode.Durable);
+        await pipeline.EnqueueAsync(CreateRecord(), TestContext.Current.CancellationToken);
+        var task = new TestableProcessQueueTask(
+            logger,
+            pipeline,
+            [consumer],
+            cloudRetryStore,
+            new FakeFailedRecordStore(),
+            new FakeCloudFallbackBufferStore(),
+            new FakeMesFallbackBufferStore(),
+            new FakeCloudDeadLetterStore(),
+            new FakeMesDeadLetterStore(),
+            new FakeCriticalPersistenceFallbackWriter());
+
+        await task.ExecuteOnceAsync();
+
+        Assert.Equal(1, consumer.ProcessCallCount);
+        Assert.Equal(expectedRetryCount, cloudRetryStore.PendingRecords.Count);
+        Assert.Equal(0, pipeline.PendingCount);
+    }
+
     [Fact]
     public async Task BestEffortFailure_ShouldNotBlockLaterDurableConsumer()
     {

@@ -422,6 +422,56 @@ public sealed class MesFrameworkBehaviorTests
     }
 
     [Fact]
+    public async Task MesHttpClient_WhenInFlightSendIsCallerCanceled_ShouldPropagateOriginalCancellation()
+    {
+        using var handler = new BlockingCancellationHandler();
+        using var httpClient = new HttpClient(handler);
+        var client = new MesHttpClient(
+            new FakeHttpClientFactory(httpClient),
+            new FakeMesEndpointProvider(),
+            new FakeLogService());
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            TestContext.Current.CancellationToken);
+
+        var send = client.PostAsync(
+            "TestPlugin",
+            "/api/mes/outbound",
+            new { barcode = "MES-CANCEL" },
+            cancellationToken: cancellation.Token);
+        await handler.RequestStarted.WaitAsync(
+            TimeSpan.FromSeconds(2),
+            TestContext.Current.CancellationToken);
+        await cancellation.CancelAsync();
+
+        var actual = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => send);
+        Assert.Equal(cancellation.Token, actual.CancellationToken);
+        Assert.Equal(1, handler.SendCount);
+    }
+
+    [Fact]
+    public async Task MesHttpClient_WhenTransportSelfCancelsWithoutCallerCancellation_ShouldReturnFailure()
+    {
+        using var handler = new CaptureHandler
+        {
+            ExceptionToThrow = new OperationCanceledException("transport self-timeout")
+        };
+        using var httpClient = new HttpClient(handler);
+        var client = new MesHttpClient(
+            new FakeHttpClientFactory(httpClient),
+            new FakeMesEndpointProvider(),
+            new FakeLogService());
+
+        var success = await client.PostAsync(
+            "TestPlugin",
+            "/api/mes/outbound",
+            new { barcode = "MES-TIMEOUT" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.False(success);
+        Assert.False(TestContext.Current.CancellationToken.IsCancellationRequested);
+    }
+
+    [Fact]
     public async Task MesEndpointProvider_WhenModuleMesUrlExists_ShouldBuildProcessUrl()
     {
         var provider = new MesEndpointProvider(
@@ -722,6 +772,26 @@ public sealed class MesFrameworkBehaviorTests
             {
                 Content = new StringContent("{}", Encoding.UTF8, "application/json")
             };
+        }
+    }
+
+    private sealed class BlockingCancellationHandler : HttpMessageHandler
+    {
+        private readonly TaskCompletionSource _requestStarted =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _sendCount;
+
+        public Task RequestStarted => _requestStarted.Task;
+        public int SendCount => Volatile.Read(ref _sendCount);
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _sendCount);
+            _requestStarted.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK);
         }
     }
 
