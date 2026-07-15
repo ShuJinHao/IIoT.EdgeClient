@@ -58,6 +58,10 @@ public static class EdgeClientProgramDataPaths
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
         var trimmed = path.Trim();
+        if (trimmed.Contains('\0'))
+        {
+            throw new ArgumentException("Configured plugin root contains a null character.", nameof(path));
+        }
         if (IsDefaultLayoutPluginRoot(trimmed))
         {
             return ResolveApplicationPluginRoot(baseDirectory);

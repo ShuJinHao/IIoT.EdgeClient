@@ -257,7 +257,7 @@ AnalyzerTests 必须是 Pure/Architecture 测试，不得启动 Shell、SQLite�
 
 ## 9. 已落地的高风险语义
 
-- 通用插件生命周期只使用中性 `TestPlugin`，覆盖发现、装载、start/stop、DI release/dispose、capture → enqueue → callback 与取消。具体工序配置与打包契约只留在对应插件 runner。
+- 通用插件生命周期只使用中性 `TestPlugin`，覆盖发现、装载、start/stop、DI release/dispose、capture → enqueue → callback 与取消。插件根配置含 NUL 或无法规范化时必须跨平台一致拒绝并非阻断回落默认根，不能接受 Windows 原生路径截断后的残缺目录。具体工序配置与打包契约只留在对应插件 runner。
 - SQLite/Persistence 已物理分为 Filesystem 与 SQLite isolated runner，并落地第 4 节的显式 UoW；覆盖 session 隔离/串行、flush rollback、跨聚合 commit、一次提交、每连接 pragma、外键、replace rollback 和主异常优先级。
 - DataPipeline 覆盖 accepted record 到 durable consumer、Cloud/MES active+queued 取消的逐项零丢失/零重复 shutdown 持久化、每通道单一总 deadline、存储成功返回后的 durable commit、停止钩子统一等待、记录出队后从开始/完成到失败/补偿/critical 降级的全部日志 best-effort、日志订阅者异常不丢记录/不改提交/不覆盖主异常、完整 critical payload 反序列化、critical 写失败 runtime fault、provider 自取消补偿、non-retryable exception、retry/fallback/deadletter 与 Cloud/MES 分离。MES HTTP 另以真实 in-flight handler 证明 caller cancellation 原样传播，transport/self-timeout 仍是普通失败。
 - 启动链对缺配置、PLC/MES/Cloud 不可达、IO/module profile 问题保持非阻断；取消测试使用 `TaskCompletionSource`/barrier 后显式 `Cancel`，不用几十毫秒机器时钟碰运气。
