@@ -32,9 +32,10 @@ function Initialize-FixtureWorkspace {
         Remove-Item $workingRoot -Recurse -Force
     }
     [void](New-Item $workingRoot -ItemType Directory -Force)
-    Copy-Item (Join-Path $fixtureSourceRoot '*') $workingRoot -Recurse -Force
+    Get-ChildItem $fixtureSourceRoot -Force |
+        Copy-Item -Destination $workingRoot -Recurse -Force
 
-    foreach ($template in @(Get-ChildItem $workingRoot -Recurse -File -Filter '*.fixture')) {
+    foreach ($template in @(Get-ChildItem $workingRoot -Recurse -File -Force -Filter '*.fixture')) {
         $targetPath = $template.FullName.Substring(0, $template.FullName.Length - '.fixture'.Length)
         Move-Item $template.FullName $targetPath
     }
@@ -179,6 +180,10 @@ Invoke-FixtureBuild -Name 'analyzer-invalid' `
     -ShouldSucceed $false `
     -ExpectedDiagnosticIds @('EDGEASYNC001', 'EDGEASYNC002') `
     -AdditionalBuildArguments @('-p:UseEdgeArchitectureAnalyzer=false')
+Invoke-FixtureBuild -Name 'analyzer-generated-invalid' `
+    -ProjectPath 'analyzer-generated-invalid/IIoT.Edge.Installer.GeneratedInvalidFixture.csproj' `
+    -ShouldSucceed $false `
+    -ExpectedDiagnosticIds @('EDGEASYNC001')
 Invoke-FixtureBuild -Name 'graph-valid' `
     -ProjectPath 'graph-valid/Host/IIoT.Edge.Host.Bootstrap.csproj' `
     -ShouldSucceed $true
@@ -260,6 +265,34 @@ Invoke-FixtureBuild -Name 'graph-analyzer-suppression-invalid' `
     -ProjectPath 'graph-analyzer-suppression-invalid/Application/IIoT.Edge.Application.csproj' `
     -ShouldSucceed $false `
     -ExpectedDiagnosticIds @('WSARCH006')
+Invoke-FixtureBuild -Name 'graph-analyzer-severity-warning-invalid' `
+    -ProjectPath 'graph-analyzer-severity-warning-invalid/Application/IIoT.Edge.Application.csproj' `
+    -ShouldSucceed $false `
+    -ExpectedDiagnosticIds @('WSARCH006')
+Invoke-FixtureBuild -Name 'graph-analyzer-severity-suggestion-invalid' `
+    -ProjectPath 'graph-analyzer-severity-suggestion-invalid/Application/IIoT.Edge.Application.csproj' `
+    -ShouldSucceed $false `
+    -ExpectedDiagnosticIds @('WSARCH006')
+Invoke-FixtureBuild -Name 'graph-analyzer-severity-none-invalid' `
+    -ProjectPath 'graph-analyzer-severity-none-invalid/Application/IIoT.Edge.Application.csproj' `
+    -ShouldSucceed $false `
+    -ExpectedDiagnosticIds @('WSARCH006')
+Invoke-FixtureBuild -Name 'graph-analyzer-globalconfig-invalid' `
+    -ProjectPath 'graph-analyzer-globalconfig-invalid/Application/IIoT.Edge.Application.csproj' `
+    -ShouldSucceed $false `
+    -ExpectedDiagnosticIds @('WSARCH006')
+Invoke-FixtureBuild -Name 'graph-analyzer-nested-globalconfig-invalid' `
+    -ProjectPath 'graph-analyzer-nested-globalconfig-invalid/Application/IIoT.Edge.Application.csproj' `
+    -ShouldSucceed $false `
+    -ExpectedDiagnosticIds @('WSARCH006')
+Invoke-FixtureBuild -Name 'graph-analyzer-pragma-invalid' `
+    -ProjectPath 'graph-analyzer-pragma-invalid/Application/IIoT.Edge.Application.csproj' `
+    -ShouldSucceed $false `
+    -ExpectedDiagnosticIds @('WSARCH006')
+Invoke-FixtureBuild -Name 'graph-analyzer-suppressmessage-invalid' `
+    -ProjectPath 'graph-analyzer-suppressmessage-invalid/Application/IIoT.Edge.Application.csproj' `
+    -ShouldSucceed $false `
+    -ExpectedDiagnosticIds @('WSARCH006')
 Invoke-FixtureBuild -Name 'graph-unknown-role-invalid' `
     -ProjectPath 'graph-unknown-role-invalid/Misc/IIoT.Edge.Utility.csproj' `
     -ShouldSucceed $false `
@@ -269,4 +302,4 @@ Invoke-FixtureBuild -Name 'graph-analyzer-exclusion-invalid' `
     -ShouldSucceed $false `
     -ExpectedDiagnosticIds @('WSARCH006')
 
-Write-Host 'Edge architecture analyzer/build fixtures passed: valid=4, invalid=21, bypass-checks=2.'
+Write-Host 'Edge architecture analyzer/build fixtures passed: valid=4, invalid=29, bypass-checks=2.'

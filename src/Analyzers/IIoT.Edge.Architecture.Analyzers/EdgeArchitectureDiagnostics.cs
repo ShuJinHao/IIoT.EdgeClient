@@ -182,5 +182,6 @@ internal static class EdgeArchitectureDiagnostics
             DiagnosticSeverity.Error,
             isEnabledByDefault: true,
             description,
-            helpLinkUri: HelpBase + anchor);
+            helpLinkUri: HelpBase + anchor,
+            customTags: new[] { WellKnownDiagnosticTags.NotConfigurable });
 }

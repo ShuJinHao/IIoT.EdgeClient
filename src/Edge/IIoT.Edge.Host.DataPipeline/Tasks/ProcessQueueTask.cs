@@ -98,7 +98,8 @@ public class ProcessQueueTask : ScheduledTaskBase
     {
         var label = record.CellData.DisplayLabel;
         var deviceName = record.ResolveDeviceName();
-        Logger.Info($"[PLC-{deviceName}][数据管道] 工序={record.CellData.ProcessType} 开始处理 {label}。");
+        WriteLogBestEffort(() =>
+            Logger.Info($"[PLC-{deviceName}][数据管道] 工序={record.CellData.ProcessType} 开始处理 {label}。"));
 
         foreach (var consumer in _consumers.Where(consumer => DataPipelineRetryChannelMetadata.ShouldProcess(record, consumer)))
         {
@@ -111,7 +112,8 @@ public class ProcessQueueTask : ScheduledTaskBase
             await ProcessConsumerAsync(record, consumer, cancellationToken).ConfigureAwait(false);
         }
 
-        Logger.Info($"[PLC-{deviceName}][数据管道] 工序={record.CellData.ProcessType} {label} 已完成本地处理并投递目标出口。");
+        WriteLogBestEffort(() =>
+            Logger.Info($"[PLC-{deviceName}][数据管道] 工序={record.CellData.ProcessType} {label} 已完成本地处理并投递目标出口。"));
     }
 
     private async Task ProcessConsumerAsync(
@@ -174,7 +176,8 @@ public class ProcessQueueTask : ScheduledTaskBase
 
         if (consumer.FailureMode == ConsumerFailureMode.BestEffort)
         {
-            Logger.Warn($"[PLC-{deviceName}][数据管道] 工序={record.CellData.ProcessType} {consumer.Name} 处理 {label} 失败：{errorMessage}（非关键消费者，继续后续链路）。");
+            WriteLogBestEffort(() =>
+                Logger.Warn($"[PLC-{deviceName}][数据管道] 工序={record.CellData.ProcessType} {consumer.Name} 处理 {label} 失败：{errorMessage}（非关键消费者，继续后续链路）。"));
             return;
         }
 
@@ -182,13 +185,14 @@ public class ProcessQueueTask : ScheduledTaskBase
         {
             var details =
                 $"[PLC-{deviceName}][数据管道] 工序={record.CellData.ProcessType} 关键消费者 {consumer.Name} 处理 {label} 失败，但未配置补偿链路。";
-            Logger.Error(details);
+            WriteLogBestEffort(() => Logger.Error(details));
             _criticalFallbackWriter.Write("DataPipeline.ProcessQueue.InvalidRetryChannel", details);
             return;
         }
 
-        Logger.Warn(
-            $"[PLC-{deviceName}][数据管道] 工序={record.CellData.ProcessType} {consumer.Name} 处理 {label} 失败，准备写入 {DataPipelineRetryChannelMetadata.Format(consumer.RetryChannel)} 补偿链路。");
+        WriteLogBestEffort(() =>
+            Logger.Warn(
+                $"[PLC-{deviceName}][数据管道] 工序={record.CellData.ProcessType} {consumer.Name} 处理 {label} 失败，准备写入 {DataPipelineRetryChannelMetadata.Format(consumer.RetryChannel)} 补偿链路。"));
 
         var sourceTable = DataPipelineRetryChannelMetadata.TryGetFailedRecordSourceTable(consumer.RetryChannel);
 
@@ -196,7 +200,7 @@ public class ProcessQueueTask : ScheduledTaskBase
         {
             var unsupportedDetails =
                 $"[PLC-{deviceName}][数据管道] 工序={record.CellData.ProcessType} {consumer.Name} 使用了不支持的补偿链路：{DataPipelineRetryChannelMetadata.Format(consumer.RetryChannel)}。";
-            Logger.Error(unsupportedDetails);
+            WriteLogBestEffort(() => Logger.Error(unsupportedDetails));
             _criticalFallbackWriter.Write("DataPipeline.ProcessQueue.UnsupportedRetryChannel", unsupportedDetails);
             return;
         }
@@ -572,7 +576,20 @@ public class ProcessQueueTask : ScheduledTaskBase
         }
         catch (Exception criticalEx)
         {
-            Logger.Error($"{details}；critical fallback 写入失败：{criticalEx.Message}");
+            WriteLogBestEffort(() =>
+                Logger.Error($"{details}；critical fallback 写入失败：{criticalEx.Message}"));
+        }
+    }
+
+    private static void WriteLogBestEffort(Action writeLog)
+    {
+        try
+        {
+            writeLog();
+        }
+        catch
+        {
+            // A dequeued record must be dispatched or compensated even when a log sink/subscriber fails.
         }
     }
 

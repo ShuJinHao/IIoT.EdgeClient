@@ -388,6 +388,13 @@
       "symbol": "GetLegacyRemarks",
       "declarationPath": "src/Application/IIoT.Edge.Application/Features/Config/SchemaReconciliation/IoMappingSchemaMetadata.cs",
       "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/IoMappingSchemaReconciliationBehaviorTests.cs",
+          "test": "ReconcileAsync_WhenRemarkMatchesModuleLegacyAlias_ShouldMigrateOnlyThatExactRemark"
+        }
+      ],
       "rationale": "Bounded schema-reconciliation reader used only to repair persisted historical IO remarks.",
       "callEvidence": [
         {
@@ -403,6 +410,13 @@
       "symbol": "GetLegacyDefaultValues",
       "declarationPath": "src/Application/IIoT.Edge.Application/Features/Config/SchemaReconciliation/ModuleParamSchemaSource.cs",
       "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/ModuleParamSchemaReconciliationBehaviorTests.cs",
+          "test": "ReconcileAsync_WhenExistingModuleParamMatchesLegacyDefault_ShouldRepairOnlyLegacyValue"
+        }
+      ],
       "rationale": "Bounded schema-reconciliation reader used only to repair persisted historical module defaults.",
       "callEvidence": [
         {
@@ -438,6 +452,13 @@
       "symbol": "CreateLegacyTemplateRemarks",
       "declarationPath": "src/Application/IIoT.Edge.Application/Modules/Hardware/ModuleHardwareProfileProviderBase.cs",
       "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceFilesystemTests/HomogenizationHardwareProfileBehaviorTests.cs",
+          "test": "HomogenizationHardwareProfileProvider_ShouldKeepTemplateMetadataInPluginProfile"
+        }
+      ],
       "rationale": "Bounded virtual hook consumed by the active hardware-schema requirement builder.",
       "callEvidence": [
         {
@@ -453,6 +474,13 @@
       "symbol": "CreateLegacyTemplateRemarks",
       "declarationPath": "src/Application/IIoT.Edge.Application/Modules/Hardware/StandardModuleHardwareProfileProviderBase.cs",
       "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceFilesystemTests/HomogenizationHardwareProfileBehaviorTests.cs",
+          "test": "HomogenizationHardwareProfileProvider_ShouldKeepTemplateMetadataInPluginProfile"
+        }
+      ],
       "rationale": "Active override reached by the base schema builder for the concrete homogenization profile.",
       "callEvidence": [
         {
@@ -818,6 +846,13 @@
       "symbol": "IsLegacySha256Hash",
       "declarationPath": "src/Shared/IIoT.Edge.SharedKernel/Security/EdgePasswordHasher.cs",
       "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Cloud.ContractTests/AuthServiceBehaviorTests.cs",
+          "test": "LoginLocalAsync_WhenStoredHashIsLegacySha256_ShouldRequireResetWithoutSession"
+        }
+      ],
       "rationale": "Bounded password-hash migration detector consumed by authentication and the in-place rehash path.",
       "callEvidence": [
         {
@@ -833,6 +868,13 @@
       "symbol": "VerifyLegacySha256",
       "declarationPath": "src/Shared/IIoT.Edge.SharedKernel/Security/EdgePasswordHasher.cs",
       "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Cloud.ContractTests/AuthServiceBehaviorTests.cs",
+          "test": "LoginLocalAsync_WhenStoredHashIsLegacySha256_ShouldRequireResetWithoutSession"
+        }
+      ],
       "rationale": "Bounded verifier invoked only after a stored hash is identified as the historical SHA-256 format.",
       "callEvidence": [
         {
@@ -893,6 +935,13 @@
       "symbol": "LegacyDefaultValues",
       "declarationPath": "src/Application/IIoT.Edge.Application/Abstractions/Config/IModuleParamRegistry.cs",
       "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/ModuleParamSchemaReconciliationBehaviorTests.cs",
+          "test": "ReconcileAsync_WhenExistingModuleParamMatchesLegacyDefault_ShouldRepairOnlyLegacyValue"
+        }
+      ],
       "rationale": "Bounded module-default migration input consumed by the registry.",
       "callEvidence": [
         {
@@ -968,6 +1017,13 @@
       "symbol": "LegacyDefaultValues",
       "declarationPath": "src/Application/IIoT.Edge.Application/Abstractions/Config/ModuleParamDescriptor.cs",
       "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/ModuleParamSchemaReconciliationBehaviorTests.cs",
+          "test": "ReconcileAsync_WhenExistingModuleParamMatchesLegacyDefault_ShouldRepairOnlyLegacyValue"
+        }
+      ],
       "rationale": "Bounded persisted-default migration data consumed by schema reconciliation.",
       "callEvidence": [
         {
@@ -1073,6 +1129,13 @@
       "symbol": "LegacyCloudSwitchSuffix",
       "declarationPath": "src/Application/IIoT.Edge.Application/Features/Config/CloudApi/CloudSystemSwitchMigration.cs",
       "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Cloud.ContractTests/LocalParameterConfigBehaviorTests.cs",
+          "test": "CloudSystemSwitchMigration_ShouldUseSystemAndAllLegacySwitchesFailClosed"
+        }
+      ],
       "rationale": "Bounded persisted Cloud-switch migration key consumed by the one-shot migration.",
       "callEvidence": [
         {
@@ -1133,6 +1196,13 @@
       "symbol": "LegacyRemarksKey",
       "declarationPath": "src/Application/IIoT.Edge.Application/Features/Config/SchemaReconciliation/IoMappingSchemaMetadata.cs",
       "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/IoMappingSchemaReconciliationBehaviorTests.cs",
+          "test": "ReconcileAsync_WhenRemarkMatchesModuleLegacyAlias_ShouldMigrateOnlyThatExactRemark"
+        }
+      ],
       "rationale": "Bounded IO remark migration metadata key consumed by reconciliation.",
       "callEvidence": [
         {
@@ -1148,6 +1218,13 @@
       "symbol": "LegacyDefaultValuesMetadataKey",
       "declarationPath": "src/Application/IIoT.Edge.Application/Features/Config/SchemaReconciliation/ModuleParamSchemaSource.cs",
       "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/ModuleParamSchemaReconciliationBehaviorTests.cs",
+          "test": "ReconcileAsync_WhenExistingModuleParamMatchesLegacyDefault_ShouldRepairOnlyLegacyValue"
+        }
+      ],
       "rationale": "Bounded module-default migration metadata key consumed by reconciliation.",
       "callEvidence": [
         {
@@ -1178,6 +1255,13 @@
       "symbol": "LegacyRemarks",
       "declarationPath": "src/Application/IIoT.Edge.Application/Modules/Hardware/ModuleHardwareProfileModels.cs",
       "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/IoMappingSchemaReconciliationBehaviorTests.cs",
+          "test": "ReconcileAsync_WhenRemarkMatchesModuleLegacyAlias_ShouldMigrateOnlyThatExactRemark"
+        }
+      ],
       "rationale": "Bounded hardware-template remark migration data consumed by IO reconciliation metadata.",
       "callEvidence": [
         {
@@ -1868,6 +1952,13 @@
       "symbol": "LegacySha256Verified",
       "declarationPath": "src/Shared/IIoT.Edge.SharedKernel/Security/EdgePasswordHasher.cs",
       "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Cloud.ContractTests/AuthServiceBehaviorTests.cs",
+          "test": "LoginLocalAsync_WhenStoredHashIsLegacySha256_ShouldRequireResetWithoutSession"
+        }
+      ],
       "rationale": "Bounded password migration result consumed by authentication before mandatory reset/rehash.",
       "callEvidence": [
         {
@@ -1883,6 +1974,13 @@
       "symbol": "LegacySha256Mismatch",
       "declarationPath": "src/Shared/IIoT.Edge.SharedKernel/Security/EdgePasswordHasher.cs",
       "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Cloud.ContractTests/AuthServiceBehaviorTests.cs",
+          "test": "LoginLocalAsync_WhenStoredHashIsLegacySha256_ShouldRequireResetWithoutSession"
+        }
+      ],
       "rationale": "Bounded password migration result emitted for a failed historical hash comparison.",
       "callEvidence": [
         {

@@ -671,6 +671,38 @@ public sealed class EdgeArchitectureAnalyzerTests
     }
 
     [Fact]
+    public async Task ProductionTaskDelegateParameterReassignedToUploader_ReportsEdgeOut001()
+    {
+        var source = PluginMetadata + TaskPrelude + """
+            namespace IIoT.Edge.Application.Abstractions.Cloud
+            {
+                public interface IProcessCloudUploader { System.Threading.Tasks.Task UploadAsync(); }
+            }
+            public sealed class Task : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader uploader;
+                public Task(IIoT.Edge.Application.Abstractions.Cloud.IProcessCloudUploader uploader) => this.uploader = uploader;
+
+                public System.Threading.Tasks.Task RunAsync() => InvokeAsync(SafeAsync);
+
+                private async System.Threading.Tasks.Task InvokeAsync(
+                    System.Func<System.Threading.Tasks.Task> callback)
+                {
+                    callback = uploader.UploadAsync;
+                    await callback();
+                }
+
+                private static System.Threading.Tasks.Task SafeAsync()
+                    => System.Threading.Tasks.Task.CompletedTask;
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        AssertSingle(diagnostics, "EDGEOUT001");
+    }
+
+    [Fact]
     public async Task ProductionTaskSafeDelegateCombinedWithUploader_ReportsEdgeOut001()
     {
         var source = PluginMetadata + TaskPrelude + """
@@ -2278,6 +2310,35 @@ public sealed class EdgeArchitectureAnalyzerTests
     }
 
     [Fact]
+    public async Task GeneratedSourceWithArchitectureViolation_IsAnalyzedAndReported()
+    {
+        var source = """
+            public sealed class GeneratedInstaller
+            {
+                public int Block(System.Threading.Tasks.Task<int> task)
+                    => task.GetAwaiter().GetResult();
+            }
+            """;
+
+        var diagnostics = await AnalyzeGeneratedAsync("IIoT.Edge.Installer", [source]);
+
+        AssertSingle(diagnostics, "EDGEASYNC001");
+    }
+
+    [Fact]
+    public void SupportedDiagnostics_AreBuildBlockingAndNotConfigurable()
+    {
+        var diagnostics = new EdgeArchitectureAnalyzer().SupportedDiagnostics;
+
+        Assert.Equal(23, diagnostics.Length);
+        Assert.All(diagnostics, diagnostic =>
+        {
+            Assert.Equal(DiagnosticSeverity.Error, diagnostic.DefaultSeverity);
+            Assert.Contains(WellKnownDiagnosticTags.NotConfigurable, diagnostic.CustomTags);
+        });
+    }
+
+    [Fact]
     public async Task EventHandlerAsyncVoid_IsAllowed()
     {
         var source = """
@@ -2440,6 +2501,37 @@ public sealed class EdgeArchitectureAnalyzerTests
         Assert.True(
             compilerErrors.Length == 0,
             "Fixture compiler errors:" + Environment.NewLine + string.Join(Environment.NewLine, compilerErrors.Select(item => item.ToString())));
+
+        var diagnostics = await compilation
+            .WithAnalyzers(ImmutableArray.Create<DiagnosticAnalyzer>(new EdgeArchitectureAnalyzer()))
+            .GetAnalyzerDiagnosticsAsync();
+        return diagnostics
+            .OrderBy(diagnostic => diagnostic.Location.GetLineSpan().Path, StringComparer.Ordinal)
+            .ThenBy(diagnostic => diagnostic.Location.SourceSpan.Start)
+            .ThenBy(diagnostic => diagnostic.Id, StringComparer.Ordinal)
+            .ToImmutableArray();
+    }
+
+    private static async Task<ImmutableArray<Diagnostic>> AnalyzeGeneratedAsync(
+        string assemblyName,
+        IReadOnlyList<string> sources)
+    {
+        var syntaxTrees = sources.Select((source, index) =>
+            CSharpSyntaxTree.ParseText(
+                source,
+                new CSharpParseOptions(LanguageVersion.Preview),
+                path: $"Fixture{index + 1}.g.cs"));
+        var compilation = CSharpCompilation.Create(
+            assemblyName,
+            syntaxTrees,
+            PlatformReferences.Value,
+            new CSharpCompilationOptions(
+                OutputKind.DynamicallyLinkedLibrary,
+                nullableContextOptions: NullableContextOptions.Enable));
+        var compilerErrors = compilation.GetDiagnostics()
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToArray();
+        Assert.Empty(compilerErrors);
 
         var diagnostics = await compilation
             .WithAnalyzers(ImmutableArray.Create<DiagnosticAnalyzer>(new EdgeArchitectureAnalyzer()))

@@ -38,7 +38,8 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
 
     public override void Initialize(AnalysisContext context)
     {
-        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
+        context.ConfigureGeneratedCodeAnalysis(
+            GeneratedCodeAnalysisFlags.Analyze | GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.EnableConcurrentExecution();
         context.RegisterCompilationStartAction(StartCompilationAnalysis);
     }
@@ -273,6 +274,7 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
                 ILocalReferenceOperation local => (ISymbol)local.Local,
                 IFieldReferenceOperation field => field.Field,
                 IPropertyReferenceOperation property => property.Property,
+                IParameterReferenceOperation parameter => parameter.Parameter.OriginalDefinition,
                 _ => null
             };
             if (symbol is not null)
@@ -287,6 +289,7 @@ public sealed class EdgeArchitectureAnalyzer : DiagnosticAnalyzer
                 ILocalReferenceOperation local => (ISymbol)local.Local,
                 IFieldReferenceOperation field => field.Field,
                 IPropertyReferenceOperation property => property.Property,
+                IParameterReferenceOperation parameter => parameter.Parameter.OriginalDefinition,
                 _ => null
             };
             if (symbol is not null)
