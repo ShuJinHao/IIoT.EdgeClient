@@ -50,11 +50,6 @@ public class IoMappingConfiguration : IEntityTypeConfiguration<IoMappingEntity>
         builder.Property(x => x.SortOrder).HasColumnName("sort_order");
         builder.Property(x => x.Remark).HasMaxLength(500).HasColumnName("remark");
 
-        builder.HasOne(x => x.NetworkDevice)
-            .WithMany(x => x.IoMappings)
-            .HasForeignKey(x => x.NetworkDeviceId)
-            .OnDelete(DeleteBehavior.Cascade);
-
         builder.HasIndex(x => x.NetworkDeviceId)
             .HasDatabaseName("ix_hw_io_mapping_network_device_id");
     }

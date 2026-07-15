@@ -7,6 +7,112 @@ namespace IIoT.Edge.Deployment.Tests;
 public sealed class RuntimeLayoutSyncExternalPluginBehaviorTests
 {
     [Fact]
+    public void CopyFile_WhenPlatformIsWindows_ShouldNotReadOrSetUnixMode()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var sourcePath = Path.Combine(tempDirectory, "source.txt");
+            var targetPath = Path.Combine(tempDirectory, "target.txt");
+            WriteText(sourcePath, "runtime content");
+            var fileSystem = new RuntimeLayoutSyncFileSystem(
+                isWindows: true,
+                _ => throw new InvalidOperationException("Windows must not read Unix file mode."),
+                (_, _) => throw new InvalidOperationException("Windows must not set Unix file mode."));
+
+            fileSystem.CopyFile(sourcePath, targetPath);
+
+            Assert.Equal("runtime content", File.ReadAllText(targetPath));
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void CopyFile_WhenPlatformUsesUnixModes_ShouldPreserveExecutableAndApplyHostDefaults()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var sourcePath = Path.Combine(tempDirectory, "source.txt");
+            WriteText(sourcePath, "runtime content");
+            var sourceMode = UnixFileMode.UserRead | UnixFileMode.UserExecute;
+            var configuredSourceMode = sourceMode;
+            var writes = new List<(string Path, UnixFileMode Mode)>();
+            var fileSystem = new RuntimeLayoutSyncFileSystem(
+                isWindows: false,
+                _ => configuredSourceMode,
+                (path, mode) => writes.Add((path, mode)));
+
+            var executableTarget = Path.Combine(tempDirectory, "plugin.dll");
+            fileSystem.CopyFile(sourcePath, executableTarget);
+            Assert.Equal((executableTarget, sourceMode), Assert.Single(writes));
+
+            configuredSourceMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+            writes.Clear();
+            var expectedHostMode =
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                UnixFileMode.OtherRead | UnixFileMode.OtherExecute;
+            foreach (var executableName in new[] { "IIoT.Edge.Shell", "IIoT.Edge.Launcher" })
+            {
+                var targetPath = Path.Combine(tempDirectory, executableName);
+                fileSystem.CopyFile(sourcePath, targetPath);
+                Assert.Contains((targetPath, expectedHostMode), writes);
+            }
+
+            var ordinaryTarget = Path.Combine(tempDirectory, "ordinary.dll");
+            fileSystem.CopyFile(sourcePath, ordinaryTarget);
+            Assert.DoesNotContain(writes, write => write.Path == ordinaryTarget);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void CopyFile_WhenUnixModeApiIsUnavailable_ShouldStillCopyFile()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var sourcePath = Path.Combine(tempDirectory, "source.txt");
+            var targetPath = Path.Combine(tempDirectory, "target.txt");
+            WriteText(sourcePath, "runtime content");
+            var fileSystem = new RuntimeLayoutSyncFileSystem(
+                isWindows: false,
+                _ => throw new PlatformNotSupportedException("Unix mode is unavailable."),
+                (_, _) => throw new InvalidOperationException("Mode must not be written after a read failure."));
+
+            fileSystem.CopyFile(sourcePath, targetPath);
+
+            Assert.Equal("runtime content", File.ReadAllText(targetPath));
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void GetExecutableCandidates_ShouldModelWindowsAndUnixWithoutDependingOnRunnerPlatform()
+    {
+        var configuredPath = Path.Combine("runtime", "IIoT.Edge.Shell");
+
+        Assert.Equal(
+            new[] { configuredPath + ".exe", configuredPath, configuredPath + ".dll" },
+            RuntimeLayoutSyncValidation.GetExecutableCandidates(configuredPath, isWindows: true));
+
+        var configuredExePath = configuredPath + ".exe";
+        Assert.Equal(
+            new[] { configuredPath, configuredExePath, configuredPath + ".dll" },
+            RuntimeLayoutSyncValidation.GetExecutableCandidates(configuredExePath, isWindows: false));
+    }
+
+    [Fact]
     public void Run_WhenRuntimeLayoutIsRefreshed_ShouldPublishSingleHostAndPreserveDataDirectory()
     {
         var tempDirectory = CreateTempDirectory();

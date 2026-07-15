@@ -170,6 +170,16 @@ try {
     Assert-FailedWith (Invoke-Gate $workingRoot $baseRef) 'coverage overall line rate weakened' 'Coverage self-authorization'
     Invoke-Git $workingRoot @('checkout', '--', 'scripts/tests/baselines/edge-coverage-baseline.json') | Out-Null
 
+    $reshapedCoverage = Get-Content $coveragePath -Raw | ConvertFrom-Json -Depth 32
+    $reshapedCoverage.requiredReportCount = 1
+    $reshapedCoverage.reportCount = 1
+    Write-Json $coveragePath $reshapedCoverage
+    $reshapedCoverageResult = Invoke-Gate $workingRoot $baseRef
+    if ($reshapedCoverageResult.ExitCode -ne 0) {
+        throw "Historical quality ratchets must not freeze the current runner count. output=$($reshapedCoverageResult.Output)"
+    }
+    Invoke-Git $workingRoot @('checkout', '--', 'scripts/tests/baselines/edge-coverage-baseline.json') | Out-Null
+
     $expandedDuplication = Get-Content $duplicationPath -Raw | ConvertFrom-Json -Depth 32
     $expandedDuplication.metrics.'production.exact'.groupCount = 1
     Write-Json $duplicationPath $expandedDuplication
@@ -180,6 +190,23 @@ try {
     $weakenedMutation.mutationScore = 0.5
     Write-Json $mutationPath $weakenedMutation
     Assert-FailedWith (Invoke-Gate $workingRoot $baseRef) 'mutation score weakened' 'Mutation self-authorization'
+    Invoke-Git $workingRoot @('checkout', '--', 'scripts/tests/baselines/edge-mutation-baseline.json') | Out-Null
+
+    $reshapedMutation = Get-Content $mutationPath -Raw | ConvertFrom-Json -Depth 32
+    $reshapedMutation.initialTestCount = 3
+    $reshapedMutation.createdMutants = 14
+    $reshapedMutation.totalMutants = 12
+    $reshapedMutation.evaluatedMutants = 11
+    $reshapedMutation.detected = 9
+    $reshapedMutation.survived = 2
+    $reshapedMutation.noCoverage = 1
+    $reshapedMutation.ignored = 0
+    $reshapedMutation.compileErrors = 0
+    Write-Json $mutationPath $reshapedMutation
+    $reshapedMutationResult = Invoke-Gate $workingRoot $baseRef
+    if ($reshapedMutationResult.ExitCode -ne 0) {
+        throw "Historical quality ratchets must not freeze report-only mutant identities or absolute counts. output=$($reshapedMutationResult.Output)"
+    }
     Invoke-Git $workingRoot @('checkout', '--', 'scripts/tests/baselines/edge-mutation-baseline.json') | Out-Null
 
     $expandedCompatibility = Get-Content $compatibilityPath -Raw | ConvertFrom-Json -Depth 32
@@ -263,7 +290,7 @@ try {
     Invoke-Git $workingRoot @('checkout', '--', 'scripts/tests/edge-compatibility-inventory.json') | Out-Null
 
     $global:LASTEXITCODE = 0
-    Write-Host "EDGE_GOVERNANCE_BASELINE_MONOTONICITY_BEHAVIOR_OK bootstrap=$bootstrapRef firstRed=8 ordinaryGrowth=1 newOrdinary=1"
+    Write-Host "EDGE_GOVERNANCE_BASELINE_MONOTONICITY_BEHAVIOR_OK bootstrap=$bootstrapRef firstRed=8 runnerReshape=1 mutationReshape=1 ordinaryGrowth=1 newOrdinary=1"
 } finally {
     if (Test-Path $workingRoot) {
         Remove-Item $workingRoot -Recurse -Force

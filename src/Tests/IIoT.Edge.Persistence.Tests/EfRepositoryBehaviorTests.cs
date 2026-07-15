@@ -119,6 +119,12 @@ public sealed class EfRepositoryBehaviorTests
                         1,
                         "Int16",
                         "Read"));
+                seed.Repository<PlcTaskBindingEntity>().Add(
+                    PlcTaskBindingEntity.Create(
+                        device.Id,
+                        "Query.Task",
+                        true,
+                        DateTimeOffset.UtcNow));
                 await seed.CommitAsync(TestContext.Current.CancellationToken);
             }
 
@@ -152,9 +158,10 @@ public sealed class EfRepositoryBehaviorTests
                 cancellationToken));
             var included = Assert.Single(await repository.GetListAsync(
                 static item => item.DeviceName == "PLC-Query",
-                [static item => item.IoMappings],
+                [static item => item.IoMappings, static item => item.PlcTaskBindings],
                 cancellationToken));
             Assert.Single(included.IoMappings);
+            Assert.Single(included.PlcTaskBindings);
             Assert.Single(await repository.GetListAsync(specification, cancellationToken));
             Assert.NotNull(await repository.GetSingleOrDefaultAsync(specification, cancellationToken));
             Assert.Equal(1, await repository.GetCountAsync(

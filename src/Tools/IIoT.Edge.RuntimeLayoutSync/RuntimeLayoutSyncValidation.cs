@@ -121,7 +121,7 @@ internal sealed class RuntimeLayoutSyncValidation(IRuntimeLayoutSyncFileSystem f
             OperatingSystem.IsWindows());
     }
 
-    private static IReadOnlyList<string> GetExecutableCandidates(string configuredPath, bool isWindows)
+    internal static IReadOnlyList<string> GetExecutableCandidates(string configuredPath, bool isWindows)
     {
         var candidates = new List<string>();
         var hasExeExtension = HasKnownExtension(configuredPath, ".exe");

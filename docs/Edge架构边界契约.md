@@ -75,7 +75,7 @@ EF navigation、`DbSet` 和 cascade 只表达 ORM 关系，不自动证明 DDD o
 
 | 类型 | 裁决 | 依据与约束 |
 |---|---|---|
-| `NetworkDeviceEntity` | 批准 AggregateRoot；存在过渡冲突 | 有独立保存命令和仓储。`IoMappings`、`PlcTaskBindings` 两个 public mutable `ICollection` 不是批准的 child collection，先精确 waiver，后改私有 backing field/只读视图或移除。 |
+| `NetworkDeviceEntity` | 批准 AggregateRoot | 有独立保存命令和仓储。`IoMappings`、`PlcTaskBindings` 使用私有 backing field 和只读视图，EF 只通过字段完成关系 fix-up；外部不能经 navigation 修改集合。 |
 | `IoMappingEntity` | 批准“按 NetworkDeviceId 分区的独立配置 AggregateRoot” | 由独立仓储、replace use case 和 schema reconciliation 写入；生产代码不经 `NetworkDevice.IoMappings` 修改。 |
 | `PlcTaskBindingEntity` | 批准“按 NetworkDeviceId 分区的独立配置 AggregateRoot” | 由独立服务按 `(NetworkDeviceId, TaskKey)` 删除/重建并提交；不是当前 NetworkDevice child。 |
 | `SerialDeviceEntity` | 批准 AggregateRoot | 独立保存命令、仓储，无 navigation child。 |
@@ -161,7 +161,7 @@ EF navigation、`DbSet` 和 cascade 只表达 ORM 关系，不自动证明 DDD o
 | `WSARCH005` | 已退役 namespace/type/API 不得回归 | 可立即 error；按 symbol，不按字符串 |
 | `WSARCH008` | TestKit 不含 case，生产不引用；friend assembly 必须精确存在 | 新 TestKit 创建时立即 error |
 | `DDD001` | Domain/Core 禁 provider/framework/upper layer | 已启用 error |
-| `DDD002` | 批准 aggregate 不暴露 public setter/可变集合 | ratchet；NetworkDevice 两集合精确有期限 waiver |
+| `DDD002` | 批准 aggregate 不暴露 public setter/可变集合 | 当前 NetworkDevice 两集合已由 required Domain 行为测试证明声明类型和运行时视图均不可写；通用静态规则仍属后续实施范围，不保留实体例外 |
 | `DDD003` | child 不得独立写；root/child 以本契约 registry 为准 | 部分 error；DeviceParam 未裁决，禁止新增 repository |
 | `DDD004` | 通用写 Repository 只允许登记的 5 个 root | 已启用 error，不能只信 `IAggregateRoot` marker |
 | `DDD005` | 聚合外部不得修改 child | 当前无批准 child，延期，不得按 navigation 猜测 |
@@ -216,7 +216,7 @@ AnalyzerTests 必须是 Pure/Architecture 测试，不得启动 Shell、SQLite�
 
 ## 8. Edge 当前测试分类与物理归口
 
-`Regression` 只是 cross-cutting `RegressionId`，不是 TestKind 或物理项目。当前机器真值为 61 个 solution 项目、32 个 required runner、1 个中性插件 fixture，Release 发现 1275 case。Unit 只允许 `Pure + Parallel`；其他 Pure runner 也受控并行；Filesystem、SQLite、Avalonia 和 Windows runner 必须物理命名且串行。
+`Regression` 只是 cross-cutting `RegressionId`，不是 TestKind 或物理项目。当前机器真值为 61 个 solution 项目、32 个 required runner、1 个中性插件 fixture，Release 发现 1280 case。Unit 只允许 `Pure + Parallel`；其他 Pure runner 也受控并行；Filesystem、SQLite、Avalonia 和 Windows runner 必须物理命名且串行。
 
 | Required runner | TestKind | Runtime / mode | Cases |
 |---|---|---|---:|
@@ -226,9 +226,9 @@ AnalyzerTests 必须是 Pure/Architecture 测试，不得启动 Shell、SQLite�
 | `IIoT.Edge.Caching.UnitTests` | Unit | Pure / Parallel | 12 |
 | `IIoT.Edge.Cloud.ContractFilesystemTests` | Contract | Filesystem / Serial | 6 |
 | `IIoT.Edge.Cloud.ContractTests` | Contract | Pure / Parallel | 87 |
-| `IIoT.Edge.Deployment.Tests` | Deployment | Filesystem / Serial | 8 |
+| `IIoT.Edge.Deployment.Tests` | Deployment | Filesystem / Serial | 12 |
 | `IIoT.Edge.DeviceBootstrap.IntegrationTests` | Integration | Filesystem / Serial | 9 |
-| `IIoT.Edge.Domain.Tests` | Aggregate | Pure / Parallel | 22 |
+| `IIoT.Edge.Domain.Tests` | Aggregate | Pure / Parallel | 23 |
 | `IIoT.Edge.Excel.IntegrationTests` | Integration | Filesystem / Serial | 3 |
 | `IIoT.Edge.Installer.UiTests` | UI | Avalonia / Serial | 2 |
 | `IIoT.Edge.Installer.UnitTests` | Unit | Pure / Parallel | 6 |
@@ -268,15 +268,16 @@ AnalyzerTests 必须是 Pure/Architecture 测试，不得启动 Shell、SQLite�
 ## 10. 清单、质量与兼容对账
 
 - `edge-test-inventory.json`、`discovered-test-inventory.json` 和 `required-test-counts.json` 是唯一机器清单；普通 CI 只验证，不自动改写。
-- required 执行必须每项目独立 TRX/coverage，最终证明 `discovered = trxTotal = executed = passed = 1275`、`failed = skipped = 0`。
+- required 执行必须每项目独立 TRX/coverage，最终证明 `discovered = trxTotal = executed = passed = 1280`、`failed = skipped = 0`。
 - compatibility inventory 必须对 alias/adapter/wrapper/compat/legacy/shadow/obsolete/fallback/双写/影子候选逐项提供真实 consumer 证据与有期迁移窗口，并对每个真实声明精确登记 symbol/path/调用证据；宽 token disposition 不得掩护未登记 symbol。每个 `MigrationWindow` symbol 必须绑定唯一 window ID、replacement/deletion/latest removal 约束和逐 symbol 真实 coverage test；缺失/未知 window、token/path 不归属、无 coverage、零 consumer、新增 consumer、未分类或未登记候选直接失败。coverage test 必须是 required runner 中真实执行且 0 skipped 的行为测试，不得用空壳或注释代替。
-- duplication 分 production/test-support/tests 的 exact/near ratchet；coverage 覆盖所有 32 runner，并对 `EdgeMemoryCacheService` 和 `DataPipelineNonRetryableException` 设高风险阈值；mutation 固定 Domain Aggregate + MTP report-only 范围与证据。
-- coverage、duplication、mutation、compatibility 的 current baseline 只负责与本次真实结果对账，不能作为自己的历史上限。CI 必须额外运行 `Test-EdgeGovernanceBaselineMonotonicity.ps1`，相对 PR base 的已提交 baseline 做机械单调校验；BaseRef 必须是候选 HEAD 的祖先且不能等于 HEAD，当前 PR 首次引入文件时以最早已提交 bootstrap commit 为锚，未提交 bootstrap 失败。覆盖率/高风险阈值不得降低，重复窗口不得放宽且 clone 不得增加，mutation score 不得降低且失败上限不得增加。compatibility token 不得删除；既有 `MigrationWindow` 的 ID/symbol/caller 上限不得增长或延长期限，当前批不得新增兼容窗口。带 compatibility-like 名称但经当前 inventory 证明唯一声明、真实可执行 caller 且状态为 `OrdinaryAbstraction` 的正常架构抽象允许新增或增长，不得被历史 ID exact-freeze；零 caller、伪注释 caller、未登记 symbol 和迁移语义伪装仍 fail-closed。对应 behavior fixture 必须同时证明四类同 PR 放宽、候选 HEAD 伪 BaseRef、无历史 bootstrap、新迁移面均失败，并证明机器可验证的普通抽象演进不被误杀。
+- duplication 分 production/test-support/tests 的 exact/near ratchet；coverage 覆盖所有 32 runner，并对 `EdgeMemoryCacheService` 和 `DataPipelineNonRetryableException` 设高风险阈值；mutation 固定 Domain Aggregate + MTP report-only 范围与证据，当前 baseline 必须与真实 report/trace 的全部状态数和重算 score 精确一致，伪分数或等总量状态漂移由独立 behavior fixture 拒绝。
+- RuntimeLayoutSync 等包含 Windows/Unix 分支的发布工具必须由同一 Deployment runner 显式覆盖两套平台决策；文件 mode 副作用以内部窄 seam 驱动 preserve/default/API-unavailable 分支，生产默认仍调用真实平台 API。coverage 不得通过平台源码排除、warning suppression 或降低 baseline 获得绿色。
+- coverage、duplication、mutation、compatibility 的 current baseline 只负责与本次真实结果对账，不能作为自己的历史上限。CI 必须额外运行 `Test-EdgeGovernanceBaselineMonotonicity.ps1`，相对 PR base 的已提交 baseline 做机械单调校验；BaseRef 必须是候选 HEAD 的祖先且不能等于 HEAD，当前 PR 首次引入文件时以最早已提交 bootstrap commit 为锚，未提交 bootstrap 失败。覆盖率/高风险质量阈值不得降低，runner/report 当前数量仍由 inventory/discovery/TRX 精确对账但不做历史永久下限；重复窗口不得放宽且 clone 不得增加；report-only mutation 历史只固定工具/目标/语义范围并要求 score 不下降，不冻结源码变化带来的 mutant identity、测试数或状态绝对数量。compatibility token 不得删除；既有 `MigrationWindow` 的 ID/symbol/caller 上限不得增长或延长期限，当前批不得新增兼容窗口。带 compatibility-like 名称但经当前 inventory 证明唯一声明、真实可执行 caller 且状态为 `OrdinaryAbstraction` 的正常架构抽象允许新增或增长，不得被历史 ID exact-freeze；零 caller、伪注释 caller、未登记 symbol 和迁移语义伪装仍 fail-closed。对应 behavior fixture 必须同时证明四类质量阈值放宽、候选 HEAD 伪 BaseRef、无历史 bootstrap、新迁移面均失败，并证明 runner/mutant 集合合法变化和机器可验证的普通抽象演进不被误杀。
 - 项目/case 变化必须先复核授权和完整 diff，再显式更新 inventory，并记录 before/after 原因。仅用户授权时才 commit、push 或修改远端。
 
 ## 11. CI 退出条件
 
-Windows required CI 必须在 25 分钟 hard timeout 内完成 Release build、Analyzer/project graph、正反 build fixture、source-quality、inventory/discovery、32 runner 执行、TRX/Skip 对账、coverage、compatibility、duplication、四类 baseline 相对不可变历史的单调校验和 regression ledger；mutation 使用独立 report job，不伪装成编译错误。故意执行非法 native build 的 PowerShell fixture 在完成全部断言后必须显式清零 `$LASTEXITCODE`，不得把预期失败残留为 job 失败。当前 macOS 工作树的 32 runner/TRX 对账已实测全绿；Windows 远端 job 与 Windows 实机 Installer/Velopack/DPI 验收在取得对应证据前不得写成已验证。
+Windows required CI 必须在 25 分钟 hard timeout 内完成 Release build、Analyzer/project graph、正反 build fixture、source-quality、inventory/discovery、32 runner 执行、TRX/Skip 对账、coverage、compatibility、duplication、四类 baseline 相对不可变历史的单调校验和 regression ledger；mutation 使用独立 report job，并先执行伪分数/状态漂移 behavior fixture，不伪装成编译错误。故意执行非法 native build 的 PowerShell fixture 在完成全部断言后必须显式清零 `$LASTEXITCODE`，不得把预期失败残留为 job 失败。当前 macOS 工作树的 32 runner/TRX 对账已实测全绿；Windows 远端 job 与 Windows 实机 Installer/Velopack/DPI 验收在取得对应证据前不得写成已验证。
 
 宿主仓与插件仓拆分属于用户下一份独立计划，不是当前测试批次、依赖或进度项。`deploy/Deploy-Changed.ps1` 是生产 CD 入口，不属于 required 测试 CI；本批不运行发布或部署。
 

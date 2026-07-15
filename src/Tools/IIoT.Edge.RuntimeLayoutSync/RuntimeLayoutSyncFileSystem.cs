@@ -2,6 +2,28 @@ using System.Text.Json;
 
 internal sealed class RuntimeLayoutSyncFileSystem : IRuntimeLayoutSyncFileSystem
 {
+    private readonly bool _isWindows;
+    private readonly Func<string, UnixFileMode> _getUnixFileMode;
+    private readonly Action<string, UnixFileMode> _setUnixFileMode;
+
+    public RuntimeLayoutSyncFileSystem()
+        : this(
+            OperatingSystem.IsWindows(),
+            GetUnixFileMode,
+            SetUnixFileMode)
+    {
+    }
+
+    internal RuntimeLayoutSyncFileSystem(
+        bool isWindows,
+        Func<string, UnixFileMode> getUnixFileMode,
+        Action<string, UnixFileMode> setUnixFileMode)
+    {
+        _isWindows = isWindows;
+        _getUnixFileMode = getUnixFileMode;
+        _setUnixFileMode = setUnixFileMode;
+    }
+
     public void RemoveLauncherShellArtifacts(string launcherRuntimeRoot)
     {
         foreach (var file in Directory.EnumerateFiles(launcherRuntimeRoot, "appsettings*.json", SearchOption.TopDirectoryOnly))
@@ -149,25 +171,25 @@ internal sealed class RuntimeLayoutSyncFileSystem : IRuntimeLayoutSyncFileSystem
     public string NormalizePathSeparators(string path)
         => path.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
 
-    private static void PreserveUnixExecutableMode(string sourcePath, string targetPath)
+    private void PreserveUnixExecutableMode(string sourcePath, string targetPath)
     {
-        if (OperatingSystem.IsWindows())
+        if (_isWindows)
         {
             return;
         }
 
         try
         {
-            var sourceMode = File.GetUnixFileMode(sourcePath);
+            var sourceMode = _getUnixFileMode(sourcePath);
             if ((sourceMode & UnixFileMode.UserExecute) == UnixFileMode.UserExecute)
             {
-                File.SetUnixFileMode(targetPath, sourceMode);
+                _setUnixFileMode(targetPath, sourceMode);
                 return;
             }
 
             if (Path.GetFileName(targetPath) is "IIoT.Edge.Shell" or "IIoT.Edge.Launcher")
             {
-                File.SetUnixFileMode(
+                _setUnixFileMode(
                     targetPath,
                     UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
                     UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
@@ -177,6 +199,26 @@ internal sealed class RuntimeLayoutSyncFileSystem : IRuntimeLayoutSyncFileSystem
         catch (PlatformNotSupportedException)
         {
         }
+    }
+
+    private static UnixFileMode GetUnixFileMode(string path)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("Unix file modes are not available on Windows.");
+        }
+
+        return File.GetUnixFileMode(path);
+    }
+
+    private static void SetUnixFileMode(string path, UnixFileMode mode)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("Unix file modes are not available on Windows.");
+        }
+
+        File.SetUnixFileMode(path, mode);
     }
 
     private static void DeleteFileIfExists(string path)

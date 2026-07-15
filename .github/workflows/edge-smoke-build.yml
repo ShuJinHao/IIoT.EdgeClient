@@ -139,6 +139,10 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Validate Edge mutation baseline behavior
+        shell: pwsh
+        run: ./scripts/tests/Test-EdgeMutationBaselineBehavior.ps1
+
       - name: Restore pinned Edge mutation tool
         shell: pwsh
         run: dotnet tool restore

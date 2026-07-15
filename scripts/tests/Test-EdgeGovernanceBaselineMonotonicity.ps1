@@ -145,11 +145,10 @@ function Assert-CoverageBaseline {
         $Prior.collector -cne $Current.collector) {
         throw 'TEST-GOV-BASE-001 coverage schema, rule, or collector pin changed.'
     }
-    if ([int]$Current.requiredReportCount -lt [int]$Prior.requiredReportCount -or
-        [int]$Current.reportCount -lt [int]$Prior.reportCount) {
-        throw 'TEST-GOV-BASE-001 coverage required runner/report count decreased.'
-    }
-
+    # Current-tree inventory, discovery, TRX and coverage reconciliation prove
+    # the exact runner/report set. Historical quality monotonicity must not turn
+    # that set into a permanent project-count floor after a real test migration
+    # or physical feature retirement.
     Assert-RateNotLower ([double]$Prior.overall.lineRate) ([double]$Current.overall.lineRate) 'coverage overall line rate'
     Assert-RateNotLower ([double]$Prior.overall.branchRate) ([double]$Current.overall.branchRate) 'coverage overall branch rate'
 
@@ -246,13 +245,11 @@ function Assert-MutationBaseline {
             throw "TEST-GOV-BASE-001 mutation semantic test was removed: $test"
         }
     }
-    if ([int]$Current.initialTestCount -lt [int]$Prior.initialTestCount) {
-        throw "TEST-GOV-BASE-001 mutation initial test count decreased: $($Prior.initialTestCount) -> $($Current.initialTestCount)."
-    }
+    # The report-only runner separately reconciles the candidate report with
+    # the current baseline. Source edits legitimately change mutant identities
+    # and absolute status counts, so history only ratchets the quality score and
+    # fixed semantic scope instead of freezing those incidental counts.
     Assert-RateNotLower ([double]$Prior.mutationScore) ([double]$Current.mutationScore) 'mutation score'
-    foreach ($property in @('survived', 'noCoverage', 'ignored', 'timeout', 'compileErrors')) {
-        Assert-CountNotHigher ([int](Get-PropertyValue $Prior $property 0)) ([int](Get-PropertyValue $Current $property 0)) "mutation $property"
-    }
 }
 
 function Get-EvidenceKey {

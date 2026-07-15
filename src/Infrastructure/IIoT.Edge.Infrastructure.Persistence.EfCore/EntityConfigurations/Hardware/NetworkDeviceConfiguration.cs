@@ -54,6 +54,17 @@ public class NetworkDeviceConfiguration : IEntityTypeConfiguration<NetworkDevice
             .WithOne(x => x.NetworkDevice)
             .HasForeignKey(x => x.NetworkDeviceId)
             .OnDelete(DeleteBehavior.Cascade);
+        builder.Navigation(x => x.IoMappings)
+            .HasField("_ioMappings")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+
+        builder.HasMany(x => x.PlcTaskBindings)
+            .WithOne(x => x.NetworkDevice)
+            .HasForeignKey(x => x.NetworkDeviceId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.Navigation(x => x.PlcTaskBindings)
+            .HasField("_plcTaskBindings")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
 
         builder.HasIndex(x => x.IpAddress)
             .HasDatabaseName("ix_hw_network_device_ip");

@@ -4,7 +4,7 @@
   "inventoryPath": "scripts/tests/edge-test-inventory.json",
   "configuration": "Release",
   "projectCount": 32,
-  "caseCount": 1275,
+  "caseCount": 1280,
   "projects": [
     {
       "projectPath": "src/Tests/IIoT.Edge.Application.Tests/IIoT.Edge.Application.Tests.csproj",
@@ -39,7 +39,7 @@
     {
       "projectPath": "src/Tests/IIoT.Edge.Deployment.Tests/IIoT.Edge.Deployment.Tests.csproj",
       "projectName": "IIoT.Edge.Deployment.Tests",
-      "discovered": 8
+      "discovered": 12
     },
     {
       "projectPath": "src/Tests/IIoT.Edge.DeviceBootstrap.IntegrationTests/IIoT.Edge.DeviceBootstrap.IntegrationTests.csproj",
@@ -49,7 +49,7 @@
     {
       "projectPath": "src/Tests/IIoT.Edge.Domain.Tests/IIoT.Edge.Domain.Tests.csproj",
       "projectName": "IIoT.Edge.Domain.Tests",
-      "discovered": 22
+      "discovered": 23
     },
     {
       "projectPath": "src/Tests/IIoT.Edge.Excel.IntegrationTests/IIoT.Edge.Excel.IntegrationTests.csproj",
@@ -7534,6 +7534,102 @@
       "skipped": false
     },
     {
+      "caseKey": "IIoT.Edge.Deployment.Tests|IIoT.Edge.Deployment.Tests.RuntimeLayoutSyncExternalPluginBehaviorTests.CopyFile_WhenPlatformIsWindows_ShouldNotReadOrSetUnixMode",
+      "assembly": "IIoT.Edge.Deployment.Tests",
+      "projectPath": "src/Tests/IIoT.Edge.Deployment.Tests/IIoT.Edge.Deployment.Tests.csproj",
+      "identity": "IIoT.Edge.Deployment.Tests.RuntimeLayoutSyncExternalPluginBehaviorTests.CopyFile_WhenPlatformIsWindows_ShouldNotReadOrSetUnixMode",
+      "source": null,
+      "testKind": "Deployment",
+      "runtime": "Filesystem",
+      "runtimeDependencies": [
+        "PowerShell",
+        "Loopback"
+      ],
+      "runnerMode": "Serial",
+      "cadence": "PR",
+      "capability": "Deployment.EdgeRuntime",
+      "risk": "P0",
+      "concern": "Reliability",
+      "profile": "Simulation",
+      "owner": "Edge.Release",
+      "ruleId": "EDGE-DEPLOY-001",
+      "regressionId": "EDGE-DEPLOY-001",
+      "required": true,
+      "skipped": false
+    },
+    {
+      "caseKey": "IIoT.Edge.Deployment.Tests|IIoT.Edge.Deployment.Tests.RuntimeLayoutSyncExternalPluginBehaviorTests.CopyFile_WhenPlatformUsesUnixModes_ShouldPreserveExecutableAndApplyHostDefaults",
+      "assembly": "IIoT.Edge.Deployment.Tests",
+      "projectPath": "src/Tests/IIoT.Edge.Deployment.Tests/IIoT.Edge.Deployment.Tests.csproj",
+      "identity": "IIoT.Edge.Deployment.Tests.RuntimeLayoutSyncExternalPluginBehaviorTests.CopyFile_WhenPlatformUsesUnixModes_ShouldPreserveExecutableAndApplyHostDefaults",
+      "source": null,
+      "testKind": "Deployment",
+      "runtime": "Filesystem",
+      "runtimeDependencies": [
+        "PowerShell",
+        "Loopback"
+      ],
+      "runnerMode": "Serial",
+      "cadence": "PR",
+      "capability": "Deployment.EdgeRuntime",
+      "risk": "P0",
+      "concern": "Reliability",
+      "profile": "Simulation",
+      "owner": "Edge.Release",
+      "ruleId": "EDGE-DEPLOY-001",
+      "regressionId": "EDGE-DEPLOY-001",
+      "required": true,
+      "skipped": false
+    },
+    {
+      "caseKey": "IIoT.Edge.Deployment.Tests|IIoT.Edge.Deployment.Tests.RuntimeLayoutSyncExternalPluginBehaviorTests.CopyFile_WhenUnixModeApiIsUnavailable_ShouldStillCopyFile",
+      "assembly": "IIoT.Edge.Deployment.Tests",
+      "projectPath": "src/Tests/IIoT.Edge.Deployment.Tests/IIoT.Edge.Deployment.Tests.csproj",
+      "identity": "IIoT.Edge.Deployment.Tests.RuntimeLayoutSyncExternalPluginBehaviorTests.CopyFile_WhenUnixModeApiIsUnavailable_ShouldStillCopyFile",
+      "source": null,
+      "testKind": "Deployment",
+      "runtime": "Filesystem",
+      "runtimeDependencies": [
+        "PowerShell",
+        "Loopback"
+      ],
+      "runnerMode": "Serial",
+      "cadence": "PR",
+      "capability": "Deployment.EdgeRuntime",
+      "risk": "P0",
+      "concern": "Reliability",
+      "profile": "Simulation",
+      "owner": "Edge.Release",
+      "ruleId": "EDGE-DEPLOY-001",
+      "regressionId": "EDGE-DEPLOY-001",
+      "required": true,
+      "skipped": false
+    },
+    {
+      "caseKey": "IIoT.Edge.Deployment.Tests|IIoT.Edge.Deployment.Tests.RuntimeLayoutSyncExternalPluginBehaviorTests.GetExecutableCandidates_ShouldModelWindowsAndUnixWithoutDependingOnRunnerPlatform",
+      "assembly": "IIoT.Edge.Deployment.Tests",
+      "projectPath": "src/Tests/IIoT.Edge.Deployment.Tests/IIoT.Edge.Deployment.Tests.csproj",
+      "identity": "IIoT.Edge.Deployment.Tests.RuntimeLayoutSyncExternalPluginBehaviorTests.GetExecutableCandidates_ShouldModelWindowsAndUnixWithoutDependingOnRunnerPlatform",
+      "source": null,
+      "testKind": "Deployment",
+      "runtime": "Filesystem",
+      "runtimeDependencies": [
+        "PowerShell",
+        "Loopback"
+      ],
+      "runnerMode": "Serial",
+      "cadence": "PR",
+      "capability": "Deployment.EdgeRuntime",
+      "risk": "P0",
+      "concern": "Reliability",
+      "profile": "Simulation",
+      "owner": "Edge.Release",
+      "ruleId": "EDGE-DEPLOY-001",
+      "regressionId": "EDGE-DEPLOY-001",
+      "required": true,
+      "skipped": false
+    },
+    {
       "caseKey": "IIoT.Edge.Deployment.Tests|IIoT.Edge.Deployment.Tests.RuntimeLayoutSyncExternalPluginBehaviorTests.Run_WhenRuntimeLayoutIsRefreshed_ShouldPublishSingleHostAndPreserveDataDirectory",
       "assembly": "IIoT.Edge.Deployment.Tests",
       "projectPath": "src/Tests/IIoT.Edge.Deployment.Tests/IIoT.Edge.Deployment.Tests.csproj",
@@ -8219,6 +8315,27 @@
       "assembly": "IIoT.Edge.Domain.Tests",
       "projectPath": "src/Tests/IIoT.Edge.Domain.Tests/IIoT.Edge.Domain.Tests.csproj",
       "identity": "IIoT.Edge.Domain.Tests.HardwareEntityValidationTests.IoMappingEntity_WhenRequiredFieldsInvalid_ShouldReject(networkDeviceId: 1, signalKey: \"Signal.A\", plcAddress: \"D0\", addressCount: 1, dataType: \"Int16\", direction: \"\")",
+      "source": null,
+      "testKind": "Aggregate",
+      "runtime": "Pure",
+      "runtimeDependencies": [],
+      "runnerMode": "Parallel",
+      "cadence": "PR",
+      "capability": "Domain.Aggregates",
+      "risk": "P1",
+      "concern": "Reliability",
+      "profile": "Simulation",
+      "owner": "Edge.Domain",
+      "ruleId": "EDGE-DOMAIN-001",
+      "regressionId": "EDGE-DOMAIN-001",
+      "required": true,
+      "skipped": false
+    },
+    {
+      "caseKey": "IIoT.Edge.Domain.Tests|IIoT.Edge.Domain.Tests.HardwareEntityValidationTests.NetworkDeviceEntity_WhenNavigationCollectionsExposed_ShouldBeReadOnly",
+      "assembly": "IIoT.Edge.Domain.Tests",
+      "projectPath": "src/Tests/IIoT.Edge.Domain.Tests/IIoT.Edge.Domain.Tests.csproj",
+      "identity": "IIoT.Edge.Domain.Tests.HardwareEntityValidationTests.NetworkDeviceEntity_WhenNavigationCollectionsExposed_ShouldBeReadOnly",
       "source": null,
       "testKind": "Aggregate",
       "runtime": "Pure",

@@ -3,7 +3,7 @@
   "inventoryPath": "scripts/tests/edge-test-inventory.json",
   "discoveredInventoryPath": "scripts/tests/discovered-test-inventory.json",
   "configuration": "Release",
-  "caseCount": 1275,
+  "caseCount": 1280,
   "projects": [
     {
       "projectPath": "src/Tests/IIoT.Edge.Application.Tests/IIoT.Edge.Application.Tests.csproj",
@@ -31,7 +31,7 @@
     },
     {
       "projectPath": "src/Tests/IIoT.Edge.Deployment.Tests/IIoT.Edge.Deployment.Tests.csproj",
-      "discovered": 8
+      "discovered": 12
     },
     {
       "projectPath": "src/Tests/IIoT.Edge.DeviceBootstrap.IntegrationTests/IIoT.Edge.DeviceBootstrap.IntegrationTests.csproj",
@@ -39,7 +39,7 @@
     },
     {
       "projectPath": "src/Tests/IIoT.Edge.Domain.Tests/IIoT.Edge.Domain.Tests.csproj",
-      "discovered": 22
+      "discovered": 23
     },
     {
       "projectPath": "src/Tests/IIoT.Edge.Excel.IntegrationTests/IIoT.Edge.Excel.IntegrationTests.csproj",

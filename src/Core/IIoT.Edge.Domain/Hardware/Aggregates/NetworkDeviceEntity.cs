@@ -8,6 +8,8 @@ public class NetworkDeviceEntity : BaseEntity<int>, IAggregateRoot, IDeviceIdent
 {
     public const int PlcCodeMaxLength = 64;
     private const string InternalPlcCodePrefix = "PLC-INTERNAL-";
+    private readonly List<IoMappingEntity> _ioMappings = [];
+    private readonly List<PlcTaskBindingEntity> _plcTaskBindings = [];
 
     protected NetworkDeviceEntity() { }
 
@@ -40,8 +42,8 @@ public class NetworkDeviceEntity : BaseEntity<int>, IAggregateRoot, IDeviceIdent
     public bool IsEnabled { get; private set; } = true;
     public string? Remark { get; private set; }
 
-    public ICollection<IoMappingEntity> IoMappings { get; private set; } = new List<IoMappingEntity>();
-    public ICollection<PlcTaskBindingEntity> PlcTaskBindings { get; private set; } = new List<PlcTaskBindingEntity>();
+    public IReadOnlyCollection<IoMappingEntity> IoMappings => _ioMappings.AsReadOnly();
+    public IReadOnlyCollection<PlcTaskBindingEntity> PlcTaskBindings => _plcTaskBindings.AsReadOnly();
 
     int IDeviceIdentifiable.NetworkDeviceId => Id;
 

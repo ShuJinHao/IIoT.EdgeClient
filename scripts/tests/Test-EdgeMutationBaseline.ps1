@@ -40,6 +40,7 @@ $requiredSemanticTests = @(
     'DeviceParamEntity_WhenRequiredFieldsInvalid_ShouldReject',
     'DeviceParamEntity_WhenSortOrderInvalid_ShouldReject',
     'NetworkDeviceEntity_WhenRequiredFieldsInvalid_ShouldReject',
+    'NetworkDeviceEntity_WhenNavigationCollectionsExposed_ShouldBeReadOnly',
     'SerialDeviceEntity_WhenPortFieldsInvalid_ShouldReject',
     'IoMappingEntity_WhenRequiredFieldsInvalid_ShouldReject',
     'IoMappingEntity_WhenPlcAddressEmpty_ShouldKeepUnconfiguredState'
@@ -150,7 +151,7 @@ if (-not $testedMatch.Success -or [int]$testedMatch.Groups[1].Value -ne $evaluat
 $mutationScore = if ($scoreDenominator -eq 0) {
     0.0
 } else {
-    [Math]::Round($statusCounts.Killed / $scoreDenominator, 6)
+    [Math]::Round(($statusCounts.Killed + $statusCounts.Timeout) / $scoreDenominator, 6)
 }
 
 $actual = [ordered]@{
@@ -204,6 +205,43 @@ if ($actual.initialTestCount -ne [int]$baseline.initialTestCount -or
     $actual.createdMutants -ne [int]$baseline.createdMutants -or
     $actual.evaluatedMutants -ne [int]$baseline.evaluatedMutants) {
     throw "TEST-GOV-007 mutation execution ledger changed: tests $($baseline.initialTestCount)->$($actual.initialTestCount), created $($baseline.createdMutants)->$($actual.createdMutants), evaluated $($baseline.evaluatedMutants)->$($actual.evaluatedMutants)."
+}
+
+$baselineStatusCounts = [ordered]@{
+    detected = [int]$baseline.detected
+    survived = [int]$baseline.survived
+    noCoverage = [int]$baseline.noCoverage
+    ignored = [int]$baseline.ignored
+    timeout = [int]$baseline.timeout
+    compileErrors = [int]$baseline.compileErrors
+}
+$baselineTotal = [int](($baselineStatusCounts.Values | Measure-Object -Sum).Sum)
+$baselineEvaluated = $baselineStatusCounts.detected + $baselineStatusCounts.survived + $baselineStatusCounts.timeout
+$baselineScoreDenominator = $baselineStatusCounts.detected + $baselineStatusCounts.survived + $baselineStatusCounts.noCoverage + $baselineStatusCounts.timeout
+$baselineComputedScore = if ($baselineScoreDenominator -eq 0) {
+    0.0
+} else {
+    [Math]::Round(
+        ($baselineStatusCounts.detected + $baselineStatusCounts.timeout) / $baselineScoreDenominator,
+        6)
+}
+if ($baselineTotal -ne [int]$baseline.totalMutants -or
+    $baselineEvaluated -ne [int]$baseline.evaluatedMutants -or
+    [Math]::Abs($baselineComputedScore - [double]$baseline.mutationScore) -gt 0.0000005) {
+    throw "TEST-GOV-007 mutation baseline result ledger is inconsistent: total=$baselineTotal/$($baseline.totalMutants), evaluated=$baselineEvaluated/$($baseline.evaluatedMutants), score=$baselineComputedScore/$($baseline.mutationScore)."
+}
+
+$resultDrift = [Collections.Generic.List[string]]::new()
+foreach ($property in @('detected', 'survived', 'noCoverage', 'ignored', 'timeout', 'compileErrors')) {
+    if ([int]$actual[$property] -ne [int]$baseline.$property) {
+        $resultDrift.Add("$property $($baseline.$property)->$($actual[$property])")
+    }
+}
+if ([Math]::Abs([double]$actual.mutationScore - [double]$baseline.mutationScore) -gt 0.0000005) {
+    $resultDrift.Add("mutationScore $($baseline.mutationScore)->$($actual.mutationScore)")
+}
+if ($resultDrift.Count -gt 0) {
+    throw "TEST-GOV-007 mutation result ledger changed: $($resultDrift -join ', '). Review the real report and update the current baseline explicitly."
 }
 
 Write-Host "Edge mutation report-only gate passed: tests=$($actual.initialTestCount), created=$($actual.createdMutants), reportMutants=$($actual.totalMutants), evaluated=$($actual.evaluatedMutants), killed=$($actual.detected), survived=$($actual.survived), noCoverage=$($actual.noCoverage), timeout=$($actual.timeout), score=$($actual.mutationScore), emptyRun=0, targetDrift=0."
