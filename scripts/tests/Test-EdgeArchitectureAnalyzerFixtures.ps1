@@ -217,6 +217,33 @@ Invoke-FixtureBuild -Name 'graph-analyzer-suppressmessage-global-alias-invalid' 
     -ProjectPath 'graph-analyzer-suppressmessage-global-alias-invalid/Application/IIoT.Edge.Installer.csproj' `
     -ShouldSucceed $false `
     -ExpectedDiagnosticIds @('WSARCH006')
+Invoke-FixtureBuild -Name 'graph-analyzer-suppressmessage-conditional-active-invalid' `
+    -ProjectPath 'graph-analyzer-suppressmessage-conditional-active-invalid/Application/IIoT.Edge.Application.csproj' `
+    -ShouldSucceed $false `
+    -ExpectedDiagnosticIds @('WSARCH006')
+Invoke-FixtureBuild -Name 'graph-analyzer-suppressmessage-conditional-inactive-invalid' `
+    -ProjectPath 'graph-analyzer-suppressmessage-conditional-inactive-invalid/Application/IIoT.Edge.Application.csproj' `
+    -ShouldSucceed $false `
+    -ExpectedDiagnosticIds @('WSARCH006')
+Invoke-FixtureBuild -Name 'graph-analyzer-suppressmessage-conditional-compound-invalid' `
+    -ProjectPath 'graph-analyzer-suppressmessage-conditional-compound-invalid/Application/IIoT.Edge.Application.csproj' `
+    -ShouldSucceed $false `
+    -ExpectedDiagnosticIds @('WSARCH006')
+Invoke-FixtureBuild -Name 'graph-analyzer-suppressmessage-conditional-false-invalid' `
+    -ProjectPath 'graph-analyzer-suppressmessage-conditional-false-invalid/Application/IIoT.Edge.Application.csproj' `
+    -ShouldSucceed $false `
+    -ExpectedDiagnosticIds @('WSARCH006')
+Invoke-FixtureBuild -Name 'graph-analyzer-suppressmessage-conditional-contradiction-invalid' `
+    -ProjectPath 'graph-analyzer-suppressmessage-conditional-contradiction-invalid/Application/IIoT.Edge.Application.csproj' `
+    -ShouldSucceed $false `
+    -ExpectedDiagnosticIds @('WSARCH006')
+Invoke-FixtureBuild -Name 'graph-analyzer-suppressmessage-referenced-const-invalid' `
+    -ProjectPath 'graph-analyzer-suppressmessage-referenced-const-invalid/Application/IIoT.Edge.Application.csproj' `
+    -ShouldSucceed $false `
+    -ExpectedDiagnosticIds @('WSARCH006')
+Invoke-FixtureBuild -Name 'graph-analyzer-suppressmessage-conditional-fake-valid' `
+    -ProjectPath 'graph-analyzer-suppressmessage-conditional-fake-valid/Application/IIoT.Edge.Application.csproj' `
+    -ShouldSucceed $true
 Invoke-FixtureBuild -Name 'graph-analyzer-suppressmessage-fake-alias-valid' `
     -ProjectPath 'graph-analyzer-suppressmessage-fake-alias-valid/Application/IIoT.Edge.Application.csproj' `
     -ShouldSucceed $true
@@ -341,4 +368,4 @@ Invoke-FixtureBuild -Name 'graph-analyzer-exclusion-invalid' `
     -ShouldSucceed $false `
     -ExpectedDiagnosticIds @('WSARCH006')
 
-Write-Host 'Edge architecture analyzer/build fixtures passed: valid=6, invalid=37, bypass-checks=2.'
+Write-Host 'Edge architecture analyzer/build fixtures passed: valid=7, invalid=43, bypass-checks=2.'

@@ -1,0 +1,6 @@
+[assembly: System.Diagnostics.CodeAnalysis.SuppressMessage(
+    "IIoT.Architecture",
+    Fixture.ArchitectureIds.EdgeAsync)]
+
+namespace Fixture;
+public sealed class Suppressed;

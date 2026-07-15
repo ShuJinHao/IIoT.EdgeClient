@@ -213,15 +213,23 @@ function Test-ContainsRealSuppressMessageAttribute {
         $_.GetType().Name -eq 'AttributeSyntax'
     })) {
         $symbol = $SemanticModel.GetSymbolInfo($attribute).Symbol
-        if ($null -eq $symbol -or
-            ([string]$symbol.ContainingType) -cne 'System.Diagnostics.CodeAnalysis.SuppressMessageAttribute') {
+        $attributeType = if ($null -ne $symbol) {
+            $symbol.ContainingType
+        } else {
+            $SemanticModel.GetTypeInfo($attribute).Type
+        }
+        if ($null -eq $attributeType -or
+            ([string]$attributeType) -cne 'System.Diagnostics.CodeAnalysis.SuppressMessageAttribute') {
             continue
         }
         foreach ($argument in @($attribute.ArgumentList.Arguments)) {
             $constant = $SemanticModel.GetConstantValue($argument.Expression)
-            if ($constant.HasValue -and
-                $constant.Value -is [string] -and
-                ([string]$constant.Value) -match [string]$architectureCatalog.CompilerIdPattern) {
+            # A referenced-project const can leave constructor overload resolution incomplete in
+            # this source-only scan. Once the exact system attribute type is known, an unresolved
+            # argument must fail closed because it can carry a mandatory architecture ID.
+            if (-not $constant.HasValue -or
+                ($constant.Value -is [string] -and
+                 ([string]$constant.Value) -match [string]$architectureCatalog.CompilerIdPattern)) {
                 return $true
             }
         }
@@ -787,33 +795,113 @@ foreach ($project in $projects) {
         $sourceDocuments = [System.Collections.Generic.List[object]]::new()
         foreach ($source in $ownedCompileItems) {
             $sourceText = Get-Content $source.FullName -Raw
-            $syntaxTree = [Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree]::ParseText($sourceText)
             $sourceDocuments.Add([pscustomobject]@{
                 FullName = $source.FullName
+                SourceText = $sourceText
                 SourceCode = Remove-CSharpNonCodeText $sourceText
-                SyntaxTree = $syntaxTree
-                SyntaxRoot = $syntaxTree.GetRoot()
             })
         }
 
-        $suppressionCompilation = $null
-        if (@($sourceDocuments | Where-Object { $_.SourceCode -match 'SuppressMessage' }).Count -gt 0) {
-            $suppressionCompilation = [Microsoft.CodeAnalysis.CSharp.CSharpCompilation]::Create(
-                "EdgeArchitectureSuppressionScan_$($project.Name)",
-                [Microsoft.CodeAnalysis.SyntaxTree[]]@($sourceDocuments | ForEach-Object { $_.SyntaxTree }),
-                [Microsoft.CodeAnalysis.MetadataReference[]]@(
-                    [Microsoft.CodeAnalysis.MetadataReference]::CreateFromFile([object].Assembly.Location)),
-                [Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions]::new(
-                    [Microsoft.CodeAnalysis.OutputKind]::DynamicallyLinkedLibrary))
+        $realSuppressMessagePaths = [System.Collections.Generic.HashSet[string]]::new(
+            [StringComparer]::OrdinalIgnoreCase)
+        $hasSuppressMessageCandidate = @($sourceDocuments | Where-Object {
+            $_.SourceCode -match '(?i)\bSuppressMessage(?:Attribute)?\b'
+        }).Count -gt 0
+        if ($hasSuppressMessageCandidate) {
+            # SuppressMessage attempts in inactive preprocessor branches are still forbidden.
+            # Replace every #if/#elif condition with an independent scan-only symbol, then
+            # exhaustively activate the structural branches. This also reaches #if false and
+            # contradictory conditions while aliases/fake attributes retain semantic identity.
+            $suppressionScanDocuments = [System.Collections.Generic.List[object]]::new()
+            $conditionalBranchSymbols = [System.Collections.Generic.List[string]]::new()
+            $scanSymbolPrefix = "__IIOT_EDGE_SUPPRESSION_SCAN_$([Guid]::NewGuid().ToString('N'))"
+            foreach ($source in $sourceDocuments) {
+                $probeTree = [Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree]::ParseText(
+                    [string]$source.SourceText,
+                    [Microsoft.CodeAnalysis.CSharp.CSharpParseOptions]::Default,
+                    [string]$source.FullName,
+                    [Text.Encoding]::UTF8,
+                    [Threading.CancellationToken]::None)
+                $conditionReplacements = [System.Collections.Generic.List[object]]::new()
+                foreach ($trivia in $probeTree.GetRoot().DescendantTrivia($null, $true)) {
+                    if (-not $trivia.HasStructure) { continue }
+                    $directive = $trivia.GetStructure()
+                    if ($directive.GetType().Name -notin @(
+                        'IfDirectiveTriviaSyntax',
+                        'ElifDirectiveTriviaSyntax')) {
+                        continue
+                    }
+
+                    $scanSymbol = "${scanSymbolPrefix}_$($conditionalBranchSymbols.Count)"
+                    $conditionalBranchSymbols.Add($scanSymbol)
+                    $conditionReplacements.Add([pscustomobject]@{
+                        Start = [int]$directive.Condition.Span.Start
+                        Length = [int]$directive.Condition.Span.Length
+                        Symbol = $scanSymbol
+                    })
+                }
+
+                $scanText = [Text.StringBuilder]::new([string]$source.SourceText)
+                foreach ($replacement in @($conditionReplacements | Sort-Object Start -Descending)) {
+                    [void]$scanText.Remove($replacement.Start, $replacement.Length)
+                    [void]$scanText.Insert($replacement.Start, [string]$replacement.Symbol)
+                }
+                $suppressionScanDocuments.Add([pscustomobject]@{
+                    FullName = $source.FullName
+                    SourceText = $scanText.ToString()
+                })
+            }
+
+            $maximumConditionalBranches = 10
+            if ($conditionalBranchSymbols.Count -gt $maximumConditionalBranches) {
+                Add-Finding 'WSARCH006' "$($project.RelativePath) contains SuppressMessage candidates across $($conditionalBranchSymbols.Count) conditional branches; exhaustive semantic suppression scanning is capped at $maximumConditionalBranches and therefore fails closed."
+            } else {
+                $valuationCount = 1 -shl $conditionalBranchSymbols.Count
+                for ($valuation = 0; $valuation -lt $valuationCount; $valuation++) {
+                    $activeSymbols = [System.Collections.Generic.List[string]]::new()
+                    for ($symbolIndex = 0; $symbolIndex -lt $conditionalBranchSymbols.Count; $symbolIndex++) {
+                        if (($valuation -band (1 -shl $symbolIndex)) -ne 0) {
+                            $activeSymbols.Add($conditionalBranchSymbols[$symbolIndex])
+                        }
+                    }
+
+                    $parseOptions = [Microsoft.CodeAnalysis.CSharp.CSharpParseOptions]::Default.WithPreprocessorSymbols(
+                        [string[]]$activeSymbols)
+                    $parsedDocuments = [System.Collections.Generic.List[object]]::new()
+                    foreach ($source in $suppressionScanDocuments) {
+                        $syntaxTree = [Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree]::ParseText(
+                            [string]$source.SourceText,
+                            $parseOptions,
+                            [string]$source.FullName,
+                            [Text.Encoding]::UTF8,
+                            [Threading.CancellationToken]::None)
+                        $parsedDocuments.Add([pscustomobject]@{
+                            FullName = $source.FullName
+                            SyntaxTree = $syntaxTree
+                            SyntaxRoot = $syntaxTree.GetRoot()
+                        })
+                    }
+
+                    $suppressionCompilation = [Microsoft.CodeAnalysis.CSharp.CSharpCompilation]::Create(
+                        "EdgeArchitectureSuppressionScan_$($project.Name)_$valuation",
+                        [Microsoft.CodeAnalysis.SyntaxTree[]]@($parsedDocuments | ForEach-Object { $_.SyntaxTree }),
+                        [Microsoft.CodeAnalysis.MetadataReference[]]@(
+                            [Microsoft.CodeAnalysis.MetadataReference]::CreateFromFile([object].Assembly.Location)),
+                        [Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions]::new(
+                            [Microsoft.CodeAnalysis.OutputKind]::DynamicallyLinkedLibrary))
+                    foreach ($parsedSource in $parsedDocuments) {
+                        if (Test-ContainsRealSuppressMessageAttribute `
+                            -SyntaxRoot $parsedSource.SyntaxRoot `
+                            -SemanticModel ($suppressionCompilation.GetSemanticModel($parsedSource.SyntaxTree))) {
+                            [void]$realSuppressMessagePaths.Add([string]$parsedSource.FullName)
+                        }
+                    }
+                }
+            }
         }
         foreach ($source in $sourceDocuments) {
-            $hasRealSuppressMessage = $false
-            if ($null -ne $suppressionCompilation) {
-                $hasRealSuppressMessage = Test-ContainsRealSuppressMessageAttribute `
-                    -SyntaxRoot $source.SyntaxRoot `
-                    -SemanticModel ($suppressionCompilation.GetSemanticModel($source.SyntaxTree))
-            }
-            if ((Test-ContainsArchitecturePragmaSuppression $source.SourceCode) -or $hasRealSuppressMessage) {
+            if ((Test-ContainsArchitecturePragmaSuppression $source.SourceCode) -or
+                $realSuppressMessagePaths.Contains([string]$source.FullName)) {
                 Add-Finding 'WSARCH006' "$(Get-RepositoryPath $source.FullName) suppresses mandatory Edge architecture diagnostics in source."
             }
         }

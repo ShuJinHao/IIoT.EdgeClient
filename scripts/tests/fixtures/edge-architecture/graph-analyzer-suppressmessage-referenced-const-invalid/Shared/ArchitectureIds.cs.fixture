@@ -1,0 +1,6 @@
+namespace Fixture;
+
+public static class ArchitectureIds
+{
+    public const string EdgeAsync = "EDGEASYNC001";
+}
