@@ -32,7 +32,9 @@ function Get-ListedTests {
             if ($trimmed -notmatch '^(Test Run|Total tests|Passed!|Failed!|警告|Warning)') { $tests.Add($trimmed) }
         }
     }
-    return [string[]]@($tests | Sort-Object)
+    $ordered = [string[]]$tests.ToArray()
+    [Array]::Sort($ordered, [StringComparer]::Ordinal)
+    return $ordered
 }
 
 function Get-OverrideValue {

@@ -3550,6 +3550,29 @@
       "skipped": false
     },
     {
+      "caseKey": "IIoT.Edge.Architecture.AnalyzerTests|IIoT.Edge.Architecture.AnalyzerTests.EdgeArchitectureAnalyzerTests.ProductionTaskDelegateParameterReassignedToUploader_ReportsEdgeOut001",
+      "assembly": "IIoT.Edge.Architecture.AnalyzerTests",
+      "projectPath": "src/Tests/IIoT.Edge.Architecture.AnalyzerTests/IIoT.Edge.Architecture.AnalyzerTests.csproj",
+      "identity": "IIoT.Edge.Architecture.AnalyzerTests.EdgeArchitectureAnalyzerTests.ProductionTaskDelegateParameterReassignedToUploader_ReportsEdgeOut001",
+      "source": null,
+      "testKind": "Architecture",
+      "runtime": "Pure",
+      "runtimeDependencies": [
+        "Roslyn"
+      ],
+      "runnerMode": "Parallel",
+      "cadence": "PR",
+      "capability": "Architecture.Analyzers",
+      "risk": "P1",
+      "concern": "Compatibility",
+      "profile": "Default",
+      "owner": "Edge.Architecture",
+      "ruleId": "EDGE-QUALITY-001",
+      "regressionId": "EDGE-QUALITY-001",
+      "required": true,
+      "skipped": false
+    },
+    {
       "caseKey": "IIoT.Edge.Architecture.AnalyzerTests|IIoT.Edge.Architecture.AnalyzerTests.EdgeArchitectureAnalyzerTests.ProductionTaskDelegateParameterizedMember_UsesIncomingCallSiteBinding(outbound: False)",
       "assembly": "IIoT.Edge.Architecture.AnalyzerTests",
       "projectPath": "src/Tests/IIoT.Edge.Architecture.AnalyzerTests/IIoT.Edge.Architecture.AnalyzerTests.csproj",
@@ -3577,29 +3600,6 @@
       "assembly": "IIoT.Edge.Architecture.AnalyzerTests",
       "projectPath": "src/Tests/IIoT.Edge.Architecture.AnalyzerTests/IIoT.Edge.Architecture.AnalyzerTests.csproj",
       "identity": "IIoT.Edge.Architecture.AnalyzerTests.EdgeArchitectureAnalyzerTests.ProductionTaskDelegateParameterizedMember_UsesIncomingCallSiteBinding(outbound: True)",
-      "source": null,
-      "testKind": "Architecture",
-      "runtime": "Pure",
-      "runtimeDependencies": [
-        "Roslyn"
-      ],
-      "runnerMode": "Parallel",
-      "cadence": "PR",
-      "capability": "Architecture.Analyzers",
-      "risk": "P1",
-      "concern": "Compatibility",
-      "profile": "Default",
-      "owner": "Edge.Architecture",
-      "ruleId": "EDGE-QUALITY-001",
-      "regressionId": "EDGE-QUALITY-001",
-      "required": true,
-      "skipped": false
-    },
-    {
-      "caseKey": "IIoT.Edge.Architecture.AnalyzerTests|IIoT.Edge.Architecture.AnalyzerTests.EdgeArchitectureAnalyzerTests.ProductionTaskDelegateParameterReassignedToUploader_ReportsEdgeOut001",
-      "assembly": "IIoT.Edge.Architecture.AnalyzerTests",
-      "projectPath": "src/Tests/IIoT.Edge.Architecture.AnalyzerTests/IIoT.Edge.Architecture.AnalyzerTests.csproj",
-      "identity": "IIoT.Edge.Architecture.AnalyzerTests.EdgeArchitectureAnalyzerTests.ProductionTaskDelegateParameterReassignedToUploader_ReportsEdgeOut001",
       "source": null,
       "testKind": "Architecture",
       "runtime": "Pure",
@@ -4631,10 +4631,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Architecture.AnalyzerTests|IIoT.Edge.Architecture.AnalyzerTests.EdgeArchitectureAnalyzerTests.ProductionTaskUnresolvedDelegate_FailsClosedWithEdgeOut001(delegateType: \"System.Func<int>\", invocation: \"_ = work();\")",
+      "caseKey": "IIoT.Edge.Architecture.AnalyzerTests|IIoT.Edge.Architecture.AnalyzerTests.EdgeArchitectureAnalyzerTests.ProductionTaskUnresolvedDelegate_FailsClosedWithEdgeOut001(delegateType: \"System.Func<System.Threading.Tasks.Task>\", invocation: \"_ = work();\")",
       "assembly": "IIoT.Edge.Architecture.AnalyzerTests",
       "projectPath": "src/Tests/IIoT.Edge.Architecture.AnalyzerTests/IIoT.Edge.Architecture.AnalyzerTests.csproj",
-      "identity": "IIoT.Edge.Architecture.AnalyzerTests.EdgeArchitectureAnalyzerTests.ProductionTaskUnresolvedDelegate_FailsClosedWithEdgeOut001(delegateType: \"System.Func<int>\", invocation: \"_ = work();\")",
+      "identity": "IIoT.Edge.Architecture.AnalyzerTests.EdgeArchitectureAnalyzerTests.ProductionTaskUnresolvedDelegate_FailsClosedWithEdgeOut001(delegateType: \"System.Func<System.Threading.Tasks.Task>\", invocation: \"_ = work();\")",
       "source": null,
       "testKind": "Architecture",
       "runtime": "Pure",
@@ -4654,10 +4654,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Architecture.AnalyzerTests|IIoT.Edge.Architecture.AnalyzerTests.EdgeArchitectureAnalyzerTests.ProductionTaskUnresolvedDelegate_FailsClosedWithEdgeOut001(delegateType: \"System.Func<System.Threading.Tasks.Task>\", invocation: \"_ = work();\")",
+      "caseKey": "IIoT.Edge.Architecture.AnalyzerTests|IIoT.Edge.Architecture.AnalyzerTests.EdgeArchitectureAnalyzerTests.ProductionTaskUnresolvedDelegate_FailsClosedWithEdgeOut001(delegateType: \"System.Func<int>\", invocation: \"_ = work();\")",
       "assembly": "IIoT.Edge.Architecture.AnalyzerTests",
       "projectPath": "src/Tests/IIoT.Edge.Architecture.AnalyzerTests/IIoT.Edge.Architecture.AnalyzerTests.csproj",
-      "identity": "IIoT.Edge.Architecture.AnalyzerTests.EdgeArchitectureAnalyzerTests.ProductionTaskUnresolvedDelegate_FailsClosedWithEdgeOut001(delegateType: \"System.Func<System.Threading.Tasks.Task>\", invocation: \"_ = work();\")",
+      "identity": "IIoT.Edge.Architecture.AnalyzerTests.EdgeArchitectureAnalyzerTests.ProductionTaskUnresolvedDelegate_FailsClosedWithEdgeOut001(delegateType: \"System.Func<int>\", invocation: \"_ = work();\")",
       "source": null,
       "testKind": "Architecture",
       "runtime": "Pure",
@@ -5134,10 +5134,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Caching.UnitTests|IIoT.Edge.Caching.UnitTests.EdgeMemoryCacheServiceBehaviorTests.GetOrCreateAsync_WhenCacheHit_ShouldNotCallFactory",
+      "caseKey": "IIoT.Edge.Caching.UnitTests|IIoT.Edge.Caching.UnitTests.EdgeMemoryCacheServiceBehaviorTests.GetOrCreateAsync_WhenCacheHitAndCallerIsPreCanceled_ShouldPropagateWithoutFactory",
       "assembly": "IIoT.Edge.Caching.UnitTests",
       "projectPath": "src/Tests/IIoT.Edge.Caching.UnitTests/IIoT.Edge.Caching.UnitTests.csproj",
-      "identity": "IIoT.Edge.Caching.UnitTests.EdgeMemoryCacheServiceBehaviorTests.GetOrCreateAsync_WhenCacheHit_ShouldNotCallFactory",
+      "identity": "IIoT.Edge.Caching.UnitTests.EdgeMemoryCacheServiceBehaviorTests.GetOrCreateAsync_WhenCacheHitAndCallerIsPreCanceled_ShouldPropagateWithoutFactory",
       "source": null,
       "testKind": "Unit",
       "runtime": "Pure",
@@ -5155,10 +5155,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Caching.UnitTests|IIoT.Edge.Caching.UnitTests.EdgeMemoryCacheServiceBehaviorTests.GetOrCreateAsync_WhenCacheHitAndCallerIsPreCanceled_ShouldPropagateWithoutFactory",
+      "caseKey": "IIoT.Edge.Caching.UnitTests|IIoT.Edge.Caching.UnitTests.EdgeMemoryCacheServiceBehaviorTests.GetOrCreateAsync_WhenCacheHit_ShouldNotCallFactory",
       "assembly": "IIoT.Edge.Caching.UnitTests",
       "projectPath": "src/Tests/IIoT.Edge.Caching.UnitTests/IIoT.Edge.Caching.UnitTests.csproj",
-      "identity": "IIoT.Edge.Caching.UnitTests.EdgeMemoryCacheServiceBehaviorTests.GetOrCreateAsync_WhenCacheHitAndCallerIsPreCanceled_ShouldPropagateWithoutFactory",
+      "identity": "IIoT.Edge.Caching.UnitTests.EdgeMemoryCacheServiceBehaviorTests.GetOrCreateAsync_WhenCacheHit_ShouldNotCallFactory",
       "source": null,
       "testKind": "Unit",
       "runtime": "Pure",
@@ -5710,10 +5710,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Cloud.ContractTests|IIoT.Edge.Cloud.ContractTests.AuthServiceBehaviorTests.LoginLocalAsync_WhenStoredHashIsLegacySha256_ShouldRequireResetWithoutSession",
+      "caseKey": "IIoT.Edge.Cloud.ContractTests|IIoT.Edge.Cloud.ContractTests.AuthServiceBehaviorTests.LoginLocalAsync_WhenStoreHasHashAndConfigIsEmpty_ShouldCreateSession",
       "assembly": "IIoT.Edge.Cloud.ContractTests",
       "projectPath": "src/Tests/IIoT.Edge.Cloud.ContractTests/IIoT.Edge.Cloud.ContractTests.csproj",
-      "identity": "IIoT.Edge.Cloud.ContractTests.AuthServiceBehaviorTests.LoginLocalAsync_WhenStoredHashIsLegacySha256_ShouldRequireResetWithoutSession",
+      "identity": "IIoT.Edge.Cloud.ContractTests.AuthServiceBehaviorTests.LoginLocalAsync_WhenStoreHasHashAndConfigIsEmpty_ShouldCreateSession",
       "source": null,
       "testKind": "Contract",
       "runtime": "Pure",
@@ -5734,10 +5734,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Cloud.ContractTests|IIoT.Edge.Cloud.ContractTests.AuthServiceBehaviorTests.LoginLocalAsync_WhenStoreHasHashAndConfigIsEmpty_ShouldCreateSession",
+      "caseKey": "IIoT.Edge.Cloud.ContractTests|IIoT.Edge.Cloud.ContractTests.AuthServiceBehaviorTests.LoginLocalAsync_WhenStoredHashIsLegacySha256_ShouldRequireResetWithoutSession",
       "assembly": "IIoT.Edge.Cloud.ContractTests",
       "projectPath": "src/Tests/IIoT.Edge.Cloud.ContractTests/IIoT.Edge.Cloud.ContractTests.csproj",
-      "identity": "IIoT.Edge.Cloud.ContractTests.AuthServiceBehaviorTests.LoginLocalAsync_WhenStoreHasHashAndConfigIsEmpty_ShouldCreateSession",
+      "identity": "IIoT.Edge.Cloud.ContractTests.AuthServiceBehaviorTests.LoginLocalAsync_WhenStoredHashIsLegacySha256_ShouldRequireResetWithoutSession",
       "source": null,
       "testKind": "Contract",
       "runtime": "Pure",
@@ -5878,30 +5878,6 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Cloud.ContractTests|IIoT.Edge.Cloud.ContractTests.CapacityCloudQueryServiceBehaviorTests.QueryByMonth_WhenPayloadViolatesCurrentRangeContract_ShouldReturnInvalidPayload(payload: \"[{}]\")",
-      "assembly": "IIoT.Edge.Cloud.ContractTests",
-      "projectPath": "src/Tests/IIoT.Edge.Cloud.ContractTests/IIoT.Edge.Cloud.ContractTests.csproj",
-      "identity": "IIoT.Edge.Cloud.ContractTests.CapacityCloudQueryServiceBehaviorTests.QueryByMonth_WhenPayloadViolatesCurrentRangeContract_ShouldReturnInvalidPayload(payload: \"[{}]\")",
-      "source": null,
-      "testKind": "Contract",
-      "runtime": "Pure",
-      "runtimeDependencies": [
-        "FakeHttp",
-        "FakeTime"
-      ],
-      "runnerMode": "Parallel",
-      "cadence": "PR",
-      "capability": "Cloud.ProtocolContracts",
-      "risk": "P0",
-      "concern": "Compatibility",
-      "profile": "Simulation",
-      "owner": "Edge.Integration",
-      "ruleId": "EDGE-CLOUD-CONTRACT-001",
-      "regressionId": "EDGE-CLOUD-CONTRACT-001",
-      "required": true,
-      "skipped": false
-    },
-    {
       "caseKey": "IIoT.Edge.Cloud.ContractTests|IIoT.Edge.Cloud.ContractTests.CapacityCloudQueryServiceBehaviorTests.QueryByMonth_WhenPayloadViolatesCurrentRangeContract_ShouldReturnInvalidPayload(payload: \"[{\\\"date\\\":\\\"2026-07-01\\\",\\\"totalCount\\\":1}]\")",
       "assembly": "IIoT.Edge.Cloud.ContractTests",
       "projectPath": "src/Tests/IIoT.Edge.Cloud.ContractTests/IIoT.Edge.Cloud.ContractTests.csproj",
@@ -5926,10 +5902,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Cloud.ContractTests|IIoT.Edge.Cloud.ContractTests.CapacityCloudQueryServiceBehaviorTests.QueryByMonth_WhenPayloadViolatesCurrentRangeContract_ShouldReturnInvalidPayload(payload: \"{}\")",
+      "caseKey": "IIoT.Edge.Cloud.ContractTests|IIoT.Edge.Cloud.ContractTests.CapacityCloudQueryServiceBehaviorTests.QueryByMonth_WhenPayloadViolatesCurrentRangeContract_ShouldReturnInvalidPayload(payload: \"[{}]\")",
       "assembly": "IIoT.Edge.Cloud.ContractTests",
       "projectPath": "src/Tests/IIoT.Edge.Cloud.ContractTests/IIoT.Edge.Cloud.ContractTests.csproj",
-      "identity": "IIoT.Edge.Cloud.ContractTests.CapacityCloudQueryServiceBehaviorTests.QueryByMonth_WhenPayloadViolatesCurrentRangeContract_ShouldReturnInvalidPayload(payload: \"{}\")",
+      "identity": "IIoT.Edge.Cloud.ContractTests.CapacityCloudQueryServiceBehaviorTests.QueryByMonth_WhenPayloadViolatesCurrentRangeContract_ShouldReturnInvalidPayload(payload: \"[{}]\")",
       "source": null,
       "testKind": "Contract",
       "runtime": "Pure",
@@ -5954,6 +5930,30 @@
       "assembly": "IIoT.Edge.Cloud.ContractTests",
       "projectPath": "src/Tests/IIoT.Edge.Cloud.ContractTests/IIoT.Edge.Cloud.ContractTests.csproj",
       "identity": "IIoT.Edge.Cloud.ContractTests.CapacityCloudQueryServiceBehaviorTests.QueryByMonth_WhenPayloadViolatesCurrentRangeContract_ShouldReturnInvalidPayload(payload: \"null\")",
+      "source": null,
+      "testKind": "Contract",
+      "runtime": "Pure",
+      "runtimeDependencies": [
+        "FakeHttp",
+        "FakeTime"
+      ],
+      "runnerMode": "Parallel",
+      "cadence": "PR",
+      "capability": "Cloud.ProtocolContracts",
+      "risk": "P0",
+      "concern": "Compatibility",
+      "profile": "Simulation",
+      "owner": "Edge.Integration",
+      "ruleId": "EDGE-CLOUD-CONTRACT-001",
+      "regressionId": "EDGE-CLOUD-CONTRACT-001",
+      "required": true,
+      "skipped": false
+    },
+    {
+      "caseKey": "IIoT.Edge.Cloud.ContractTests|IIoT.Edge.Cloud.ContractTests.CapacityCloudQueryServiceBehaviorTests.QueryByMonth_WhenPayloadViolatesCurrentRangeContract_ShouldReturnInvalidPayload(payload: \"{}\")",
+      "assembly": "IIoT.Edge.Cloud.ContractTests",
+      "projectPath": "src/Tests/IIoT.Edge.Cloud.ContractTests/IIoT.Edge.Cloud.ContractTests.csproj",
+      "identity": "IIoT.Edge.Cloud.ContractTests.CapacityCloudQueryServiceBehaviorTests.QueryByMonth_WhenPayloadViolatesCurrentRangeContract_ShouldReturnInvalidPayload(payload: \"{}\")",
       "source": null,
       "testKind": "Contract",
       "runtime": "Pure",
@@ -6406,10 +6406,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Cloud.ContractTests|IIoT.Edge.Cloud.ContractTests.CloudHttpClientBehaviorTests.GetAsync_WhenProtectedRequestHasNoToken_ShouldSkipRequestAndReturnNull",
+      "caseKey": "IIoT.Edge.Cloud.ContractTests|IIoT.Edge.Cloud.ContractTests.CloudHttpClientBehaviorTests.GetAsync_WhenProtectedRequestHasNoTokenAndRefreshSucceeds_ShouldSendRequest",
       "assembly": "IIoT.Edge.Cloud.ContractTests",
       "projectPath": "src/Tests/IIoT.Edge.Cloud.ContractTests/IIoT.Edge.Cloud.ContractTests.csproj",
-      "identity": "IIoT.Edge.Cloud.ContractTests.CloudHttpClientBehaviorTests.GetAsync_WhenProtectedRequestHasNoToken_ShouldSkipRequestAndReturnNull",
+      "identity": "IIoT.Edge.Cloud.ContractTests.CloudHttpClientBehaviorTests.GetAsync_WhenProtectedRequestHasNoTokenAndRefreshSucceeds_ShouldSendRequest",
       "source": null,
       "testKind": "Contract",
       "runtime": "Pure",
@@ -6430,10 +6430,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Cloud.ContractTests|IIoT.Edge.Cloud.ContractTests.CloudHttpClientBehaviorTests.GetAsync_WhenProtectedRequestHasNoTokenAndRefreshSucceeds_ShouldSendRequest",
+      "caseKey": "IIoT.Edge.Cloud.ContractTests|IIoT.Edge.Cloud.ContractTests.CloudHttpClientBehaviorTests.GetAsync_WhenProtectedRequestHasNoToken_ShouldSkipRequestAndReturnNull",
       "assembly": "IIoT.Edge.Cloud.ContractTests",
       "projectPath": "src/Tests/IIoT.Edge.Cloud.ContractTests/IIoT.Edge.Cloud.ContractTests.csproj",
-      "identity": "IIoT.Edge.Cloud.ContractTests.CloudHttpClientBehaviorTests.GetAsync_WhenProtectedRequestHasNoTokenAndRefreshSucceeds_ShouldSendRequest",
+      "identity": "IIoT.Edge.Cloud.ContractTests.CloudHttpClientBehaviorTests.GetAsync_WhenProtectedRequestHasNoToken_ShouldSkipRequestAndReturnNull",
       "source": null,
       "testKind": "Contract",
       "runtime": "Pure",
@@ -6478,10 +6478,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Cloud.ContractTests|IIoT.Edge.Cloud.ContractTests.CloudHttpClientBehaviorTests.GetAsync_WhenProtectedRequestTokenIsExpired_ShouldSkipRequestAndReturnNull",
+      "caseKey": "IIoT.Edge.Cloud.ContractTests|IIoT.Edge.Cloud.ContractTests.CloudHttpClientBehaviorTests.GetAsync_WhenProtectedRequestTokenIsExpiredAndRefreshSucceeds_ShouldSendRequestWithFreshToken",
       "assembly": "IIoT.Edge.Cloud.ContractTests",
       "projectPath": "src/Tests/IIoT.Edge.Cloud.ContractTests/IIoT.Edge.Cloud.ContractTests.csproj",
-      "identity": "IIoT.Edge.Cloud.ContractTests.CloudHttpClientBehaviorTests.GetAsync_WhenProtectedRequestTokenIsExpired_ShouldSkipRequestAndReturnNull",
+      "identity": "IIoT.Edge.Cloud.ContractTests.CloudHttpClientBehaviorTests.GetAsync_WhenProtectedRequestTokenIsExpiredAndRefreshSucceeds_ShouldSendRequestWithFreshToken",
       "source": null,
       "testKind": "Contract",
       "runtime": "Pure",
@@ -6502,10 +6502,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Cloud.ContractTests|IIoT.Edge.Cloud.ContractTests.CloudHttpClientBehaviorTests.GetAsync_WhenProtectedRequestTokenIsExpiredAndRefreshSucceeds_ShouldSendRequestWithFreshToken",
+      "caseKey": "IIoT.Edge.Cloud.ContractTests|IIoT.Edge.Cloud.ContractTests.CloudHttpClientBehaviorTests.GetAsync_WhenProtectedRequestTokenIsExpired_ShouldSkipRequestAndReturnNull",
       "assembly": "IIoT.Edge.Cloud.ContractTests",
       "projectPath": "src/Tests/IIoT.Edge.Cloud.ContractTests/IIoT.Edge.Cloud.ContractTests.csproj",
-      "identity": "IIoT.Edge.Cloud.ContractTests.CloudHttpClientBehaviorTests.GetAsync_WhenProtectedRequestTokenIsExpiredAndRefreshSucceeds_ShouldSendRequestWithFreshToken",
+      "identity": "IIoT.Edge.Cloud.ContractTests.CloudHttpClientBehaviorTests.GetAsync_WhenProtectedRequestTokenIsExpired_ShouldSkipRequestAndReturnNull",
       "source": null,
       "testKind": "Contract",
       "runtime": "Pure",
@@ -7246,10 +7246,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Cloud.ContractTests|IIoT.Edge.Cloud.ContractTests.LocalParameterConfigBehaviorTests.SaveCloudApiConfigParamsHandler_WhenEnabled_ShouldRefreshRuntimeAndWriteProjection",
+      "caseKey": "IIoT.Edge.Cloud.ContractTests|IIoT.Edge.Cloud.ContractTests.LocalParameterConfigBehaviorTests.SaveCloudApiConfigParamsHandler_WhenEnableProjectionFails_ShouldRollBackSystemSwitch",
       "assembly": "IIoT.Edge.Cloud.ContractTests",
       "projectPath": "src/Tests/IIoT.Edge.Cloud.ContractTests/IIoT.Edge.Cloud.ContractTests.csproj",
-      "identity": "IIoT.Edge.Cloud.ContractTests.LocalParameterConfigBehaviorTests.SaveCloudApiConfigParamsHandler_WhenEnabled_ShouldRefreshRuntimeAndWriteProjection",
+      "identity": "IIoT.Edge.Cloud.ContractTests.LocalParameterConfigBehaviorTests.SaveCloudApiConfigParamsHandler_WhenEnableProjectionFails_ShouldRollBackSystemSwitch",
       "source": null,
       "testKind": "Contract",
       "runtime": "Pure",
@@ -7270,10 +7270,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Cloud.ContractTests|IIoT.Edge.Cloud.ContractTests.LocalParameterConfigBehaviorTests.SaveCloudApiConfigParamsHandler_WhenEnableProjectionFails_ShouldRollBackSystemSwitch",
+      "caseKey": "IIoT.Edge.Cloud.ContractTests|IIoT.Edge.Cloud.ContractTests.LocalParameterConfigBehaviorTests.SaveCloudApiConfigParamsHandler_WhenEnabled_ShouldRefreshRuntimeAndWriteProjection",
       "assembly": "IIoT.Edge.Cloud.ContractTests",
       "projectPath": "src/Tests/IIoT.Edge.Cloud.ContractTests/IIoT.Edge.Cloud.ContractTests.csproj",
-      "identity": "IIoT.Edge.Cloud.ContractTests.LocalParameterConfigBehaviorTests.SaveCloudApiConfigParamsHandler_WhenEnableProjectionFails_ShouldRollBackSystemSwitch",
+      "identity": "IIoT.Edge.Cloud.ContractTests.LocalParameterConfigBehaviorTests.SaveCloudApiConfigParamsHandler_WhenEnabled_ShouldRefreshRuntimeAndWriteProjection",
       "source": null,
       "testKind": "Contract",
       "runtime": "Pure",
@@ -8662,6 +8662,75 @@
       "skipped": false
     },
     {
+      "caseKey": "IIoT.Edge.Launcher.FilesystemTests|IIoT.Edge.Launcher.FilesystemTests.LauncherDependencyInjectionTests.LauncherAccountCatalogInitializer_ShouldNotCopySampleAccountAsDefaultCatalog",
+      "assembly": "IIoT.Edge.Launcher.FilesystemTests",
+      "projectPath": "src/Tests/IIoT.Edge.Launcher.FilesystemTests/IIoT.Edge.Launcher.FilesystemTests.csproj",
+      "identity": "IIoT.Edge.Launcher.FilesystemTests.LauncherDependencyInjectionTests.LauncherAccountCatalogInitializer_ShouldNotCopySampleAccountAsDefaultCatalog",
+      "source": null,
+      "testKind": "Integration",
+      "runtime": "Filesystem",
+      "runtimeDependencies": [
+        "ProcessEnvironment"
+      ],
+      "runnerMode": "Serial",
+      "cadence": "PR",
+      "capability": "Launcher.RuntimePaths",
+      "risk": "P1",
+      "concern": "Reliability",
+      "profile": "Simulation",
+      "owner": "Edge.Launcher",
+      "ruleId": "EDGE-LAUNCHER-001",
+      "regressionId": "EDGE-LAUNCHER-001",
+      "required": true,
+      "skipped": false
+    },
+    {
+      "caseKey": "IIoT.Edge.Launcher.FilesystemTests|IIoT.Edge.Launcher.FilesystemTests.LauncherDependencyInjectionTests.LauncherAccountCatalogInitializer_WhenCatalogExists_ShouldNotOverwriteExistingAccounts",
+      "assembly": "IIoT.Edge.Launcher.FilesystemTests",
+      "projectPath": "src/Tests/IIoT.Edge.Launcher.FilesystemTests/IIoT.Edge.Launcher.FilesystemTests.csproj",
+      "identity": "IIoT.Edge.Launcher.FilesystemTests.LauncherDependencyInjectionTests.LauncherAccountCatalogInitializer_WhenCatalogExists_ShouldNotOverwriteExistingAccounts",
+      "source": null,
+      "testKind": "Integration",
+      "runtime": "Filesystem",
+      "runtimeDependencies": [
+        "ProcessEnvironment"
+      ],
+      "runnerMode": "Serial",
+      "cadence": "PR",
+      "capability": "Launcher.RuntimePaths",
+      "risk": "P1",
+      "concern": "Reliability",
+      "profile": "Simulation",
+      "owner": "Edge.Launcher",
+      "ruleId": "EDGE-LAUNCHER-001",
+      "regressionId": "EDGE-LAUNCHER-001",
+      "required": true,
+      "skipped": false
+    },
+    {
+      "caseKey": "IIoT.Edge.Launcher.FilesystemTests|IIoT.Edge.Launcher.FilesystemTests.LauncherDependencyInjectionTests.LauncherAccountCatalogInitializer_WhenSampleIsMissing_ShouldNotBlockStartup",
+      "assembly": "IIoT.Edge.Launcher.FilesystemTests",
+      "projectPath": "src/Tests/IIoT.Edge.Launcher.FilesystemTests/IIoT.Edge.Launcher.FilesystemTests.csproj",
+      "identity": "IIoT.Edge.Launcher.FilesystemTests.LauncherDependencyInjectionTests.LauncherAccountCatalogInitializer_WhenSampleIsMissing_ShouldNotBlockStartup",
+      "source": null,
+      "testKind": "Integration",
+      "runtime": "Filesystem",
+      "runtimeDependencies": [
+        "ProcessEnvironment"
+      ],
+      "runnerMode": "Serial",
+      "cadence": "PR",
+      "capability": "Launcher.RuntimePaths",
+      "risk": "P1",
+      "concern": "Reliability",
+      "profile": "Simulation",
+      "owner": "Edge.Launcher",
+      "ruleId": "EDGE-LAUNCHER-001",
+      "regressionId": "EDGE-LAUNCHER-001",
+      "required": true,
+      "skipped": false
+    },
+    {
       "caseKey": "IIoT.Edge.Launcher.FilesystemTests|IIoT.Edge.Launcher.FilesystemTests.LauncherDependencyInjectionTests.LauncherAccountCatalog_ShouldRoundTripAccounts",
       "assembly": "IIoT.Edge.Launcher.FilesystemTests",
       "projectPath": "src/Tests/IIoT.Edge.Launcher.FilesystemTests/IIoT.Edge.Launcher.FilesystemTests.csproj",
@@ -8781,75 +8850,6 @@
       "assembly": "IIoT.Edge.Launcher.FilesystemTests",
       "projectPath": "src/Tests/IIoT.Edge.Launcher.FilesystemTests/IIoT.Edge.Launcher.FilesystemTests.csproj",
       "identity": "IIoT.Edge.Launcher.FilesystemTests.LauncherDependencyInjectionTests.LauncherAccountCatalog_WhenCatalogOnlyHasEmptyHashSample_ShouldReportNeedsInitialSetup",
-      "source": null,
-      "testKind": "Integration",
-      "runtime": "Filesystem",
-      "runtimeDependencies": [
-        "ProcessEnvironment"
-      ],
-      "runnerMode": "Serial",
-      "cadence": "PR",
-      "capability": "Launcher.RuntimePaths",
-      "risk": "P1",
-      "concern": "Reliability",
-      "profile": "Simulation",
-      "owner": "Edge.Launcher",
-      "ruleId": "EDGE-LAUNCHER-001",
-      "regressionId": "EDGE-LAUNCHER-001",
-      "required": true,
-      "skipped": false
-    },
-    {
-      "caseKey": "IIoT.Edge.Launcher.FilesystemTests|IIoT.Edge.Launcher.FilesystemTests.LauncherDependencyInjectionTests.LauncherAccountCatalogInitializer_ShouldNotCopySampleAccountAsDefaultCatalog",
-      "assembly": "IIoT.Edge.Launcher.FilesystemTests",
-      "projectPath": "src/Tests/IIoT.Edge.Launcher.FilesystemTests/IIoT.Edge.Launcher.FilesystemTests.csproj",
-      "identity": "IIoT.Edge.Launcher.FilesystemTests.LauncherDependencyInjectionTests.LauncherAccountCatalogInitializer_ShouldNotCopySampleAccountAsDefaultCatalog",
-      "source": null,
-      "testKind": "Integration",
-      "runtime": "Filesystem",
-      "runtimeDependencies": [
-        "ProcessEnvironment"
-      ],
-      "runnerMode": "Serial",
-      "cadence": "PR",
-      "capability": "Launcher.RuntimePaths",
-      "risk": "P1",
-      "concern": "Reliability",
-      "profile": "Simulation",
-      "owner": "Edge.Launcher",
-      "ruleId": "EDGE-LAUNCHER-001",
-      "regressionId": "EDGE-LAUNCHER-001",
-      "required": true,
-      "skipped": false
-    },
-    {
-      "caseKey": "IIoT.Edge.Launcher.FilesystemTests|IIoT.Edge.Launcher.FilesystemTests.LauncherDependencyInjectionTests.LauncherAccountCatalogInitializer_WhenCatalogExists_ShouldNotOverwriteExistingAccounts",
-      "assembly": "IIoT.Edge.Launcher.FilesystemTests",
-      "projectPath": "src/Tests/IIoT.Edge.Launcher.FilesystemTests/IIoT.Edge.Launcher.FilesystemTests.csproj",
-      "identity": "IIoT.Edge.Launcher.FilesystemTests.LauncherDependencyInjectionTests.LauncherAccountCatalogInitializer_WhenCatalogExists_ShouldNotOverwriteExistingAccounts",
-      "source": null,
-      "testKind": "Integration",
-      "runtime": "Filesystem",
-      "runtimeDependencies": [
-        "ProcessEnvironment"
-      ],
-      "runnerMode": "Serial",
-      "cadence": "PR",
-      "capability": "Launcher.RuntimePaths",
-      "risk": "P1",
-      "concern": "Reliability",
-      "profile": "Simulation",
-      "owner": "Edge.Launcher",
-      "ruleId": "EDGE-LAUNCHER-001",
-      "regressionId": "EDGE-LAUNCHER-001",
-      "required": true,
-      "skipped": false
-    },
-    {
-      "caseKey": "IIoT.Edge.Launcher.FilesystemTests|IIoT.Edge.Launcher.FilesystemTests.LauncherDependencyInjectionTests.LauncherAccountCatalogInitializer_WhenSampleIsMissing_ShouldNotBlockStartup",
-      "assembly": "IIoT.Edge.Launcher.FilesystemTests",
-      "projectPath": "src/Tests/IIoT.Edge.Launcher.FilesystemTests/IIoT.Edge.Launcher.FilesystemTests.csproj",
-      "identity": "IIoT.Edge.Launcher.FilesystemTests.LauncherDependencyInjectionTests.LauncherAccountCatalogInitializer_WhenSampleIsMissing_ShouldNotBlockStartup",
       "source": null,
       "testKind": "Integration",
       "runtime": "Filesystem",
@@ -10295,10 +10295,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Launcher.UiTests|IIoT.Edge.Launcher.UiTests.LauncherWindowHeadlessTests.MainWindow_WhenLocalAccountSetupRequired_ShouldLoadSetupView",
+      "caseKey": "IIoT.Edge.Launcher.UiTests|IIoT.Edge.Launcher.UiTests.LauncherWindowHeadlessTests.MainWindow_WhenLocalAccountSetupRequiredAtMinimumSize_ShouldKeepActionAboveNotice",
       "assembly": "IIoT.Edge.Launcher.UiTests",
       "projectPath": "src/Tests/IIoT.Edge.Launcher.UiTests/IIoT.Edge.Launcher.UiTests.csproj",
-      "identity": "IIoT.Edge.Launcher.UiTests.LauncherWindowHeadlessTests.MainWindow_WhenLocalAccountSetupRequired_ShouldLoadSetupView",
+      "identity": "IIoT.Edge.Launcher.UiTests.LauncherWindowHeadlessTests.MainWindow_WhenLocalAccountSetupRequiredAtMinimumSize_ShouldKeepActionAboveNotice",
       "source": null,
       "testKind": "UI",
       "runtime": "Avalonia",
@@ -10318,10 +10318,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Launcher.UiTests|IIoT.Edge.Launcher.UiTests.LauncherWindowHeadlessTests.MainWindow_WhenLocalAccountSetupRequiredAtMinimumSize_ShouldKeepActionAboveNotice",
+      "caseKey": "IIoT.Edge.Launcher.UiTests|IIoT.Edge.Launcher.UiTests.LauncherWindowHeadlessTests.MainWindow_WhenLocalAccountSetupRequired_ShouldLoadSetupView",
       "assembly": "IIoT.Edge.Launcher.UiTests",
       "projectPath": "src/Tests/IIoT.Edge.Launcher.UiTests/IIoT.Edge.Launcher.UiTests.csproj",
-      "identity": "IIoT.Edge.Launcher.UiTests.LauncherWindowHeadlessTests.MainWindow_WhenLocalAccountSetupRequiredAtMinimumSize_ShouldKeepActionAboveNotice",
+      "identity": "IIoT.Edge.Launcher.UiTests.LauncherWindowHeadlessTests.MainWindow_WhenLocalAccountSetupRequired_ShouldLoadSetupView",
       "source": null,
       "testKind": "UI",
       "runtime": "Avalonia",
@@ -13652,6 +13652,69 @@
       "skipped": false
     },
     {
+      "caseKey": "IIoT.Edge.Module.Homogenization.ConformanceTests|IIoT.Edge.Module.Homogenization.ConformanceTests.ModuleParamSchemaReconciliationBehaviorTests.CloudApiConfigSchemaSource_WhenLoaded_ShouldUseAppSettingsSnapshotDefaults",
+      "assembly": "IIoT.Edge.Module.Homogenization.ConformanceTests",
+      "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/IIoT.Edge.Module.Homogenization.ConformanceTests.csproj",
+      "identity": "IIoT.Edge.Module.Homogenization.ConformanceTests.ModuleParamSchemaReconciliationBehaviorTests.CloudApiConfigSchemaSource_WhenLoaded_ShouldUseAppSettingsSnapshotDefaults",
+      "source": null,
+      "testKind": "Conformance",
+      "runtime": "Pure",
+      "runtimeDependencies": [],
+      "runnerMode": "Parallel",
+      "cadence": "PR",
+      "capability": "Plugins.HomogenizationConformance",
+      "risk": "P0",
+      "concern": "Compatibility",
+      "profile": "Simulation",
+      "owner": "Edge.Homogenization",
+      "ruleId": "EDGE-PLUGIN-CONFORMANCE-001",
+      "regressionId": "EDGE-PLUGIN-CONFORMANCE-001",
+      "required": true,
+      "skipped": false
+    },
+    {
+      "caseKey": "IIoT.Edge.Module.Homogenization.ConformanceTests|IIoT.Edge.Module.Homogenization.ConformanceTests.ModuleParamSchemaReconciliationBehaviorTests.ReconcileAsync_WhenExistingModuleParamMatchesLegacyDefault_ShouldRepairOnlyLegacyValue",
+      "assembly": "IIoT.Edge.Module.Homogenization.ConformanceTests",
+      "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/IIoT.Edge.Module.Homogenization.ConformanceTests.csproj",
+      "identity": "IIoT.Edge.Module.Homogenization.ConformanceTests.ModuleParamSchemaReconciliationBehaviorTests.ReconcileAsync_WhenExistingModuleParamMatchesLegacyDefault_ShouldRepairOnlyLegacyValue",
+      "source": null,
+      "testKind": "Conformance",
+      "runtime": "Pure",
+      "runtimeDependencies": [],
+      "runnerMode": "Parallel",
+      "cadence": "PR",
+      "capability": "Plugins.HomogenizationConformance",
+      "risk": "P0",
+      "concern": "Compatibility",
+      "profile": "Simulation",
+      "owner": "Edge.Homogenization",
+      "ruleId": "EDGE-PLUGIN-CONFORMANCE-001",
+      "regressionId": "EDGE-PLUGIN-CONFORMANCE-001",
+      "required": true,
+      "skipped": false
+    },
+    {
+      "caseKey": "IIoT.Edge.Module.Homogenization.ConformanceTests|IIoT.Edge.Module.Homogenization.ConformanceTests.ModuleParamSchemaReconciliationBehaviorTests.ReconcileAsync_WhenPluginCloudSchemaIsEmpty_ShouldDeleteLegacyPluginCloudKeysAndPreserveOtherCategories",
+      "assembly": "IIoT.Edge.Module.Homogenization.ConformanceTests",
+      "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/IIoT.Edge.Module.Homogenization.ConformanceTests.csproj",
+      "identity": "IIoT.Edge.Module.Homogenization.ConformanceTests.ModuleParamSchemaReconciliationBehaviorTests.ReconcileAsync_WhenPluginCloudSchemaIsEmpty_ShouldDeleteLegacyPluginCloudKeysAndPreserveOtherCategories",
+      "source": null,
+      "testKind": "Conformance",
+      "runtime": "Pure",
+      "runtimeDependencies": [],
+      "runnerMode": "Parallel",
+      "cadence": "PR",
+      "capability": "Plugins.HomogenizationConformance",
+      "risk": "P0",
+      "concern": "Compatibility",
+      "profile": "Simulation",
+      "owner": "Edge.Homogenization",
+      "ruleId": "EDGE-PLUGIN-CONFORMANCE-001",
+      "regressionId": "EDGE-PLUGIN-CONFORMANCE-001",
+      "required": true,
+      "skipped": false
+    },
+    {
       "caseKey": "IIoT.Edge.Module.Homogenization.ConformanceTests|IIoT.Edge.Module.Homogenization.ConformanceTests.ModuleParameterBehaviorTests.LoadParamViewHandler_WhenHomogenizationRegistered_ShouldExposeDisplayFallbackWithoutChangingIdentity",
       "assembly": "IIoT.Edge.Module.Homogenization.ConformanceTests",
       "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/IIoT.Edge.Module.Homogenization.ConformanceTests.csproj",
@@ -13803,69 +13866,6 @@
       "assembly": "IIoT.Edge.Module.Homogenization.ConformanceTests",
       "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/IIoT.Edge.Module.Homogenization.ConformanceTests.csproj",
       "identity": "IIoT.Edge.Module.Homogenization.ConformanceTests.ModuleParameterBehaviorTests.ModuleParamRegistry_WhenHomogenizationRegistered_ShouldKeepInternalNameAndExposeDisplayResources",
-      "source": null,
-      "testKind": "Conformance",
-      "runtime": "Pure",
-      "runtimeDependencies": [],
-      "runnerMode": "Parallel",
-      "cadence": "PR",
-      "capability": "Plugins.HomogenizationConformance",
-      "risk": "P0",
-      "concern": "Compatibility",
-      "profile": "Simulation",
-      "owner": "Edge.Homogenization",
-      "ruleId": "EDGE-PLUGIN-CONFORMANCE-001",
-      "regressionId": "EDGE-PLUGIN-CONFORMANCE-001",
-      "required": true,
-      "skipped": false
-    },
-    {
-      "caseKey": "IIoT.Edge.Module.Homogenization.ConformanceTests|IIoT.Edge.Module.Homogenization.ConformanceTests.ModuleParamSchemaReconciliationBehaviorTests.CloudApiConfigSchemaSource_WhenLoaded_ShouldUseAppSettingsSnapshotDefaults",
-      "assembly": "IIoT.Edge.Module.Homogenization.ConformanceTests",
-      "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/IIoT.Edge.Module.Homogenization.ConformanceTests.csproj",
-      "identity": "IIoT.Edge.Module.Homogenization.ConformanceTests.ModuleParamSchemaReconciliationBehaviorTests.CloudApiConfigSchemaSource_WhenLoaded_ShouldUseAppSettingsSnapshotDefaults",
-      "source": null,
-      "testKind": "Conformance",
-      "runtime": "Pure",
-      "runtimeDependencies": [],
-      "runnerMode": "Parallel",
-      "cadence": "PR",
-      "capability": "Plugins.HomogenizationConformance",
-      "risk": "P0",
-      "concern": "Compatibility",
-      "profile": "Simulation",
-      "owner": "Edge.Homogenization",
-      "ruleId": "EDGE-PLUGIN-CONFORMANCE-001",
-      "regressionId": "EDGE-PLUGIN-CONFORMANCE-001",
-      "required": true,
-      "skipped": false
-    },
-    {
-      "caseKey": "IIoT.Edge.Module.Homogenization.ConformanceTests|IIoT.Edge.Module.Homogenization.ConformanceTests.ModuleParamSchemaReconciliationBehaviorTests.ReconcileAsync_WhenExistingModuleParamMatchesLegacyDefault_ShouldRepairOnlyLegacyValue",
-      "assembly": "IIoT.Edge.Module.Homogenization.ConformanceTests",
-      "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/IIoT.Edge.Module.Homogenization.ConformanceTests.csproj",
-      "identity": "IIoT.Edge.Module.Homogenization.ConformanceTests.ModuleParamSchemaReconciliationBehaviorTests.ReconcileAsync_WhenExistingModuleParamMatchesLegacyDefault_ShouldRepairOnlyLegacyValue",
-      "source": null,
-      "testKind": "Conformance",
-      "runtime": "Pure",
-      "runtimeDependencies": [],
-      "runnerMode": "Parallel",
-      "cadence": "PR",
-      "capability": "Plugins.HomogenizationConformance",
-      "risk": "P0",
-      "concern": "Compatibility",
-      "profile": "Simulation",
-      "owner": "Edge.Homogenization",
-      "ruleId": "EDGE-PLUGIN-CONFORMANCE-001",
-      "regressionId": "EDGE-PLUGIN-CONFORMANCE-001",
-      "required": true,
-      "skipped": false
-    },
-    {
-      "caseKey": "IIoT.Edge.Module.Homogenization.ConformanceTests|IIoT.Edge.Module.Homogenization.ConformanceTests.ModuleParamSchemaReconciliationBehaviorTests.ReconcileAsync_WhenPluginCloudSchemaIsEmpty_ShouldDeleteLegacyPluginCloudKeysAndPreserveOtherCategories",
-      "assembly": "IIoT.Edge.Module.Homogenization.ConformanceTests",
-      "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/IIoT.Edge.Module.Homogenization.ConformanceTests.csproj",
-      "identity": "IIoT.Edge.Module.Homogenization.ConformanceTests.ModuleParamSchemaReconciliationBehaviorTests.ReconcileAsync_WhenPluginCloudSchemaIsEmpty_ShouldDeleteLegacyPluginCloudKeysAndPreserveOtherCategories",
       "source": null,
       "testKind": "Conformance",
       "runtime": "Pure",
@@ -14315,10 +14315,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Module.Homogenization.WorkflowTests|IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.Inbound_WhenMesDisabled_ShouldAckOkAndSkipQueue",
+      "caseKey": "IIoT.Edge.Module.Homogenization.WorkflowTests|IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.Inbound_WhenMesDisabledAndCloudEnabled_ShouldEnqueueCloudOnlyWithoutMainPlan",
       "assembly": "IIoT.Edge.Module.Homogenization.WorkflowTests",
       "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.WorkflowTests/IIoT.Edge.Module.Homogenization.WorkflowTests.csproj",
-      "identity": "IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.Inbound_WhenMesDisabled_ShouldAckOkAndSkipQueue",
+      "identity": "IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.Inbound_WhenMesDisabledAndCloudEnabled_ShouldEnqueueCloudOnlyWithoutMainPlan",
       "source": null,
       "testKind": "Workflow",
       "runtime": "Pure",
@@ -14339,10 +14339,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Module.Homogenization.WorkflowTests|IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.Inbound_WhenMesDisabledAndCloudEnabled_ShouldEnqueueCloudOnlyWithoutMainPlan",
+      "caseKey": "IIoT.Edge.Module.Homogenization.WorkflowTests|IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.Inbound_WhenMesDisabled_ShouldAckOkAndSkipQueue",
       "assembly": "IIoT.Edge.Module.Homogenization.WorkflowTests",
       "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.WorkflowTests/IIoT.Edge.Module.Homogenization.WorkflowTests.csproj",
-      "identity": "IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.Inbound_WhenMesDisabledAndCloudEnabled_ShouldEnqueueCloudOnlyWithoutMainPlan",
+      "identity": "IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.Inbound_WhenMesDisabled_ShouldAckOkAndSkipQueue",
       "source": null,
       "testKind": "Workflow",
       "runtime": "Pure",
@@ -14747,10 +14747,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Module.Homogenization.WorkflowTests|IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.Realtime_WhenMesAndCloudDisabled_ShouldSkipQueueAndKeepFingerprintUnset",
+      "caseKey": "IIoT.Edge.Module.Homogenization.WorkflowTests|IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.Realtime_WhenMesAndCloudDisabledLegacyCase_ShouldSkipQueueAndKeepFingerprintUnset",
       "assembly": "IIoT.Edge.Module.Homogenization.WorkflowTests",
       "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.WorkflowTests/IIoT.Edge.Module.Homogenization.WorkflowTests.csproj",
-      "identity": "IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.Realtime_WhenMesAndCloudDisabled_ShouldSkipQueueAndKeepFingerprintUnset",
+      "identity": "IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.Realtime_WhenMesAndCloudDisabledLegacyCase_ShouldSkipQueueAndKeepFingerprintUnset",
       "source": null,
       "testKind": "Workflow",
       "runtime": "Pure",
@@ -14771,10 +14771,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Module.Homogenization.WorkflowTests|IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.Realtime_WhenMesAndCloudDisabledLegacyCase_ShouldSkipQueueAndKeepFingerprintUnset",
+      "caseKey": "IIoT.Edge.Module.Homogenization.WorkflowTests|IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.Realtime_WhenMesAndCloudDisabled_ShouldSkipQueueAndKeepFingerprintUnset",
       "assembly": "IIoT.Edge.Module.Homogenization.WorkflowTests",
       "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.WorkflowTests/IIoT.Edge.Module.Homogenization.WorkflowTests.csproj",
-      "identity": "IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.Realtime_WhenMesAndCloudDisabledLegacyCase_ShouldSkipQueueAndKeepFingerprintUnset",
+      "identity": "IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.Realtime_WhenMesAndCloudDisabled_ShouldSkipQueueAndKeepFingerprintUnset",
       "source": null,
       "testKind": "Workflow",
       "runtime": "Pure",
@@ -14891,6 +14891,30 @@
       "skipped": false
     },
     {
+      "caseKey": "IIoT.Edge.Module.Homogenization.WorkflowTests|IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.RecipeAndEquipmentStatus_WhenReady_ShouldEnqueueMesOnlyRecordsAndAckOk",
+      "assembly": "IIoT.Edge.Module.Homogenization.WorkflowTests",
+      "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.WorkflowTests/IIoT.Edge.Module.Homogenization.WorkflowTests.csproj",
+      "identity": "IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.RecipeAndEquipmentStatus_WhenReady_ShouldEnqueueMesOnlyRecordsAndAckOk",
+      "source": null,
+      "testKind": "Workflow",
+      "runtime": "Pure",
+      "runtimeDependencies": [
+        "FakeTime",
+        "ControlledConcurrency"
+      ],
+      "runnerMode": "Parallel",
+      "cadence": "PR",
+      "capability": "Plugins.HomogenizationWorkflow",
+      "risk": "P0",
+      "concern": "Reliability",
+      "profile": "Simulation",
+      "owner": "Edge.Homogenization",
+      "ruleId": "EDGE-PLUGIN-WORKFLOW-001",
+      "regressionId": "EDGE-PLUGIN-WORKFLOW-001",
+      "required": true,
+      "skipped": false
+    },
+    {
       "caseKey": "IIoT.Edge.Module.Homogenization.WorkflowTests|IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.Recipe_WhenCloudOnlyDataPipelineThrows_ShouldRecordCloudFailureWithoutMesDiagnostics",
       "assembly": "IIoT.Edge.Module.Homogenization.WorkflowTests",
       "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.WorkflowTests/IIoT.Edge.Module.Homogenization.WorkflowTests.csproj",
@@ -14939,30 +14963,6 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Module.Homogenization.WorkflowTests|IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.Recipe_WhenMesDisabled_ShouldAckOkAndSkipQueue",
-      "assembly": "IIoT.Edge.Module.Homogenization.WorkflowTests",
-      "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.WorkflowTests/IIoT.Edge.Module.Homogenization.WorkflowTests.csproj",
-      "identity": "IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.Recipe_WhenMesDisabled_ShouldAckOkAndSkipQueue",
-      "source": null,
-      "testKind": "Workflow",
-      "runtime": "Pure",
-      "runtimeDependencies": [
-        "FakeTime",
-        "ControlledConcurrency"
-      ],
-      "runnerMode": "Parallel",
-      "cadence": "PR",
-      "capability": "Plugins.HomogenizationWorkflow",
-      "risk": "P0",
-      "concern": "Reliability",
-      "profile": "Simulation",
-      "owner": "Edge.Homogenization",
-      "ruleId": "EDGE-PLUGIN-WORKFLOW-001",
-      "regressionId": "EDGE-PLUGIN-WORKFLOW-001",
-      "required": true,
-      "skipped": false
-    },
-    {
       "caseKey": "IIoT.Edge.Module.Homogenization.WorkflowTests|IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.Recipe_WhenMesDisabledAndCloudEnabled_ShouldEnqueueCloudOnlyWithoutMainPlan",
       "assembly": "IIoT.Edge.Module.Homogenization.WorkflowTests",
       "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.WorkflowTests/IIoT.Edge.Module.Homogenization.WorkflowTests.csproj",
@@ -14987,10 +14987,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Module.Homogenization.WorkflowTests|IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.RecipeAndEquipmentStatus_WhenReady_ShouldEnqueueMesOnlyRecordsAndAckOk",
+      "caseKey": "IIoT.Edge.Module.Homogenization.WorkflowTests|IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.Recipe_WhenMesDisabled_ShouldAckOkAndSkipQueue",
       "assembly": "IIoT.Edge.Module.Homogenization.WorkflowTests",
       "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.WorkflowTests/IIoT.Edge.Module.Homogenization.WorkflowTests.csproj",
-      "identity": "IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.RecipeAndEquipmentStatus_WhenReady_ShouldEnqueueMesOnlyRecordsAndAckOk",
+      "identity": "IIoT.Edge.Module.Homogenization.WorkflowTests.HomogenizationBusinessChainBehaviorTests.Recipe_WhenMesDisabled_ShouldAckOkAndSkipQueue",
       "source": null,
       "testKind": "Workflow",
       "runtime": "Pure",
@@ -15971,30 +15971,6 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Module.Homogenization.WorkflowTests|IIoT.Edge.Module.Homogenization.WorkflowTests.PlcTaskBindingBehaviorTests.GetEnabledTaskKeys_WhenCandidateDefaultEnabled_ShouldEnableRunnableMissingRow",
-      "assembly": "IIoT.Edge.Module.Homogenization.WorkflowTests",
-      "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.WorkflowTests/IIoT.Edge.Module.Homogenization.WorkflowTests.csproj",
-      "identity": "IIoT.Edge.Module.Homogenization.WorkflowTests.PlcTaskBindingBehaviorTests.GetEnabledTaskKeys_WhenCandidateDefaultEnabled_ShouldEnableRunnableMissingRow",
-      "source": null,
-      "testKind": "Workflow",
-      "runtime": "Pure",
-      "runtimeDependencies": [
-        "FakeTime",
-        "ControlledConcurrency"
-      ],
-      "runnerMode": "Parallel",
-      "cadence": "PR",
-      "capability": "Plugins.HomogenizationWorkflow",
-      "risk": "P0",
-      "concern": "Reliability",
-      "profile": "Simulation",
-      "owner": "Edge.Homogenization",
-      "ruleId": "EDGE-PLUGIN-WORKFLOW-001",
-      "regressionId": "EDGE-PLUGIN-WORKFLOW-001",
-      "required": true,
-      "skipped": false
-    },
-    {
       "caseKey": "IIoT.Edge.Module.Homogenization.WorkflowTests|IIoT.Edge.Module.Homogenization.WorkflowTests.PlcTaskBindingBehaviorTests.GetEnabledTaskKeys_WhenCandidateDefaultEnabledButIoMissing_ShouldKeepDisabled",
       "assembly": "IIoT.Edge.Module.Homogenization.WorkflowTests",
       "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.WorkflowTests/IIoT.Edge.Module.Homogenization.WorkflowTests.csproj",
@@ -16023,6 +15999,30 @@
       "assembly": "IIoT.Edge.Module.Homogenization.WorkflowTests",
       "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.WorkflowTests/IIoT.Edge.Module.Homogenization.WorkflowTests.csproj",
       "identity": "IIoT.Edge.Module.Homogenization.WorkflowTests.PlcTaskBindingBehaviorTests.GetEnabledTaskKeys_WhenCandidateDefaultEnabledButSavedDisabled_ShouldUseSavedRow",
+      "source": null,
+      "testKind": "Workflow",
+      "runtime": "Pure",
+      "runtimeDependencies": [
+        "FakeTime",
+        "ControlledConcurrency"
+      ],
+      "runnerMode": "Parallel",
+      "cadence": "PR",
+      "capability": "Plugins.HomogenizationWorkflow",
+      "risk": "P0",
+      "concern": "Reliability",
+      "profile": "Simulation",
+      "owner": "Edge.Homogenization",
+      "ruleId": "EDGE-PLUGIN-WORKFLOW-001",
+      "regressionId": "EDGE-PLUGIN-WORKFLOW-001",
+      "required": true,
+      "skipped": false
+    },
+    {
+      "caseKey": "IIoT.Edge.Module.Homogenization.WorkflowTests|IIoT.Edge.Module.Homogenization.WorkflowTests.PlcTaskBindingBehaviorTests.GetEnabledTaskKeys_WhenCandidateDefaultEnabled_ShouldEnableRunnableMissingRow",
+      "assembly": "IIoT.Edge.Module.Homogenization.WorkflowTests",
+      "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.WorkflowTests/IIoT.Edge.Module.Homogenization.WorkflowTests.csproj",
+      "identity": "IIoT.Edge.Module.Homogenization.WorkflowTests.PlcTaskBindingBehaviorTests.GetEnabledTaskKeys_WhenCandidateDefaultEnabled_ShouldEnableRunnableMissingRow",
       "source": null,
       "testKind": "Workflow",
       "runtime": "Pure",
@@ -17634,10 +17634,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Plc.ContractTests|IIoT.Edge.Plc.ContractTests.McPlcServiceBehaviorTests.ParseAddress_ShouldSplitPrefixAndDeviceNumber(address: \"x1f\", expectedPrefix: \"X\", expectedDeviceAddress: \"1F\")",
+      "caseKey": "IIoT.Edge.Plc.ContractTests|IIoT.Edge.Plc.ContractTests.McPlcServiceBehaviorTests.ParseAddress_ShouldSplitPrefixAndDeviceNumber(address: \"ZR400\", expectedPrefix: \"ZR\", expectedDeviceAddress: \"400\")",
       "assembly": "IIoT.Edge.Plc.ContractTests",
       "projectPath": "src/Tests/IIoT.Edge.Plc.ContractTests/IIoT.Edge.Plc.ContractTests.csproj",
-      "identity": "IIoT.Edge.Plc.ContractTests.McPlcServiceBehaviorTests.ParseAddress_ShouldSplitPrefixAndDeviceNumber(address: \"x1f\", expectedPrefix: \"X\", expectedDeviceAddress: \"1F\")",
+      "identity": "IIoT.Edge.Plc.ContractTests.McPlcServiceBehaviorTests.ParseAddress_ShouldSplitPrefixAndDeviceNumber(address: \"ZR400\", expectedPrefix: \"ZR\", expectedDeviceAddress: \"400\")",
       "source": null,
       "testKind": "Contract",
       "runtime": "Pure",
@@ -17657,10 +17657,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Plc.ContractTests|IIoT.Edge.Plc.ContractTests.McPlcServiceBehaviorTests.ParseAddress_ShouldSplitPrefixAndDeviceNumber(address: \"ZR400\", expectedPrefix: \"ZR\", expectedDeviceAddress: \"400\")",
+      "caseKey": "IIoT.Edge.Plc.ContractTests|IIoT.Edge.Plc.ContractTests.McPlcServiceBehaviorTests.ParseAddress_ShouldSplitPrefixAndDeviceNumber(address: \"x1f\", expectedPrefix: \"X\", expectedDeviceAddress: \"1F\")",
       "assembly": "IIoT.Edge.Plc.ContractTests",
       "projectPath": "src/Tests/IIoT.Edge.Plc.ContractTests/IIoT.Edge.Plc.ContractTests.csproj",
-      "identity": "IIoT.Edge.Plc.ContractTests.McPlcServiceBehaviorTests.ParseAddress_ShouldSplitPrefixAndDeviceNumber(address: \"ZR400\", expectedPrefix: \"ZR\", expectedDeviceAddress: \"400\")",
+      "identity": "IIoT.Edge.Plc.ContractTests.McPlcServiceBehaviorTests.ParseAddress_ShouldSplitPrefixAndDeviceNumber(address: \"x1f\", expectedPrefix: \"X\", expectedDeviceAddress: \"1F\")",
       "source": null,
       "testKind": "Contract",
       "runtime": "Pure",
@@ -18186,10 +18186,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Plc.ContractTests|IIoT.Edge.Plc.ContractTests.ModbusPlcServiceBehaviorTests.PlcEndpointResolver_WhenModbusRtu_ShouldUseBoundSerialDevice",
+      "caseKey": "IIoT.Edge.Plc.ContractTests|IIoT.Edge.Plc.ContractTests.ModbusPlcServiceBehaviorTests.PlcEndpointResolver_WhenModbusRtuHasNoSerialBinding_ShouldReject",
       "assembly": "IIoT.Edge.Plc.ContractTests",
       "projectPath": "src/Tests/IIoT.Edge.Plc.ContractTests/IIoT.Edge.Plc.ContractTests.csproj",
-      "identity": "IIoT.Edge.Plc.ContractTests.ModbusPlcServiceBehaviorTests.PlcEndpointResolver_WhenModbusRtu_ShouldUseBoundSerialDevice",
+      "identity": "IIoT.Edge.Plc.ContractTests.ModbusPlcServiceBehaviorTests.PlcEndpointResolver_WhenModbusRtuHasNoSerialBinding_ShouldReject",
       "source": null,
       "testKind": "Contract",
       "runtime": "Pure",
@@ -18209,10 +18209,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Plc.ContractTests|IIoT.Edge.Plc.ContractTests.ModbusPlcServiceBehaviorTests.PlcEndpointResolver_WhenModbusRtuHasNoSerialBinding_ShouldReject",
+      "caseKey": "IIoT.Edge.Plc.ContractTests|IIoT.Edge.Plc.ContractTests.ModbusPlcServiceBehaviorTests.PlcEndpointResolver_WhenModbusRtu_ShouldUseBoundSerialDevice",
       "assembly": "IIoT.Edge.Plc.ContractTests",
       "projectPath": "src/Tests/IIoT.Edge.Plc.ContractTests/IIoT.Edge.Plc.ContractTests.csproj",
-      "identity": "IIoT.Edge.Plc.ContractTests.ModbusPlcServiceBehaviorTests.PlcEndpointResolver_WhenModbusRtuHasNoSerialBinding_ShouldReject",
+      "identity": "IIoT.Edge.Plc.ContractTests.ModbusPlcServiceBehaviorTests.PlcEndpointResolver_WhenModbusRtu_ShouldUseBoundSerialDevice",
       "source": null,
       "testKind": "Contract",
       "runtime": "Pure",
@@ -19156,30 +19156,6 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Runtime.WorkflowTests|IIoT.Edge.Runtime.WorkflowTests.DataPipelineConsumerInvokerBehaviorTests.ExecuteAsync_WhenCallerCancels_ShouldNotConvertToTimeout",
-      "assembly": "IIoT.Edge.Runtime.WorkflowTests",
-      "projectPath": "src/Tests/IIoT.Edge.Runtime.WorkflowTests/IIoT.Edge.Runtime.WorkflowTests.csproj",
-      "identity": "IIoT.Edge.Runtime.WorkflowTests.DataPipelineConsumerInvokerBehaviorTests.ExecuteAsync_WhenCallerCancels_ShouldNotConvertToTimeout",
-      "source": null,
-      "testKind": "Workflow",
-      "runtime": "Pure",
-      "runtimeDependencies": [
-        "FakeTime",
-        "ControlledConcurrency"
-      ],
-      "runnerMode": "Parallel",
-      "cadence": "PR",
-      "capability": "Runtime.DataPipeline",
-      "risk": "P0",
-      "concern": "Reliability",
-      "profile": "Simulation",
-      "owner": "Edge.Runtime",
-      "ruleId": "EDGE-DATAPIPELINE-001",
-      "regressionId": "EDGE-DATAPIPELINE-001",
-      "required": true,
-      "skipped": false
-    },
-    {
       "caseKey": "IIoT.Edge.Runtime.WorkflowTests|IIoT.Edge.Runtime.WorkflowTests.DataPipelineConsumerInvokerBehaviorTests.ExecuteAsync_WhenCallerCancelsBeforeIgnoredActionReturns_ShouldPropagateCancellation(timeoutMilliseconds: 0)",
       "assembly": "IIoT.Edge.Runtime.WorkflowTests",
       "projectPath": "src/Tests/IIoT.Edge.Runtime.WorkflowTests/IIoT.Edge.Runtime.WorkflowTests.csproj",
@@ -19208,6 +19184,30 @@
       "assembly": "IIoT.Edge.Runtime.WorkflowTests",
       "projectPath": "src/Tests/IIoT.Edge.Runtime.WorkflowTests/IIoT.Edge.Runtime.WorkflowTests.csproj",
       "identity": "IIoT.Edge.Runtime.WorkflowTests.DataPipelineConsumerInvokerBehaviorTests.ExecuteAsync_WhenCallerCancelsBeforeIgnoredActionReturns_ShouldPropagateCancellation(timeoutMilliseconds: 5000)",
+      "source": null,
+      "testKind": "Workflow",
+      "runtime": "Pure",
+      "runtimeDependencies": [
+        "FakeTime",
+        "ControlledConcurrency"
+      ],
+      "runnerMode": "Parallel",
+      "cadence": "PR",
+      "capability": "Runtime.DataPipeline",
+      "risk": "P0",
+      "concern": "Reliability",
+      "profile": "Simulation",
+      "owner": "Edge.Runtime",
+      "ruleId": "EDGE-DATAPIPELINE-001",
+      "regressionId": "EDGE-DATAPIPELINE-001",
+      "required": true,
+      "skipped": false
+    },
+    {
+      "caseKey": "IIoT.Edge.Runtime.WorkflowTests|IIoT.Edge.Runtime.WorkflowTests.DataPipelineConsumerInvokerBehaviorTests.ExecuteAsync_WhenCallerCancels_ShouldNotConvertToTimeout",
+      "assembly": "IIoT.Edge.Runtime.WorkflowTests",
+      "projectPath": "src/Tests/IIoT.Edge.Runtime.WorkflowTests/IIoT.Edge.Runtime.WorkflowTests.csproj",
+      "identity": "IIoT.Edge.Runtime.WorkflowTests.DataPipelineConsumerInvokerBehaviorTests.ExecuteAsync_WhenCallerCancels_ShouldNotConvertToTimeout",
       "source": null,
       "testKind": "Workflow",
       "runtime": "Pure",
@@ -19588,10 +19588,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Runtime.WorkflowTests|IIoT.Edge.Runtime.WorkflowTests.DeadLetterMaintenanceBehaviorTests.DeadLetter_Delete_ShouldRemoveOnlySelectedChannelRecord",
+      "caseKey": "IIoT.Edge.Runtime.WorkflowTests|IIoT.Edge.Runtime.WorkflowTests.DeadLetterMaintenanceBehaviorTests.DeadLetter_DeleteFailure_ShouldReturnFailureAndLogError",
       "assembly": "IIoT.Edge.Runtime.WorkflowTests",
       "projectPath": "src/Tests/IIoT.Edge.Runtime.WorkflowTests/IIoT.Edge.Runtime.WorkflowTests.csproj",
-      "identity": "IIoT.Edge.Runtime.WorkflowTests.DeadLetterMaintenanceBehaviorTests.DeadLetter_Delete_ShouldRemoveOnlySelectedChannelRecord",
+      "identity": "IIoT.Edge.Runtime.WorkflowTests.DeadLetterMaintenanceBehaviorTests.DeadLetter_DeleteFailure_ShouldReturnFailureAndLogError",
       "source": null,
       "testKind": "Workflow",
       "runtime": "Pure",
@@ -19612,10 +19612,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Runtime.WorkflowTests|IIoT.Edge.Runtime.WorkflowTests.DeadLetterMaintenanceBehaviorTests.DeadLetter_DeleteFailure_ShouldReturnFailureAndLogError",
+      "caseKey": "IIoT.Edge.Runtime.WorkflowTests|IIoT.Edge.Runtime.WorkflowTests.DeadLetterMaintenanceBehaviorTests.DeadLetter_Delete_ShouldRemoveOnlySelectedChannelRecord",
       "assembly": "IIoT.Edge.Runtime.WorkflowTests",
       "projectPath": "src/Tests/IIoT.Edge.Runtime.WorkflowTests/IIoT.Edge.Runtime.WorkflowTests.csproj",
-      "identity": "IIoT.Edge.Runtime.WorkflowTests.DeadLetterMaintenanceBehaviorTests.DeadLetter_DeleteFailure_ShouldReturnFailureAndLogError",
+      "identity": "IIoT.Edge.Runtime.WorkflowTests.DeadLetterMaintenanceBehaviorTests.DeadLetter_Delete_ShouldRemoveOnlySelectedChannelRecord",
       "source": null,
       "testKind": "Workflow",
       "runtime": "Pure",
@@ -22324,10 +22324,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Runtime.WorkflowTests|IIoT.Edge.Runtime.WorkflowTests.ProcessQueueTaskBehaviorTests.ProcessQueue_WhenRecordLogSubscriberThrows_ShouldStillDispatchOrCompensateExactlyOnce(throwingLogMarker: \"开始处理\", consumerResult: True, expectedRetryCount: 0)",
+      "caseKey": "IIoT.Edge.Runtime.WorkflowTests|IIoT.Edge.Runtime.WorkflowTests.ProcessQueueTaskBehaviorTests.ProcessQueue_WhenRecordLogSubscriberThrows_ShouldStillDispatchOrCompensateExactlyOnce(throwingLogMarker: \"准备写入\", consumerResult: False, expectedRetryCount: 1)",
       "assembly": "IIoT.Edge.Runtime.WorkflowTests",
       "projectPath": "src/Tests/IIoT.Edge.Runtime.WorkflowTests/IIoT.Edge.Runtime.WorkflowTests.csproj",
-      "identity": "IIoT.Edge.Runtime.WorkflowTests.ProcessQueueTaskBehaviorTests.ProcessQueue_WhenRecordLogSubscriberThrows_ShouldStillDispatchOrCompensateExactlyOnce(throwingLogMarker: \"开始处理\", consumerResult: True, expectedRetryCount: 0)",
+      "identity": "IIoT.Edge.Runtime.WorkflowTests.ProcessQueueTaskBehaviorTests.ProcessQueue_WhenRecordLogSubscriberThrows_ShouldStillDispatchOrCompensateExactlyOnce(throwingLogMarker: \"准备写入\", consumerResult: False, expectedRetryCount: 1)",
       "source": "ProcessQueueTaskBehaviorTests.cs",
       "testKind": "Workflow",
       "runtime": "Pure",
@@ -22372,10 +22372,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Runtime.WorkflowTests|IIoT.Edge.Runtime.WorkflowTests.ProcessQueueTaskBehaviorTests.ProcessQueue_WhenRecordLogSubscriberThrows_ShouldStillDispatchOrCompensateExactlyOnce(throwingLogMarker: \"准备写入\", consumerResult: False, expectedRetryCount: 1)",
+      "caseKey": "IIoT.Edge.Runtime.WorkflowTests|IIoT.Edge.Runtime.WorkflowTests.ProcessQueueTaskBehaviorTests.ProcessQueue_WhenRecordLogSubscriberThrows_ShouldStillDispatchOrCompensateExactlyOnce(throwingLogMarker: \"开始处理\", consumerResult: True, expectedRetryCount: 0)",
       "assembly": "IIoT.Edge.Runtime.WorkflowTests",
       "projectPath": "src/Tests/IIoT.Edge.Runtime.WorkflowTests/IIoT.Edge.Runtime.WorkflowTests.csproj",
-      "identity": "IIoT.Edge.Runtime.WorkflowTests.ProcessQueueTaskBehaviorTests.ProcessQueue_WhenRecordLogSubscriberThrows_ShouldStillDispatchOrCompensateExactlyOnce(throwingLogMarker: \"准备写入\", consumerResult: False, expectedRetryCount: 1)",
+      "identity": "IIoT.Edge.Runtime.WorkflowTests.ProcessQueueTaskBehaviorTests.ProcessQueue_WhenRecordLogSubscriberThrows_ShouldStillDispatchOrCompensateExactlyOnce(throwingLogMarker: \"开始处理\", consumerResult: True, expectedRetryCount: 0)",
       "source": "ProcessQueueTaskBehaviorTests.cs",
       "testKind": "Workflow",
       "runtime": "Pure",
@@ -24124,10 +24124,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Runtime.WorkflowTests|IIoT.Edge.Runtime.WorkflowTests.RuntimeTaskBaseBehaviorTests.PlcTaskBase_WhenDoCoreThrows_ShouldLogAndRetry",
+      "caseKey": "IIoT.Edge.Runtime.WorkflowTests|IIoT.Edge.Runtime.WorkflowTests.RuntimeTaskBaseBehaviorTests.PlcTaskBase_WhenDoCoreThrowsUnrelatedCancellation_ShouldLogAndRetry",
       "assembly": "IIoT.Edge.Runtime.WorkflowTests",
       "projectPath": "src/Tests/IIoT.Edge.Runtime.WorkflowTests/IIoT.Edge.Runtime.WorkflowTests.csproj",
-      "identity": "IIoT.Edge.Runtime.WorkflowTests.RuntimeTaskBaseBehaviorTests.PlcTaskBase_WhenDoCoreThrows_ShouldLogAndRetry",
+      "identity": "IIoT.Edge.Runtime.WorkflowTests.RuntimeTaskBaseBehaviorTests.PlcTaskBase_WhenDoCoreThrowsUnrelatedCancellation_ShouldLogAndRetry",
       "source": null,
       "testKind": "Workflow",
       "runtime": "Pure",
@@ -24148,10 +24148,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Runtime.WorkflowTests|IIoT.Edge.Runtime.WorkflowTests.RuntimeTaskBaseBehaviorTests.PlcTaskBase_WhenDoCoreThrowsUnrelatedCancellation_ShouldLogAndRetry",
+      "caseKey": "IIoT.Edge.Runtime.WorkflowTests|IIoT.Edge.Runtime.WorkflowTests.RuntimeTaskBaseBehaviorTests.PlcTaskBase_WhenDoCoreThrows_ShouldLogAndRetry",
       "assembly": "IIoT.Edge.Runtime.WorkflowTests",
       "projectPath": "src/Tests/IIoT.Edge.Runtime.WorkflowTests/IIoT.Edge.Runtime.WorkflowTests.csproj",
-      "identity": "IIoT.Edge.Runtime.WorkflowTests.RuntimeTaskBaseBehaviorTests.PlcTaskBase_WhenDoCoreThrowsUnrelatedCancellation_ShouldLogAndRetry",
+      "identity": "IIoT.Edge.Runtime.WorkflowTests.RuntimeTaskBaseBehaviorTests.PlcTaskBase_WhenDoCoreThrows_ShouldLogAndRetry",
       "source": null,
       "testKind": "Workflow",
       "runtime": "Pure",
@@ -24220,10 +24220,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Runtime.WorkflowTests|IIoT.Edge.Runtime.WorkflowTests.RuntimeTaskBaseBehaviorTests.ScheduledTaskBase_WhenExecuteThrows_ShouldLogAndRetry",
+      "caseKey": "IIoT.Edge.Runtime.WorkflowTests|IIoT.Edge.Runtime.WorkflowTests.RuntimeTaskBaseBehaviorTests.ScheduledTaskBase_WhenExecuteThrowsUnrelatedCancellation_ShouldLogAndRetry",
       "assembly": "IIoT.Edge.Runtime.WorkflowTests",
       "projectPath": "src/Tests/IIoT.Edge.Runtime.WorkflowTests/IIoT.Edge.Runtime.WorkflowTests.csproj",
-      "identity": "IIoT.Edge.Runtime.WorkflowTests.RuntimeTaskBaseBehaviorTests.ScheduledTaskBase_WhenExecuteThrows_ShouldLogAndRetry",
+      "identity": "IIoT.Edge.Runtime.WorkflowTests.RuntimeTaskBaseBehaviorTests.ScheduledTaskBase_WhenExecuteThrowsUnrelatedCancellation_ShouldLogAndRetry",
       "source": null,
       "testKind": "Workflow",
       "runtime": "Pure",
@@ -24244,10 +24244,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Runtime.WorkflowTests|IIoT.Edge.Runtime.WorkflowTests.RuntimeTaskBaseBehaviorTests.ScheduledTaskBase_WhenExecuteThrowsUnrelatedCancellation_ShouldLogAndRetry",
+      "caseKey": "IIoT.Edge.Runtime.WorkflowTests|IIoT.Edge.Runtime.WorkflowTests.RuntimeTaskBaseBehaviorTests.ScheduledTaskBase_WhenExecuteThrows_ShouldLogAndRetry",
       "assembly": "IIoT.Edge.Runtime.WorkflowTests",
       "projectPath": "src/Tests/IIoT.Edge.Runtime.WorkflowTests/IIoT.Edge.Runtime.WorkflowTests.csproj",
-      "identity": "IIoT.Edge.Runtime.WorkflowTests.RuntimeTaskBaseBehaviorTests.ScheduledTaskBase_WhenExecuteThrowsUnrelatedCancellation_ShouldLogAndRetry",
+      "identity": "IIoT.Edge.Runtime.WorkflowTests.RuntimeTaskBaseBehaviorTests.ScheduledTaskBase_WhenExecuteThrows_ShouldLogAndRetry",
       "source": null,
       "testKind": "Workflow",
       "runtime": "Pure",
@@ -24967,6 +24967,29 @@
       "skipped": false
     },
     {
+      "caseKey": "IIoT.Edge.Shell.FilesystemTests|IIoT.Edge.Shell.FilesystemTests.ShellRuntimePathResolverBehaviorTests.ResolveWithDiagnostics_WhenRuntimeRootIsInvalid_ShouldUseProfileDefaultWithoutThrowing",
+      "assembly": "IIoT.Edge.Shell.FilesystemTests",
+      "projectPath": "src/Tests/IIoT.Edge.Shell.FilesystemTests/IIoT.Edge.Shell.FilesystemTests.csproj",
+      "identity": "IIoT.Edge.Shell.FilesystemTests.ShellRuntimePathResolverBehaviorTests.ResolveWithDiagnostics_WhenRuntimeRootIsInvalid_ShouldUseProfileDefaultWithoutThrowing",
+      "source": null,
+      "testKind": "Integration",
+      "runtime": "Filesystem",
+      "runtimeDependencies": [
+        "ProcessEnvironment"
+      ],
+      "runnerMode": "Serial",
+      "cadence": "PR",
+      "capability": "Shell.ConfigurationFilesystem",
+      "risk": "P1",
+      "concern": "Reliability",
+      "profile": "Simulation",
+      "owner": "Edge.Shell",
+      "ruleId": "EDGE-SHELL-001",
+      "regressionId": "EDGE-SHELL-001",
+      "required": true,
+      "skipped": false
+    },
+    {
       "caseKey": "IIoT.Edge.Shell.FilesystemTests|IIoT.Edge.Shell.FilesystemTests.ShellRuntimePathResolverBehaviorTests.Resolve_WhenDataRootOverrideIsSet_ShouldHonorExplicitOverride",
       "assembly": "IIoT.Edge.Shell.FilesystemTests",
       "projectPath": "src/Tests/IIoT.Edge.Shell.FilesystemTests/IIoT.Edge.Shell.FilesystemTests.csproj",
@@ -25040,29 +25063,6 @@
       "assembly": "IIoT.Edge.Shell.FilesystemTests",
       "projectPath": "src/Tests/IIoT.Edge.Shell.FilesystemTests/IIoT.Edge.Shell.FilesystemTests.csproj",
       "identity": "IIoT.Edge.Shell.FilesystemTests.ShellRuntimePathResolverBehaviorTests.Resolve_WhenRuntimeDataRootUsesWindowsSeparators_ShouldResolveRelativeRootAgainstBaseDirectory",
-      "source": null,
-      "testKind": "Integration",
-      "runtime": "Filesystem",
-      "runtimeDependencies": [
-        "ProcessEnvironment"
-      ],
-      "runnerMode": "Serial",
-      "cadence": "PR",
-      "capability": "Shell.ConfigurationFilesystem",
-      "risk": "P1",
-      "concern": "Reliability",
-      "profile": "Simulation",
-      "owner": "Edge.Shell",
-      "ruleId": "EDGE-SHELL-001",
-      "regressionId": "EDGE-SHELL-001",
-      "required": true,
-      "skipped": false
-    },
-    {
-      "caseKey": "IIoT.Edge.Shell.FilesystemTests|IIoT.Edge.Shell.FilesystemTests.ShellRuntimePathResolverBehaviorTests.ResolveWithDiagnostics_WhenRuntimeRootIsInvalid_ShouldUseProfileDefaultWithoutThrowing",
-      "assembly": "IIoT.Edge.Shell.FilesystemTests",
-      "projectPath": "src/Tests/IIoT.Edge.Shell.FilesystemTests/IIoT.Edge.Shell.FilesystemTests.csproj",
-      "identity": "IIoT.Edge.Shell.FilesystemTests.ShellRuntimePathResolverBehaviorTests.ResolveWithDiagnostics_WhenRuntimeRootIsInvalid_ShouldUseProfileDefaultWithoutThrowing",
       "source": null,
       "testKind": "Integration",
       "runtime": "Filesystem",
@@ -25174,10 +25174,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Shell.FilesystemTests|IIoT.Edge.Shell.FilesystemTests.SingleInstanceMutexHandleBehaviorTests.TryAcquire_WhenExistingMutexIsNotOwnedByCaller_ShouldDisposeHandleImmediately",
+      "caseKey": "IIoT.Edge.Shell.FilesystemTests|IIoT.Edge.Shell.FilesystemTests.SingleInstanceMutexHandleBehaviorTests.TryAcquireNonBlocking_WhenMutexNameIsInvalid_ShouldReturnUnavailableWithoutThrowing",
       "assembly": "IIoT.Edge.Shell.FilesystemTests",
       "projectPath": "src/Tests/IIoT.Edge.Shell.FilesystemTests/IIoT.Edge.Shell.FilesystemTests.csproj",
-      "identity": "IIoT.Edge.Shell.FilesystemTests.SingleInstanceMutexHandleBehaviorTests.TryAcquire_WhenExistingMutexIsNotOwnedByCaller_ShouldDisposeHandleImmediately",
+      "identity": "IIoT.Edge.Shell.FilesystemTests.SingleInstanceMutexHandleBehaviorTests.TryAcquireNonBlocking_WhenMutexNameIsInvalid_ShouldReturnUnavailableWithoutThrowing",
       "source": null,
       "testKind": "Integration",
       "runtime": "Filesystem",
@@ -25197,10 +25197,10 @@
       "skipped": false
     },
     {
-      "caseKey": "IIoT.Edge.Shell.FilesystemTests|IIoT.Edge.Shell.FilesystemTests.SingleInstanceMutexHandleBehaviorTests.TryAcquireNonBlocking_WhenMutexNameIsInvalid_ShouldReturnUnavailableWithoutThrowing",
+      "caseKey": "IIoT.Edge.Shell.FilesystemTests|IIoT.Edge.Shell.FilesystemTests.SingleInstanceMutexHandleBehaviorTests.TryAcquire_WhenExistingMutexIsNotOwnedByCaller_ShouldDisposeHandleImmediately",
       "assembly": "IIoT.Edge.Shell.FilesystemTests",
       "projectPath": "src/Tests/IIoT.Edge.Shell.FilesystemTests/IIoT.Edge.Shell.FilesystemTests.csproj",
-      "identity": "IIoT.Edge.Shell.FilesystemTests.SingleInstanceMutexHandleBehaviorTests.TryAcquireNonBlocking_WhenMutexNameIsInvalid_ShouldReturnUnavailableWithoutThrowing",
+      "identity": "IIoT.Edge.Shell.FilesystemTests.SingleInstanceMutexHandleBehaviorTests.TryAcquire_WhenExistingMutexIsNotOwnedByCaller_ShouldDisposeHandleImmediately",
       "source": null,
       "testKind": "Integration",
       "runtime": "Filesystem",
@@ -25404,6 +25404,29 @@
       "skipped": false
     },
     {
+      "caseKey": "IIoT.Edge.Shell.UiTests|IIoT.Edge.Shell.UiTests.ConfigurationWorkspaceViewModelBehaviorTests.ConfigurationWorkspaceView_ShouldRefreshVisibleTabTitles",
+      "assembly": "IIoT.Edge.Shell.UiTests",
+      "projectPath": "src/Tests/IIoT.Edge.Shell.UiTests/IIoT.Edge.Shell.UiTests.csproj",
+      "identity": "IIoT.Edge.Shell.UiTests.ConfigurationWorkspaceViewModelBehaviorTests.ConfigurationWorkspaceView_ShouldRefreshVisibleTabTitles",
+      "source": null,
+      "testKind": "UI",
+      "runtime": "Avalonia",
+      "runtimeDependencies": [
+        "Headless"
+      ],
+      "runnerMode": "Serial",
+      "cadence": "PR",
+      "capability": "Shell.UI",
+      "risk": "P2",
+      "concern": "Accessibility",
+      "profile": "Simulation",
+      "owner": "Edge.Shell",
+      "ruleId": "EDGE-UI-001",
+      "regressionId": "EDGE-UI-001",
+      "required": true,
+      "skipped": false
+    },
+    {
       "caseKey": "IIoT.Edge.Shell.UiTests|IIoT.Edge.Shell.UiTests.ConfigurationWorkspaceViewModelBehaviorTests.ConfigurationWorkspace_ShouldExposeRegisteredPluginConfigurationTabs",
       "assembly": "IIoT.Edge.Shell.UiTests",
       "projectPath": "src/Tests/IIoT.Edge.Shell.UiTests/IIoT.Edge.Shell.UiTests.csproj",
@@ -25500,29 +25523,6 @@
       "assembly": "IIoT.Edge.Shell.UiTests",
       "projectPath": "src/Tests/IIoT.Edge.Shell.UiTests/IIoT.Edge.Shell.UiTests.csproj",
       "identity": "IIoT.Edge.Shell.UiTests.ConfigurationWorkspaceViewModelBehaviorTests.ConfigurationWorkspace_ShouldUseMenuRequiredPermission",
-      "source": null,
-      "testKind": "UI",
-      "runtime": "Avalonia",
-      "runtimeDependencies": [
-        "Headless"
-      ],
-      "runnerMode": "Serial",
-      "cadence": "PR",
-      "capability": "Shell.UI",
-      "risk": "P2",
-      "concern": "Accessibility",
-      "profile": "Simulation",
-      "owner": "Edge.Shell",
-      "ruleId": "EDGE-UI-001",
-      "regressionId": "EDGE-UI-001",
-      "required": true,
-      "skipped": false
-    },
-    {
-      "caseKey": "IIoT.Edge.Shell.UiTests|IIoT.Edge.Shell.UiTests.ConfigurationWorkspaceViewModelBehaviorTests.ConfigurationWorkspaceView_ShouldRefreshVisibleTabTitles",
-      "assembly": "IIoT.Edge.Shell.UiTests",
-      "projectPath": "src/Tests/IIoT.Edge.Shell.UiTests/IIoT.Edge.Shell.UiTests.csproj",
-      "identity": "IIoT.Edge.Shell.UiTests.ConfigurationWorkspaceViewModelBehaviorTests.ConfigurationWorkspaceView_ShouldRefreshVisibleTabTitles",
       "source": null,
       "testKind": "UI",
       "runtime": "Avalonia",
@@ -29233,6 +29233,29 @@
       "skipped": false
     },
     {
+      "caseKey": "IIoT.Edge.UI.Shared.Tests|IIoT.Edge.UI.Shared.Tests.EdgeProgressBarTests.IndeterminateGeometry_StaysInsideTheTrack(phase: 0)",
+      "assembly": "IIoT.Edge.UI.Shared.Tests",
+      "projectPath": "src/Tests/IIoT.Edge.UI.Shared.Tests/IIoT.Edge.UI.Shared.Tests.csproj",
+      "identity": "IIoT.Edge.UI.Shared.Tests.EdgeProgressBarTests.IndeterminateGeometry_StaysInsideTheTrack(phase: 0)",
+      "source": null,
+      "testKind": "UI",
+      "runtime": "Avalonia",
+      "runtimeDependencies": [
+        "Headless"
+      ],
+      "runnerMode": "Serial",
+      "cadence": "PR",
+      "capability": "UI.SharedControls",
+      "risk": "P2",
+      "concern": "Accessibility",
+      "profile": "Simulation",
+      "owner": "Edge.UI",
+      "ruleId": "EDGE-UI-001",
+      "regressionId": "EDGE-UI-001",
+      "required": true,
+      "skipped": false
+    },
+    {
       "caseKey": "IIoT.Edge.UI.Shared.Tests|IIoT.Edge.UI.Shared.Tests.EdgeProgressBarTests.IndeterminateGeometry_StaysInsideTheTrack(phase: 0.25)",
       "assembly": "IIoT.Edge.UI.Shared.Tests",
       "projectPath": "src/Tests/IIoT.Edge.UI.Shared.Tests/IIoT.Edge.UI.Shared.Tests.csproj",
@@ -29283,29 +29306,6 @@
       "assembly": "IIoT.Edge.UI.Shared.Tests",
       "projectPath": "src/Tests/IIoT.Edge.UI.Shared.Tests/IIoT.Edge.UI.Shared.Tests.csproj",
       "identity": "IIoT.Edge.UI.Shared.Tests.EdgeProgressBarTests.IndeterminateGeometry_StaysInsideTheTrack(phase: 0.75)",
-      "source": null,
-      "testKind": "UI",
-      "runtime": "Avalonia",
-      "runtimeDependencies": [
-        "Headless"
-      ],
-      "runnerMode": "Serial",
-      "cadence": "PR",
-      "capability": "UI.SharedControls",
-      "risk": "P2",
-      "concern": "Accessibility",
-      "profile": "Simulation",
-      "owner": "Edge.UI",
-      "ruleId": "EDGE-UI-001",
-      "regressionId": "EDGE-UI-001",
-      "required": true,
-      "skipped": false
-    },
-    {
-      "caseKey": "IIoT.Edge.UI.Shared.Tests|IIoT.Edge.UI.Shared.Tests.EdgeProgressBarTests.IndeterminateGeometry_StaysInsideTheTrack(phase: 0)",
-      "assembly": "IIoT.Edge.UI.Shared.Tests",
-      "projectPath": "src/Tests/IIoT.Edge.UI.Shared.Tests/IIoT.Edge.UI.Shared.Tests.csproj",
-      "identity": "IIoT.Edge.UI.Shared.Tests.EdgeProgressBarTests.IndeterminateGeometry_StaysInsideTheTrack(phase: 0)",
       "source": null,
       "testKind": "UI",
       "runtime": "Avalonia",
