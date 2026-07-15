@@ -146,6 +146,18 @@ function Assert-ArchitectureGateTextIsPinned {
             [StringComparison]::Ordinal)) {
         throw 'EDGE-ARCH-FIXTURE-001 isolated graph overrides must remain limited to explicit fixture projects.'
     }
+    $fixtureExec = $fixtureTarget.SelectSingleNode('Exec')
+    $fixtureCommand = if ($null -eq $fixtureExec) {
+        ''
+    } else {
+        ([System.Xml.XmlElement]$fixtureExec).GetAttribute('Command')
+    }
+    $expectedFixtureRepositoryArgument = '-RepositoryRoot "$([System.IO.Path]::TrimEndingDirectorySeparator($([System.IO.Path]::GetFullPath(''$(EdgeArchitectureFixtureRepositoryRoot)''))))"'
+    $expectedFixtureSolutionArgument = '-SolutionPath "$([System.IO.Path]::GetFullPath(''$(EdgeArchitectureFixtureSolutionPath)''))"'
+    if (-not $fixtureCommand.Contains($expectedFixtureRepositoryArgument, [StringComparison]::Ordinal) -or
+        -not $fixtureCommand.Contains($expectedFixtureSolutionArgument, [StringComparison]::Ordinal)) {
+        throw 'EDGE-ARCH-FIXTURE-001 isolated fixture graph paths must be canonicalized without a Windows trailing-separator quote escape.'
+    }
 
     Write-Host 'Edge architecture gate text passed: Analyzer is mandatory and Shell graph paths are pinned.'
 }

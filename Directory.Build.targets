@@ -54,7 +54,7 @@
                      and '$(IsEdgeArchitectureGraphFixture)' == 'true'">
     <Error Condition="'$(EdgeArchitectureFixtureRepositoryRoot)' == '' or '$(EdgeArchitectureFixtureSolutionPath)' == ''"
            Text="EDGE-ARCH-FIXTURE-001 graph fixture must declare EdgeArchitectureFixtureRepositoryRoot and EdgeArchitectureFixtureSolutionPath." />
-    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)scripts/tests/Test-EdgeArchitectureProjectGraph.ps1&quot; -RepositoryRoot &quot;$(EdgeArchitectureFixtureRepositoryRoot)&quot; -SolutionPath &quot;$(EdgeArchitectureFixtureSolutionPath)&quot; -Configuration &quot;$(Configuration)&quot;" />
+    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)scripts/tests/Test-EdgeArchitectureProjectGraph.ps1&quot; -RepositoryRoot &quot;$([System.IO.Path]::TrimEndingDirectorySeparator($([System.IO.Path]::GetFullPath('$(EdgeArchitectureFixtureRepositoryRoot)'))))&quot; -SolutionPath &quot;$([System.IO.Path]::GetFullPath('$(EdgeArchitectureFixtureSolutionPath)'))&quot; -Configuration &quot;$(Configuration)&quot;" />
   </Target>
 
   <Target Name="ValidateEdgeDeploymentPolicy"
