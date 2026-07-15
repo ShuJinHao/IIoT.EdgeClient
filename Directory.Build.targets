@@ -9,7 +9,7 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <EdgeArchitectureAnalyzerProject>$(MSBuildThisFileDirectory)src/Analyzers/IIoT.Edge.Architecture.Analyzers/IIoT.Edge.Architecture.Analyzers.csproj</EdgeArchitectureAnalyzerProject>
+    <EdgeArchitectureAnalyzerProject>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src/Analyzers/IIoT.Edge.Architecture.Analyzers/IIoT.Edge.Architecture.Analyzers.csproj'))</EdgeArchitectureAnalyzerProject>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(IsTestProject)' != 'true'

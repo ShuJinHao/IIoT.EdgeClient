@@ -113,6 +113,13 @@ function Assert-ArchitectureGateTextIsPinned {
     }
 
     [xml]$targets = $targetsText
+    $analyzerProjectNodes = @($targets.SelectNodes('/Project/PropertyGroup/EdgeArchitectureAnalyzerProject'))
+    $expectedAnalyzerProject = '$([System.IO.Path]::GetFullPath(''$(MSBuildThisFileDirectory)src/Analyzers/IIoT.Edge.Architecture.Analyzers/IIoT.Edge.Architecture.Analyzers.csproj''))'
+    if ($analyzerProjectNodes.Count -ne 1 -or
+        $analyzerProjectNodes[0].InnerText.Trim() -cne $expectedAnalyzerProject) {
+        throw 'EDGE-ARCH-FIXTURE-001 Analyzer self-exclusion path must use one canonical absolute GetFullPath expression so Windows and Unix compare the same project identity.'
+    }
+
     $shellTarget = $targets.SelectSingleNode("/Project/Target[@Name='ValidateEdgeArchitectureProjectGraph']")
     $shellExec = if ($null -eq $shellTarget) {
         $null
