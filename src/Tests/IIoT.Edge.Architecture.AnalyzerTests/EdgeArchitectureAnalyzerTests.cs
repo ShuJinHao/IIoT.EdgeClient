@@ -803,6 +803,178 @@ public sealed class EdgeArchitectureAnalyzerTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task ProductionTaskDelegateParameterFlow_IsCallSiteSensitive(bool outboundFromProductionTask)
+    {
+        var productionCallback = outboundFromProductionTask ? "targets.Outbound" : "targets.Safe";
+        var unrelatedCallback = outboundFromProductionTask ? "targets.Safe" : "targets.Outbound";
+        var source = PluginMetadata + TaskPrelude + $$"""
+            namespace IIoT.Edge.Application.Abstractions.Cloud
+            {
+                public interface ICloudHttpClient { System.Threading.Tasks.Task SendAsync(); }
+            }
+            public static class CallbackRunner
+            {
+                public static void Invoke(System.Action callback) => callback();
+            }
+            public sealed class CallbackTargets
+            {
+                private readonly IIoT.Edge.Application.Abstractions.Cloud.ICloudHttpClient cloud;
+                public CallbackTargets(IIoT.Edge.Application.Abstractions.Cloud.ICloudHttpClient cloud) => this.cloud = cloud;
+                public void Safe() { }
+                public void Outbound() => _ = cloud.SendAsync();
+            }
+            public sealed class ProductionTask : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly CallbackTargets targets;
+                public ProductionTask(CallbackTargets targets) => this.targets = targets;
+                public void Execute() => CallbackRunner.Invoke({{productionCallback}});
+            }
+            public sealed class UnrelatedCaller
+            {
+                private readonly CallbackTargets targets;
+                public UnrelatedCaller(CallbackTargets targets) => this.targets = targets;
+                public void Execute() => CallbackRunner.Invoke({{unrelatedCallback}});
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        if (outboundFromProductionTask)
+            AssertSingle(diagnostics, "EDGEOUT001");
+        else
+            Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id is "EDGEOUT001" or "EDGEOUT002");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ProductionTaskDelegateParameterizedMember_UsesIncomingCallSiteBinding(bool outbound)
+    {
+        var callback = outbound ? "targets.Outbound" : "targets.Safe";
+        var source = PluginMetadata + TaskPrelude + $$"""
+            namespace IIoT.Edge.Application.Abstractions.Cloud
+            {
+                public interface ICloudHttpClient { System.Threading.Tasks.Task SendAsync(); }
+            }
+            public sealed class CallbackTargets
+            {
+                private readonly IIoT.Edge.Application.Abstractions.Cloud.ICloudHttpClient cloud;
+                public CallbackTargets(IIoT.Edge.Application.Abstractions.Cloud.ICloudHttpClient cloud) => this.cloud = cloud;
+                public void Safe() { }
+                public void Outbound() => _ = cloud.SendAsync();
+            }
+            public sealed class ProductionTask : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly CallbackTargets targets;
+                public ProductionTask(CallbackTargets targets) => this.targets = targets;
+                public void Execute() => Invoke({{callback}});
+                private static void Invoke(System.Action callback) => callback();
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        if (outbound)
+            AssertSingle(diagnostics, "EDGEOUT001");
+        else
+            Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id is "EDGEOUT001" or "EDGEOUT002");
+    }
+
+    [Fact]
+    public async Task ProductionTaskPublicDelegateMember_WithSafeSourceCaller_RemainsIndependentFailClosedRoot()
+    {
+        var source = PluginMetadata + TaskPrelude + """
+            public sealed class ProductionTask : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                public void Execute() => Invoke(static () => { });
+                public static void Invoke(System.Action callback) => callback();
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        AssertSingle(diagnostics, "EDGEOUT001");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ProductionTaskInternalDelegateMember_OnSealedType_UsesCompleteSourceBindings(bool outbound)
+    {
+        var callback = outbound ? "targets.Outbound" : "targets.Safe";
+        var source = PluginMetadata + TaskPrelude + $$"""
+            namespace IIoT.Edge.Application.Abstractions.Cloud
+            {
+                public interface ICloudHttpClient { System.Threading.Tasks.Task SendAsync(); }
+            }
+            public sealed class CallbackTargets
+            {
+                private readonly IIoT.Edge.Application.Abstractions.Cloud.ICloudHttpClient cloud;
+                public CallbackTargets(IIoT.Edge.Application.Abstractions.Cloud.ICloudHttpClient cloud) => this.cloud = cloud;
+                public void Safe() { }
+                public void Outbound() => _ = cloud.SendAsync();
+            }
+            public sealed class ProductionTask : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly CallbackTargets targets;
+                public ProductionTask(CallbackTargets targets) => this.targets = targets;
+                public void Execute() => Invoke({{callback}});
+                internal static void Invoke(System.Action callback) => callback();
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        if (outbound)
+            AssertSingle(diagnostics, "EDGEOUT001");
+        else
+            Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id is "EDGEOUT001" or "EDGEOUT002");
+    }
+
+    [Theory]
+    [InlineData("conditional")]
+    [InlineData("two-call-sites")]
+    public async Task ProductionTaskDelegateFlow_DistinguishesAnonymousCallbacksBySourceSpan(string shape)
+    {
+        var executeBody = shape == "conditional"
+            ? """
+                System.Action callback = flag
+                    ? static () => { }
+                    : () => { _ = cloud.SendAsync(); };
+                callback();
+                """
+            : """
+                Invoke(static () => { });
+                Invoke(() => { _ = cloud.SendAsync(); });
+                """;
+        var helper = shape == "conditional"
+            ? string.Empty
+            : "private static void Invoke(System.Action callback) => callback();";
+        var source = PluginMetadata + TaskPrelude + $$"""
+            namespace IIoT.Edge.Application.Abstractions.Cloud
+            {
+                public interface ICloudHttpClient { System.Threading.Tasks.Task SendAsync(); }
+            }
+            public sealed class ProductionTask : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly IIoT.Edge.Application.Abstractions.Cloud.ICloudHttpClient cloud;
+                public ProductionTask(IIoT.Edge.Application.Abstractions.Cloud.ICloudHttpClient cloud) => this.cloud = cloud;
+                public void Execute(bool flag)
+                {
+                    {{executeBody}}
+                }
+                {{helper}}
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source]);
+
+        AssertSingle(diagnostics, "EDGEOUT001");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task ProductionTaskIndirectConstructorOrSetterUploader_ReportsEdgeOut001(bool useSetter)
     {
         var action = useSetter ? "helper.Trigger = true;" : "_ = new Helper(uploader);";
@@ -1271,6 +1443,213 @@ public sealed class EdgeArchitectureAnalyzerTests
         var diagnostics = await AnalyzeAsync("IIoT.Edge.Module.Fixture", [source], application);
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id is "EDGEOUT001" or "EDGEOUT002");
+    }
+
+    [Theory]
+    [InlineData(false, false, "void")]
+    [InlineData(false, false, "sync")]
+    [InlineData(false, false, "custom")]
+    [InlineData(false, true, "void")]
+    [InlineData(false, true, "sync")]
+    [InlineData(false, true, "custom")]
+    [InlineData(true, false, "void")]
+    [InlineData(true, false, "sync")]
+    [InlineData(true, false, "custom")]
+    [InlineData(true, true, "void")]
+    [InlineData(true, true, "sync")]
+    [InlineData(true, true, "custom")]
+    public async Task ProductionTaskApprovedExternalDelegateMetadataReference_TracksActualCallback(
+        bool useConstructor,
+        bool useLambda,
+        string returnShape)
+    {
+        var delegateType = returnShape switch
+        {
+            "void" => "System.Action",
+            "sync" => "System.Func<int>",
+            _ => "ExternalBoundary.CustomCallback"
+        };
+        var helperReference = CreateReference(
+            "IIoT.Edge.Application",
+            $$"""
+            namespace ExternalBoundary
+            {
+                public readonly struct CustomAwaitable { }
+                public delegate CustomAwaitable CustomCallback();
+            }
+            namespace IIoT.Edge.Application.Abstractions.Cloud
+            {
+                public interface ICloudHttpClient { System.Threading.Tasks.Task SendAsync(); }
+            }
+            namespace IIoT.Edge.Application.Abstractions.Config
+            {
+                public interface ICallbackInvoker { void Invoke({{delegateType}} callback); }
+                public sealed class CallbackRegistration
+                {
+                    public CallbackRegistration({{delegateType}} callback) { }
+                }
+            }
+            """);
+
+        string BuildSource(bool outbound)
+        {
+            var sideEffect = outbound ? "_ = cloud.SendAsync();" : string.Empty;
+            var callbackMethod = returnShape switch
+            {
+                "void" => $"public void Callback() {{ {sideEffect} }}",
+                "sync" => $"public int Callback() {{ {sideEffect} return 0; }}",
+                _ => $"public ExternalBoundary.CustomAwaitable Callback() {{ {sideEffect} return default; }}"
+            };
+            var callbackValue = useLambda
+                ? returnShape switch
+                {
+                    "void" when outbound => "() => { _ = cloud.SendAsync(); }",
+                    "void" => "static () => { }",
+                    "sync" when outbound => "() => { _ = cloud.SendAsync(); return 0; }",
+                    "sync" => "static () => 0",
+                    _ when outbound => "() => { _ = cloud.SendAsync(); return default; }",
+                    _ => "static () => default"
+                }
+                : "targets.Callback";
+            var registration = useConstructor
+                ? $"_ = new IIoT.Edge.Application.Abstractions.Config.CallbackRegistration({callbackValue});"
+                : $"invoker.Invoke({callbackValue});";
+            return PluginMetadata + TaskPrelude + $$"""
+                public sealed class CallbackTargets
+                {
+                    private readonly IIoT.Edge.Application.Abstractions.Cloud.ICloudHttpClient cloud;
+                    public CallbackTargets(IIoT.Edge.Application.Abstractions.Cloud.ICloudHttpClient cloud) => this.cloud = cloud;
+                    {{callbackMethod}}
+                }
+                public sealed class ProductionTask : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+                {
+                    private readonly IIoT.Edge.Application.Abstractions.Cloud.ICloudHttpClient cloud;
+                    private readonly IIoT.Edge.Application.Abstractions.Config.ICallbackInvoker invoker;
+                    private readonly CallbackTargets targets;
+                    public ProductionTask(
+                        IIoT.Edge.Application.Abstractions.Cloud.ICloudHttpClient cloud,
+                        IIoT.Edge.Application.Abstractions.Config.ICallbackInvoker invoker,
+                        CallbackTargets targets)
+                    {
+                        this.cloud = cloud;
+                        this.invoker = invoker;
+                        this.targets = targets;
+                    }
+                    public void Execute()
+                    {
+                        {{registration}}
+                    }
+                }
+                """;
+        }
+
+        var outboundDiagnostics = await AnalyzeAsync(
+            "IIoT.Edge.Module.Fixture",
+            [BuildSource(outbound: true)],
+            helperReference);
+        var safeDiagnostics = await AnalyzeAsync(
+            "IIoT.Edge.Module.Fixture",
+            [BuildSource(outbound: false)],
+            helperReference);
+
+        AssertSingle(outboundDiagnostics, "EDGEOUT001");
+        Assert.DoesNotContain(outboundDiagnostics, diagnostic => diagnostic.Id == "EDGEOUT002");
+        Assert.DoesNotContain(safeDiagnostics, diagnostic => diagnostic.Id is "EDGEOUT001" or "EDGEOUT002");
+    }
+
+    [Fact]
+    public async Task ProductionTaskApprovedExternalDelegateMetadataReference_UnknownCallbackFailsClosed()
+    {
+        var helperReference = CreateReference(
+            "IIoT.Edge.Application",
+            """
+            namespace IIoT.Edge.Application.Abstractions.Config
+            {
+                public interface ICallbackInvoker { void Invoke(System.Action callback); }
+            }
+            """);
+        var source = PluginMetadata + TaskPrelude + """
+            public sealed class ProductionTask : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly IIoT.Edge.Application.Abstractions.Config.ICallbackInvoker invoker;
+                private readonly System.Action callback;
+                public ProductionTask(
+                    IIoT.Edge.Application.Abstractions.Config.ICallbackInvoker invoker,
+                    System.Action callback)
+                {
+                    this.invoker = invoker;
+                    this.callback = callback;
+                }
+                public void Execute() => invoker.Invoke(callback);
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync(
+            "IIoT.Edge.Module.Fixture",
+            [source],
+            helperReference);
+
+        AssertSingle(diagnostics, "EDGEOUT001");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ProductionTaskApprovedExternalDelegateMetadataReference_TracksReducedExtensionForwarding(
+        bool outbound)
+    {
+        var helperReference = CreateReference(
+            "IIoT.Edge.Application",
+            """
+            namespace IIoT.Edge.Application.Abstractions.Config
+            {
+                public interface ICallbackInvoker { void Invoke(System.Action callback); }
+            }
+            namespace IIoT.Edge.Application.Abstractions.Cloud
+            {
+                public interface ICloudHttpClient { System.Threading.Tasks.Task SendAsync(); }
+            }
+            """);
+        var callback = outbound ? "targets.Outbound" : "targets.Safe";
+        var source = PluginMetadata + TaskPrelude + $$"""
+            public static class CallbackForwarder
+            {
+                public static void Forward(
+                    this IIoT.Edge.Application.Abstractions.Config.ICallbackInvoker invoker,
+                    System.Action callback)
+                    => invoker.Invoke(callback);
+            }
+            public sealed class CallbackTargets
+            {
+                private readonly IIoT.Edge.Application.Abstractions.Cloud.ICloudHttpClient cloud;
+                public CallbackTargets(IIoT.Edge.Application.Abstractions.Cloud.ICloudHttpClient cloud) => this.cloud = cloud;
+                public void Safe() { }
+                public void Outbound() => _ = cloud.SendAsync();
+            }
+            public sealed class ProductionTask : IIoT.Edge.Application.Abstractions.Plc.IPlcTask
+            {
+                private readonly IIoT.Edge.Application.Abstractions.Config.ICallbackInvoker invoker;
+                private readonly CallbackTargets targets;
+                public ProductionTask(
+                    IIoT.Edge.Application.Abstractions.Config.ICallbackInvoker invoker,
+                    CallbackTargets targets)
+                {
+                    this.invoker = invoker;
+                    this.targets = targets;
+                }
+                public void Execute() => invoker.Forward({{callback}});
+            }
+            """;
+
+        var diagnostics = await AnalyzeAsync(
+            "IIoT.Edge.Module.Fixture",
+            [source],
+            helperReference);
+
+        if (outbound)
+            AssertSingle(diagnostics, "EDGEOUT001");
+        else
+            Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id is "EDGEOUT001" or "EDGEOUT002");
     }
 
     [Theory]

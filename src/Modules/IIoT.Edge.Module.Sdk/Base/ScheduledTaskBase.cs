@@ -21,6 +21,8 @@ public abstract class ScheduledTaskBase : IStartupAwareBackgroundTask
         Exception exception,
         CancellationToken cancellationToken)
         => false;
+    protected virtual Task OnStoppingAsync()
+        => Task.CompletedTask;
 
     protected ScheduledTaskBase(ProductionContext context, ILogService logger)
     {
@@ -53,40 +55,59 @@ public abstract class ScheduledTaskBase : IStartupAwareBackgroundTask
         Logger.Info($"{deviceInfo}{TaskName} 已启动，执行间隔：{ExecuteInterval}ms");
         startup.TrySetResult();
 
-        while (!ct.IsCancellationRequested)
+        try
         {
-            try
+            while (!ct.IsCancellationRequested)
             {
-                await ExecuteAsync();
-                await WaitForNextIterationAsync(ct);
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                Logger.Error($"{deviceInfo}{TaskName} 执行失败：{ex.Message}");
-                if (ShouldPropagateExecutionFailure(ex, ct))
-                {
-                    throw;
-                }
-
                 try
                 {
-                    await WaitForErrorRetryAsync(ct);
+                    await ExecuteAsync();
+                    await WaitForNextIterationAsync(ct);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
                     break;
                 }
-                catch (Exception retryException)
+                catch (Exception ex)
                 {
-                    Logger.Error($"{deviceInfo}{TaskName} 重试等待失败：{retryException.Message}");
+                    Logger.Error($"{deviceInfo}{TaskName} 执行失败：{ex.Message}");
+                    if (ShouldPropagateExecutionFailure(ex, ct))
+                    {
+                        throw;
+                    }
+
+                    try
+                    {
+                        await WaitForErrorRetryAsync(ct);
+                    }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                    {
+                        break;
+                    }
+                    catch (Exception retryException)
+                    {
+                        Logger.Error($"{deviceInfo}{TaskName} 重试等待失败：{retryException.Message}");
+                    }
                 }
             }
         }
-
-        Logger.Info($"{deviceInfo}{TaskName} 已停止。");
+        finally
+        {
+            try
+            {
+                await OnStoppingAsync();
+            }
+            finally
+            {
+                try
+                {
+                    Logger.Info($"{deviceInfo}{TaskName} 已停止。");
+                }
+                catch (Exception)
+                {
+                    // 停止日志是 best-effort，不能覆盖执行或停止钩子的主异常。
+                }
+            }
+        }
     }
 }
