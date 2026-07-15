@@ -115,7 +115,21 @@ public sealed class ShellRuntimePathResolver : IShellRuntimePathResolver
 
     private string ResolvePath(string baseDirectory, string path)
     {
+        if (path.Contains('\0'))
+        {
+            throw new ArgumentException(
+                "Configured runtime data root contains a null character.",
+                nameof(path));
+        }
+
         var expanded = EdgeClientProgramDataPaths.ExpandProgramDataTokens(path, baseDirectory);
+        if (expanded.Contains('\0'))
+        {
+            throw new ArgumentException(
+                "Expanded runtime data root contains a null character.",
+                nameof(path));
+        }
+
         var normalized = NormalizePathSeparators(expanded);
         return Path.GetFullPath(
             Path.IsPathRooted(normalized)

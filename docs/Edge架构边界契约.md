@@ -258,6 +258,7 @@ AnalyzerTests 必须是 Pure/Architecture 测试，不得启动 Shell、SQLite�
 ## 9. 已落地的高风险语义
 
 - 通用插件生命周期只使用中性 `TestPlugin`，覆盖发现、装载、start/stop、DI release/dispose、capture → enqueue → callback 与取消。插件根配置含 NUL 或无法规范化时必须跨平台一致拒绝并非阻断回落默认根，不能接受 Windows 原生路径截断后的残缺目录。具体工序配置与打包契约只留在对应插件 runner。
+- Shell 运行数据根等启动期配置路径同样必须在平台路径 API 前及环境变量/token 展开后显式拒绝 NUL；无效值只产生 `RUNTIME_DATA_ROOT_INVALID` 等诊断并回落 profile 默认目录，不能利用 Windows/Unix 对非法字符的不同处理形成静默路径漂移或 fatal 启动。
 - SQLite/Persistence 已物理分为 Filesystem 与 SQLite isolated runner，并落地第 4 节的显式 UoW；覆盖 session 隔离/串行、flush rollback、跨聚合 commit、一次提交、每连接 pragma、外键、replace rollback 和主异常优先级。
 - DataPipeline 覆盖 accepted record 到 durable consumer、Cloud/MES active+queued 取消的逐项零丢失/零重复 shutdown 持久化、每通道单一总 deadline、存储成功返回后的 durable commit、停止钩子统一等待、记录出队后从开始/完成到失败/补偿/critical 降级的全部日志 best-effort、日志订阅者异常不丢记录/不改提交/不覆盖主异常、完整 critical payload 反序列化、critical 写失败 runtime fault、provider 自取消补偿、non-retryable exception、retry/fallback/deadletter 与 Cloud/MES 分离。MES HTTP 另以真实 in-flight handler 证明 caller cancellation 原样传播，transport/self-timeout 仍是普通失败。
 - 启动链对缺配置、PLC/MES/Cloud 不可达、IO/module profile 问题保持非阻断；取消测试使用 `TaskCompletionSource`/barrier 后显式 `Cancel`，不用几十毫秒机器时钟碰运气。
@@ -270,7 +271,7 @@ AnalyzerTests 必须是 Pure/Architecture 测试，不得启动 Shell、SQLite�
 - required 执行必须每项目独立 TRX/coverage，最终证明 `discovered = trxTotal = executed = passed = 1275`、`failed = skipped = 0`。
 - compatibility inventory 必须对 alias/adapter/wrapper/compat/legacy/shadow/obsolete/fallback/双写/影子候选逐项提供真实 consumer 证据与有期迁移窗口，并对每个真实声明精确登记 symbol/path/调用证据；宽 token disposition 不得掩护未登记 symbol。每个 `MigrationWindow` symbol 必须绑定唯一 window ID、replacement/deletion/latest removal 约束和逐 symbol 真实 coverage test；缺失/未知 window、token/path 不归属、无 coverage、零 consumer、新增 consumer、未分类或未登记候选直接失败。coverage test 必须是 required runner 中真实执行且 0 skipped 的行为测试，不得用空壳或注释代替。
 - duplication 分 production/test-support/tests 的 exact/near ratchet；coverage 覆盖所有 32 runner，并对 `EdgeMemoryCacheService` 和 `DataPipelineNonRetryableException` 设高风险阈值；mutation 固定 Domain Aggregate + MTP report-only 范围与证据。
-- coverage、duplication、mutation、compatibility 的 current baseline 只负责与本次真实结果对账，不能作为自己的历史上限。CI 必须额外运行 `Test-EdgeGovernanceBaselineMonotonicity.ps1`，相对 PR base 的已提交 baseline 做机械单调校验；BaseRef 必须是候选 HEAD 的祖先且不能等于 HEAD，当前 PR 首次引入文件时以最早已提交 bootstrap commit 为锚，未提交 bootstrap 失败。覆盖率/高风险阈值不得降低，重复窗口不得放宽且 clone 不得增加，mutation score 不得降低且失败上限不得增加，compatibility token/ID/symbol/window/caller 上限不得增长或延长期限；只允许真实删除或收紧。对应 behavior fixture 必须证明四类同 PR 自授权、候选 HEAD 伪 BaseRef 和无历史 bootstrap 均 fail-closed。
+- coverage、duplication、mutation、compatibility 的 current baseline 只负责与本次真实结果对账，不能作为自己的历史上限。CI 必须额外运行 `Test-EdgeGovernanceBaselineMonotonicity.ps1`，相对 PR base 的已提交 baseline 做机械单调校验；BaseRef 必须是候选 HEAD 的祖先且不能等于 HEAD，当前 PR 首次引入文件时以最早已提交 bootstrap commit 为锚，未提交 bootstrap 失败。覆盖率/高风险阈值不得降低，重复窗口不得放宽且 clone 不得增加，mutation score 不得降低且失败上限不得增加。compatibility token 不得删除；既有 `MigrationWindow` 的 ID/symbol/caller 上限不得增长或延长期限，当前批不得新增兼容窗口。带 compatibility-like 名称但经当前 inventory 证明唯一声明、真实可执行 caller 且状态为 `OrdinaryAbstraction` 的正常架构抽象允许新增或增长，不得被历史 ID exact-freeze；零 caller、伪注释 caller、未登记 symbol 和迁移语义伪装仍 fail-closed。对应 behavior fixture 必须同时证明四类同 PR 放宽、候选 HEAD 伪 BaseRef、无历史 bootstrap、新迁移面均失败，并证明机器可验证的普通抽象演进不被误杀。
 - 项目/case 变化必须先复核授权和完整 diff，再显式更新 inventory，并记录 before/after 原因。仅用户授权时才 commit、push 或修改远端。
 
 ## 11. CI 退出条件

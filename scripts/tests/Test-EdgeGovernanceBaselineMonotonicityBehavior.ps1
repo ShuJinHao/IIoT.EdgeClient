@@ -183,13 +183,87 @@ try {
     Invoke-Git $workingRoot @('checkout', '--', 'scripts/tests/baselines/edge-mutation-baseline.json') | Out-Null
 
     $expandedCompatibility = Get-Content $compatibilityPath -Raw | ConvertFrom-Json -Depth 32
-    $expandedCompatibility.candidateDispositions[0].candidateCount = 2
+    $expandedCompatibility.candidateDispositions[0].status = 'MigrationWindow'
     Write-Json $compatibilityPath $expandedCompatibility
-    Assert-FailedWith (Invoke-Gate $workingRoot $baseRef) 'candidate EDGE-CANDIDATE-LEGACY file count expanded' 'Compatibility self-authorization'
+    Assert-FailedWith (Invoke-Gate $workingRoot $baseRef) "ordinary candidate 'EDGE-CANDIDATE-LEGACY'" 'Compatibility self-authorization'
+    Invoke-Git $workingRoot @('checkout', '--', 'scripts/tests/edge-compatibility-inventory.json') | Out-Null
+
+    $ordinaryGrowth = Get-Content $compatibilityPath -Raw | ConvertFrom-Json -Depth 32
+    $ordinaryGrowth.candidateDispositions[0].occurrenceCount = 2
+    $ordinaryGrowth.candidateDispositions[0].callEvidence[0].expectedOccurrences = 2
+    $ordinaryGrowth.symbolCandidates[0].callEvidence[0].expectedOccurrences = 2
+    Write-Json $compatibilityPath $ordinaryGrowth
+    Set-Content (Join-Path $workingRoot 'src/Legacy.cs') 'sealed class LegacyThing { void LegacyCall() {} void Second() { LegacyCall(); } }' -Encoding utf8
+    $ordinaryGrowthResult = Invoke-Gate $workingRoot $baseRef
+    if ($ordinaryGrowthResult.ExitCode -ne 0) {
+        throw "A machine-verified ordinary abstraction may gain a real caller. output=$($ordinaryGrowthResult.Output)"
+    }
+    Invoke-Git $workingRoot @('checkout', '--', 'scripts/tests/edge-compatibility-inventory.json', 'src/Legacy.cs') | Out-Null
+
+    $newOrdinary = Get-Content $compatibilityPath -Raw | ConvertFrom-Json -Depth 32
+    $ordinaryEvidence = @([pscustomobject][ordered]@{
+        path = 'src/CurrentAdapter.cs'
+        pattern = 'CurrentAdapterCall'
+        expectedOccurrences = 1
+    })
+    $newOrdinary.candidateDispositions = @($newOrdinary.candidateDispositions) + @([pscustomobject][ordered]@{
+        id = 'EDGE-CANDIDATE-CURRENT-ADAPTER'
+        token = 'adapter'
+        pathPattern = '^src/CurrentAdapter\.cs$'
+        status = 'OrdinaryAbstraction'
+        rationale = 'Current architecture port with executable callers; not a compatibility surface.'
+        candidateCount = 1
+        occurrenceCount = 1
+        manifestSha256 = 'fixture-current-adapter'
+        callEvidence = $ordinaryEvidence
+    })
+    $newOrdinary.symbolCandidates = @($newOrdinary.symbolCandidates) + @([pscustomobject][ordered]@{
+        token = 'adapter'
+        kind = 'type'
+        symbol = 'CurrentAdapter'
+        declarationPath = 'src/CurrentAdapter.cs'
+        status = 'OrdinaryAbstraction'
+        rationale = 'Current architecture port with executable callers; not a compatibility surface.'
+        callEvidence = $ordinaryEvidence
+    })
+    Write-Json $compatibilityPath $newOrdinary
+    Set-Content (Join-Path $workingRoot 'src/CurrentAdapter.cs') 'sealed class CurrentAdapter { void CurrentAdapterCall() {} }' -Encoding utf8
+    $newOrdinaryResult = Invoke-Gate $workingRoot $baseRef
+    if ($newOrdinaryResult.ExitCode -ne 0) {
+        throw "A new machine-verified ordinary abstraction should not be frozen as compatibility. output=$($newOrdinaryResult.Output)"
+    }
+    Invoke-Git $workingRoot @('checkout', '--', 'scripts/tests/edge-compatibility-inventory.json') | Out-Null
+    Remove-Item (Join-Path $workingRoot 'src/CurrentAdapter.cs') -Force
+
+    $newMigrationCandidate = Get-Content $compatibilityPath -Raw | ConvertFrom-Json -Depth 32
+    $newMigrationCandidate.candidateDispositions = @($newMigrationCandidate.candidateDispositions) + @([pscustomobject][ordered]@{
+        id = 'EDGE-CANDIDATE-NEW-LEGACY'
+        token = 'legacy'
+        pathPattern = '^src/'
+        status = 'MigrationWindow'
+        rationale = 'A new compatibility surface is not authorized by the current batch.'
+        candidateCount = 1
+        occurrenceCount = 1
+        manifestSha256 = 'fixture-new-legacy'
+        callEvidence = $evidence
+    })
+    Write-Json $compatibilityPath $newMigrationCandidate
+    Assert-FailedWith (Invoke-Gate $workingRoot $baseRef) 'EDGE-CANDIDATE-NEW-LEGACY' 'New migration candidate'
+    Invoke-Git $workingRoot @('checkout', '--', 'scripts/tests/edge-compatibility-inventory.json') | Out-Null
+
+    $newMigrationWindow = Get-Content $compatibilityPath -Raw | ConvertFrom-Json -Depth 32
+    $newMigrationWindow.migrationWindows = @([pscustomobject][ordered]@{
+        id = 'EDGE-MIGRATION-NEW-LEGACY'
+        currentConsumers = @('fixture')
+        callEvidence = $evidence
+        latestRemovalBatch = 'fixture-next'
+    })
+    Write-Json $compatibilityPath $newMigrationWindow
+    Assert-FailedWith (Invoke-Gate $workingRoot $baseRef) 'EDGE-MIGRATION-NEW-LEGACY' 'New migration window'
     Invoke-Git $workingRoot @('checkout', '--', 'scripts/tests/edge-compatibility-inventory.json') | Out-Null
 
     $global:LASTEXITCODE = 0
-    Write-Host "EDGE_GOVERNANCE_BASELINE_MONOTONICITY_BEHAVIOR_OK bootstrap=$bootstrapRef firstRed=6"
+    Write-Host "EDGE_GOVERNANCE_BASELINE_MONOTONICITY_BEHAVIOR_OK bootstrap=$bootstrapRef firstRed=8 ordinaryGrowth=1 newOrdinary=1"
 } finally {
     if (Test-Path $workingRoot) {
         Remove-Item $workingRoot -Recurse -Force

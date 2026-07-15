@@ -334,16 +334,30 @@ function Assert-CompatibilityBaseline {
     foreach ($entry in @(Get-Collection $Current 'candidateDispositions')) {
         $id = [string]$entry.id
         if (-not $priorDispositions.ContainsKey($id)) {
-            throw "TEST-GOV-BASE-001 compatibility baseline self-authorized new candidate disposition: $id"
+            if ([string]$entry.status -cne 'OrdinaryAbstraction') {
+                throw "TEST-GOV-BASE-001 compatibility baseline introduced a new non-ordinary candidate disposition: $id"
+            }
+            # The required lane separately runs the current-tree TEST-COMPAT-001
+            # gate to prove the declaration and its executable call evidence.
+            # Historical monotonicity must not turn a
+            # normal Adapter/Wrapper name into a permanently frozen compatibility
+            # surface merely because it was not present at the PR base.
+            continue
         }
         $old = $priorDispositions[$id]
-        if ([string]$old.status -ceq 'MigrationWindow' -and [string]$entry.status -cne 'MigrationWindow') {
-            throw "TEST-GOV-BASE-001 candidate '$id' weakened from MigrationWindow to '$($entry.status)'."
+        if ([string]$old.status -ceq 'MigrationWindow') {
+            if ([string]$entry.status -cne 'MigrationWindow') {
+                throw "TEST-GOV-BASE-001 candidate '$id' weakened from MigrationWindow to '$($entry.status)'."
+            }
+            Assert-CountNotHigher ([int](Get-PropertyValue $old 'candidateCount' 0)) ([int](Get-PropertyValue $entry 'candidateCount' 0)) "candidate $id file count"
+            Assert-CountNotHigher ([int](Get-PropertyValue $old 'occurrenceCount' 0)) ([int](Get-PropertyValue $entry 'occurrenceCount' 0)) "candidate $id occurrence count"
+            Assert-EvidenceNotExpanded (Get-Collection $old 'callEvidence') (Get-Collection $entry 'callEvidence') "candidate $id"
+            Assert-DeadlineUnchanged $old $entry "candidate $id"
+            continue
         }
-        Assert-CountNotHigher ([int](Get-PropertyValue $old 'candidateCount' 0)) ([int](Get-PropertyValue $entry 'candidateCount' 0)) "candidate $id file count"
-        Assert-CountNotHigher ([int](Get-PropertyValue $old 'occurrenceCount' 0)) ([int](Get-PropertyValue $entry 'occurrenceCount' 0)) "candidate $id occurrence count"
-        Assert-EvidenceNotExpanded (Get-Collection $old 'callEvidence') (Get-Collection $entry 'callEvidence') "candidate $id"
-        Assert-DeadlineUnchanged $old $entry "candidate $id"
+        if ([string]$entry.status -cne 'OrdinaryAbstraction') {
+            throw "TEST-GOV-BASE-001 ordinary candidate '$id' was reclassified as '$($entry.status)'."
+        }
     }
 
     $priorWindows = @{}
@@ -366,14 +380,23 @@ function Assert-CompatibilityBaseline {
     foreach ($entry in @(Get-Collection $Current 'symbolCandidates')) {
         $key = Get-SymbolKey $entry
         if (-not $priorSymbols.ContainsKey($key)) {
-            throw "TEST-GOV-BASE-001 compatibility baseline self-authorized new symbol candidate: $key"
+            if ([string]$entry.status -cne 'OrdinaryAbstraction') {
+                throw "TEST-GOV-BASE-001 compatibility baseline introduced a new non-ordinary symbol candidate: $key"
+            }
+            continue
         }
         $old = $priorSymbols[$key]
-        if ([string]$old.status -ceq 'MigrationWindow' -and [string]$entry.status -cne 'MigrationWindow') {
-            throw "TEST-GOV-BASE-001 symbol '$key' weakened from MigrationWindow to '$($entry.status)'."
+        if ([string]$old.status -ceq 'MigrationWindow') {
+            if ([string]$entry.status -cne 'MigrationWindow') {
+                throw "TEST-GOV-BASE-001 symbol '$key' weakened from MigrationWindow to '$($entry.status)'."
+            }
+            Assert-EvidenceNotExpanded (Get-Collection $old 'callEvidence') (Get-Collection $entry 'callEvidence') "symbol $key"
+            Assert-DeadlineUnchanged $old $entry "symbol $key"
+            continue
         }
-        Assert-EvidenceNotExpanded (Get-Collection $old 'callEvidence') (Get-Collection $entry 'callEvidence') "symbol $key"
-        Assert-DeadlineUnchanged $old $entry "symbol $key"
+        if ([string]$entry.status -cne 'OrdinaryAbstraction') {
+            throw "TEST-GOV-BASE-001 ordinary symbol '$key' was reclassified as '$($entry.status)'."
+        }
     }
 }
 
