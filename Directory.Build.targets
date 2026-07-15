@@ -44,7 +44,7 @@
   <Target Name="ValidateEdgeArchitectureProjectGraph"
           BeforeTargets="PrepareForBuild"
           Condition="'$(DesignTimeBuild)' != 'true' and '$(MSBuildProjectName)' == 'IIoT.Edge.Shell'">
-    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)scripts/tests/Test-EdgeArchitectureProjectGraph.ps1&quot; -RepositoryRoot &quot;$(MSBuildThisFileDirectory)&quot; -SolutionPath &quot;$(MSBuildThisFileDirectory)IIoT.EdgeClient.slnx&quot; -Configuration &quot;$(Configuration)&quot;" />
+    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)scripts/tests/Test-EdgeArchitectureProjectGraph.ps1&quot; -RepositoryRoot &quot;$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory).'))&quot; -SolutionPath &quot;$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)IIoT.EdgeClient.slnx'))&quot; -Configuration &quot;$(Configuration)&quot;" />
   </Target>
 
   <Target Name="ValidateEdgeArchitectureProjectGraphFixture"

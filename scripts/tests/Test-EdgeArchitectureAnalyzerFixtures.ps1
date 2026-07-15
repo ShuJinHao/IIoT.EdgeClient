@@ -130,11 +130,13 @@ function Assert-ArchitectureGateTextIsPinned {
         throw 'EDGE-ARCH-FIXTURE-001 pinned Shell project-graph target is missing.'
     }
     $shellCommand = ([System.Xml.XmlElement]$shellExec).GetAttribute('Command')
-    if (-not $shellCommand.Contains('-RepositoryRoot "$(MSBuildThisFileDirectory)"', [StringComparison]::Ordinal) -or
-        -not $shellCommand.Contains('-SolutionPath "$(MSBuildThisFileDirectory)IIoT.EdgeClient.slnx"', [StringComparison]::Ordinal) -or
+    $expectedRepositoryArgument = '-RepositoryRoot "$([System.IO.Path]::GetFullPath(''$(MSBuildThisFileDirectory).''))"'
+    $expectedSolutionArgument = '-SolutionPath "$([System.IO.Path]::GetFullPath(''$(MSBuildThisFileDirectory)IIoT.EdgeClient.slnx''))"'
+    if (-not $shellCommand.Contains($expectedRepositoryArgument, [StringComparison]::Ordinal) -or
+        -not $shellCommand.Contains($expectedSolutionArgument, [StringComparison]::Ordinal) -or
         $shellCommand.Contains('$(EdgeArchitectureGraphRepositoryRoot)', [StringComparison]::Ordinal) -or
         $shellCommand.Contains('$(EdgeArchitectureGraphSolutionPath)', [StringComparison]::Ordinal)) {
-        throw 'EDGE-ARCH-FIXTURE-001 Shell project-graph paths must be pinned to the current repository and solution.'
+        throw 'EDGE-ARCH-FIXTURE-001 Shell project-graph paths must be pinned to canonical current-repository paths without a Windows trailing-separator quote escape.'
     }
 
     $fixtureTarget = $targets.SelectSingleNode("/Project/Target[@Name='ValidateEdgeArchitectureProjectGraphFixture']")
