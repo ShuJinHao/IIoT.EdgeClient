@@ -270,11 +270,12 @@ AnalyzerTests 必须是 Pure/Architecture 测试，不得启动 Shell、SQLite�
 - required 执行必须每项目独立 TRX/coverage，最终证明 `discovered = trxTotal = executed = passed = 1275`、`failed = skipped = 0`。
 - compatibility inventory 必须对 alias/adapter/wrapper/compat/legacy/shadow/obsolete/fallback/双写/影子候选逐项提供真实 consumer 证据与有期迁移窗口，并对每个真实声明精确登记 symbol/path/调用证据；宽 token disposition 不得掩护未登记 symbol。每个 `MigrationWindow` symbol 必须绑定唯一 window ID、replacement/deletion/latest removal 约束和逐 symbol 真实 coverage test；缺失/未知 window、token/path 不归属、无 coverage、零 consumer、新增 consumer、未分类或未登记候选直接失败。coverage test 必须是 required runner 中真实执行且 0 skipped 的行为测试，不得用空壳或注释代替。
 - duplication 分 production/test-support/tests 的 exact/near ratchet；coverage 覆盖所有 32 runner，并对 `EdgeMemoryCacheService` 和 `DataPipelineNonRetryableException` 设高风险阈值；mutation 固定 Domain Aggregate + MTP report-only 范围与证据。
+- coverage、duplication、mutation、compatibility 的 current baseline 只负责与本次真实结果对账，不能作为自己的历史上限。CI 必须额外运行 `Test-EdgeGovernanceBaselineMonotonicity.ps1`，相对 PR base 的已提交 baseline 做机械单调校验；BaseRef 必须是候选 HEAD 的祖先且不能等于 HEAD，当前 PR 首次引入文件时以最早已提交 bootstrap commit 为锚，未提交 bootstrap 失败。覆盖率/高风险阈值不得降低，重复窗口不得放宽且 clone 不得增加，mutation score 不得降低且失败上限不得增加，compatibility token/ID/symbol/window/caller 上限不得增长或延长期限；只允许真实删除或收紧。对应 behavior fixture 必须证明四类同 PR 自授权、候选 HEAD 伪 BaseRef 和无历史 bootstrap 均 fail-closed。
 - 项目/case 变化必须先复核授权和完整 diff，再显式更新 inventory，并记录 before/after 原因。仅用户授权时才 commit、push 或修改远端。
 
 ## 11. CI 退出条件
 
-Windows required CI 必须在 25 分钟 hard timeout 内完成 Release build、Analyzer/project graph、正反 build fixture、source-quality、inventory/discovery、32 runner 执行、TRX/Skip 对账、coverage、compatibility、duplication 和 regression ledger；mutation 使用独立 report job，不伪装成编译错误。当前 macOS 工作树的 32 runner/TRX 对账已实测全绿；Windows 远端 job 与 Windows 实机 Installer/Velopack/DPI 验收在取得对应证据前不得写成已验证。
+Windows required CI 必须在 25 分钟 hard timeout 内完成 Release build、Analyzer/project graph、正反 build fixture、source-quality、inventory/discovery、32 runner 执行、TRX/Skip 对账、coverage、compatibility、duplication、四类 baseline 相对不可变历史的单调校验和 regression ledger；mutation 使用独立 report job，不伪装成编译错误。故意执行非法 native build 的 PowerShell fixture 在完成全部断言后必须显式清零 `$LASTEXITCODE`，不得把预期失败残留为 job 失败。当前 macOS 工作树的 32 runner/TRX 对账已实测全绿；Windows 远端 job 与 Windows 实机 Installer/Velopack/DPI 验收在取得对应证据前不得写成已验证。
 
 宿主仓与插件仓拆分属于用户下一份独立计划，不是当前测试批次、依赖或进度项。`deploy/Deploy-Changed.ps1` 是生产 CD 入口，不属于 required 测试 CI；本批不运行发布或部署。
 

@@ -390,3 +390,4 @@ Invoke-FixtureBuild -Name 'graph-analyzer-exclusion-invalid' `
     -ExpectedDiagnosticIds @('WSARCH006')
 
 Write-Host 'Edge architecture analyzer/build fixtures passed: valid=7, invalid=43, bypass-checks=2.'
+$global:LASTEXITCODE = 0
