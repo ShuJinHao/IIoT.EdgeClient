@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Shared/IIoT.Edge.SharedKernel.csproj" />
+  <Project Path="Application/IIoT.Edge.Application.csproj" />
+</Solution>

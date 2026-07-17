@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="TestsA/IIoT.Edge.Host.CycleA.csproj" />
+  <Project Path="TestsB/IIoT.Edge.Host.CycleB.csproj" />
+</Solution>

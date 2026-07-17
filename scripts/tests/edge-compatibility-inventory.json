@@ -1,0 +1,2268 @@
+{
+  "schemaVersion": 3,
+  "ruleId": "TEST-COMPAT-001",
+  "scanTokens": [
+    "alias",
+    "adapter",
+    "wrapper",
+    "compat",
+    "legacy",
+    "shadow",
+    "obsolete",
+    "fallback",
+    "双写",
+    "影子"
+  ],
+  "symbolCandidates": [
+    {
+      "token": "fallback",
+      "symbol": "ICloudFallbackBufferStore",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Abstractions/Cloud/Stores/ICloudFallbackBufferStore.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Primary Cloud durability buffer port consumed by the active capacity and cascading-persistence paths; it is not an obsolete alternate API.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCapacityGuard.cs",
+          "pattern": "\\bICloudFallbackBufferStore\\b",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "symbol": "ICriticalPersistenceFallbackWriter",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Abstractions/DataPipeline/Stores/ICriticalPersistenceFallbackWriter.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Last-resort crash persistence port in the current durable cascade, with direct production consumers.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCascadingPersistenceWriter.cs",
+          "pattern": "\\bICriticalPersistenceFallbackWriter\\b",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "symbol": "IFallbackBufferStore",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Abstractions/DataPipeline/Stores/IFallbackBufferStore.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Typed common port used by the active fallback recovery algorithm for both isolated channels.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/FallbackRecoveryServiceBase.cs",
+          "pattern": "\\bIFallbackBufferStore\\b",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "symbol": "IMesFallbackBufferStore",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Abstractions/Mes/Stores/IMesFallbackBufferStore.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Primary MES durability buffer port consumed by the active capacity and cascading-persistence paths.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCapacityGuard.cs",
+          "pattern": "\\bIMesFallbackBufferStore\\b",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "compat",
+      "symbol": "IEdgeVersionCompatibilityPolicy",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Abstractions/Updates/EdgeUpdateInterfaces.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current release compatibility enforcement contract registered as the sole update policy.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/DependencyInjection.cs",
+          "pattern": "\\bIEdgeVersionCompatibilityPolicy\\b",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "compat",
+      "symbol": "EdgeVersionCompatibilityPolicy",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Features/Updates/EdgeVersionCompatibilityPolicy.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current version-window validator selected by production DI, not a legacy compatibility path.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/DependencyInjection.cs",
+          "pattern": "(?<!I)\\bEdgeVersionCompatibilityPolicy\\b",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "symbol": "CriticalPersistenceFallbackWriter",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/CriticalPersistenceFallbackWriter.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Concrete current crash-log writer selected by host DI for the final persistence tier.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.Bootstrap/DependencyInjection.cs",
+          "pattern": "(?<!I)\\bCriticalPersistenceFallbackWriter\\b",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "compat",
+      "symbol": "IModulePluginCompatibilityPolicy",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/Modules/ModulePluginCompatibilityPolicy.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current plugin host-API range gate used by the live directory catalog.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/Modules/DirectoryModuleCatalog.cs",
+          "pattern": "\\bIModulePluginCompatibilityPolicy\\b",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "compat",
+      "symbol": "ModulePluginCompatibilityPolicy",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/Modules/ModulePluginCompatibilityPolicy.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current plugin compatibility gate selected by the host composition root.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.Bootstrap/DependencyInjection.cs",
+          "pattern": "(?<!I)\\bModulePluginCompatibilityPolicy\\b",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "compat",
+      "symbol": "ModulePluginCompatibilityResult",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/Modules/ModulePluginCompatibilityPolicy.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Result value returned by every live plugin compatibility evaluation branch.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/Modules/ModulePluginCompatibilityPolicy.cs",
+          "pattern": "ModulePluginCompatibilityResult\\.(?:Compatible|Incompatible)",
+          "expectedOccurrences": 3
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "symbol": "CloudFallbackRecoveryService",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/CloudFallbackRecoveryService.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Active Cloud recovery service selected by DataPipeline DI.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/DependencyInjection.cs",
+          "pattern": "(?<!I)\\bCloudFallbackRecoveryService\\b",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "symbol": "FallbackRecoveryServiceBase",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/FallbackRecoveryServiceBase.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Shared typed recovery algorithm inherited by both current isolated channel services.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/CloudFallbackRecoveryService.cs",
+          "pattern": "\\bFallbackRecoveryServiceBase\\b",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "symbol": "ICloudFallbackRecoveryService",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/ICloudFallbackRecoveryService.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Cloud retry task depends on this current channel-specific recovery contract.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Tasks/CloudRetryTask.cs",
+          "pattern": "\\bICloudFallbackRecoveryService\\b",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "symbol": "IMesFallbackRecoveryService",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/IMesFallbackRecoveryService.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "MES retry task depends on this current channel-specific recovery contract.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Tasks/MesRetryTask.cs",
+          "pattern": "\\bIMesFallbackRecoveryService\\b",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "symbol": "MesFallbackRecoveryService",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/MesFallbackRecoveryService.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Active MES recovery service selected by DataPipeline DI.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/DependencyInjection.cs",
+          "pattern": "(?<!I)\\bMesFallbackRecoveryService\\b",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "symbol": "IRetryTaskFallbackRecoveryService",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/RetryTaskServiceContracts.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Generic retry orchestration port with a live field and constructor consumer in RetryTaskBase.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Tasks/RetryTaskBase.cs",
+          "pattern": "\\bIRetryTaskFallbackRecoveryService\\b",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "symbol": "CloudFallbackBufferStore",
+      "declarationPath": "src/Infrastructure/IIoT.Edge.Infrastructure.Persistence.Dapper/Stores/CloudFallbackBufferStore.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Concrete current Cloud store implements the live port and is selected by Dapper store convention scanning.",
+      "callEvidence": [
+        {
+          "path": "src/Infrastructure/IIoT.Edge.Infrastructure.Persistence.Dapper/Stores/CloudFallbackBufferStore.cs",
+          "pattern": "\\bICloudFallbackBufferStore\\b",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "symbol": "FallbackBufferStoreBase",
+      "declarationPath": "src/Infrastructure/IIoT.Edge.Infrastructure.Persistence.Dapper/Stores/FallbackBufferStoreBase.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current Dapper fallback persistence implementation inherited by both concrete stores.",
+      "callEvidence": [
+        {
+          "path": "src/Infrastructure/IIoT.Edge.Infrastructure.Persistence.Dapper/Stores/CloudFallbackBufferStore.cs",
+          "pattern": "\\bFallbackBufferStoreBase\\b",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "symbol": "MesFallbackBufferStore",
+      "declarationPath": "src/Infrastructure/IIoT.Edge.Infrastructure.Persistence.Dapper/Stores/MesFallbackBufferStore.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Concrete current MES store implements the live port and is selected by Dapper store convention scanning.",
+      "callEvidence": [
+        {
+          "path": "src/Infrastructure/IIoT.Edge.Infrastructure.Persistence.Dapper/Stores/MesFallbackBufferStore.cs",
+          "pattern": "\\bIMesFallbackBufferStore\\b",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "symbol": "CloudFallbackRecord",
+      "declarationPath": "src/Shared/IIoT.Edge.SharedKernel/DataPipeline/CloudFallbackRecord.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current Cloud durable record type consumed by its recovery service and typed store.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/CloudFallbackRecoveryService.cs",
+          "pattern": "\\bCloudFallbackRecord\\b",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "symbol": "IFallbackRecord",
+      "declarationPath": "src/Shared/IIoT.Edge.SharedKernel/DataPipeline/IFallbackRecord.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Typed constraint consumed by the live generic recovery and persistence paths.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/FallbackRecoveryServiceBase.cs",
+          "pattern": "\\bIFallbackRecord\\b",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "symbol": "MesFallbackRecord",
+      "declarationPath": "src/Shared/IIoT.Edge.SharedKernel/DataPipeline/MesFallbackRecord.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current MES durable record type consumed by its recovery service and typed store.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/MesFallbackRecoveryService.cs",
+          "pattern": "\\bMesFallbackRecord\\b",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "compat",
+      "kind": "method",
+      "symbol": "AnalyzeRemovedCompatibilityType",
+      "declarationPath": "src/Analyzers/IIoT.Edge.Architecture.Analyzers/EdgeArchitectureAnalyzer.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Active analyzer helper invoked from named-type and signature analysis paths.",
+      "callEvidence": [
+        {
+          "path": "src/Analyzers/IIoT.Edge.Architecture.Analyzers/EdgeArchitectureAnalyzer.cs",
+          "pattern": "AnalyzeRemovedCompatibilityType\\(context",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "compat",
+      "kind": "method",
+      "symbol": "AnalyzeRemovedCompatibilityOperation",
+      "declarationPath": "src/Analyzers/IIoT.Edge.Architecture.Analyzers/EdgeArchitectureAnalyzer.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Active analyzer helper invoked for invocation, object creation, property, local, and constructed generic type-argument operations.",
+      "callEvidence": [
+        {
+          "path": "src/Analyzers/IIoT.Edge.Architecture.Analyzers/EdgeArchitectureAnalyzer.cs",
+          "pattern": "AnalyzeRemovedCompatibilityOperation\\(context",
+          "expectedOccurrences": 5
+        }
+      ]
+    },
+    {
+      "token": "compat",
+      "kind": "method",
+      "symbol": "TryFindRemovedCompatibilityType",
+      "declarationPath": "src/Analyzers/IIoT.Edge.Architecture.Analyzers/EdgeArchitectureAnalyzer.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Active recursive analyzer helper used by both compatibility diagnostic paths.",
+      "callEvidence": [
+        {
+          "path": "src/Analyzers/IIoT.Edge.Architecture.Analyzers/EdgeArchitectureAnalyzer.cs",
+          "pattern": "TryFindRemovedCompatibilityType\\((?:type|array|argument)",
+          "expectedOccurrences": 4
+        }
+      ]
+    },
+    {
+      "token": "compat",
+      "kind": "method",
+      "symbol": "IsReleaseCompatible",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Abstractions/Updates/EdgeUpdateInterfaces.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current update-policy contract invoked by the active release selection flow.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Features/Updates/EdgeReleaseService.cs",
+          "pattern": "_compatibilityPolicy\\.IsReleaseCompatible",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "legacy",
+      "kind": "method",
+      "symbol": "GetLegacyRemarks",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Features/Config/SchemaReconciliation/IoMappingSchemaMetadata.cs",
+      "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/IoMappingSchemaReconciliationBehaviorTests.cs",
+          "test": "ReconcileAsync_WhenRemarkMatchesModuleLegacyAlias_ShouldMigrateOnlyThatExactRemark"
+        }
+      ],
+      "rationale": "Bounded schema-reconciliation reader used only to repair persisted historical IO remarks.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Features/Config/SchemaReconciliation/IoMappingConfigValueStore.cs",
+          "pattern": "IoMappingSchemaMetadata\\.GetLegacyRemarks\\(item\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "legacy",
+      "kind": "method",
+      "symbol": "GetLegacyDefaultValues",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Features/Config/SchemaReconciliation/ModuleParamSchemaSource.cs",
+      "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/ModuleParamSchemaReconciliationBehaviorTests.cs",
+          "test": "ReconcileAsync_WhenExistingModuleParamMatchesLegacyDefault_ShouldRepairOnlyLegacyValue"
+        }
+      ],
+      "rationale": "Bounded schema-reconciliation reader used only to repair persisted historical module defaults.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Features/Config/SchemaReconciliation/ModuleParamConfigValueStore.cs",
+          "pattern": "ModuleParamSchemaSource\\.GetLegacyDefaultValues\\(item\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "compat",
+      "kind": "method",
+      "symbol": "IsReleaseCompatible",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Features/Updates/EdgeVersionCompatibilityPolicy.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Sole registered implementation of the active release compatibility policy.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/DependencyInjection.cs",
+          "pattern": "AddSingleton<IEdgeVersionCompatibilityPolicy, EdgeVersionCompatibilityPolicy>",
+          "expectedOccurrences": 1
+        },
+        {
+          "path": "src/Infrastructure/IIoT.Edge.Infrastructure.Update/Packages/EdgePluginPackageInstaller.cs",
+          "pattern": "_compatibilityPolicy\\.IsReleaseCompatible",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "legacy",
+      "kind": "method",
+      "symbol": "CreateLegacyTemplateRemarks",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Modules/Hardware/ModuleHardwareProfileProviderBase.cs",
+      "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceFilesystemTests/HomogenizationHardwareProfileBehaviorTests.cs",
+          "test": "HomogenizationHardwareProfileProvider_ShouldKeepTemplateMetadataInPluginProfile"
+        }
+      ],
+      "rationale": "Bounded virtual hook consumed by the active hardware-schema requirement builder.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Modules/Hardware/ModuleHardwareProfileProviderBase.cs",
+          "pattern": "CreateLegacyTemplateRemarks\\(signal\\)\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "legacy",
+      "kind": "method",
+      "symbol": "CreateLegacyTemplateRemarks",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Modules/Hardware/StandardModuleHardwareProfileProviderBase.cs",
+      "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceFilesystemTests/HomogenizationHardwareProfileBehaviorTests.cs",
+          "test": "HomogenizationHardwareProfileProvider_ShouldKeepTemplateMetadataInPluginProfile"
+        }
+      ],
+      "rationale": "Active override reached by the base schema builder for the concrete homogenization profile.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Modules/Hardware/ModuleHardwareProfileProviderBase.cs",
+          "pattern": "CreateLegacyTemplateRemarks\\(signal\\)\\)",
+          "expectedOccurrences": 1
+        },
+        {
+          "path": "src/Modules/IIoT.Edge.Module.Homogenization/Config/Io/HomogenizationHardwareProfileProvider.cs",
+          "pattern": "StandardModuleHardwareProfileProviderBase<",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "method",
+      "symbol": "BuildFallbackEntry",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/CrashLogWriter.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Active crash-log formatter invoked when the primary structured writer fails.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/CrashLogWriter.cs",
+          "pattern": "\\bBuildFallbackEntry\\(",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "method",
+      "symbol": "CreateFallbackRuntimePaths",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/EdgeRuntimePathPreflight.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Active non-blocking startup path constructor invoked after the configured runtime path is unwritable.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/EdgeRuntimePathPreflight.cs",
+          "pattern": "fallbackPaths = CreateFallbackRuntimePaths\\(runtimePaths\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "method",
+      "symbol": "ResolveWritableFallbackBase",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/EdgeRuntimePathPreflight.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Active runtime-path helper used only by the non-blocking fallback path constructor.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/EdgeRuntimePathPreflight.cs",
+          "pattern": "ResolveWritableFallbackBase\\(\\),",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "compat",
+      "kind": "method",
+      "symbol": "Compatible",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/Modules/ModulePluginCompatibilityPolicy.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Active result factory returned by successful plugin SDK compatibility evaluation.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/Modules/ModulePluginCompatibilityPolicy.cs",
+          "pattern": "ModulePluginCompatibilityResult\\.Compatible\\(",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "compat",
+      "kind": "method",
+      "symbol": "Incompatible",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/Modules/ModulePluginCompatibilityPolicy.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Active result factory returned by both plugin SDK compatibility rejection branches.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/Modules/ModulePluginCompatibilityPolicy.cs",
+          "pattern": "ModulePluginCompatibilityResult\\.Incompatible\\(",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "method",
+      "symbol": "RefreshFallbackCapacityStatusAsync",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/CloudFallbackRecoveryService.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Active Cloud override reached by the shared recovery algorithm and backed by the registered Cloud service.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/FallbackRecoveryServiceBase.cs",
+          "pattern": "await RefreshFallbackCapacityStatusAsync\\(\\)",
+          "expectedOccurrences": 1
+        },
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/DependencyInjection.cs",
+          "pattern": "(?<!I)\\bCloudFallbackRecoveryService\\b",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "method",
+      "symbol": "GetCloudFallbackBlockReasonAsync",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCapacityGuard.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Active Cloud durability-capacity gate consumed by cascading persistence.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCascadingPersistenceWriter.cs",
+          "pattern": "_capacityGuard\\.GetCloudFallbackBlockReasonAsync\\(processType\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "method",
+      "symbol": "GetMesFallbackBlockReasonAsync",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCapacityGuard.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Active MES durability-capacity gate consumed by cascading persistence.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCascadingPersistenceWriter.cs",
+          "pattern": "_capacityGuard\\.GetMesFallbackBlockReasonAsync\\(processType\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "method",
+      "symbol": "RefreshCloudFallbackCapacityStatusAsync",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCapacityGuard.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Active Cloud capacity-status refresh invoked by the Cloud retry task and recovery override.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Tasks/CloudRetryTask.cs",
+          "pattern": "_capacityGuard\\.RefreshCloudFallbackCapacityStatusAsync\\(\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "method",
+      "symbol": "RefreshMesFallbackCapacityStatusAsync",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCapacityGuard.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Active MES capacity-status refresh invoked by the MES retry task and recovery override.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Tasks/MesRetryTask.cs",
+          "pattern": "_capacityGuard\\.RefreshMesFallbackCapacityStatusAsync\\(\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "method",
+      "symbol": "EvaluateFallbackCapacityAsync",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCapacityGuard.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Shared active capacity evaluator invoked independently by the Cloud and MES fallback gates.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCapacityGuard.cs",
+          "pattern": "=> await EvaluateFallbackCapacityAsync\\(",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "method",
+      "symbol": "RefreshFallbackCapacityStatusAsync",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCapacityGuard.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Shared active status updater invoked by both isolated channel refresh methods.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCapacityGuard.cs",
+          "pattern": "=> await RefreshFallbackCapacityStatusAsync\\(",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "method",
+      "symbol": "GetFallbackRecordSourceTable",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineRetryChannelMetadata.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current channel-to-source-table mapping consumed by both recovery services.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/CloudFallbackRecoveryService.cs",
+          "pattern": "DataPipelineRetryChannelMetadata\\.GetFallbackRecordSourceTable\\(DataPipelineRetryChannel\\.Cloud\\)",
+          "expectedOccurrences": 1
+        },
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/MesFallbackRecoveryService.cs",
+          "pattern": "DataPipelineRetryChannelMetadata\\.GetFallbackRecordSourceTable\\(DataPipelineRetryChannel\\.Mes\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "method",
+      "symbol": "RefreshFallbackCapacityStatusAsync",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/FallbackRecoveryServiceBase.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current abstract recovery hook invoked after each recovery attempt.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/FallbackRecoveryServiceBase.cs",
+          "pattern": "await RefreshFallbackCapacityStatusAsync\\(\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "method",
+      "symbol": "RefreshFallbackCapacityStatusAsync",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/MesFallbackRecoveryService.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Active MES override reached by the shared recovery algorithm and backed by the registered MES service.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/FallbackRecoveryServiceBase.cs",
+          "pattern": "await RefreshFallbackCapacityStatusAsync\\(\\)",
+          "expectedOccurrences": 1
+        },
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/DependencyInjection.cs",
+          "pattern": "(?<!I)\\bMesFallbackRecoveryService\\b",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "method",
+      "symbol": "Fallback",
+      "declarationPath": "src/Edge/IIoT.Edge.Launcher/LauncherStartupErrorWindow.axaml.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current startup-error text fallback invoked for all four required display fields.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Launcher/LauncherStartupErrorWindow.axaml.cs",
+          "pattern": "Fallback\\((?:windowTitle|title|message|closeText)",
+          "expectedOccurrences": 4
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "method",
+      "symbol": "GetDllFallbackPath",
+      "declarationPath": "src/Edge/IIoT.Edge.Launcher/Services/ShellLaunchTargetResolver.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current launcher target resolver invokes the DLL path alternative in both configured-path branches.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Launcher/Services/ShellLaunchTargetResolver.cs",
+          "pattern": "GetDllFallbackPath\\(configuredPath\\)",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "method",
+      "symbol": "FallbackFor",
+      "declarationPath": "src/Edge/IIoT.Edge.Launcher/ViewModels/LauncherText.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current launcher localization helper invoked by both plain and formatted text paths.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Launcher/ViewModels/LauncherText.cs",
+          "pattern": "FallbackFor\\(key\\)",
+          "expectedOccurrences": 4
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "method",
+      "symbol": "ResolveFallbackTokenReason",
+      "declarationPath": "src/Infrastructure/IIoT.Edge.Infrastructure.Integration/Device/DeviceUploadGatePolicy.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current upload-gate reason resolver invoked when no explicit block reason exists.",
+      "callEvidence": [
+        {
+          "path": "src/Infrastructure/IIoT.Edge.Infrastructure.Integration/Device/DeviceUploadGatePolicy.cs",
+          "pattern": "\\? ResolveFallbackTokenReason\\(session\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "method",
+      "symbol": "ToFallbackBindings",
+      "declarationPath": "src/Modules/IIoT.Edge.Module.Sdk/Signals/BufferLogicalSignalAccessor.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current SDK signal accessor invokes this binding derivation only when explicit profile bindings are absent.",
+      "callEvidence": [
+        {
+          "path": "src/Modules/IIoT.Edge.Module.Sdk/Signals/BufferLogicalSignalAccessor.cs",
+          "pattern": ": ToFallbackBindings\\(profile\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "method",
+      "symbol": "ResolveCurrentProcessFallbackTitle",
+      "declarationPath": "src/Presentation/IIoT.Edge.Presentation.Panels/Features/Equipment/ViewModels/EquipmentViewModel.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current equipment menu projection consumes this method as a LINQ selector.",
+      "callEvidence": [
+        {
+          "path": "src/Presentation/IIoT.Edge.Presentation.Panels/Features/Equipment/ViewModels/EquipmentViewModel.cs",
+          "pattern": "\\.Select\\(ResolveCurrentProcessFallbackTitle\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "method",
+      "symbol": "ResolveProfileFallbackCrashLogPath",
+      "declarationPath": "src/Shared/IIoT.Edge.SharedKernel/Configuration/EdgeClientProgramDataPaths.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current shell runtime-path resolver consumes the per-profile crash-log fallback path.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/ShellRuntimePathResolver.cs",
+          "pattern": "EdgeClientProgramDataPaths\\.ResolveProfileFallbackCrashLogPath\\(",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "legacy",
+      "kind": "method",
+      "symbol": "IsLegacySha256Hash",
+      "declarationPath": "src/Shared/IIoT.Edge.SharedKernel/Security/EdgePasswordHasher.cs",
+      "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Cloud.ContractTests/AuthServiceBehaviorTests.cs",
+          "test": "LoginLocalAsync_WhenStoredHashIsLegacySha256_ShouldRequireResetWithoutSession"
+        }
+      ],
+      "rationale": "Bounded password-hash migration detector consumed by authentication and the in-place rehash path.",
+      "callEvidence": [
+        {
+          "path": "src/Infrastructure/IIoT.Edge.Infrastructure.Integration/Auth/AuthService.cs",
+          "pattern": "EdgePasswordHasher\\.IsLegacySha256Hash\\(configuredHash\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "legacy",
+      "kind": "method",
+      "symbol": "VerifyLegacySha256",
+      "declarationPath": "src/Shared/IIoT.Edge.SharedKernel/Security/EdgePasswordHasher.cs",
+      "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Cloud.ContractTests/AuthServiceBehaviorTests.cs",
+          "test": "LoginLocalAsync_WhenStoredHashIsLegacySha256_ShouldRequireResetWithoutSession"
+        }
+      ],
+      "rationale": "Bounded verifier invoked only after a stored hash is identified as the historical SHA-256 format.",
+      "callEvidence": [
+        {
+          "path": "src/Shared/IIoT.Edge.SharedKernel/Security/EdgePasswordHasher.cs",
+          "pattern": "return VerifyLegacySha256\\(password, hash\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "method",
+      "symbol": "GetDllFallbackPath",
+      "declarationPath": "src/Tools/IIoT.Edge.RuntimeLayoutSync/RuntimeLayoutSyncValidation.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current runtime-layout validator invokes the DLL alternative while resolving shell targets.",
+      "callEvidence": [
+        {
+          "path": "src/Tools/IIoT.Edge.RuntimeLayoutSync/RuntimeLayoutSyncValidation.cs",
+          "pattern": "AddDistinct\\(candidates, GetDllFallbackPath\\(configuredPath\\)\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "compat",
+      "kind": "field",
+      "symbol": "RemovedCompatibilityContract",
+      "declarationPath": "src/Analyzers/IIoT.Edge.Architecture.Analyzers/EdgeArchitectureDiagnostics.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Active analyzer descriptor emitted by the removed-contract rule.",
+      "callEvidence": [
+        {
+          "path": "src/Analyzers/IIoT.Edge.Architecture.Analyzers/EdgeArchitectureAnalyzer.cs",
+          "pattern": "EdgeArchitectureDiagnostics\\.RemovedCompatibilityContract",
+          "expectedOccurrences": 3
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "record-property",
+      "symbol": "FallbackCrashLogPath",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Abstractions/Config/EdgeRuntimePaths.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current runtime-path value consumed while configuring the crash writer.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Shell/App.axaml.cs",
+          "pattern": "runtimePaths\\.FallbackCrashLogPath",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "legacy",
+      "kind": "record-property",
+      "symbol": "LegacyDefaultValues",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Abstractions/Config/IModuleParamRegistry.cs",
+      "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/ModuleParamSchemaReconciliationBehaviorTests.cs",
+          "test": "ReconcileAsync_WhenExistingModuleParamMatchesLegacyDefault_ShouldRepairOnlyLegacyValue"
+        }
+      ],
+      "rationale": "Bounded module-default migration input consumed by the registry.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Features/Config/ModuleParameters/ModuleParamRegistry.cs",
+          "pattern": "defaultOverride\\?\\.LegacyDefaultValues",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "property",
+      "symbol": "DisplayNameFallback",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Abstractions/Config/ModuleParamAttribute.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current module parameter localization metadata consumed by the registry.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Features/Config/ModuleParameters/ModuleParamRegistry.cs",
+          "pattern": "attribute\\.DisplayNameFallback",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "property",
+      "symbol": "DescriptionFallback",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Abstractions/Config/ModuleParamAttribute.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current module parameter description metadata consumed by the registry.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Features/Config/ModuleParameters/ModuleParamRegistry.cs",
+          "pattern": "attribute\\.DescriptionFallback",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "record-property",
+      "symbol": "DisplayNameFallback",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Abstractions/Config/ModuleParamDescriptor.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current parameter descriptor display fallback consumed by the parameter view.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Features/Config/ParamView/ParamViewQueries.cs",
+          "pattern": "descriptor\\.DisplayNameFallback,",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "record-property",
+      "symbol": "DescriptionFallback",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Abstractions/Config/ModuleParamDescriptor.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current parameter descriptor description fallback consumed by the parameter view.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Features/Config/ParamView/ParamViewQueries.cs",
+          "pattern": "descriptor\\.DescriptionFallback,",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "legacy",
+      "kind": "record-property",
+      "symbol": "LegacyDefaultValues",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Abstractions/Config/ModuleParamDescriptor.cs",
+      "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/ModuleParamSchemaReconciliationBehaviorTests.cs",
+          "test": "ReconcileAsync_WhenExistingModuleParamMatchesLegacyDefault_ShouldRepairOnlyLegacyValue"
+        }
+      ],
+      "rationale": "Bounded persisted-default migration data consumed by schema reconciliation.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Features/Config/SchemaReconciliation/ModuleParamSchemaSource.cs",
+          "pattern": "if \\(descriptor\\.LegacyDefaultValues",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "property",
+      "symbol": "FallbackTotalLimit",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Abstractions/DataPipeline/DataPipelineCapacityOptions.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current fallback capacity limit enforced by both isolated channels.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCapacityGuard.cs",
+          "pattern": "limits\\.FallbackTotalLimit",
+          "expectedOccurrences": 5
+        }
+      ]
+    },
+    {
+      "token": "compat",
+      "kind": "record-property",
+      "symbol": "CompatibilityIssue",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Abstractions/Updates/EdgeUpdateModels.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current release-plan compatibility detail rendered by the launcher.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Launcher/ViewModels/LauncherProfileCardViewModel.cs",
+          "pattern": "option\\.CompatibilityIssue",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "alias",
+      "kind": "field",
+      "symbol": "TimeZoneAliases",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Common/Time/ProductionTimeProvider.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current operating-system time-zone identifier map used by both resolution failure paths.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Common/Time/ProductionTimeProvider.cs",
+          "pattern": "TimeZoneAliases\\.TryGetValue",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "const",
+      "symbol": "GroupDisplayNameFallback",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Features/Config/CloudApi/CloudApiConfigParamSchema.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current Cloud parameter group label consumed by the parameter view.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Features/Config/ParamView/ParamViewQueries.cs",
+          "pattern": "CloudApiConfigParamSchema\\.GroupDisplayNameFallback",
+          "expectedOccurrences": 3
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "record-property",
+      "symbol": "DisplayNameFallback",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Features/Config/CloudApi/CloudApiConfigParamSchema.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current Cloud parameter descriptor display label consumed by parameter projection.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Features/Config/ParamView/ParamViewQueries.cs",
+          "pattern": "descriptor\\.DisplayNameFallback",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "record-property",
+      "symbol": "DescriptionFallback",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Features/Config/CloudApi/CloudApiConfigParamSchema.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current Cloud parameter descriptor description consumed by schema reconciliation.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Features/Config/SchemaReconciliation/CloudApiConfigSchemaSource.cs",
+          "pattern": "descriptor\\.DescriptionFallback",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "legacy",
+      "kind": "const",
+      "symbol": "LegacyCloudSwitchSuffix",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Features/Config/CloudApi/CloudSystemSwitchMigration.cs",
+      "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Cloud.ContractTests/LocalParameterConfigBehaviorTests.cs",
+          "test": "CloudSystemSwitchMigration_ShouldUseSystemAndAllLegacySwitchesFailClosed"
+        }
+      ],
+      "rationale": "Bounded persisted Cloud-switch migration key consumed by the one-shot migration.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Features/Config/CloudApi/CloudSystemSwitchMigration.cs",
+          "pattern": "EndsWith\\(LegacyCloudSwitchSuffix",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "record-property",
+      "symbol": "DisplayNameFallback",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Features/Config/ParamView/ParamViewQueries.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current parameter-view snapshot label consumed by presentation mapping.",
+      "callEvidence": [
+        {
+          "path": "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Config/ParamView/ViewModels/ParamViewModelMapper.cs",
+          "pattern": "DisplayNameFallback = snapshot\\.DisplayNameFallback",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "record-property",
+      "symbol": "DescriptionFallback",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Features/Config/ParamView/ParamViewQueries.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current parameter-view snapshot description consumed by presentation mapping.",
+      "callEvidence": [
+        {
+          "path": "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Config/ParamView/ViewModels/ParamViewModelMapper.cs",
+          "pattern": "DescriptionFallback = snapshot\\.DescriptionFallback",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "record-property",
+      "symbol": "ModuleDisplayNameFallback",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Features/Config/ParamView/ParamViewQueries.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current module group label consumed by presentation mapping.",
+      "callEvidence": [
+        {
+          "path": "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Config/ParamView/ViewModels/ParamViewModelMapper.cs",
+          "pattern": "ModuleDisplayNameFallback = snapshot\\.ModuleDisplayNameFallback",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "legacy",
+      "kind": "const",
+      "symbol": "LegacyRemarksKey",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Features/Config/SchemaReconciliation/IoMappingSchemaMetadata.cs",
+      "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/IoMappingSchemaReconciliationBehaviorTests.cs",
+          "test": "ReconcileAsync_WhenRemarkMatchesModuleLegacyAlias_ShouldMigrateOnlyThatExactRemark"
+        }
+      ],
+      "rationale": "Bounded IO remark migration metadata key consumed by reconciliation.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Features/Config/SchemaReconciliation/IoMappingSchemaMetadata.cs",
+          "pattern": "GetOptional\\(item, LegacyRemarksKey",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "legacy",
+      "kind": "const",
+      "symbol": "LegacyDefaultValuesMetadataKey",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Features/Config/SchemaReconciliation/ModuleParamSchemaSource.cs",
+      "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/ModuleParamSchemaReconciliationBehaviorTests.cs",
+          "test": "ReconcileAsync_WhenExistingModuleParamMatchesLegacyDefault_ShouldRepairOnlyLegacyValue"
+        }
+      ],
+      "rationale": "Bounded module-default migration metadata key consumed by reconciliation.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Features/Config/SchemaReconciliation/ModuleParamSchemaSource.cs",
+          "pattern": "TryGetMetadata\\(item, LegacyDefaultValuesMetadataKey",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "compat",
+      "kind": "field",
+      "symbol": "_compatibilityPolicy",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Features/Updates/EdgeReleaseService.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current release policy dependency invoked by release selection.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Features/Updates/EdgeReleaseService.cs",
+          "pattern": "_compatibilityPolicy\\.IsReleaseCompatible",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "legacy",
+      "kind": "record-property",
+      "symbol": "LegacyRemarks",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Modules/Hardware/ModuleHardwareProfileModels.cs",
+      "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/IoMappingSchemaReconciliationBehaviorTests.cs",
+          "test": "ReconcileAsync_WhenRemarkMatchesModuleLegacyAlias_ShouldMigrateOnlyThatExactRemark"
+        }
+      ],
+      "rationale": "Bounded hardware-template remark migration data consumed by IO reconciliation metadata.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Features/Config/SchemaReconciliation/IoMappingSchemaMetadata.cs",
+          "pattern": "template\\.LegacyRemarks",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "property",
+      "symbol": "FallbackLogPath",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/CrashLogWriter.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Private current crash-log alternative consumed after primary write failure.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/CrashLogWriter.cs",
+          "pattern": "fallbackPath = FallbackLogPath",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "field",
+      "symbol": "_defaultFallbackLogPathProvider",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/CrashLogWriter.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current default crash path provider consumed by the private path property.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/CrashLogWriter.cs",
+          "pattern": "_defaultFallbackLogPathProvider\\(\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "field",
+      "symbol": "_fallbackLogPath",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/CrashLogWriter.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current configured crash path state consumed by the private path property.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/CrashLogWriter.cs",
+          "pattern": "_fallbackLogPath = fallbackLogPath",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "const",
+      "symbol": "FallbackDirectoryName",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/EdgeRuntimePathPreflight.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current non-blocking runtime fallback directory segment consumed by path construction.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/EdgeRuntimePathPreflight.cs",
+          "pattern": "FallbackDirectoryName,",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "compat",
+      "kind": "field",
+      "symbol": "_compatibilityPolicy",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/Modules/DirectoryModuleCatalog.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current plugin policy dependency invoked during directory discovery.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/Modules/DirectoryModuleCatalog.cs",
+          "pattern": "_compatibilityPolicy\\.Evaluate",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "compat",
+      "kind": "record-property",
+      "symbol": "IsCompatible",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/Modules/ModulePluginCompatibilityPolicy.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current plugin compatibility decision consumed by directory discovery.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/Modules/DirectoryModuleCatalog.cs",
+          "pattern": "compatibility\\.IsCompatible",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "field",
+      "symbol": "_cloudFallbackStore",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCapacityGuard.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current Cloud fallback store used by the capacity guard.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCapacityGuard.cs",
+          "pattern": "_cloudFallbackStore\\.GetCountAsync",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "field",
+      "symbol": "_mesFallbackStore",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCapacityGuard.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current MES fallback store used by the capacity guard.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCapacityGuard.cs",
+          "pattern": "_mesFallbackStore\\.GetCountAsync",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "field",
+      "symbol": "_cloudFallbackBlock",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCapacityGuard.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current Cloud fallback capacity state consumed by diagnostics.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCapacityGuard.cs",
+          "pattern": "_cloudRetryBlock \\?\\? _cloudFallbackBlock",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "field",
+      "symbol": "_mesFallbackBlock",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCapacityGuard.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current MES fallback capacity state consumed by diagnostics.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCapacityGuard.cs",
+          "pattern": "_mesRetryBlock \\?\\? _mesFallbackBlock",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "field",
+      "symbol": "_cloudFallbackStore",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCascadingPersistenceWriter.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current Cloud second-level durability store consumed by the cascading writer.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCascadingPersistenceWriter.cs",
+          "pattern": "_cloudFallbackStore\\.SaveAsync",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "field",
+      "symbol": "_mesFallbackStore",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCascadingPersistenceWriter.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current MES second-level durability store consumed by the cascading writer.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCascadingPersistenceWriter.cs",
+          "pattern": "_mesFallbackStore\\.SaveAsync",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "field",
+      "symbol": "_criticalFallbackWriter",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCascadingPersistenceWriter.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current final crash persistence writer consumed after dead-letter failure.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCascadingPersistenceWriter.cs",
+          "pattern": "_criticalFallbackWriter\\.Write",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "record-property",
+      "symbol": "GetFallbackBlockReasonAsync",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCascadingPersistenceWriter.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current channel-isolated capacity delegate invoked by cascading persistence.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCascadingPersistenceWriter.cs",
+          "pattern": "operations\\s*\\.GetFallbackBlockReasonAsync",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "record-property",
+      "symbol": "SaveFallbackAsync",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCascadingPersistenceWriter.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current channel-isolated fallback delegate invoked by cascading persistence.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCascadingPersistenceWriter.cs",
+          "pattern": "operations\\.SaveFallbackAsync",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "property",
+      "symbol": "FallbackStore",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/FallbackRecoveryServiceBase.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current typed recovery store consumed by the shared recovery algorithm.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/FallbackRecoveryServiceBase.cs",
+          "pattern": "FallbackStore\\.GetPendingAsync",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "field",
+      "symbol": "_criticalFallbackWriter",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/IngressOverflowPersistence.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current final persistence dependency consumed for invalid overflow channels.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/IngressOverflowPersistence.cs",
+          "pattern": "_criticalFallbackWriter\\.Write",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "field",
+      "symbol": "_criticalFallbackWriter",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/RetryDeadLetterServiceBase.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current final persistence dependency passed to the dead-letter writer.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/RetryDeadLetterServiceBase.cs",
+          "pattern": "_criticalFallbackWriter,",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "field",
+      "symbol": "_criticalFallbackWriter",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Tasks/ProcessQueueTask.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current final persistence dependency consumed by durable worker compensation.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Tasks/ProcessQueueTask.cs",
+          "pattern": "_criticalFallbackWriter\\.Write",
+          "expectedOccurrences": 4
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "field",
+      "symbol": "_fallbackRecoveryService",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.DataPipeline/Tasks/RetryTaskBase.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current recovery service consumed after retry processing.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Tasks/RetryTaskBase.cs",
+          "pattern": "_fallbackRecoveryService\\.RecoverAsync",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "const",
+      "symbol": "FallbackWindowTitle",
+      "declarationPath": "src/Edge/IIoT.Edge.Launcher/LauncherStartupErrorWindow.axaml.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current startup error window title default consumed by construction.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Launcher/LauncherStartupErrorWindow.axaml.cs",
+          "pattern": "Fallback\\(windowTitle, FallbackWindowTitle\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "const",
+      "symbol": "FallbackTitle",
+      "declarationPath": "src/Edge/IIoT.Edge.Launcher/LauncherStartupErrorWindow.axaml.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current startup error heading default consumed by construction.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Launcher/LauncherStartupErrorWindow.axaml.cs",
+          "pattern": "Fallback\\(title, FallbackTitle\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "const",
+      "symbol": "FallbackMessage",
+      "declarationPath": "src/Edge/IIoT.Edge.Launcher/LauncherStartupErrorWindow.axaml.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current startup error message default consumed by construction.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Launcher/LauncherStartupErrorWindow.axaml.cs",
+          "pattern": "Fallback\\(message, FallbackMessage\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "const",
+      "symbol": "FallbackCloseText",
+      "declarationPath": "src/Edge/IIoT.Edge.Launcher/LauncherStartupErrorWindow.axaml.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current startup close-action default consumed by construction.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Launcher/LauncherStartupErrorWindow.axaml.cs",
+          "pattern": "Fallback\\(closeText, FallbackCloseText\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "compat",
+      "kind": "property",
+      "symbol": "CompatibilityIssue",
+      "declarationPath": "src/Edge/IIoT.Edge.Launcher/ViewModels/LauncherVersionManagementItems.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current launcher option detail consumed by update-center release notes.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Launcher/ViewModels/LauncherMainViewModel.cs",
+          "pattern": "option\\.CompatibilityIssue",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "compat",
+      "kind": "field",
+      "symbol": "_compatibilityPolicy",
+      "declarationPath": "src/Infrastructure/IIoT.Edge.Infrastructure.Update/Packages/EdgePluginPackageInstaller.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current package installer policy invoked before both install paths.",
+      "callEvidence": [
+        {
+          "path": "src/Infrastructure/IIoT.Edge.Infrastructure.Update/Packages/EdgePluginPackageInstaller.cs",
+          "pattern": "_compatibilityPolicy\\.IsReleaseCompatible",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "record-property",
+      "symbol": "FallbackOffset",
+      "declarationPath": "src/Modules/IIoT.Edge.Module.Sdk/Signals/BufferLogicalSignalAccessor.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current SDK signal binding offset consumed by both read and write access.",
+      "callEvidence": [
+        {
+          "path": "src/Modules/IIoT.Edge.Module.Sdk/Signals/BufferLogicalSignalAccessor.cs",
+          "pattern": "binding\\.FallbackOffset",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "property",
+      "symbol": "ModuleDisplayNameFallback",
+      "declarationPath": "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Config/ParamView/Models/ModuleParamGroupVm.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current module label fallback consumed during localization refresh.",
+      "callEvidence": [
+        {
+          "path": "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Config/ParamView/ViewModels/ParamViewModel.cs",
+          "pattern": "group\\.ModuleDisplayNameFallback",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "property",
+      "symbol": "DisplayNameFallback",
+      "declarationPath": "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Config/ParamView/Models/ModuleParamVm.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current parameter label fallback consumed during localization refresh.",
+      "callEvidence": [
+        {
+          "path": "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Config/ParamView/ViewModels/ParamViewModel.cs",
+          "pattern": "param\\.DisplayNameFallback",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "property",
+      "symbol": "DescriptionFallback",
+      "declarationPath": "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Config/ParamView/Models/ModuleParamVm.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current parameter description fallback consumed during localization refresh.",
+      "callEvidence": [
+        {
+          "path": "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Config/ParamView/ViewModels/ParamViewModel.cs",
+          "pattern": "param\\.DescriptionFallback",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "field",
+      "symbol": "_recipeStatusFallback",
+      "declarationPath": "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Dashboard/ViewModels/DashboardViewModel.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current dashboard recipe status fallback consumed by localization rendering.",
+      "callEvidence": [
+        {
+          "path": "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Dashboard/ViewModels/DashboardViewModel.cs",
+          "pattern": "GetText\\(_recipeStatusResourceKey, _recipeStatusFallback\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "property",
+      "symbol": "TitleFallback",
+      "declarationPath": "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Production/Monitor/ViewModels/MonitorViewModels.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current monitor card label fallback consumed by the localized title.",
+      "callEvidence": [
+        {
+          "path": "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Production/Monitor/ViewModels/MonitorViewModels.cs",
+          "pattern": "GetString\\(TitleResourceKey, TitleFallback\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "property",
+      "symbol": "TitleFallback",
+      "declarationPath": "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Shell/ViewModels/NavigationItemViewModel.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current navigation item label fallback consumed by the localized title.",
+      "callEvidence": [
+        {
+          "path": "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Shell/ViewModels/NavigationItemViewModel.cs",
+          "pattern": "GetString\\(TitleResourceKey, TitleFallback\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "property",
+      "symbol": "TitleFallback",
+      "declarationPath": "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Shell/ViewModels/OverviewWorkspaceViewModel.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current overview workspace label fallback consumed by the localized title.",
+      "callEvidence": [
+        {
+          "path": "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/Shell/ViewModels/OverviewWorkspaceViewModel.cs",
+          "pattern": "GetString\\(TitleResourceKey, TitleFallback\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "property",
+      "symbol": "TitleFallback",
+      "declarationPath": "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/System/DiagnosticsView/ViewModels/DiagnosticsTabController.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current diagnostics tab label fallback consumed by the localized title.",
+      "callEvidence": [
+        {
+          "path": "src/Presentation/IIoT.Edge.Presentation.Navigation/Features/System/DiagnosticsView/ViewModels/DiagnosticsTabController.cs",
+          "pattern": "GetString\\(TitleResourceKey, TitleFallback\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "field",
+      "symbol": "_titleFallback",
+      "declarationPath": "src/Presentation/IIoT.Edge.Presentation.Navigation/Localization/LocalizedCrudPageViewModelBase.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current CRUD page label fallback consumed by ViewTitle.",
+      "callEvidence": [
+        {
+          "path": "src/Presentation/IIoT.Edge.Presentation.Navigation/Localization/LocalizedCrudPageViewModelBase.cs",
+          "pattern": "GetText\\(_titleResourceKey, _titleFallback\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "field",
+      "symbol": "_titleFallback",
+      "declarationPath": "src/Presentation/IIoT.Edge.Presentation.Navigation/Localization/NavigationViewModelBase.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current navigation page label fallback consumed by ViewTitle.",
+      "callEvidence": [
+        {
+          "path": "src/Presentation/IIoT.Edge.Presentation.Navigation/Localization/NavigationViewModelBase.cs",
+          "pattern": "GetText\\(_titleResourceKey, _titleFallback\\)",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "const",
+      "symbol": "EmptyFallback",
+      "declarationPath": "src/Presentation/IIoT.Edge.Presentation.Panels/Features/Equipment/ViewModels/ProductionPlanSelectionWindowViewModel.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current empty error text fallback consumed by plan selection failure rendering.",
+      "callEvidence": [
+        {
+          "path": "src/Presentation/IIoT.Edge.Presentation.Panels/Features/Equipment/ViewModels/ProductionPlanSelectionWindowViewModel.cs",
+          "pattern": "\\? EmptyFallback : ex\\.Message",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "field",
+      "symbol": "_popupOffsetFallback",
+      "declarationPath": "src/Shared/IIoT.Edge.UI.Shared/Avalonia/Controls/Inputs/EdgeFilterComboBox.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current popup offset control fallback consumed when no popup presenter exists.",
+      "callEvidence": [
+        {
+          "path": "src/Shared/IIoT.Edge.UI.Shared/Avalonia/Controls/Inputs/EdgeFilterComboBox.cs",
+          "pattern": "_popupOffsetFallback\\.RenderTransform",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "enum-member",
+      "symbol": "Fallback",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Abstractions/Shared/CapacityBlockedChannel.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current durable fallback channel state consumed by capacity enforcement.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/DataPipelineCapacityGuard.cs",
+          "pattern": "CapacityBlockedChannel\\.Fallback",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "compat",
+      "kind": "enum-member",
+      "symbol": "Incompatible",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Abstractions/Updates/EdgeUpdateModels.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current release status emitted when the active compatibility policy rejects a release.",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Features/Updates/EdgeReleaseService.cs",
+          "pattern": "EdgeVersionStatus\\.Incompatible",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "compat",
+      "kind": "enum-member",
+      "symbol": "HostVersionIncompatible",
+      "declarationPath": "src/Application/IIoT.Edge.Application/Modules/Diagnostics/StartupDiagnosticsReport.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current plugin lifecycle diagnostic state emitted for a host-version mismatch.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/StartupPluginLifecycleSnapshotBuilder.cs",
+          "pattern": "PluginLifecycleState\\.HostVersionIncompatible",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "enum-member",
+      "symbol": "FallbackToBootstrap",
+      "declarationPath": "src/Infrastructure/IIoT.Edge.Infrastructure.Integration/Device/DeviceRefreshResult.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current device refresh outcome explicitly routes stale sessions back through bootstrap.",
+      "callEvidence": [
+        {
+          "path": "src/Infrastructure/IIoT.Edge.Infrastructure.Integration/Device/DeviceService.cs",
+          "pattern": "DeviceRefreshResult\\.FallbackToBootstrap",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "enum-member",
+      "symbol": "FallbackPersist",
+      "declarationPath": "src/Shared/IIoT.Edge.SharedKernel/DataPipeline/DeadLetterStage.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current dead-letter stage records fallback persistence failure.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/IngressOverflowPersistence.cs",
+          "pattern": "DeadLetterStage\\.FallbackPersist",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "enum-member",
+      "symbol": "FallbackRecoverDeserialize",
+      "declarationPath": "src/Shared/IIoT.Edge.SharedKernel/DataPipeline/DeadLetterStage.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current dead-letter stage records fallback recovery deserialization failure.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Services/FallbackRecoveryServiceBase.cs",
+          "pattern": "DeadLetterStage\\.FallbackRecoverDeserialize",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "legacy",
+      "kind": "enum-member",
+      "symbol": "LegacySha256Verified",
+      "declarationPath": "src/Shared/IIoT.Edge.SharedKernel/Security/EdgePasswordHasher.cs",
+      "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Cloud.ContractTests/AuthServiceBehaviorTests.cs",
+          "test": "LoginLocalAsync_WhenStoredHashIsLegacySha256_ShouldRequireResetWithoutSession"
+        }
+      ],
+      "rationale": "Bounded password migration result consumed by authentication before mandatory reset/rehash.",
+      "callEvidence": [
+        {
+          "path": "src/Infrastructure/IIoT.Edge.Infrastructure.Integration/Auth/AuthService.cs",
+          "pattern": "EdgePasswordVerificationResult\\.LegacySha256Verified",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "token": "legacy",
+      "kind": "enum-member",
+      "symbol": "LegacySha256Mismatch",
+      "declarationPath": "src/Shared/IIoT.Edge.SharedKernel/Security/EdgePasswordHasher.cs",
+      "status": "MigrationWindow",
+      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Cloud.ContractTests/AuthServiceBehaviorTests.cs",
+          "test": "LoginLocalAsync_WhenStoredHashIsLegacySha256_ShouldRequireResetWithoutSession"
+        }
+      ],
+      "rationale": "Bounded password migration result emitted for a failed historical hash comparison.",
+      "callEvidence": [
+        {
+          "path": "src/Shared/IIoT.Edge.SharedKernel/Security/EdgePasswordHasher.cs",
+          "pattern": "EdgePasswordVerificationResult\\.LegacySha256Mismatch",
+          "expectedOccurrences": 1
+        }
+      ]
+    }
+  ],
+  "candidateDispositions": [
+    {
+      "id": "EDGE-CANDIDATE-ALIAS-ACTIVE",
+      "token": "alias",
+      "pathPattern": "^src/",
+      "status": "OrdinaryAbstraction",
+      "rationale": "The analyzer names the forbidden alias category, while ProductionTimeProvider maps operating-system time-zone identifiers with live lookup consumers; neither is an API compatibility alias.",
+      "candidateCount": 2,
+      "occurrenceCount": 8,
+      "manifestSha256": "c67d653ef4fb41f50bb9e9a4788da1bbf0b1b4df53feb25b7b38a65452c6b67a",
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Common/Time/ProductionTimeProvider.cs",
+          "pattern": "TimeZoneAliases\\.TryGetValue",
+          "expectedOccurrences": 2
+        },
+        {
+          "path": "src/Analyzers/IIoT.Edge.Architecture.Analyzers/EdgeArchitectureAnalyzer.cs",
+          "pattern": "RemovedCompatibilityContract",
+          "expectedOccurrences": 3
+        }
+      ]
+    },
+    {
+      "id": "EDGE-CANDIDATE-ADAPTER-MODBUS",
+      "token": "adapter",
+      "pathPattern": "^src/Infrastructure/IIoT\\.Edge\\.Infrastructure\\.DeviceComm/Plc/Services/Modbus/ModbusPlcService\\.cs$",
+      "status": "OrdinaryAbstraction",
+      "rationale": "SerialPortAdapter is the NModbus transport object constructed by the live RTU master path, not a compatibility wrapper owned by Edge.",
+      "candidateCount": 1,
+      "occurrenceCount": 1,
+      "manifestSha256": "8feebfe8b99cce5f04e6d91f1a29eea4c56ed47f848125a11b1cd17252155978",
+      "callEvidence": [
+        {
+          "path": "src/Infrastructure/IIoT.Edge.Infrastructure.DeviceComm/Plc/Services/Modbus/ModbusPlcService.cs",
+          "pattern": "new\\s+SerialPortAdapter\\s*\\(",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "id": "EDGE-CANDIDATE-WRAPPER-ANALYZER-MARKER",
+      "token": "wrapper",
+      "pathPattern": "^src/Analyzers/",
+      "status": "OrdinaryAbstraction",
+      "rationale": "The word occurs only in the diagnostic that prevents deleted wrappers from being reintroduced; the analyzer consumes that descriptor.",
+      "candidateCount": 1,
+      "occurrenceCount": 1,
+      "manifestSha256": "c95333f2d9600d40bcc4fd8a2b2155cb5a7d85fd828abe5e7bb52626ec99f698",
+      "callEvidence": [
+        {
+          "path": "src/Analyzers/IIoT.Edge.Architecture.Analyzers/EdgeArchitectureAnalyzer.cs",
+          "pattern": "RemovedCompatibilityContract",
+          "expectedOccurrences": 3
+        }
+      ]
+    },
+    {
+      "id": "EDGE-CANDIDATE-COMPAT-CURRENT-CONTRACTS",
+      "token": "compat",
+      "pathPattern": "^src/",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Active host-API and release-version compatibility policies reject incompatible packages and expose current diagnostics; they are the primary contract, not an alternate legacy path.",
+      "candidateCount": 25,
+      "occurrenceCount": 139,
+      "manifestSha256": "38fc7e54425f06828bde40758f57ce6b6d7370d1b3dcb64b784d310e68d9dab7",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.Bootstrap/DependencyInjection.cs",
+          "pattern": "ModulePluginCompatibilityPolicy",
+          "expectedOccurrences": 2
+        },
+        {
+          "path": "src/Application/IIoT.Edge.Application/DependencyInjection.cs",
+          "pattern": "EdgeVersionCompatibilityPolicy",
+          "expectedOccurrences": 2
+        }
+      ]
+    },
+    {
+      "id": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
+      "token": "legacy",
+      "pathPattern": "^src/",
+      "status": "MigrationWindow",
+      "rationale": "The remaining legacy markers read installed historical config, cache, signal, or password data and immediately project or rewrite the current format; new writers and new consumers are forbidden.",
+      "candidateCount": 17,
+      "occurrenceCount": 54,
+      "manifestSha256": "5c79199fa0cfdb965771fa584031a3a7d154397923c4988cb38650f0ef67bee6",
+      "producer": "Installed pre-current Edge configuration, device-session cache, module signal metadata, and SHA-256 password records",
+      "currentConsumers": [
+        "AppStartupInitializer one-time Cloud switch migration",
+        "EdgePasswordHasher login/reset migration",
+        "DeviceSessionFileCacheStore read-then-rewrite migration",
+        "schema reconciliation of installed module/IO metadata"
+      ],
+      "replacementPath": "All current writes use the canonical system switch, ClientCode-keyed cache, explicit signal contract, and PBKDF2 password format.",
+      "deletionCondition": "Supported deployed estates contain no pre-current records for one full release window and migration telemetry confirms zero reads.",
+      "latestRemovalBatch": "EDGE-LEGACY-MIGRATION-004",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/AppStartupInitializer.cs",
+          "pattern": "_cloudSystemSwitchMigration\\s*\\r?\\n\\s*\\.MigrateAsync",
+          "expectedOccurrences": 1
+        },
+        {
+          "path": "src/Shared/IIoT.Edge.SharedKernel/Security/EdgePasswordHasher.cs",
+          "pattern": "VerifyLegacySha256",
+          "expectedOccurrences": 1
+        },
+        {
+          "path": "src/Infrastructure/IIoT.Edge.Infrastructure.Integration/Device/Cache/DeviceSessionFileCacheStore.cs",
+          "pattern": "isLegacyCache",
+          "expectedOccurrences": 3
+        }
+      ],
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Cloud.ContractTests/LocalParameterConfigBehaviorTests.cs",
+          "test": "CloudSystemSwitchMigration_ShouldUseSystemAndAllLegacySwitchesFailClosed"
+        },
+        {
+          "path": "src/Tests/IIoT.Edge.Cloud.ContractTests/AuthServiceBehaviorTests.cs",
+          "test": "LoginLocalAsync_WhenStoredHashIsLegacySha256_ShouldRequireResetWithoutSession"
+        },
+        {
+          "path": "src/Tests/IIoT.Edge.DeviceBootstrap.IntegrationTests/DeviceBootstrapBehaviorTests.cs",
+          "test": "TryLoad_ShouldMapLegacyMacAddressCacheToRequestedClientCode"
+        }
+      ]
+    },
+    {
+      "id": "EDGE-CANDIDATE-SHADOW-VISUAL-TOKENS",
+      "token": "shadow",
+      "pathPattern": "^src/",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Shadow is an Avalonia visual depth resource consumed by current controls and windows, not an execution shadow path.",
+      "candidateCount": 7,
+      "occurrenceCount": 59,
+      "manifestSha256": "a1b943d467cd66d9dcdbbdfbc87c0002d067cb7ccb3ec8da23419413eb00aa47",
+      "callEvidence": [
+        {
+          "path": "src/Shared/IIoT.Edge.UI.Shared/Avalonia/Styles/Controls/Surfaces.axaml",
+          "pattern": "Edge\\.Shadow\\.",
+          "expectedOccurrences": 11
+        }
+      ]
+    },
+    {
+      "id": "EDGE-CANDIDATE-FALLBACK-PRIMARY-RESILIENCE",
+      "token": "fallback",
+      "pathPattern": "^src/",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Fallback names the primary resilience channels (DataPipeline durable cascade, crash diagnostics, deterministic config/localization defaults) with live consumers; it does not select an obsolete alternate implementation.",
+      "candidateCount": 115,
+      "occurrenceCount": 698,
+      "manifestSha256": "9b3a4bc97d88ebd838916c42cd82f07d0be5ee8a0bd71c2f47d3b49ae1f927e2",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Tasks/ProcessQueueTask.cs",
+          "pattern": "_criticalFallbackWriter\\.Write",
+          "expectedOccurrences": 4
+        },
+        {
+          "path": "src/Presentation/IIoT.Edge.Presentation.Shell/Localization/AppLanguageService.cs",
+          "pattern": "fallback",
+          "expectedOccurrences": 6
+        },
+        {
+          "path": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/EdgeRuntimePathPreflight.cs",
+          "pattern": "FallbackCrashLogPath",
+          "expectedOccurrences": 1
+        }
+      ]
+    }
+  ],
+  "migrationWindows": [
+    {
+      "id": "EDGE-COMPAT-CAPACITY-NO-IDEMPOTENCY",
+      "status": "MigrationWindow",
+      "producer": "CapacitySyncTask.PostCapacityAsync/CreatePayload",
+      "currentConsumers": [
+        "ICloudHttpClient.PostAsync -> configured capacity-hourly Cloud endpoint"
+      ],
+      "callEvidence": [
+        {
+          "path": "src/Infrastructure/IIoT.Edge.Infrastructure.Integration/Capacity/CapacitySyncTask.cs",
+          "pattern": "\\bCreatePayload\\s*\\(",
+          "expectedOccurrences": 1
+        },
+        {
+          "path": "src/Infrastructure/IIoT.Edge.Infrastructure.Integration/Capacity/CapacitySyncTask.cs",
+          "pattern": "_endpointProvider\\.GetCapacityHourlyPath\\(\\)",
+          "expectedOccurrences": 1
+        }
+      ],
+      "replacementPath": "Cloud provider first accepts a stable requestId/idempotency contract; Edge then supplies CloudRequestOptions.IdempotencyKey without changing the payload protocol unilaterally.",
+      "deletionCondition": "Cloud capacity-hourly contract and deployed consumer accept the replacement idempotency field/header, and dual-path contract tests pass during the bounded migration window.",
+      "latestRemovalBatch": "EDGE-CLOUD-IDEMPOTENCY-002",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Runtime.WorkflowTests/CapacitySyncTaskBehaviorTests.cs",
+          "test": "RetryBuffer_WhenOnlineAndAllPostsSucceed_ShouldPostAllAndDeleteClaimedSummaries"
+        }
+      ]
+    },
+    {
+      "id": "EDGE-COMPAT-DEVICE-LOG-NO-IDEMPOTENCY",
+      "status": "MigrationWindow",
+      "producer": "DeviceLogSyncTask.PostLogsAsync",
+      "currentConsumers": [
+        "ICloudHttpClient.PostAsync -> configured device-log Cloud endpoint"
+      ],
+      "callEvidence": [
+        {
+          "path": "src/Infrastructure/IIoT.Edge.Infrastructure.Integration/DeviceLog/DeviceLogSyncTask.cs",
+          "pattern": "\\bPostLogsAsync\\s*\\(",
+          "expectedOccurrences": 1
+        },
+        {
+          "path": "src/Infrastructure/IIoT.Edge.Infrastructure.Integration/DeviceLog/DeviceLogSyncTask.cs",
+          "pattern": "_endpointProvider\\.GetDeviceLogPath\\(\\)",
+          "expectedOccurrences": 1
+        }
+      ],
+      "replacementPath": "Cloud provider first accepts a stable requestId/idempotency contract; Edge then supplies CloudRequestOptions.IdempotencyKey without changing the payload protocol unilaterally.",
+      "deletionCondition": "Cloud device-log contract and deployed consumer accept the replacement idempotency field/header, and dual-path contract tests pass during the bounded migration window.",
+      "latestRemovalBatch": "EDGE-CLOUD-IDEMPOTENCY-002",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Runtime.WorkflowTests/DeviceLogSyncTaskBehaviorTests.cs",
+          "test": "RetryBuffer_WhenOnline_ShouldPostAndDeleteClaimedRows"
+        }
+      ]
+    },
+    {
+      "id": "EDGE-COMPAT-CONTENT-HASH-IDEMPOTENCY",
+      "status": "MigrationWindow",
+      "producer": "CloudIdempotencyKeyBuilder content-hash keys",
+      "currentConsumers": [
+        "CloudUploadChannelBase per-record and batch upload",
+        "StandardPassStationCloudUploader batch upload"
+      ],
+      "callEvidence": [
+        {
+          "path": "src/Application/IIoT.Edge.Application/Modules/Cloud/CloudUploadChannelBase.cs",
+          "pattern": "CloudIdempotencyKeyBuilder\\.ForRecord\\s*\\(",
+          "expectedOccurrences": 1
+        },
+        {
+          "path": "src/Application/IIoT.Edge.Application/Modules/Cloud/CloudUploadChannelBase.cs",
+          "pattern": "CloudIdempotencyKeyBuilder\\.ForBatch\\s*\\(",
+          "expectedOccurrences": 1
+        },
+        {
+          "path": "src/Infrastructure/IIoT.Edge.Infrastructure.Integration/PassStation/StandardPassStationCloudUploader.cs",
+          "pattern": "CloudIdempotencyKeyBuilder\\.ForBatch\\s*\\(",
+          "expectedOccurrences": 1
+        }
+      ],
+      "replacementPath": "Provider-issued or persisted business requestId becomes the sole idempotency identity after every Cloud endpoint accepts it.",
+      "deletionCondition": "All listed live consumers use the provider-approved stable business requestId and no production call site references the content-hash builder.",
+      "latestRemovalBatch": "EDGE-CLOUD-IDEMPOTENCY-003",
+      "coverageTests": [
+        {
+          "path": "src/Tests/IIoT.Edge.Runtime.WorkflowTests/CloudConsumerBehaviorTests.cs",
+          "test": "ProcessBatchAsync_WhenSameProcessContainsMultiplePlcs_ShouldUploadPerPlcContext"
+        },
+        {
+          "path": "src/Tests/IIoT.Edge.Cloud.ContractFilesystemTests/PassStationContractSnapshotTests.cs",
+          "test": "CanonicalSnapshot_RequestIdDescription_ShouldMatchRealHashBuilder"
+        }
+      ]
+    }
+  ]
+}

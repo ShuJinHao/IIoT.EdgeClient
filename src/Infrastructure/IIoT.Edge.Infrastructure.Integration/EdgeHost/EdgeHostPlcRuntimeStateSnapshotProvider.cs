@@ -7,7 +7,7 @@ using IIoT.Edge.SharedKernel.Repository;
 namespace IIoT.Edge.Infrastructure.Integration.EdgeHost;
 
 public sealed class EdgeHostPlcRuntimeStateSnapshotProvider(
-    IRepository<NetworkDeviceEntity> networkDevices,
+    IReadRepository<NetworkDeviceEntity> networkDevices,
     IPlcConnectionManager plcConnectionManager) : IEdgeHostPlcRuntimeStateSnapshotProvider
 {
     private const string Connected = "Connected";

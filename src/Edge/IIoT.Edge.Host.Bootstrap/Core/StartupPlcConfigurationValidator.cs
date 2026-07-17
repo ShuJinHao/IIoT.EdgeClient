@@ -9,7 +9,7 @@ using IIoT.Edge.SharedKernel.Repository;
 namespace IIoT.Edge.Shell.Core;
 
 internal sealed class StartupPlcConfigurationValidator(
-    IRepository<IoMappingEntity> ioMappings,
+    IReadRepository<IoMappingEntity> ioMappings,
     ICellDataRegistry cellDataRegistry,
     IStationRuntimeRegistry runtimeRegistry)
     : IStartupAsyncDiagnosticValidator

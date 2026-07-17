@@ -1,4 +1,5 @@
 using System.Threading;
+using IIoT.Edge.SharedKernel.Configuration;
 
 namespace IIoT.Edge.Launcher.Services;
 
@@ -11,7 +12,7 @@ public sealed class NamedMutexShellInstanceProbe : IShellInstanceProbe
             return false;
         }
 
-        var mutexName = $"Global\\IIoT.EdgeClient_{instanceId.Trim()}";
+        var mutexName = EdgeClientInstanceMutexName.Create(instanceId);
         try
         {
             using var _ = Mutex.OpenExisting(mutexName);

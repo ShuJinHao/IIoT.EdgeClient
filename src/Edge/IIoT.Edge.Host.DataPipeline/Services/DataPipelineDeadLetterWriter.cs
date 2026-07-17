@@ -18,8 +18,10 @@ public sealed class DataPipelineDeadLetterWriter : IDataPipelineDeadLetterWriter
         long sourceRecordId,
         DeadLetterStage stage,
         string failureReason,
-        FailedCellRecord? sourceRecord = null)
+        FailedCellRecord? sourceRecord = null,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         try
         {
             await saveAsync(new DeadLetterRecord
@@ -40,12 +42,17 @@ public sealed class DataPipelineDeadLetterWriter : IDataPipelineDeadLetterWriter
                 MainPlanCode = sourceRecord?.MainPlanCode ?? string.Empty,
                 TraceBatchNumber = sourceRecord?.TraceBatchNumber ?? string.Empty
             }).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
 
             var deviceName = string.IsNullOrWhiteSpace(sourceRecord?.DeviceName)
                 ? "未知"
                 : sourceRecord.DeviceName;
             logger.Fatal($"[PLC-{deviceName}][{channel.DeadLetterName}] 工序={processType} 记录 {sourceRecordId} 已进入死信表。");
             return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {

@@ -21,5 +21,6 @@ public interface IDataPipelineDeadLetterWriter
         long sourceRecordId,
         DeadLetterStage stage,
         string failureReason,
-        FailedCellRecord? sourceRecord = null);
+        FailedCellRecord? sourceRecord = null,
+        CancellationToken cancellationToken = default);
 }

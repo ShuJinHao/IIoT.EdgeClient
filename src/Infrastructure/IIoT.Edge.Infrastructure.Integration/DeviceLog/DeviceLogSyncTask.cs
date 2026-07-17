@@ -166,13 +166,13 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
                 break;
             }
 
-            await ExecuteOnceAsync();
+            await ExecuteOnceAsync(ct);
         }
     }
 
-    private async Task ExecuteOnceAsync()
+    private async Task ExecuteOnceAsync(CancellationToken cancellationToken)
     {
-        await _syncGate.WaitAsync().ConfigureAwait(false);
+        await _syncGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             if (!_runtimeConfig.Current.SystemCloudEnabled)
@@ -194,7 +194,11 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
                 return;
             }
 
-            await RetryBufferedLogsCoreAsync(device).ConfigureAwait(false);
+            await RetryBufferedLogsCoreAsync(device, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -206,10 +210,13 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
         }
     }
 
-    private async Task<bool> RetryBufferedLogsCoreAsync(DeviceSession device)
+    private async Task<bool> RetryBufferedLogsCoreAsync(
+        DeviceSession device,
+        CancellationToken cancellationToken = default)
     {
         for (var i = 0; i < RetryMaxBatchesPerRound; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var claimedBatch = await _bufferStore.ClaimPendingBatchAsync(RetryBatchSize).ConfigureAwait(false);
             if (claimedBatch is null || claimedBatch.Records.Count == 0)
             {
@@ -217,12 +224,22 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
             }
 
             CloudCallResult? result = null;
+            var claimReleased = false;
+            var claimDeleted = false;
             try
             {
-                result = await PostLogsAsync(device.DeviceId, claimedBatch.Records).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                result = await PostLogsAsync(
+                        device.DeviceId,
+                        claimedBatch.Records,
+                        cancellationToken)
+                    .ConfigureAwait(false);
                 if (!result.IsSuccess)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     await _bufferStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
+                    claimReleased = true;
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (result.Outcome is CloudCallOutcome.SkippedUploadNotReady or CloudCallOutcome.UnauthorizedAfterRetry)
                     {
                         _logger.Warn($"[设备日志同步] 补传已暂停，等待云端恢复。结果：{result.Outcome}，原因：{result.ReasonCode}");
@@ -231,26 +248,29 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
                     return false;
                 }
 
+                cancellationToken.ThrowIfCancellationRequested();
                 await _bufferStore.DeleteClaimedBatchAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
+                claimDeleted = true;
+                cancellationToken.ThrowIfCancellationRequested();
 
                 if (claimedBatch.Records.Count < RetryBatchSize)
                 {
                     return true;
                 }
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                if (!claimReleased && !claimDeleted)
+                {
+                    await TryReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
+                }
+                throw;
+            }
             catch (Exception ex)
             {
-                if (result is null || !result.IsSuccess)
+                if (!claimReleased && !claimDeleted)
                 {
-                    try
-                    {
-                        await _bufferStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
-                    }
-                    catch (Exception releaseEx)
-                    {
-                        _logger.Error(
-                            $"[设备日志同步] 释放设备日志补传领取标记 {claimedBatch.ClaimToken} 失败：{releaseEx.Message}");
-                    }
+                    await TryReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
                 }
 
                 _logger.Error($"[设备日志同步] 缓冲日志补传失败：{ex.Message}");
@@ -261,7 +281,23 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
         return true;
     }
 
-    private async Task<CloudCallResult> PostLogsAsync(Guid deviceId, IReadOnlyCollection<DeviceLogRecord> batch)
+    private async Task TryReleaseClaimAsync(string claimToken)
+    {
+        try
+        {
+            await _bufferStore.ReleaseClaimAsync(claimToken).ConfigureAwait(false);
+        }
+        catch (Exception releaseEx)
+        {
+            _logger.Error(
+                $"[设备日志同步] 释放设备日志补传领取标记 {claimToken} 失败：{releaseEx.Message}");
+        }
+    }
+
+    private async Task<CloudCallResult> PostLogsAsync(
+        Guid deviceId,
+        IReadOnlyCollection<DeviceLogRecord> batch,
+        CancellationToken cancellationToken = default)
     {
         var payload = new
         {
@@ -274,7 +310,12 @@ public class DeviceLogSyncTask : IDeviceLogSyncTask
             }).ToArray()
         };
 
-        var result = await _cloudHttp.PostAsync(_endpointProvider.GetDeviceLogPath(), payload).ConfigureAwait(false);
+        var result = await _cloudHttp.PostAsync(
+                _endpointProvider.GetDeviceLogPath(),
+                payload,
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         _diagnosticsStore.RecordResult("DeviceLog", result);
         return result;
     }

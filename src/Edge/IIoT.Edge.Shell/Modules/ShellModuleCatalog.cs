@@ -20,11 +20,6 @@ public interface IShellModuleCatalog
         IConfiguration configuration,
         IReadOnlyList<ModulePluginDescriptor> discoveredModules);
 
-    IReadOnlyList<IEdgeProcessModule> CreateAllModulesForValidation();
-
-    IReadOnlyList<IEdgeProcessModule> CreateAllModulesForValidation(
-        IReadOnlyList<ModulePluginDescriptor> discoveredModules);
-
     bool IsDiscoveredModule(string moduleId, IReadOnlyList<ModulePluginDescriptor> discoveredModules);
 }
 
@@ -49,10 +44,19 @@ public sealed class ShellModuleCatalog : IShellModuleCatalog
             .GetSection($"{ShellModuleOptions.SectionName}:PluginRoots")
             .Get<string[]>()
             ?? [];
-        var paths = configuredRoots
-            .Where(static path => !string.IsNullOrWhiteSpace(path))
-            .Select(path => ResolveConfiguredPluginRoot(baseDirectory, path))
-            .ToList();
+        var paths = new List<string>();
+        foreach (var configuredRoot in configuredRoots.Where(static path => !string.IsNullOrWhiteSpace(path)))
+        {
+            try
+            {
+                paths.Add(ResolveConfiguredPluginRoot(baseDirectory, configuredRoot));
+            }
+            catch
+            {
+                // ShellConfigurationLoader records the detailed startup diagnostic.
+                // Catalog resolution must remain non-blocking even when invoked independently.
+            }
+        }
         if (paths.Count == 0)
         {
             paths.Add(GetPluginRootPath(baseDirectory));
@@ -110,14 +114,6 @@ public sealed class ShellModuleCatalog : IShellModuleCatalog
             configuration,
             ShellModuleOptions.SectionName,
             discoveredModules);
-
-    public IReadOnlyList<IEdgeProcessModule> CreateAllModulesForValidation()
-        => _moduleCatalog.CreateAllModules(
-            DiscoverModules([GetPluginRootPath(AppContext.BaseDirectory)]).Modules);
-
-    public IReadOnlyList<IEdgeProcessModule> CreateAllModulesForValidation(
-        IReadOnlyList<ModulePluginDescriptor> discoveredModules)
-        => _moduleCatalog.CreateAllModules(discoveredModules);
 
     public bool IsDiscoveredModule(string moduleId, IReadOnlyList<ModulePluginDescriptor> discoveredModules)
         => _moduleCatalog.IsDiscoveredModule(moduleId, discoveredModules);

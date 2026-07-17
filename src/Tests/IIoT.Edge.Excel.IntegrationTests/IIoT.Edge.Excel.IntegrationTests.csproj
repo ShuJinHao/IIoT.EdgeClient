@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <TestKind>Integration</TestKind>
+    <TestRuntime>Filesystem</TestRuntime><TestRuntimeDependencies />
+    <TestRunnerMode>Serial</TestRunnerMode>
+    <TestCadence>PR</TestCadence><TestCapability>Export.Excel</TestCapability><TestRisk>P1</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Integration</TestOwner><TestRuleId>EDGE-EXCEL-001</TestRuleId><TestRequired>true</TestRequired>
+    <UseEdgeTestingCore>true</UseEdgeTestingCore>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.Integration\IIoT.Edge.Infrastructure.Integration.csproj" />
+    <ProjectReference Include="..\..\Testing\IIoT.Edge.Testing.Core\IIoT.Edge.Testing.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -19,7 +19,7 @@ public interface IStartupDiagnosticsReportBuilder
 
 public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportBuilder
 {
-    private readonly IRepository<NetworkDeviceEntity> _networkDevices;
+    private readonly IReadRepository<NetworkDeviceEntity> _networkDevices;
     private readonly ILocalSystemRuntimeConfigService? _runtimeConfigService;
     private readonly IStartupPluginLifecycleSnapshotBuilder _pluginLifecycleSnapshotBuilder;
     private readonly IReadOnlyDictionary<string, IEdgeProcessModule> _modulesById;
@@ -33,9 +33,10 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
     private readonly IReadOnlyList<IStartupAsyncDiagnosticValidator> _asyncValidators;
     private readonly IStartupConfigurationProfileBuilder _configurationProfileBuilder;
     private readonly IStartupModuleRegistrationSnapshotBuilder _moduleRegistrationSnapshotBuilder;
+    private readonly IReadOnlyList<StartupDiagnosticIssue> _constructionDiagnosticIssues;
 
     public StartupDiagnosticsReportBuilder(
-        IRepository<NetworkDeviceEntity> networkDevices,
+        IReadRepository<NetworkDeviceEntity> networkDevices,
         IStartupPluginLifecycleSnapshotBuilder pluginLifecycleSnapshotBuilder,
         IReadOnlyCollection<ModulePluginDescriptor> discoveredModules,
         IReadOnlyCollection<ModuleCatalogIssue> moduleCatalogIssues,
@@ -56,7 +57,11 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
         _discoveredModulesById = discoveredModules.ToDictionary(x => x.ModuleId, StringComparer.OrdinalIgnoreCase);
         _moduleCatalogIssues = moduleCatalogIssues.ToArray();
         _bootstrapDiagnosticIssues = bootstrapDiagnosticIssues.ToArray();
-        _hardwareProfilesByModuleId = hardwareProfiles.ToDictionary(x => x.ModuleId, StringComparer.OrdinalIgnoreCase);
+        var constructionDiagnosticIssues = new List<StartupDiagnosticIssue>();
+        _hardwareProfilesByModuleId = BuildHardwareProfileIndex(
+            hardwareProfiles,
+            constructionDiagnosticIssues);
+        _constructionDiagnosticIssues = constructionDiagnosticIssues;
         _configuredEnabledModuleIds = configuredEnabledModuleIds
             .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -70,11 +75,16 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
     public async Task<StartupDiagnosticsReport> BuildAsync(CancellationToken cancellationToken = default)
     {
         var issues = new List<StartupDiagnosticIssue>();
+        issues.AddRange(_constructionDiagnosticIssues);
         if (_runtimeConfigService is not null)
         {
             try
             {
                 await _runtimeConfigService.EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception)
             {
@@ -110,6 +120,10 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
             {
                 validator.Validate(context, issues);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception)
             {
                 AddDiagnosticFailureIssue(
@@ -124,6 +138,10 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
             try
             {
                 await validator.ValidateAsync(context, issues, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception)
             {
@@ -158,6 +176,10 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
             return await _networkDevices.GetListAsync(
                 x => x.IsEnabled && x.DeviceType == DeviceType.PLC,
                 cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception)
         {
@@ -212,6 +234,55 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
         string code,
         string message)
         => issues.Add(StartupDiagnosticIssueFactory.Create(code, message));
+
+    internal static IReadOnlyDictionary<string, IModuleHardwareProfileProvider> BuildHardwareProfileIndex(
+        IEnumerable<IModuleHardwareProfileProvider> hardwareProfiles,
+        ICollection<StartupDiagnosticIssue> issues)
+    {
+        var result = new Dictionary<string, IModuleHardwareProfileProvider>(StringComparer.OrdinalIgnoreCase);
+        var duplicates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var provider in hardwareProfiles)
+        {
+            string moduleId;
+            try
+            {
+                moduleId = provider.ModuleId;
+                if (string.IsNullOrWhiteSpace(moduleId))
+                    throw new InvalidOperationException("ModuleId 为空。");
+            }
+            catch (Exception ex)
+            {
+                issues.Add(StartupDiagnosticIssueFactory.Create(
+                    "HARDWARE_PROFILE_IDENTITY_FAILED",
+                    $"硬件 profile 身份读取失败，已忽略该 profile：{ex.Message}"));
+                continue;
+            }
+
+            if (provider is GuardedModuleHardwareProfileProvider guarded
+                && guarded.IdentityFailureMessage is { Length: > 0 } identityFailure)
+            {
+                issues.Add(StartupDiagnosticIssueFactory.Create(
+                    "HARDWARE_PROFILE_IDENTITY_FAILED",
+                    $"插件“{moduleId}”的硬件 profile 身份无效：{identityFailure}",
+                    moduleId));
+            }
+
+            if (duplicates.Contains(moduleId))
+                continue;
+
+            if (!result.TryAdd(moduleId, provider))
+            {
+                result.Remove(moduleId);
+                duplicates.Add(moduleId);
+                issues.Add(StartupDiagnosticIssueFactory.Create(
+                    "HARDWARE_PROFILE_DUPLICATE",
+                    $"模块“{moduleId}”重复注册硬件 profile，已忽略该模块的全部 profile，避免不确定选择。",
+                    moduleId));
+            }
+        }
+
+        return result;
+    }
 
     public bool HasBlockingIssues(IReadOnlyCollection<StartupDiagnosticIssue> issues)
         => false;

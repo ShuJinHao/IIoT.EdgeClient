@@ -18,8 +18,8 @@ public interface IPlcRuntimeTaskBinder
 public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
 {
     private readonly IServiceProvider _serviceProvider;
-    private readonly IRepository<NetworkDeviceEntity> _networkDevices;
-    private readonly IRepository<IoMappingEntity> _ioMappings;
+    private readonly IReadRepository<NetworkDeviceEntity> _networkDevices;
+    private readonly IReadRepository<IoMappingEntity> _ioMappings;
     private readonly IPlcConnectionManager _plcConnectionManager;
     private readonly IStationRuntimeRegistry _runtimeRegistry;
     private readonly IPlcTaskBindingService _taskBindingService;
@@ -28,8 +28,8 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
 
     public PlcRuntimeTaskBinder(
         IServiceProvider serviceProvider,
-        IRepository<NetworkDeviceEntity> networkDevices,
-        IRepository<IoMappingEntity> ioMappings,
+        IReadRepository<NetworkDeviceEntity> networkDevices,
+        IReadRepository<IoMappingEntity> ioMappings,
         IPlcConnectionManager plcConnectionManager,
         IStationRuntimeRegistry runtimeRegistry,
         IPlcTaskBindingService taskBindingService,

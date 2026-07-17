@@ -25,7 +25,7 @@ public sealed record SaveModuleParamsCommand(
     List<ModuleParamDto> Params) : ICommand<Result>;
 
 public sealed class SaveModuleParamsHandler(
-    IRepository<SystemConfigEntity> repo,
+    IEdgeUnitOfWorkFactory unitOfWorkFactory,
     IEdgeCacheService cache,
     ILocalParameterConfigChangePublisher changePublisher)
     : ICommandHandler<SaveModuleParamsCommand, Result>
@@ -53,10 +53,15 @@ public sealed class SaveModuleParamsHandler(
             return Result.Failure(configsResult.ErrorMessage ?? "插件参数保存失败。");
         }
 
+        await using var unitOfWork = await unitOfWorkFactory
+            .BeginAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var repo = unitOfWork.Repository<SystemConfigEntity>();
         await SystemConfigParamSaveHelper.ReplaceByKeysAsync(
             repo,
             configsResult.Value ?? [],
             cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
 
         cache.Remove(ParameterCacheKeys.SystemAll);
         cache.RemoveByPrefix(ParameterCacheKeys.ModuleSnapshotPrefix);

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <TestKind>Unit</TestKind>
+    <TestRuntime>Pure</TestRuntime><TestRuntimeDependencies />
+    <TestRunnerMode>Parallel</TestRunnerMode>
+    <TestCadence>PR</TestCadence><TestCapability>Caching.Memory</TestCapability><TestRisk>P1</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Persistence</TestOwner><TestRuleId>TEST-EXC-001</TestRuleId><TestRequired>true</TestRequired>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
+  </ItemGroup>
+</Project>

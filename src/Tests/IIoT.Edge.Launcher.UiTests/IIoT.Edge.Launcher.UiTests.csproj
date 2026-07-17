@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable><IsTestProject>true</IsTestProject>
+    <TestKind>UI</TestKind><TestRuntime>Avalonia</TestRuntime><TestRuntimeDependencies>Headless</TestRuntimeDependencies><TestRunnerMode>Serial</TestRunnerMode><TestCadence>PR</TestCadence><TestCapability>Launcher.UI</TestCapability><TestRisk>P2</TestRisk><TestConcern>Accessibility</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Launcher</TestOwner><TestRuleId>EDGE-UI-001</TestRuleId><TestRequired>true</TestRequired>
+  </PropertyGroup>
+  <ItemGroup><PackageReference Include="Avalonia.Headless.XUnit" /><PackageReference Include="Avalonia.Themes.Fluent" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="..\..\Edge\IIoT.Edge.Launcher\IIoT.Edge.Launcher.csproj" /></ItemGroup>
+</Project>

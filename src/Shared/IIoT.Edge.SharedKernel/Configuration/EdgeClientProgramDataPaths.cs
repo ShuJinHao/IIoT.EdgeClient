@@ -58,6 +58,10 @@ public static class EdgeClientProgramDataPaths
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
         var trimmed = path.Trim();
+        if (trimmed.Contains('\0'))
+        {
+            throw new ArgumentException("Configured plugin root contains a null character.", nameof(path));
+        }
         if (IsDefaultLayoutPluginRoot(trimmed))
         {
             return ResolveApplicationPluginRoot(baseDirectory);
@@ -122,13 +126,13 @@ public static class EdgeClientProgramDataPaths
             return "Default";
         }
 
-        var invalidChars = Path.GetInvalidFileNameChars();
         var sanitized = new string(value
             .Trim()
-            .Select(ch => invalidChars.Contains(ch) ? '_' : ch)
-            .ToArray());
+            .Select(static ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' or '.' ? ch : '_')
+            .ToArray())
+            .Replace("..", "__", StringComparison.Ordinal);
 
-        return string.IsNullOrWhiteSpace(sanitized)
+        return string.IsNullOrWhiteSpace(sanitized) || sanitized is "." or ".."
             ? "Default"
             : sanitized;
     }

@@ -96,7 +96,8 @@ macOS 开发阶段运行态验收：
 - 本阶段不得因为验证通过自动触发上传、发布、`stable` 或 Windows 部署。
 
 ```powershell
-dotnet test src/Tests/IIoT.Edge.Installer.Tests/IIoT.Edge.Installer.Tests.csproj -p:BuildInParallel=false --disable-build-servers
+dotnet test src/Tests/IIoT.Edge.Installer.UnitTests/IIoT.Edge.Installer.UnitTests.csproj -c Release --no-build --no-restore --nologo
+dotnet test src/Tests/IIoT.Edge.Installer.UiTests/IIoT.Edge.Installer.UiTests.csproj -c Release --no-build --no-restore --nologo
 ./scripts/TestEdgeRuntimePublish.ps1 -Configuration Release
 ./scripts/PackEdgeClientVelopack.ps1 -Version 1.0.0 -Channel stable -OutputRoot publish/edge-velopack -CleanOutput -SkipVeloAppCheck:$true
 ./scripts/TestEdgeVelopackPackage.ps1 -OutputRoot publish/edge-velopack -Channel stable -Version 1.0.0

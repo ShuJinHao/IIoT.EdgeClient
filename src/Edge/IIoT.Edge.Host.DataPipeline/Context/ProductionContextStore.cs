@@ -224,9 +224,10 @@ public class ProductionContextStore : IProductionContextStore
             }
             catch (Exception ex)
             {
-                _logger.Error(
-                    $"[运行上下文] 写入临时文件 {Path.GetFileName(tempPath)} 失败：{ex.Message}。{CleanupTempFile(tempPath)}");
-                return;
+                var message =
+                    $"[运行上下文] 写入临时文件 {Path.GetFileName(tempPath)} 失败：{ex.Message}。{CleanupTempFile(tempPath)}";
+                _logger.Error(message);
+                throw new IOException(message, ex);
             }
 
             try
@@ -235,9 +236,10 @@ public class ProductionContextStore : IProductionContextStore
             }
             catch (Exception ex)
             {
-                _logger.Error(
-                    $"[运行上下文] 替换持久化文件 {Path.GetFileName(_persistPath)} 失败：{ex.Message}。{CleanupTempFile(tempPath)}");
-                return;
+                var message =
+                    $"[运行上下文] 替换持久化文件 {Path.GetFileName(_persistPath)} 失败：{ex.Message}。{CleanupTempFile(tempPath)}";
+                _logger.Error(message);
+                throw new IOException(message, ex);
             }
 
             _logger.Info($"[运行上下文] 已保存 {contexts.Count} 个设备运行上下文。");
@@ -245,6 +247,7 @@ public class ProductionContextStore : IProductionContextStore
         catch (Exception ex)
         {
             _logger.Error($"[运行上下文] 保存运行状态失败：{ex.Message}");
+            throw;
         }
     }
 
@@ -255,7 +258,14 @@ public class ProductionContextStore : IProductionContextStore
             while (!ct.IsCancellationRequested)
             {
                 await Task.Delay(TimeSpan.FromSeconds(intervalSeconds), ct);
-                SaveToFile();
+                try
+                {
+                    SaveToFile();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warn($"[运行上下文] 自动保存失败，将在下一周期重试：{ex.Message}");
+                }
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)

@@ -8,6 +8,7 @@
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
     <IsPackable>true</IsPackable>
     <PackageId>IIoT.Edge.Module.Homogenization</PackageId>
+    <EdgeModuleRole>Entry</EdgeModuleRole>
     <IsEdgePluginModule>true</IsEdgePluginModule>
     <PluginModuleId>Homogenization</PluginModuleId>
   </PropertyGroup>
@@ -22,7 +23,16 @@
 
   <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
-      <_Parameter1>IIoT.Edge.NonUiRegressionTests</_Parameter1>
+      <_Parameter1>IIoT.Edge.Module.Homogenization.WorkflowTests</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>IIoT.Edge.Module.Homogenization.WorkflowFilesystemTests</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>IIoT.Edge.Module.Homogenization.ConformanceTests</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>IIoT.Edge.Module.Homogenization.ConformanceFilesystemTests</_Parameter1>
     </AssemblyAttribute>
   </ItemGroup>
 

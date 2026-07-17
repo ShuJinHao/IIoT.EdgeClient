@@ -19,7 +19,7 @@ public enum DataPipelineUploadTargets
 public abstract class CellDataBase
 {
     /// <summary>
-    /// 工序类型标识，例如 <c>Homogenization</c>。
+    /// 工序类型标识，例如 <c>TestProcess</c>。
     /// </summary>
     public abstract string ProcessType { get; }
 

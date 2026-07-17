@@ -11,7 +11,8 @@ namespace IIoT.Edge.Application.Abstractions.DataPipeline;
 public interface IDataPipelineService
 {
     /// <summary>
-    /// 将打包好的电芯完成记录推入消费队列。
+    /// 将打包好的电芯完成记录推入消费队列。返回值只表示本地内存队列或溢出补偿已接受，
+    /// 不表示 MES/Cloud durable consumer 已处理完成；当前端口不提供下游完成句柄。
     /// </summary>
     ValueTask<DataPipelineEnqueueResult> EnqueueAsync(
         CellCompletedRecord record,

@@ -1,0 +1,12 @@
+#if false
+[assembly: Fixture.SuppressMessage("Fake", "EDGEASYNC001")]
+#endif
+
+namespace Fixture;
+
+public sealed class SuppressMessageAttribute : System.Attribute
+{
+    public SuppressMessageAttribute(string category, string checkId) { }
+}
+
+public sealed class SafeType;

@@ -15,10 +15,10 @@ public sealed class VisualTestDataOptions
     /// <summary>
     /// 测试数据主设备名称，用于多个页面保持同一视觉上下文。
     /// </summary>
-    public string PrimaryDeviceName { get; set; } = "PLC-Homogenization-01";
+    public string PrimaryDeviceName { get; set; } = "PLC-TestPlugin-01";
 
     /// <summary>
     /// 测试批次号，仅用于界面展示验收。
     /// </summary>
-    public string BatchCode { get; set; } = "VT-HG-20260602-01";
+    public string BatchCode { get; set; } = "VT-TEST-20260602-01";
 }

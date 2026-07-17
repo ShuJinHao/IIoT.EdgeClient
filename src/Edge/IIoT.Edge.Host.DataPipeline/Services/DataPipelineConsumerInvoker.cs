@@ -11,10 +11,13 @@ public sealed class DefaultDataPipelineConsumerInvoker : IDataPipelineConsumerIn
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(action);
+        cancellationToken.ThrowIfCancellationRequested();
 
         if (timeout <= TimeSpan.Zero)
         {
-            return await action(cancellationToken).ConfigureAwait(false);
+            var result = await action(cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            return result;
         }
 
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -22,9 +25,16 @@ public sealed class DefaultDataPipelineConsumerInvoker : IDataPipelineConsumerIn
 
         try
         {
-            return await action(timeoutCts.Token)
+            var result = await action(timeoutCts.Token)
                 .WaitAsync(timeoutCts.Token)
                 .ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            return result;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeoutCts.IsCancellationRequested)
         {

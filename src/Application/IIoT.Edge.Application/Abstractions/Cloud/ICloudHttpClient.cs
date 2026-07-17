@@ -11,26 +11,29 @@ public interface ICloudHttpClient
     /// <summary>
     /// 向指定地址提交 JSON 数据。
     /// </summary>
-    /// <returns>返回云端调用结果，不抛出异常。</returns>
+    /// <returns>非取消故障返回稳定调用结果；调用方取消传播 <see cref="OperationCanceledException"/>。</returns>
     Task<CloudCallResult> PostAsync(
         string url,
         object payload,
-        CloudRequestOptions? options = null);
+        CloudRequestOptions? options = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 向指定地址提交 JSON 数据，并返回响应内容。
     /// </summary>
-    /// <returns>返回云端调用结果及响应内容，不抛出异常。</returns>
+    /// <returns>非取消故障返回稳定调用结果及响应内容；调用方取消传播 <see cref="OperationCanceledException"/>。</returns>
     Task<CloudCallResult<string>> PostWithResponseAsync(
         string url,
         object payload,
-        CloudRequestOptions? options = null);
+        CloudRequestOptions? options = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 发起 GET 请求。
     /// </summary>
-    /// <returns>返回云端调用结果及响应内容，不抛出异常。</returns>
+    /// <returns>非取消故障返回稳定调用结果及响应内容；调用方取消传播 <see cref="OperationCanceledException"/>。</returns>
     Task<CloudCallResult<string>> GetAsync(
         string url,
-        CloudRequestOptions? options = null);
+        CloudRequestOptions? options = null,
+        CancellationToken cancellationToken = default);
 }

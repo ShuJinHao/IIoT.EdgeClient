@@ -11,12 +11,14 @@ namespace IIoT.Edge.Application.Features.Config.LocalParameterConfig;
 /// 统一封装本地模块参数读取与变更通知。
 /// </summary>
 public sealed class LocalParameterConfigService(
-    IRepository<SystemConfigEntity> systemConfigs,
+    IReadRepository<SystemConfigEntity> systemConfigs,
+    IEdgeUnitOfWorkFactory unitOfWorkFactory,
     IEdgeCacheService cache)
-    : ILocalParameterConfigService, ILocalParameterConfigChangePublisher
+    : ILocalParameterConfigService, ILocalParameterConfigChangePublisher, ILocalSystemConfigSnapshotReader
 {
-    private readonly IRepository<SystemConfigEntity> _systemConfigs = systemConfigs;
+    private readonly IReadRepository<SystemConfigEntity> _systemConfigs = systemConfigs;
     private readonly IEdgeCacheService _cache = cache;
+    private IReadOnlyList<LocalSystemConfigSnapshot> _currentSystemConfigs = Array.Empty<LocalSystemConfigSnapshot>();
 
     public event EventHandler<ParameterConfigChangedEventArgs>? ParameterConfigChanged;
 
@@ -29,11 +31,16 @@ public sealed class LocalParameterConfigService(
                 cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
-        return (result ?? [])
+        var snapshots = (result ?? [])
             .OrderBy(x => x.SortOrder)
             .Select(MapSystemConfig)
-            .ToList();
+            .ToArray();
+        Volatile.Write(ref _currentSystemConfigs, snapshots);
+        return snapshots;
     }
+
+    public IReadOnlyList<LocalSystemConfigSnapshot> GetCurrentSystemConfigs()
+        => Volatile.Read(ref _currentSystemConfigs);
 
     public async Task InsertSystemConfigAsync(
         string key,
@@ -43,14 +50,24 @@ public sealed class LocalParameterConfigService(
         CancellationToken cancellationToken = default)
     {
         var normalizedKey = NormalizeModuleParameterKey(key);
-        await _systemConfigs.ExecuteDeleteAsync(
-            x => x.Key == normalizedKey,
-            cancellationToken).ConfigureAwait(false);
-
         var entity = SystemConfigEntity.Create(normalizedKey, value, description);
         entity.UpdateSortOrder(Math.Max(0, sortOrder));
-        _systemConfigs.Add(entity);
-        await _systemConfigs.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await using (var unitOfWork = await unitOfWorkFactory
+                         .BeginAsync(cancellationToken)
+                         .ConfigureAwait(false))
+        {
+            var repository = unitOfWork.Repository<SystemConfigEntity>();
+            var existing = await repository
+                .GetListAsync(x => x.Key == normalizedKey, cancellationToken)
+                .ConfigureAwait(false);
+            foreach (var config in existing)
+            {
+                repository.Delete(config);
+            }
+
+            repository.Add(entity);
+            await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
 
         InvalidateModuleCaches();
     }
@@ -60,12 +77,21 @@ public sealed class LocalParameterConfigService(
         CancellationToken cancellationToken = default)
     {
         var normalizedKey = NormalizeModuleParameterKey(key);
-        var deleted = await _systemConfigs.ExecuteDeleteAsync(
-            x => x.Key == normalizedKey,
-            cancellationToken).ConfigureAwait(false);
-
-        if (deleted > 0)
+        await using var unitOfWork = await unitOfWorkFactory
+            .BeginAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var repository = unitOfWork.Repository<SystemConfigEntity>();
+        var existing = await repository
+            .GetListAsync(x => x.Key == normalizedKey, cancellationToken)
+            .ConfigureAwait(false);
+        foreach (var config in existing)
         {
+            repository.Delete(config);
+        }
+
+        if (existing.Count > 0)
+        {
+            await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
             InvalidateModuleCaches();
         }
     }

@@ -1,7 +1,7 @@
 ## Change Scope
 
 - [ ] Host
-- [ ] Homogenization
+- [ ] Plugin module
 - [ ] Shared
 
 ## Module Contract Impact
@@ -13,9 +13,10 @@ Compatibility notes:
 
 ## Verification
 
-- [ ] `dotnet build src/Edge/IIoT.Edge.Shell/IIoT.Edge.Shell.csproj -p:BuildInParallel=false`
-- [ ] `dotnet test src/Tests/IIoT.Edge.Shell.Tests/IIoT.Edge.Shell.Tests.csproj -p:BuildInParallel=false --disable-build-servers`
-- [ ] `dotnet test src/Tests/IIoT.Edge.NonUiRegressionTests/IIoT.Edge.NonUiRegressionTests.csproj -p:BuildInParallel=false --disable-build-servers`
+- [ ] `dotnet build IIoT.EdgeClient.slnx -c Release -p:BuildInParallel=false --disable-build-servers`
+- [ ] `./scripts/tests/Get-EdgeTestInventory.ps1 && ./scripts/tests/Test-EdgeArchitectureProjectGraph.ps1 -RepositoryRoot . -SolutionPath IIoT.EdgeClient.slnx -Configuration Release`
+- [ ] `./scripts/tests/Invoke-EdgeRequiredTests.ps1 -ResultsDirectory artifacts/test-results -Configuration Release`
+- [ ] `./scripts/tests/Confirm-EdgeRequiredTestResults.ps1 -ResultsDirectory artifacts/test-results`
 - [ ] Other verification described below
 
 Additional verification:

@@ -27,7 +27,7 @@ public class FailedCellRecord
     public string Channel { get; set; } = string.Empty;
 
     /// <summary>
-    /// 工序类型标识（例如 "Homogenization"）
+    /// 工序类型标识（例如 "TestProcess"）
     /// 反序列化时用于识别 CellDataJson 的具体类型
     /// </summary>
     public string ProcessType { get; set; } = string.Empty;

@@ -1,0 +1,6 @@
+#if CONDITIONAL_A && !CONDITIONAL_A
+[assembly: System.Diagnostics.CodeAnalysis.SuppressMessage("IIoT.Architecture", "EDGEASYNC001")]
+#endif
+
+namespace Fixture;
+public sealed class Suppressed;

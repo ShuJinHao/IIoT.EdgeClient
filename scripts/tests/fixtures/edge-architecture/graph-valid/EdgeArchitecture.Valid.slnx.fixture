@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Shared/IIoT.Edge.SharedKernel.csproj" />
+  <Project Path="Domain/IIoT.Edge.Domain.csproj" />
+  <Project Path="Application/IIoT.Edge.Application.csproj" />
+  <Project Path="Visual/IIoT.Edge.Presentation.VisualTestData.csproj" />
+  <Project Path="Host/IIoT.Edge.Host.Bootstrap.csproj" />
+</Solution>

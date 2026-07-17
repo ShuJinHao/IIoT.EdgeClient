@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <EdgeModuleRole>Fixture</EdgeModuleRole>
+    <IsEdgePluginModule>true</IsEdgePluginModule>
+    <IsEdgePluginTestFixture>true</IsEdgePluginTestFixture>
+    <PluginModuleId>TestPlugin</PluginModuleId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
+    <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Sdk\IIoT.Edge.Module.Sdk.csproj" />
+    <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
+    <PluginOwnedProject Include="..\IIoT.Edge.Module.TestPlugin.Companion\IIoT.Edge.Module.TestPlugin.Companion.csproj" />
+    <Reference Include="IIoT.Edge.Module.TestPlugin.Companion">
+      <HintPath>..\IIoT.Edge.Module.TestPlugin.Companion\bin\$(Configuration)\$(TargetFramework)\IIoT.Edge.Module.TestPlugin.Companion.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="plugin.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Config\test-plugin.module.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>Config\test-plugin.module.json</TargetPath>
+    </None>
+  </ItemGroup>
+
+  <Target Name="BuildTestPluginCompanion" BeforeTargets="ResolveAssemblyReferences">
+    <MSBuild Projects="@(PluginOwnedProject)"
+             Targets="Build"
+             BuildInParallel="false"
+             Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)" />
+  </Target>
+
+  <Target Name="StageTestPluginCompanion" AfterTargets="Build" DependsOnTargets="BuildTestPluginCompanion">
+    <ItemGroup>
+      <_TestPluginCompanionTarget Include="..\IIoT.Edge.Module.TestPlugin.Companion\bin\$(Configuration)\$(TargetFramework)\IIoT.Edge.Module.TestPlugin.Companion.dll" />
+    </ItemGroup>
+    <Error Condition="!Exists('@(_TestPluginCompanionTarget)')"
+           Text="EDGE-PLUGIN-STAGING-001 test plugin companion was not built: @(_TestPluginCompanionTarget)." />
+    <Copy SourceFiles="@(_TestPluginCompanionTarget)"
+          DestinationFolder="$(TargetDir)"
+          SkipUnchangedFiles="true">
+      <Output TaskParameter="CopiedFiles" ItemName="_TestPluginCompanionCopiedFile" />
+    </Copy>
+    <ItemGroup>
+      <FileWrites Include="@(_TestPluginCompanionCopiedFile)" />
+    </ItemGroup>
+  </Target>
+
+</Project>

@@ -22,3 +22,12 @@ public interface ILocalParameterConfigService
         string key,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// 返回已由异步初始化链读入的本地系统配置快照。
+/// 未初始化时返回空集合，调用方必须使用非阻塞默认值。
+/// </summary>
+public interface ILocalSystemConfigSnapshotReader
+{
+    IReadOnlyList<LocalSystemConfigSnapshot> GetCurrentSystemConfigs();
+}

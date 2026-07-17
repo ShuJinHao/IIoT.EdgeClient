@@ -227,8 +227,7 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
         Services.AddSingleton<IModuleHardwareProfileProvider>(serviceProvider =>
         {
             var provider = serviceProvider.GetRequiredService<TProvider>();
-            EnsureModuleId(provider.ModuleId, typeof(TProvider).Name);
-            return provider;
+            return new GuardedModuleHardwareProfileProvider(ModuleId, provider);
         });
     }
 

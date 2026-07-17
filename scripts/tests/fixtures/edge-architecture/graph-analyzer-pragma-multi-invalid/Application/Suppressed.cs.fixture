@@ -1,0 +1,3 @@
+#pragma warning disable CS0168, EDGEASYNC001
+namespace Fixture;
+public sealed class Suppressed;

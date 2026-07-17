@@ -1,38 +1,66 @@
 <Project>
 
+  <ItemGroup Condition="'$(IsTestProject)' == 'true' and '$(TestRunnerMode)' == 'Serial'">
+    <None Remove="$(MSBuildThisFileDirectory)src/Tests/xunit.runner.json" />
+    <None Include="$(MSBuildThisFileDirectory)src/Tests/xunit.runner.serial.json"
+          Link="xunit.runner.json"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <EdgeArchitectureAnalyzerProject>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src/Analyzers/IIoT.Edge.Architecture.Analyzers/IIoT.Edge.Architecture.Analyzers.csproj'))</EdgeArchitectureAnalyzerProject>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsTestProject)' != 'true'
+                        and '$(MSBuildProjectFullPath)' != '$(EdgeArchitectureAnalyzerProject)'
+                        and '$(IsEdgePluginTestFixture)' != 'true'">
+    <ProjectReference Include="$(EdgeArchitectureAnalyzerProject)"
+                      ReferenceOutputAssembly="false"
+                      OutputItemType="Analyzer"
+                      PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(EdgeModuleRole)' != ''">
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>EdgeModuleRole</_Parameter1>
+      <_Parameter2>$(EdgeModuleRole)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>IsEdgePluginModule</_Parameter1>
+      <_Parameter2>$(IsEdgePluginModule)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>IsPackable</_Parameter1>
+      <_Parameter2>$(IsPackable)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute"
+                       Condition="'$(PluginModuleId)' != ''">
+      <_Parameter1>PluginModuleId</_Parameter1>
+      <_Parameter2>$(PluginModuleId)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <Target Name="ValidateEdgeArchitectureProjectGraph"
+          BeforeTargets="PrepareForBuild"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(MSBuildProjectName)' == 'IIoT.Edge.Shell'">
+    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)scripts/tests/Test-EdgeArchitectureProjectGraph.ps1&quot; -RepositoryRoot &quot;$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory).'))&quot; -SolutionPath &quot;$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)IIoT.EdgeClient.slnx'))&quot; -Configuration &quot;$(Configuration)&quot;" />
+  </Target>
+
+  <Target Name="ValidateEdgeArchitectureProjectGraphFixture"
+          BeforeTargets="PrepareForBuild"
+          Condition="'$(DesignTimeBuild)' != 'true'
+                     and '$(MSBuildProjectName)' != 'IIoT.Edge.Shell'
+                     and '$(IsEdgeArchitectureGraphFixture)' == 'true'">
+    <Error Condition="'$(EdgeArchitectureFixtureRepositoryRoot)' == '' or '$(EdgeArchitectureFixtureSolutionPath)' == ''"
+           Text="EDGE-ARCH-FIXTURE-001 graph fixture must declare EdgeArchitectureFixtureRepositoryRoot and EdgeArchitectureFixtureSolutionPath." />
+    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)scripts/tests/Test-EdgeArchitectureProjectGraph.ps1&quot; -RepositoryRoot &quot;$([System.IO.Path]::TrimEndingDirectorySeparator($([System.IO.Path]::GetFullPath('$(EdgeArchitectureFixtureRepositoryRoot)'))))&quot; -SolutionPath &quot;$([System.IO.Path]::GetFullPath('$(EdgeArchitectureFixtureSolutionPath)'))&quot; -Configuration &quot;$(Configuration)&quot;" />
+  </Target>
+
   <Target Name="ValidateEdgeDeploymentPolicy"
           BeforeTargets="PrepareForBuild"
           Condition="'$(DesignTimeBuild)' != 'true' and '$(MSBuildProjectName)' == 'IIoT.Edge.Shell'">
     <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)scripts/tests/TestEdgeDeploymentPolicy.ps1&quot;" />
-  </Target>
-
-  <Target Name="ValidateEdgeTestGovernanceStaticPolicy"
-          BeforeTargets="PrepareForBuild"
-          Condition="'$(DesignTimeBuild)' != 'true' and '$(MSBuildProjectName)' == 'IIoT.Edge.Shell'">
-    <Exec Command="pwsh -NoLogo -NoProfile -NonInteractive -File &quot;$(MSBuildThisFileDirectory)scripts/tests/TestEdgeTestGovernancePolicy.ps1&quot; -Mode ValidateStatic -Configuration &quot;$(Configuration)&quot;" />
-  </Target>
-
-  <Target Name="ValidateEdgeTestGovernanceAssembly"
-          AfterTargets="Compile"
-          Condition="'$(IsTestProject)' == 'true' and '$(DesignTimeBuild)' != 'true' and '$(IsCrossTargetingBuild)' != 'true' and '$(TargetFramework)' != ''">
-    <PropertyGroup>
-      <_EdgeTestGovernanceDirectory>$(MSBuildProjectDirectory)/$(IntermediateOutputPath)test-governance</_EdgeTestGovernanceDirectory>
-      <_EdgeTestGovernanceReferencePathsFile>$(_EdgeTestGovernanceDirectory)/reference-paths.rsp</_EdgeTestGovernanceReferencePathsFile>
-    </PropertyGroup>
-    <Error Condition="'@(IntermediateAssembly)' == ''"
-           Text="EDGE-TEST-GOV-001-SCAN compiled test assembly was not produced for $(MSBuildProjectName)." />
-    <MakeDir Directories="$(_EdgeTestGovernanceDirectory)" />
-    <WriteLinesToFile File="$(_EdgeTestGovernanceReferencePathsFile)"
-                      Lines="@(ReferencePath->'%(FullPath)')"
-                      Overwrite="true"
-                      Encoding="UTF-8" />
-    <Exec Command="pwsh -NoLogo -NoProfile -NonInteractive -File &quot;$(MSBuildThisFileDirectory)scripts/tests/TestEdgeTestGovernancePolicy.ps1&quot; -Mode ValidateProject -Configuration &quot;$(Configuration)&quot; -ProjectPath &quot;$(MSBuildProjectFullPath)&quot; -ProjectName &quot;$(MSBuildProjectName)&quot; -AssemblyPath &quot;@(IntermediateAssembly->'%(FullPath)')&quot; -ReferencePathsFile &quot;$(_EdgeTestGovernanceReferencePathsFile)&quot;" />
-  </Target>
-
-  <Target Name="ValidateEdgeTestRunnerConfiguration"
-          AfterTargets="CopyFilesToOutputDirectory"
-          Condition="'$(IsTestProject)' == 'true' and '$(DesignTimeBuild)' != 'true' and '$(IsCrossTargetingBuild)' != 'true' and '$(TargetFramework)' != ''">
-    <Exec Command="pwsh -NoLogo -NoProfile -NonInteractive -File &quot;$(MSBuildThisFileDirectory)scripts/tests/TestEdgeTestGovernancePolicy.ps1&quot; -Mode ValidateRunnerConfiguration -RunnerConfigPath &quot;$(TargetDir)xunit.runner.json&quot;" />
   </Target>
 
   <Target Name="ValidateEdgePluginProjectReferences"
@@ -52,7 +80,7 @@
           Returns="@(PluginArtifact)"
           Condition="'$(IsEdgePluginModule)' == 'true'">
     <Error Condition="'$(PluginModuleId)' == ''"
-           Text="EDGE-TEST-GOV-001-PLUGIN-STAGING plugin project $(MSBuildProjectName) does not declare PluginModuleId." />
+           Text="EDGE-PLUGIN-STAGING-001 plugin project $(MSBuildProjectName) does not declare PluginModuleId." />
     <FindUnderPath Path="$(TargetDir)"
                    Files="@(FileWrites)"
                    UpdateToAbsolutePaths="true">
@@ -67,11 +95,11 @@
       </PluginArtifact>
     </ItemGroup>
     <Error Condition="'@(_PluginOutputFile)' == ''"
-           Text="EDGE-TEST-GOV-001-PLUGIN-STAGING plugin project $(MSBuildProjectName) produced no current-build artifacts under $(TargetDir)." />
+           Text="EDGE-PLUGIN-STAGING-001 plugin project $(MSBuildProjectName) produced no current-build artifacts under $(TargetDir)." />
     <Error Condition="'@(_MissingPluginOutputFile)' != ''"
-           Text="EDGE-TEST-GOV-001-PLUGIN-STAGING plugin project $(MSBuildProjectName) reported missing current-build artifacts: @(_MissingPluginOutputFile->'%(FullPath)', ', ')." />
+           Text="EDGE-PLUGIN-STAGING-001 plugin project $(MSBuildProjectName) reported missing current-build artifacts: @(_MissingPluginOutputFile->'%(FullPath)', ', ')." />
     <Error Condition="!Exists('$(TargetPath)') or !Exists('$(TargetDir)plugin.json')"
-           Text="EDGE-TEST-GOV-001-PLUGIN-STAGING plugin project $(MSBuildProjectName) is missing its entry assembly or staged plugin.json." />
+           Text="EDGE-PLUGIN-STAGING-001 plugin project $(MSBuildProjectName) is missing its entry assembly or staged plugin.json." />
   </Target>
 
 </Project>

@@ -7,5 +7,7 @@ public enum DeadLetterStage
     FallbackPersist = 2,
     FallbackRecoverDeserialize = 3,
     RetryDeserialize = 4,
-    CapacityBlocked = 5
+    CapacityBlocked = 5,
+    InvalidPayload = 6,
+    DurableShutdownPersist = 7
 }

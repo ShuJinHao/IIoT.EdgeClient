@@ -15,7 +15,9 @@ public abstract class DeadLetterStoreBase : DapperRepositoryBase<DeadLetterRecor
     {
     }
 
-    public async Task SaveAsync(DeadLetterRecord record)
+    public async Task SaveAsync(
+        DeadLetterRecord record,
+        CancellationToken cancellationToken = default)
     {
         var sql = $@"
             INSERT INTO {TableName}
@@ -44,7 +46,7 @@ public abstract class DeadLetterStoreBase : DapperRepositoryBase<DeadLetterRecor
             record.PlanSessionId,
             record.MainPlanCode,
             record.TraceBatchNumber
-        });
+        }, cancellationToken).ConfigureAwait(false);
 
         if (affectedRows <= 0)
         {

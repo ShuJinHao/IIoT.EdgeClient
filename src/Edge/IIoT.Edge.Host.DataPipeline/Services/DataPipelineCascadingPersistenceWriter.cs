@@ -4,6 +4,7 @@ using IIoT.Edge.Application.Abstractions.Logging;
 using IIoT.Edge.Application.Abstractions.Modules;
 using IIoT.Edge.SharedKernel.DataPipeline;
 using IIoT.Edge.SharedKernel.DataPipeline.CellData;
+using System.Text.Json;
 
 using IIoT.Edge.Application.Abstractions.Cloud;
 using IIoT.Edge.Application.Abstractions.Mes;
@@ -15,6 +16,11 @@ namespace IIoT.Edge.Host.DataPipeline.Services;
 /// </summary>
 public sealed class DataPipelineCascadingPersistenceWriter
 {
+    private static readonly JsonSerializerOptions CriticalRecoveryJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
     private readonly ICloudRetryRecordStore _cloudRetryStore;
     private readonly IMesRetryRecordStore _mesRetryStore;
     private readonly ICloudFallbackBufferStore _cloudFallbackStore;
@@ -57,8 +63,10 @@ public sealed class DataPipelineCascadingPersistenceWriter
         string errorMessage,
         string sourceTable,
         DeadLetterStage fallbackFailureStage,
-        long? sourceRecordId = null)
+        long? sourceRecordId = null,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var operations = Resolve(channel);
         return PersistCoreAsync(
             record,
@@ -67,7 +75,62 @@ public sealed class DataPipelineCascadingPersistenceWriter
             sourceTable,
             sourceRecordId,
             fallbackFailureStage,
-            operations);
+            operations,
+            cancellationToken);
+    }
+
+    public Task<bool> PersistNonRetryableAsync(
+        CellCompletedRecord record,
+        DataPipelineRetryChannel channel,
+        string failedTarget,
+        string reasonCode,
+        string sourceTable,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var operations = Resolve(channel);
+        return TryPersistDeadLetterAsync(
+            record,
+            failedTarget,
+            sourceTable,
+            sourceRecordId: null,
+            operations,
+            DeadLetterStage.InvalidPayload,
+            reasonCode,
+            exception: null,
+            cancellationToken);
+    }
+
+    public void WriteDurableShutdownCriticalEvidence(
+        CellCompletedRecord record,
+        DataPipelineRetryChannel channel,
+        string failedTarget,
+        string failureReason,
+        Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        ArgumentException.ThrowIfNullOrWhiteSpace(failedTarget);
+        ArgumentException.ThrowIfNullOrWhiteSpace(failureReason);
+        ArgumentNullException.ThrowIfNull(exception);
+
+        var operations = Resolve(channel);
+        var sourceTable = DataPipelineRetryChannelMetadata.TryGetFailedRecordSourceTable(channel);
+        if (string.IsNullOrWhiteSpace(sourceTable))
+        {
+            throw new InvalidOperationException(
+                $"无法为 {DataPipelineRetryChannelMetadata.Format(channel)} 生成 shutdown 恢复证据。");
+        }
+
+        WriteCriticalRecoveryEvidence(
+            record,
+            operations,
+            failedTarget,
+            sourceTable,
+            sourceRecordId: null,
+            DeadLetterStage.DurableShutdownPersist,
+            failureReason,
+            exception,
+            $"DataPipeline.ProcessQueue.{FormatRecoveryChannel(channel)}.ShutdownPersistenceFailed");
     }
 
     private async Task<bool> PersistCoreAsync(
@@ -77,34 +140,33 @@ public sealed class DataPipelineCascadingPersistenceWriter
         string sourceTable,
         long? sourceRecordId,
         DeadLetterStage fallbackFailureStage,
-        ChannelOperations operations)
+        ChannelOperations operations,
+        CancellationToken cancellationToken)
     {
-        var retryBlockedReason = await operations.GetRetryBlockReasonAsync(record.CellData.ProcessType).ConfigureAwait(false);
-        if (!string.IsNullOrWhiteSpace(retryBlockedReason))
-        {
-            return await TryPersistDeadLetterAsync(
-                record,
-                failedTarget,
-                sourceTable,
-                sourceRecordId,
-                operations,
-                DeadLetterStage.CapacityBlocked,
-                BuildCapacityBlockedFailureReason(CapacityBlockedChannel.Retry, retryBlockedReason),
-                exception: null).ConfigureAwait(false);
-        }
-
+        cancellationToken.ThrowIfCancellationRequested();
+        Exception? retryFailure = null;
+        string? retryBlockedReason = null;
         try
         {
-            await operations.SaveRetryAsync(record, failedTarget, errorMessage).ConfigureAwait(false);
-            _logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 已写入 {operations.DisplayName} 补传队列。");
-            return true;
+            retryBlockedReason = await operations
+                .GetRetryBlockReasonAsync(record.CellData.ProcessType, cancellationToken)
+                .ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
         }
-        catch (Exception retryEx)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            _logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 写入补传队列失败：{retryEx.Message}");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            retryFailure = ex;
+            WriteLogBestEffort(logger =>
+                logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] 补传容量检查失败：{ex.Message}"));
+        }
 
-            var fallbackBlockedReason = await operations.GetFallbackBlockReasonAsync(record.CellData.ProcessType).ConfigureAwait(false);
-            if (!string.IsNullOrWhiteSpace(fallbackBlockedReason))
+        if (retryFailure is null)
+        {
+            if (!string.IsNullOrWhiteSpace(retryBlockedReason))
             {
                 return await TryPersistDeadLetterAsync(
                     record,
@@ -113,29 +175,102 @@ public sealed class DataPipelineCascadingPersistenceWriter
                     sourceRecordId,
                     operations,
                     DeadLetterStage.CapacityBlocked,
-                    BuildCapacityBlockedFailureReason(CapacityBlockedChannel.Fallback, fallbackBlockedReason),
-                    exception: null).ConfigureAwait(false);
+                    BuildCapacityBlockedFailureReason(CapacityBlockedChannel.Retry, retryBlockedReason),
+                    exception: null,
+                    cancellationToken).ConfigureAwait(false);
             }
 
             try
             {
-                await operations.SaveFallbackAsync(record, failedTarget, errorMessage).ConfigureAwait(false);
-                _logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] 补传队列不可用，{record.CellData.DisplayLabel} 已写入 {operations.DisplayName} 兜底缓存。");
+                await operations.SaveRetryAsync(record, failedTarget, errorMessage, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                retryFailure = ex;
+                WriteLogBestEffort(logger =>
+                    logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 写入补传队列失败：{ex.Message}"));
+            }
+
+            if (retryFailure is null)
+            {
+                WriteLogBestEffort(logger =>
+                    logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 已写入 {operations.DisplayName} 补传队列。"));
                 return true;
             }
-            catch (Exception fallbackEx)
-            {
-                return await TryPersistDeadLetterAsync(
-                    record,
-                    failedTarget,
-                    sourceTable,
-                    sourceRecordId,
-                    operations,
-                    fallbackFailureStage,
-                    $"{operations.DisplayName} 补传队列写入失败：{retryEx.Message}；兜底缓存写入失败：{fallbackEx.Message}",
-                    fallbackEx).ConfigureAwait(false);
-            }
         }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        string? fallbackBlockedReason;
+        try
+        {
+            fallbackBlockedReason = await operations
+                .GetFallbackBlockReasonAsync(record.CellData.ProcessType, cancellationToken)
+                .ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception fallbackGuardEx)
+        {
+            WriteLogBestEffort(logger =>
+                logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] 兜底容量检查失败：{fallbackGuardEx.Message}"));
+            return await TryPersistDeadLetterAsync(
+                record,
+                failedTarget,
+                sourceTable,
+                sourceRecordId,
+                operations,
+                fallbackFailureStage,
+                $"{operations.DisplayName} 补传链路失败：{retryFailure!.Message}；兜底容量检查失败：{fallbackGuardEx.Message}",
+                fallbackGuardEx,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        if (!string.IsNullOrWhiteSpace(fallbackBlockedReason))
+        {
+            return await TryPersistDeadLetterAsync(
+                record,
+                failedTarget,
+                sourceTable,
+                sourceRecordId,
+                operations,
+                DeadLetterStage.CapacityBlocked,
+                BuildCapacityBlockedFailureReason(CapacityBlockedChannel.Fallback, fallbackBlockedReason),
+                exception: retryFailure,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        try
+        {
+            await operations.SaveFallbackAsync(record, failedTarget, errorMessage, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception fallbackEx)
+        {
+            return await TryPersistDeadLetterAsync(
+                record,
+                failedTarget,
+                sourceTable,
+                sourceRecordId,
+                operations,
+                fallbackFailureStage,
+                $"{operations.DisplayName} 补传链路失败：{retryFailure!.Message}；兜底缓存写入失败：{fallbackEx.Message}",
+                fallbackEx,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        WriteLogBestEffort(logger =>
+            logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] 补传队列不可用，{record.CellData.DisplayLabel} 已写入 {operations.DisplayName} 兜底缓存。"));
+        return true;
     }
 
     private async Task<bool> TryPersistDeadLetterAsync(
@@ -146,8 +281,10 @@ public sealed class DataPipelineCascadingPersistenceWriter
         ChannelOperations operations,
         DeadLetterStage stage,
         string failureReason,
-        Exception? exception)
+        Exception? exception,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         try
         {
             await operations.SaveDeadLetterAsync(BuildDeadLetterRecord(
@@ -156,39 +293,102 @@ public sealed class DataPipelineCascadingPersistenceWriter
                     sourceTable,
                     sourceRecordId,
                     stage,
-                    failureReason))
+                    failureReason),
+                    cancellationToken)
                 .ConfigureAwait(false);
-            _logger.Fatal($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 已进入 {operations.DisplayName} 死信。");
-            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception deadLetterEx)
         {
-            _criticalFallbackWriter.Write(
-                operations.CriticalSource,
+            cancellationToken.ThrowIfCancellationRequested();
+            WriteCriticalRecoveryEvidence(
+                record,
+                operations,
+                failedTarget,
+                sourceTable,
+                sourceRecordId,
+                stage,
                 $"{failureReason}；死信写入失败：{deadLetterEx.Message}",
-                exception);
+                deadLetterEx,
+                operations.CriticalSource);
             return false;
         }
+
+        WriteLogBestEffort(logger =>
+            logger.Fatal($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 已进入 {operations.DisplayName} 死信。"));
+        return true;
+    }
+
+    private void WriteLogBestEffort(Action<ILogService> writeLog)
+    {
+        try
+        {
+            writeLog(_logger);
+        }
+        catch (Exception)
+        {
+            // 日志订阅者失败不能改变任一级已提交的恢复状态或中断恢复链。
+        }
+    }
+
+    private void WriteCriticalRecoveryEvidence(
+        CellCompletedRecord record,
+        ChannelOperations operations,
+        string failedTarget,
+        string sourceTable,
+        long? sourceRecordId,
+        DeadLetterStage stage,
+        string failureReason,
+        Exception exception,
+        string criticalSource)
+    {
+        var details = JsonSerializer.Serialize(
+            new CriticalRecoveryEnvelope(
+                SchemaVersion: 1,
+                Channel: FormatRecoveryChannel(operations.Channel),
+                FailedTarget: failedTarget,
+                SourceTable: sourceTable,
+                SourceRecordId: sourceRecordId,
+                FailureStage: stage.ToString(),
+                FailureReason: failureReason,
+                ProcessType: record.CellData.ProcessType,
+                CellDataJson: _cellDataJsonSerializer.Serialize(record.CellData),
+                NetworkDeviceId: record.ResolveNetworkDeviceId(),
+                DeviceName: record.ResolveDeviceName(),
+                ModuleId: record.ModuleId,
+                TaskKey: record.TaskKey,
+                PlanSessionId: record.PlanSessionId,
+                MainPlanCode: record.MainPlanCode,
+                TraceBatchNumber: record.TraceBatchNumber,
+                CreatedAtUtc: DateTime.UtcNow),
+            CriticalRecoveryJsonOptions);
+
+        _criticalFallbackWriter.Write(criticalSource, details, exception);
     }
 
     private ChannelOperations Resolve(DataPipelineRetryChannel channel)
         => channel switch
         {
             DataPipelineRetryChannel.Cloud => new ChannelOperations(
+                DataPipelineRetryChannel.Cloud,
                 DataPipelineRetryChannelMetadata.Format(channel),
                 DataPipelineRetryChannelMetadata.Format(channel),
-                processType => _capacityGuard.GetCloudRetryBlockReasonAsync(processType),
+                (processType, cancellationToken) => _capacityGuard.GetCloudRetryBlockReasonAsync(processType).WaitAsync(cancellationToken),
                 _cloudRetryStore.SaveAsync,
-                processType => _capacityGuard.GetCloudFallbackBlockReasonAsync(processType),
+                (processType, cancellationToken) => _capacityGuard.GetCloudFallbackBlockReasonAsync(processType).WaitAsync(cancellationToken),
                 _cloudFallbackStore.SaveAsync,
                 _cloudDeadLetterStore.SaveAsync,
                 "DataPipeline.CloudDeadLetterPersistFailed"),
             DataPipelineRetryChannel.Mes => new ChannelOperations(
+                DataPipelineRetryChannel.Mes,
                 DataPipelineRetryChannelMetadata.Format(channel),
                 DataPipelineRetryChannelMetadata.Format(channel),
-                processType => _capacityGuard.GetMesRetryBlockReasonAsync(processType),
+                (processType, cancellationToken) => _capacityGuard.GetMesRetryBlockReasonAsync(processType).WaitAsync(cancellationToken),
                 _mesRetryStore.SaveAsync,
-                processType => _capacityGuard.GetMesFallbackBlockReasonAsync(processType),
+                (processType, cancellationToken) => _capacityGuard.GetMesFallbackBlockReasonAsync(processType).WaitAsync(cancellationToken),
                 _mesFallbackStore.SaveAsync,
                 _mesDeadLetterStore.SaveAsync,
                 "DataPipeline.MesDeadLetterPersistFailed"),
@@ -226,6 +426,14 @@ public sealed class DataPipelineCascadingPersistenceWriter
         string blockedReason)
         => $"容量受限:{FormatCapacityBlockedChannel(channel)}:{blockedReason}";
 
+    private static string FormatRecoveryChannel(DataPipelineRetryChannel channel)
+        => channel switch
+        {
+            DataPipelineRetryChannel.Cloud => "Cloud",
+            DataPipelineRetryChannel.Mes => "MES",
+            _ => throw new InvalidOperationException($"不支持的恢复证据通道：{channel}。")
+        };
+
     private static string FormatCapacityBlockedChannel(CapacityBlockedChannel channel)
         => channel switch
         {
@@ -235,12 +443,32 @@ public sealed class DataPipelineCascadingPersistenceWriter
         };
 
     private sealed record ChannelOperations(
+        DataPipelineRetryChannel Channel,
         string LogPrefix,
         string DisplayName,
-        Func<string, Task<string?>> GetRetryBlockReasonAsync,
-        Func<CellCompletedRecord, string, string, Task> SaveRetryAsync,
-        Func<string, Task<string?>> GetFallbackBlockReasonAsync,
-        Func<CellCompletedRecord, string, string, Task> SaveFallbackAsync,
-        Func<DeadLetterRecord, Task> SaveDeadLetterAsync,
+        Func<string, CancellationToken, Task<string?>> GetRetryBlockReasonAsync,
+        Func<CellCompletedRecord, string, string, CancellationToken, Task> SaveRetryAsync,
+        Func<string, CancellationToken, Task<string?>> GetFallbackBlockReasonAsync,
+        Func<CellCompletedRecord, string, string, CancellationToken, Task> SaveFallbackAsync,
+        Func<DeadLetterRecord, CancellationToken, Task> SaveDeadLetterAsync,
         string CriticalSource);
+
+    private sealed record CriticalRecoveryEnvelope(
+        int SchemaVersion,
+        string Channel,
+        string FailedTarget,
+        string SourceTable,
+        long? SourceRecordId,
+        string FailureStage,
+        string FailureReason,
+        string ProcessType,
+        string CellDataJson,
+        int? NetworkDeviceId,
+        string DeviceName,
+        string? ModuleId,
+        string? TaskKey,
+        string? PlanSessionId,
+        string? MainPlanCode,
+        string? TraceBatchNumber,
+        DateTime CreatedAtUtc);
 }

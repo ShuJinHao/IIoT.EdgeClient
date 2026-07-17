@@ -2,15 +2,15 @@ namespace IIoT.Edge.Presentation.VisualTestData;
 
 internal static class VisualTestScenario
 {
-    public const string SecondaryDeviceName = "PLC-Homogenization-02";
-    public const string RecipeName = "匀浆 A 线试产配方";
+    public const string SecondaryDeviceName = "PLC-TestPlugin-02";
+    public const string RecipeName = "测试工序 A 线验收配方";
     public const string RecipeVersion = "V2.4";
-    public const string ProcessName = "匀浆";
-    public const string MainPlanCode = "MES-HG-MAIN-20260604-A";
+    public const string ProcessName = "测试工序";
+    public const string MainPlanCode = "MES-TEST-MAIN-20260604-A";
 
     public static string ResolveBatchCode(VisualTestDataOptions options)
         => string.IsNullOrWhiteSpace(options.BatchCode)
-            ? "VT-HG-20260604-01"
+            ? "VT-TEST-20260604-01"
             : options.BatchCode.Trim();
 
     public static VisualTestCapacityMetrics CreateCapacityMetrics(

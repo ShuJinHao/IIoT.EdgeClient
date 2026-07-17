@@ -65,7 +65,7 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
                 continue;
             }
 
-            var persisted = await PersistForChannelAsync(record, consumer).ConfigureAwait(false);
+            var persisted = await PersistForChannelAsync(record, consumer, cancellationToken).ConfigureAwait(false);
             if (persisted)
             {
                 persistedTargetCount++;
@@ -83,8 +83,10 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
 
     private async Task<bool> PersistForChannelAsync(
         CellCompletedRecord record,
-        ICellDataConsumer consumer)
+        ICellDataConsumer consumer,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (consumer.RetryChannel is not DataPipelineRetryChannel.Cloud and not DataPipelineRetryChannel.Mes)
         {
             var details =
@@ -100,7 +102,8 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
                 consumer.Name,
                 "数据管道队列溢出。",
                 "ingress_overflow",
-                DeadLetterStage.FallbackPersist)
+                DeadLetterStage.FallbackPersist,
+                cancellationToken: cancellationToken)
             .ConfigureAwait(false);
     }
 

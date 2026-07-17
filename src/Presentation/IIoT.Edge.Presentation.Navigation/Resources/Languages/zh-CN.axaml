@@ -206,8 +206,6 @@
     <sys:String x:Key="Navigation_Param_CloudApi_HumanIdentityRefreshPath_Description">人员登录身份刷新接口路径。</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_DeviceLogPath_DisplayName">设备日志接口</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_DeviceLogPath_Description">客户端上传设备日志的接口路径。</sys:String>
-    <sys:String x:Key="Navigation_Param_CloudApi_ProcessUploadPath_DisplayName">生产数据上传接口</sys:String>
-    <sys:String x:Key="Navigation_Param_CloudApi_ProcessUploadPath_Description">客户端上传工序生产数据的接口路径。</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_PassStationBatchTemplatePath_DisplayName">过站批量上传接口模板</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_PassStationBatchTemplatePath_Description">客户端上传工序过站数据的接口模板，必须包含 {typeKey}。</sys:String>
     <sys:String x:Key="Navigation_Param_CloudApi_CapacityHourlyPath_DisplayName">小时产能接口</sys:String>
@@ -769,9 +767,4 @@
     <sys:String x:Key="Navigation_PlcTaskBinding_DeviceCountFormat">已加载 {0} 台 PLC 的任务绑定。</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_DisableHeartbeatConfirmTitle">确认关闭心跳任务</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_DisableHeartbeatConfirmMessageFormat">即将关闭 PLC“{0}”的心跳类任务：{1}。&#x0a;关闭后该 PLC 不再执行心跳握手，可能影响运行状态判断。是否继续保存？</sys:String>
-    <sys:String x:Key="DieCutting_Runtime_AllStatus">全部/汇总模式显示本地生产记录；请选择右侧 PLC 查看实时采集状态。</sys:String>
-    <sys:String x:Key="DieCutting_Runtime_NoContext">当前 PLC“{0}”暂无模切采样运行上下文，请检查任务绑定是否已应用。</sys:String>
-    <sys:String x:Key="DieCutting_Runtime_LastResult">最近处理：{0}，结果：{1}</sys:String>
-    <sys:String x:Key="DieCutting_Runtime_NoSnapshot">当前还没有模切采样快照。</sys:String>
-    <sys:String x:Key="DieCutting_Runtime_Snapshot">批次={0}，产量={1}，冲切速度={2}，放卷长度={3}，弹夹={4}</sys:String>
 </ResourceDictionary>

@@ -53,6 +53,26 @@ public sealed class ProductionTimeProvider : IProductionTimeProvider
     public string FormatBusinessTimestamp(DateTime value)
         => ToBusinessTime(value).ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 
+    public static bool IsTimeZoneAvailable(string? timeZoneId)
+    {
+        if (string.IsNullOrWhiteSpace(timeZoneId))
+            return false;
+
+        try
+        {
+            _ = ResolveTimeZone(timeZoneId);
+            return true;
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return false;
+        }
+        catch (InvalidTimeZoneException)
+        {
+            return false;
+        }
+    }
+
     private static TimeZoneInfo ResolveTimeZone(string timeZoneId)
     {
         try

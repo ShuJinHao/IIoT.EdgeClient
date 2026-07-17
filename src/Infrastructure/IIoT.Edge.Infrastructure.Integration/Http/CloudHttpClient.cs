@@ -52,7 +52,11 @@ public class CloudHttpClient : ICloudHttpClient
         _logger = logger;
     }
 
-    public async Task<CloudCallResult> PostAsync(string url, object payload, CloudRequestOptions? options = null)
+    public async Task<CloudCallResult> PostAsync(
+        string url,
+        object payload,
+        CloudRequestOptions? options = null,
+        CancellationToken cancellationToken = default)
     {
         var requestUrl = _endpointProvider.BuildUrl(url);
 
@@ -70,13 +74,19 @@ public class CloudHttpClient : ICloudHttpClient
                     () => JsonContent.Create(sanitizedPayload),
                     options,
                     static result => result,
-                    static _ => Task.FromResult(CloudCallResult.Success()),
-                    CloudCallResult.Failure);
+                    static (_, _) => Task.FromResult(CloudCallResult.Success()),
+                    CloudCallResult.Failure,
+                    cancellationToken);
             },
+            cancellationToken,
             CloudCallResult.Failure).ConfigureAwait(false);
     }
 
-    public async Task<CloudCallResult<string>> PostWithResponseAsync(string url, object payload, CloudRequestOptions? options = null)
+    public async Task<CloudCallResult<string>> PostWithResponseAsync(
+        string url,
+        object payload,
+        CloudRequestOptions? options = null,
+        CancellationToken cancellationToken = default)
     {
         var requestUrl = _endpointProvider.BuildUrl(url);
 
@@ -95,12 +105,17 @@ public class CloudHttpClient : ICloudHttpClient
                     options,
                     ToTypedResult<string>,
                     CreateStringResultAsync,
-                    CloudCallResult<string>.Failure);
+                    CloudCallResult<string>.Failure,
+                    cancellationToken);
             },
+            cancellationToken,
             CloudCallResult<string>.Failure).ConfigureAwait(false);
     }
 
-    public async Task<CloudCallResult<string>> GetAsync(string url, CloudRequestOptions? options = null)
+    public async Task<CloudCallResult<string>> GetAsync(
+        string url,
+        CloudRequestOptions? options = null,
+        CancellationToken cancellationToken = default)
     {
         var requestUrl = _endpointProvider.BuildUrl(url);
 
@@ -116,7 +131,9 @@ public class CloudHttpClient : ICloudHttpClient
                 options,
                 ToTypedResult<string>,
                 CreateStringResultAsync,
-                CloudCallResult<string>.Failure),
+                CloudCallResult<string>.Failure,
+                cancellationToken),
+            cancellationToken,
             CloudCallResult<string>.Failure).ConfigureAwait(false);
     }
 
@@ -127,15 +144,17 @@ public class CloudHttpClient : ICloudHttpClient
         Func<HttpContent?>? contentFactory,
         CloudRequestOptions? options,
         Func<CloudCallResult, TResult> convertShortCircuit,
-        Func<HttpResponseMessage, Task<TResult>> createSuccess,
-        Func<CloudCallOutcome, string, HttpStatusCode?, TResult> createFailure)
+        Func<HttpResponseMessage, CancellationToken, Task<TResult>> createSuccess,
+        Func<CloudCallOutcome, string, HttpStatusCode?, TResult> createFailure,
+        CancellationToken cancellationToken)
         where TResult : CloudCallResult
     {
         var sendResult = await SendWithRetryAsync(
             method,
             requestUrl,
             contentFactory,
-            options).ConfigureAwait(false);
+            options,
+            cancellationToken).ConfigureAwait(false);
 
         if (sendResult.ShortCircuitResult is not null)
         {
@@ -144,7 +163,7 @@ public class CloudHttpClient : ICloudHttpClient
 
         using var response = sendResult.Response!;
         return response.IsSuccessStatusCode
-            ? await createSuccess(response).ConfigureAwait(false)
+            ? await createSuccess(response, cancellationToken).ConfigureAwait(false)
             : CreateHttpFailureResult(
                 operationName,
                 requestUrl,
@@ -157,12 +176,18 @@ public class CloudHttpClient : ICloudHttpClient
         string exceptionOperationName,
         string requestUrl,
         Func<Task<TResult>> sendAsync,
+        CancellationToken cancellationToken,
         Func<CloudCallOutcome, string, HttpStatusCode?, TResult> createFailure)
         where TResult : CloudCallResult
     {
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return await sendAsync().ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (TaskCanceledException ex)
         {
@@ -205,19 +230,29 @@ public class CloudHttpClient : ICloudHttpClient
         HttpMethod method,
         string requestUrl,
         Func<HttpContent?>? contentFactory,
-        CloudRequestOptions? options)
+        CloudRequestOptions? options,
+        CancellationToken cancellationToken)
     {
         var isAnonymous = IsAnonymousRequest(method, requestUrl);
         var client = _httpClientFactory.CreateClient("CloudApi");
 
         using var firstRequest = CreateRequest(method, requestUrl, contentFactory, options);
-        var authPreparation = await PrepareAuthorizationAsync(firstRequest, isAnonymous).ConfigureAwait(false);
+        var authPreparation = await PrepareAuthorizationAsync(
+                firstRequest,
+                isAnonymous,
+                cancellationToken)
+            .ConfigureAwait(false);
         if (authPreparation is not null)
         {
             return SendWithRetryResult.WithShortCircuit(authPreparation);
         }
 
-        var firstResponse = await client.SendAsync(firstRequest).ConfigureAwait(false);
+        var firstResponse = await client.SendAsync(firstRequest, cancellationToken).ConfigureAwait(false);
+        if (cancellationToken.IsCancellationRequested)
+        {
+            firstResponse.Dispose();
+            cancellationToken.ThrowIfCancellationRequested();
+        }
         if (isAnonymous || firstResponse.StatusCode != HttpStatusCode.Unauthorized)
         {
             return SendWithRetryResult.WithResponse(firstResponse);
@@ -226,16 +261,28 @@ public class CloudHttpClient : ICloudHttpClient
         firstResponse.Dispose();
         _logger.Warn(
             $"event=edge.upload.auth.retry_after_401 route={GetRequestRoute(requestUrl)} status_code=401 result=retry");
-        await RefreshBootstrapSingleFlightAsync(firstRequest.Headers.Authorization?.Parameter).ConfigureAwait(false);
+        await RefreshBootstrapSingleFlightAsync(
+                firstRequest.Headers.Authorization?.Parameter,
+                cancellationToken)
+            .ConfigureAwait(false);
 
         using var retryRequest = CreateRequest(method, requestUrl, contentFactory, options);
-        authPreparation = await PrepareAuthorizationAsync(retryRequest, isAnonymous).ConfigureAwait(false);
+        authPreparation = await PrepareAuthorizationAsync(
+                retryRequest,
+                isAnonymous,
+                cancellationToken)
+            .ConfigureAwait(false);
         if (authPreparation is not null)
         {
             return SendWithRetryResult.WithShortCircuit(authPreparation);
         }
 
-        var retryResponse = await client.SendAsync(retryRequest).ConfigureAwait(false);
+        var retryResponse = await client.SendAsync(retryRequest, cancellationToken).ConfigureAwait(false);
+        if (cancellationToken.IsCancellationRequested)
+        {
+            retryResponse.Dispose();
+            cancellationToken.ThrowIfCancellationRequested();
+        }
         if (retryResponse.StatusCode == HttpStatusCode.Unauthorized)
         {
             retryResponse.Dispose();
@@ -274,7 +321,8 @@ public class CloudHttpClient : ICloudHttpClient
 
     private async Task<CloudCallResult?> PrepareAuthorizationAsync(
         HttpRequestMessage request,
-        bool isAnonymousRequest)
+        bool isAnonymousRequest,
+        CancellationToken cancellationToken)
     {
         if (isAnonymousRequest)
         {
@@ -291,7 +339,7 @@ public class CloudHttpClient : ICloudHttpClient
         _logger.Info(
             $"event=edge.upload.auth.refresh_before_send route={route} reason={refreshReason} result=attempt");
 
-        await RefreshBootstrapSingleFlightAsync(_tokenProvider.AccessToken).ConfigureAwait(false);
+        await RefreshBootstrapSingleFlightAsync(_tokenProvider.AccessToken, cancellationToken).ConfigureAwait(false);
         if (TryAttachAuthorization(request))
         {
             return null;
@@ -319,11 +367,14 @@ public class CloudHttpClient : ICloudHttpClient
         return true;
     }
 
-    private async Task RefreshBootstrapSingleFlightAsync(string? knownToken)
+    private async Task RefreshBootstrapSingleFlightAsync(
+        string? knownToken,
+        CancellationToken cancellationToken)
     {
-        await _refreshGate.WaitAsync().ConfigureAwait(false);
+        await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var currentToken = _tokenProvider.AccessToken?.Trim();
             if (HasUsableToken()
                 && !string.IsNullOrWhiteSpace(currentToken)
@@ -332,7 +383,7 @@ public class CloudHttpClient : ICloudHttpClient
                 return;
             }
 
-            await _deviceService.RefreshBootstrapAsync().ConfigureAwait(false);
+            await _deviceService.RefreshBootstrapAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -380,8 +431,11 @@ public class CloudHttpClient : ICloudHttpClient
     private static CloudCallResult<T> ToTypedResult<T>(CloudCallResult result)
         => CloudCallResult<T>.Failure(result.Outcome, result.ReasonCode, result.HttpStatusCode);
 
-    private static async Task<CloudCallResult<string>> CreateStringResultAsync(HttpResponseMessage response)
-        => CloudCallResult<string>.Success(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+    private static async Task<CloudCallResult<string>> CreateStringResultAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+        => CloudCallResult<string>.Success(
+            await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
 
     private static string BuildHttpReasonCode(HttpStatusCode statusCode)
         => $"http_status_{(int)statusCode}";

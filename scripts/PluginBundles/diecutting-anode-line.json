@@ -1,6 +1,0 @@
-{
-  "bundleId": "diecutting-anode-line",
-  "displayName": "负极模切线",
-  "includeModules": [ "DieCuttingAnode" ],
-  "machineProfiles": [ "DieCuttingAnodeLine" ]
-}

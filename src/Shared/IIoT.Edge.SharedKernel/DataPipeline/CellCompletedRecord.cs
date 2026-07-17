@@ -25,7 +25,7 @@ public class CellCompletedRecord
     public string DeviceName { get; set; } = string.Empty;
 
     /// <summary>
-    /// 产生该记录的模块 Id，例如 DieCuttingCathode。
+    /// 产生该记录的模块 Id。
     /// </summary>
     public string ModuleId { get; set; } = string.Empty;
 

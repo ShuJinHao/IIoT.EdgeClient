@@ -16,7 +16,6 @@ internal sealed class StartupAppSettingsValidator(
         "CloudApi:Paths:IdentityDeviceLogin",
         "CloudApi:Paths:HumanIdentityRefresh",
         "CloudApi:Paths:DeviceLog",
-        "CloudApi:Paths:ProcessUpload",
         "CloudApi:Paths:PassStationBatchTemplate",
         "CloudApi:Paths:CapacityHourly",
         "CloudApi:Paths:CapacitySummary",

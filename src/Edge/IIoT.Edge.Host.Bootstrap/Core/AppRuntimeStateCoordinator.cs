@@ -41,8 +41,33 @@ public sealed class AppRuntimeStateCoordinator : IAppRuntimeStateCoordinator
 
     public Task SaveAsync(CancellationToken cancellationToken = default)
     {
-        _contextStore.SaveToFile();
-        _recipeService.SaveToFile();
+        List<Exception>? failures = null;
+        try
+        {
+            _contextStore.SaveToFile();
+        }
+        catch (Exception ex)
+        {
+            (failures ??= []).Add(ex);
+            _logger.Error($"[生命周期] 运行上下文保存失败：{ex.Message}");
+        }
+
+        try
+        {
+            _recipeService.SaveToFile();
+        }
+        catch (Exception ex)
+        {
+            (failures ??= []).Add(ex);
+            _logger.Error($"[生命周期] 配方保存失败：{ex.Message}");
+        }
+
+        if (failures is { Count: 1 })
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failures[0]).Throw();
+
+        if (failures is { Count: > 1 })
+            throw new AggregateException(failures);
+
         _logger.Info("[生命周期] 关闭前运行时状态已保存。");
         return Task.CompletedTask;
     }

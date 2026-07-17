@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsEdgeArchitectureGraphFixture>true</IsEdgeArchitectureGraphFixture>
+    <EdgeArchitectureFixtureRepositoryRoot>$(MSBuildThisFileDirectory)..</EdgeArchitectureFixtureRepositoryRoot>
+    <EdgeArchitectureFixtureSolutionPath>$(MSBuildThisFileDirectory)..\EdgeArchitecture.Invalid.slnx</EdgeArchitectureFixtureSolutionPath>
+  </PropertyGroup>
+  <Target Name="HiddenBuild">
+    <ItemGroup>
+      <HiddenProject Include="../Infrastructure/IIoT.Edge.Infrastructure.Persistence.EfCore.csproj" />
+    </ItemGroup>
+    <MSBuild Projects="@(HiddenProject)" Targets="Build" />
+  </Target>
+</Project>

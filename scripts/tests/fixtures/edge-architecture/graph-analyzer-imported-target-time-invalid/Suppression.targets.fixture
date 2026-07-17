@@ -1,0 +1,8 @@
+<Project>
+  <Target Name="DisableImportedAnalyzers" BeforeTargets="CoreCompile">
+    <PropertyGroup>
+      <RunAnalyzers>false</RunAnalyzers>
+      <WarningsNotAsErrors>$(WarningsNotAsErrors);EDGEOUT001</WarningsNotAsErrors>
+    </PropertyGroup>
+  </Target>
+</Project>

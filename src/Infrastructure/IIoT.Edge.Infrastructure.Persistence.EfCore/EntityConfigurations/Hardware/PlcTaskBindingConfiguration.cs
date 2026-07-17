@@ -34,9 +34,5 @@ public sealed class PlcTaskBindingConfiguration : IEntityTypeConfiguration<PlcTa
             .IsUnique()
             .HasDatabaseName("ux_hw_plc_task_binding_device_task");
 
-        builder.HasOne(x => x.NetworkDevice)
-            .WithMany(x => x.PlcTaskBindings)
-            .HasForeignKey(x => x.NetworkDeviceId)
-            .OnDelete(DeleteBehavior.Cascade);
     }
 }

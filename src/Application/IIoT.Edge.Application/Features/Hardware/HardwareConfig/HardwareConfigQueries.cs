@@ -8,6 +8,7 @@ using IIoT.Edge.Application.Features.Hardware.UseCases.SerialDevice.Commands;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.SharedKernel.Enums;
+using IIoT.Edge.SharedKernel.Repository;
 using MediatR;
 
 namespace IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
@@ -135,6 +136,7 @@ public class LoadIoMappingsHandler(ISender sender)
 
 public class SaveHardwareConfigHandler(
     ISender sender,
+    IEdgeUnitOfWorkFactory unitOfWorkFactory,
     IClientPermissionService permissionService,
     IPlcConnectionManager plcConnectionManager,
     IPlcRuntimeApplyService plcRuntimeApplyService)
@@ -150,13 +152,21 @@ public class SaveHardwareConfigHandler(
         var existingNetworkDevices = await LoadExistingNetworkDevicesAsync(ct);
         var existingIoMappings = await LoadExistingIoMappingsAsync(request.SelectedNetworkDeviceId, ct);
 
-        var networkResult = await sender.Send(new SaveNetworkDevicesCommand(request.NetworkDevices), ct);
+        await using var unitOfWork = await unitOfWorkFactory.BeginAsync(ct).ConfigureAwait(false);
+
+        var networkResult = await SaveNetworkDevicesHandler.ApplyAsync(
+            unitOfWork.Repository<NetworkDeviceEntity>(),
+            new SaveNetworkDevicesCommand(request.NetworkDevices),
+            ct).ConfigureAwait(false);
         if (!networkResult.IsSuccess)
         {
             return CrudOperationResult.Failure(networkResult.ErrorMessage ?? "网络设备保存失败。");
         }
 
-        var serialResult = await sender.Send(new SaveSerialDevicesCommand(request.SerialDevices), ct);
+        var serialResult = await SaveSerialDevicesHandler.ApplyAsync(
+            unitOfWork.Repository<SerialDeviceEntity>(),
+            new SaveSerialDevicesCommand(request.SerialDevices),
+            ct).ConfigureAwait(false);
         if (!serialResult.IsSuccess)
         {
             return CrudOperationResult.Failure(serialResult.ErrorMessage ?? "串口设备保存失败。");
@@ -171,12 +181,17 @@ public class SaveHardwareConfigHandler(
                 .Select(dto => dto with { NetworkDeviceId = request.SelectedNetworkDeviceId })
                 .ToList();
 
-            var ioResult = await sender.Send(new SaveIoMappingsCommand(request.SelectedNetworkDeviceId, ioDtos), ct);
+            var ioResult = await SaveIoMappingsHandler.ApplyAsync(
+                unitOfWork.Repository<IoMappingEntity>(),
+                new SaveIoMappingsCommand(request.SelectedNetworkDeviceId, ioDtos),
+                ct).ConfigureAwait(false);
             if (!ioResult.IsSuccess)
             {
                 return CrudOperationResult.Failure(ioResult.ErrorMessage ?? "IO 映射保存失败。");
             }
         }
+
+        await unitOfWork.CommitAsync(ct).ConfigureAwait(false);
 
         var stopFailures = new List<string>();
         var reloadFailures = new List<string>();

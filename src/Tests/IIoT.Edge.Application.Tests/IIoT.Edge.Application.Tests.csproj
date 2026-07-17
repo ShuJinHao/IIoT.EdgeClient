@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable><IsTestProject>true</IsTestProject>
+    <TestKind>Application</TestKind><TestRuntime>Pure</TestRuntime><TestRuntimeDependencies>FakeTime</TestRuntimeDependencies><TestRunnerMode>Parallel</TestRunnerMode><TestCadence>PR</TestCadence><TestCapability>Application.UseCases</TestCapability><TestRisk>P1</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Application</TestOwner><TestRuleId>EDGE-APP-TEST-001</TestRuleId><TestRequired>true</TestRequired><UseEdgeTestingCore>true</UseEdgeTestingCore>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
+    <ProjectReference Include="..\..\Testing\IIoT.Edge.Testing.Core\IIoT.Edge.Testing.Core.csproj" />
+  </ItemGroup>
+</Project>

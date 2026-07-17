@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable><IsTestProject>true</IsTestProject>
+    <TestKind>Contract</TestKind><TestRuntime>Network</TestRuntime><TestRuntimeDependencies>ControlledConcurrency;Loopback</TestRuntimeDependencies><TestRunnerMode>Serial</TestRunnerMode><TestCadence>PR</TestCadence><TestCapability>PLC.Protocol.Network</TestCapability><TestRisk>P0</TestRisk><TestConcern>Compatibility</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.PLC</TestOwner><TestRuleId>EDGE-PLC-CONTRACT-NETWORK-001</TestRuleId><TestRequired>true</TestRequired><UseEdgeTestingCore>true</UseEdgeTestingCore>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.DeviceComm\IIoT.Edge.Infrastructure.DeviceComm.csproj" />
+    <ProjectReference Include="..\..\Testing\IIoT.Edge.Testing.Core\IIoT.Edge.Testing.Core.csproj" />
+  </ItemGroup>
+</Project>

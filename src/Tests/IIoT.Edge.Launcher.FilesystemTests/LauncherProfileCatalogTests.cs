@@ -1,0 +1,261 @@
+using IIoT.Edge.Launcher.Services;
+using System.Text;
+using System.Text.Json;
+using Xunit;
+
+namespace IIoT.Edge.Launcher.FilesystemTests;
+
+public sealed class LauncherProfileCatalogTests
+{
+    [Fact]
+    public void LoadProfiles_ShouldResolveRelativePathsAndApplyDefaults()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            WriteText(
+                Path.Combine(tempDirectory, "launcher.profiles.json"),
+                """
+                [
+                  {
+                    "ProfileId": "TestPluginLine",
+                    "DisplayName": "测试插件",
+                    "Description": "TestPlugin profile",
+                    "MachineProfile": "TestPluginLine"
+                  }
+                ]
+                """);
+
+            var catalog = new LauncherProfileCatalog(tempDirectory);
+
+            var profile = Assert.Single(catalog.LoadProfiles());
+            Assert.Equal(
+                Path.GetFullPath(Path.Combine(tempDirectory, "..", "host", "IIoT.Edge.Shell")),
+                profile.ExecutablePath);
+            Assert.Null(profile.ImagePath);
+            Assert.Equal("TestPluginLine", profile.MachineProfile);
+            Assert.Equal("Cog", profile.IconKind);
+            Assert.Equal("#0F766E", profile.AccentColor);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void LoadProfiles_ShouldResolveSiblingHostExecutable()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            WriteText(
+                Path.Combine(tempDirectory, "launcher.profiles.json"),
+                """
+                [
+                  {
+                    "ProfileId": "TestPluginLine",
+                    "DisplayName": "测试插件",
+                    "Description": "TestPlugin profile",
+                    "ImagePath": "Assets/Profiles/testplugin.png",
+                    "IconKind": "BeakerOutline",
+                    "AccentColor": "#4D7C0F",
+                    "MachineProfile": "TestPluginLine",
+                    "ExecutablePath": "..\\host\\IIoT.Edge.Shell"
+                  }
+                ]
+                """);
+
+            var catalog = new LauncherProfileCatalog(tempDirectory);
+
+            var profile = Assert.Single(catalog.LoadProfiles());
+            Assert.Equal(
+                Path.GetFullPath(Path.Combine(tempDirectory, "..", "host", "IIoT.Edge.Shell")),
+                profile.ExecutablePath);
+            Assert.Equal(Path.Combine(tempDirectory, "Assets", "Profiles", "testplugin.png"), profile.ImagePath);
+            Assert.Equal("BeakerOutline", profile.IconKind);
+            Assert.Equal("#4D7C0F", profile.AccentColor);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void LoadProfiles_WhenRequiredFieldIsMissing_ShouldThrowChineseError()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            WriteText(
+                Path.Combine(tempDirectory, "launcher.profiles.json"),
+                """
+                [
+                  {
+                    "ProfileId": "Broken",
+                    "DisplayName": "Broken"
+                  }
+                ]
+                """);
+
+            var catalog = new LauncherProfileCatalog(tempDirectory);
+
+            var ex = Assert.Throws<InvalidOperationException>(() => catalog.LoadProfiles());
+            Assert.Contains("启动器工序", ex.Message, StringComparison.Ordinal);
+            Assert.Contains("MachineProfile", ex.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void LoadProfiles_WhenProfileIdIsMissing_ShouldThrowChineseError()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            WriteText(
+                Path.Combine(tempDirectory, "launcher.profiles.json"),
+                """
+                [
+                  {
+                    "DisplayName": "测试插件",
+                    "MachineProfile": "TestPluginLine"
+                  }
+                ]
+                """);
+
+            var catalog = new LauncherProfileCatalog(tempDirectory);
+
+            var ex = Assert.Throws<InvalidOperationException>(() => catalog.LoadProfiles());
+            Assert.Contains("缺少 ProfileId", ex.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void LoadProfiles_WhenCatalogIsMissing_ShouldThrowChineseError()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var catalog = new LauncherProfileCatalog(tempDirectory);
+
+            var ex = Assert.Throws<FileNotFoundException>(() => catalog.LoadProfiles());
+            Assert.Contains("未找到启动器工序清单", ex.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void LoadProfiles_ShouldLoadNeutralTestPluginProfile()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            WriteText(
+                Path.Combine(tempDirectory, "launcher.profiles.json"),
+                """
+                [
+                  {
+                    "ProfileId": "TestPluginLine",
+                    "DisplayName": "Test Plugin",
+                    "Description": "Neutral host contract fixture",
+                    "MachineProfile": "TestPluginLine",
+                    "ExecutablePath": "../host/IIoT.Edge.Shell"
+                  }
+                ]
+                """);
+
+            var catalog = new LauncherProfileCatalog(tempDirectory);
+            var profile = Assert.Single(catalog.LoadProfiles());
+
+            Assert.Equal("TestPluginLine", profile.ProfileId);
+            Assert.Equal("Test Plugin", profile.DisplayName);
+            Assert.Equal("TestPluginLine", profile.MachineProfile);
+            Assert.EndsWith(
+                Path.Combine("host", "IIoT.Edge.Shell"),
+                profile.ExecutablePath,
+                StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void SourceMachineProfiles_ShouldHaveUniqueNonDefaultInstanceIds()
+    {
+        var repoRoot = FindRepoRoot();
+        var launcherRoot = Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Launcher");
+        var shellRoot = Path.Combine(repoRoot, "src", "Edge", "IIoT.Edge.Shell");
+        var catalog = new LauncherProfileCatalog(launcherRoot);
+        var profiles = catalog.LoadProfiles();
+        var instanceIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var profile in profiles)
+        {
+            var configPath = Path.Combine(shellRoot, $"appsettings.machine.{profile.MachineProfile}.json");
+            Assert.True(File.Exists(configPath), $"Missing machine profile config: {configPath}");
+            using var document = JsonDocument.Parse(File.ReadAllText(configPath));
+            Assert.True(document.RootElement.TryGetProperty("InstanceId", out var instanceIdElement));
+            Assert.Equal(JsonValueKind.String, instanceIdElement.ValueKind);
+            var instanceId = instanceIdElement.GetString();
+            Assert.False(string.IsNullOrWhiteSpace(instanceId));
+            Assert.False(
+                string.Equals("IIoT-Edge-Default", instanceId, StringComparison.OrdinalIgnoreCase),
+                $"Machine profile '{profile.MachineProfile}' must not use the default InstanceId.");
+            Assert.True(instanceIds.Add(instanceId!), $"Duplicate machine profile InstanceId: {instanceId}");
+        }
+    }
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "IIoT.EdgeClient.slnx")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("未找到 IIoT.EdgeClient 仓库根目录。");
+    }
+
+    private static string CreateTempDirectory()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "edge-launcher-profile-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    private static void WriteText(string path, string content)
+        => File.WriteAllText(path, content, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+    private static void DeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+        catch
+        {
+        }
+    }
+}

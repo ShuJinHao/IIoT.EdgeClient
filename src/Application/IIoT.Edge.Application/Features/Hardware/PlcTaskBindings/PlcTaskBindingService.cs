@@ -12,8 +12,9 @@ public sealed class PlcTaskBindingService(
     IConfiguration configuration,
     IStationRuntimeRegistry runtimeRegistry,
     IReadRepository<NetworkDeviceEntity> networkDevices,
-    IRepository<IoMappingEntity> ioMappings,
-    IRepository<PlcTaskBindingEntity> bindings,
+    IReadRepository<IoMappingEntity> ioMappings,
+    IReadRepository<PlcTaskBindingEntity> bindings,
+    IEdgeUnitOfWorkFactory unitOfWorkFactory,
     ILogService logger) : IPlcTaskBindingService
 {
     private const string DefaultEnableAllTasksKey = "PlcTaskBinding:DefaultEnableAllTasks";
@@ -138,18 +139,34 @@ public sealed class PlcTaskBindingService(
             .Select(static x => x.DisplayName)
             .ToArray();
 
-        await bindings.ExecuteDeleteAsync(
-            x => x.NetworkDeviceId == networkDeviceId,
-            cancellationToken).ConfigureAwait(false);
-
         var updatedAt = DateTimeOffset.UtcNow;
-        foreach (var candidate in candidates)
+        var replacements = candidates
+            .Select(candidate => PlcTaskBindingEntity.Create(
+                networkDeviceId,
+                candidate.Key,
+                resolvedStates[candidate.Key],
+                updatedAt))
+            .ToArray();
+        await using (var unitOfWork = await unitOfWorkFactory
+                         .BeginAsync(cancellationToken)
+                         .ConfigureAwait(false))
         {
-            var enabled = resolvedStates[candidate.Key];
-            bindings.Add(PlcTaskBindingEntity.Create(networkDeviceId, candidate.Key, enabled, updatedAt));
-        }
+            var repository = unitOfWork.Repository<PlcTaskBindingEntity>();
+            var existing = await repository
+                .GetListAsync(x => x.NetworkDeviceId == networkDeviceId, cancellationToken)
+                .ConfigureAwait(false);
+            foreach (var binding in existing)
+            {
+                repository.Delete(binding);
+            }
 
-        await bindings.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            foreach (var replacement in replacements)
+            {
+                repository.Add(replacement);
+            }
+
+            await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
 
         if (disabledHeartbeatTasks.Length > 0)
         {

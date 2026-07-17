@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "ruleId": "TEST-GOV-007",
+  "collector": "coverlet.collector/10.0.1",
+  "requiredReportCount": 32,
+  "reportCount": 32,
+  "productionFileCount": 741,
+  "overall": {
+    "lineValid": 48453,
+    "lineCovered": 31240,
+    "lineRate": 0.644749,
+    "branchValid": 12225,
+    "branchCovered": 6067,
+    "branchRate": 0.496278
+  },
+  "components": [
+    {
+      "component": "Application",
+      "metrics": {
+        "lineValid": 6475,
+        "lineCovered": 4918,
+        "lineRate": 0.759537,
+        "branchValid": 2287,
+        "branchCovered": 1312,
+        "branchRate": 0.573677
+      }
+    },
+    {
+      "component": "Core",
+      "metrics": {
+        "lineValid": 277,
+        "lineCovered": 247,
+        "lineRate": 0.891697,
+        "branchValid": 86,
+        "branchCovered": 58,
+        "branchRate": 0.674419
+      }
+    },
+    {
+      "component": "Edge",
+      "metrics": {
+        "lineValid": 9455,
+        "lineCovered": 6420,
+        "lineRate": 0.679006,
+        "branchValid": 2797,
+        "branchCovered": 1463,
+        "branchRate": 0.52306
+      }
+    },
+    {
+      "component": "Infrastructure",
+      "metrics": {
+        "lineValid": 10313,
+        "lineCovered": 7445,
+        "lineRate": 0.721904,
+        "branchValid": 2892,
+        "branchCovered": 1434,
+        "branchRate": 0.495851
+      }
+    },
+    {
+      "component": "Modules",
+      "metrics": {
+        "lineValid": 2585,
+        "lineCovered": 1926,
+        "lineRate": 0.745068,
+        "branchValid": 516,
+        "branchCovered": 314,
+        "branchRate": 0.608527
+      }
+    },
+    {
+      "component": "Presentation",
+      "metrics": {
+        "lineValid": 13034,
+        "lineCovered": 5597,
+        "lineRate": 0.429415,
+        "branchValid": 2823,
+        "branchCovered": 1137,
+        "branchRate": 0.402763
+      }
+    },
+    {
+      "component": "Shared",
+      "metrics": {
+        "lineValid": 5932,
+        "lineCovered": 4466,
+        "lineRate": 0.752866,
+        "branchValid": 662,
+        "branchCovered": 279,
+        "branchRate": 0.42145
+      }
+    },
+    {
+      "component": "Tools",
+      "metrics": {
+        "lineValid": 382,
+        "lineCovered": 221,
+        "lineRate": 0.578534,
+        "branchValid": 162,
+        "branchCovered": 70,
+        "branchRate": 0.432099
+      }
+    }
+  ],
+  "highRiskThresholds": [
+    {
+      "path": "src/Application/IIoT.Edge.Application/Common/Caching/Memory/EdgeMemoryCacheService.cs",
+      "minimumLineRate": 0.9,
+      "minimumBranchRate": 0.85,
+      "metrics": {
+        "lineValid": 60,
+        "lineCovered": 60,
+        "lineRate": 1.0,
+        "branchValid": 30,
+        "branchCovered": 30,
+        "branchRate": 1.0
+      }
+    },
+    {
+      "path": "src/Application/IIoT.Edge.Application/Abstractions/DataPipeline/DataPipelineNonRetryableException.cs",
+      "minimumLineRate": 0.9,
+      "minimumBranchRate": 0.85,
+      "metrics": {
+        "lineValid": 2,
+        "lineCovered": 2,
+        "lineRate": 1.0,
+        "branchValid": 0,
+        "branchCovered": 0,
+        "branchRate": 1.0
+      }
+    }
+  ]
+}

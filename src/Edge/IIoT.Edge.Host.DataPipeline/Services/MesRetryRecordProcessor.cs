@@ -52,6 +52,7 @@ internal sealed class MesRetryRecordProcessor : RetryRecordProcessorBase<MesRetr
 
     public async Task<MesRetryProcessResult> ProcessAsync(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var claimedBatch = await RetryStore.ClaimPendingBatchAsync(batchSize: ClaimBatchSize).ConfigureAwait(false);
         if (claimedBatch is null || claimedBatch.Records.Count == 0)
         {
@@ -61,6 +62,7 @@ internal sealed class MesRetryRecordProcessor : RetryRecordProcessorBase<MesRetr
         var hadFailure = false;
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             foreach (var record in claimedBatch.Records)
             {
                 if (!await ProcessOneAsync(record, cancellationToken).ConfigureAwait(false))
@@ -69,16 +71,14 @@ internal sealed class MesRetryRecordProcessor : RetryRecordProcessorBase<MesRetr
                 }
             }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            await TryReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
+            throw;
+        }
         catch (Exception ex)
         {
-            try
-            {
-                await RetryStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
-            }
-            catch (Exception releaseEx)
-            {
-                Logger.Error($"[MES补传] 释放补传领取标记 {claimedBatch.ClaimToken} 失败：{releaseEx.Message}");
-            }
+            await TryReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
 
             Logger.Error($"[MES补传] 补传批次执行异常：{ex.Message}");
             return MesRetryProcessResult.Failed;
@@ -91,14 +91,17 @@ internal sealed class MesRetryRecordProcessor : RetryRecordProcessorBase<MesRetr
 
     private async Task<bool> ProcessOneAsync(FailedCellRecord record, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var cellData = DeserializeCellData(record.ProcessType, record.CellDataJson);
         if (cellData is null)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return await HandleDeserializeFailureAsync(
                 record,
                 DataPipelineRetryChannelMetadata.GetFailedRecordSourceTable(DataPipelineRetryChannel.Mes),
                 $"MES 补传记录反序列化失败，工序：{record.ProcessType}。",
-                "MES 补传记录反序列化失败，且死信持久化也失败。").ConfigureAwait(false);
+                "MES 补传记录反序列化失败，且死信持久化也失败。",
+                cancellationToken).ConfigureAwait(false);
         }
 
         var completedRecord = DataPipelineRetryChannelMetadata.CreateCompletedRecord(record, cellData);
@@ -114,19 +117,35 @@ internal sealed class MesRetryRecordProcessor : RetryRecordProcessorBase<MesRetr
         }
         catch (TimeoutException)
         {
-            await HandleRetryFailureAsync(record, "处理超时。").ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            await HandleRetryFailureAsync(record, "处理超时。", cancellationToken).ConfigureAwait(false);
             return false;
         }
 
         if (success)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             await RetryStore.DeleteAsync(record.Id).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
             Logger.Info($"[PLC-{record.DeviceName}][MES补传] {cellData.DisplayLabel} 补传成功，记录已删除。");
             return true;
         }
 
-        await HandleRetryFailureAsync(record, "消费者返回失败。").ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        await HandleRetryFailureAsync(record, "消费者返回失败。", cancellationToken).ConfigureAwait(false);
         return false;
+    }
+
+    private async Task TryReleaseClaimAsync(string claimToken)
+    {
+        try
+        {
+            await RetryStore.ReleaseClaimAsync(claimToken).ConfigureAwait(false);
+        }
+        catch (Exception releaseEx)
+        {
+            Logger.Error($"[MES补传] 释放补传领取标记 {claimToken} 失败：{releaseEx.Message}");
+        }
     }
 
 }

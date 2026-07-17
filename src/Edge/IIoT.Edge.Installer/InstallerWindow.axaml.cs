@@ -57,9 +57,9 @@ public partial class InstallerWindow : Window
 
     // ── Page 1: Welcome ──
 
-    private void QuickInstallButton_Click(object? sender, RoutedEventArgs e)
+    private async void QuickInstallButton_Click(object? sender, RoutedEventArgs e)
     {
-        StartInstall(_installRoot, createShortcut: true);
+        await StartInstallAsync(_installRoot, createShortcut: true);
     }
 
     private void CustomInstallButton_Click(object? sender, RoutedEventArgs e)
@@ -94,15 +94,15 @@ public partial class InstallerWindow : Window
         ShowPage(WelcomePage);
     }
 
-    private void InstallButton_Click(object? sender, RoutedEventArgs e)
+    private async void InstallButton_Click(object? sender, RoutedEventArgs e)
     {
         _installRoot = SelfExtractor.ResolveInstallRoot(InstallPathInput.Text);
-        StartInstall(_installRoot, DesktopShortcutCheckBox.IsChecked == true);
+        await StartInstallAsync(_installRoot, DesktopShortcutCheckBox.IsChecked == true);
     }
 
     // ── Page 3: Installing ──
 
-    private async void StartInstall(string installRoot, bool createShortcut)
+    private async Task StartInstallAsync(string installRoot, bool createShortcut)
     {
         ShowPage(InstallingPage);
 

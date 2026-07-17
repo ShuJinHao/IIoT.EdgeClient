@@ -81,8 +81,6 @@ public abstract class DapperRepositoryBase<TEntity> : ITableInitializer
 
     protected IDbConnection GetConnection() => ConnectionFactory.Create(DbName);
 
-    protected Task<IDbConnection> GetConnectionAsync() => ConnectionFactory.CreateAsync(DbName);
-
     public async Task<TEntity?> GetByIdAsync(long id)
     {
         var sql = $"SELECT * FROM {TableName} WHERE Id = @Id";
@@ -127,11 +125,19 @@ public abstract class DapperRepositoryBase<TEntity> : ITableInitializer
             connection => connection.ExecuteScalarAsync<int>(sql, param, commandTimeout: CommandTimeout));
     }
 
-    protected Task<int> SafeExecuteAsync(string sql, object? param = null)
+    protected Task<int> SafeExecuteAsync(
+        string sql,
+        object? param = null,
+        CancellationToken cancellationToken = default)
     {
         return ExecuteWriteAsync(
             "执行失败",
-            connection => connection.ExecuteAsync(sql, param, commandTimeout: CommandTimeout));
+            connection => connection.ExecuteAsync(new CommandDefinition(
+                sql,
+                param,
+                commandTimeout: CommandTimeout,
+                cancellationToken: cancellationToken)),
+            cancellationToken);
     }
 
     protected async Task<int> StrictExecuteAsync(
@@ -211,18 +217,31 @@ public abstract class DapperRepositoryBase<TEntity> : ITableInitializer
         }
     }
 
-    private async Task<T> ExecuteWriteAsync<T>(string operation, Func<IDbConnection, Task<T>> action)
+    private async Task<T> ExecuteWriteAsync<T>(
+        string operation,
+        Func<IDbConnection, Task<T>> action,
+        CancellationToken cancellationToken = default)
     {
         for (var attempt = 0; ; attempt++)
         {
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 using var connection = GetConnection();
                 return await action(connection).ConfigureAwait(false);
             }
             catch (SqliteException ex) when (IsBusyOrLocked(ex) && attempt < WriteRetryDelaysMs.Length)
             {
-                await DelayForRetryAsync(ex, attempt).ConfigureAwait(false);
+                await DelayForRetryAsync(ex, attempt, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -231,12 +250,15 @@ public abstract class DapperRepositoryBase<TEntity> : ITableInitializer
         }
     }
 
-    private async Task DelayForRetryAsync(SqliteException ex, int attempt)
+    private async Task DelayForRetryAsync(
+        SqliteException ex,
+        int attempt,
+        CancellationToken cancellationToken = default)
     {
         var delayMs = WriteRetryDelaysMs[attempt];
         Logger.Warn(
             $"[Dapper] 写入遇到 busy/locked，准备重试 [{TableName}] ({DbName}.db) - attempt {attempt + 1}/{WriteRetryDelaysMs.Length}, delay {delayMs}ms, sqlite={ex.SqliteErrorCode}");
-        await Task.Delay(delayMs).ConfigureAwait(false);
+        await Task.Delay(delayMs, cancellationToken).ConfigureAwait(false);
     }
 
     private PersistenceAccessException LogAndWrapAccessFailure(string operation, Exception ex)

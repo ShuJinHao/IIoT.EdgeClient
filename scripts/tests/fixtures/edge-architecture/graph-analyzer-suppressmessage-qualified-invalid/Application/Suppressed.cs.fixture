@@ -1,0 +1,6 @@
+[global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("IIoT.Architecture", "EDGEASYNC001")]
+public sealed class Suppressed
+{
+    public int Block(System.Threading.Tasks.Task<int> task)
+        => task.GetAwaiter().GetResult();
+}

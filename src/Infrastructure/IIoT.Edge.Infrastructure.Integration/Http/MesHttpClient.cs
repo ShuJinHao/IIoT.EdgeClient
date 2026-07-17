@@ -110,6 +110,10 @@ public sealed class MesHttpClient : IMesHttpClient
             _logger.Warn($"[MesHttp] {method} 请求失败：{requestUrl}，状态码={(int)response.StatusCode} {response.ReasonPhrase}");
             return (false, await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.Error($"[MesHttp] {method} 请求异常：{requestUrl}，{ex.Message}");

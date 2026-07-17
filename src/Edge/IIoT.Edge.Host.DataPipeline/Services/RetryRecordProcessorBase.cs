@@ -51,8 +51,10 @@ internal abstract class RetryRecordProcessorBase<TRuntimeState> : RetryDeadLette
         FailedCellRecord record,
         string sourceTable,
         string deadLetterFailureReason,
-        string retryFailureReason)
+        string retryFailureReason,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var persisted = await TryPersistDeadLetterAsync(
             record.ProcessType,
             record.CellDataJson,
@@ -61,20 +63,27 @@ internal abstract class RetryRecordProcessorBase<TRuntimeState> : RetryDeadLette
             record.Id,
             DeadLetterStage.RetryDeserialize,
             deadLetterFailureReason,
-            record).ConfigureAwait(false);
+            record,
+            cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
 
         if (persisted)
         {
             await RetryStore.DeleteAsync(record.Id).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
             return true;
         }
 
-        await HandleRetryFailureAsync(record, retryFailureReason).ConfigureAwait(false);
+        await HandleRetryFailureAsync(record, retryFailureReason, cancellationToken).ConfigureAwait(false);
         return false;
     }
 
-    protected async Task HandleRetryFailureAsync(FailedCellRecord record, string errorMessage)
+    protected async Task HandleRetryFailureAsync(
+        FailedCellRecord record,
+        string errorMessage,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var newRetryCount = record.RetryCount + 1;
         _diagnosticsStore?.SetRuntimeState(_backoffState);
 
@@ -82,10 +91,12 @@ internal abstract class RetryRecordProcessorBase<TRuntimeState> : RetryDeadLette
         {
             Logger.Warn($"[PLC-{record.DeviceName}][{DeadLetterChannelMetadata.LogPrefix}] {record.ProcessType} 已达到最大补传次数 {_maxRetryCount}，自动补传停止。");
             await RetryStore.UpdateRetryAsync(record.Id, newRetryCount, errorMessage, AbandonedRetryTimeUtc).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
             return;
         }
 
         var nextRetryTime = DateTime.UtcNow.Add(_retryBackoffStrategy.Calculate(newRetryCount));
         await RetryStore.UpdateRetryAsync(record.Id, newRetryCount, errorMessage, nextRetryTime).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
     }
 }

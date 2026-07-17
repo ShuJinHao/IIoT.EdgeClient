@@ -1,0 +1,4 @@
+root = false
+
+[*.cs]
+dotnet_diagnostic.EDGEOUT001.severity = suggestion
