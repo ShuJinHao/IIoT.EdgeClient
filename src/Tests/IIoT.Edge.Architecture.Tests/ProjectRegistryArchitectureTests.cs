@@ -108,50 +108,34 @@ public sealed partial class ProjectRegistryArchitectureTests
     public void RetiredProcessFamilyTokens_ShouldBeAbsentFromActiveWorkspace()
     {
         var root = FindRepositoryRoot();
-        var retiredTokens = new[]
-        {
-            "Die" + "Cutting",
-            "die" + "-cut",
-            "模" + "切",
-            "Polarity" + "Specific",
-            "Shared" + "Die" + "Cutting"
-        };
-        var excludedTransitionFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "scripts/tests/Test-EdgeRegressionLedger.ps1",
-            "scripts/tests/baselines/edge-regression-ledger.json",
-            "docs/改动复盘与规则沉淀.md"
-        };
-        var activeTextExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ".cs", ".csproj", ".json", ".axaml", ".ps1", ".yml", ".yaml", ".props", ".targets", ".slnx", ".md"
-        };
-        var activeRoots = new[]
-        {
-            Path.Combine(root, "src"),
-            Path.Combine(root, "scripts"),
-            Path.Combine(root, ".github"),
-            Path.Combine(root, "docs")
-        };
-        var rootFiles = new[]
-        {
-            Path.Combine(root, "IIoT.EdgeClient.slnx"),
-            Path.Combine(root, "Directory.Build.props"),
-            Path.Combine(root, "Directory.Build.targets"),
-            Path.Combine(root, "Directory.Packages.props")
-        };
-        var findings = activeRoots
-            .Where(Directory.Exists)
-            .SelectMany(path => Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
-            .Concat(rootFiles.Where(File.Exists))
-            .Where(path => !ShouldSkip(path))
-            .Where(path => activeTextExtensions.Contains(Path.GetExtension(path)))
-            .Where(path => !excludedTransitionFiles.Contains(Normalize(Path.GetRelativePath(root, path))))
-            .Where(path => retiredTokens.Any(token => File.ReadAllText(path).Contains(token, StringComparison.OrdinalIgnoreCase)))
-            .Select(path => Normalize(Path.GetRelativePath(root, path)))
-            .ToArray();
+        var evidenceGate = Path.Combine(root, "scripts", "tests", "Test-EdgeRetiredFeatureEvidence.ps1");
+        var evidenceFixtures = Path.Combine(root, "scripts", "tests", "Test-EdgeRetiredFeatureEvidenceFixtures.ps1");
+        Assert.True(File.Exists(evidenceGate), $"Missing retired feature evidence gate: {evidenceGate}");
+        Assert.True(File.Exists(evidenceFixtures), $"Missing retired feature evidence fixtures: {evidenceFixtures}");
 
-        Assert.Empty(findings);
+        var evidenceCommand = "run: ./scripts/tests/Test-EdgeRetiredFeatureEvidence.ps1 -RepositoryRoot .";
+        var fixtureCommand = "run: ./scripts/tests/Test-EdgeRetiredFeatureEvidenceFixtures.ps1 -RepositoryRoot .";
+        var workflows = new[]
+        {
+            Path.Combine(root, ".github", "workflows", "edge-smoke-build.yml"),
+            Path.Combine(root, ".github", "workflows", "edge-pack-modules.yml")
+        };
+        foreach (var workflow in workflows)
+        {
+            Assert.True(File.Exists(workflow), $"Missing workflow: {workflow}");
+            var workflowText = File.ReadAllText(workflow);
+            Assert.Equal(1, workflowText.Split(evidenceCommand, StringSplitOptions.None).Length - 1);
+            Assert.Equal(1, workflowText.Split(fixtureCommand, StringSplitOptions.None).Length - 1);
+
+            var evidenceIndex = workflowText.IndexOf(evidenceCommand, StringComparison.Ordinal);
+            var fixtureIndex = workflowText.IndexOf(fixtureCommand, StringComparison.Ordinal);
+            var restoreIndex = workflowText.IndexOf("name: Restore ", StringComparison.Ordinal);
+            Assert.True(evidenceIndex >= 0 && evidenceIndex < fixtureIndex,
+                $"Retired feature evidence must run before its negative fixtures: {workflow}");
+            Assert.True(fixtureIndex < restoreIndex,
+                $"Retired feature evidence must remain in preflight before restore/package work: {workflow}");
+        }
+
     }
 
     [GeneratedRegex("<Project\\s+Path=\"([^\"]+\\.csproj)\"", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
