@@ -63,6 +63,14 @@ jobs:
         shell: pwsh
         run: ./scripts/tests/Test-EdgeRegressionLedger.ps1 -RepositoryRoot .
 
+      - name: Validate Edge retired feature evidence
+        shell: pwsh
+        run: ./scripts/tests/Test-EdgeRetiredFeatureEvidence.ps1 -RepositoryRoot .
+
+      - name: Validate Edge retired feature evidence negative fixtures
+        shell: pwsh
+        run: ./scripts/tests/Test-EdgeRetiredFeatureEvidenceFixtures.ps1 -RepositoryRoot .
+
       - name: Validate Edge analyzer build fixtures
         shell: pwsh
         run: ./scripts/tests/Test-EdgeArchitectureAnalyzerFixtures.ps1 -RepositoryRoot . -Configuration Release

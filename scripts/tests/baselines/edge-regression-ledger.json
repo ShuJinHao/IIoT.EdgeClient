@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "ruleId": "EDGE-REGRESSION-LEDGER-001",
   "baselineCommit": "e92846eec7a4d4a3cf9b9d9f843d06244d2b40ff",
   "baselineTree": "d55eaadadda7fb2ce50110f42da67649e3c7f505",
@@ -29,6 +29,36 @@
     "EDGE-PLUGIN-LIFECYCLE-001",
     "EDGE-SQLITE-UOW-001",
     "EDGE-STARTUP-NONBLOCKING-001"
+  ],
+  "retirementEvidence": [
+    {
+      "ruleId": "EDGE-DIECUT-RETIRE-001",
+      "disposition": "retired-diecut",
+      "replacement": "decision:EDGE-DIECUT-RETIRE-001",
+      "expectedDeclarationCount": 41,
+      "sourceCommit": "e92846eec7a4d4a3cf9b9d9f843d06244d2b40ff",
+      "sourceTree": "d55eaadadda7fb2ce50110f42da67649e3c7f505",
+      "oldSourcePaths": [
+        "src/Tests/IIoT.Edge.Module.ContractTests/DieCuttingModuleContractTests.cs",
+        "src/Tests/IIoT.Edge.Module.ContractTests/ModuleDiscoveryContractTests.cs",
+        "src/Tests/IIoT.Edge.Shell.Tests/LogViewModelBehaviorTests.cs",
+        "src/Tests/IIoT.Edge.Shell.Tests/RepositoryHygieneTests.cs"
+      ],
+      "tokenPatterns": [
+        "(?i)die[\\s._/-]*cut(?:ting)?",
+        "(?i)polarity[\\s._/-]*specific",
+        "模切"
+      ],
+      "pathPatterns": [
+        "(?i)die[\\s._/-]*cut(?:ting)?",
+        "(?i)polarity[\\s._/-]*specific",
+        "模切"
+      ],
+      "allowedNonDocumentationPaths": [
+        "scripts/tests/Test-EdgeRegressionLedger.ps1",
+        "scripts/tests/baselines/edge-regression-ledger.json"
+      ]
+    }
   ],
   "entries": [
     {

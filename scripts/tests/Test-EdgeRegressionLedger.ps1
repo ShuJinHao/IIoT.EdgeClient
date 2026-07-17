@@ -14,6 +14,31 @@ $baselineCommit = 'e92846eec7a4d4a3cf9b9d9f843d06244d2b40ff'
 $baselineTree = 'd55eaadadda7fb2ce50110f42da67649e3c7f505'
 $baselineCaseCount = 1091
 $baselineDeclarationCount = 964
+$retirementRuleId = 'EDGE-DIECUT-RETIRE-001'
+$retirementDisposition = 'retired-diecut'
+$retirementReplacement = "decision:$retirementRuleId"
+$retirementExpectedDeclarationCount = 41
+$retirementReason = 'This declaration covered only the die-cutting feature that the user explicitly approved for complete physical deletion; no production implementation remains to exercise.'
+$retirementOldSourcePaths = @(
+    'src/Tests/IIoT.Edge.Module.ContractTests/DieCuttingModuleContractTests.cs',
+    'src/Tests/IIoT.Edge.Module.ContractTests/ModuleDiscoveryContractTests.cs',
+    'src/Tests/IIoT.Edge.Shell.Tests/LogViewModelBehaviorTests.cs',
+    'src/Tests/IIoT.Edge.Shell.Tests/RepositoryHygieneTests.cs'
+)
+$retirementTokenPatterns = @(
+    '(?i)die[\s._/-]*cut(?:ting)?',
+    '(?i)polarity[\s._/-]*specific',
+    '模切'
+)
+$retirementPathPatterns = @(
+    '(?i)die[\s._/-]*cut(?:ting)?',
+    '(?i)polarity[\s._/-]*specific',
+    '模切'
+)
+$retirementAllowedNonDocumentationPaths = @(
+    'scripts/tests/Test-EdgeRegressionLedger.ps1',
+    'scripts/tests/baselines/edge-regression-ledger.json'
+)
 
 if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
     $RepositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
@@ -30,6 +55,39 @@ function Get-Sha256([string[]]$Lines) {
     $payload = [string]::Join("`n", @($Lines | Sort-Object))
     $bytes = [Text.UTF8Encoding]::new($false).GetBytes($payload)
     return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+}
+
+function Assert-ExactStringSet {
+    param(
+        [Parameter(Mandatory)][object[]]$Actual,
+        [Parameter(Mandatory)][string[]]$Expected,
+        [Parameter(Mandatory)][string]$Label
+    )
+
+    $actualStrings = @($Actual | ForEach-Object { [string]$_ })
+    $actualUnique = @($actualStrings | Sort-Object -Unique)
+    $expectedUnique = @($Expected | Sort-Object -Unique)
+    if ($actualStrings.Count -ne $actualUnique.Count -or
+        $actualUnique.Count -ne $expectedUnique.Count -or
+        ($actualUnique -join "`n") -cne ($expectedUnique -join "`n")) {
+        throw "EDGE-REGRESSION-LEDGER-001 $Label drifted: expected=[$($expectedUnique -join ', ')] actual=[$($actualStrings -join ', ')]."
+    }
+}
+
+function Test-IsRetirementDeclaration([object]$Declaration) {
+    $identity = @(
+        [string]$Declaration.oldKey,
+        [string]$Declaration.oldSourcePath,
+        [string]$Declaration.oldClass,
+        [string]$Declaration.oldMethod
+    ) -join "`n"
+    foreach ($pattern in $retirementTokenPatterns) {
+        if ($identity -match $pattern) { return $true }
+    }
+    foreach ($pattern in $retirementPathPatterns) {
+        if ([string]$Declaration.oldSourcePath -match $pattern) { return $true }
+    }
+    return $false
 }
 
 function Invoke-Git([string[]]$Arguments) {
@@ -300,11 +358,10 @@ if ($Update) {
         $disposition = ''
         $replacement = ''
         $reason = ''
-        if ([string]$old.oldClass -match 'DieCutting' -or
-            [string]$old.oldMethod -match 'DieCutting|PolaritySpecific|SharedDieCutting') {
-            $disposition = 'retired-diecut'
-            $replacement = 'decision:EDGE-DIECUT-RETIRE-001'
-            $reason = 'This declaration covered only the die-cutting feature that the user explicitly approved for complete physical deletion; no production implementation remains to exercise.'
+        if (Test-IsRetirementDeclaration $old) {
+            $disposition = $retirementDisposition
+            $replacement = $retirementReplacement
+            $reason = $retirementReason
         } elseif ([string]$old.oldSourcePath -like '*/RepositoryHygieneTests.cs' -and
                   $repositoryHygieneMap.ContainsKey([string]$old.oldMethod)) {
             $replacement = [string]$repositoryHygieneMap[[string]$old.oldMethod]
@@ -365,7 +422,7 @@ if ($Update) {
     }
 
     $document = [pscustomobject][ordered]@{
-        schemaVersion = 2
+        schemaVersion = 3
         ruleId = 'EDGE-REGRESSION-LEDGER-001'
         baselineCommit = $baselineCommit
         baselineTree = $baselineTree
@@ -378,6 +435,18 @@ if ($Update) {
             attributes = @('Fact', 'Theory', 'AvaloniaFact', 'AvaloniaTheory')
         }
         requiredRegressionIds = $requiredRegressionIds
+        retirementEvidence = @([pscustomobject][ordered]@{
+            ruleId = $retirementRuleId
+            disposition = $retirementDisposition
+            replacement = $retirementReplacement
+            expectedDeclarationCount = $retirementExpectedDeclarationCount
+            sourceCommit = $baselineCommit
+            sourceTree = $baselineTree
+            oldSourcePaths = $retirementOldSourcePaths
+            tokenPatterns = $retirementTokenPatterns
+            pathPatterns = $retirementPathPatterns
+            allowedNonDocumentationPaths = $retirementAllowedNonDocumentationPaths
+        })
         entries = [object[]]$entries
     }
     [void](New-Item (Split-Path $LedgerPath -Parent) -ItemType Directory -Force)
@@ -389,12 +458,40 @@ if (-not (Test-Path $LedgerPath -PathType Leaf)) {
 }
 $ledger = Get-Content $LedgerPath -Raw | ConvertFrom-Json -Depth 40
 $entries = @($ledger.entries)
-if ([int]$ledger.schemaVersion -ne 2 -or [string]$ledger.ruleId -cne 'EDGE-REGRESSION-LEDGER-001' -or
+if ([int]$ledger.schemaVersion -ne 3 -or [string]$ledger.ruleId -cne 'EDGE-REGRESSION-LEDGER-001' -or
     [string]$ledger.baselineCommit -cne $baselineCommit -or [string]$ledger.baselineTree -cne $baselineTree -or
     [int]$ledger.baselineCaseCount -ne $baselineCaseCount -or
     [int]$ledger.baselineDeclarationCount -ne $baselineDeclarationCount -or $entries.Count -ne $baselineDeclarationCount -or
     [string]$ledger.baselineDeclarationSha256 -cne $baselineSha256) {
     throw 'EDGE-REGRESSION-LEDGER-001 schema, fixed-commit extraction, or declaration hash drifted.'
+}
+$retirementEvidenceProperty = $ledger.PSObject.Properties['retirementEvidence']
+if ($null -eq $retirementEvidenceProperty) {
+    throw 'EDGE-REGRESSION-LEDGER-001 retirement evidence is missing.'
+}
+$retirementEvidence = @($retirementEvidenceProperty.Value)
+if ($retirementEvidence.Count -ne 1) {
+    throw "EDGE-REGRESSION-LEDGER-001 retirement evidence count drifted: expected=1 actual=$($retirementEvidence.Count)."
+}
+$retirement = $retirementEvidence[0]
+if ([string]$retirement.ruleId -cne $retirementRuleId -or
+    [string]$retirement.disposition -cne $retirementDisposition -or
+    [string]$retirement.replacement -cne $retirementReplacement -or
+    [int]$retirement.expectedDeclarationCount -ne $retirementExpectedDeclarationCount -or
+    [string]$retirement.sourceCommit -cne $baselineCommit -or
+    [string]$retirement.sourceTree -cne $baselineTree) {
+    throw 'EDGE-REGRESSION-LEDGER-001 retirement evidence identity, frozen source, or expected count drifted.'
+}
+Assert-ExactStringSet -Actual @($retirement.oldSourcePaths) -Expected $retirementOldSourcePaths -Label 'retirement old source paths'
+Assert-ExactStringSet -Actual @($retirement.tokenPatterns) -Expected $retirementTokenPatterns -Label 'retirement token patterns'
+Assert-ExactStringSet -Actual @($retirement.pathPatterns) -Expected $retirementPathPatterns -Label 'retirement path patterns'
+Assert-ExactStringSet -Actual @($retirement.allowedNonDocumentationPaths) -Expected $retirementAllowedNonDocumentationPaths -Label 'retirement non-documentation allowlist'
+foreach ($pattern in @($retirement.tokenPatterns) + @($retirement.pathPatterns)) {
+    try {
+        [void][regex]::new([string]$pattern, [Text.RegularExpressions.RegexOptions]::CultureInvariant)
+    } catch {
+        throw "EDGE-REGRESSION-LEDGER-001 invalid retirement scan pattern '$pattern': $($_.Exception.Message)"
+    }
 }
 if ((@($ledger.requiredRegressionIds | ForEach-Object { [string]$_ } | Sort-Object) -join '|') -cne ($requiredRegressionIds -join '|')) {
     throw 'EDGE-REGRESSION-LEDGER-001 required RegressionId ledger drifted.'
@@ -415,6 +512,36 @@ foreach ($old in $baselineDeclarations) {
     }
 }
 
+$retirementCandidates = @($entries | Where-Object { Test-IsRetirementDeclaration $_ })
+$retirementDecisionEntries = @($entries | Where-Object {
+    [string]$_.disposition -ceq $retirementDisposition -or
+    [string]$_.replacement -ceq $retirementReplacement
+})
+if ($retirementCandidates.Count -ne $retirementExpectedDeclarationCount -or
+    $retirementDecisionEntries.Count -ne $retirementExpectedDeclarationCount) {
+    throw "EDGE-REGRESSION-LEDGER-001 retirement declaration count drifted: expected=$retirementExpectedDeclarationCount candidates=$($retirementCandidates.Count) decisions=$($retirementDecisionEntries.Count)."
+}
+Assert-ExactStringSet `
+    -Actual @($retirementCandidates | ForEach-Object { [string]$_.oldKey }) `
+    -Expected @($retirementDecisionEntries | ForEach-Object { [string]$_.oldKey }) `
+    -Label 'retirement declaration keys'
+Assert-ExactStringSet `
+    -Actual @($retirementCandidates | ForEach-Object { [string]$_.oldSourcePath } | Sort-Object -Unique) `
+    -Expected $retirementOldSourcePaths `
+    -Label 'retirement declaration source paths'
+foreach ($entry in $retirementCandidates) {
+    if ([string]$entry.disposition -cne $retirementDisposition -or
+        [string]$entry.replacement -cne $retirementReplacement) {
+        throw "EDGE-REGRESSION-LEDGER-001 retirement declaration has wrong disposition or decision: $($entry.oldKey)."
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$entry.reason)) {
+        throw "EDGE-REGRESSION-LEDGER-001 retirement declaration has no reviewed reason: $($entry.oldKey)."
+    }
+    if ($currentSet.Contains([string]$entry.oldKey)) {
+        throw "EDGE-REGRESSION-LEDGER-001 retired declaration returned to current discovery: $($entry.oldKey)."
+    }
+}
+
 $counts = @{}
 $analyzerText = @(Get-ChildItem (Join-Path $RepositoryRoot 'src/Analyzers') -Recurse -File -Filter '*.cs' |
     ForEach-Object { Get-Content $_.FullName -Raw }) -join "`n"
@@ -422,7 +549,7 @@ $analyzerTestText = @(Get-ChildItem (Join-Path $RepositoryRoot 'src/Tests/IIoT.E
     ForEach-Object { Get-Content $_.FullName -Raw }) -join "`n"
 foreach ($entry in $entries) {
     $disposition = [string]$entry.disposition
-    if ($disposition -notin @('retained-exact', 'moved-exact', 'replaced', 'retired-diecut', 'retired-doc-lock')) {
+    if ($disposition -notin @('retained-exact', 'moved-exact', 'replaced', $retirementDisposition, 'retired-doc-lock')) {
         throw "EDGE-REGRESSION-LEDGER-001 unsupported disposition '$disposition' for $($entry.oldKey)."
     }
     $counts[$disposition] = 1 + [int]($counts[$disposition] ?? 0)
@@ -450,9 +577,8 @@ foreach ($entry in $entries) {
             -not [IO.File]::ReadAllText($staticPath).Contains($staticMarker, [StringComparison]::Ordinal)) {
             throw "EDGE-REGRESSION-LEDGER-001 static replacement lacks file or marker evidence: $replacement."
         }
-    } elseif ($replacement -ceq 'decision:EDGE-DIECUT-RETIRE-001') {
-        if ($disposition -cne 'retired-diecut' -or
-            ([string]$entry.oldClass -notmatch 'DieCutting' -and [string]$entry.oldMethod -notmatch 'DieCutting|PolaritySpecific|SharedDieCutting')) {
+    } elseif ($replacement -ceq $retirementReplacement) {
+        if ($disposition -cne $retirementDisposition -or -not (Test-IsRetirementDeclaration $entry)) {
             throw "EDGE-REGRESSION-LEDGER-001 non-die-cutting declaration cannot use the retirement decision: $($entry.oldKey)."
         }
     } elseif ($replacement -ceq 'decision:EDGE-DOC-WORDING-RETIRE-001') {
@@ -472,10 +598,11 @@ foreach ($entry in $entries) {
 $retained = [int]($counts['retained-exact'] ?? 0)
 $moved = [int]($counts['moved-exact'] ?? 0)
 $replaced = [int]($counts['replaced'] ?? 0)
-$retired = [int]($counts['retired-diecut'] ?? 0)
+$retired = [int]($counts[$retirementDisposition] ?? 0)
 $retiredDocLock = [int]($counts['retired-doc-lock'] ?? 0)
 if ($retained + $moved + $replaced + $retired + $retiredDocLock -ne $baselineDeclarationCount -or
-    $retained -eq 0 -or $moved -eq 0 -or $replaced -eq 0 -or $retired -eq 0) {
+    $retained -eq 0 -or $moved -eq 0 -or $replaced -eq 0 -or
+    $retired -ne $retirementExpectedDeclarationCount) {
     throw 'EDGE-REGRESSION-LEDGER-001 disposition counts are incomplete.'
 }
 

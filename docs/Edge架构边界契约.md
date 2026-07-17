@@ -270,6 +270,7 @@ AnalyzerTests 必须是 Pure/Architecture 测试，不得启动 Shell、SQLite�
 
 - `edge-test-inventory.json`、`discovered-test-inventory.json` 和 `required-test-counts.json` 是唯一机器清单；普通 CI 只验证，不自动改写。
 - required 执行必须每项目独立 TRX/coverage，最终证明 `discovered = trxTotal = executed = passed = 1332`、`failed = skipped = 0`。
+- regression ledger 的退役证据必须是可执行契约，不是自由文本豁免。当前 `EDGE-DIECUT-RETIRE-001` 由 schema v3 精确绑定冻结 source commit/tree、41 条唯一旧声明、4 个历史源路径、受控 token/path pattern、`retired-diecut` disposition/decision、非空 reason 和 current discovery 零回流；非文档 active input 只允许 canonical ledger generator 与 ledger 两处命中。`Test-EdgeRetiredFeatureEvidence.ps1` 必须扫描生产/测试/UI/solution/project/config/`.github`/打包发布与全部其它脚本，第三处命中直接失败；独立 fixture 必须证明活动源码、第三治理文件、40/42、重复 oldKey、错误 disposition/decision 和旧声明回流均非零退出。该门禁只接入 smoke 与 runtime-pack 的 preflight，不新增发布入口，也不执行 package/release/deploy。
 - compatibility inventory 必须对 alias/adapter/wrapper/compat/legacy/shadow/obsolete/fallback/双写/影子候选逐项提供真实 consumer 证据与有期迁移窗口，并对每个真实声明精确登记 symbol/path/调用证据；宽 token disposition 不得掩护未登记 symbol。每个 `MigrationWindow` symbol 必须绑定唯一 window ID、replacement/deletion/latest removal 约束和逐 symbol 真实 coverage test；缺失/未知 window、token/path 不归属、无 coverage、零 consumer、新增 consumer、未分类或未登记候选直接失败。coverage test 必须是 required runner 中真实执行且 0 skipped 的行为测试，不得用空壳或注释代替。
 - duplication 分 production/test-support/tests 的 exact/near ratchet；coverage 覆盖所有 32 runner，并对 `EdgeMemoryCacheService` 和 `DataPipelineNonRetryableException` 设高风险阈值；mutation 固定 Domain Aggregate + MTP report-only 范围与证据，当前 baseline 必须与真实 report/trace 的全部状态数和重算 score 精确一致，伪分数或等总量状态漂移由独立 behavior fixture 拒绝。
 - RuntimeLayoutSync 等包含 Windows/Unix 分支的发布工具必须由同一 Deployment runner 显式覆盖两套平台决策；文件 mode 副作用以内部窄 seam 驱动 preserve/default/API-unavailable 分支，生产默认仍调用真实平台 API。coverage 不得通过平台源码排除、warning suppression 或降低 baseline 获得绿色。
@@ -278,7 +279,7 @@ AnalyzerTests 必须是 Pure/Architecture 测试，不得启动 Shell、SQLite�
 
 ## 11. CI 退出条件
 
-Windows required CI 必须在 25 分钟 hard timeout 内完成 Release build、Analyzer/project graph、正反 build fixture、source-quality、inventory/discovery、32 runner 执行、TRX/Skip 对账、coverage、compatibility、duplication、四类 baseline 相对不可变历史的单调校验和 regression ledger；mutation 使用独立 report job，并先执行伪分数/状态漂移 behavior fixture，不伪装成编译错误。故意执行非法 native build 的 PowerShell fixture 在完成全部断言后必须显式清零 `$LASTEXITCODE`，不得把预期失败残留为 job 失败。当前 macOS 工作树的 32 runner/TRX 对账已实测全绿；Windows 远端 job 与 Windows 实机 Installer/Velopack/DPI 验收在取得对应证据前不得写成已验证。
+Windows required CI 必须在 25 分钟 hard timeout 内完成 Release build、Analyzer/project graph、正反 build fixture、source-quality、inventory/discovery、32 runner 执行、TRX/Skip 对账、coverage、compatibility、duplication、四类 baseline 相对不可变历史的单调校验、regression ledger 以及退役功能 evidence/negative fixtures；mutation 使用独立 report job，并先执行伪分数/状态漂移 behavior fixture，不伪装成编译错误。故意执行非法 native build 的 PowerShell fixture 在完成全部断言后必须显式清零 `$LASTEXITCODE`，不得把预期失败残留为 job 失败。当前 macOS 工作树的 32 runner/TRX 对账已实测全绿；Windows 远端 job 与 Windows 实机 Installer/Velopack/DPI 验收在取得对应证据前不得写成已验证。
 
 宿主、SDK 与私有插件三仓拆分由审核通过后的 `Edge宿主SDK私有插件三仓拆分计划.md` 单独执行，不是当前测试批次、依赖或进度项。`deploy/Deploy-Changed.ps1` 是生产 CD 入口，不属于 required 测试 CI；本批不运行发布或部署。
 
