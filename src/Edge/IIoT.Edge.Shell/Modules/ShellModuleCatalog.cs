@@ -3,6 +3,7 @@ using IIoT.Edge.Host.Bootstrap.Modules;
 using IIoT.Edge.SharedKernel.Configuration;
 using Microsoft.Extensions.Configuration;
 using System.IO;
+using System.Security;
 
 namespace IIoT.Edge.Shell.Modules;
 
@@ -26,10 +27,20 @@ public interface IShellModuleCatalog
 public sealed class ShellModuleCatalog : IShellModuleCatalog
 {
     private readonly IModuleCatalog _moduleCatalog;
+    private readonly Func<string, string, string> _configuredPluginRootResolver;
 
     public ShellModuleCatalog(IModuleCatalog moduleCatalog)
+        : this(moduleCatalog, ResolveConfiguredPluginRoot)
+    {
+    }
+
+    internal ShellModuleCatalog(
+        IModuleCatalog moduleCatalog,
+        Func<string, string, string> configuredPluginRootResolver)
     {
         _moduleCatalog = moduleCatalog ?? throw new ArgumentNullException(nameof(moduleCatalog));
+        _configuredPluginRootResolver = configuredPluginRootResolver
+            ?? throw new ArgumentNullException(nameof(configuredPluginRootResolver));
     }
 
     public string GetPluginRootPath(string baseDirectory)
@@ -49,9 +60,9 @@ public sealed class ShellModuleCatalog : IShellModuleCatalog
         {
             try
             {
-                paths.Add(ResolveConfiguredPluginRoot(baseDirectory, configuredRoot));
+                paths.Add(_configuredPluginRootResolver(baseDirectory, configuredRoot));
             }
-            catch
+            catch (Exception ex) when (IsApprovedPathFailure(ex))
             {
                 // ShellConfigurationLoader records the detailed startup diagnostic.
                 // Catalog resolution must remain non-blocking even when invoked independently.
@@ -120,4 +131,11 @@ public sealed class ShellModuleCatalog : IShellModuleCatalog
 
     private static string ResolveConfiguredPluginRoot(string baseDirectory, string path)
         => EdgeClientProgramDataPaths.ResolveConfiguredPluginRoot(baseDirectory, path);
+
+    private static bool IsApprovedPathFailure(Exception exception)
+        => exception is ArgumentException
+            or NotSupportedException
+            or IOException
+            or UnauthorizedAccessException
+            or SecurityException;
 }

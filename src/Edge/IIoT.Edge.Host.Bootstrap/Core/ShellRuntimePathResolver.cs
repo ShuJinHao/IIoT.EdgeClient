@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Modules.Diagnostics;
+using IIoT.Edge.Host.Bootstrap;
 using IIoT.Edge.SharedKernel.Configuration;
 using Microsoft.Extensions.Configuration;
 using System.IO;
@@ -21,6 +22,33 @@ public interface IShellRuntimePathResolver
 
 public sealed class ShellRuntimePathResolver : IShellRuntimePathResolver
 {
+    private readonly Func<string, string, string> _profileDataRootResolver;
+    private readonly Func<string, string, string> _configuredRuntimeRootResolver;
+    private readonly Func<string, string, string> _fallbackCrashLogPathResolver;
+
+    public ShellRuntimePathResolver()
+        : this(
+            static (profileName, baseDirectory) =>
+                EdgeClientProgramDataPaths.ResolveProfileDataRoot(profileName, baseDirectory),
+            static (baseDirectory, path) => ResolvePath(baseDirectory, path),
+            static (profileName, baseDirectory) =>
+                EdgeClientProgramDataPaths.ResolveProfileFallbackCrashLogPath(profileName, baseDirectory))
+    {
+    }
+
+    internal ShellRuntimePathResolver(
+        Func<string, string, string> profileDataRootResolver,
+        Func<string, string, string> configuredRuntimeRootResolver,
+        Func<string, string, string> fallbackCrashLogPathResolver)
+    {
+        _profileDataRootResolver = profileDataRootResolver
+            ?? throw new ArgumentNullException(nameof(profileDataRootResolver));
+        _configuredRuntimeRootResolver = configuredRuntimeRootResolver
+            ?? throw new ArgumentNullException(nameof(configuredRuntimeRootResolver));
+        _fallbackCrashLogPathResolver = fallbackCrashLogPathResolver
+            ?? throw new ArgumentNullException(nameof(fallbackCrashLogPathResolver));
+    }
+
     public EdgeRuntimePaths Resolve(string baseDirectory, IConfiguration configuration)
         => ResolveWithDiagnostics(baseDirectory, configuration).RuntimePaths;
 
@@ -49,11 +77,11 @@ public sealed class ShellRuntimePathResolver : IShellRuntimePathResolver
         string defaultRuntimeDataRoot;
         try
         {
-            defaultRuntimeDataRoot = EdgeClientProgramDataPaths.ResolveProfileDataRoot(
+            defaultRuntimeDataRoot = _profileDataRootResolver(
                 profileName,
                 normalizedBaseDirectory);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (StartupExceptionBoundary.IsApprovedPathFailure(ex))
         {
             defaultRuntimeDataRoot = Path.Combine(
                 normalizedBaseDirectory,
@@ -70,9 +98,11 @@ public sealed class ShellRuntimePathResolver : IShellRuntimePathResolver
         {
             try
             {
-                runtimeDataRoot = ResolvePath(normalizedBaseDirectory, runtimeDataRootSetting);
+                runtimeDataRoot = _configuredRuntimeRootResolver(
+                    normalizedBaseDirectory,
+                    runtimeDataRootSetting);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (StartupExceptionBoundary.IsApprovedPathFailure(ex))
             {
                 issues.Add(StartupDiagnosticIssueFactory.Create(
                     "RUNTIME_DATA_ROOT_INVALID",
@@ -85,11 +115,11 @@ public sealed class ShellRuntimePathResolver : IShellRuntimePathResolver
         string fallbackCrashLogPath;
         try
         {
-            fallbackCrashLogPath = EdgeClientProgramDataPaths.ResolveProfileFallbackCrashLogPath(
+            fallbackCrashLogPath = _fallbackCrashLogPathResolver(
                 profileName,
                 normalizedBaseDirectory);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (StartupExceptionBoundary.IsApprovedPathFailure(ex))
         {
             fallbackCrashLogPath = Path.Combine(diagnosticsDirectory, "crash.fallback.log");
             issues.Add(StartupDiagnosticIssueFactory.Create(
@@ -113,7 +143,7 @@ public sealed class ShellRuntimePathResolver : IShellRuntimePathResolver
         return new ShellRuntimePathResolutionResult(runtimePaths, issues);
     }
 
-    private string ResolvePath(string baseDirectory, string path)
+    private static string ResolvePath(string baseDirectory, string path)
     {
         if (path.Contains('\0'))
         {

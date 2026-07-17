@@ -2,6 +2,7 @@ using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.SharedKernel.Configuration;
 using IIoT.Edge.Shell.Core;
 using Microsoft.Extensions.Configuration;
+using System.Security;
 using Xunit;
 
 namespace IIoT.Edge.Shell.FilesystemTests;
@@ -205,6 +206,165 @@ public sealed class ShellRuntimePathResolverBehaviorTests
         }
     }
 
+    [Theory]
+    [InlineData(typeof(ArgumentException))]
+    [InlineData(typeof(NotSupportedException))]
+    [InlineData(typeof(IOException))]
+    [InlineData(typeof(UnauthorizedAccessException))]
+    [InlineData(typeof(SecurityException))]
+    public void ResolveWithDiagnostics_WhenApprovedPathExceptionOccurs_ShouldUseSafeFallback(Type exceptionType)
+    {
+        var baseDirectory = Path.Combine(Path.GetTempPath(), "edge-runtime-resolver-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(baseDirectory);
+        try
+        {
+            var expected = (Exception)Activator.CreateInstance(exceptionType, "recoverable path failure")!;
+            var resolver = new ShellRuntimePathResolver(
+                (_, _) => throw expected,
+                (_, _) => Path.Combine(baseDirectory, "configured"),
+                (_, _) => Path.Combine(baseDirectory, "fallback-crash.log"));
+
+            var result = resolver.ResolveWithDiagnostics(
+                baseDirectory,
+                new ConfigurationBuilder().Build());
+
+            Assert.Equal(
+                Path.Combine(baseDirectory, "runtime-data", "Default"),
+                result.RuntimePaths.RuntimeDataRoot);
+            Assert.Contains(result.Issues, issue => issue.Code == "RUNTIME_DEFAULT_ROOT_INVALID");
+        }
+        finally
+        {
+            Directory.Delete(baseDirectory, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("configured", typeof(ArgumentException))]
+    [InlineData("configured", typeof(NotSupportedException))]
+    [InlineData("configured", typeof(IOException))]
+    [InlineData("configured", typeof(UnauthorizedAccessException))]
+    [InlineData("configured", typeof(SecurityException))]
+    [InlineData("fallback", typeof(ArgumentException))]
+    [InlineData("fallback", typeof(NotSupportedException))]
+    [InlineData("fallback", typeof(IOException))]
+    [InlineData("fallback", typeof(UnauthorizedAccessException))]
+    [InlineData("fallback", typeof(SecurityException))]
+    public void ResolveWithDiagnostics_WhenApprovedConfiguredOrFallbackPathExceptionOccurs_ShouldReportStableDiagnostic(
+        string boundary,
+        Type exceptionType)
+    {
+        var baseDirectory = Path.Combine(Path.GetTempPath(), "edge-runtime-resolver-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(baseDirectory);
+        try
+        {
+            var expected = (Exception)Activator.CreateInstance(exceptionType, "recoverable path failure")!;
+            var callCount = 0;
+            string ResolveOrThrow(string currentBoundary, string fallback)
+            {
+                if (!string.Equals(boundary, currentBoundary, StringComparison.Ordinal))
+                    return fallback;
+
+                callCount++;
+                throw expected;
+            }
+
+            var profileDefault = Path.Combine(baseDirectory, "profile-default");
+            var resolver = new ShellRuntimePathResolver(
+                (_, _) => profileDefault,
+                (_, _) => ResolveOrThrow("configured", Path.Combine(baseDirectory, "configured")),
+                (_, _) => ResolveOrThrow("fallback", Path.Combine(baseDirectory, "fallback-crash.log")));
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Shell:RuntimeDataRoot"] = "configured-root"
+                })
+                .Build();
+
+            var result = resolver.ResolveWithDiagnostics(baseDirectory, configuration);
+
+            Assert.Equal(1, callCount);
+            Assert.Contains(
+                result.Issues,
+                issue => issue.Code == (boundary == "configured"
+                    ? "RUNTIME_DATA_ROOT_INVALID"
+                    : "RUNTIME_FALLBACK_CRASH_PATH_INVALID"));
+            if (boundary == "configured")
+                Assert.Equal(profileDefault, result.RuntimePaths.RuntimeDataRoot);
+            else
+                Assert.Equal(
+                    Path.Combine(result.RuntimePaths.DiagnosticsDirectory, "crash.fallback.log"),
+                    result.RuntimePaths.FallbackCrashLogPath);
+        }
+        finally
+        {
+            Directory.Delete(baseDirectory, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("profile")]
+    [InlineData("configured")]
+    [InlineData("fallback")]
+    public void ResolveWithDiagnostics_WhenPathBoundaryThrowsUnknownException_ShouldPropagateSameInstanceExactlyOnce(
+        string boundary)
+    {
+        AssertPathBoundaryExceptionPropagates(
+            boundary,
+            new InvalidOperationException($"unexpected {boundary} failure"));
+    }
+
+    [Theory]
+    [InlineData("profile")]
+    [InlineData("configured")]
+    [InlineData("fallback")]
+    public void ResolveWithDiagnostics_WhenPathBoundaryThrowsOperationCanceledException_ShouldPropagateSameInstanceExactlyOnce(
+        string boundary)
+    {
+        AssertPathBoundaryExceptionPropagates(
+            boundary,
+            new OperationCanceledException($"{boundary} canceled"));
+    }
+
+    private static void AssertPathBoundaryExceptionPropagates(string boundary, Exception expected)
+    {
+        var baseDirectory = Path.Combine(Path.GetTempPath(), "edge-runtime-resolver-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(baseDirectory);
+        try
+        {
+            var callCount = 0;
+            string ResolveOrThrow(string currentBoundary, string fallback)
+            {
+                if (!string.Equals(boundary, currentBoundary, StringComparison.Ordinal))
+                    return fallback;
+
+                callCount++;
+                throw expected;
+            }
+
+            var resolver = new ShellRuntimePathResolver(
+                (_, _) => ResolveOrThrow("profile", Path.Combine(baseDirectory, "profile-default")),
+                (_, _) => ResolveOrThrow("configured", Path.Combine(baseDirectory, "configured")),
+                (_, _) => ResolveOrThrow("fallback", Path.Combine(baseDirectory, "fallback-crash.log")));
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Shell:RuntimeDataRoot"] = "configured-root"
+                })
+                .Build();
+
+            var actual = Assert.Throws(expected.GetType(), () =>
+                resolver.ResolveWithDiagnostics(baseDirectory, configuration));
+
+            Assert.Same(expected, actual);
+            Assert.Equal(1, callCount);
+        }
+        finally
+        {
+            Directory.Delete(baseDirectory, recursive: true);
+        }
+    }
+
     [Fact]
     public void Preflight_WhenRuntimeDataRootCannotBeCreated_ShouldUseFallbackAndReportDiagnosticIssue()
     {
@@ -277,6 +437,125 @@ public sealed class ShellRuntimePathResolverBehaviorTests
                 Directory.Delete(fallbackRoot, recursive: true);
             }
 
+            if (Directory.Exists(tempDirectory))
+                Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Preflight_WhenProbeReturnsUnknownException_ShouldPropagateSameInstanceExactlyOnce()
+    {
+        AssertPreflightProbeExceptionPropagates(new InvalidOperationException("unexpected probe failure"));
+    }
+
+    [Fact]
+    public void Preflight_WhenProbeReturnsOperationCanceledException_ShouldPropagateSameInstanceExactlyOnce()
+    {
+        AssertPreflightProbeExceptionPropagates(new OperationCanceledException("probe canceled"));
+    }
+
+    private static void AssertPreflightProbeExceptionPropagates(Exception expected)
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "edge-runtime-resolver-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var callCount = 0;
+            var runtimePaths = CreateRuntimePaths(tempDirectory, "UnknownProbe", Path.Combine(tempDirectory, "runtime"));
+
+            var actual = Assert.Throws(expected.GetType(), () =>
+                EdgeRuntimePathPreflight.EnsureWritable(
+                    runtimePaths,
+                    _ =>
+                    {
+                        callCount++;
+                        return expected;
+                    }));
+
+            Assert.Same(expected, actual);
+            Assert.Equal(1, callCount);
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Preflight_WhenPrimaryAndFallbackProbeFail_ShouldProbeEveryDirectoryAtMostOnce()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "edge-runtime-resolver-tests", Guid.NewGuid().ToString("N"));
+        var profileName = "SingleProbe-" + Guid.NewGuid().ToString("N");
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var fallbackBase = string.IsNullOrWhiteSpace(localAppData) ? Path.GetTempPath() : localAppData;
+        var fallbackRoot = Path.Combine(fallbackBase, "IIoT.Edge", "runtime-fallback", profileName);
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var runtimePaths = CreateRuntimePaths(tempDirectory, profileName, Path.Combine(tempDirectory, "runtime"));
+
+            var result = EdgeRuntimePathPreflight.EnsureWritable(
+                runtimePaths,
+                directory =>
+                {
+                    counts[directory] = counts.GetValueOrDefault(directory) + 1;
+                    return new IOException("probe denied");
+                });
+
+            Assert.Equal("RUNTIME_DATA_ROOT_UNAVAILABLE", Assert.Single(result.Issues).Code);
+            Assert.NotEmpty(counts);
+            Assert.All(counts, pair => Assert.Equal(1, pair.Value));
+        }
+        finally
+        {
+            if (Directory.Exists(fallbackRoot))
+                Directory.Delete(fallbackRoot, recursive: true);
+            if (Directory.Exists(tempDirectory))
+                Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(typeof(ArgumentException))]
+    [InlineData(typeof(NotSupportedException))]
+    [InlineData(typeof(IOException))]
+    [InlineData(typeof(UnauthorizedAccessException))]
+    [InlineData(typeof(SecurityException))]
+    public void Preflight_WhenApprovedPrimaryProbeFailureOccurs_ShouldUseFallbackExactlyOnce(Type exceptionType)
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "edge-runtime-resolver-tests", Guid.NewGuid().ToString("N"));
+        var profileName = "ApprovedProbe-" + Guid.NewGuid().ToString("N");
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var fallbackBase = string.IsNullOrWhiteSpace(localAppData) ? Path.GetTempPath() : localAppData;
+        var fallbackRoot = Path.Combine(fallbackBase, "IIoT.Edge", "runtime-fallback", profileName);
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var expected = (Exception)Activator.CreateInstance(exceptionType, "recoverable probe failure")!;
+            var primaryRoot = Path.Combine(tempDirectory, "runtime");
+            var primaryCallCount = 0;
+            var runtimePaths = CreateRuntimePaths(tempDirectory, profileName, primaryRoot);
+
+            var result = EdgeRuntimePathPreflight.EnsureWritable(
+                runtimePaths,
+                directory =>
+                {
+                    if (!string.Equals(directory, primaryRoot, StringComparison.OrdinalIgnoreCase))
+                        return null;
+
+                    primaryCallCount++;
+                    return expected;
+                });
+
+            Assert.Equal(1, primaryCallCount);
+            Assert.Equal("RUNTIME_DATA_ROOT_FALLBACK", Assert.Single(result.Issues).Code);
+            Assert.Equal(fallbackRoot, result.RuntimePaths.RuntimeDataRoot);
+        }
+        finally
+        {
+            if (Directory.Exists(fallbackRoot))
+                Directory.Delete(fallbackRoot, recursive: true);
             if (Directory.Exists(tempDirectory))
                 Directory.Delete(tempDirectory, recursive: true);
         }

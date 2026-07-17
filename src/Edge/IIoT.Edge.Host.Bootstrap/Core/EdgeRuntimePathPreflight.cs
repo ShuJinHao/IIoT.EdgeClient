@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Abstractions.Config;
 using IIoT.Edge.Application.Modules.Diagnostics;
+using IIoT.Edge.Host.Bootstrap;
 using IIoT.Edge.SharedKernel.Configuration;
 using System.IO;
 
@@ -33,7 +34,12 @@ public static class EdgeRuntimePathPreflight
         }
 
         var fallbackPaths = CreateFallbackRuntimePaths(runtimePaths);
-        if (TryPrepareRuntimeDirectories(fallbackPaths, directoryProbe, out _, out _))
+        var fallbackIsWritable = TryPrepareRuntimeDirectories(
+            fallbackPaths,
+            directoryProbe,
+            out var fallbackFailedPath,
+            out var fallbackException);
+        if (fallbackIsWritable)
         {
             return new EdgeRuntimePathPreflightResult(
                 fallbackPaths,
@@ -46,11 +52,6 @@ public static class EdgeRuntimePathPreflight
                 ]);
         }
 
-        TryPrepareRuntimeDirectories(
-            fallbackPaths,
-            directoryProbe,
-            out var fallbackFailedPath,
-            out var fallbackException);
         return new EdgeRuntimePathPreflightResult(
             runtimePaths,
             [
@@ -79,7 +80,7 @@ public static class EdgeRuntimePathPreflight
                 if (probeFailure is not null)
                     throw probeFailure;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (StartupExceptionBoundary.IsApprovedPathFailure(ex))
             {
                 failedPath = directory;
                 exception = ex;
@@ -106,7 +107,7 @@ public static class EdgeRuntimePathPreflight
             if (File.ReadAllBytes(targetPath) is not [0x31])
                 throw new IOException($"运行目录原子替换验证失败：{directory}");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (StartupExceptionBoundary.IsApprovedPathFailure(ex))
         {
             failure = ex;
         }
@@ -140,7 +141,7 @@ public static class EdgeRuntimePathPreflight
                 File.Delete(path);
             return null;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (StartupExceptionBoundary.IsApprovedPathFailure(ex))
         {
             return ex;
         }

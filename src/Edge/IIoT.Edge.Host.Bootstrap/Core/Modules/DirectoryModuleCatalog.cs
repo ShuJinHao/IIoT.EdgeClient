@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using System.IO;
 using System.Text.Json;
 using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Host.Bootstrap;
 
 namespace IIoT.Edge.Host.Bootstrap.Modules;
 
@@ -58,7 +59,7 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
             physicalPluginRoot = PluginPathBoundary.ResolveExistingPhysicalPath(pluginRootPath);
             pluginDirectories = Directory.EnumerateDirectories(pluginRootPath).ToArray();
         }
-        catch (Exception ex)
+        catch (Exception ex) when (StartupExceptionBoundary.IsApprovedPathFailure(ex))
         {
             return new ModuleCatalogDiscoveryResult(
                 [],
@@ -70,20 +71,11 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
         {
             try
             {
-                var physicalPluginDirectory = PluginPathBoundary.ResolveExistingPhysicalPath(pluginDirectory);
-                if (!PluginPathBoundary.IsWithin(physicalPluginRoot, physicalPluginDirectory))
-                {
-                    throw new InvalidOperationException(
-                        $"插件目录的真实路径越出插件根目录：{pluginDirectory}。");
-                }
-
-                var manifestPath = ResolvePluginManifestPath(physicalPluginDirectory);
-                if (manifestPath is null)
-                    continue;
-
-                descriptors.Add(LoadDescriptor(physicalPluginDirectory, manifestPath));
+                var descriptor = LoadDescriptor(pluginDirectory, physicalPluginRoot);
+                if (descriptor is not null)
+                    descriptors.Add(descriptor);
             }
-            catch (Exception ex)
+            catch (ModulePluginManifestException ex)
             {
                 issues.Add(new ModuleCatalogIssue(
                     "PLUGIN_MANIFEST_INVALID",
@@ -196,7 +188,7 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
                     pendingDescriptors.Remove(descriptor.ModuleId);
                     progressMade = true;
                 }
-                catch (Exception ex)
+                catch (ModulePluginLoadException ex)
                 {
                     issues.Add(new ModuleCatalogIssue(
                         "PLUGIN_LOAD_FAILED",
@@ -293,20 +285,48 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
         return result;
     }
 
-    private ModulePluginDescriptor LoadDescriptor(string pluginDirectory, string manifestPath)
+    private ModulePluginDescriptor? LoadDescriptor(string pluginDirectory, string physicalPluginRoot)
+    {
+        try
+        {
+            var physicalPluginDirectory = PluginPathBoundary.ResolveExistingPhysicalPath(pluginDirectory);
+            if (!PluginPathBoundary.IsWithin(physicalPluginRoot, physicalPluginDirectory))
+            {
+                throw new ModulePluginManifestException(
+                    $"插件目录的真实路径越出插件根目录：{pluginDirectory}。");
+            }
+
+            var manifestPath = ResolvePluginManifestPath(physicalPluginDirectory);
+            return manifestPath is null
+                ? null
+                : LoadDescriptorCore(physicalPluginDirectory, manifestPath);
+        }
+        catch (ModulePluginManifestException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (StartupExceptionBoundary.IsApprovedManifestFailure(ex))
+        {
+            throw new ModulePluginManifestException(
+                $"插件目录“{pluginDirectory}”的清单无法读取或解析：{ex.Message}",
+                ex);
+        }
+    }
+
+    private ModulePluginDescriptor LoadDescriptorCore(string pluginDirectory, string manifestPath)
     {
         var physicalPluginDirectory = PluginPathBoundary.ResolveExistingPhysicalPath(pluginDirectory);
         var physicalManifestPath = PluginPathBoundary.ResolveExistingPhysicalPath(manifestPath);
         if (!PluginPathBoundary.IsWithin(physicalPluginDirectory, physicalManifestPath))
         {
-            throw new InvalidOperationException(
+            throw new ModulePluginManifestException(
                 $"插件清单的真实路径越出 staged 目录：{manifestPath}。");
         }
 
         var manifest = JsonSerializer.Deserialize<ModulePluginManifest>(
             File.ReadAllText(physicalManifestPath),
             JsonOptions)
-            ?? throw new InvalidOperationException(
+            ?? throw new ModulePluginManifestException(
                 $"插件清单“{physicalManifestPath}”无法解析。");
 
         ValidateManifest(manifest, physicalManifestPath);
@@ -314,7 +334,7 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
         var entryAssemblyPath = ResolveEntryAssemblyPath(physicalPluginDirectory, manifest.EntryAssembly, manifest.ModuleId);
         if (!File.Exists(entryAssemblyPath))
         {
-            throw new InvalidOperationException(
+            throw new ModulePluginManifestException(
                 $"插件“{manifest.ModuleId}”的入口程序集“{manifest.EntryAssembly}”不存在：{entryAssemblyPath}。");
         }
 
@@ -348,7 +368,7 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
             !trimmedEntryAssembly.Equals(Path.GetFileName(trimmedEntryAssembly), StringComparison.Ordinal) ||
             !Path.GetExtension(trimmedEntryAssembly).Equals(".dll", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException(
+            throw new ModulePluginManifestException(
                 $"插件“{moduleId}”的 entryAssembly 必须是插件 staged 目录内的 DLL 单文件名：{entryAssembly}。");
         }
 
@@ -361,7 +381,7 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
         var entryAssemblyPath = PluginPathBoundary.ResolveExistingPhysicalPath(lexicalEntryAssemblyPath);
         if (!PluginPathBoundary.IsWithin(normalizedPluginDirectory, entryAssemblyPath))
         {
-            throw new InvalidOperationException(
+            throw new ModulePluginManifestException(
                 $"插件“{moduleId}”的 entryAssembly 越出 staged 目录：{entryAssembly}。");
         }
 
@@ -372,54 +392,54 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
     {
         if (string.IsNullOrWhiteSpace(manifest.ModuleId))
         {
-            throw new InvalidOperationException($"插件清单“{manifestPath}”缺少 moduleId。");
+            throw new ModulePluginManifestException($"插件清单“{manifestPath}”缺少 moduleId。");
         }
 
         if (string.IsNullOrWhiteSpace(manifest.DisplayName))
         {
-            throw new InvalidOperationException($"插件清单“{manifestPath}”缺少 displayName。");
+            throw new ModulePluginManifestException($"插件清单“{manifestPath}”缺少 displayName。");
         }
 
         if (string.IsNullOrWhiteSpace(manifest.Version))
         {
-            throw new InvalidOperationException($"插件清单“{manifestPath}”缺少 version。");
+            throw new ModulePluginManifestException($"插件清单“{manifestPath}”缺少 version。");
         }
 
         if (!ModulePluginHostRuntime.TryParseVersion(manifest.Version, out _))
         {
-            throw new InvalidOperationException($"插件清单“{manifestPath}”的 version 无效：{manifest.Version}。");
+            throw new ModulePluginManifestException($"插件清单“{manifestPath}”的 version 无效：{manifest.Version}。");
         }
 
         if (string.IsNullOrWhiteSpace(manifest.HostApiVersion))
         {
-            throw new InvalidOperationException($"插件清单“{manifestPath}”缺少 hostApiVersion。");
+            throw new ModulePluginManifestException($"插件清单“{manifestPath}”缺少 hostApiVersion。");
         }
 
         if (string.IsNullOrWhiteSpace(manifest.MinHostVersion)
             || !ModulePluginHostRuntime.TryParseVersion(manifest.MinHostVersion, out _))
         {
-            throw new InvalidOperationException($"插件清单“{manifestPath}”的 minHostVersion 无效：{manifest.MinHostVersion}。");
+            throw new ModulePluginManifestException($"插件清单“{manifestPath}”的 minHostVersion 无效：{manifest.MinHostVersion}。");
         }
 
         if (string.IsNullOrWhiteSpace(manifest.MaxHostVersion)
             || !ModulePluginHostRuntime.TryParseVersion(manifest.MaxHostVersion, out _))
         {
-            throw new InvalidOperationException($"插件清单“{manifestPath}”的 maxHostVersion 无效：{manifest.MaxHostVersion}。");
+            throw new ModulePluginManifestException($"插件清单“{manifestPath}”的 maxHostVersion 无效：{manifest.MaxHostVersion}。");
         }
 
         if (string.IsNullOrWhiteSpace(manifest.SupportedProcessType))
         {
-            throw new InvalidOperationException($"插件清单“{manifestPath}”缺少 supportedProcessType。");
+            throw new ModulePluginManifestException($"插件清单“{manifestPath}”缺少 supportedProcessType。");
         }
 
         if (string.IsNullOrWhiteSpace(manifest.EntryAssembly))
         {
-            throw new InvalidOperationException($"插件清单“{manifestPath}”缺少 entryAssembly。");
+            throw new ModulePluginManifestException($"插件清单“{manifestPath}”缺少 entryAssembly。");
         }
 
         if (string.IsNullOrWhiteSpace(manifest.EntryType))
         {
-            throw new InvalidOperationException($"插件清单“{manifestPath}”缺少 entryType。");
+            throw new ModulePluginManifestException($"插件清单“{manifestPath}”缺少 entryType。");
         }
     }
 

@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Modules.Diagnostics;
+using IIoT.Edge.Host.Bootstrap;
 using IIoT.Edge.Host.Bootstrap.Modules;
 using IIoT.Edge.SharedKernel.Configuration;
 using Microsoft.Extensions.Configuration;
@@ -198,7 +199,7 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
                     baseDirectory,
                     configuredRoot));
             }
-            catch (Exception ex)
+            catch (Exception ex) when (StartupExceptionBoundary.IsApprovedPathFailure(ex))
             {
                 issues.Add(StartupDiagnosticIssueFactory.Create(
                     "PLUGIN_ROOT_PATH_INVALID",
@@ -215,18 +216,7 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
             if (!Directory.Exists(pluginRoot))
                 continue;
 
-            ModuleCatalogDiscoveryResult discovery;
-            try
-            {
-                discovery = _moduleCatalog.DiscoverModules(pluginRoot);
-            }
-            catch (Exception ex)
-            {
-                issues.Add(StartupDiagnosticIssueFactory.Create(
-                    "PLUGIN_DEFAULT_DISCOVERY_FAILED",
-                    $"扫描插件默认配置失败，已继续启动：{pluginRoot}；{ex.Message}"));
-                continue;
-            }
+            var discovery = _moduleCatalog.DiscoverModules(pluginRoot);
 
             foreach (var discoveryIssue in discovery.Issues)
             {
@@ -308,7 +298,7 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
 
             return result;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (StartupExceptionBoundary.IsApprovedPathFailure(ex))
         {
             issues.Add(StartupDiagnosticIssueFactory.Create(
                 "PLUGIN_DEFAULT_ENUMERATION_FAILED",
@@ -364,9 +354,8 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
             Flatten(document.RootElement, parentPath: null, result);
             return result;
         }
-        catch (Exception ex) when (ex is IOException
-                                   or UnauthorizedAccessException
-                                   or JsonException)
+        catch (Exception ex) when (StartupExceptionBoundary.IsApprovedPathFailure(ex)
+                                   || ex is JsonException)
         {
             issues.Add(StartupDiagnosticIssueFactory.Create(
                 issueCode,
@@ -425,7 +414,7 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
         {
             return EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(machineProfile, baseDirectory);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (StartupExceptionBoundary.IsApprovedPathFailure(ex))
         {
             issues.Add(StartupDiagnosticIssueFactory.Create(
                 "MACHINE_PROFILE_EXTERNAL_PATH_INVALID",
@@ -454,7 +443,7 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
 
             File.Copy(sourcePath, targetPath, overwrite: false);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (StartupExceptionBoundary.IsApprovedPathFailure(ex))
         {
             issues.Add(StartupDiagnosticIssueFactory.Create(
                 "MACHINE_PROFILE_EXTERNAL_INITIALIZATION_FAILED",

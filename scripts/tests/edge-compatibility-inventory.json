@@ -1289,6 +1289,21 @@
     {
       "token": "fallback",
       "kind": "field",
+      "symbol": "_fallbackCrashLogPathResolver",
+      "declarationPath": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/ShellRuntimePathResolver.cs",
+      "status": "OrdinaryAbstraction",
+      "rationale": "Current per-profile crash-log path resolver seam invoked once by startup resolution; the public default constructor remains bound to the real program-data path API.",
+      "callEvidence": [
+        {
+          "path": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/ShellRuntimePathResolver.cs",
+          "pattern": "_fallbackCrashLogPathResolver\\(",
+          "expectedOccurrences": 1
+        }
+      ]
+    },
+    {
+      "token": "fallback",
+      "kind": "field",
       "symbol": "_defaultFallbackLogPathProvider",
       "declarationPath": "src/Edge/IIoT.Edge.Host.Bootstrap/Core/CrashLogWriter.cs",
       "status": "OrdinaryAbstraction",
@@ -2145,8 +2160,8 @@
       "status": "OrdinaryAbstraction",
       "rationale": "Fallback names the primary resilience channels (DataPipeline durable cascade, crash diagnostics, deterministic config/localization defaults) with live consumers; it does not select an obsolete alternate implementation.",
       "candidateCount": 115,
-      "occurrenceCount": 698,
-      "manifestSha256": "9b3a4bc97d88ebd838916c42cd82f07d0be5ee8a0bd71c2f47d3b49ae1f927e2",
+      "occurrenceCount": 705,
+      "manifestSha256": "a61c31772b5f5f1cb71a340c085d516309045fe5af8211027591816f8c071498",
       "callEvidence": [
         {
           "path": "src/Edge/IIoT.Edge.Host.DataPipeline/Tasks/ProcessQueueTask.cs",

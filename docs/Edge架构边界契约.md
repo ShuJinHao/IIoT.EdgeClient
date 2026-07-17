@@ -216,7 +216,7 @@ AnalyzerTests 必须是 Pure/Architecture 测试，不得启动 Shell、SQLite�
 
 ## 8. Edge 当前测试分类与物理归口
 
-`Regression` 只是 cross-cutting `RegressionId`，不是 TestKind 或物理项目。当前机器真值为 61 个 solution 项目、32 个 required runner、1 个中性插件 fixture，Release 发现 1280 case。Unit 只允许 `Pure + Parallel`；其他 Pure runner 也受控并行；Filesystem、SQLite、Avalonia 和 Windows runner 必须物理命名且串行。
+`Regression` 只是 cross-cutting `RegressionId`，不是 TestKind 或物理项目。当前机器真值为 61 个 solution 项目、32 个 required runner、1 个中性插件 fixture，Release 发现 1332 case。Unit 只允许 `Pure + Parallel`；其他 Pure runner 也受控并行；Filesystem、SQLite、Avalonia 和 Windows runner 必须物理命名且串行。
 
 | Required runner | TestKind | Runtime / mode | Cases |
 |---|---|---|---:|
@@ -236,7 +236,7 @@ AnalyzerTests 必须是 Pure/Architecture 测试，不得启动 Shell、SQLite�
 | `IIoT.Edge.Launcher.UiTests` | UI | Avalonia / Serial | 13 |
 | `IIoT.Edge.Launcher.UnitTests` | Unit | Pure / Parallel | 33 |
 | `IIoT.Edge.Mes.ContractTests` | Contract | Pure / Parallel | 23 |
-| `IIoT.Edge.Module.ConformanceTests` | Conformance | Filesystem / Serial | 59 |
+| `IIoT.Edge.Module.ConformanceTests` | Conformance | Filesystem / Serial | 77 |
 | `IIoT.Edge.Module.Homogenization.ConformanceFilesystemTests` | Conformance | Filesystem / Serial | 24 |
 | `IIoT.Edge.Module.Homogenization.ConformanceTests` | Conformance | Pure / Parallel | 13 |
 | `IIoT.Edge.Module.Homogenization.WorkflowFilesystemTests` | Workflow | Filesystem / Serial | 8 |
@@ -247,9 +247,9 @@ AnalyzerTests 必须是 Pure/Architecture 测试，不得启动 Shell、SQLite�
 | `IIoT.Edge.Plc.ContractNetworkTests` | Contract | Network / Serial | 5 |
 | `IIoT.Edge.Plc.ContractTests` | Contract | Pure / Parallel | 40 |
 | `IIoT.Edge.Runtime.WorkflowTests` | Workflow | Pure / Parallel | 249 |
-| `IIoT.Edge.Shell.FilesystemTests` | Integration | Filesystem / Serial | 32 |
+| `IIoT.Edge.Shell.FilesystemTests` | Integration | Filesystem / Serial | 65 |
 | `IIoT.Edge.Shell.UiTests` | UI | Avalonia / Serial | 122 |
-| `IIoT.Edge.Startup.IntegrationTests` | Integration | SQLite / Serial | 42 |
+| `IIoT.Edge.Startup.IntegrationTests` | Integration | SQLite / Serial | 43 |
 | `IIoT.Edge.UI.Shared.Tests` | UI | Avalonia / Serial | 17 |
 | `IIoT.Edge.Update.ContractTests` | Contract | Filesystem / Serial | 17 |
 
@@ -259,6 +259,7 @@ AnalyzerTests 必须是 Pure/Architecture 测试，不得启动 Shell、SQLite�
 
 - 通用插件生命周期只使用中性 `TestPlugin`，覆盖发现、装载、start/stop、DI release/dispose、capture → enqueue → callback 与取消。插件根配置含 NUL 或无法规范化时必须跨平台一致拒绝并非阻断回落默认根，不能接受 Windows 原生路径截断后的残缺目录。具体工序配置与打包契约只留在对应插件 runner。
 - Shell 运行数据根等启动期配置路径同样必须在平台路径 API 前及环境变量/token 展开后显式拒绝 NUL；无效值只产生 `RUNTIME_DATA_ROOT_INVALID` 等诊断并回落 profile 默认目录，不能利用 Windows/Unix 对非法字符的不同处理形成静默路径漂移或 fatal 启动。
+- 启动 filesystem/path adapter 的批准翻译集合精确为 `ArgumentException`、`NotSupportedException`、`IOException`、`UnauthorizedAccessException`、`SecurityException`；未知异常与直接 OCE 原实例传播。插件 manifest/load 使用两类显式 typed exception，批准的 JSON/reflection/assembly/filesystem 失败包装时保留 inner exception；配置层不得再外包 broad catalog catch，catalog 激活只处理 `ModulePluginLoadException`，独立有效插件继续装载。resolver/preflight 的 internal seam 只服务确定性测试，生产默认绑定真实 API，所有 probe/loader 单次执行。
 - SQLite/Persistence 已物理分为 Filesystem 与 SQLite isolated runner，并落地第 4 节的显式 UoW；覆盖 session 隔离/串行、flush rollback、跨聚合 commit、一次提交、每连接 pragma、外键、replace rollback 和主异常优先级。
 - DataPipeline 覆盖 accepted record 到 durable consumer、Cloud/MES active+queued 取消的逐项零丢失/零重复 shutdown 持久化、每通道单一总 deadline、存储成功返回后的 durable commit、停止钩子统一等待、记录出队后从开始/完成到失败/补偿/critical 降级的全部日志 best-effort、日志订阅者异常不丢记录/不改提交/不覆盖主异常、完整 critical payload 反序列化、critical 写失败 runtime fault、provider 自取消补偿、non-retryable exception、retry/fallback/deadletter 与 Cloud/MES 分离。MES HTTP 另以真实 in-flight handler 证明 caller cancellation 原样传播，transport/self-timeout 仍是普通失败。
 - 启动链对缺配置、PLC/MES/Cloud 不可达、IO/module profile 问题保持非阻断；取消测试使用 `TaskCompletionSource`/barrier 后显式 `Cancel`，不用几十毫秒机器时钟碰运气。
@@ -268,7 +269,7 @@ AnalyzerTests 必须是 Pure/Architecture 测试，不得启动 Shell、SQLite�
 ## 10. 清单、质量与兼容对账
 
 - `edge-test-inventory.json`、`discovered-test-inventory.json` 和 `required-test-counts.json` 是唯一机器清单；普通 CI 只验证，不自动改写。
-- required 执行必须每项目独立 TRX/coverage，最终证明 `discovered = trxTotal = executed = passed = 1280`、`failed = skipped = 0`。
+- required 执行必须每项目独立 TRX/coverage，最终证明 `discovered = trxTotal = executed = passed = 1332`、`failed = skipped = 0`。
 - compatibility inventory 必须对 alias/adapter/wrapper/compat/legacy/shadow/obsolete/fallback/双写/影子候选逐项提供真实 consumer 证据与有期迁移窗口，并对每个真实声明精确登记 symbol/path/调用证据；宽 token disposition 不得掩护未登记 symbol。每个 `MigrationWindow` symbol 必须绑定唯一 window ID、replacement/deletion/latest removal 约束和逐 symbol 真实 coverage test；缺失/未知 window、token/path 不归属、无 coverage、零 consumer、新增 consumer、未分类或未登记候选直接失败。coverage test 必须是 required runner 中真实执行且 0 skipped 的行为测试，不得用空壳或注释代替。
 - duplication 分 production/test-support/tests 的 exact/near ratchet；coverage 覆盖所有 32 runner，并对 `EdgeMemoryCacheService` 和 `DataPipelineNonRetryableException` 设高风险阈值；mutation 固定 Domain Aggregate + MTP report-only 范围与证据，当前 baseline 必须与真实 report/trace 的全部状态数和重算 score 精确一致，伪分数或等总量状态漂移由独立 behavior fixture 拒绝。
 - RuntimeLayoutSync 等包含 Windows/Unix 分支的发布工具必须由同一 Deployment runner 显式覆盖两套平台决策；文件 mode 副作用以内部窄 seam 驱动 preserve/default/API-unavailable 分支，生产默认仍调用真实平台 API。coverage 不得通过平台源码排除、warning suppression 或降低 baseline 获得绿色。

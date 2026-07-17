@@ -98,7 +98,7 @@ public sealed class ModuleDiscoveryContractTests
                 overwrite: true);
             using var resolver = new ModulePluginAssemblyResolver();
 
-            var exception = Assert.Throws<InvalidOperationException>(() =>
+            var exception = Assert.Throws<ModulePluginLoadException>(() =>
                 resolver.LoadAssembly(stagedAssemblyPath, pluginDirectory));
 
             Assert.Contains("未授权宿主程序集", exception.Message, StringComparison.Ordinal);
@@ -185,8 +185,10 @@ public sealed class ModuleDiscoveryContractTests
             _ = resolver.LoadAssembly(firstPath, firstDirectory);
             File.Delete(missingSecondPath);
 
-            Assert.Throws<FileNotFoundException>(() =>
+            var exception = Assert.Throws<ModulePluginLoadException>(() =>
                 resolver.LoadAssembly(missingSecondPath, secondDirectory));
+
+            Assert.IsType<FileNotFoundException>(exception.InnerException);
         }
         finally
         {

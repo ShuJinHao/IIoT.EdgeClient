@@ -199,6 +199,52 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
+    public void ConfiguredCatalog_WhenOneStagedPluginHasApprovedAssemblyFailure_ShouldLoadIndependentPlugin()
+    {
+        var pluginRoot = CreatePluginRuntimeRootFor("TestPlugin");
+        try
+        {
+            var brokenPluginDirectory = Path.Combine(pluginRoot, "BrokenPlugin");
+            Directory.CreateDirectory(brokenPluginDirectory);
+            File.WriteAllText(
+                Path.Combine(brokenPluginDirectory, "plugin.json"),
+                """
+                {
+                  "moduleId": "BrokenPlugin",
+                  "supportedProcessType": "BrokenProcess",
+                  "displayName": "Broken Plugin",
+                  "version": "1.0.0",
+                  "hostApiVersion": "1.0.0",
+                  "minHostVersion": "1.0.0",
+                  "maxHostVersion": "99.0.0",
+                  "dependencies": [],
+                  "entryAssembly": "BrokenPlugin.dll",
+                  "entryType": "BrokenPlugin.DependencyInjection"
+                }
+                """);
+            File.WriteAllText(
+                Path.Combine(brokenPluginDirectory, "BrokenPlugin.dll"),
+                "not a managed assembly");
+
+            var catalog = CreateShellModuleCatalog();
+            var discovery = catalog.DiscoverModules(pluginRoot);
+            var activation = catalog.CreateEnabledModules(
+                CreateConfiguration(["BrokenPlugin", "TestPlugin"]),
+                discovery.Modules);
+
+            Assert.Empty(discovery.Issues);
+            Assert.Equal(["TestPlugin"], activation.Modules.Select(module => module.ModuleId).ToArray());
+            var issue = Assert.Single(activation.Issues);
+            Assert.Equal("PLUGIN_LOAD_FAILED", issue.Code);
+            Assert.Equal("BrokenPlugin", issue.ModuleId);
+        }
+        finally
+        {
+            DeleteDirectory(pluginRoot);
+        }
+    }
+
+    [Fact]
     public void ConfiguredCatalog_WhenUnknownModuleIsConfigured_ShouldReportActivationIssue()
     {
         var pluginRoot = CreatePluginRuntimeRootFor("TestPlugin");

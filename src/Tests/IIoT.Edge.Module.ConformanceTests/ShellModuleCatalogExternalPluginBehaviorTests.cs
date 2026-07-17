@@ -2,6 +2,7 @@ using IIoT.Edge.Host.Bootstrap.Modules;
 using IIoT.Edge.SharedKernel.Configuration;
 using IIoT.Edge.Shell.Modules;
 using Microsoft.Extensions.Configuration;
+using System.Security;
 using System.Text;
 using Xunit;
 
@@ -109,6 +110,101 @@ public sealed class ShellModuleCatalogExternalPluginBehaviorTests
             Assert.Equal(
                 Path.Combine(tempDirectory, EdgeClientProgramDataPaths.PluginsDirectoryName),
                 Assert.Single(paths));
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Theory]
+    [InlineData(typeof(ArgumentException))]
+    [InlineData(typeof(NotSupportedException))]
+    [InlineData(typeof(IOException))]
+    [InlineData(typeof(UnauthorizedAccessException))]
+    [InlineData(typeof(SecurityException))]
+    public void GetPluginRootPaths_WhenResolverThrowsApprovedPathException_ShouldUseDefaultRootExactlyOnce(
+        Type exceptionType)
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Modules:PluginRoots:0"] = "configured-plugins"
+                })
+                .Build();
+            var expected = (Exception)Activator.CreateInstance(exceptionType, "recoverable configured-root failure")!;
+            var callCount = 0;
+            var catalog = new ShellModuleCatalog(
+                new DirectoryModuleCatalog(
+                    new ModulePluginLoader(new ModulePluginAssemblyResolver()),
+                    new ModulePluginCompatibilityPolicy()),
+                (_, _) =>
+                {
+                    callCount++;
+                    throw expected;
+                });
+
+            var paths = catalog.GetPluginRootPaths(hostDirectory, configuration);
+
+            Assert.Equal(1, callCount);
+            Assert.Equal(
+                Path.Combine(tempDirectory, EdgeClientProgramDataPaths.PluginsDirectoryName),
+                Assert.Single(paths));
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void GetPluginRootPaths_WhenResolverThrowsUnknownException_ShouldPropagateSameInstanceExactlyOnce()
+    {
+        AssertConfiguredRootResolverExceptionPropagates(
+            new InvalidOperationException("unexpected configured-root failure"));
+    }
+
+    [Fact]
+    public void GetPluginRootPaths_WhenResolverThrowsOperationCanceledException_ShouldPropagateSameInstanceExactlyOnce()
+    {
+        AssertConfiguredRootResolverExceptionPropagates(
+            new OperationCanceledException("configured-root canceled"));
+    }
+
+    private static void AssertConfiguredRootResolverExceptionPropagates(Exception expected)
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Modules:PluginRoots:0"] = "configured-plugins"
+                })
+                .Build();
+            var callCount = 0;
+            var catalog = new ShellModuleCatalog(
+                new DirectoryModuleCatalog(
+                    new ModulePluginLoader(new ModulePluginAssemblyResolver()),
+                    new ModulePluginCompatibilityPolicy()),
+                (_, _) =>
+                {
+                    callCount++;
+                    throw expected;
+                });
+
+            var actual = Assert.Throws(expected.GetType(), () =>
+                catalog.GetPluginRootPaths(hostDirectory, configuration));
+
+            Assert.Same(expected, actual);
+            Assert.Equal(1, callCount);
         }
         finally
         {

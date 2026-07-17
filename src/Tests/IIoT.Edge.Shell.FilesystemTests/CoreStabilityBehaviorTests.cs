@@ -1,6 +1,7 @@
 using IIoT.Edge.Shell.Core;
 using IIoT.Edge.SharedKernel.Configuration;
 using System.Text;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace IIoT.Edge.Shell.FilesystemTests;
@@ -193,5 +194,66 @@ public sealed class CrashLogWriterBehaviorTests
         catch
         {
         }
+    }
+}
+
+public sealed class StartupExceptionAllowlistSourceGuardTests
+{
+    private static readonly string[] GuardedSourcePaths =
+    [
+        "src/Edge/IIoT.Edge.Host.Bootstrap/Core/ShellConfigurationLoader.cs",
+        "src/Edge/IIoT.Edge.Host.Bootstrap/Core/ShellRuntimePathResolver.cs",
+        "src/Edge/IIoT.Edge.Host.Bootstrap/Core/Modules/DirectoryModuleCatalog.cs",
+        "src/Edge/IIoT.Edge.Host.Bootstrap/Core/Modules/ModulePluginLoader.cs",
+        "src/Edge/IIoT.Edge.Host.Bootstrap/Core/Modules/ModulePluginAssemblyResolver.cs",
+        "src/Edge/IIoT.Edge.Shell/Modules/ShellModuleCatalog.cs",
+        "src/Edge/IIoT.Edge.Host.Bootstrap/Core/EdgeRuntimePathPreflight.cs"
+    ];
+
+    [Fact]
+    public void StartupAdapterSources_ShouldNotContainUnfilteredCatchAll()
+    {
+        var repositoryRoot = FindRepositoryRoot();
+        foreach (var relativePath in GuardedSourcePaths)
+        {
+            var source = File.ReadAllText(Path.Combine(repositoryRoot, relativePath));
+
+            Assert.False(
+                Regex.IsMatch(source, @"catch\s*\{"),
+                $"Bare catch is forbidden in startup adapter source: {relativePath}");
+            Assert.False(
+                Regex.IsMatch(source, @"catch\s*\(\s*Exception\s+\w+\s*\)\s*\{"),
+                $"Unfiltered Exception catch is forbidden in startup adapter source: {relativePath}");
+        }
+    }
+
+    [Fact]
+    public void PluginCatalogSources_ShouldKeepTypedFailureBoundaryAndNoOuterDiscoveryFallback()
+    {
+        var repositoryRoot = FindRepositoryRoot();
+        var configurationLoaderSource = File.ReadAllText(Path.Combine(
+            repositoryRoot,
+            "src/Edge/IIoT.Edge.Host.Bootstrap/Core/ShellConfigurationLoader.cs"));
+        var directoryCatalogSource = File.ReadAllText(Path.Combine(
+            repositoryRoot,
+            "src/Edge/IIoT.Edge.Host.Bootstrap/Core/Modules/DirectoryModuleCatalog.cs"));
+
+        Assert.DoesNotContain("PLUGIN_DEFAULT_DISCOVERY_FAILED", configurationLoaderSource, StringComparison.Ordinal);
+        Assert.Contains("catch (ModulePluginManifestException ex)", directoryCatalogSource, StringComparison.Ordinal);
+        Assert.Contains("catch (ModulePluginLoadException ex)", directoryCatalogSource, StringComparison.Ordinal);
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "IIoT.EdgeClient.slnx")))
+                return directory.FullName;
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate IIoT.EdgeClient repository root.");
     }
 }

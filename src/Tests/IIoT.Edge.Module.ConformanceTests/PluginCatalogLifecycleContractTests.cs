@@ -1,4 +1,6 @@
+using IIoT.Edge.Application.Abstractions.Modules;
 using Microsoft.Extensions.Configuration;
+using System.Reflection;
 using System.Text.Json.Nodes;
 
 namespace IIoT.Edge.Module.ConformanceTests;
@@ -129,7 +131,7 @@ public sealed class PluginCatalogLifecycleContractTests
                 outsideDependencyPath);
             using var resolver = new ModulePluginAssemblyResolver();
 
-            var exception = Assert.Throws<InvalidOperationException>(() =>
+            var exception = Assert.Throws<ModulePluginLoadException>(() =>
                 resolver.LoadAssembly(entryAssemblyPath, pluginDirectory));
 
             Assert.Contains("依赖程序集", exception.Message, StringComparison.Ordinal);
@@ -313,6 +315,183 @@ public sealed class PluginCatalogLifecycleContractTests
         }
     }
 
+    [Fact]
+    public void CreateEnabledModules_WhenOnePluginHasApprovedLoadFailure_ShouldContinueIndependentPlugin()
+    {
+        var loader = new DelegatingModulePluginLoader(descriptor =>
+            descriptor.ModuleId == "BrokenPlugin"
+                ? throw new ModulePluginLoadException("approved plugin load failure")
+                : new StubProcessModule(descriptor.ModuleId, descriptor.ProcessType));
+        var catalog = new DirectoryModuleCatalog(loader, new ModulePluginCompatibilityPolicy());
+
+        var activation = catalog.CreateEnabledModules(
+            CreateEnabledConfiguration("BrokenPlugin", "HealthyPlugin"),
+            "Modules",
+            [CreateDescriptor("BrokenPlugin"), CreateDescriptor("HealthyPlugin")]);
+
+        Assert.Equal(["HealthyPlugin"], activation.Modules.Select(module => module.ModuleId).ToArray());
+        var issue = Assert.Single(activation.Issues);
+        Assert.Equal("PLUGIN_LOAD_FAILED", issue.Code);
+        Assert.Equal("BrokenPlugin", issue.ModuleId);
+        Assert.Equal(1, loader.GetCallCount("BrokenPlugin"));
+        Assert.Equal(1, loader.GetCallCount("HealthyPlugin"));
+    }
+
+    [Fact]
+    public void CreateEnabledModules_WhenLoaderThrowsUnknownException_ShouldPropagateSameInstanceExactlyOnce()
+    {
+        AssertActivationExceptionPropagates(new InvalidOperationException("unexpected loader failure"));
+    }
+
+    [Fact]
+    public void CreateEnabledModules_WhenLoaderThrowsOperationCanceledException_ShouldPropagateSameInstanceExactlyOnce()
+    {
+        AssertActivationExceptionPropagates(new OperationCanceledException("loader canceled"));
+    }
+
+    private static void AssertActivationExceptionPropagates(Exception expected)
+    {
+        var loader = new DelegatingModulePluginLoader(_ => throw expected);
+        var catalog = new DirectoryModuleCatalog(loader, new ModulePluginCompatibilityPolicy());
+
+        var actual = Assert.Throws(expected.GetType(), () =>
+            catalog.CreateEnabledModules(
+                CreateEnabledConfiguration("TestPlugin"),
+                "Modules",
+                [CreateDescriptor("TestPlugin")]));
+
+        Assert.Same(expected, actual);
+        Assert.Equal(1, loader.GetCallCount("TestPlugin"));
+    }
+
+    [Fact]
+    public void ModulePluginLoader_WhenResolverThrowsUnknownException_ShouldPropagateSameInstanceExactlyOnce()
+    {
+        AssertResolverExceptionPropagates(new InvalidOperationException("unexpected resolver failure"));
+    }
+
+    [Fact]
+    public void ModulePluginLoader_WhenResolverThrowsOperationCanceledException_ShouldPropagateSameInstanceExactlyOnce()
+    {
+        AssertResolverExceptionPropagates(new OperationCanceledException("resolver canceled"));
+    }
+
+    private static void AssertResolverExceptionPropagates(Exception expected)
+    {
+        var resolver = new ThrowingAssemblyResolver(expected);
+        var loader = new ModulePluginLoader(resolver);
+
+        var actual = Assert.Throws(expected.GetType(), () =>
+            loader.CreateModule(CreateDescriptor("TestPlugin")));
+
+        Assert.Same(expected, actual);
+        Assert.Equal(1, resolver.CallCount);
+    }
+
+    [Fact]
+    public void ModulePluginLoader_WhenEntryAssemblyIsInvalid_ShouldWrapApprovedAssemblyFailureAndPreserveInnerException()
+    {
+        var pluginDirectory = ContractTestPathHelper.CreateTempDirectory("edge-plugin-invalid-assembly-tests");
+        try
+        {
+            var assemblyPath = Path.Combine(pluginDirectory, "InvalidPlugin.dll");
+            File.WriteAllText(assemblyPath, "not a managed assembly");
+            var descriptor = CreateDescriptor("InvalidPlugin") with
+            {
+                PluginDirectory = pluginDirectory,
+                ManifestPath = Path.Combine(pluginDirectory, "plugin.json"),
+                EntryAssemblyPath = assemblyPath
+            };
+            var loader = new ModulePluginLoader(new ModulePluginAssemblyResolver());
+
+            var exception = Assert.Throws<ModulePluginLoadException>(() => loader.CreateModule(descriptor));
+
+            Assert.IsType<BadImageFormatException>(exception.InnerException);
+        }
+        finally
+        {
+            ContractTestPathHelper.DeleteDirectory(pluginDirectory);
+        }
+    }
+
+    [Theory]
+    [InlineData(typeof(BadImageFormatException))]
+    [InlineData(typeof(FileLoadException))]
+    [InlineData(typeof(FileNotFoundException))]
+    public void AssemblyResolver_WhenSharedLoaderThrowsApprovedAssemblyException_ShouldReturnNullExactlyOnce(
+        Type exceptionType)
+    {
+        var expected = (Exception)Activator.CreateInstance(exceptionType, "recoverable shared load failure")!;
+        var callCount = 0;
+        using var resolver = new ModulePluginAssemblyResolver(
+            _ => null,
+            _ =>
+            {
+                callCount++;
+                throw expected;
+            });
+
+        var assembly = resolver.ResolveSharedAssembly(new AssemblyName("Avalonia.Remote.Protocol"));
+
+        Assert.Null(assembly);
+        Assert.Equal(1, callCount);
+    }
+
+    [Fact]
+    public void AssemblyResolver_WhenSharedLoaderThrowsUnknownException_ShouldPropagateSameInstanceExactlyOnce()
+    {
+        AssertSharedAssemblyLoaderExceptionPropagates(new InvalidOperationException("unexpected shared load failure"));
+    }
+
+    [Fact]
+    public void AssemblyResolver_WhenSharedLoaderThrowsOperationCanceledException_ShouldPropagateSameInstanceExactlyOnce()
+    {
+        AssertSharedAssemblyLoaderExceptionPropagates(new OperationCanceledException("shared load canceled"));
+    }
+
+    private static void AssertSharedAssemblyLoaderExceptionPropagates(Exception expected)
+    {
+        var callCount = 0;
+        using var resolver = new ModulePluginAssemblyResolver(
+            _ => null,
+            _ =>
+            {
+                callCount++;
+                throw expected;
+            });
+
+        var actual = Assert.Throws(expected.GetType(), () =>
+            resolver.ResolveSharedAssembly(new AssemblyName("Avalonia.Remote.Protocol")));
+
+        Assert.Same(expected, actual);
+        Assert.Equal(1, callCount);
+    }
+
+    private static IConfiguration CreateEnabledConfiguration(params string[] moduleIds)
+    {
+        var values = moduleIds
+            .Select((moduleId, index) => new KeyValuePair<string, string?>($"Modules:Enabled:{index}", moduleId));
+        return new ConfigurationBuilder()
+            .AddInMemoryCollection(values)
+            .Build();
+    }
+
+    private static ModulePluginDescriptor CreateDescriptor(string moduleId)
+        => new(
+            moduleId,
+            moduleId + "Process",
+            moduleId,
+            "1.0.0",
+            ModulePluginHostRuntime.HostApiVersion,
+            "1.0.0",
+            "99.0.0",
+            [],
+            moduleId,
+            moduleId + ".DependencyInjection",
+            "/plugins/" + moduleId,
+            "/plugins/" + moduleId + "/plugin.json",
+            "/plugins/" + moduleId + "/" + moduleId + ".dll");
+
     private static string CreatePluginRoot(params string[] moduleIds)
     {
         return ContractTestPathHelper.CreatePluginRuntimeRoot(moduleIds);
@@ -322,4 +501,42 @@ public sealed class PluginCatalogLifecycleContractTests
         => new DirectoryModuleCatalog(
             new ModulePluginLoader(new ModulePluginAssemblyResolver()),
             new ModulePluginCompatibilityPolicy());
+
+    private sealed class DelegatingModulePluginLoader(
+        Func<ModulePluginDescriptor, IEdgeProcessModule> factory) : IModulePluginLoader
+    {
+        private readonly Dictionary<string, int> _callCounts = new(StringComparer.OrdinalIgnoreCase);
+
+        public IEdgeProcessModule CreateModule(ModulePluginDescriptor descriptor)
+        {
+            _callCounts[descriptor.ModuleId] = GetCallCount(descriptor.ModuleId) + 1;
+            return factory(descriptor);
+        }
+
+        public int GetCallCount(string moduleId) => _callCounts.GetValueOrDefault(moduleId);
+    }
+
+    private sealed class ThrowingAssemblyResolver(Exception exception) : IModulePluginAssemblyResolver
+    {
+        public int CallCount { get; private set; }
+
+        public Assembly LoadAssembly(string assemblyPath, string pluginDirectory)
+        {
+            CallCount++;
+            throw exception;
+        }
+    }
+
+    private sealed class StubProcessModule(string moduleId, string processType) : IEdgeProcessModule
+    {
+        public string ModuleId { get; } = moduleId;
+
+        public string ProcessType { get; } = processType;
+
+        public string DisplayName => ModuleId;
+
+        public void Configure(IEdgeProcessModuleBuilder builder)
+        {
+        }
+    }
 }

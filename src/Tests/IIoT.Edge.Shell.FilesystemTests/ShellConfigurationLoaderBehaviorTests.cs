@@ -1,5 +1,7 @@
+using IIoT.Edge.Host.Bootstrap.Modules;
 using IIoT.Edge.SharedKernel.Configuration;
 using IIoT.Edge.Shell.Core;
+using Microsoft.Extensions.Configuration;
 using System.Text;
 using Xunit;
 
@@ -630,6 +632,52 @@ public sealed class ShellConfigurationLoaderBehaviorTests
         }
     }
 
+    [Fact]
+    public void Load_WhenPluginDiscoveryThrowsUnknownException_ShouldPropagateSameInstanceExactlyOnce()
+    {
+        var expected = new InvalidOperationException("unexpected catalog failure");
+
+        AssertPluginDiscoveryExceptionPropagates(expected);
+    }
+
+    [Fact]
+    public void Load_WhenPluginDiscoveryThrowsOperationCanceledException_ShouldPropagateSameInstanceExactlyOnce()
+    {
+        var expected = new OperationCanceledException("catalog canceled");
+
+        AssertPluginDiscoveryExceptionPropagates(expected);
+    }
+
+    private static void AssertPluginDiscoveryExceptionPropagates(Exception expected)
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(tempDirectory, "plugins"));
+            WriteText(
+                Path.Combine(tempDirectory, "appsettings.json"),
+                """
+                {
+                  "Modules": {
+                    "Enabled": [ "TestPlugin" ],
+                    "PluginRoots": [ "plugins" ]
+                  }
+                }
+                """);
+            var catalog = new ThrowingModuleCatalog(expected);
+
+            var actual = Assert.Throws(expected.GetType(), () =>
+                new ShellConfigurationLoader(catalog).Load(tempDirectory));
+
+            Assert.Same(expected, actual);
+            Assert.Equal(1, catalog.DiscoverCallCount);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var path = Path.Combine(Path.GetTempPath(), "edge-shell-config-tests", Guid.NewGuid().ToString("N"));
@@ -682,5 +730,27 @@ public sealed class ShellConfigurationLoaderBehaviorTests
         catch
         {
         }
+    }
+
+    private sealed class ThrowingModuleCatalog(Exception exception) : IModuleCatalog
+    {
+        public int DiscoverCallCount { get; private set; }
+
+        public ModuleCatalogDiscoveryResult DiscoverModules(string pluginRootPath)
+        {
+            DiscoverCallCount++;
+            throw exception;
+        }
+
+        public ModuleCatalogActivationResult CreateEnabledModules(
+            IConfiguration configuration,
+            string sectionName,
+            IReadOnlyList<ModulePluginDescriptor> discoveredModules)
+            => throw new NotSupportedException();
+
+        public bool IsDiscoveredModule(
+            string moduleId,
+            IReadOnlyList<ModulePluginDescriptor> discoveredModules)
+            => throw new NotSupportedException();
     }
 }
