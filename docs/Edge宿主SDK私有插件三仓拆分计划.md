@@ -1,7 +1,7 @@
 # Edge 宿主、SDK 与私有插件三仓拆分计划
 
 > 版本：v0.3（单维护者、单真实链路版）
-> 状态：审核稿，尚未授权实施、建仓、发包或发布
+> 状态：Phase 0–5 已授权在既有 `IIoT.EdgeClient` 仓实施；Phase 6–10、建远端仓、远端发包、发布与部署未授权
 > 日期：2026-07-17
 > 当前范围：只定义 `IIoT.EdgeClient` 的拆分目标、批次、门禁与未来三仓协作方式
 > 权威上位规则：[总规则](../../docs/总规则.md)、[客户端规则](客户端规则.md)、[Edge 架构边界契约](Edge架构边界契约.md)、[Edge 客户端宿主插件分发契约](Edge客户端宿主插件分发契约.md)、[三项目测试架构治理总计划](../../docs/三项目测试架构治理总计划.md)
@@ -67,7 +67,7 @@
 
 - 当前 solution：61 个项目。
 - required runner：32 个。
-- Release 发现：1280 个测试，要求 `discovered = executed = passed`、`failed = 0`、`skipped = 0`。
+- Phase 0 guard 接入后的 Release 发现：1334 个测试（基线 1332，新增账本正例与负例门禁 2 个），要求 `discovered = executed = passed`、`failed = 0`、`skipped = 0`。
 - 中性插件 fixture：1 个，即 `src/Testing/IIoT.Edge.TestPlugin`；它只证明通用宿主机制，不证明 Homogenization 真实兼容。
 - Homogenization 真实测试当前包括 Conformance、Conformance Filesystem、Workflow、Workflow Filesystem 四类 runner。
 
@@ -383,6 +383,8 @@ API surface 和资源 key 比较不能证明插件页面能运行。真实 UI �
 
 每个批次默认只修改一个当时存在的仓库。进入三仓后，如某批需要跨仓写入，必须在该轮由用户明确列出允许写入的仓库/目录。任何批次失败都先停在当前 gate，不用兼容 wrapper 跨过去。
 
+Phase 0–5 的 Git 证据采用 implementation/evidence commit pair，不得在 ledger 中伪造自引用的最终 commit：先提交本 Phase 的实现、generator、schema、测试和文档形成 implementation commit；在该提交工作树 clean 时运行唯一 generator，状态采集只允许排除 canonical ledger 自身；再以仅包含 canonical ledger 的 evidence commit 收口。ledger 记录的是 implementation commit 的 HEAD/tree，commit-pair validator 必须证明当前 HEAD 恰好只多一个 ledger-only evidence commit，该 commit 的唯一 parent 是 recorded implementation HEAD、唯一差异是 canonical ledger，且最终工作树完全 clean；Phase 0 还必须在 E 上继续通过无参数 actual formal 与 post-E canonical/full gates，commit-pair validator 单独通过不构成收口。implementation commit 前或 evidence commit 前的 noncanonical/pending smoke 只用于调试，不得冒充 final canonical gate。Phase 2 另需在迁移实现前先提交独立 canonical snapshot；因此一个 Phase 是可审的有序提交单元，不等于永远只有一个 Git commit，也不得把这里的 Git 提交与业务 UoW 的 `CommitAsync` 混为一谈。
+
 Phase 6 至 Phase 9 是一次受控的仓库迁移窗口：期间不执行新的生产发布，现有现场仍运行迁移前已发布的不可变组合；Phase 9 恢复唯一正式发布入口后才解除发布冻结。若期间出现必须立即发布的现场修复，应中止尚未完成的迁移批次并回到迁移前 clean 基线处理，不长期维护新旧两套发布实现。
 
 ### Phase 0：冻结事实与机器账本
@@ -391,19 +393,35 @@ Phase 6 至 Phase 9 是一次受控的仓库迁移窗口：期间不执行新的
 
 工作：
 
-- 记录当前 clean HEAD、solution/project graph、测试 inventory、plugin manifest、正式发布 artifact 和 package 内容。
+- 按 implementation/evidence commit pair 记录真实 clean implementation HEAD/tree、solution/project graph、测试 inventory、plugin manifest、正式发布 artifact 和 package 内容；`cleanObserved` 必须由 generator 调用 `git status --porcelain` 实测，禁止从输入 JSON 复制。
 - 使用 MSBuild + Roslyn compilation 生成 Homogenization 依赖账本，不使用 namespace grep 代替。
+- 唯一 generator 固定为 `eng/Generate-EdgePluginContractLedger.ps1`，schema 固定为 `eng/edge-plugin-contract-ledger.schema.json`，canonical ledger 固定为 `eng/baselines/edge-plugin-contract-ledger.json`；Phase 0 冻结 baseline，Phase 1–5 每批都由同一 generator 读取“前一批 canonical ledger”并校验 immediate predecessor batch/digest，从其中继承 Phase 0 exact carry、推进 lifecycle 后原位重生成当前账本，禁止跳批、平行临时脚本或手写 JSON。
 - 对每个插件使用的外部 symbol 记录：源文件/行号、symbol、owner assembly、usage kind、目标处置、替代契约和保护测试。
+- 同时生成四个独立可重算依赖层：evaluated `ProjectReference`（输入 csproj、完整 item、owner family、总数/禁止数/未知数）、Roslyn forbidden symbols（完整 Compile 输入与 semantic usage）、候选程序集 PE `AssemblyRef`（输入程序集、完整引用、owner family、总数/禁止数/未知数）和插件 zip packaged assemblies（package hash、逐 entry hash/size、程序集归属、总数/禁止数/未知数）。Phase 0–3 的 package 层必须显式为 `not-applicable-before-EDGE-SPLIT-040`，不得把“未评估”伪装成 evaluated zero。
+- owner family 固定区分 Application、Domain、SharedKernel、Infrastructure、Presentation、Host、UiShared、SdkContract、Analyzer、PluginOwned、PlatformOrThirdParty 与 Unknown；四层输入明细、层内计数和 summary 四层计数均由 strict schema 与 validator 交叉重算，删字段、加未知字段和伪造 count 的负例必须失败。
 - 生成当前公开 ViewId/资源字典/页面 inventory。
-- 从真实发布位置取得 `Host API 1.0.0 + Homogenization 1.0.1` artifact、URL 和 SHA256；不存在真实发布字节时明确记为阻塞，不制造基线。
+- 从真实发布位置取得并首次逐字节验证 `Host API 1.0.0 + Homogenization 1.0.1` artifact、URL、size、SHA256 和插件 archive inventory；将已验证历史构成冻结进 authority input。正常可复现生成读取冻结证据，不依赖内网端点持续在线；只有显式 `-RefreshHistoricalArtifactEvidence` 才重新下载并逐项对账，刷新失败不得改写冻结结论或回退伪 artifact。
 - 冻结目标包名、目标 `hostApiVersion=2.0.0` 和三仓工作名。
+- formal closure 固定为 `I（本批全部实现、测试、schema、tracked docs） → clean I 上唯一 generator → ledger-only E → E 上 no-arg actual formal`。formal parent 固定 `param()`、固定仓根与 canonical ledger，不接受 ledger/root/command/fixture/skip override，不调用 generator；`E` 必须是 `I` 的唯一直接子提交，唯一变化为 mode `100644` 的 canonical ledger，committed blob 与 worktree bytes 精确相等。E 后不得补写 tracked 文档或代码。
+- actual formal 在 authority 前执行两次相等的 clean precondition，ledger 只绑定 clean I 且唯一 excluded path 为 canonical ledger；direct-child coordinator 必须产生 authority/replay `1/1` 的签名临时 machine-fact receipt，正式验证保持 `RequireFormal` 与 fast consumer 的两个 Require switches，随后验证 post-state、non-recursive exact cleanup 和最终收据原字节。该 receipt 不承载 reviewer、waiver、permission、manual approval 或 parallel authority 语义。
 
 完成门：
 
 - 未分类 symbol 为零。
 - 未知程序集依赖为零。
+- canonical ledger 必须由 clean implementation commit 可复现生成，唯一排除路径为 ledger 自身；evidence commit 只含该 ledger。当前 solution project、Compile source、runner/case、View/resource 与 manifest 数量只作为本次可重算观测值，不得硬编码成 Phase 1–5 的永久常量。
+- schema v2 先记录完整 semantic-evidence identity（源路径/位置、精确 symbol、symbol kind、完整 owner assembly identity 和 usage kind），再以 `sourcePath + ownerAssembly + symbol` 作为 carry item 的 canonical 聚合身份；occurrence 是该身份下层语义证据记录数，不是源码行数、标识符文本次数或只统计 invocation 的旧口径。本批审查接受的候选值为 `EDGE-SPLIT-020` 的 `Domain.Hardware + development-sample` 22 个 exact items / 122 个 semantic-evidence occurrences，以及 `EDGE-SPLIT-030` 的私有 Presentation seam 6 个 exact items / 11 个 semantic-evidence occurrences；只有 implementation/evidence pair、E 上 actual formal 与 post-E canonical/full gates 全部完成后才正式冻结，目标批次前必须 retained-exact，到目标批次必须 closed/zero。
+- `IIoT.Edge.UI.Shared` 是已批准的稳定 SDK UI surface；schema v2 候选账本中的 34 条 UiShared usages 作为稳定契约使用对账，不归入 `EDGE-SPLIT-030` 待移除 carry，不得因 Phase 3 打包/边界化重新标为 forbidden。
 - 当前测试发现、执行、失败、Skip 对账完成。
 - 真实旧组合 artifact 有可复验 digest；若当前尚未正式发布，则先完成合法发布基线或明确取消“上一正式版本兼容”结论。
+- actual formal 的 strict result 必须通过独立 schema v1，固定报告 I/E、ledger/receipt/public-key digest、authority/replay `1/1`、双 descriptor direct-child binding、两个 Require switches、post-state 与 cleanup；`cleanupComplete=true` 只表示受控临时 run root 已精确清理，不表示删除 final receipt。既有 request/descriptor/receipt/authority-result 四份 schema v1 不因新增 formal-result 而改写。
+- static/formal 终态必须由真实入口对账 11 sources、formal mutations `10/10`、formal-result `receiptPath='.artifacts/../x'` path-traversal schema negative `1/1` 与 legacy `87+22+3=112`。synthetic formal fixture 只能保护 schema/签名/ownership，不能替代 E 上无参数 actual formal。
+
+#### Phase 0 当前候选真值（2026-07-21 文档冻结前）
+
+- `actual formal=NOT_RUN`；`I/E=NOT_FORMED`；`Phase 0=NOT_CLOSED`。当前候选所有运行 gate 均为 `NOT_RUN`，不得引用旧 HEAD 或早期 source bytes 的通过记录冒充终态。
+- 本批没有新增 `[Fact]`，只是扩展既有 Architecture Fact；最近 1334 discovery 基线尚未对当前候选重新验证。旧四份 authority schema v1 保持原字节，新 formal-result 为独立 v1。
+- pre-I qualification 的精确命令与 F0 manifest key 见 `客户端架构治理清单.md` 第 0.1、8.1 节；结果只写固定工作区仓外 F0 checkpoint，不回写 ledger-only E 之后的 tracked docs。
 
 ### Phase 1：在当前仓抽取纯 Contracts 与 SDK
 
@@ -414,14 +432,14 @@ Phase 6 至 Phase 9 是一次受控的仓库迁移窗口：期间不执行新的
 - 创建目标 Contracts/SDK/UI/Analyzer 项目，但暂不建新 Git 仓。
 - 按账本逐个把真正跨边界的抽象、DTO 和通用基类迁入目标项目。
 - 宿主 Application 改为实现/消费 Contracts，而不是把 Application 自己暴露给插件。
-- 清除插件对 `Application.Features`、`Application.Modules` 和 `Application.Common` 实现的直接使用。
+- 清除插件对 `Application.Features`、`Application.Modules` 和 `Application.Common` 实现的直接使用，但只把通过 Phase 0 final evidence 正式冻结的 development-sample carry set 留给 `EDGE-SPLIT-020`；不得新增同批之外的延期项。
 - 清除 Module.Sdk 对宿主 Application/SharedKernel 的依赖；必要稳定 primitive 进入 Contracts，不把整个 SharedKernel 变成插件 API。
 - 建立公共 API 递归 Analyzer 和 ProjectReference gate。
 - 旧声明、旧 namespace 和临时 adapter 在 consumer 同批迁移后物理删除。
 
 完成门：
 
-- Homogenization 对 Application、Domain、Infrastructure、Host、Presentation 实现的 ProjectReference 为零。
+- Homogenization 除 Phase 0 final evidence 正式冻结的 `EDGE-SPLIT-020` 与 `EDGE-SPLIT-030` 两组精确 carry set 外，对 Application、Domain、Infrastructure、Host、Presentation 实现的 ProjectReference 与 symbol 使用为零；carry set 数量不得增长。
 - Module.Sdk 对宿主 Application/Domain/SharedKernel 的 ProjectReference 为零。
 - Analyzer 对别名、泛型、基类、attribute、DTO 闭包和跨文件泄漏都有正反 fixture。
 - 全仓原 required 测试保持真实绿；数量变化有 before/after 解释，0 Skip。
@@ -432,14 +450,20 @@ Phase 6 至 Phase 9 是一次受控的仓库迁移窗口：期间不执行新的
 
 工作：
 
+- Phase 1 clean/evidence 收口后、迁移代码前，先把旧实现的 canonical snapshot 作为独立 snapshot commit 冻结，建议唯一文件为 `eng/baselines/homogenization-hardware-development-sample-v1.json`。expected 必须由旧实现/旧 fixture 产生并人工复核，禁止由新 mapper 同源生成 expected/actual。snapshot 同时保存 input facts 与 materialized Domain 两层：1 台默认设备；40 条有序模板，其中 Read 35/Write 5、sort `1..35 + 101..105`、类别 10 交互/18 单点/12 连续；逐项保留 `resourceKey=null` 与 legacy remarks；并绑定同名设备复用、已有映射整套跳过、Reset 分支、UoW/commit 次数与异常结果。新 DTO normalization 与 Domain normalization 必须由独立测试/实现路径产生并分别对 snapshot；Reset/约束/级联部分必须使用真实 SQLite fixture，不能只用内存 repository。
 - 独立提取 Hardware/IO Template DTO 和 contributor port。
 - 宿主 Application 增加 DTO → Domain 的唯一 mapping/编排入口。
 - Homogenization 只声明真实模板事实，不读取/构造 Domain 聚合。
 - 对迁移前后真实模板和 materialized Domain 结果生成可复验 snapshot。
+- 冻结旧源码/EF 事实：`ResetBeforeImport=true` 时在 `GetHardwareProfile()` 之前删除当前数据库全部 `NetworkDeviceEntity`，并非仅删除 Homogenization；真实 EF 关系会 cascade 删除这些设备的全部 `IoMappingEntity`、`PlcTaskBindingEntity` 与 `DeviceParamEntity`。源码中的“旧匀浆样本”注释不能缩窄真实语义。任何将 reset 改成模块级/同名设备级或漏掉级联结果的行为都属于另行授权的业务变更，本迁移不得顺手实施。
+- 冻结正常路径事实：同名设备存在时复用；该设备只要存在任一 IO 映射，就整套模板跳过且不修复用户编辑；新设备写入与 IO 映射写入当前分别开启 UoW 并产生两次 durable commit。
+- 目标实现必须在一个显式 UoW/session/transaction 中完成 reset、设备与映射的组合写入；允许零到多次同 transaction 的 non-durable `FlushAsync`，但成功路径最多一次最终 durable `CommitAsync`。Reset 后同事务重建相同 `PlcCode` 可能碰 unique index，允许采用 delete Flush → add/identity Flush → mapping → final Commit 的顺序；设备写入、mapping/mapping-N 写入、任一 Flush 或 final Commit 失败都必须整体 rollback，不得留下旧级联数据只删一部分、设备已提交但映射未提交或新级联数据半成品。若现有 UoW 无法表达，先扩展正式 port/测试，禁止用第二次 durable commit 冒充原子性。
 
 完成门：
 
 - 第 5 节全部行为等价条件满足。
+- canonical snapshot 对迁移前后逐字段相等；同名设备复用、任一映射整套跳过、全库 Reset 且先于 hardware profile、SQLite 真实 cascade 清除 IoMappings/PlcTaskBindings/DeviceParams、相同 PlcCode 同 transaction 重建、正常路径一次 session/最多一次最终 durable commit、允许多次 non-durable Flush、每个故障点 rollback/零半成品均有独立行为测试。
+- final schema v2 canonical 将冻结 `EDGE-SPLIT-020` 的 22 个 exact items / 122 个 semantic-evidence occurrences；Phase 2 完成后该 carry lifecycle 必须 `closed` 且相关 Application/Domain owner 在 ProjectReference、Roslyn、PE 前三层全部归零。`EDGE-SPLIT-030` 的 6 个私有 Presentation exact items / 11 个 semantic-evidence occurrences 在 Phase 2 只能 retained-exact，不得增删、替换身份或提前伪归零；UiShared 稳定 surface 不属于该 carry。
 - 插件 metadata 中 `IIoT.Edge.Domain` 引用为零。
 - 没有新 repository、DbContext、事务或权限旁路。
 - 相关 Workflow/Conformance、Domain、Application、Persistence 测试全部通过。
@@ -452,12 +476,12 @@ Phase 6 至 Phase 9 是一次受控的仓库迁移窗口：期间不执行新的
 
 - 把当前 `Presentation.Navigation.PluginSystem` 中真正属于插件的 ViewId、View/ViewModel registration、resource registration 和导航请求迁入 SDK/UI 包。
 - 宿主 Presentation 只消费 UI registration 结果，不向插件暴露 Panels/Shell 实现。
-- 复核 `IIoT.Edge.UI.Shared` 的依赖闭包；宿主特有资源留宿主，插件公共资源进入 SDK UI，具体工序资源留插件。
+- 以 `IIoT.Edge.UI.Shared` 已批准的稳定 SDK UI surface 为输入完成打包和边界化；宿主特有资源留宿主，稳定共享 UI 契约进入 SDK UI，具体工序资源留插件。schema v2 的 34 条 UiShared usages 是 approved/stable 对账面，不得重分类为 Phase 3 forbidden carry。
 - 建立真实 View 枚举和 Headless runtime 门。
 
 完成门：
 
-- 插件对全部 `Presentation.*` ProjectReference 和 symbol 使用为零。
+- `EDGE-SPLIT-030` 的 6 个私有 Presentation exact items / 11 个 semantic-evidence occurrences 归零，插件对全部宿主私有 `Presentation.*` ProjectReference 和 symbol 使用为零；对 approved `IIoT.Edge.UI.Shared` 稳定契约的合法消费保留并由 package/API/runtime 门对账。
 - 插件全部真实 View 可以通过新契约注册、打开和释放。
 - 资源 key/API baseline 通过，同时真实 XAML runtime 门通过。
 - 原 Shell 导航、语言切换和当前启用插件 DataView 行为不变。
@@ -469,7 +493,7 @@ Phase 6 至 Phase 9 是一次受控的仓库迁移窗口：期间不执行新的
 工作：
 
 - 让目标 SDK 项目可 pack，生成真实 NuGet 包、符号包和 package metadata。
-- 建立唯一私有 package source；默认使用现有个人 GitHub 体系的私有 NuGet 源，若已有受控私有源则复用，但只能选一个权威源。
+- Phase 0–5 唯一 package source 固定为本批隔离本地 feed `artifacts/edge-sdk-feed`，不得远端发布；远端私有 NuGet 权威源留到 Phase 6 取得明确授权时只裁决一次，不得同时配置 GitHub Packages 与另一受控源。
 - 当前同仓过渡时先 pack 到隔离 feed，再让宿主和 Homogenization 以 PackageReference restore；不得保留同一 consumer 的 ProjectReference/PackageReference 双轨。
 - 改造唯一 `PackEdgePlugin` 为程序集/文件白名单。
 - 收紧宿主 resolver：共享列表只保留 SDK/UI 和批准的框架程序集，移除 Application、Domain、Presentation 等宿主内部程序集。
@@ -670,26 +694,44 @@ PR 不连接生产和现场。真实 PLC/MES/Cloud/Windows 现场属于 Release/
 
 ## 14. 批次验证命令
 
-以下现有命令继续作为当前 Edge 仓基线；每批按影响补跑，不能只选择窄单测后宣布完成：
+Phase 0 当前使用以下已存在入口分段执行；本节所有命令当前均为 `NOT_RUN`，不能只选择其中一段宣布完成。
+
+### 14.1 Dirty candidate qualification
 
 ```bash
-dotnet build IIoT.EdgeClient.slnx -c Release --no-restore -m:1 -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse
-pwsh -NoLogo -NoProfile -File scripts/tests/Get-EdgeTestInventory.ps1
-pwsh -NoLogo -NoProfile -File scripts/tests/Test-EdgeArchitectureProjectGraph.ps1 -RepositoryRoot . -SolutionPath IIoT.EdgeClient.slnx -Configuration Release
-pwsh -NoLogo -NoProfile -File scripts/tests/Test-EdgeArchitectureAnalyzerFixtures.ps1 -RepositoryRoot . -Configuration Release
-pwsh -NoLogo -NoProfile -File scripts/tests/Invoke-EdgeRequiredTests.ps1 -RepositoryRoot . -Configuration Release -ResultsDirectory artifacts/test-results -CollectCoverage -PureThrottle 4
-pwsh -NoLogo -NoProfile -File scripts/tests/Confirm-EdgeRequiredTestResults.ps1 -RepositoryRoot . -Configuration Release -ResultsDirectory artifacts/test-results
-pwsh -NoLogo -NoProfile -File scripts/tests/Test-EdgeCompatibilityInventory.ps1
-pwsh -NoLogo -NoProfile -File scripts/tests/Test-EdgeDuplicationBaseline.ps1
-pwsh -NoLogo -NoProfile -File scripts/TestEdgeDeploymentPreflight.ps1
+pwsh -NoLogo -NoProfile -NonInteractive -File scripts/tests/Test-EdgePluginContractStaticGuard.ps1 -RepositoryRoot .
+pwsh -NoLogo -NoProfile -File scripts/tests/Test-EdgePluginContractLedgerPrimitives.ps1 -RepositoryRoot .
+pwsh -NoLogo -NoProfile -NonInteractive -File scripts/tests/Test-EdgePluginContractAuthorityProtocol.ps1 -RepositoryRoot . -LedgerPath .artifacts/phase0-ledger-dev-3.json
+pwsh -NoLogo -NoProfile -NonInteractive -File scripts/tests/Invoke-EdgePluginContractDevelopmentValidation.ps1 -RepositoryRoot . -Configuration Release -CurrentBatch EDGE-SPLIT-000 -AuthorityTimeoutSeconds 900
+dotnet build src/Tests/IIoT.Edge.Architecture.Tests/IIoT.Edge.Architecture.Tests.csproj -c Release --no-restore -t:Rebuild --disable-build-servers --nologo -noAutoResponse /p:UseSharedCompilation=false /nodeReuse:false
+dotnet test src/Tests/IIoT.Edge.Architecture.Tests/IIoT.Edge.Architecture.Tests.csproj -c Release --no-build --no-restore --disable-build-servers --nologo --filter "FullyQualifiedName=IIoT.Edge.Architecture.Tests.EdgePluginContractLedgerTests.CanonicalLedgerValidator_ShouldRejectSemanticBypassFixtures"
 ```
 
-计划实施时拟新增的统一命令：
+顺序固定为 StaticGuard → Primitives → AuthorityProtocol synthetic → Development → forced rebuild/freshness → exact xUnit；synthetic 不得替代 actual formal。DLL freshness 与 F0 checkpoint 字段按 `客户端架构治理清单.md` 第 8.1 节执行。
+
+### 14.2 Clean `I` 上唯一 generator
+
+```bash
+pwsh -NoLogo -NoProfile -NonInteractive -File eng/Generate-EdgePluginContractLedger.ps1 -PluginProject src/Modules/IIoT.Edge.Module.Homogenization/IIoT.Edge.Module.Homogenization.csproj -OutputPath eng/baselines/edge-plugin-contract-ledger.json -Configuration Release -CurrentBatch EDGE-SPLIT-000
+```
+
+全部实现、测试、schema 和 tracked docs 必须先进入 clean 本地 `I`；generator 后只允许 canonical ledger 成为差异，当前仍禁止 push。
+
+### 14.3 Ledger-only `E` 与 actual formal
+
+```bash
+pwsh -NoLogo -NoProfile -NonInteractive -File scripts/tests/Test-EdgePluginContractLedger.ps1 -RepositoryRoot . -LedgerPath eng/baselines/edge-plugin-contract-ledger.json -CommitPairGateOnly
+pwsh -NoLogo -NoProfile -NonInteractive -File scripts/tests/Invoke-EdgePluginContractFormalValidation.ps1
+pwsh -NoLogo -NoProfile -NonInteractive -File scripts/tests/Test-EdgePluginContractLedger.ps1 -RepositoryRoot . -LedgerPath eng/baselines/edge-plugin-contract-ledger.json
+```
+
+第二条是 E 上 actual formal，必须保持无参数；第三条是 actual formal 成功后的 canonical validator。随后必须继续执行 `客户端架构治理清单.md` 第 8.4 节的 post-E full gates，才可评估 Phase 0 是否关闭。
+
+### 14.4 后续 Phase 命令
+
+以下唯一跨仓兼容入口属于后续 Phase，在对应实现创建前只保留为计划契约，不得写成当前已存在或已通过：
 
 ```powershell
-pwsh ./eng/Generate-EdgePluginContractLedger.ps1 `
-  -PluginProject <Homogenization.csproj> `
-  -OutputPath <contract-ledger.json>
 
 pwsh ./eng/Verify-EdgeSdkCompatibility.ps1 `
   -HostRepository <IIoT.EdgeClient> `
@@ -699,7 +741,7 @@ pwsh ./eng/Verify-EdgeSdkCompatibility.ps1 `
   -TargetRuntime win-x64
 ```
 
-上述名称是计划契约，脚本在对应 Phase 创建前不得被写入文档为“已存在/已通过”。
+Phase 0 不运行该未来入口，也不以它替代当前 I/E/formal/post-E 链。
 
 ## 15. 最终完成定义
 
@@ -719,13 +761,13 @@ pwsh ./eng/Verify-EdgeSdkCompatibility.ps1 `
 - 部署、Windows 实机、真实 PLC/MES/Cloud 或生产操作未执行时明确记录，未被 Headless、mock 或文档冒充完成。
 - 三仓对应规则、架构契约、部署文档和滚动复盘已更新，旧入口/死链/旧项目名零命中。
 
-## 16. 审核时只需拍板的事项
+## 16. Phase 0 候选的命名与版本事项
 
-本计划的技术方向已经闭合，审核只需确认以下四个命名/版本决策，不再重新讨论是否拆仓：
+以下四项已通过 Phase 0 审查并进入 schema v2 候选实现；当前仍未完成 `I → clean I 上 canonical 生成 → ledger-only E → E 上 commit-pair gate → E 上无参数 actual formal → post-E canonical/full gates` 证据链，因此不得提前称为 Phase 0 已正式冻结或收口。只有 actual formal 的 strict result 与 post-E full gates 同时通过后，Phase 0–5 才可消费该冻结输入且不得漂移：
 
-1. 三个远端仓库最终名称是否采用本文工作名。
-2. 私有 NuGet 源是否采用当前个人 GitHub Packages；只能保留一个权威源。
-3. 新契约代际是否固定为 `hostApiVersion=2.0.0`。
-4. 当前真实 `Host API 1.0.0 + Homogenization 1.0.1` 是否已有可下载不可变 artifact；没有时先补正式基线，再开始破坏性代际迁移。
+1. 三个目标仓名采用 `IIoT.EdgeClient`、`IIoT.Edge.Sdk`、`IIoT.Edge.Plugins.Private`。
+2. Phase 0–5 只用 `artifacts/edge-sdk-feed` 隔离本地源且禁止远端发布；Phase 6 再取得授权裁决唯一远端私有源。
+3. 新契约代际固定为 `hostApiVersion=2.0.0`。
+4. 旧组合候选固定为正式 Host `1.0.29 / API 1.0.0` 与 Homogenization `1.0.1`：catalog、manifest、Setup 与插件 zip 的 URL、bytes、SHA256、source commit 和旧包内容须由 final canonical ledger 复验。
 
-审核通过后从 Phase 0 开始，不允许跳过契约账本直接移动仓库。
+E 上无参数 actual formal 与 post-E canonical/full gates 全部完成后，Phase 0–5 才能按序消费该账本；不得用 final validator、synthetic、旧 gate 或文档结论单独闭合证据链，也不允许跳过或扩大 carry set。Phase 6 之后仍需用户另行授权。

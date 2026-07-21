@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://iiot.local/schemas/edge-phase-close-evidence.schema.json",
+  "title": "Edge phase-close external test evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "ruleId",
+    "batchId",
+    "evidenceHead",
+    "canonicalLedger",
+    "source",
+    "reconciliation"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "ruleId": { "const": "EDGE-SPLIT-EVIDENCE-001" },
+    "batchId": { "$ref": "#/$defs/batchId" },
+    "evidenceHead": { "$ref": "#/$defs/gitObject" },
+    "canonicalLedger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "batchId"],
+      "properties": {
+        "path": { "const": "eng/baselines/edge-plugin-contract-ledger.json" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "batchId": { "$ref": "#/$defs/batchId" }
+      }
+    },
+    "source": {
+      "oneOf": [
+        { "$ref": "#/$defs/localSource" },
+        { "$ref": "#/$defs/requiredCiSource" }
+      ]
+    },
+    "reconciliation": { "$ref": "#/$defs/reconciliation" }
+  },
+  "$defs": {
+    "gitObject": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "batchId": {
+      "enum": ["EDGE-SPLIT-000", "EDGE-SPLIT-010", "EDGE-SPLIT-020", "EDGE-SPLIT-030", "EDGE-SPLIT-040", "EDGE-SPLIT-050"]
+    },
+    "repositoryPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:[\\\\/])(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$"
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runnerId", "path", "size", "sha256", "format"],
+      "properties": {
+        "runnerId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]+$" },
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "size": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "format": { "const": "trx" }
+      }
+    },
+    "localSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "recordedHead", "artifacts"],
+      "properties": {
+        "type": { "const": "local-trx-manifest" },
+        "recordedHead": { "$ref": "#/$defs/gitObject" },
+        "artifacts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/artifact" },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "requiredCiSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "recordedHead", "workflowRunUrl", "workflowRunId", "workflowRunAttempt", "artifacts"],
+      "properties": {
+        "type": { "const": "required-ci" },
+        "recordedHead": { "$ref": "#/$defs/gitObject" },
+        "workflowRunUrl": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://github\\.com/[^/]+/[^/]+/actions/runs/[0-9]+$"
+        },
+        "workflowRunId": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+        "workflowRunAttempt": { "type": "integer", "minimum": 1 },
+        "artifacts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/artifact" },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "reconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requiredRunnerCount", "artifactCount", "discovered", "executed", "passed", "failed", "skipped"],
+      "properties": {
+        "requiredRunnerCount": { "type": "integer", "minimum": 1 },
+        "artifactCount": { "type": "integer", "minimum": 1 },
+        "discovered": { "type": "integer", "minimum": 1 },
+        "executed": { "type": "integer", "minimum": 1 },
+        "passed": { "type": "integer", "minimum": 1 },
+        "failed": { "const": 0 },
+        "skipped": { "const": 0 }
+      }
+    }
+  }
+}

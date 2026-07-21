@@ -1,0 +1,972 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://iiot.local/schemas/edge-plugin-contract-ledger.schema.json",
+  "title": "Edge plugin contract ledger",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "ruleId",
+    "batchId",
+    "sourceState",
+    "frozenPhase0Source",
+    "decisions",
+    "solutionInventory",
+    "testInventory",
+    "pluginManifest",
+    "publishedComposition",
+    "msbuildCompilation",
+    "viewInventory",
+    "pageInventory",
+    "resourceInventory",
+    "referenceAssemblies",
+    "externalSymbolUsages",
+    "dependencyLayers",
+    "carrySets",
+    "summary",
+    "integrity"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 2 },
+    "ruleId": { "const": "EDGE-SPLIT-LEDGER-001" },
+    "batchId": {
+      "enum": ["EDGE-SPLIT-000", "EDGE-SPLIT-010", "EDGE-SPLIT-020", "EDGE-SPLIT-030", "EDGE-SPLIT-040", "EDGE-SPLIT-050"]
+    },
+    "sourceState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["head", "tree", "originMain", "cleanObserved", "dirtyPaths", "excludedPaths", "observationMethod", "generationProtocol", "pluginSourceDriftFromHead"],
+      "properties": {
+        "head": { "$ref": "#/$defs/gitObject" },
+        "tree": { "$ref": "#/$defs/gitObject" },
+        "originMain": { "$ref": "#/$defs/gitObject" },
+        "cleanObserved": { "type": "boolean" },
+        "dirtyPaths": { "$ref": "#/$defs/pathArray" },
+        "excludedPaths": { "$ref": "#/$defs/pathArray" },
+        "observationMethod": { "const": "git-status-porcelain-v1" },
+        "generationProtocol": { "const": "clean-implementation-head-plus-ledger-evidence-commit" },
+        "pluginSourceDriftFromHead": { "$ref": "#/$defs/pathArray" }
+      }
+    },
+    "frozenPhase0Source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["head", "tree", "originMainAtFreeze", "pullRequest", "pluginSourceDriftFromFrozenHead"],
+      "properties": {
+        "head": { "$ref": "#/$defs/gitObject" },
+        "tree": { "$ref": "#/$defs/gitObject" },
+        "originMainAtFreeze": { "$ref": "#/$defs/gitObject" },
+        "pullRequest": { "type": "string", "format": "uri" },
+        "pluginSourceDriftFromFrozenHead": { "$ref": "#/$defs/pathArray" }
+      }
+    },
+    "decisions": { "$ref": "#/$defs/decisions" },
+    "solutionInventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["solutionPath", "projectCount", "projects"],
+      "properties": {
+        "solutionPath": { "$ref": "#/$defs/repositoryPath" },
+        "projectCount": { "type": "integer", "minimum": 1 },
+        "projects": { "$ref": "#/$defs/pathArray" }
+      }
+    },
+    "testInventory": { "$ref": "#/$defs/testInventory" },
+    "pluginManifest": { "$ref": "#/$defs/pluginManifest" },
+    "publishedComposition": { "$ref": "#/$defs/publishedComposition" },
+    "msbuildCompilation": { "$ref": "#/$defs/msbuildCompilation" },
+    "viewInventory": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/viewInventoryItem" },
+      "uniqueItems": true
+    },
+    "pageInventory": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/pageInventoryItem" },
+      "uniqueItems": true
+    },
+    "resourceInventory": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/resourceInventoryItem" },
+      "uniqueItems": true
+    },
+    "referenceAssemblies": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/referenceAssembly" },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "externalSymbolUsages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourcePath",
+          "line",
+          "column",
+          "symbol",
+          "symbolKind",
+          "ownerAssembly",
+          "ownerAssemblyVersion",
+          "ownerAssemblyCulture",
+          "ownerAssemblyPublicKeyToken",
+          "containingNamespace",
+          "usageKind",
+          "ownerFamily",
+          "classification",
+          "disposition",
+          "removalBatch",
+          "replacementContract",
+          "protectionTest",
+          "forbiddenForSourceLayer"
+        ],
+        "properties": {
+          "sourcePath": { "$ref": "#/$defs/repositoryPath" },
+          "line": { "type": "integer", "minimum": 1 },
+          "column": { "type": "integer", "minimum": 1 },
+          "symbol": { "type": "string", "minLength": 1 },
+          "symbolKind": { "type": "string", "minLength": 1 },
+          "ownerAssembly": { "type": "string", "minLength": 1 },
+          "ownerAssemblyVersion": { "type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+){1,3}$" },
+          "ownerAssemblyCulture": { "type": "string", "pattern": "^(?:neutral|[A-Za-z0-9-]+)$" },
+          "ownerAssemblyPublicKeyToken": { "type": "string", "pattern": "^(?:none|[0-9a-f]{16})$" },
+          "containingNamespace": { "type": "string" },
+          "usageKind": { "type": "string", "minLength": 1 },
+          "ownerFamily": { "$ref": "#/$defs/ownerFamily" },
+          "classification": { "type": "string", "minLength": 1 },
+          "disposition": { "type": "string", "minLength": 1 },
+          "removalBatch": { "type": ["string", "null"] },
+          "replacementContract": { "type": "string", "minLength": 1 },
+          "protectionTest": { "type": "string", "minLength": 1 },
+          "forbiddenForSourceLayer": { "type": "boolean" }
+        }
+      }
+    },
+    "dependencyLayers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evaluatedProjectReferences", "roslynForbiddenSymbols", "peAssemblyReferences", "sdkUiContractClosures", "packagedAssemblies"],
+      "properties": {
+        "evaluatedProjectReferences": { "$ref": "#/$defs/evaluatedLayer" },
+        "roslynForbiddenSymbols": { "$ref": "#/$defs/roslynLayer" },
+        "peAssemblyReferences": { "$ref": "#/$defs/peLayer" },
+        "sdkUiContractClosures": { "$ref": "#/$defs/contractSurfaceLayer" },
+        "packagedAssemblies": { "$ref": "#/$defs/packageLayer" }
+      }
+    },
+    "carrySets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["EDGE-SPLIT-020", "EDGE-SPLIT-030"],
+      "properties": {
+        "EDGE-SPLIT-020": { "$ref": "#/$defs/carrySet" },
+        "EDGE-SPLIT-030": { "$ref": "#/$defs/carrySet" }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "externalSymbolUsageCount",
+        "uniqueExternalSymbolCount",
+        "dispositionCounts",
+        "ownerAssemblyCounts",
+        "ownerFamilyCounts",
+        "carrySet020ItemCount",
+        "carrySet030ItemCount",
+        "carrySet020OccurrenceCount",
+        "carrySet030OccurrenceCount",
+        "viewCount",
+        "pageCount",
+        "resourceKeyOccurrenceCount",
+        "evaluatedProjectReferenceForbiddenCount",
+        "roslynForbiddenSymbolCount",
+        "peForbiddenAssemblyReferenceCount",
+        "packagedForbiddenAssemblyCount",
+        "contractSurfaceForbiddenReferenceCount",
+        "packagedForbiddenFileCount",
+        "packagedUnclassifiedFileCount",
+        "unknownAssemblyCount",
+        "unclassifiedSymbolCount"
+      ],
+      "properties": {
+        "externalSymbolUsageCount": { "type": "integer", "minimum": 1 },
+        "uniqueExternalSymbolCount": { "type": "integer", "minimum": 1 },
+        "dispositionCounts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/dispositionCount" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "ownerAssemblyCounts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ownerAssemblyCount" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "ownerFamilyCounts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ownerCount" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "carrySet020ItemCount": { "type": "integer", "minimum": 0 },
+        "carrySet030ItemCount": { "type": "integer", "minimum": 0 },
+        "carrySet020OccurrenceCount": { "type": "integer", "minimum": 0 },
+        "carrySet030OccurrenceCount": { "type": "integer", "minimum": 0 },
+        "viewCount": { "type": "integer", "minimum": 0 },
+        "pageCount": { "type": "integer", "minimum": 0 },
+        "resourceKeyOccurrenceCount": { "type": "integer", "minimum": 0 },
+        "evaluatedProjectReferenceForbiddenCount": { "type": "integer", "minimum": 0 },
+        "roslynForbiddenSymbolCount": { "type": "integer", "minimum": 0 },
+        "peForbiddenAssemblyReferenceCount": { "type": "integer", "minimum": 0 },
+        "packagedForbiddenAssemblyCount": { "type": "integer", "minimum": 0 },
+        "contractSurfaceForbiddenReferenceCount": { "type": "integer", "minimum": 0 },
+        "packagedForbiddenFileCount": { "type": "integer", "minimum": 0 },
+        "packagedUnclassifiedFileCount": { "type": "integer", "minimum": 0 },
+        "unknownAssemblyCount": { "const": 0 },
+        "unclassifiedSymbolCount": { "const": 0 }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaSha256", "generatorSha256", "roslynHelperSha256", "validatorRoslynHelperSha256", "phaseCloseEvidenceSchemaSha256", "phaseCloseEvidenceValidatorSha256", "phase0InputsSha256", "phase0InputsSchemaSha256", "baselineLedgerSha256", "baselineLedgerBatchId", "baselineLedgerEvidenceCommit", "analyzedInputsSha256", "payloadSha256"],
+      "properties": {
+        "schemaSha256": { "$ref": "#/$defs/sha256" },
+        "generatorSha256": { "$ref": "#/$defs/sha256" },
+        "roslynHelperSha256": { "$ref": "#/$defs/sha256" },
+        "validatorRoslynHelperSha256": { "$ref": "#/$defs/sha256" },
+        "phaseCloseEvidenceSchemaSha256": { "$ref": "#/$defs/sha256" },
+        "phaseCloseEvidenceValidatorSha256": { "$ref": "#/$defs/sha256" },
+        "phase0InputsSha256": { "$ref": "#/$defs/sha256" },
+        "phase0InputsSchemaSha256": { "$ref": "#/$defs/sha256" },
+        "baselineLedgerSha256": { "type": "string", "pattern": "^$|^[0-9a-f]{64}$" },
+        "baselineLedgerBatchId": { "enum": ["", "EDGE-SPLIT-000", "EDGE-SPLIT-010", "EDGE-SPLIT-020", "EDGE-SPLIT-030", "EDGE-SPLIT-040"] },
+        "baselineLedgerEvidenceCommit": { "type": "string", "pattern": "^$|^[0-9a-f]{40}$" },
+        "analyzedInputsSha256": { "$ref": "#/$defs/sha256" },
+        "payloadSha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  },
+  "$defs": {
+    "gitObject": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "repositoryPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:[\\\\/])(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$"
+    },
+    "pathArray": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/repositoryPath" },
+      "uniqueItems": true
+    },
+    "semanticVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$"
+    },
+    "decisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repositories", "sdkPackages", "packageSource", "targetHostApiVersion"],
+      "properties": {
+        "repositories": {
+          "const": ["IIoT.EdgeClient", "IIoT.Edge.Sdk", "IIoT.Edge.Plugins.Private"]
+        },
+        "sdkPackages": {
+          "const": ["IIoT.Edge.Module.Contracts", "IIoT.Edge.Module.Sdk", "IIoT.Edge.UI.Shared", "IIoT.Edge.Module.Analyzers"]
+        },
+        "packageSource": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["authorityForPhase0To5", "repositoryRelativePath", "remotePublishAllowed", "remoteAuthorityDecision"],
+          "properties": {
+            "authorityForPhase0To5": { "const": "isolated-local-feed" },
+            "repositoryRelativePath": { "const": "artifacts/edge-sdk-feed" },
+            "remotePublishAllowed": { "const": false },
+            "remoteAuthorityDecision": { "const": "deferred-to-Phase-6-explicit-authorization" }
+          }
+        },
+        "targetHostApiVersion": { "const": "2.0.0" }
+      }
+    },
+    "requiredSuiteEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidenceRole", "sourceHead", "workflowRun", "requiredRunners", "discovered", "executed", "passed", "failed", "skipped"],
+      "properties": {
+        "evidenceRole": { "const": "historical-required-suite-baseline-only" },
+        "sourceHead": { "$ref": "#/$defs/gitObject" },
+        "workflowRun": { "type": "string", "format": "uri", "pattern": "^https://github\\.com/[^/]+/[^/]+/actions/runs/[0-9]+$" },
+        "requiredRunners": { "type": "integer", "minimum": 1 },
+        "discovered": { "type": "integer", "minimum": 1 },
+        "executed": { "type": "integer", "minimum": 1 },
+        "passed": { "type": "integer", "minimum": 1 },
+        "failed": { "const": 0 },
+        "skipped": { "const": 0 }
+      }
+    },
+    "testInventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inventorySchemaVersion", "requiredRunnerCount", "discoveredCaseCount", "discoveredInventoryCaseCount", "historicalRequiredSuiteBaseline", "phaseCloseEvidenceProtocol", "inventorySha256", "requiredCountsSha256", "discoveredInventorySha256"],
+      "properties": {
+        "inventorySchemaVersion": { "const": 3 },
+        "requiredRunnerCount": { "type": "integer", "minimum": 1 },
+        "discoveredCaseCount": { "type": "integer", "minimum": 1 },
+        "discoveredInventoryCaseCount": { "type": "integer", "minimum": 1 },
+        "historicalRequiredSuiteBaseline": { "$ref": "#/$defs/requiredSuiteEvidence" },
+        "phaseCloseEvidenceProtocol": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["carriedByLedger", "requiredHead", "acceptedSources", "requiredReconciliation", "schemaPath", "schemaSha256", "validatorPath", "validatorSha256"],
+          "properties": {
+            "carriedByLedger": { "const": false },
+            "requiredHead": { "const": "exact-ledger-evidence-commit-head" },
+            "acceptedSources": { "const": ["local-trx-manifest", "required-ci"] },
+            "requiredReconciliation": { "const": "discovered=executed=passed;failed=skipped=0" },
+            "schemaPath": { "const": "eng/edge-phase-close-evidence.schema.json" },
+            "schemaSha256": { "$ref": "#/$defs/sha256" },
+            "validatorPath": { "const": "scripts/tests/Test-EdgePhaseCloseEvidence.ps1" },
+            "validatorSha256": { "$ref": "#/$defs/sha256" }
+          }
+        },
+        "inventorySha256": { "$ref": "#/$defs/sha256" },
+        "requiredCountsSha256": { "$ref": "#/$defs/sha256" },
+        "discoveredInventorySha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "pluginManifestValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["moduleId", "displayName", "version", "hostApiVersion", "minHostVersion", "maxHostVersion", "entryAssembly", "entryType", "supportedProcessType", "dependencies"],
+      "properties": {
+        "moduleId": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$" },
+        "displayName": { "type": "string", "minLength": 1 },
+        "version": { "$ref": "#/$defs/semanticVersion" },
+        "hostApiVersion": { "$ref": "#/$defs/semanticVersion" },
+        "minHostVersion": { "$ref": "#/$defs/semanticVersion" },
+        "maxHostVersion": { "$ref": "#/$defs/semanticVersion" },
+        "entryAssembly": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+\\.dll$" },
+        "entryType": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)+$" },
+        "supportedProcessType": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$" },
+        "dependencies": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "pluginManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "value"],
+      "properties": {
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "value": { "$ref": "#/$defs/pluginManifestValue" }
+      }
+    },
+    "artifactEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "size", "sha256", "verified"],
+      "properties": {
+        "url": { "type": "string", "format": "uri", "pattern": "^https?://[^?#]+$" },
+        "size": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "verified": { "const": true }
+      }
+    },
+    "historicalPackageEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "size"],
+      "properties": {
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "size": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "publishedComposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidenceRole", "byteVerification", "catalogApiBaseUrl", "host", "plugin"],
+      "properties": {
+        "evidenceRole": { "const": "immutable-historical-composition" },
+        "byteVerification": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "method", "recordedOn", "note"],
+          "properties": {
+            "status": { "const": "verified" },
+            "method": { "const": "download-size-sha256-and-archive-inventory" },
+            "recordedOn": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+            "note": { "type": "string", "minLength": 1 }
+          }
+        },
+        "catalogApiBaseUrl": { "type": "string", "format": "uri", "pattern": "^https?://[^?#]+$" },
+        "host": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["version", "hostApiVersion", "sourceCommit", "catalogDownloadUrl", "manifest", "artifact"],
+          "properties": {
+            "version": { "$ref": "#/$defs/semanticVersion" },
+            "hostApiVersion": { "$ref": "#/$defs/semanticVersion" },
+            "sourceCommit": { "$ref": "#/$defs/gitObject" },
+            "catalogDownloadUrl": { "type": "string", "pattern": "^/(?!.*(?:^|/)\\.\\.(?:/|$))[^?#]+$" },
+            "manifest": { "$ref": "#/$defs/artifactEvidence" },
+            "artifact": { "$ref": "#/$defs/artifactEvidence" }
+          }
+        },
+        "plugin": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["moduleId", "version", "hostApiVersion", "sourceCommit", "artifact", "packageEntries"],
+          "properties": {
+            "moduleId": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$" },
+            "version": { "$ref": "#/$defs/semanticVersion" },
+            "hostApiVersion": { "$ref": "#/$defs/semanticVersion" },
+            "sourceCommit": { "$ref": "#/$defs/gitObject" },
+            "artifact": { "$ref": "#/$defs/artifactEvidence" },
+            "packageEntries": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/historicalPackageEntry" },
+              "minItems": 1,
+              "uniqueItems": true
+            }
+          }
+        }
+      }
+    },
+    "sourceDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "msbuildCompilation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["projectPath", "dotnetSdkVersion", "configuration", "targetFramework", "langVersion", "nullable", "assemblyName", "msbuildCompileSourceCount", "emittedGeneratorSourceCount", "compilationInputCount", "metadataReferenceCount", "compilationErrorCount", "pluginSources", "generatedSources", "compilationInputs", "authorityProjectionPolicy", "authorityInputCount", "authorityInputs", "viewIdsAssemblyPath", "viewIdsTypeName"],
+      "properties": {
+        "projectPath": { "$ref": "#/$defs/repositoryPath" },
+        "dotnetSdkVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+        "configuration": { "enum": ["Debug", "Release"] },
+        "targetFramework": { "type": "string", "pattern": "^net[0-9]+\\.[0-9]+(?:-[A-Za-z0-9.-]+)?$" },
+        "langVersion": { "type": "string", "pattern": "^(?:[0-9]+(?:\\.[0-9]+)?|latest|preview)$" },
+        "nullable": { "enum": ["enable", "disable", "annotations", "warnings"] },
+        "assemblyName": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+$" },
+        "msbuildCompileSourceCount": { "type": "integer", "minimum": 1 },
+        "emittedGeneratorSourceCount": { "type": "integer", "minimum": 0 },
+        "compilationInputCount": { "type": "integer", "minimum": 1 },
+        "metadataReferenceCount": { "type": "integer", "minimum": 1 },
+        "compilationErrorCount": { "const": 0 },
+        "pluginSources": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sourceDigest" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "generatedSources": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sourceDigest" },
+          "uniqueItems": true
+        },
+        "compilationInputs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sourceDigest" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "authorityProjectionPolicy": { "$ref": "#/$defs/authorityProjectionPolicy" },
+        "authorityInputCount": { "type": "integer", "minimum": 1 },
+        "authorityInputs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/authorityInput" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "viewIdsAssemblyPath": { "$ref": "#/$defs/repositoryPath" },
+        "viewIdsTypeName": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)+$" }
+      }
+    },
+    "authorityInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "origin", "representation", "roles", "size", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1, "pattern": "^(?:[A-Za-z0-9._-]+(?:/[A-Za-z0-9._+@()-]+)*|nuget-cache/[A-Za-z0-9._+@()/-]+|dotnet-toolchain/[A-Za-z0-9._+@()/-]+)$" },
+        "origin": { "enum": ["tracked-repository", "generated-repository", "nuget-cache", "dotnet-toolchain"] },
+        "representation": { "enum": ["raw-sha256", "restore-semantic-v1", "compiler-config-semantic-v1"] },
+        "roles": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^(?:root-configuration|deterministic-build-targets|evaluated-project|evaluated-import|restore-assets|restore-package-(?:archive|sha512|metadata)|executed-toolchain-(?:assembly|closure)|generated-compiler-analyzer-config|item-[a-z]+)$" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "size": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "authorityProjectionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "restoreConfigPath", "restoreIsolation", "pluginDiscoveryIsolation", "restorePackageAuthority", "restoreGeneratedRepresentation", "compilerConfigRepresentation", "rawRepresentation", "resolvedSdkPolicy", "executedToolchainAuthority", "rootReplacement", "xmlProjection", "jsonSetFields", "unknownJsonArrayPolicy", "nugetCacheRepresentation", "dotnetToolchainRepresentation", "absoluteRootTokens"],
+      "properties": {
+        "version": { "const": 1 },
+        "restoreConfigPath": { "const": "NuGet.Config" },
+        "restoreIsolation": { "const": "empty-caches-explicit-sources-no-ambient" },
+        "pluginDiscoveryIsolation": { "const": "explicit-empty-discovery-paths-plus-diagnostic-rejection" },
+        "restorePackageAuthority": { "const": "nupkg-archive-sha512-metadata-contenthash-v1" },
+        "restoreGeneratedRepresentation": { "const": "restore-semantic-v1" },
+        "compilerConfigRepresentation": { "const": "compiler-config-semantic-v1" },
+        "rawRepresentation": { "const": "raw-sha256" },
+        "resolvedSdkPolicy": { "const": "global-json-version-exact" },
+        "executedToolchainAuthority": { "const": "diagnostic-executed-assembly-plus-sibling-managed-closure" },
+        "rootReplacement": { "const": "longest-first-boundary-aware" },
+        "xmlProjection": { "const": "infoset-element-order-attribute-ordinal" },
+        "jsonSetFields": { "const": ["/libraries/*/files", "/project/restore/configFilePaths"] },
+        "unknownJsonArrayPolicy": { "const": "preserve-sequence" },
+        "nugetCacheRepresentation": { "const": "root-relative-path-plus-package-content-sha256" },
+        "dotnetToolchainRepresentation": { "const": "root-relative-path-plus-distribution-content-sha256" },
+        "absoluteRootTokens": {
+          "const": ["$DOTNET_ROOT", "$NUGET_PACKAGES", "$REPOSITORY"]
+        }
+      }
+    },
+    "viewInventoryItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["viewId", "propertyName", "registrationSource", "viewOwner"],
+      "properties": {
+        "viewId": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$" },
+        "propertyName": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+        "registrationSource": { "$ref": "#/$defs/repositoryPath" },
+        "viewOwner": { "enum": ["host-standard-page", "plugin-custom-page"] }
+      }
+    },
+    "pageInventoryItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourcePath", "sourceSize", "sourceSha256", "className", "codeBehindPath", "codeBehindSize", "codeBehindSha256"],
+      "properties": {
+        "sourcePath": { "allOf": [{ "$ref": "#/$defs/repositoryPath" }, { "pattern": "\\.axaml$" }] },
+        "sourceSize": { "type": "integer", "minimum": 1 },
+        "sourceSha256": { "$ref": "#/$defs/sha256" },
+        "className": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)+$" },
+        "codeBehindPath": { "allOf": [{ "$ref": "#/$defs/repositoryPath" }, { "pattern": "\\.axaml\\.cs$" }] },
+        "codeBehindSize": { "type": "integer", "minimum": 1 },
+        "codeBehindSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "resourceInventoryItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourcePath", "sourceSize", "sourceSha256", "key", "valueType"],
+      "properties": {
+        "sourcePath": { "allOf": [{ "$ref": "#/$defs/repositoryPath" }, { "pattern": "\\.axaml$" }] },
+        "sourceSize": { "type": "integer", "minimum": 1 },
+        "sourceSha256": { "$ref": "#/$defs/sha256" },
+        "key": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$" },
+        "valueType": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$" }
+      }
+    },
+    "referenceAssembly": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assemblyName", "assemblyVersion", "culture", "publicKeyToken", "mvid", "size", "origin", "provenance", "sha256", "ownerFamily"],
+      "properties": {
+        "assemblyName": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+$" },
+        "assemblyVersion": { "type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+){1,3}$" },
+        "culture": { "type": "string", "pattern": "^(?:neutral|[A-Za-z0-9-]+)$" },
+        "publicKeyToken": { "type": "string", "pattern": "^(?:none|[0-9a-f]{16})$" },
+        "mvid": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "size": { "type": "integer", "minimum": 1 },
+        "origin": { "type": "string", "pattern": "^(?:repository:[^\\\\]+|nuget:[^/\\\\]+/[^/\\\\]+|framework:[^/\\\\]+/[^/\\\\]+|external:[^/\\\\]+)$" },
+        "provenance": { "$ref": "#/$defs/referenceProvenance" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "ownerFamily": { "$ref": "#/$defs/ownerFamily" }
+      }
+    },
+    "referenceProvenance": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "projectPath", "outputPath"],
+          "properties": {
+            "kind": { "const": "project-reference" },
+            "projectPath": { "$ref": "#/$defs/repositoryPath" },
+            "outputPath": { "$ref": "#/$defs/repositoryPath" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "packageId", "packageVersion", "pathInPackage", "assetsPath"],
+          "properties": {
+            "kind": { "const": "nuget-package" },
+            "packageId": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+$" },
+            "packageVersion": { "type": "string", "pattern": "^[0-9A-Za-z][0-9A-Za-z.+-]*$" },
+            "pathInPackage": { "type": "string", "pattern": "^(?:ref|lib|runtimes)/[^\\\\]+\\.dll$" },
+            "assetsPath": { "allOf": [{ "$ref": "#/$defs/repositoryPath" }, { "pattern": "project\\.assets\\.json$" }] }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "frameworkName", "frameworkVersion", "targetingPackId", "targetingPackPath"],
+          "properties": {
+            "kind": { "const": "framework-reference" },
+            "frameworkName": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+$" },
+            "frameworkVersion": { "type": "string", "pattern": "^[0-9A-Za-z][0-9A-Za-z.+-]*$" },
+            "targetingPackId": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+\\.Ref$" },
+            "targetingPackPath": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+\\.Ref/[0-9A-Za-z.+-]+/ref/[^\\\\]+\\.dll$" }
+          }
+        }
+      ]
+    },
+    "ownerFamily": {
+      "enum": ["Application", "Domain", "SharedKernel", "Infrastructure", "Presentation", "Host", "UiShared", "SdkContract", "Analyzer", "PluginOwned", "PlatformOrThirdParty", "Unknown"]
+    },
+    "ownerCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ownerFamily", "count"],
+      "properties": {
+        "ownerFamily": { "$ref": "#/$defs/ownerFamily" },
+        "count": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "dispositionCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["disposition", "count"],
+      "properties": {
+        "disposition": { "type": "string", "minLength": 1 },
+        "count": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "ownerAssemblyCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ownerAssembly", "count"],
+      "properties": {
+        "ownerAssembly": { "type": "string", "minLength": 1 },
+        "count": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "evaluatedProjectReferenceItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["projectPath", "projectName", "ownerFamily", "direct", "referenceOutputAssembly", "outputItemType", "forbiddenForSourceLayer"],
+      "properties": {
+        "projectPath": { "$ref": "#/$defs/repositoryPath" },
+        "projectName": { "type": "string", "minLength": 1 },
+        "ownerFamily": { "$ref": "#/$defs/ownerFamily" },
+        "direct": { "type": "boolean" },
+        "referenceOutputAssembly": { "type": "boolean" },
+        "outputItemType": { "type": "string" },
+        "forbiddenForSourceLayer": { "type": "boolean" }
+      }
+    },
+    "evaluatedLayer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "inputProject", "items", "totalCount", "forbiddenCount", "forbiddenCountByOwnerFamily", "unknownAssemblyCount"],
+      "properties": {
+        "status": { "const": "evaluated" },
+        "inputProject": { "$ref": "#/$defs/repositoryPath" },
+        "items": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evaluatedProjectReferenceItem" },
+          "uniqueItems": true
+        },
+        "totalCount": { "type": "integer", "minimum": 0 },
+        "forbiddenCount": { "type": "integer", "minimum": 0 },
+        "forbiddenCountByOwnerFamily": { "type": "array", "items": { "$ref": "#/$defs/ownerCount" }, "uniqueItems": true },
+        "unknownAssemblyCount": { "const": 0 }
+      }
+    },
+    "roslynLayer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "inputs", "totalExternalUsageCount", "forbiddenUsageCount", "forbiddenCountByOwnerFamily", "unclassifiedSymbolCount"],
+      "properties": {
+        "status": { "const": "evaluated" },
+        "inputs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/repositoryPath" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "totalExternalUsageCount": { "type": "integer", "minimum": 1 },
+        "forbiddenUsageCount": { "type": "integer", "minimum": 0 },
+        "forbiddenCountByOwnerFamily": { "type": "array", "items": { "$ref": "#/$defs/ownerCount" }, "uniqueItems": true },
+        "unclassifiedSymbolCount": { "const": 0 }
+      }
+    },
+    "peAssemblyReferenceItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourcePath", "sourceAssembly", "referencedAssembly", "referencedVersion", "referencedCulture", "referencedPublicKeyToken", "ownerFamily", "forbiddenForSourceLayer"],
+      "properties": {
+        "sourcePath": { "$ref": "#/$defs/repositoryPath" },
+        "sourceAssembly": { "type": "string", "minLength": 1 },
+        "referencedAssembly": { "type": "string", "minLength": 1 },
+        "referencedVersion": { "type": "string", "minLength": 1 },
+        "referencedCulture": { "type": "string", "pattern": "^(?:neutral|[A-Za-z0-9-]+)$" },
+        "referencedPublicKeyToken": { "type": "string", "pattern": "^(?:none|[0-9a-f]{16})$" },
+        "ownerFamily": { "$ref": "#/$defs/ownerFamily" },
+        "forbiddenForSourceLayer": { "type": "boolean" }
+      }
+    },
+    "assemblyInputFact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "assemblyName", "assemblyVersion", "culture", "publicKeyToken", "mvid", "size", "sha256", "verifiedPluginOwned"],
+      "properties": {
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "assemblyName": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+$" },
+        "assemblyVersion": { "type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+){1,3}$" },
+        "culture": { "type": "string", "pattern": "^(?:neutral|[A-Za-z0-9-]+)$" },
+        "publicKeyToken": { "type": "string", "pattern": "^(?:none|[0-9a-f]{16})$" },
+        "mvid": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "size": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "verifiedPluginOwned": { "type": "boolean" }
+      }
+    },
+    "peLayer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "inputs", "items", "totalCount", "forbiddenCount", "forbiddenCountByOwnerFamily", "unknownAssemblyCount"],
+      "properties": {
+        "status": { "const": "evaluated" },
+        "inputs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/assemblyInputFact" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "items": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/peAssemblyReferenceItem" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "totalCount": { "type": "integer", "minimum": 1 },
+        "forbiddenCount": { "type": "integer", "minimum": 0 },
+        "forbiddenCountByOwnerFamily": { "type": "array", "items": { "$ref": "#/$defs/ownerCount" }, "uniqueItems": true },
+        "unknownAssemblyCount": { "const": 0 }
+      }
+    },
+    "contractSurfaceProjectReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["projectPath", "projectName", "ownerFamily", "referenceOutputAssembly", "forbiddenForContractSurface"],
+      "properties": {
+        "projectPath": { "$ref": "#/$defs/repositoryPath" },
+        "projectName": { "type": "string", "minLength": 1 },
+        "ownerFamily": { "$ref": "#/$defs/ownerFamily" },
+        "referenceOutputAssembly": { "type": "boolean" },
+        "forbiddenForContractSurface": { "type": "boolean" }
+      }
+    },
+    "contractSurfaceAssemblyReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["referencedAssembly", "referencedVersion", "referencedCulture", "referencedPublicKeyToken", "ownerFamily", "forbiddenForContractSurface"],
+      "properties": {
+        "referencedAssembly": { "type": "string", "minLength": 1 },
+        "referencedVersion": { "type": "string", "minLength": 1 },
+        "referencedCulture": { "type": "string", "pattern": "^(?:neutral|[A-Za-z0-9-]+)$" },
+        "referencedPublicKeyToken": { "type": "string", "pattern": "^(?:none|[0-9a-f]{16})$" },
+        "ownerFamily": { "$ref": "#/$defs/ownerFamily" },
+        "forbiddenForContractSurface": { "type": "boolean" }
+      }
+    },
+    "contractSurface": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["projectPath", "assemblyName", "assemblyInput", "projectReferences", "assemblyReferences", "forbiddenProjectReferenceCount", "forbiddenAssemblyReferenceCount", "unknownOwnerCount"],
+      "properties": {
+        "projectPath": { "$ref": "#/$defs/repositoryPath" },
+        "assemblyName": { "enum": ["IIoT.Edge.Module.Contracts", "IIoT.Edge.Module.Sdk", "IIoT.Edge.UI.Shared", "IIoT.Edge.Module.Analyzers"] },
+        "assemblyInput": {
+          "allOf": [
+            { "$ref": "#/$defs/assemblyInputFact" },
+            { "properties": { "verifiedPluginOwned": { "const": false } } }
+          ]
+        },
+        "projectReferences": { "type": "array", "items": { "$ref": "#/$defs/contractSurfaceProjectReference" }, "uniqueItems": true },
+        "assemblyReferences": { "type": "array", "items": { "$ref": "#/$defs/contractSurfaceAssemblyReference" }, "uniqueItems": true },
+        "forbiddenProjectReferenceCount": { "type": "integer", "minimum": 0 },
+        "forbiddenAssemblyReferenceCount": { "type": "integer", "minimum": 0 },
+        "unknownOwnerCount": { "const": 0 }
+      }
+    },
+    "contractSurfaceLayer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "surfaces", "surfaceCount", "forbiddenReferenceCount", "unknownOwnerCount"],
+      "properties": {
+        "status": { "const": "evaluated" },
+        "surfaces": { "type": "array", "items": { "$ref": "#/$defs/contractSurface" }, "minItems": 1, "uniqueItems": true },
+        "surfaceCount": { "type": "integer", "minimum": 1, "maximum": 4 },
+        "forbiddenReferenceCount": { "type": "integer", "minimum": 0 },
+        "unknownOwnerCount": { "const": 0 }
+      }
+    },
+    "packageEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "size", "sha256", "category", "owner", "allowed"],
+      "properties": {
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "size": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "category": { "enum": ["plugin-manifest", "plugin-owned-assembly", "plugin-symbols", "plugin-config", "plugin-resource", "forbidden-assembly", "unclassified"] },
+        "owner": { "type": "string", "minLength": 1 },
+        "allowed": { "type": "boolean" }
+      }
+    },
+    "packageStaticInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["packagePath", "sourcePath", "size", "sha256", "category", "required"],
+      "properties": {
+        "packagePath": { "$ref": "#/$defs/repositoryPath" },
+        "sourcePath": { "$ref": "#/$defs/repositoryPath" },
+        "size": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "category": { "enum": ["plugin-manifest", "plugin-symbols", "plugin-config", "plugin-resource"] },
+        "required": { "type": "boolean" }
+      }
+    },
+    "packageLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxEntryCount", "maxCompressedPackageBytes", "maxEntryUncompressedBytes", "maxTotalUncompressedBytes"],
+      "properties": {
+        "maxEntryCount": { "const": 256 },
+        "maxCompressedPackageBytes": { "const": 134217728 },
+        "maxEntryUncompressedBytes": { "const": 67108864 },
+        "maxTotalUncompressedBytes": { "const": 268435456 }
+      }
+    },
+    "packageAssembly": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "assemblyName", "assemblyVersion", "culture", "publicKeyToken", "mvid", "size", "sha256", "ownerFamily", "declaredPluginOwned", "byteMatchVerifiedInput", "forbiddenForPackageLayer"],
+      "properties": {
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "assemblyName": { "type": "string", "minLength": 1 },
+        "assemblyVersion": { "type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+){1,3}$" },
+        "culture": { "type": "string", "pattern": "^(?:neutral|[A-Za-z0-9-]+)$" },
+        "publicKeyToken": { "type": "string", "pattern": "^(?:none|[0-9a-f]{16})$" },
+        "mvid": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "size": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "ownerFamily": { "$ref": "#/$defs/ownerFamily" },
+        "declaredPluginOwned": { "type": "boolean" },
+        "byteMatchVerifiedInput": { "type": "boolean" },
+        "forbiddenForPackageLayer": { "type": "boolean" }
+      }
+    },
+    "packageLayer": {
+      "oneOf": [
+        { "$ref": "#/$defs/packageLayerNotApplicable" },
+        { "$ref": "#/$defs/packageLayerEvaluated" }
+      ]
+    },
+    "packageLayerNotApplicable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "declaredPluginOwnedAssemblies", "limits", "staticInputs", "packagePath", "packageSha256", "entries", "totalEntryCount", "assemblies", "totalAssemblyCount", "forbiddenCount", "forbiddenCountByOwnerFamily", "unknownAssemblyCount", "forbiddenFileCount", "unclassifiedFileCount"],
+      "properties": {
+        "status": { "const": "not-applicable-before-EDGE-SPLIT-040" },
+        "declaredPluginOwnedAssemblies": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
+        "limits": { "$ref": "#/$defs/packageLimits" },
+        "staticInputs": { "type": "array", "items": { "$ref": "#/$defs/packageStaticInput" }, "minItems": 1, "uniqueItems": true },
+        "packagePath": { "const": "" },
+        "packageSha256": { "const": "" },
+        "entries": { "type": "array", "maxItems": 0 },
+        "totalEntryCount": { "const": 0 },
+        "assemblies": { "type": "array", "maxItems": 0 },
+        "totalAssemblyCount": { "const": 0 },
+        "forbiddenCount": { "const": 0 },
+        "forbiddenCountByOwnerFamily": { "type": "array", "maxItems": 0 },
+        "unknownAssemblyCount": { "const": 0 },
+        "forbiddenFileCount": { "const": 0 },
+        "unclassifiedFileCount": { "const": 0 }
+      }
+    },
+    "packageLayerEvaluated": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "declaredPluginOwnedAssemblies", "limits", "staticInputs", "packagePath", "packageSha256", "entries", "totalEntryCount", "assemblies", "totalAssemblyCount", "forbiddenCount", "forbiddenCountByOwnerFamily", "unknownAssemblyCount", "forbiddenFileCount", "unclassifiedFileCount"],
+      "properties": {
+        "status": { "const": "evaluated" },
+        "declaredPluginOwnedAssemblies": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
+        "limits": { "$ref": "#/$defs/packageLimits" },
+        "staticInputs": { "type": "array", "items": { "$ref": "#/$defs/packageStaticInput" }, "minItems": 1, "uniqueItems": true },
+        "packagePath": { "$ref": "#/$defs/repositoryPath" },
+        "packageSha256": { "$ref": "#/$defs/sha256" },
+        "entries": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/packageEntry" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "totalEntryCount": { "type": "integer", "minimum": 1 },
+        "assemblies": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/packageAssembly" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "totalAssemblyCount": { "type": "integer", "minimum": 1 },
+        "forbiddenCount": { "type": "integer", "minimum": 0 },
+        "forbiddenCountByOwnerFamily": { "type": "array", "items": { "$ref": "#/$defs/ownerCount" }, "uniqueItems": true },
+        "unknownAssemblyCount": { "const": 0 },
+        "forbiddenFileCount": { "type": "integer", "minimum": 0 },
+        "unclassifiedFileCount": { "const": 0 }
+      }
+    },
+    "carryItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourcePath", "symbol", "ownerAssembly", "ownerFamily", "count", "usageKinds", "removalBatch"],
+      "properties": {
+        "sourcePath": { "$ref": "#/$defs/repositoryPath" },
+        "symbol": { "type": "string", "minLength": 1 },
+        "ownerAssembly": { "type": "string", "minLength": 1 },
+        "ownerFamily": { "$ref": "#/$defs/ownerFamily" },
+        "count": { "type": "integer", "minimum": 1 },
+        "usageKinds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
+        "removalBatch": { "enum": ["EDGE-SPLIT-020", "EDGE-SPLIT-030"] }
+      }
+    },
+    "carrySet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["removalBatch", "lifecycleStatus", "baselineItems", "currentItems", "baselineItemCount", "currentItemCount", "baselineOccurrenceCount", "currentOccurrenceCount"],
+      "properties": {
+        "removalBatch": { "enum": ["EDGE-SPLIT-020", "EDGE-SPLIT-030"] },
+        "lifecycleStatus": { "enum": ["frozen", "retained-exact", "closed"] },
+        "baselineItems": { "type": "array", "items": { "$ref": "#/$defs/carryItem" }, "minItems": 1 },
+        "currentItems": { "type": "array", "items": { "$ref": "#/$defs/carryItem" } },
+        "baselineItemCount": { "type": "integer", "minimum": 1 },
+        "currentItemCount": { "type": "integer", "minimum": 0 },
+        "baselineOccurrenceCount": { "type": "integer", "minimum": 1 },
+        "currentOccurrenceCount": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

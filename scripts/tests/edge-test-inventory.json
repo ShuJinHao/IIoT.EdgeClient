@@ -50,6 +50,7 @@
       "runtime": "Filesystem",
       "runtimeDependencies": [
         "MSBuild",
+        "PowerShell",
         "Reflection"
       ],
       "runnerMode": "Serial",

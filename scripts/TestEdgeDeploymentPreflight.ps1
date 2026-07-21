@@ -15,6 +15,8 @@ param(
 
     [string]$ReleaseNotesPath = '',
 
+    [string]$WorkspaceRoot = '',
+
     [switch]$SkipCloud,
 
     [switch]$AllowDirty,
@@ -25,12 +27,26 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$repoRoot = Split-Path -Parent $PSScriptRoot
-$workspaceRoot = Split-Path -Parent $repoRoot
+$repoRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
+$resolvedWorkspaceRoot = ''
 . (Join-Path $PSScriptRoot 'EdgeReleaseCredential.Common.ps1')
 . (Join-Path $PSScriptRoot 'EdgeDeployment.Common.ps1')
 $failures = [System.Collections.Generic.List[string]]::new()
 $warnings = [System.Collections.Generic.List[string]]::new()
+$workspaceRuleId = 'EDGE-DEPLOY-WORKSPACE-001'
+$securityRuleId = 'EDGE-DEPLOY-SECURITY-001'
+$pathComparison = if ($IsWindows) {
+    [System.StringComparison]::OrdinalIgnoreCase
+}
+else {
+    [System.StringComparison]::Ordinal
+}
+$pathComparer = if ($pathComparison -eq [System.StringComparison]::OrdinalIgnoreCase) {
+    [System.StringComparer]::OrdinalIgnoreCase
+}
+else {
+    [System.StringComparer]::Ordinal
+}
 
 function Add-Failure {
     param([Parameter(Mandatory = $true)][string]$Message)
@@ -42,6 +58,148 @@ function Add-Warning {
     $script:warnings.Add($Message) | Out-Null
 }
 
+function Resolve-PhysicalPath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if (-not [System.IO.Path]::IsPathFullyQualified($Path)) {
+        throw "Physical path resolution requires a fully qualified filesystem path: $Path"
+    }
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    $pathRoot = [System.IO.Path]::GetPathRoot($fullPath)
+    if ([string]::IsNullOrWhiteSpace($pathRoot)) {
+        throw "Physical path resolution requires a fully qualified filesystem path: $Path"
+    }
+
+    $rootItem = Get-Item -LiteralPath $pathRoot -Force -ErrorAction Stop
+    $rootLinkTarget = $rootItem.ResolveLinkTarget($true)
+    $currentPath = if ($null -ne $rootLinkTarget) {
+        $rootLinkTarget.FullName
+    }
+    else {
+        $rootItem.FullName
+    }
+    $relativePath = $fullPath.Substring($pathRoot.Length)
+    $segments = $relativePath.Split(
+        [System.IO.Path]::DirectorySeparatorChar,
+        [System.StringSplitOptions]::RemoveEmptyEntries)
+    foreach ($segment in $segments) {
+        $candidatePath = [System.IO.Path]::Combine($currentPath, $segment)
+        $item = Get-Item -LiteralPath $candidatePath -Force -ErrorAction Stop
+        $finalLinkTarget = $item.ResolveLinkTarget($true)
+        $currentPath = if ($null -ne $finalLinkTarget) {
+            $finalLinkTarget.FullName
+        }
+        else {
+            $item.FullName
+        }
+    }
+
+    return [System.IO.Path]::TrimEndingDirectorySeparator([System.IO.Path]::GetFullPath($currentPath))
+}
+
+function Test-PathEquals {
+    param(
+        [Parameter(Mandatory = $true)][string]$Left,
+        [Parameter(Mandatory = $true)][string]$Right
+    )
+
+    $normalizedLeft = Resolve-PhysicalPath -Path $Left
+    $normalizedRight = Resolve-PhysicalPath -Path $Right
+    return [string]::Equals($normalizedLeft, $normalizedRight, $pathComparison)
+}
+
+function Get-UniqueSortedPaths {
+    param([AllowEmptyCollection()][string[]]$Paths = @())
+
+    $uniquePaths = [System.Collections.Generic.HashSet[string]]::new($pathComparer)
+    $orderedPaths = [System.Collections.Generic.List[string]]::new()
+    foreach ($path in $Paths) {
+        if (-not [string]::IsNullOrWhiteSpace($path) -and $uniquePaths.Add($path)) {
+            $orderedPaths.Add($path)
+        }
+    }
+    $orderedPaths.Sort($pathComparer)
+    [string[]]$result = $orderedPaths.ToArray()
+    return ,$result
+}
+
+function Get-GitAbsolutePath {
+    param(
+        [Parameter(Mandatory = $true)]$GitCommand,
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot,
+        [Parameter(Mandatory = $true)][string]$Selector
+    )
+
+    $output = @(& $GitCommand.Source -C $RepositoryRoot rev-parse --path-format=absolute $Selector 2>$null)
+    if ($LASTEXITCODE -ne 0 -or $output.Count -ne 1 -or [string]::IsNullOrWhiteSpace([string]$output[0])) {
+        throw "$workspaceRuleId reason=canonical-checkout-invalid git-selector=$Selector repository=$RepositoryRoot"
+    }
+
+    return [System.IO.Path]::GetFullPath(([string]$output[0]).Trim())
+}
+
+function Resolve-ValidatedWorkspaceRoot {
+    param([string]$RequestedWorkspaceRoot = '')
+
+    $gitCommand = Get-Command git -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -eq $gitCommand) {
+        throw "$workspaceRuleId reason=canonical-checkout-invalid git-not-found"
+    }
+
+    $repoTopLevel = Get-GitAbsolutePath -GitCommand $gitCommand -RepositoryRoot $repoRoot -Selector '--show-toplevel'
+    $repoGitDirectory = Get-GitAbsolutePath -GitCommand $gitCommand -RepositoryRoot $repoRoot -Selector '--git-dir'
+    $repoCommonDirectory = Get-GitAbsolutePath -GitCommand $gitCommand -RepositoryRoot $repoRoot -Selector '--git-common-dir'
+    if (-not (Test-PathEquals -Left $repoTopLevel -Right $repoRoot)) {
+        throw "$workspaceRuleId reason=canonical-checkout-invalid repository-toplevel=$repoTopLevel script-repository=$repoRoot"
+    }
+
+    $hasExplicitRoot = -not [string]::IsNullOrWhiteSpace($RequestedWorkspaceRoot)
+    if (-not $hasExplicitRoot -and -not (Test-PathEquals -Left $repoGitDirectory -Right $repoCommonDirectory)) {
+        throw "$workspaceRuleId reason=linked-worktree-requires-explicit-root pass=-WorkspaceRoot script-repository=$repoRoot"
+    }
+
+    if ($hasExplicitRoot) {
+        if (-not [System.IO.Path]::IsPathFullyQualified($RequestedWorkspaceRoot)) {
+            throw "$workspaceRuleId reason=workspace-root-must-be-absolute workspace-root=$RequestedWorkspaceRoot"
+        }
+        if (-not (Test-Path -LiteralPath $RequestedWorkspaceRoot -PathType Container)) {
+            throw "$workspaceRuleId reason=canonical-checkout-invalid workspace-root=$RequestedWorkspaceRoot"
+        }
+        $candidate = [System.IO.Path]::GetFullPath((Get-Item -LiteralPath $RequestedWorkspaceRoot -Force).FullName)
+    }
+    else {
+        $candidate = [System.IO.Path]::GetFullPath((Split-Path -Parent $repoRoot))
+    }
+
+    foreach ($marker in @('docs/上传部署总览.md', 'deploy/Invoke-WorkspaceDeploy.ps1')) {
+        $markerPath = Join-Path $candidate $marker
+        if (-not (Test-Path -LiteralPath $markerPath -PathType Leaf)) {
+            throw "$workspaceRuleId reason=missing-marker marker=$marker workspace-root=$candidate"
+        }
+    }
+
+    $canonicalRepository = [System.IO.Path]::GetFullPath((Join-Path $candidate 'IIoT.EdgeClient'))
+    if (-not (Test-Path -LiteralPath $canonicalRepository -PathType Container)) {
+        throw "$workspaceRuleId reason=canonical-checkout-invalid canonical-repository=$canonicalRepository"
+    }
+
+    $canonicalTopLevel = Get-GitAbsolutePath -GitCommand $gitCommand -RepositoryRoot $canonicalRepository -Selector '--show-toplevel'
+    $canonicalGitDirectory = Get-GitAbsolutePath -GitCommand $gitCommand -RepositoryRoot $canonicalRepository -Selector '--git-dir'
+    $canonicalCommonDirectory = Get-GitAbsolutePath -GitCommand $gitCommand -RepositoryRoot $canonicalRepository -Selector '--git-common-dir'
+    if (-not (Test-PathEquals -Left $canonicalTopLevel -Right $canonicalRepository) -or
+        -not (Test-PathEquals -Left $canonicalGitDirectory -Right $canonicalCommonDirectory)) {
+        throw "$workspaceRuleId reason=canonical-checkout-invalid canonical-repository=$canonicalRepository"
+    }
+    if (-not (Test-PathEquals -Left $repoCommonDirectory -Right $canonicalCommonDirectory)) {
+        throw "$workspaceRuleId reason=repository-owner-mismatch repository=$repoRoot canonical-repository=$canonicalRepository"
+    }
+    if (-not $hasExplicitRoot -and -not (Test-PathEquals -Left $repoRoot -Right $canonicalRepository)) {
+        throw "$workspaceRuleId reason=canonical-checkout-invalid canonical-default-owner=$canonicalRepository repository=$repoRoot"
+    }
+
+    return $candidate
+}
+
 function Resolve-RepoPath {
     param([Parameter(Mandatory = $true)][string]$RelativePath)
     return Join-Path $repoRoot $RelativePath
@@ -49,7 +207,7 @@ function Resolve-RepoPath {
 
 function Resolve-WorkspacePath {
     param([Parameter(Mandatory = $true)][string]$RelativePath)
-    return Join-Path $workspaceRoot $RelativePath
+    return Join-Path $resolvedWorkspaceRoot $RelativePath
 }
 
 function Assert-FileExists {
@@ -83,6 +241,41 @@ function Read-FileIfExists {
     return Get-Content -Raw -Encoding UTF8 -LiteralPath $Path
 }
 
+function ConvertTo-NormalizedRepoRelativePath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    $relativePath = [System.IO.Path]::GetRelativePath($repoRoot, $fullPath).Replace('\', '/')
+    if ([System.IO.Path]::IsPathRooted($relativePath) -or
+        [string]::Equals($relativePath, '..', $pathComparison) -or
+        $relativePath.StartsWith('../', $pathComparison)) {
+        throw "$securityRuleId scan path escaped repository root: $fullPath"
+    }
+
+    return $relativePath
+}
+
+function Test-IsDeploymentScanExcludedPath {
+    param([Parameter(Mandatory = $true)][string]$RelativePath)
+
+    $normalizedPath = $RelativePath.Replace('\', '/')
+    foreach ($testOwnedRoot in @('scripts/tests', 'src/Tests', 'src/Testing')) {
+        if ([string]::Equals($normalizedPath, $testOwnedRoot, $pathComparison) -or
+            $normalizedPath.StartsWith("$testOwnedRoot/", $pathComparison)) {
+            return $true
+        }
+    }
+
+    foreach ($segment in $normalizedPath.Split('/')) {
+        if ([string]::Equals($segment, 'bin', $pathComparison) -or
+            [string]::Equals($segment, 'obj', $pathComparison)) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
 function Get-TextFiles {
     param(
         [Parameter(Mandatory = $true)][string[]]$Roots,
@@ -97,21 +290,25 @@ function Get-TextFiles {
 
         foreach ($include in $Includes) {
             Get-ChildItem -LiteralPath $rootPath -Recurse -File -Include $include |
-                Where-Object {
-                    $_.FullName -notmatch '[/\\](bin|obj)[/\\]' -and
-                    $_.FullName -notmatch '[/\\]src[/\\]Tests[/\\]'
-                } |
-                ForEach-Object { $files.Add($_.FullName) | Out-Null }
+                ForEach-Object {
+                    $relativePath = ConvertTo-NormalizedRepoRelativePath -Path $_.FullName
+                    if (-not (Test-IsDeploymentScanExcludedPath -RelativePath $relativePath)) {
+                        $files.Add($_.FullName) | Out-Null
+                    }
+                }
         }
     }
 
-    return $files.ToArray() | Sort-Object -Unique
+    [string[]]$result = Get-UniqueSortedPaths -Paths $files.ToArray()
+    return ,$result
 }
 
 function Add-ForbiddenTextFailures {
     param(
         [Parameter(Mandatory = $true)][string]$Description,
-        [Parameter(Mandatory = $true)][string[]]$Files,
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [string[]]$Files,
         [Parameter(Mandatory = $true)][string[]]$Needles
     )
 
@@ -123,8 +320,8 @@ function Add-ForbiddenTextFailures {
 
         foreach ($needle in $Needles) {
             if ($text.Contains($needle, [System.StringComparison]::OrdinalIgnoreCase)) {
-                $relative = [System.IO.Path]::GetRelativePath($repoRoot, $path)
-                Add-Failure "$Description found '$needle' in $relative."
+                $relative = ConvertTo-NormalizedRepoRelativePath -Path $path
+                Add-Failure "$securityRuleId $Description found '$needle' in $relative."
             }
         }
     }
@@ -133,7 +330,9 @@ function Add-ForbiddenTextFailures {
 function Add-ForbiddenRegexFailures {
     param(
         [Parameter(Mandatory = $true)][string]$Description,
-        [Parameter(Mandatory = $true)][string[]]$Files,
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [string[]]$Files,
         [Parameter(Mandatory = $true)][string[]]$Patterns
     )
 
@@ -145,8 +344,8 @@ function Add-ForbiddenRegexFailures {
 
         foreach ($pattern in $Patterns) {
             if ([regex]::IsMatch($text, $pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
-                $relative = [System.IO.Path]::GetRelativePath($repoRoot, $path)
-                Add-Failure "$Description matched pattern '$pattern' in $relative."
+                $relative = ConvertTo-NormalizedRepoRelativePath -Path $path
+                Add-Failure "$securityRuleId $Description matched pattern '$pattern' in $relative."
             }
         }
     }
@@ -183,7 +382,8 @@ function Test-ClientSecurityRedLines {
         -Roots @((Resolve-RepoPath 'scripts')) `
         -Includes @('*.ps1')
     foreach ($path in $scriptFiles) {
-        if ([string]::Equals([System.IO.Path]::GetFileName($path), 'TestEdgeDeploymentPreflight.ps1', [System.StringComparison]::Ordinal)) {
+        $relative = ConvertTo-NormalizedRepoRelativePath -Path $path
+        if ([string]::Equals($relative, 'scripts/TestEdgeDeploymentPreflight.ps1', $pathComparison)) {
             continue
         }
 
@@ -197,8 +397,7 @@ function Test-ClientSecurityRedLines {
         $hasSha256Hashing = $text.Contains('SHA256Managed', [System.StringComparison]::Ordinal) -or
             $text.Contains('.ComputeHash(', [System.StringComparison]::Ordinal)
         if ($hasPasswordContext -and $hasSha256Hashing) {
-            $relative = [System.IO.Path]::GetRelativePath($repoRoot, $path)
-            Add-Failure "SHA256 password hash generation script content found in $relative."
+            Add-Failure "$securityRuleId SHA256 password hash generation script content found in $relative."
         }
     }
 
@@ -254,7 +453,7 @@ function Test-ClientSecurityRedLines {
     $privateNetworkAddressPattern = '\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})\b'
     Add-ForbiddenRegexFailures `
         -Description 'Hardcoded private network IP in production source or execution docs' `
-        -Files (($productionFiles + $deploymentFiles) | Sort-Object -Unique) `
+        -Files (Get-UniqueSortedPaths -Paths @($productionFiles + $deploymentFiles)) `
         -Patterns @($privateNetworkAddressPattern)
 
     $certificateFiles = $productionFiles + $deploymentFiles
@@ -392,6 +591,7 @@ function Test-GitState {
 
 function Test-CommonDeploymentInputs {
     Assert-FileExists (Resolve-WorkspacePath 'docs/上传部署总览.md') 'Deployment overview'
+    Assert-FileExists (Resolve-WorkspacePath 'deploy/Invoke-WorkspaceDeploy.ps1') 'Workspace deployment entrypoint'
     Assert-FileExists (Resolve-RepoPath 'docs/客户端部署.md') 'EdgeClient deployment guide'
     Assert-FileExists (Resolve-RepoPath 'docs/Edge安装更新验收.md') 'Edge installer/update acceptance guide'
     Resolve-ReleaseNotes
@@ -501,12 +701,25 @@ function Write-NextCommand {
 }
 
 Write-Host "Edge deployment preflight: mode=$Mode"
-Test-CommonDeploymentInputs
+try {
+    $resolvedWorkspaceRoot = Resolve-ValidatedWorkspaceRoot -RequestedWorkspaceRoot $WorkspaceRoot
+}
+catch {
+    $workspaceFailure = $_.Exception.Message
+    if (-not $workspaceFailure.StartsWith("$workspaceRuleId reason=", [System.StringComparison]::Ordinal)) {
+        $workspaceFailure = "$workspaceRuleId reason=canonical-checkout-invalid detail=$workspaceFailure"
+    }
+    Add-Failure $workspaceFailure
+}
 
-switch ($Mode) {
-    'Host' { Test-HostMode }
-    'Plugin' { Test-PluginMode }
-    'GitHubHost' { Test-GitHubHostMode }
+if ($failures.Count -eq 0) {
+    Test-CommonDeploymentInputs
+
+    switch ($Mode) {
+        'Host' { Test-HostMode }
+        'Plugin' { Test-PluginMode }
+        'GitHubHost' { Test-GitHubHostMode }
+    }
 }
 
 if ($warnings.Count -gt 0) {

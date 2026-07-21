@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://iiot.local/schemas/edge-split-phase0-inputs.schema.json",
+  "title": "Edge split Phase 0 authority inputs",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "batchId", "baselineGit", "decisions", "testEvidence", "publishedComposition"],
+  "properties": {
+    "schemaVersion": { "const": 2 },
+    "batchId": { "const": "EDGE-SPLIT-000" },
+    "baselineGit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["head", "tree", "originMain", "pullRequest"],
+      "properties": {
+        "head": { "$ref": "#/$defs/gitObject" },
+        "tree": { "$ref": "#/$defs/gitObject" },
+        "originMain": { "$ref": "#/$defs/gitObject" },
+        "pullRequest": { "type": "string", "format": "uri", "pattern": "^https://github\\.com/[^/]+/[^/]+/pull/[0-9]+$" }
+      }
+    },
+    "decisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repositories", "sdkPackages", "packageSource", "targetHostApiVersion"],
+      "properties": {
+        "repositories": { "const": ["IIoT.EdgeClient", "IIoT.Edge.Sdk", "IIoT.Edge.Plugins.Private"] },
+        "sdkPackages": { "const": ["IIoT.Edge.Module.Contracts", "IIoT.Edge.Module.Sdk", "IIoT.Edge.UI.Shared", "IIoT.Edge.Module.Analyzers"] },
+        "packageSource": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["authorityForPhase0To5", "repositoryRelativePath", "remotePublishAllowed", "remoteAuthorityDecision"],
+          "properties": {
+            "authorityForPhase0To5": { "const": "isolated-local-feed" },
+            "repositoryRelativePath": { "const": "artifacts/edge-sdk-feed" },
+            "remotePublishAllowed": { "const": false },
+            "remoteAuthorityDecision": { "const": "deferred-to-Phase-6-explicit-authorization" }
+          }
+        },
+        "targetHostApiVersion": { "const": "2.0.0" }
+      }
+    },
+    "testEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["historicalBaseline"],
+      "properties": {
+        "historicalBaseline": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["evidenceRole", "sourceHead", "workflowRun", "requiredRunners", "discovered", "executed", "passed", "failed", "skipped"],
+          "properties": {
+            "evidenceRole": { "const": "historical-required-suite-baseline-only" },
+            "sourceHead": { "$ref": "#/$defs/gitObject" },
+            "workflowRun": { "type": "string", "format": "uri", "pattern": "^https://github\\.com/[^/]+/[^/]+/actions/runs/[0-9]+$" },
+            "requiredRunners": { "type": "integer", "minimum": 1 },
+            "discovered": { "type": "integer", "minimum": 1 },
+            "executed": { "type": "integer", "minimum": 1 },
+            "passed": { "type": "integer", "minimum": 1 },
+            "failed": { "const": 0 },
+            "skipped": { "const": 0 }
+          }
+        }
+      }
+    },
+    "publishedComposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["catalogApiBaseUrl", "byteVerification", "host", "plugin"],
+      "properties": {
+        "catalogApiBaseUrl": { "$ref": "#/$defs/safeHttpUri" },
+        "byteVerification": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "method", "recordedOn", "note"],
+          "properties": {
+            "status": { "const": "verified" },
+            "method": { "const": "download-size-sha256-and-archive-inventory" },
+            "recordedOn": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+            "note": { "type": "string", "minLength": 1 }
+          }
+        },
+        "host": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["version", "hostApiVersion", "catalogDownloadUrl", "manifestUrl", "manifestSha256", "manifestSize", "artifactUrl", "sha256", "size", "sourceCommit"],
+          "properties": {
+            "version": { "$ref": "#/$defs/semanticVersion" },
+            "hostApiVersion": { "$ref": "#/$defs/semanticVersion" },
+            "catalogDownloadUrl": { "type": "string", "pattern": "^/(?!.*(?:^|/)\\.\\.(?:/|$))[^?#]+$" },
+            "manifestUrl": { "$ref": "#/$defs/safeHttpUri" },
+            "manifestSha256": { "$ref": "#/$defs/sha256" },
+            "manifestSize": { "type": "integer", "minimum": 1 },
+            "artifactUrl": { "$ref": "#/$defs/safeHttpUri" },
+            "sha256": { "$ref": "#/$defs/sha256" },
+            "size": { "type": "integer", "minimum": 1 },
+            "sourceCommit": { "$ref": "#/$defs/gitObject" }
+          }
+        },
+        "plugin": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["moduleId", "version", "hostApiVersion", "artifactUrl", "sha256", "size", "sourceCommit", "packageEntries", "requiredPackageEntries"],
+          "properties": {
+            "moduleId": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$" },
+            "version": { "$ref": "#/$defs/semanticVersion" },
+            "hostApiVersion": { "$ref": "#/$defs/semanticVersion" },
+            "artifactUrl": { "$ref": "#/$defs/safeHttpUri" },
+            "sha256": { "$ref": "#/$defs/sha256" },
+            "size": { "type": "integer", "minimum": 1 },
+            "sourceCommit": { "$ref": "#/$defs/gitObject" },
+            "packageEntries": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["path", "size"],
+                "properties": {
+                  "path": { "$ref": "#/$defs/repositoryPath" },
+                  "size": { "type": "integer", "minimum": 0 }
+                }
+              }
+            },
+            "requiredPackageEntries": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/repositoryPath" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "gitObject": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "semanticVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$" },
+    "repositoryPath": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?![A-Za-z]:[\\\\/])(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$" },
+    "safeHttpUri": { "type": "string", "format": "uri", "pattern": "^https?://[^@/?#]+(?::[0-9]+)?/[^?#]*$" }
+  }
+}

@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 2,
+  "batchId": "EDGE-SPLIT-000",
+  "baselineGit": {
+    "head": "7474b3a919d8e0058ac529fdda6e2d0cd720390d",
+    "tree": "7dffa8b378d37865f86599deac8ed8f88a55a42a",
+    "originMain": "164115abb15d0a9cfb4dd718e526a042ff2db263",
+    "pullRequest": "https://github.com/ShuJinHao/IIoT.EdgeClient/pull/53"
+  },
+  "decisions": {
+    "repositories": [
+      "IIoT.EdgeClient",
+      "IIoT.Edge.Sdk",
+      "IIoT.Edge.Plugins.Private"
+    ],
+    "sdkPackages": [
+      "IIoT.Edge.Module.Contracts",
+      "IIoT.Edge.Module.Sdk",
+      "IIoT.Edge.UI.Shared",
+      "IIoT.Edge.Module.Analyzers"
+    ],
+    "packageSource": {
+      "authorityForPhase0To5": "isolated-local-feed",
+      "repositoryRelativePath": "artifacts/edge-sdk-feed",
+      "remotePublishAllowed": false,
+      "remoteAuthorityDecision": "deferred-to-Phase-6-explicit-authorization"
+    },
+    "targetHostApiVersion": "2.0.0"
+  },
+  "testEvidence": {
+    "historicalBaseline": {
+      "evidenceRole": "historical-required-suite-baseline-only",
+      "sourceHead": "7474b3a919d8e0058ac529fdda6e2d0cd720390d",
+      "workflowRun": "https://github.com/ShuJinHao/IIoT.EdgeClient/actions/runs/29558380849",
+      "requiredRunners": 32,
+      "discovered": 1332,
+      "executed": 1332,
+      "passed": 1332,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "publishedComposition": {
+    "catalogApiBaseUrl": "http://10.98.90.154:81/api/v1",
+    "byteVerification": {
+      "status": "verified",
+      "method": "download-size-sha256-and-archive-inventory",
+      "recordedOn": "2026-07-17",
+      "note": "Frozen historical evidence; rerun the generator with -RefreshHistoricalArtifactEvidence only when the internal immutable endpoints are reachable."
+    },
+    "host": {
+      "version": "1.0.29",
+      "hostApiVersion": "1.0.0",
+      "catalogDownloadUrl": "/edge-updates/installers/stable/1.0.29/installer-artifact.json",
+      "manifestUrl": "http://10.98.90.154:81/edge-updates/installers/stable/1.0.29/installer-artifact.json",
+      "manifestSha256": "97d75f802681a2dd16f4a6a05f83462b51d69a74afb72c10f178762491691ef7",
+      "manifestSize": 1539,
+      "artifactUrl": "http://10.98.90.154:81/edge-updates/installers/stable/1.0.29/IIoT.Edge.Setup.exe",
+      "sha256": "669a35b0795cbc03d94ba29566ca630eacfc83590ff8c40ff3676adaec3d7f46",
+      "size": 49035816,
+      "sourceCommit": "afe32d7e4de930529cb9c340fde30f1fa838a9a4"
+    },
+    "plugin": {
+      "moduleId": "Homogenization",
+      "version": "1.0.1",
+      "hostApiVersion": "1.0.0",
+      "artifactUrl": "http://10.98.90.154:81/edge-updates/plugins/stable/Homogenization/1.0.1/IIoT.EdgePlugin.Homogenization-1.0.1-win-x64.zip",
+      "sha256": "73e1ccb0f0af6e6e4bc37014e0c2a537d27825f5d0934e3723091830c1927473",
+      "size": 1130996,
+      "sourceCommit": "afe32d7e4de930529cb9c340fde30f1fa838a9a4",
+      "packageEntries": [
+        { "path": "Config/homogenization.module.json", "size": 5131 },
+        { "path": "IIoT.Edge.Application.dll", "size": 916992 },
+        { "path": "IIoT.Edge.Application.pdb", "size": 200540 },
+        { "path": "IIoT.Edge.Domain.dll", "size": 20992 },
+        { "path": "IIoT.Edge.Domain.pdb", "size": 18860 },
+        { "path": "IIoT.Edge.Module.Homogenization.deps.json", "size": 28125 },
+        { "path": "IIoT.Edge.Module.Homogenization.dll", "size": 210432 },
+        { "path": "IIoT.Edge.Module.Homogenization.pdb", "size": 49632 },
+        { "path": "IIoT.Edge.Module.Sdk.dll", "size": 33792 },
+        { "path": "IIoT.Edge.Module.Sdk.pdb", "size": 20400 },
+        { "path": "IIoT.Edge.Presentation.Navigation.dll", "size": 777216 },
+        { "path": "IIoT.Edge.Presentation.Navigation.pdb", "size": 188876 },
+        { "path": "IIoT.Edge.Presentation.Panels.dll", "size": 109056 },
+        { "path": "IIoT.Edge.Presentation.Panels.pdb", "size": 34356 },
+        { "path": "IIoT.Edge.SharedKernel.dll", "size": 51200 },
+        { "path": "IIoT.Edge.SharedKernel.pdb", "size": 28856 },
+        { "path": "IIoT.Edge.UI.Shared.dll", "size": 422400 },
+        { "path": "IIoT.Edge.UI.Shared.pdb", "size": 98184 },
+        { "path": "plugin.json", "size": 378 },
+        { "path": "Resources/Languages/en-US.axaml", "size": 7972 },
+        { "path": "Resources/Languages/zh-CN.axaml", "size": 7821 }
+      ],
+      "requiredPackageEntries": [
+        "plugin.json",
+        "IIoT.Edge.Module.Homogenization.dll",
+        "IIoT.Edge.Application.dll",
+        "IIoT.Edge.Domain.dll",
+        "IIoT.Edge.Module.Sdk.dll",
+        "IIoT.Edge.Presentation.Navigation.dll",
+        "IIoT.Edge.SharedKernel.dll",
+        "IIoT.Edge.UI.Shared.dll",
+        "Config/homogenization.module.json",
+        "Resources/Languages/en-US.axaml",
+        "Resources/Languages/zh-CN.axaml"
+      ]
+    }
+  }
+}

@@ -60,6 +60,172 @@ function Invoke-Git {
     }
 }
 
+function Invoke-PreflightProcess {
+    param(
+        [Parameter(Mandatory = $true)][string]$ScriptPath,
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [ValidateRange(1, 300)][int]$TimeoutSeconds = 30
+    )
+
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = (Get-Command pwsh -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+    $startInfo.WorkingDirectory = Split-Path -Parent (Split-Path -Parent $ScriptPath)
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    foreach ($argument in @('-NoLogo', '-NoProfile', '-File', $ScriptPath) + $Arguments) {
+        $startInfo.ArgumentList.Add([string]$argument)
+    }
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    $started = $false
+    try {
+        if (-not $process.Start()) {
+            throw "Could not start deployment preflight fixture: $ScriptPath"
+        }
+        $started = $true
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+            $killError = ''
+            try {
+                $process.Kill($true)
+            }
+            catch {
+                $killError = $_.Exception.Message
+            }
+            if (-not $process.WaitForExit(5000)) {
+                throw "Deployment preflight fixture timed out after $TimeoutSeconds seconds and its process tree did not exit within the 5-second kill wait. killError=$killError script=$ScriptPath"
+            }
+            throw "Deployment preflight fixture timed out after $TimeoutSeconds seconds; the entire process tree was killed. script=$ScriptPath"
+        }
+        if (-not $stdoutTask.Wait(5000) -or -not $stderrTask.Wait(5000)) {
+            throw "Deployment preflight fixture exited but redirected output did not close within 5 seconds. script=$ScriptPath"
+        }
+        $stdout = $stdoutTask.Result
+        $stderr = $stderrTask.Result
+        $output = ($stdout + [Environment]::NewLine + $stderr).Trim()
+        $exitCode = $process.ExitCode
+
+        return [PSCustomObject]@{
+            ExitCode = $exitCode
+            Output = $output
+        }
+    }
+    finally {
+        if ($started) {
+            try {
+                if (-not $process.HasExited) {
+                    $process.Kill($true)
+                    [void]$process.WaitForExit(5000)
+                }
+            }
+            catch {
+                # The bounded timeout path already reports the actionable process failure.
+            }
+        }
+        $process.Dispose()
+    }
+}
+
+function Assert-PreflightResult {
+    param(
+        [Parameter(Mandatory = $true)]$Result,
+        [Parameter(Mandatory = $true)][int]$ExpectedExitCode,
+        [Parameter(Mandatory = $true)][string[]]$RequiredText,
+        [Parameter(Mandatory = $true)][string]$Scenario,
+        [System.StringComparison]$TextComparison = [System.StringComparison]::OrdinalIgnoreCase
+    )
+
+    if ($Result.ExitCode -ne $ExpectedExitCode) {
+        throw "$Scenario expected exit $ExpectedExitCode, got $($Result.ExitCode). Output: $($Result.Output)"
+    }
+    foreach ($required in $RequiredText) {
+        if (-not $Result.Output.Contains($required, $TextComparison)) {
+            throw "$Scenario output did not contain '$required'. Output: $($Result.Output)"
+        }
+    }
+    $script:passed++
+}
+
+function New-PreflightWorkspaceFixture {
+    $fixtureRoot = New-TestDirectory
+    $workspaceRoot = Join-Path $fixtureRoot 'workspace'
+    $canonicalRepository = Join-Path $workspaceRoot 'IIoT.EdgeClient'
+    $linkedRepository = Join-Path $fixtureRoot 'linked-edge'
+    $caseVariantRepository = Join-Path $fixtureRoot 'case-variant-edge'
+    $wrongWorkspaceRoot = Join-Path $fixtureRoot 'wrong-workspace'
+    $wrongCanonicalRepository = Join-Path $wrongWorkspaceRoot 'IIoT.EdgeClient'
+
+    foreach ($directory in @(
+        (Join-Path $workspaceRoot 'docs'),
+        (Join-Path $workspaceRoot 'deploy'),
+        (Join-Path $canonicalRepository 'scripts'),
+        (Join-Path $canonicalRepository 'docs'),
+        (Join-Path $canonicalRepository 'src/Edge/IIoT.Edge.Shell'),
+        (Join-Path $wrongWorkspaceRoot 'docs'),
+        (Join-Path $wrongWorkspaceRoot 'deploy'),
+        $wrongCanonicalRepository
+    )) {
+        New-Item -ItemType Directory -Force -Path $directory | Out-Null
+    }
+
+    Set-Content -Encoding UTF8 -LiteralPath (Join-Path $workspaceRoot 'docs/上传部署总览.md') -Value '# isolated workspace deployment overview marker'
+    Set-Content -Encoding UTF8 -LiteralPath (Join-Path $workspaceRoot 'deploy/Invoke-WorkspaceDeploy.ps1') -Value '# isolated marker; never executed'
+    Set-Content -Encoding UTF8 -LiteralPath (Join-Path $wrongWorkspaceRoot 'docs/上传部署总览.md') -Value '# wrong workspace marker'
+    Set-Content -Encoding UTF8 -LiteralPath (Join-Path $wrongWorkspaceRoot 'deploy/Invoke-WorkspaceDeploy.ps1') -Value '# wrong workspace marker; never executed'
+
+    Copy-Item -LiteralPath (Join-Path $scriptsRoot 'TestEdgeDeploymentPreflight.ps1') -Destination (Join-Path $canonicalRepository 'scripts/TestEdgeDeploymentPreflight.ps1')
+    Set-Content -Encoding UTF8 -LiteralPath (Join-Path $canonicalRepository 'scripts/EdgeReleaseCredential.Common.ps1') -Value '# isolated no-network credential stub'
+    Set-Content -Encoding UTF8 -LiteralPath (Join-Path $canonicalRepository 'scripts/EdgeDeployment.Common.ps1') -Value '# isolated deployment guard stub'
+    Set-Content -Encoding UTF8 -LiteralPath (Join-Path $canonicalRepository 'scripts/LocalPublishAndDeploy.ps1') -Value @'
+# Stable Edge host releases must use -Transport http
+# Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgeHost
+# Enter-EdgeDeploymentLock
+# ResumeReleaseRoot
+# UploadTimeoutSeconds
+'@
+    foreach ($requiredScript in @(
+        'PublishEdgeClientInstallerArtifact.ps1',
+        'TestEdgeClientInstallerArtifact.ps1',
+        'PackEdgeClientVelopack.ps1'
+    )) {
+        Set-Content -Encoding UTF8 -LiteralPath (Join-Path $canonicalRepository "scripts/$requiredScript") -Value '# isolated required host marker'
+    }
+    Set-Content -Encoding UTF8 -LiteralPath (Join-Path $canonicalRepository 'docs/客户端部署.md') -Value '# isolated Edge deployment guide'
+    Set-Content -Encoding UTF8 -LiteralPath (Join-Path $canonicalRepository 'docs/Edge安装更新验收.md') -Value '# isolated Edge installer acceptance guide'
+    Set-Content -Encoding UTF8 -LiteralPath (Join-Path $canonicalRepository 'src/Edge/IIoT.Edge.Shell/appsettings.fixture.json') -Value '{}'
+
+    Invoke-Git -WorkingDirectory $canonicalRepository -Arguments @('init', '-q')
+    Invoke-Git -WorkingDirectory $canonicalRepository -Arguments @('config', 'user.name', 'Edge Preflight Test')
+    Invoke-Git -WorkingDirectory $canonicalRepository -Arguments @('config', 'user.email', 'edge-preflight-test@example.invalid')
+    Invoke-Git -WorkingDirectory $canonicalRepository -Arguments @('add', 'scripts', 'docs', 'src')
+    Invoke-Git -WorkingDirectory $canonicalRepository -Arguments @('commit', '-q', '-m', 'isolated preflight fixture')
+    Invoke-Git -WorkingDirectory $canonicalRepository -Arguments @('worktree', 'add', '--detach', $linkedRepository, 'HEAD')
+    if (-not $IsWindows) {
+        Invoke-Git -WorkingDirectory $canonicalRepository -Arguments @('worktree', 'add', '--detach', $caseVariantRepository, 'HEAD')
+    }
+
+    Invoke-Git -WorkingDirectory $wrongCanonicalRepository -Arguments @('init', '-q')
+    Invoke-Git -WorkingDirectory $wrongCanonicalRepository -Arguments @('config', 'user.name', 'Wrong Edge Owner Test')
+    Invoke-Git -WorkingDirectory $wrongCanonicalRepository -Arguments @('config', 'user.email', 'wrong-edge-owner-test@example.invalid')
+    Set-Content -Encoding UTF8 -LiteralPath (Join-Path $wrongCanonicalRepository 'tracked.txt') -Value 'independent repository owner'
+    Invoke-Git -WorkingDirectory $wrongCanonicalRepository -Arguments @('add', 'tracked.txt')
+    Invoke-Git -WorkingDirectory $wrongCanonicalRepository -Arguments @('commit', '-q', '-m', 'independent owner')
+
+    return [PSCustomObject]@{
+        WorkspaceRoot = $workspaceRoot
+        CanonicalRepository = $canonicalRepository
+        LinkedRepository = $linkedRepository
+        CaseVariantRepository = $caseVariantRepository
+        WrongWorkspaceRoot = $wrongWorkspaceRoot
+        CanonicalPreflight = Join-Path $canonicalRepository 'scripts/TestEdgeDeploymentPreflight.ps1'
+        LinkedPreflight = Join-Path $linkedRepository 'scripts/TestEdgeDeploymentPreflight.ps1'
+    }
+}
+
 try {
     $oldDispatch = $env:IIOT_EDGE_WORKSPACE_DISPATCH
     $oldTarget = $env:IIOT_EDGE_WORKSPACE_TARGET
@@ -74,6 +240,164 @@ try {
     $env:IIOT_EDGE_WORKSPACE_INVOCATION_ID = [Guid]::NewGuid().ToString('D')
     Assert-ThrowsContaining -Action { Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgeHost | Out-Null } -Needles @('target mismatch')
     Assert-Passes -Action { Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgePlugin | Out-Null }
+
+    $preflightFixture = New-PreflightWorkspaceFixture
+    $basePreflightArguments = @(
+        '-Mode', 'Host',
+        '-SkipCloud',
+        '-AllowDirty',
+        '-ReleaseNotes', 'isolated deployment preflight fixture'
+    )
+
+    $canonicalFixtureAuthFiles = [Collections.Generic.List[string]]::new()
+    foreach ($authRoot in @(
+        (Join-Path $preflightFixture.CanonicalRepository 'src/Edge/IIoT.Edge.Launcher/Services'),
+        (Join-Path $preflightFixture.CanonicalRepository 'src/Infrastructure/IIoT.Edge.Infrastructure.Integration/Auth')
+    )) {
+        if (Test-Path -LiteralPath $authRoot -PathType Container) {
+            foreach ($authFile in Get-ChildItem -LiteralPath $authRoot -Recurse -File -Filter '*.cs') {
+                $canonicalFixtureAuthFiles.Add($authFile.FullName)
+            }
+        }
+    }
+    Assert-True -Condition ($canonicalFixtureAuthFiles.Count -eq 0) `
+        -Message 'Canonical deployment preflight fixture must exercise the real zero-auth-file scanner contract.'
+
+    $canonicalResult = Invoke-PreflightProcess -ScriptPath $preflightFixture.CanonicalPreflight -Arguments $basePreflightArguments
+    Assert-PreflightResult -Result $canonicalResult -ExpectedExitCode 0 `
+        -RequiredText @('Deployment preflight passed.') -Scenario 'canonical checkout default workspace root'
+
+    $linkedWithoutRootResult = Invoke-PreflightProcess -ScriptPath $preflightFixture.LinkedPreflight -Arguments $basePreflightArguments
+    Assert-PreflightResult -Result $linkedWithoutRootResult -ExpectedExitCode 1 `
+        -RequiredText @('EDGE-DEPLOY-WORKSPACE-001', 'reason=linked-worktree-requires-explicit-root', '-WorkspaceRoot') `
+        -Scenario 'linked worktree without explicit workspace root'
+
+    $linkedArguments = $basePreflightArguments + @('-WorkspaceRoot', $preflightFixture.WorkspaceRoot)
+    $linkedResult = Invoke-PreflightProcess -ScriptPath $preflightFixture.LinkedPreflight -Arguments $linkedArguments
+    Assert-PreflightResult -Result $linkedResult -ExpectedExitCode 0 `
+        -RequiredText @('Deployment preflight passed.') -Scenario 'linked worktree with explicit workspace root'
+
+    $wrongOwnerArguments = $basePreflightArguments + @('-WorkspaceRoot', $preflightFixture.WrongWorkspaceRoot)
+    $wrongOwnerResult = Invoke-PreflightProcess -ScriptPath $preflightFixture.LinkedPreflight -Arguments $wrongOwnerArguments
+    Assert-PreflightResult -Result $wrongOwnerResult -ExpectedExitCode 1 `
+        -RequiredText @('EDGE-DEPLOY-WORKSPACE-001', 'reason=repository-owner-mismatch') `
+        -Scenario 'workspace root with markers but wrong repository owner'
+
+    $testOnlyScriptDirectory = Join-Path $preflightFixture.LinkedRepository 'scripts/tests/fixtures'
+    $sourceTestsDirectory = Join-Path $preflightFixture.LinkedRepository 'src/Tests/PreflightFixture'
+    $sourceTestingDirectory = Join-Path $preflightFixture.LinkedRepository 'src/Testing/PreflightFixture'
+    New-Item -ItemType Directory -Force -Path $testOnlyScriptDirectory, $sourceTestsDirectory, $sourceTestingDirectory | Out-Null
+    $testOnlyScriptPath = Join-Path $testOnlyScriptDirectory 'TestOnlyPasswordHash.ps1'
+    Set-Content -Encoding UTF8 -LiteralPath $testOnlyScriptPath -Value @'
+param([string]$Password)
+$algorithm = [Security.Cryptography.SHA256]::Create()
+$bytes = [Text.Encoding]::UTF8.GetBytes($Password)
+$algorithm.ComputeHash($bytes)
+'@
+    $testOnlyDebugSource = @'
+namespace PreflightFixture;
+internal static class TestOnlyDebugOutput
+{
+    internal static void Write() => System.Diagnostics.Debug.WriteLine("test-only negative fixture");
+}
+'@
+    Set-Content -Encoding UTF8 -LiteralPath (Join-Path $sourceTestsDirectory 'TestOnlyDebugOutput.cs') -Value $testOnlyDebugSource
+    Set-Content -Encoding UTF8 -LiteralPath (Join-Path $sourceTestingDirectory 'TestOnlyDebugOutput.cs') -Value $testOnlyDebugSource
+
+    $testOwnerResult = Invoke-PreflightProcess -ScriptPath $preflightFixture.LinkedPreflight -Arguments $linkedArguments
+    Assert-PreflightResult -Result $testOwnerResult -ExpectedExitCode 0 `
+        -RequiredText @('Deployment preflight passed.') -Scenario 'three test-owned negative fixture paths'
+
+    if (-not $IsWindows) {
+        $caseProbeDirectory = Join-Path $preflightFixture.CaseVariantRepository '.case-sensitive-coexistence-probe'
+        New-Item -ItemType Directory -Path $caseProbeDirectory | Out-Null
+        $caseProbeExactPath = Join-Path $caseProbeDirectory 'edge-path-owner'
+        $caseProbeVariantPath = Join-Path $caseProbeDirectory 'Edge-Path-Owner'
+        [IO.File]::WriteAllText($caseProbeExactPath, 'exact-owner')
+        $caseProbeVariantWriteSucceeded = $true
+        try {
+            [IO.File]::WriteAllText($caseProbeVariantPath, 'case-variant')
+        }
+        catch {
+            $caseProbeVariantWriteSucceeded = $false
+        }
+        $caseProbeNames = @([IO.Directory]::EnumerateFiles($caseProbeDirectory) | ForEach-Object { [IO.Path]::GetFileName($_) })
+        $caseProbeHasExact = @($caseProbeNames | Where-Object {
+            [string]::Equals($_, 'edge-path-owner', [System.StringComparison]::Ordinal)
+        }).Count -eq 1
+        $caseProbeHasVariant = @($caseProbeNames | Where-Object {
+            [string]::Equals($_, 'Edge-Path-Owner', [System.StringComparison]::Ordinal)
+        }).Count -eq 1
+        $caseSensitiveCoexistenceSupported = $caseProbeVariantWriteSucceeded -and $caseProbeHasExact -and $caseProbeHasVariant
+
+        $caseVariantOriginalPreflight = Join-Path $preflightFixture.CaseVariantRepository 'scripts/TestEdgeDeploymentPreflight.ps1'
+        if ($caseSensitiveCoexistenceSupported) {
+            $exactScriptTestsDirectory = Join-Path $preflightFixture.CaseVariantRepository 'scripts/tests/fixtures'
+            $caseVariantScriptTestsDirectory = Join-Path $preflightFixture.CaseVariantRepository 'scripts/Tests/fixtures'
+            $exactSourceTestsDirectory = Join-Path $preflightFixture.CaseVariantRepository 'src/Tests/PreflightFixture'
+            $caseVariantSourceTestsDirectory = Join-Path $preflightFixture.CaseVariantRepository 'src/tests/PreflightFixture'
+            New-Item -ItemType Directory -Force -Path `
+                $exactScriptTestsDirectory, $caseVariantScriptTestsDirectory, `
+                $exactSourceTestsDirectory, $caseVariantSourceTestsDirectory | Out-Null
+            Copy-Item -LiteralPath $testOnlyScriptPath -Destination (Join-Path $exactScriptTestsDirectory 'ExactOwnerPasswordHash.ps1')
+            Copy-Item -LiteralPath $testOnlyScriptPath -Destination (Join-Path $caseVariantScriptTestsDirectory 'CaseVariantPasswordHash.ps1')
+            Set-Content -Encoding UTF8 -LiteralPath (Join-Path $exactSourceTestsDirectory 'ExactOwnerDebugOutput.cs') -Value $testOnlyDebugSource
+            Set-Content -Encoding UTF8 -LiteralPath (Join-Path $caseVariantSourceTestsDirectory 'CaseVariantDebugOutput.cs') -Value $testOnlyDebugSource
+
+            $caseVariantPreflight = Join-Path $preflightFixture.CaseVariantRepository 'scripts/TestEdgeDeploymentPreFlight.ps1'
+            Copy-Item -LiteralPath $caseVariantOriginalPreflight -Destination $caseVariantPreflight
+
+            $scriptDirectoryNames = [Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+            foreach ($directoryPath in [IO.Directory]::EnumerateDirectories((Join-Path $preflightFixture.CaseVariantRepository 'scripts'))) {
+                [void]$scriptDirectoryNames.Add([IO.Path]::GetFileName($directoryPath))
+            }
+            $sourceDirectoryNames = [Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+            foreach ($directoryPath in [IO.Directory]::EnumerateDirectories((Join-Path $preflightFixture.CaseVariantRepository 'src'))) {
+                [void]$sourceDirectoryNames.Add([IO.Path]::GetFileName($directoryPath))
+            }
+            $preflightFileNames = [Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+            foreach ($filePath in [IO.Directory]::EnumerateFiles((Join-Path $preflightFixture.CaseVariantRepository 'scripts'))) {
+                [void]$preflightFileNames.Add([IO.Path]::GetFileName($filePath))
+            }
+            Assert-True `
+                -Condition ($scriptDirectoryNames.Contains('tests') -and $scriptDirectoryNames.Contains('Tests') -and
+                    $sourceDirectoryNames.Contains('Tests') -and $sourceDirectoryNames.Contains('tests') -and
+                    $preflightFileNames.Contains('TestEdgeDeploymentPreflight.ps1') -and
+                    $preflightFileNames.Contains('TestEdgeDeploymentPreFlight.ps1')) `
+                -Message 'Case-sensitive fixture did not preserve exact self/owner paths and their case variants simultaneously.'
+
+            $caseVariantArguments = $basePreflightArguments + @('-WorkspaceRoot', $preflightFixture.WorkspaceRoot)
+            $caseVariantResult = Invoke-PreflightProcess -ScriptPath $caseVariantPreflight -Arguments $caseVariantArguments
+            Assert-PreflightResult -Result $caseVariantResult -ExpectedExitCode 1 `
+                -RequiredText @(
+                    'EDGE-DEPLOY-SECURITY-001',
+                    'scripts/Tests/fixtures/CaseVariantPasswordHash.ps1',
+                    'src/tests/PreflightFixture/CaseVariantDebugOutput.cs',
+                    'scripts/TestEdgeDeploymentPreFlight.ps1'
+                ) `
+                -Scenario 'non-Windows case-variant paths remain production-owned' `
+                -TextComparison ([System.StringComparison]::Ordinal)
+        }
+        else {
+            $preflightSource = [IO.File]::ReadAllText($caseVariantOriginalPreflight)
+            $pathComparisonContract = '\$pathComparison\s*=\s*if\s*\(\$IsWindows\)[\s\S]*?\[System\.StringComparison\]::OrdinalIgnoreCase[\s\S]*?\[System\.StringComparison\]::Ordinal'
+            $pathComparerContract = '\$pathComparer\s*=\s*if\s*\(\$pathComparison\s+-eq\s+\[System\.StringComparison\]::OrdinalIgnoreCase\)[\s\S]*?\[System\.StringComparer\]::OrdinalIgnoreCase[\s\S]*?\[System\.StringComparer\]::Ordinal'
+            Assert-True `
+                -Condition ([regex]::IsMatch($preflightSource, $pathComparisonContract) -and [regex]::IsMatch($preflightSource, $pathComparerContract)) `
+                -Message 'Case-sensitive path coexistence is unavailable and the non-Windows ordinal comparer source contract is missing.'
+            Write-Host 'Case-sensitive path coexistence is unavailable; verified the non-Windows ordinal comparer source contract without claiming the coexistence behavior ran.'
+            $passed++
+        }
+    }
+
+    $productionScriptDirectory = Join-Path $preflightFixture.LinkedRepository 'scripts/production'
+    New-Item -ItemType Directory -Force -Path $productionScriptDirectory | Out-Null
+    $productionScriptPath = Join-Path $productionScriptDirectory 'TestOnlyPasswordHash.ps1'
+    Copy-Item -LiteralPath $testOnlyScriptPath -Destination $productionScriptPath
+    $productionResult = Invoke-PreflightProcess -ScriptPath $preflightFixture.LinkedPreflight -Arguments $linkedArguments
+    Assert-PreflightResult -Result $productionResult -ExpectedExitCode 1 `
+        -RequiredText @('EDGE-DEPLOY-SECURITY-001', 'SHA256 password hash generation script content', 'scripts/production/TestOnlyPasswordHash.ps1') `
+        -Scenario 'same-byte production security violation'
 
     $gitFixtureRoot = New-TestDirectory
     $gitRepo = Join-Path $gitFixtureRoot 'repo'

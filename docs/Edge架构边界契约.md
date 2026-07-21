@@ -216,13 +216,13 @@ AnalyzerTests 必须是 Pure/Architecture 测试，不得启动 Shell、SQLite�
 
 ## 8. Edge 当前测试分类与物理归口
 
-`Regression` 只是 cross-cutting `RegressionId`，不是 TestKind 或物理项目。当前机器真值为 61 个 solution 项目、32 个 required runner、1 个中性插件 fixture，Release 发现 1332 case。Unit 只允许 `Pure + Parallel`；其他 Pure runner 也受控并行；Filesystem、SQLite、Avalonia 和 Windows runner 必须物理命名且串行。
+`Regression` 只是 cross-cutting `RegressionId`，不是 TestKind 或物理项目。历史冻结 inventory / 最近可信完整基线为 61 个 solution 项目、32 个 required runner、1 个中性插件 fixture，Release 发现 1334 case；相对 PR #53 的 1332 基线只新增本契约账本的 2 条 Architecture case。当前 Gap A formal-close 候选未新增 Fact，但已修改既有 Architecture Fact，尚未重新执行 discovery/TRX；1334 只能作为历史预期，禁止称为本批 PASS。Unit 只允许 `Pure + Parallel`；其他 Pure runner 也受控并行；Filesystem、SQLite、Avalonia 和 Windows runner 必须物理命名且串行。
 
 | Required runner | TestKind | Runtime / mode | Cases |
 |---|---|---|---:|
 | `IIoT.Edge.Application.Tests` | Application | Pure / Parallel | 47 |
 | `IIoT.Edge.Architecture.AnalyzerTests` | Architecture | Pure / Parallel | 160 |
-| `IIoT.Edge.Architecture.Tests` | Architecture | Filesystem / Serial | 5 |
+| `IIoT.Edge.Architecture.Tests` | Architecture | Filesystem / Serial | 7 |
 | `IIoT.Edge.Caching.UnitTests` | Unit | Pure / Parallel | 12 |
 | `IIoT.Edge.Cloud.ContractFilesystemTests` | Contract | Filesystem / Serial | 6 |
 | `IIoT.Edge.Cloud.ContractTests` | Contract | Pure / Parallel | 87 |
@@ -269,7 +269,15 @@ AnalyzerTests 必须是 Pure/Architecture 测试，不得启动 Shell、SQLite�
 ## 10. 清单、质量与兼容对账
 
 - `edge-test-inventory.json`、`discovered-test-inventory.json` 和 `required-test-counts.json` 是唯一机器清单；普通 CI 只验证，不自动改写。
-- required 执行必须每项目独立 TRX/coverage，最终证明 `discovered = trxTotal = executed = passed = 1332`、`failed = skipped = 0`。
+- `EDGE-SPLIT-LEDGER-001` 的唯一 canonical 生成器是 `eng/Generate-EdgePluginContractLedger.ps1`；它必须以真实 MSBuild `Compile`/`ReferencePath`、evaluated `ProjectReference`、Roslyn semantic model、候选程序集 PE `AssemblyRef` 和候选插件 zip 生成四层独立依赖账本，并绑定 artifact、View/Page、resource、已发布历史组合和全部输入 SHA-256/size。每层必须记录完整输入/items、owner family、total/forbidden/unknown 计数，summary 再记录四层 forbidden count；strict schema 与 validator 必须分别拒绝缺字段、未知字段和伪造 count。Phase 0–3 的 package 层必须显式为 `not-applicable-before-EDGE-SPLIT-040`，不能伪装为 evaluated zero；Phase 4–5 必须读取真实 zip 并逐 entry hash/size 对账。`unknownAssemblies`、`unclassifiedSymbols` 必须恒为 0；`EDGE-SPLIT-020` 与 `EDGE-SPLIT-030` carry set 以 Phase 0 exact item/count 冻结，随后只允许 retained-exact 或在目标批次 closed/zero，禁止增长、替换身份或由并行脚本、namespace grep、手工 JSON 形成第二真相源。每个 Phase 使用 implementation/evidence commit pair：只在 clean implementation commit 生成 ledger，仅排除 canonical ledger 路径，随后恰好一个 ledger-only evidence commit；final canonical validator 必须证明该 commit 的唯一 parent 是 recorded implementation HEAD、唯一差异是 ledger 且最终工作树完全 clean，禁止因 commit hash 自引用而记录虚假 clean/final HEAD。noncanonical/pending smoke 不是 final 证据。project/source/test/manifest/view/resource 的当前数量是可重算观测值，不是跨 Phase 永久常量。
+- schema v2 的完整 semantic-evidence identity 包含源路径/位置、精确 symbol、symbol kind、完整 owner assembly identity 和 usage kind；carry item 按 `sourcePath + ownerAssembly + symbol` 聚合，`count`/occurrence 等于该身份的底层语义证据记录数。stale schema v1 的窄语法/调用次数不得继续作为 carry 真值。审查通过的 schema v2 候选为 `EDGE-SPLIT-020` 22 exact items / 122 semantic-evidence occurrences，`EDGE-SPLIT-030` 6 个私有 Presentation exact items / 11 semantic-evidence occurrences；仅 final canonical evidence 完成后才正式冻结。`IIoT.Edge.UI.Shared` 为 approved stable SDK UI surface，候选账本的 34 条 UiShared usages 不是 Phase 3 carry；Phase 3 只归零私有 Presentation seam，同时对 UiShared 稳定契约做 package/API/runtime 边界对账。
+- Phase 0 formal closure 的唯一顺序是 `I（全部实现/测试/schema/tracked docs） → clean I 上唯一 generator → E（唯一 direct parent 为 I，且只改 canonical ledger） → E 上无参数 actual formal`。`scripts/tests/Invoke-EdgePluginContractFormalValidation.ps1` 必须保持 `param()`、固定仓根与 `eng/baselines/edge-plugin-contract-ledger.json`，不得暴露 ledger/root/command/fixture/skip 等 override，也不得调用 generator；`E` 之后禁止再补写 tracked 文档或代码，任何 tracked 漂移都使该证据链失效并要求重新形成 I/E。
+- formal precondition 必须精确证明：worktree 与 index 完全 clean；ledger 的 `sourceState` 绑定 `I` 的真实 HEAD/tree、`cleanObserved=true`、`dirtyPaths=[]` 且唯一 `excludedPaths` 为 canonical ledger；当前 `E` 是 `I` 的唯一直接子提交，parent inventory 只有 `I`，`I..E` 距离为 1，唯一 diff path 为 canonical ledger，tree entry mode 为 `100644`，committed blob 与 worktree ledger 原字节恒等。相同 precondition 必须在启动 authority 前执行两次并逐字段相等，不能用第一次结果跨越并发漂移。
+- actual formal 必须只启动一个 direct-child coordinator，由其产生 authority/replay `1/1` 的签名临时机器事实；descriptor 必须绑定 direct-child PID/start、I、E、canonical ledger 与收据 digest。正式收据验证和 fast consumer 必须分别保持 `RequireFormal` 以及 `-RequireAuthorityReceipt -RequireFormalAuthorityReceipt`，随后复核 repository post-state；受控 run root 只能按已知 marker/file allowlist 做 non-recursive exact cleanup，未知项、symlink/reparse、身份漂移或 recursive cleanup 都 fail-closed，cleanup 后再次复核仓库与收据原字节身份。
+- formal 成功输出必须通过独立 `eng/edge-plugin-contract-formal-validation-result.schema.json` 的 strict schema v1：未知字段拒绝，`mode=formal-clean`、`formal=true`、`passed=true`、I/E、ledger/receipt/public-key digest、authority/replay `1/1`、双 descriptor direct-child binding、两个 Require switches、`postStateStable=true` 与 `cleanupComplete=true` 均为固定事实。新增该 schema 不得改写既有 request/descriptor/receipt/authority-result 四份 schema v1 的字节或语义；`cleanupComplete` 不表示删除 final receipt，收据保留为本次机器验证输出。
+- static owner 的正式输入集合必须为 11 个受审源，formal 专属 mutation 必须保持 `10/10`，formal-result schema 必须以 `receiptPath='.artifacts/../x'` 的 path-traversal 负例保持 `1/1`，既有 lifecycle/protocol mutation 库保持 `87 + 22 + 3 = 112`，不得用 formal 新库替换、重命名或少算 legacy 库。上述数字是待真实入口执行并核对的机器契约，不是文档写入即产生的运行证据；AuthorityProtocol 的 synthetic formal fixture 只能证明 schema、签名绑定和 fail-closed ownership，绝不能替代 E 上的无参数 actual formal。
+- `Test-EdgePluginContractLedgerBehavior.ps1` 必须在任何 behavior mutant 之前 fail-closed 执行 `Test-EdgePluginContractLedgerPrimitives.ps1` 并传播非零退出；required Architecture xUnit 必须同时断言 primitives 和 behavior 通过标记，不得只在文档列独立命令或依赖维护者手动补跑。
+- required 执行必须每项目独立 TRX/coverage。历史冻结 inventory 的 expected count 为 1334；当前 Gap A 候选只有在 post-E full gate 重新证明 `discovered = trxTotal = executed = passed = 1334`、`failed = skipped = 0` 后才能沿用该数量，运行前不得称为本批 PASS。
 - regression ledger 的退役证据必须是可执行契约，不是自由文本豁免。当前 `EDGE-DIECUT-RETIRE-001` 由 schema v3 精确绑定冻结 source commit/tree、41 条唯一旧声明、4 个历史源路径、受控 token/path pattern、`retired-diecut` disposition/decision、非空 reason 和 current discovery 零回流；非文档 active input 只允许 canonical ledger generator 与 ledger 两处命中。`Test-EdgeRetiredFeatureEvidence.ps1` 必须扫描生产/测试/UI/solution/project/config/`.github`/打包发布与全部其它脚本，第三处命中直接失败；独立 fixture 必须证明活动源码、第三治理文件、40/42、重复 oldKey、错误 disposition/decision 和旧声明回流均非零退出。该门禁只接入 smoke 与 runtime-pack 的 preflight，不新增发布入口，也不执行 package/release/deploy。
 - compatibility inventory 必须对 alias/adapter/wrapper/compat/legacy/shadow/obsolete/fallback/双写/影子候选逐项提供真实 consumer 证据与有期迁移窗口，并对每个真实声明精确登记 symbol/path/调用证据；宽 token disposition 不得掩护未登记 symbol。每个 `MigrationWindow` symbol 必须绑定唯一 window ID、replacement/deletion/latest removal 约束和逐 symbol 真实 coverage test；缺失/未知 window、token/path 不归属、无 coverage、零 consumer、新增 consumer、未分类或未登记候选直接失败。coverage test 必须是 required runner 中真实执行且 0 skipped 的行为测试，不得用空壳或注释代替。
 - duplication 分 production/test-support/tests 的 exact/near ratchet；coverage 覆盖所有 32 runner，并对 `EdgeMemoryCacheService` 和 `DataPipelineNonRetryableException` 设高风险阈值；mutation 固定 Domain Aggregate + MTP report-only 范围与证据，当前 baseline 必须与真实 report/trace 的全部状态数和重算 score 精确一致，伪分数或等总量状态漂移由独立 behavior fixture 拒绝。
@@ -281,7 +289,7 @@ AnalyzerTests 必须是 Pure/Architecture 测试，不得启动 Shell、SQLite�
 
 Windows required CI 必须在 25 分钟 hard timeout 内完成 Release build、Analyzer/project graph、正反 build fixture、source-quality、inventory/discovery、32 runner 执行、TRX/Skip 对账、coverage、compatibility、duplication、四类 baseline 相对不可变历史的单调校验、regression ledger 以及退役功能 evidence/negative fixtures；mutation 使用独立 report job，并先执行伪分数/状态漂移 behavior fixture，不伪装成编译错误。故意执行非法 native build 的 PowerShell fixture 在完成全部断言后必须显式清零 `$LASTEXITCODE`，不得把预期失败残留为 job 失败。当前 macOS 工作树的 32 runner/TRX 对账已实测全绿；Windows 远端 job 与 Windows 实机 Installer/Velopack/DPI 验收在取得对应证据前不得写成已验证。
 
-宿主、SDK 与私有插件三仓拆分由审核通过后的 `Edge宿主SDK私有插件三仓拆分计划.md` 单独执行，不是当前测试批次、依赖或进度项。`deploy/Deploy-Changed.ps1` 是生产 CD 入口，不属于 required 测试 CI；本批不运行发布或部署。
+宿主、SDK 与私有插件三仓拆分当前只授权执行 `Edge宿主SDK私有插件三仓拆分计划.md` 的 Phase 0–5，并继续在现有 `IIoT.EdgeClient` 仓内形成可验证、可回滚的批次；Phase 6–10、新 remote 仓、远端 NuGet 发布、生产部署和 `stable` 均未授权。`deploy/Deploy-Changed.ps1` 是生产 CD 入口，不属于 required 测试 CI；当前拆分批次不得运行发布或部署。
 
 ## 12. 非声明范围
 

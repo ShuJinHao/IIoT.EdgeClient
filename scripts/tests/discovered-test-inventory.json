@@ -4,7 +4,7 @@
   "inventoryPath": "scripts/tests/edge-test-inventory.json",
   "configuration": "Release",
   "projectCount": 32,
-  "caseCount": 1332,
+  "caseCount": 1334,
   "projects": [
     {
       "projectPath": "src/Tests/IIoT.Edge.Application.Tests/IIoT.Edge.Application.Tests.csproj",
@@ -19,7 +19,7 @@
     {
       "projectPath": "src/Tests/IIoT.Edge.Architecture.Tests/IIoT.Edge.Architecture.Tests.csproj",
       "projectName": "IIoT.Edge.Architecture.Tests",
-      "discovered": 5
+      "discovered": 7
     },
     {
       "projectPath": "src/Tests/IIoT.Edge.Caching.UnitTests/IIoT.Edge.Caching.UnitTests.csproj",
@@ -4930,6 +4930,56 @@
       "skipped": false
     },
     {
+      "caseKey": "IIoT.Edge.Architecture.Tests|IIoT.Edge.Architecture.Tests.EdgePluginContractLedgerTests.CanonicalLedgerValidator_ShouldRejectSemanticBypassFixtures",
+      "assembly": "IIoT.Edge.Architecture.Tests",
+      "projectPath": "src/Tests/IIoT.Edge.Architecture.Tests/IIoT.Edge.Architecture.Tests.csproj",
+      "identity": "IIoT.Edge.Architecture.Tests.EdgePluginContractLedgerTests.CanonicalLedgerValidator_ShouldRejectSemanticBypassFixtures",
+      "source": null,
+      "testKind": "Architecture",
+      "runtime": "Filesystem",
+      "runtimeDependencies": [
+        "MSBuild",
+        "PowerShell",
+        "Reflection"
+      ],
+      "runnerMode": "Serial",
+      "cadence": "PR",
+      "capability": "Architecture.ProjectGraph",
+      "risk": "P1",
+      "concern": "Compatibility",
+      "profile": "Default",
+      "owner": "Edge.Architecture",
+      "ruleId": "EDGE-QUALITY-001",
+      "regressionId": "EDGE-QUALITY-001",
+      "required": true,
+      "skipped": false
+    },
+    {
+      "caseKey": "IIoT.Edge.Architecture.Tests|IIoT.Edge.Architecture.Tests.EdgePluginContractLedgerTests.CanonicalLedger_ShouldPassSchemaDigestAndSemanticValidation",
+      "assembly": "IIoT.Edge.Architecture.Tests",
+      "projectPath": "src/Tests/IIoT.Edge.Architecture.Tests/IIoT.Edge.Architecture.Tests.csproj",
+      "identity": "IIoT.Edge.Architecture.Tests.EdgePluginContractLedgerTests.CanonicalLedger_ShouldPassSchemaDigestAndSemanticValidation",
+      "source": null,
+      "testKind": "Architecture",
+      "runtime": "Filesystem",
+      "runtimeDependencies": [
+        "MSBuild",
+        "PowerShell",
+        "Reflection"
+      ],
+      "runnerMode": "Serial",
+      "cadence": "PR",
+      "capability": "Architecture.ProjectGraph",
+      "risk": "P1",
+      "concern": "Compatibility",
+      "profile": "Default",
+      "owner": "Edge.Architecture",
+      "ruleId": "EDGE-QUALITY-001",
+      "regressionId": "EDGE-QUALITY-001",
+      "required": true,
+      "skipped": false
+    },
+    {
       "caseKey": "IIoT.Edge.Architecture.Tests|IIoT.Edge.Architecture.Tests.ProjectRegistryArchitectureTests.LegacyBucketAndCompatibilityProjects_ShouldBePhysicallyAbsent",
       "assembly": "IIoT.Edge.Architecture.Tests",
       "projectPath": "src/Tests/IIoT.Edge.Architecture.Tests/IIoT.Edge.Architecture.Tests.csproj",
@@ -4939,6 +4989,7 @@
       "runtime": "Filesystem",
       "runtimeDependencies": [
         "MSBuild",
+        "PowerShell",
         "Reflection"
       ],
       "runnerMode": "Serial",
@@ -4963,6 +5014,7 @@
       "runtime": "Filesystem",
       "runtimeDependencies": [
         "MSBuild",
+        "PowerShell",
         "Reflection"
       ],
       "runnerMode": "Serial",
@@ -4987,6 +5039,7 @@
       "runtime": "Filesystem",
       "runtimeDependencies": [
         "MSBuild",
+        "PowerShell",
         "Reflection"
       ],
       "runnerMode": "Serial",
@@ -5011,6 +5064,7 @@
       "runtime": "Filesystem",
       "runtimeDependencies": [
         "MSBuild",
+        "PowerShell",
         "Reflection"
       ],
       "runnerMode": "Serial",
@@ -5035,6 +5089,7 @@
       "runtime": "Filesystem",
       "runtimeDependencies": [
         "MSBuild",
+        "PowerShell",
         "Reflection"
       ],
       "runnerMode": "Serial",
