@@ -2,8 +2,8 @@
   "schemaVersion": 3,
   "defaultRegressionIdSource": "project.ruleId",
   "solutionPath": "IIoT.EdgeClient.slnx",
-  "solutionProjectCount": 61,
-  "testProjectCount": 32,
+  "solutionProjectCount": 50,
+  "testProjectCount": 26,
   "projects": [
     {
       "projectPath": "src/Tests/IIoT.Edge.Application.Tests/IIoT.Edge.Application.Tests.csproj",
@@ -21,25 +21,6 @@
       "profile": "Simulation",
       "owner": "Edge.Application",
       "ruleId": "EDGE-APP-TEST-001",
-      "required": true,
-      "overrides": null
-    },
-    {
-      "projectPath": "src/Tests/IIoT.Edge.Architecture.AnalyzerTests/IIoT.Edge.Architecture.AnalyzerTests.csproj",
-      "projectName": "IIoT.Edge.Architecture.AnalyzerTests",
-      "testKind": "Architecture",
-      "runtime": "Pure",
-      "runtimeDependencies": [
-        "Roslyn"
-      ],
-      "runnerMode": "Parallel",
-      "cadence": "PR",
-      "capability": "Architecture.Analyzers",
-      "risk": "P1",
-      "concern": "Compatibility",
-      "profile": "Default",
-      "owner": "Edge.Architecture",
-      "ruleId": "EDGE-QUALITY-001",
       "required": true,
       "overrides": null
     },
@@ -352,88 +333,6 @@
       ]
     },
     {
-      "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceFilesystemTests/IIoT.Edge.Module.Homogenization.ConformanceFilesystemTests.csproj",
-      "projectName": "IIoT.Edge.Module.Homogenization.ConformanceFilesystemTests",
-      "testKind": "Conformance",
-      "runtime": "Filesystem",
-      "runtimeDependencies": [
-        "AssemblyLoad"
-      ],
-      "runnerMode": "Serial",
-      "cadence": "PR",
-      "capability": "Plugins.HomogenizationPackaging",
-      "risk": "P0",
-      "concern": "Compatibility",
-      "profile": "GoldenDataset",
-      "owner": "Edge.Homogenization",
-      "ruleId": "EDGE-PLUGIN-PACKAGING-001",
-      "required": true,
-      "overrides": null
-    },
-    {
-      "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/IIoT.Edge.Module.Homogenization.ConformanceTests.csproj",
-      "projectName": "IIoT.Edge.Module.Homogenization.ConformanceTests",
-      "testKind": "Conformance",
-      "runtime": "Pure",
-      "runtimeDependencies": [],
-      "runnerMode": "Parallel",
-      "cadence": "PR",
-      "capability": "Plugins.HomogenizationConformance",
-      "risk": "P0",
-      "concern": "Compatibility",
-      "profile": "Simulation",
-      "owner": "Edge.Homogenization",
-      "ruleId": "EDGE-PLUGIN-CONFORMANCE-001",
-      "required": true,
-      "overrides": null
-    },
-    {
-      "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.WorkflowFilesystemTests/IIoT.Edge.Module.Homogenization.WorkflowFilesystemTests.csproj",
-      "projectName": "IIoT.Edge.Module.Homogenization.WorkflowFilesystemTests",
-      "testKind": "Workflow",
-      "runtime": "Filesystem",
-      "runtimeDependencies": [
-        "FakeTime",
-        "ControlledConcurrency"
-      ],
-      "runnerMode": "Serial",
-      "cadence": "PR",
-      "capability": "Plugins.HomogenizationRuntimeFilesystem",
-      "risk": "P0",
-      "concern": "Reliability",
-      "profile": "Simulation",
-      "owner": "Edge.Homogenization",
-      "ruleId": "EDGE-PLUGIN-WORKFLOW-FS-001",
-      "required": true,
-      "overrides": {
-        "source": "HomogenizationRuntimeBehaviorTests.cs",
-        "regressionId": "EDGE-PLUGIN-HOMOGENIZATION-001",
-        "risk": "P0",
-        "concern": "Reliability",
-        "ruleId": "EDGE-PLUGIN-WORKFLOW-001"
-      }
-    },
-    {
-      "projectPath": "src/Tests/IIoT.Edge.Module.Homogenization.WorkflowTests/IIoT.Edge.Module.Homogenization.WorkflowTests.csproj",
-      "projectName": "IIoT.Edge.Module.Homogenization.WorkflowTests",
-      "testKind": "Workflow",
-      "runtime": "Pure",
-      "runtimeDependencies": [
-        "FakeTime",
-        "ControlledConcurrency"
-      ],
-      "runnerMode": "Parallel",
-      "cadence": "PR",
-      "capability": "Plugins.HomogenizationWorkflow",
-      "risk": "P0",
-      "concern": "Reliability",
-      "profile": "Simulation",
-      "owner": "Edge.Homogenization",
-      "ruleId": "EDGE-PLUGIN-WORKFLOW-001",
-      "required": true,
-      "overrides": null
-    },
-    {
       "projectPath": "src/Tests/IIoT.Edge.Persistence.FilesystemTests/IIoT.Edge.Persistence.FilesystemTests.csproj",
       "projectName": "IIoT.Edge.Persistence.FilesystemTests",
       "testKind": "Persistence",
@@ -652,25 +551,6 @@
         "concern": "Reliability",
         "ruleId": "EDGE-STARTUP-NONBLOCKING-001"
       }
-    },
-    {
-      "projectPath": "src/Tests/IIoT.Edge.UI.Shared.Tests/IIoT.Edge.UI.Shared.Tests.csproj",
-      "projectName": "IIoT.Edge.UI.Shared.Tests",
-      "testKind": "UI",
-      "runtime": "Avalonia",
-      "runtimeDependencies": [
-        "Headless"
-      ],
-      "runnerMode": "Serial",
-      "cadence": "PR",
-      "capability": "UI.SharedControls",
-      "risk": "P2",
-      "concern": "Accessibility",
-      "profile": "Simulation",
-      "owner": "Edge.UI",
-      "ruleId": "EDGE-UI-001",
-      "required": true,
-      "overrides": null
     },
     {
       "projectPath": "src/Tests/IIoT.Edge.Update.ContractTests/IIoT.Edge.Update.ContractTests.csproj",

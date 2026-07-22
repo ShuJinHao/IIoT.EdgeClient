@@ -5,12 +5,13 @@ namespace IIoT.Edge.Launcher.FilesystemTests;
 public sealed class MainWindowBehaviorTests
 {
     [Fact]
-    public void MainWindow_ShouldNotHardcodeProcessChipsInHero()
+    public void MainWindow_HeroFlowChips_ShouldUseSharedResourceLabels()
     {
         var axaml = File.ReadAllText(ResolveLauncherAxamlPath("MainWindow.axaml"));
 
-        Assert.DoesNotContain("Text=\"叠片\"", axaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("Text=\"匀浆\"", axaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{DynamicResource Launcher_Hero_FlowLogin}\"", axaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{DynamicResource Launcher_Hero_FlowProfile}\"", axaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{DynamicResource Launcher_Hero_FlowShell}\"", axaml, StringComparison.Ordinal);
     }
 
     [Fact]
