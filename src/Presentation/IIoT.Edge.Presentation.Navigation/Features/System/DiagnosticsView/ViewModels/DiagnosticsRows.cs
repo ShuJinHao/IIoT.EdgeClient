@@ -1,5 +1,4 @@
 using IIoT.Edge.Module.Contracts.DataPipeline;
-using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.UI.Shared.Avalonia.Controls;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;

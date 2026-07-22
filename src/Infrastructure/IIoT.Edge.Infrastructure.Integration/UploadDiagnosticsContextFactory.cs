@@ -1,8 +1,8 @@
+using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Module.Contracts.Cloud;
 using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.Mes;
 using IIoT.Edge.Module.Sdk.DataPipeline;
-using IIoT.Edge.Module.Contracts.DataPipeline;
 
 namespace IIoT.Edge.Infrastructure.Integration;
 

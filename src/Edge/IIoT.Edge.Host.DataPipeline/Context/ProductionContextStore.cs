@@ -1,7 +1,6 @@
 using IIoT.Edge.Module.Contracts.Runtime;
 using IIoT.Edge.Module.Contracts.Context;
 using IIoT.Edge.Module.Contracts.Logging;
-using IIoT.Edge.Module.Contracts.Runtime;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 using System.Text.Json;
 

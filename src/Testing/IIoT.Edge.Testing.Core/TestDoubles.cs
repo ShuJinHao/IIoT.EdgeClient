@@ -10,8 +10,6 @@ using IIoT.Edge.Module.Contracts.Auth;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Module.Contracts.Time;
-using IIoT.Edge.Module.Contracts.Runtime;
-using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
 using IIoT.Edge.Module.Contracts.DataPipeline.DeviceLog;
 using IIoT.Edge.Module.Contracts.DataPipeline.Recipe;

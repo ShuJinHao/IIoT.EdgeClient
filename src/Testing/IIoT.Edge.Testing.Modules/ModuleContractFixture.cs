@@ -9,6 +9,7 @@ using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 using IIoT.Edge.Host.Bootstrap.Modules;
+using IIoT.Edge.Presentation.Navigation.PluginSystem;
 using IIoT.Edge.Shell.Core;
 using IIoT.Edge.UI.Shared.Modularity;
 using IIoT.Edge.UI.Shared.Mvvm;
@@ -82,6 +83,21 @@ public sealed class TestEdgeProcessModuleBuilder(
     public IServiceCollection Services { get; } = services;
 
     public IConfiguration Configuration { get; } = configuration;
+
+    public void RegisterStandardViews(StandardModuleViewRegistration registration)
+    {
+        ArgumentNullException.ThrowIfNull(registration);
+        this.RegisterStandardModuleViews(
+            registration.ModuleId,
+            registration.DataViewTitle,
+            registration.DataViewTitleResourceKey,
+            registration.CustomDataViewType,
+            registration.CustomDataViewModelType,
+            registration.DataMenuTitle,
+            registration.DataMenuTitleResourceKey,
+            registration.CacheDataView,
+            registration.SupportsRecipe);
+    }
 
     public void RegisterRoute(string viewId, Type viewType, Type viewModelType, bool cacheView = true)
         => viewRegistry.RegisterRoute(viewId, viewType, viewModelType, cacheView);

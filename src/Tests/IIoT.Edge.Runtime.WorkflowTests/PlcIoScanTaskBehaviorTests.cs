@@ -12,7 +12,6 @@ using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Infrastructure.DeviceComm.Signals;
 using IIoT.Edge.Module.Sdk.Signals;
 using IIoT.Edge.Module.Contracts.Runtime;
-using IIoT.Edge.Module.Contracts.Hardware;
 using Microsoft.Extensions.Time.Testing;
 using System.Reflection;
 

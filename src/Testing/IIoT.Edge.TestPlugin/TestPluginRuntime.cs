@@ -6,7 +6,6 @@ using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Module.Contracts.Plc.Store;
 using IIoT.Edge.Module.Sdk.Base;
 using IIoT.Edge.Module.Contracts.Runtime;
-using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 using Microsoft.Extensions.DependencyInjection;
 

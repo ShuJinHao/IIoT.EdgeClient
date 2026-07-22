@@ -2,6 +2,7 @@
 param(
     [string]$RepositoryRoot,
     [string]$SolutionPath,
+    [string]$AnalyzerPackageRoot,
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Release'
 )
@@ -157,21 +158,12 @@ function Test-IsActiveEdge {
     return $true
 }
 
-function Test-IsApprovedAnalyzerToolEdge {
-    param(
-        [Parameter(Mandatory)][object]$Item,
-        [Parameter(Mandatory)][string]$TargetPath
-    )
+function Test-IsForbiddenAnalyzerSourceEdge {
+    param([Parameter(Mandatory)][string]$TargetPath)
 
-    $expectedTarget = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../src/Analyzers/IIoT.Edge.Architecture.Analyzers/IIoT.Edge.Architecture.Analyzers.csproj'))
-    $expectedTargetsFile = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../Directory.Build.targets'))
-    return [IO.Path]::GetFullPath($TargetPath).Equals($expectedTarget, [StringComparison]::OrdinalIgnoreCase) -and
-        $Item.GetMetadataValue('OutputItemType').Equals('Analyzer', [StringComparison]::OrdinalIgnoreCase) -and
-        $Item.GetMetadataValue('ReferenceOutputAssembly').Equals('false', [StringComparison]::OrdinalIgnoreCase) -and
-        $Item.GetMetadataValue('PrivateAssets').Equals('all', [StringComparison]::OrdinalIgnoreCase) -and
-        [IO.Path]::GetFullPath($Item.GetMetadataValue('DefiningProjectFullPath')).Equals(
-            $expectedTargetsFile,
-            [StringComparison]::OrdinalIgnoreCase)
+    return [IO.Path]::GetFileNameWithoutExtension($TargetPath) -in @(
+        'IIoT.Edge.Module.Analyzers',
+        'IIoT.Edge.Architecture.Analyzers')
 }
 
 function Test-IsArchitectureDiagnosticText {
@@ -235,31 +227,6 @@ function Test-ContainsRealSuppressMessageAttribute {
         }
     }
     return $false
-}
-
-function Test-IsApprovedAnalyzerToolDeclaration {
-    param(
-        [Parameter(Mandatory)][System.Xml.XmlElement]$Item,
-        [Parameter(Mandatory)][string]$DefiningFile,
-        [Parameter(Mandatory)][string]$TargetPath
-    )
-
-    function Get-ItemMetadataValue {
-        param([Parameter(Mandatory)][string]$Name)
-        $attributeValue = $Item.GetAttribute($Name).Trim()
-        if (-not [string]::IsNullOrWhiteSpace($attributeValue)) { return $attributeValue }
-        $child = $Item.SelectSingleNode($Name)
-        if ($null -eq $child) { return '' }
-        return ([string]$child.InnerText).Trim()
-    }
-
-    $expectedTarget = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../src/Analyzers/IIoT.Edge.Architecture.Analyzers/IIoT.Edge.Architecture.Analyzers.csproj'))
-    $expectedTargetsFile = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../Directory.Build.targets'))
-    return [IO.Path]::GetFullPath($TargetPath).Equals($expectedTarget, [StringComparison]::OrdinalIgnoreCase) -and
-        (Get-ItemMetadataValue 'OutputItemType').Equals('Analyzer', [StringComparison]::OrdinalIgnoreCase) -and
-        (Get-ItemMetadataValue 'ReferenceOutputAssembly').Equals('false', [StringComparison]::OrdinalIgnoreCase) -and
-        (Get-ItemMetadataValue 'PrivateAssets').Equals('all', [StringComparison]::OrdinalIgnoreCase) -and
-        [IO.Path]::GetFullPath($DefiningFile).Equals($expectedTargetsFile, [StringComparison]::OrdinalIgnoreCase)
 }
 
 function Add-Finding {
@@ -481,7 +448,11 @@ if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
 
 $catalogRepositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $architectureCatalog = & (Join-Path $PSScriptRoot 'Get-EdgeArchitectureDiagnosticCatalog.ps1') `
-    -RepositoryRoot $catalogRepositoryRoot
+    -RepositoryRoot $catalogRepositoryRoot `
+    -AnalyzerPackageRoot $AnalyzerPackageRoot
+if ((Split-Path ([string]$architectureCatalog.AnalyzerPackageRoot) -Leaf) -cne '2.0.0') {
+    throw "WSARCH006 resolved Edge Analyzer package must remain pinned to 2.0.0: $($architectureCatalog.AnalyzerPackageRoot)"
+}
 $architectureCompilerIds = [System.Collections.Generic.HashSet[string]]::new(
     [string[]]$architectureCatalog.CompilerIds,
     [StringComparer]::OrdinalIgnoreCase)
@@ -658,8 +629,28 @@ foreach ($project in $projects) {
         Add-Finding 'WSARCH005' "$($project.RelativePath) production role '$($project.Role)' cannot use test identity: AssemblyName='$($project.EffectiveAssemblyName)', IsTestProject='$($project.EffectiveIsTestProject)'."
     }
 
+    $approvedAnalyzerReferenceCount = 0
     foreach ($package in @($project.EvaluatedProject.GetItems('PackageReference'))) {
         $packageName = $package.EvaluatedInclude.Trim()
+        if ($packageName.Equals('IIoT.Edge.Module.Analyzers', [StringComparison]::Ordinal)) {
+            $expectedTargetsFile = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../Directory.Build.targets'))
+            $definingPath = [IO.Path]::GetFullPath($package.GetMetadataValue('DefiningProjectFullPath'))
+            $includeAssets = $package.GetMetadataValue('IncludeAssets')
+            $includeAssetNames = @(
+                $includeAssets.Split(';', [StringSplitOptions]::RemoveEmptyEntries) |
+                    ForEach-Object { $_.Trim() }
+            )
+            $isApprovedAnalyzerPackage =
+                $package.GetMetadataValue('PrivateAssets').Equals('all', [StringComparison]::OrdinalIgnoreCase) -and
+                $package.GetMetadataValue('GeneratePathProperty').Equals('true', [StringComparison]::OrdinalIgnoreCase) -and
+                $includeAssetNames -contains 'analyzers' -and
+                $definingPath.Equals($expectedTargetsFile, [StringComparison]::OrdinalIgnoreCase)
+            if ($isApprovedAnalyzerPackage) {
+                $approvedAnalyzerReferenceCount++
+            } else {
+                Add-Finding 'WSARCH006' "$($project.RelativePath) has an unapproved Edge Analyzer package declaration."
+            }
+        }
         if ($project.Role -notin @('Test', 'Analyzer') -and
             ($packageName -match '(?i)(^xunit|Test\.Sdk|TestPlatform|Moq|NSubstitute|FluentAssertions)')) {
             $definingPath = $package.GetMetadataValue('DefiningProjectFullPath')
@@ -703,7 +694,6 @@ foreach ($project in $projects) {
     }
 
     $registeredProjectReferencePaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-    $approvedAnalyzerReferenceCount = 0
     foreach ($item in @($project.EvaluatedProject.GetItems('ProjectReference'))) {
         $targetPath = $item.GetMetadataValue('FullPath')
         if ([string]::IsNullOrWhiteSpace($targetPath)) {
@@ -712,8 +702,8 @@ foreach ($project in $projects) {
             $targetPath = [IO.Path]::GetFullPath($targetPath)
         }
 
-        if (Test-IsApprovedAnalyzerToolEdge -Item $item -TargetPath $targetPath) {
-            $approvedAnalyzerReferenceCount++
+        if (Test-IsForbiddenAnalyzerSourceEdge -TargetPath $targetPath) {
+            Add-Finding 'WSARCH006' "$($project.RelativePath) must consume the Edge Analyzer package, not its source project."
             continue
         }
 
@@ -948,7 +938,8 @@ foreach ($project in $projects) {
 
             foreach ($candidate in $expandedInclude.Split(';', [StringSplitOptions]::RemoveEmptyEntries)) {
                 $targetPath = Resolve-FullPath $project.Directory $candidate.Trim()
-                if (Test-IsApprovedAnalyzerToolDeclaration -Item $itemElement -DefiningFile $declarationFile -TargetPath $targetPath) {
+                if (Test-IsForbiddenAnalyzerSourceEdge -TargetPath $targetPath) {
+                    Add-Finding 'WSARCH006' "$($project.RelativePath) declares a forbidden Edge Analyzer source ProjectReference in $(Get-RepositoryPath $declarationFile)."
                     continue
                 }
                 if ($registeredProjectReferencePaths.Add($targetPath)) {

@@ -75,6 +75,21 @@ public sealed class StandardModuleNavigationRegistrationBehaviorTests
 
         public List<string> MenuIds { get; } = [];
 
+        public void RegisterStandardViews(StandardModuleViewRegistration registration)
+        {
+            ArgumentNullException.ThrowIfNull(registration);
+            this.RegisterStandardModuleViews(
+                registration.ModuleId,
+                registration.DataViewTitle,
+                registration.DataViewTitleResourceKey,
+                registration.CustomDataViewType,
+                registration.CustomDataViewModelType,
+                registration.DataMenuTitle,
+                registration.DataMenuTitleResourceKey,
+                registration.CacheDataView,
+                registration.SupportsRecipe);
+        }
+
         public void RegisterRoute(string viewId, Type viewType, Type viewModelType, bool cacheView = true)
             => RouteIds.Add(viewId);
 

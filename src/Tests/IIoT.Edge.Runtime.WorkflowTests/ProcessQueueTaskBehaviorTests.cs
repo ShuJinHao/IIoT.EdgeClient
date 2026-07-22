@@ -3,7 +3,6 @@ using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Host.DataPipeline.Services;
 using IIoT.Edge.Host.DataPipeline.Tasks;
-using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;

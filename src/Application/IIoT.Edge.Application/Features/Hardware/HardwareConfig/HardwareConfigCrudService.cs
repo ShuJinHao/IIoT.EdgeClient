@@ -8,7 +8,6 @@ using IIoT.Edge.Application.Features.Hardware.UseCases.SerialDevice.Commands;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Sdk.Hardware;
-using IIoT.Edge.Module.Contracts.Hardware;
 using MediatR;
 
 namespace IIoT.Edge.Application.Features.Hardware.HardwareConfigView;

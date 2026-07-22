@@ -1,4 +1,5 @@
 using IIoT.Edge.Module.Contracts.Context;
+using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Domain.Hardware.Aggregates;
@@ -43,7 +44,7 @@ public sealed class PlcLifecycleCoordinator
             ThrowIfDisposed();
 
             var devices = await _networkDevices.GetListAsync(
-                x => x.IsEnabled && x.DeviceType == SharedKernel.Enums.DeviceType.PLC,
+                x => x.IsEnabled && x.DeviceType == DeviceType.PLC,
                 ct).ConfigureAwait(false);
 
             var duplicateEndpointFaults = DiagnoseDuplicateEnabledTcpEndpoints(devices);
@@ -76,7 +77,7 @@ public sealed class PlcLifecycleCoordinator
             }
 
             var enabledDevices = await _networkDevices.GetListAsync(
-                x => x.IsEnabled && x.DeviceType == SharedKernel.Enums.DeviceType.PLC,
+                x => x.IsEnabled && x.DeviceType == DeviceType.PLC,
                 ct).ConfigureAwait(false);
             var duplicateEndpointFaults = DiagnoseDuplicateEnabledTcpEndpoints(enabledDevices);
             foreach (var duplicateDeviceId in duplicateEndpointFaults.Keys)

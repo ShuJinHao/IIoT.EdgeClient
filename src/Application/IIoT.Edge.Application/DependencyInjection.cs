@@ -22,6 +22,7 @@ using IIoT.Edge.Application.Features.Hardware.IOView;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Application.Features.Production.CapacityView;
 using IIoT.Edge.Application.Features.Production.Equipment;
+using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Module.Contracts.Production;
 using IIoT.Edge.Application.Features.Production.Monitor;
 using IIoT.Edge.Application.Features.Updates;

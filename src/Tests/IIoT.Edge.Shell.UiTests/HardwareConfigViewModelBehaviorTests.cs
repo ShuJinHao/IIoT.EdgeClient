@@ -11,7 +11,6 @@ using IIoT.Edge.Application.Features.Hardware.UseCases.SerialDevice.Commands;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
-using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.UI.Shared.Localization;
 

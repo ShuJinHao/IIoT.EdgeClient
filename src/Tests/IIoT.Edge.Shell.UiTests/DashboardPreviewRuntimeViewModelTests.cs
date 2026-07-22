@@ -17,7 +17,6 @@ using IIoT.Edge.Presentation.Navigation.Features.Dashboard;
 using IIoT.Edge.Presentation.Navigation.Features.Shell;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.Presentation.Panels.Features.SysLog;
-using IIoT.Edge.Module.Contracts.Runtime;
 using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using Xunit;

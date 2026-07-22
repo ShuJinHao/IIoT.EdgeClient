@@ -4,7 +4,6 @@ using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Mes;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Infrastructure.Integration;
-using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 
 namespace IIoT.Edge.Infrastructure.Integration.Mes;
