@@ -48,8 +48,6 @@ internal interface IRuntimeLayoutSyncValidation
 internal interface IRuntimeLayoutSyncModulePublisher
 {
     void PublishModulesToPluginsRoot(
-        string repoRoot,
-        string configuration,
         IReadOnlyList<string> moduleIds,
         string targetPluginsRoot);
 }

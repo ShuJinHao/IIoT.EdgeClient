@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="IIoT.Edge.Shell with modules" type="ShConfigurationType">
-    <option name="SCRIPT_TEXT" value="DOTNET_ENVIRONMENT=Development Shell__MachineProfile=HomogenizationLine NO_PROXY=10.98.101.247,localhost,127.0.0.1 no_proxy=10.98.101.247,localhost,127.0.0.1 dotnet run --project src/Edge/IIoT.Edge.Shell/IIoT.Edge.Shell.csproj -p:EnableLocalPluginModuleBuild=true -p:UseSharedCompilation=false" />
+  <configuration default="false" name="IIoT.Edge.Shell Default" type="ShConfigurationType">
+    <option name="SCRIPT_TEXT" value="DOTNET_ENVIRONMENT=Development Shell__MachineProfile=Default dotnet run --project src/Edge/IIoT.Edge.Shell/IIoT.Edge.Shell.csproj -p:UseSharedCompilation=false" />
     <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
     <option name="SCRIPT_PATH" value="" />
     <option name="SCRIPT_OPTIONS" value="" />

@@ -27,7 +27,7 @@ internal sealed class RuntimeLayoutSyncApp(
         fileSystem.RemoveLauncherShellArtifacts(launcherRuntimeRoot);
 
         SyncHostLayout(repoRoot, shellRuntimeRoot, manifest, layoutRoot);
-        SyncPluginsLayout(repoRoot, options.Configuration, manifest, layoutRoot);
+        SyncPluginsLayout(manifest, layoutRoot);
         fileSystem.CreateDirectory(Path.Combine(layoutRoot, "data"));
 
         validation.ValidateProfilesMatchManifest(manifest, profiles, launcherRuntimeRoot, checkExecutablePath: true);
@@ -82,8 +82,6 @@ internal sealed class RuntimeLayoutSyncApp(
             .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
     private void SyncPluginsLayout(
-        string repoRoot,
-        string configuration,
         RuntimePublishManifest manifest,
         string layoutRoot)
     {
@@ -93,6 +91,6 @@ internal sealed class RuntimeLayoutSyncApp(
             .Where(static moduleId => !string.IsNullOrWhiteSpace(moduleId))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        modulePublisher.PublishModulesToPluginsRoot(repoRoot, configuration, moduleIds, pluginsRoot);
+        modulePublisher.PublishModulesToPluginsRoot(moduleIds, pluginsRoot);
     }
 }

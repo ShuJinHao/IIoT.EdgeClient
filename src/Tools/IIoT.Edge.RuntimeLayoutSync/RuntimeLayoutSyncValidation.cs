@@ -39,7 +39,7 @@ internal sealed class RuntimeLayoutSyncValidation(IRuntimeLayoutSyncFileSystem f
                 }
             }
 
-            if (profile.ModuleIds.Count == 0)
+            if (profile.ModuleIds is null)
             {
                 throw new InvalidOperationException($"Profile entry '{profile.ProfileId}' in '{manifestPath}' does not define moduleIds.");
             }

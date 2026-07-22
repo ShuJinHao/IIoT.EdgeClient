@@ -113,6 +113,63 @@ public sealed class RuntimeLayoutSyncExternalPluginBehaviorTests
     }
 
     [Fact]
+    public void ValidateManifest_WhenDefaultProfileHasNoModules_ShouldAcceptHostOnlyLayout()
+    {
+        var validation = new RuntimeLayoutSyncValidation(new RuntimeLayoutSyncFileSystem());
+        var manifest = new RuntimePublishManifest(
+            "launcher",
+            "host",
+            "plugins",
+            [new RuntimeProfileDefinition("Default", "Default", "appsettings.machine.Default.json", [])]);
+
+        validation.ValidateManifest(manifest, "edge-runtime.publish.json");
+    }
+
+    [Fact]
+    public void PublishModulesToPluginsRoot_WhenDefaultProfileHasNoModules_ShouldCreateEmptyRoot()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var pluginsRoot = Path.Combine(tempDirectory, "plugins");
+            WriteText(Path.Combine(pluginsRoot, "stale", "plugin.json"), "{}");
+            var publisher = new RuntimeLayoutSyncModulePublisher(new RuntimeLayoutSyncFileSystem());
+
+            publisher.PublishModulesToPluginsRoot([], pluginsRoot);
+
+            Assert.True(Directory.Exists(pluginsRoot));
+            Assert.Empty(Directory.EnumerateFileSystemEntries(pluginsRoot));
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void PublishModulesToPluginsRoot_WhenProfileRequestsPlugin_ShouldRejectSourceBuildWithoutMutatingLayout()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var pluginsRoot = Path.Combine(tempDirectory, "plugins");
+            var sentinelPath = Path.Combine(pluginsRoot, "existing", "plugin.json");
+            WriteText(sentinelPath, "existing artifact");
+            var publisher = new RuntimeLayoutSyncModulePublisher(new RuntimeLayoutSyncFileSystem());
+
+            var error = Assert.Throws<InvalidOperationException>(() =>
+                publisher.PublishModulesToPluginsRoot(["TestPlugin"], pluginsRoot));
+
+            Assert.Contains("does not compile plugin source", error.Message, StringComparison.Ordinal);
+            Assert.Equal("existing artifact", File.ReadAllText(sentinelPath));
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
     public void Run_WhenRuntimeLayoutIsRefreshed_ShouldPublishSingleHostAndPreserveDataDirectory()
     {
         var tempDirectory = CreateTempDirectory();
@@ -290,8 +347,6 @@ public sealed class RuntimeLayoutSyncExternalPluginBehaviorTests
     private sealed class StubRuntimeLayoutSyncModulePublisher : IRuntimeLayoutSyncModulePublisher
     {
         public void PublishModulesToPluginsRoot(
-            string repoRoot,
-            string configuration,
             IReadOnlyList<string> moduleIds,
             string targetPluginsRoot)
         {

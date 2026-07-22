@@ -16,12 +16,6 @@ internal sealed record LauncherProfileEntry(
     string MachineProfile,
     string ExecutablePath);
 
-internal sealed record ModuleProject(
-    string ModuleId,
-    string ProjectPath,
-    string ProjectDirectory,
-    string TargetFramework);
-
 internal sealed record CommandLineOptions(
     string Configuration,
     string RepoRoot,
