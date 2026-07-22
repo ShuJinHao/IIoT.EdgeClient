@@ -1,4 +1,4 @@
-using IIoT.Edge.SharedKernel.DataPipeline.CellData;
+using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 
 namespace IIoT.Edge.Testing;
 

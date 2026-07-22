@@ -1,8 +1,8 @@
-using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Module.Contracts.Device;
+using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Application.Common.Device;
 
-using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Module.Contracts.Cloud;
 namespace IIoT.Edge.Infrastructure.Integration.Device;
 
 public interface IDeviceBootstrapEventLogger

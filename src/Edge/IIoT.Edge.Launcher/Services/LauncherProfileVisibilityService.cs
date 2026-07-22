@@ -1,5 +1,5 @@
 using System.Text.Json;
-using IIoT.Edge.Application.Abstractions.Updates;
+using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.SharedKernel.Configuration;
 

@@ -1,14 +1,16 @@
-using IIoT.Edge.Application.Abstractions.Context;
-using IIoT.Edge.Application.Abstractions.Config;
-using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Application.Abstractions.Plc;
-using IIoT.Edge.Application.Abstractions.Plc.Factory;
-using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Module.Contracts.Context;
+using IIoT.Edge.Module.Contracts.Config;
+using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Module.Contracts.Plc.Factory;
+using IIoT.Edge.Module.Contracts.Plc.Store;
 using IIoT.Edge.Application.Modules.Hardware;
+using IIoT.Edge.Module.Contracts.Hardware;
+using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Signals;
-using IIoT.Edge.SharedKernel.Context;
-using IIoT.Edge.SharedKernel.Enums;
+using IIoT.Edge.Module.Contracts.Runtime;
+using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.SharedKernel.Repository;
 using System.Globalization;
 

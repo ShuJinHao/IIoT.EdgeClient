@@ -1,13 +1,13 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using Avalonia.Threading;
-using IIoT.Edge.Application.Abstractions.Plc;
-using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Module.Contracts.Plc.Store;
 using IIoT.Edge.Application.Features.Hardware.IOView;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
-using IIoT.Edge.SharedKernel.Enums;
+using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 

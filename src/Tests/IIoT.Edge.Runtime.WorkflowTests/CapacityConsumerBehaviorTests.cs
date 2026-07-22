@@ -1,8 +1,8 @@
-using IIoT.Edge.Application.Abstractions.Config;
-using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
+using IIoT.Edge.Module.Contracts.Config;
+using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
 using IIoT.Edge.Infrastructure.Integration.Capacity;
-using IIoT.Edge.SharedKernel.DataPipeline;
-using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
+using IIoT.Edge.Module.Contracts.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
 using MediatR;
 
 namespace IIoT.Edge.Runtime.WorkflowTests;

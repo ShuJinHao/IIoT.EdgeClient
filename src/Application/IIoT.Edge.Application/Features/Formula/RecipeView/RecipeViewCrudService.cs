@@ -1,4 +1,4 @@
-using IIoT.Edge.SharedKernel.DataPipeline.Recipe;
+using IIoT.Edge.Module.Contracts.DataPipeline.Recipe;
 using MediatR;
 
 namespace IIoT.Edge.Application.Features.Formula.RecipeView;

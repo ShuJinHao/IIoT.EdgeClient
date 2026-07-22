@@ -1,10 +1,10 @@
-using IIoT.Edge.Application.Abstractions.DataPipeline;
-using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
-using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.SharedKernel.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
+using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Module.Contracts.DataPipeline;
 
-using IIoT.Edge.Application.Abstractions.Cloud;
-using IIoT.Edge.Application.Abstractions.Mes;
+using IIoT.Edge.Module.Contracts.Cloud;
+using IIoT.Edge.Module.Contracts.Mes;
 namespace IIoT.Edge.Application.Features.DataPipeline.DeadLetters;
 
 /// <summary>

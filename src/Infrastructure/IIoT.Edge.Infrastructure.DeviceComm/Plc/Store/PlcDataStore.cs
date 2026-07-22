@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Module.Contracts.Plc.Store;
 using System.Collections.Concurrent;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;

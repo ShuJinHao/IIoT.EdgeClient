@@ -1,5 +1,5 @@
 using System.Text.Json;
-using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Module.Contracts.Device;
 
 namespace IIoT.Edge.Infrastructure.Integration.Device.Cache;
 

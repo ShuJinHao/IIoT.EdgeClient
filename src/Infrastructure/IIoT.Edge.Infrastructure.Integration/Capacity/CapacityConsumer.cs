@@ -1,13 +1,13 @@
-﻿using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
-using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
-using IIoT.Edge.Application.Abstractions.DataPipeline;
-using IIoT.Edge.Application.Abstractions.Config;
-using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Events;
-using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Application.Abstractions.Time;
-using IIoT.Edge.SharedKernel.DataPipeline;
-using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
+﻿using IIoT.Edge.Module.Contracts.DataPipeline.Consumers;
+using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
+using IIoT.Edge.Module.Contracts.DataPipeline;
+using IIoT.Edge.Module.Contracts.Config;
+using IIoT.Edge.Module.Contracts.Device;
+using IIoT.Edge.Module.Contracts.Events;
+using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Module.Contracts.Time;
+using IIoT.Edge.Module.Contracts.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
 using MediatR;
 
 namespace IIoT.Edge.Infrastructure.Integration.Capacity;
@@ -24,8 +24,8 @@ public class CapacityConsumer : ICapacityConsumer
 
     public string Name => "Capacity";
     public int Order => 10;
-    public IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode FailureMode
-        => IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode.BestEffort;
+    public IIoT.Edge.Module.Contracts.DataPipeline.ConsumerFailureMode FailureMode
+        => IIoT.Edge.Module.Contracts.DataPipeline.ConsumerFailureMode.BestEffort;
     public DataPipelineRetryChannel RetryChannel => DataPipelineRetryChannel.None;
 
     public CapacityConsumer(

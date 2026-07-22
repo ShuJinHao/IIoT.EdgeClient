@@ -1,8 +1,8 @@
-using IIoT.Edge.Application.Abstractions.Config;
-using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Module.Contracts.Config;
+using IIoT.Edge.Module.Contracts.Logging;
 
-using IIoT.Edge.Application.Abstractions.Mes;
-using IIoT.Edge.Application.Abstractions.Shared;
+using IIoT.Edge.Module.Contracts.Mes;
+using IIoT.Edge.Module.Contracts.Shared;
 namespace IIoT.Edge.Infrastructure.Integration.Mes;
 
 public sealed class MesHeartbeatTask

@@ -1,8 +1,8 @@
-using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Application.Abstractions.Mes;
-using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Module.Contracts.Mes;
+using IIoT.Edge.Module.Contracts.Plc.Store;
 using IIoT.Edge.Module.Sdk.Base;
-using IIoT.Edge.SharedKernel.Context;
+using IIoT.Edge.Module.Contracts.Runtime;
 
 namespace IIoT.Edge.Module.ConformanceTests;
 

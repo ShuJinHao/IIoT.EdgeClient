@@ -1,6 +1,6 @@
-﻿using IIoT.Edge.Application.Abstractions.Config;
+﻿using IIoT.Edge.Module.Contracts.Config;
 using IIoT.Edge.Infrastructure.Integration;
-using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Module.Contracts.Cloud;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;

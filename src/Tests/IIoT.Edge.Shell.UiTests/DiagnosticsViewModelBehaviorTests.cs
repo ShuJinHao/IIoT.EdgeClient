@@ -1,24 +1,24 @@
-using IIoT.Edge.Application.Context;
-using IIoT.Edge.Application.Modules.Diagnostics;
+using IIoT.Edge.Module.Contracts.Runtime;
+using IIoT.Edge.Module.Contracts.Diagnostics;
 using System.Globalization;
 using Avalonia.Headless.XUnit;
-using IIoT.Edge.Application.Abstractions.Context;
-using IIoT.Edge.Application.Abstractions.DataPipeline;
-using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Auth;
-using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Module.Contracts.Context;
+using IIoT.Edge.Module.Contracts.DataPipeline;
+using IIoT.Edge.Module.Contracts.Device;
+using IIoT.Edge.Module.Contracts.Auth;
+using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.Presentation.Shell.Localization;
-using IIoT.Edge.SharedKernel.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
 using Xunit;
 
-using IIoT.Edge.Application.Abstractions.Cloud;
-using IIoT.Edge.Application.Abstractions.Mes;
-using IIoT.Edge.Application.Abstractions.Shared;
+using IIoT.Edge.Module.Contracts.Cloud;
+using IIoT.Edge.Module.Contracts.Mes;
+using IIoT.Edge.Module.Contracts.Shared;
 namespace IIoT.Edge.Shell.UiTests;
 
 public sealed class DiagnosticsViewModelBehaviorTests

@@ -1,12 +1,12 @@
-using IIoT.Edge.Application.Abstractions.Config;
-using IIoT.Edge.Application.Abstractions.DataPipeline;
-using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
-using IIoT.Edge.Application.Abstractions.Cloud;
-using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Module.Contracts.Config;
+using IIoT.Edge.Module.Contracts.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
+using IIoT.Edge.Module.Contracts.Cloud;
+using IIoT.Edge.Module.Contracts.Device;
+using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Infrastructure.Integration.Config;
-using IIoT.Edge.SharedKernel.DataPipeline.DeviceLog;
+using IIoT.Edge.Module.Contracts.DataPipeline.DeviceLog;
 
 namespace IIoT.Edge.Infrastructure.Integration.DeviceLog;
 

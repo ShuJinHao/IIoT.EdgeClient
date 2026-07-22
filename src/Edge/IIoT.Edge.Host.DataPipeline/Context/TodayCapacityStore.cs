@@ -1,6 +1,6 @@
-using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
-using IIoT.Edge.Application.Abstractions.Context;
-using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
+using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
+using IIoT.Edge.Module.Contracts.Context;
+using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
 
 namespace IIoT.Edge.Host.DataPipeline.Context;
 

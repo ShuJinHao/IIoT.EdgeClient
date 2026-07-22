@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Module.Contracts.Device;
 using IIoT.Edge.Infrastructure.Integration.Recipe;
 
 namespace IIoT.Edge.Runtime.WorkflowTests;

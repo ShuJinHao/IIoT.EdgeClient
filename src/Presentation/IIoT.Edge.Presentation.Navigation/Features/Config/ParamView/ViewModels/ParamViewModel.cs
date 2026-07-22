@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Auth;
+using IIoT.Edge.Module.Contracts.Auth;
 using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Config.ParamView;
 using IIoT.Edge.Presentation.Navigation.Features.Config.ParamView.Models;

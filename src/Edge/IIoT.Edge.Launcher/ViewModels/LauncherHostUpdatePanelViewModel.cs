@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
-using IIoT.Edge.Application.Abstractions.Updates;
+using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;

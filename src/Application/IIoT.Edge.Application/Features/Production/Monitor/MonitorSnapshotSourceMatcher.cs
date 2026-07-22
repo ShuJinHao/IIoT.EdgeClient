@@ -1,5 +1,5 @@
-using IIoT.Edge.Application.Abstractions.Plc;
-using IIoT.Edge.SharedKernel.Identity;
+using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Module.Contracts.Identity;
 
 namespace IIoT.Edge.Application.Features.Production.Monitor;
 

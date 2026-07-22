@@ -1,7 +1,7 @@
-using IIoT.Edge.Application.Abstractions.Cloud;
-using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Module.Contracts.Cloud;
+using IIoT.Edge.Module.Contracts.Device;
 using IIoT.Edge.Application.Features.Production.CapacityView;
-using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
+using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
 using MediatR;
 using Xunit;
 

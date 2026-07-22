@@ -1,5 +1,5 @@
 using Avalonia.Threading;
-using IIoT.Edge.Application.Abstractions.Auth;
+using IIoT.Edge.Module.Contracts.Auth;
 using System.Threading;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;

@@ -1,10 +1,10 @@
-using IIoT.Edge.Application.Abstractions.Cloud;
-using IIoT.Edge.Application.Abstractions.Config;
-using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Module.Contracts.Cloud;
+using IIoT.Edge.Module.Contracts.Config;
+using IIoT.Edge.Module.Contracts.Device;
+using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Host.DataPipeline.Services;
-using IIoT.Edge.SharedKernel.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline;
 
 namespace IIoT.Edge.Host.DataPipeline.Tasks;
 

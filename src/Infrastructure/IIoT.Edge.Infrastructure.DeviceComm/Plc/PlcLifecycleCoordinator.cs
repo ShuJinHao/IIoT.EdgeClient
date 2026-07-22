@@ -1,6 +1,6 @@
-using IIoT.Edge.Application.Abstractions.Context;
-using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Application.Abstractions.Plc;
+using IIoT.Edge.Module.Contracts.Context;
+using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.SharedKernel.Repository;
 

@@ -1,8 +1,8 @@
-using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
-using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
+using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
 
-using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Module.Contracts.Cloud;
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 
 public sealed class CloudDeadLetterStore : DeadLetterStoreBase, ICloudDeadLetterStore

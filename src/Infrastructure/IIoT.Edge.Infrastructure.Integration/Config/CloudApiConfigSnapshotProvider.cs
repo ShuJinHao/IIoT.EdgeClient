@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Module.Contracts.Config;
 using Microsoft.Extensions.Options;
 
 namespace IIoT.Edge.Infrastructure.Integration.Config;

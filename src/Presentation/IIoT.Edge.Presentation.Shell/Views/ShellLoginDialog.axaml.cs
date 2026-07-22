@@ -1,7 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using IIoT.Edge.Application.Abstractions.Auth;
+using IIoT.Edge.Module.Contracts.Auth;
 using IIoT.Edge.Presentation.Shell.Services;
 
 namespace IIoT.Edge.Presentation.Shell.Views;

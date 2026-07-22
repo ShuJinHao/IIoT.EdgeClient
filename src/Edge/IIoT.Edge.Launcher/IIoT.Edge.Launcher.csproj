@@ -10,7 +10,7 @@
     <BaseOutputPath>..\..\..\..\publish\</BaseOutputPath>
     <OutputPath>..\..\..\..\publish\$(Configuration)\launcher\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <ApplicationIcon>..\..\Shared\IIoT.Edge.UI.Shared\Assets\images\icon.ico</ApplicationIcon>
+    <ApplicationIcon>..\Assets\icon.ico</ApplicationIcon>
     <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../..'))</RepoRoot>
     <RuntimeLayoutSyncProject>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../Tools/IIoT.Edge.RuntimeLayoutSync/IIoT.Edge.RuntimeLayoutSync.csproj'))</RuntimeLayoutSyncProject>
     <RuntimeLayoutSyncAssembly>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../Tools/IIoT.Edge.RuntimeLayoutSync/bin/$(Configuration)/net10.0/IIoT.Edge.RuntimeLayoutSync.dll'))</RuntimeLayoutSyncAssembly>
@@ -29,7 +29,7 @@
     <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
     <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.Update\IIoT.Edge.Infrastructure.Update.csproj" />
     <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
-    <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
+    <PackageReference Include="IIoT.Edge.UI.Shared" />
   </ItemGroup>
 
   <ItemGroup>

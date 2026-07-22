@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Auth;
+using IIoT.Edge.Module.Contracts.Auth;
 
 namespace IIoT.Edge.Presentation.Shell.Services;
 

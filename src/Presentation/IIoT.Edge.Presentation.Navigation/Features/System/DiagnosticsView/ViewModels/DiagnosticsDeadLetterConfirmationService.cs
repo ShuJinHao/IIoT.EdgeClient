@@ -2,7 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
-using IIoT.Edge.Application.Abstractions.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.UI.Shared.Localization;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;

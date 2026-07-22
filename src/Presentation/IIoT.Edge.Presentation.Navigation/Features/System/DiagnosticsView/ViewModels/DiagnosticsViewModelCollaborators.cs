@@ -1,6 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Threading;
-using IIoT.Edge.Application.Abstractions.Auth;
+using IIoT.Edge.Module.Contracts.Auth;
 using IIoT.Edge.UI.Shared.Localization;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;

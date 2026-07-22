@@ -1,17 +1,17 @@
-using IIoT.Edge.Application.Abstractions.DataPipeline;
-using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
-using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Module.Contracts.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
+using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Host.DataPipeline.Services;
 using IIoT.Edge.Host.DataPipeline.Tasks;
-using IIoT.Edge.SharedKernel.DataPipeline;
-using IIoT.Edge.SharedKernel.DataPipeline.CellData;
+using IIoT.Edge.Module.Contracts.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using System.Text.Json;
 
-using IIoT.Edge.Application.Abstractions.Cloud;
-using IIoT.Edge.Application.Abstractions.Mes;
-using IIoT.Edge.Application.Abstractions.Shared;
+using IIoT.Edge.Module.Contracts.Cloud;
+using IIoT.Edge.Module.Contracts.Mes;
+using IIoT.Edge.Module.Contracts.Shared;
 namespace IIoT.Edge.Runtime.WorkflowTests;
 
 public sealed class ProcessQueueTaskBehaviorTests

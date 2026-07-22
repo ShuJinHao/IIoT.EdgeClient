@@ -1,10 +1,10 @@
-using IIoT.Edge.Application.Abstractions.Cloud;
-﻿using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Module.Contracts.Cloud;
+﻿using IIoT.Edge.Module.Contracts.Device;
 using IIoT.Edge.Application.Common.Device;
-using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Application.Abstractions.Recipe;
+using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Module.Contracts.Recipe;
 using IIoT.Edge.Infrastructure.Integration.Config;
-using IIoT.Edge.SharedKernel.DataPipeline.Recipe;
+using IIoT.Edge.Module.Contracts.DataPipeline.Recipe;
 using System.IO;
 using System.Text.Json;
 

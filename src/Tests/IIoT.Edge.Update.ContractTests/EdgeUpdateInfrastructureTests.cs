@@ -1,6 +1,6 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
-using IIoT.Edge.Application.Abstractions.Updates;
+using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.Application.Features.Updates;
 using IIoT.Edge.Infrastructure.Update.Configuration;
 using IIoT.Edge.Infrastructure.Update.Host;

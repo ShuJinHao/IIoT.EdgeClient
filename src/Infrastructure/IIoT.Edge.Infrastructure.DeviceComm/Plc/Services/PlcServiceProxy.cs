@@ -1,5 +1,5 @@
-using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Application.Abstractions.Plc;
+using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Module.Contracts.Plc;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc.Services;
 

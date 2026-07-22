@@ -1,5 +1,5 @@
-using IIoT.Edge.Application.Abstractions.Config;
-using IIoT.Edge.Application.Abstractions.Updates;
+using IIoT.Edge.Module.Contracts.Config;
+using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.Application.Features.Updates;
 
 namespace IIoT.Edge.Runtime.WorkflowTests;

@@ -1,6 +1,6 @@
-using IIoT.Edge.SharedKernel.DataPipeline.Recipe;
-using IIoT.Edge.Application.Abstractions.Auth;
-using IIoT.Edge.Application.Abstractions.Recipe;
+using IIoT.Edge.Module.Contracts.DataPipeline.Recipe;
+using IIoT.Edge.Module.Contracts.Auth;
+using IIoT.Edge.Module.Contracts.Recipe;
 using MediatR;
 
 namespace IIoT.Edge.Application.Features.Formula.RecipeView;

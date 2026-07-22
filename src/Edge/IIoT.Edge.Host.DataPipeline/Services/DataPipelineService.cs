@@ -1,6 +1,6 @@
-using IIoT.Edge.Application.Abstractions.DataPipeline;
-using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.SharedKernel.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline;
+using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Module.Contracts.DataPipeline;
 using System.Threading.Channels;
 
 namespace IIoT.Edge.Host.DataPipeline.Services;

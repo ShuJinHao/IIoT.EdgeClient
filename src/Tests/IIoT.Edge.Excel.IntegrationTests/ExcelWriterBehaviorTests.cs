@@ -1,6 +1,6 @@
 using ClosedXML.Excel;
 using IIoT.Edge.Infrastructure.Integration.Export.Excel;
-using IIoT.Edge.SharedKernel.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline;
 
 namespace IIoT.Edge.Excel.IntegrationTests;
 

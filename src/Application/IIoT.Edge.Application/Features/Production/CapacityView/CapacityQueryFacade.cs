@@ -1,5 +1,5 @@
-using IIoT.Edge.Application.Abstractions.Cloud;
-using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Module.Contracts.Cloud;
+using IIoT.Edge.Module.Contracts.Device;
 using MediatR;
 
 namespace IIoT.Edge.Application.Features.Production.CapacityView;

@@ -1,6 +1,6 @@
-using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Module.Contracts.Device;
 
-using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Module.Contracts.Cloud;
 namespace IIoT.Edge.Infrastructure.Integration.Config;
 
 public interface ICloudApiEndpointProvider : ICloudApiPathProvider

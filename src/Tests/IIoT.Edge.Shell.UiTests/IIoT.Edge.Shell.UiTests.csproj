@@ -16,7 +16,7 @@
     <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.Panels\IIoT.Edge.Presentation.Panels.csproj" />
     <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.Shell\IIoT.Edge.Presentation.Shell.csproj" />
     <ProjectReference Include="..\..\Presentation\IIoT.Edge.Presentation.VisualTestData\IIoT.Edge.Presentation.VisualTestData.csproj" />
-    <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
+    <PackageReference Include="IIoT.Edge.UI.Shared" />
     <ProjectReference Include="..\..\Testing\IIoT.Edge.Testing.Core\IIoT.Edge.Testing.Core.csproj" />
   </ItemGroup>
 </Project>

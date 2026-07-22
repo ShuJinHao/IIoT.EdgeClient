@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.Presentation.Panels.Features.Equipment;
 using IIoT.Edge.Presentation.Panels.Features.SysLog;

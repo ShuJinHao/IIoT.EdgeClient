@@ -1,6 +1,6 @@
 using System.IO.Ports;
 using System.Net.Sockets;
-using IIoT.Edge.Application.Abstractions.Plc;
+using IIoT.Edge.Module.Contracts.Plc;
 using NModbus;
 using NModbus.Serial;
 

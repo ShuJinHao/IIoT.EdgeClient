@@ -1,10 +1,10 @@
-using IIoT.Edge.Application.Abstractions.Cache;
+using IIoT.Edge.Module.Contracts.Cache;
 using IIoT.Edge.Application.Features.Config.LocalParameterConfig;
 using IIoT.Edge.Domain.Config.Aggregates;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.Persistence.EfCore;
 using IIoT.Edge.Infrastructure.Persistence.EfCore.Repositories;
-using IIoT.Edge.SharedKernel.Enums;
+using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.SharedKernel.Repository;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;

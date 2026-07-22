@@ -1,9 +1,9 @@
-using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Application.Abstractions.Plc;
-using IIoT.Edge.Application.Abstractions.Plc.Factory;
+using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Module.Contracts.Plc.Factory;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Services;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Services.Modbus;
-using IIoT.Edge.SharedKernel.Enums;
+using IIoT.Edge.Module.Contracts.Hardware;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc.Factory;
 

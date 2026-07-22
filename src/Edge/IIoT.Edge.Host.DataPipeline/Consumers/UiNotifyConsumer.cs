@@ -1,8 +1,8 @@
-using IIoT.Edge.SharedKernel.DataPipeline;
-using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Application.Abstractions.DataPipeline;
-using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
-using IIoT.Edge.Application.Abstractions.Events;
+using IIoT.Edge.Module.Contracts.DataPipeline;
+using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Module.Contracts.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline.Consumers;
+using IIoT.Edge.Module.Contracts.Events;
 using MediatR;
 
 namespace IIoT.Edge.Host.DataPipeline.Consumers;
@@ -22,8 +22,8 @@ public class UiNotifyConsumer : IUiNotifyConsumer
 
     public string Name => "UI";
     public int Order => 50;
-    public IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode FailureMode
-        => IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode.BestEffort;
+    public IIoT.Edge.Module.Contracts.DataPipeline.ConsumerFailureMode FailureMode
+        => IIoT.Edge.Module.Contracts.DataPipeline.ConsumerFailureMode.BestEffort;
     public DataPipelineRetryChannel RetryChannel => DataPipelineRetryChannel.None;
 
     public UiNotifyConsumer(

@@ -1,10 +1,10 @@
-using IIoT.Edge.Application.Abstractions.Plc;
-using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Module.Contracts.Plc.Store;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Application.Features.Production.Equipment;
 using IIoT.Edge.Domain.Hardware.Aggregates;
-using IIoT.Edge.SharedKernel.Context;
-using IIoT.Edge.SharedKernel.Enums;
+using IIoT.Edge.Module.Contracts.Runtime;
+using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.SharedKernel.Result;
 using MediatR;
 

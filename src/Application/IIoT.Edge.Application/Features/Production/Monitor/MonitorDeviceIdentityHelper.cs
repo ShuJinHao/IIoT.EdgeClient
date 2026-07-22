@@ -1,8 +1,8 @@
 using System.Globalization;
-using IIoT.Edge.Application.Abstractions.Plc;
+using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Domain.Hardware.Aggregates;
-using IIoT.Edge.SharedKernel.Context;
-using IIoT.Edge.SharedKernel.Identity;
+using IIoT.Edge.Module.Contracts.Runtime;
+using IIoT.Edge.Module.Contracts.Identity;
 
 namespace IIoT.Edge.Application.Features.Production.Monitor;
 

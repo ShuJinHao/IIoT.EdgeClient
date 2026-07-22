@@ -1,22 +1,22 @@
-using IIoT.Edge.Application.Abstractions.Config;
-using IIoT.Edge.Application.Abstractions.Context;
-using IIoT.Edge.Application.Abstractions.DataPipeline;
-using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
-using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
-using IIoT.Edge.Application.Abstractions.Cloud;
-using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Module.Contracts.Config;
+using IIoT.Edge.Module.Contracts.Context;
+using IIoT.Edge.Module.Contracts.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline.Consumers;
+using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
+using IIoT.Edge.Module.Contracts.Cloud;
+using IIoT.Edge.Module.Contracts.Device;
+using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Host.DataPipeline.Context;
 using IIoT.Edge.Host.DataPipeline.Consumers;
 using IIoT.Edge.Host.DataPipeline.Services;
 using IIoT.Edge.Host.DataPipeline.Tasks;
 using IIoT.Edge.Module.Sdk.Signals;
-using IIoT.Edge.SharedKernel.DataPipeline.CellData;
+using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-using IIoT.Edge.Application.Abstractions.Mes;
+using IIoT.Edge.Module.Contracts.Mes;
 namespace IIoT.Edge.Host.DataPipeline;
 
 public static class DependencyInjection

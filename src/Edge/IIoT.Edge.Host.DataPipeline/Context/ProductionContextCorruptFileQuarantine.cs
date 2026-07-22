@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
-using IIoT.Edge.Application.Context;
-using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Module.Contracts.Runtime;
+using IIoT.Edge.Module.Contracts.Logging;
 
 namespace IIoT.Edge.Host.DataPipeline.Context;
 

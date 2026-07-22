@@ -1,10 +1,10 @@
-using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
-using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
+using IIoT.Edge.Module.Contracts.Config;
 using IIoT.Edge.Infrastructure.Integration.Capacity;
-using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
+using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
 using System.Text.Json;
-using DeviceSession = IIoT.Edge.Application.Abstractions.Device.DeviceSession;
-using NetworkState = IIoT.Edge.Application.Abstractions.Device.NetworkState;
+using DeviceSession = IIoT.Edge.Module.Contracts.Device.DeviceSession;
+using NetworkState = IIoT.Edge.Module.Contracts.Device.NetworkState;
 
 namespace IIoT.Edge.Runtime.WorkflowTests;
 

@@ -1,8 +1,10 @@
 using System.ComponentModel;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView.Models;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
+using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.Application.Modules.Hardware;
-
+using IIoT.Edge.Module.Contracts.Hardware;
+using IIoT.Edge.Module.Sdk.Hardware;
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
 
 public interface IHardwareConfigEditSession

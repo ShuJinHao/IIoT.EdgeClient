@@ -1,5 +1,5 @@
 using System.Globalization;
-using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Module.Contracts.Plc.Store;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 

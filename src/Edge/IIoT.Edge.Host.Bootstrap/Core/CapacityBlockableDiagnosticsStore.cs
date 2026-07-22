@@ -1,6 +1,6 @@
-using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Module.Contracts.Modules;
 
-using IIoT.Edge.Application.Abstractions.Shared;
+using IIoT.Edge.Module.Contracts.Shared;
 namespace IIoT.Edge.Shell.Core;
 
 public abstract class CapacityBlockableDiagnosticsStore<TSnapshot, TRuntimeState>

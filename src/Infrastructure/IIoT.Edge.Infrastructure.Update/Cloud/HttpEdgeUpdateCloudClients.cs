@@ -1,7 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net;
 using System.Net.NetworkInformation;
-using IIoT.Edge.Application.Abstractions.Updates;
+using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.Infrastructure.CloudClient;
 using static IIoT.Edge.Infrastructure.Update.Cloud.EdgeUpdateCloudUrl;
 

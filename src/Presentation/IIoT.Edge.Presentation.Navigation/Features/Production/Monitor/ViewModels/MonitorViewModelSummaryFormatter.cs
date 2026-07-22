@@ -1,5 +1,5 @@
 using IIoT.Edge.Application.Features.Production.Monitor;
-using IIoT.Edge.Application.Abstractions.Plc;
+using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.UI.Shared.Localization;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Production.Monitor;

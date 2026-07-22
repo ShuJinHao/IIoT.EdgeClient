@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Tasks;
+using IIoT.Edge.Module.Contracts.Tasks;
 
 namespace IIoT.Edge.Application.Common.Tasks;
 

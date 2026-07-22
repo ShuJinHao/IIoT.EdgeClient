@@ -1,8 +1,8 @@
-using IIoT.Edge.Application.Context;
-using IIoT.Edge.Application.Abstractions.Cloud;
-using IIoT.Edge.Application.Abstractions.Mes;
-using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Application.Abstractions.Plc;
+using IIoT.Edge.Module.Contracts.Runtime;
+using IIoT.Edge.Module.Contracts.Cloud;
+using IIoT.Edge.Module.Contracts.Mes;
+using IIoT.Edge.Module.Contracts.Modules;
+using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Application.Features.Production.Monitor;
 using IIoT.Edge.Presentation.Navigation.Features.Production.Monitor;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;

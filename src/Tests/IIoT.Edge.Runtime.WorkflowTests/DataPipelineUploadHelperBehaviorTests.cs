@@ -1,6 +1,6 @@
-using IIoT.Edge.Application.Abstractions.DataPipeline;
-using IIoT.Edge.Application.Common.DataPipeline;
-using IIoT.Edge.SharedKernel.DataPipeline.CellData;
+using IIoT.Edge.Module.Contracts.DataPipeline;
+using IIoT.Edge.Module.Sdk.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 
 namespace IIoT.Edge.Runtime.WorkflowTests;
 

@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Cache;
+using IIoT.Edge.Module.Contracts.Cache;
 using IIoT.Edge.Application.Common.Caching.Memory;
 using IIoT.Edge.Infrastructure.Persistence.EfCore.Repositories;
 using IIoT.Edge.SharedKernel.Repository;

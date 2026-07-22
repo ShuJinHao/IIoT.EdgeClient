@@ -1,4 +1,4 @@
-using IIoT.Edge.SharedKernel.Context;
+using IIoT.Edge.Module.Contracts.Runtime;
 
 namespace IIoT.Edge.Host.DataPipeline.Context;
 

@@ -1,5 +1,5 @@
-using IIoT.Edge.Application.Abstractions.Plc;
-using IIoT.Edge.SharedKernel.Enums;
+using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Module.Contracts.Hardware;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView.Models;
 

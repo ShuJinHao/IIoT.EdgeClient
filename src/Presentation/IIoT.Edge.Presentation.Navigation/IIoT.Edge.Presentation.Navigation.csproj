@@ -11,7 +11,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
     <ProjectReference Include="..\IIoT.Edge.Presentation.Panels\IIoT.Edge.Presentation.Panels.csproj" />
-    <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
+    <PackageReference Include="IIoT.Edge.UI.Shared" />
   </ItemGroup>
 
   <ItemGroup>

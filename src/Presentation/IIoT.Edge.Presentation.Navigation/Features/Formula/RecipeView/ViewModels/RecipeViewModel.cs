@@ -1,8 +1,8 @@
-using IIoT.Edge.Application.Abstractions.Recipe;
+using IIoT.Edge.Module.Contracts.Recipe;
 using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Features.Formula.RecipeView;
 using IIoT.Edge.Presentation.Navigation.Localization;
-using IIoT.Edge.SharedKernel.DataPipeline.Recipe;
+using IIoT.Edge.Module.Contracts.DataPipeline.Recipe;
 using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;

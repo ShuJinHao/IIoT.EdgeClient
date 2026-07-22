@@ -1,6 +1,6 @@
-﻿using IIoT.Edge.Application.Abstractions.Config;
+﻿using IIoT.Edge.Module.Contracts.Config;
 using IIoT.Edge.Infrastructure.Integration.DeviceLog;
-using IIoT.Edge.SharedKernel.DataPipeline.DeviceLog;
+using IIoT.Edge.Module.Contracts.DataPipeline.DeviceLog;
 
 namespace IIoT.Edge.Runtime.WorkflowTests;
 
@@ -13,7 +13,7 @@ public sealed class DeviceLogSyncTaskBehaviorTests
         var endpointProvider = new FakeCloudApiEndpointProvider();
         var deviceService = new FakeDeviceService
         {
-            CurrentState = IIoT.Edge.Application.Abstractions.Device.NetworkState.Offline,
+            CurrentState = IIoT.Edge.Module.Contracts.Device.NetworkState.Offline,
             HasDeviceId = false,
             CurrentDevice = null
         };
@@ -51,7 +51,7 @@ public sealed class DeviceLogSyncTaskBehaviorTests
         cloudHttp.EnqueuePostResult(true);
 
         var deviceService = new FakeDeviceService();
-        deviceService.SetOnline(new IIoT.Edge.Application.Abstractions.Device.DeviceSession
+        deviceService.SetOnline(new IIoT.Edge.Module.Contracts.Device.DeviceSession
         {
             DeviceId = Guid.NewGuid(),
             DeviceName = "PLC-A",
@@ -95,7 +95,7 @@ public sealed class DeviceLogSyncTaskBehaviorTests
         cloudHttp.EnqueuePostResult(false);
 
         var deviceService = new FakeDeviceService();
-        deviceService.SetOnline(new IIoT.Edge.Application.Abstractions.Device.DeviceSession
+        deviceService.SetOnline(new IIoT.Edge.Module.Contracts.Device.DeviceSession
         {
             DeviceId = Guid.NewGuid(),
             DeviceName = "PLC-A",
@@ -142,7 +142,7 @@ public sealed class DeviceLogSyncTaskBehaviorTests
             PostWait = neverComplete.Task
         };
         var deviceService = new FakeDeviceService();
-        deviceService.SetOnline(new IIoT.Edge.Application.Abstractions.Device.DeviceSession
+        deviceService.SetOnline(new IIoT.Edge.Module.Contracts.Device.DeviceSession
         {
             DeviceId = Guid.NewGuid(),
             DeviceName = "PLC-A",
@@ -192,7 +192,7 @@ public sealed class DeviceLogSyncTaskBehaviorTests
         var cloudHttp = new FakeCloudHttpClient();
         cloudHttp.EnqueuePostResult(true);
         var deviceService = new FakeDeviceService();
-        deviceService.SetOnline(new IIoT.Edge.Application.Abstractions.Device.DeviceSession
+        deviceService.SetOnline(new IIoT.Edge.Module.Contracts.Device.DeviceSession
         {
             DeviceId = Guid.NewGuid(),
             DeviceName = "PLC-A",
@@ -338,7 +338,7 @@ public sealed class DeviceLogSyncTaskBehaviorTests
         cloudHttp.EnqueuePostResult(true);
 
         var deviceService = new FakeDeviceService();
-        deviceService.SetOnline(new IIoT.Edge.Application.Abstractions.Device.DeviceSession
+        deviceService.SetOnline(new IIoT.Edge.Module.Contracts.Device.DeviceSession
         {
             DeviceId = Guid.NewGuid(),
             DeviceName = "PLC-A",
@@ -443,7 +443,7 @@ public sealed class DeviceLogSyncTaskBehaviorTests
         cloudHttp.EnqueuePostResult(true);
 
         var deviceService = new FakeDeviceService();
-        deviceService.SetOnline(new IIoT.Edge.Application.Abstractions.Device.DeviceSession
+        deviceService.SetOnline(new IIoT.Edge.Module.Contracts.Device.DeviceSession
         {
             DeviceId = Guid.NewGuid(),
             DeviceName = "PLC-A",
@@ -567,7 +567,7 @@ public sealed class DeviceLogSyncTaskBehaviorTests
         FakeCloudDiagnosticsStore diagnostics)
     {
         var deviceService = new FakeDeviceService();
-        deviceService.SetOnline(new IIoT.Edge.Application.Abstractions.Device.DeviceSession
+        deviceService.SetOnline(new IIoT.Edge.Module.Contracts.Device.DeviceSession
         {
             DeviceId = Guid.NewGuid(),
             DeviceName = "PLC-A",

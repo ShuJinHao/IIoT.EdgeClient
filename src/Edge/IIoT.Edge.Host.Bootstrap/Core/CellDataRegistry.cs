@@ -1,5 +1,5 @@
-using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.SharedKernel.DataPipeline.CellData;
+using IIoT.Edge.Module.Contracts.Modules;
+using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 
 namespace IIoT.Edge.Shell.Core;
 

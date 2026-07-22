@@ -2,9 +2,9 @@ using System.Collections;
 using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
-using IIoT.Edge.Application.Abstractions.Time;
-using IIoT.Edge.SharedKernel.DataPipeline.CellData;
-using IIoT.Edge.SharedKernel.Context;
+using IIoT.Edge.Module.Contracts.Time;
+using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
+using IIoT.Edge.Module.Contracts.Runtime;
 
 namespace IIoT.Edge.Application.Features.Production.Monitor;
 

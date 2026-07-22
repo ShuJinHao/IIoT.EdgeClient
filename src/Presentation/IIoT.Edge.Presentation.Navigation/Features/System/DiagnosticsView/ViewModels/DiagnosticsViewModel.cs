@@ -1,7 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Threading;
 using System.Windows.Input;
-using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.UI.Shared.Avalonia.Controls;

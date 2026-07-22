@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Module.Contracts.Modules;
 using Microsoft.Extensions.Configuration;
 using System.Reflection;
 using System.Text.Json.Nodes;

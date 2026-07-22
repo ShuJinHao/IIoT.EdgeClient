@@ -9,6 +9,10 @@
     <PackageVersion Include="Avalonia.Desktop" Version="12.0.4" />
     <PackageVersion Include="Avalonia.Headless.XUnit" Version="12.0.4" />
     <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.0.4" />
+    <PackageVersion Include="IIoT.Edge.Module.Contracts" Version="2.0.0" />
+    <PackageVersion Include="IIoT.Edge.Module.Sdk" Version="2.0.0" />
+    <PackageVersion Include="IIoT.Edge.UI.Shared" Version="2.0.0" />
+    <PackageVersion Include="IIoT.Edge.Module.Analyzers" Version="2.0.0" />
     <PackageVersion Include="ClosedXML" Version="0.105.0" />
     <PackageVersion Include="coverlet.collector" Version="10.0.1" />
     <PackageVersion Include="Dapper" Version="2.1.72" />

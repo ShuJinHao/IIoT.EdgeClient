@@ -1,7 +1,7 @@
-using IIoT.Edge.Application.Abstractions.Auth;
-using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Application.Abstractions.Plc;
-using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Module.Contracts.Auth;
+using IIoT.Edge.Module.Contracts.Modules;
+using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Module.Contracts.Plc.Store;
 using IIoT.Edge.Application.Auth;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Features.Config.ParamView;
@@ -11,9 +11,11 @@ using IIoT.Edge.Application.Features.Hardware.UseCases.IoMapping.Commands;
 using IIoT.Edge.Application.Features.Hardware.UseCases.NetworkDevice.Commands;
 using IIoT.Edge.Application.Features.Hardware.UseCases.SerialDevice.Commands;
 using IIoT.Edge.Application.Modules.Hardware;
+using IIoT.Edge.Module.Contracts.Hardware;
+using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
-using IIoT.Edge.SharedKernel.Context;
-using IIoT.Edge.SharedKernel.Enums;
+using IIoT.Edge.Module.Contracts.Runtime;
+using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.SharedKernel.Result;
 using IIoT.Edge.SharedKernel.Domain;
 using IIoT.Edge.SharedKernel.Repository;
@@ -476,11 +478,11 @@ public sealed class ConfigPermissionGuardBehaviorTests
 
         public void RegisterTasks(
             string deviceName,
-            Func<IPlcBuffer, ProductionContext, List<IIoT.Edge.Application.Abstractions.Plc.IPlcTask>> factory)
+            Func<IPlcBuffer, ProductionContext, List<IIoT.Edge.Module.Contracts.Plc.IPlcTask>> factory)
         {
         }
 
-        public IIoT.Edge.Application.Abstractions.Plc.IPlcService? GetPlc(int networkDeviceId) => null;
+        public IIoT.Edge.Module.Contracts.Plc.IPlcService? GetPlc(int networkDeviceId) => null;
 
         public ProductionContext? GetContext(string deviceName) => null;
 

@@ -2,7 +2,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using IIoT.Edge.Application.Abstractions.Updates;
+using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.Infrastructure.Update.Cloud;
 using IIoT.Edge.Infrastructure.Update.Plugins;
 using IIoT.Edge.SharedKernel.Configuration;

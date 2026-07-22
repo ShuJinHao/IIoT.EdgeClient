@@ -15,15 +15,15 @@ public sealed class ModulePluginAssemblyResolver : IModulePluginAssemblyResolver
 {
     private static readonly HashSet<string> SharedContractAssemblyNames = new(
         [
-            "IIoT.Edge.Application", "IIoT.Edge.Domain", "IIoT.Edge.Module.Sdk",
-            "IIoT.Edge.Presentation.Navigation", "IIoT.Edge.SharedKernel",
-            "IIoT.Edge.UI.Shared", "Avalonia", "Avalonia.Base",
+            "IIoT.Edge.Module.Contracts", "IIoT.Edge.Module.Sdk", "IIoT.Edge.UI.Shared",
+            "Avalonia", "Avalonia.Base",
             "Avalonia.Controls", "Avalonia.Controls.DataGrid",
             "Avalonia.Markup", "Avalonia.Markup.Xaml",
             "Avalonia.Remote.Protocol", "MediatR", "MediatR.Contracts",
             "Microsoft.Extensions.Configuration", "Microsoft.Extensions.Configuration.Abstractions",
             "Microsoft.Extensions.Configuration.Binder", "Microsoft.Extensions.Configuration.FileExtensions",
-            "Microsoft.Extensions.Configuration.Json", "Microsoft.Extensions.DependencyInjection.Abstractions",
+            "Microsoft.Extensions.Configuration.Json", "Microsoft.Extensions.DependencyInjection",
+            "Microsoft.Extensions.DependencyInjection.Abstractions",
             "Microsoft.Extensions.Diagnostics.Abstractions", "Microsoft.Extensions.FileProviders.Abstractions",
             "Microsoft.Extensions.FileProviders.Physical", "Microsoft.Extensions.FileSystemGlobbing",
             "Microsoft.Extensions.Hosting.Abstractions", "Microsoft.Extensions.Logging.Abstractions",
@@ -35,6 +35,9 @@ public sealed class ModulePluginAssemblyResolver : IModulePluginAssemblyResolver
     private static readonly HashSet<string> FrameworkAssemblyNames = BuildFrameworkAssemblyNames();
     private static readonly HashSet<string> ForbiddenHostAssemblyNames = new(
         [
+            "IIoT.Edge.Application",
+            "IIoT.Edge.Architecture.Analyzers",
+            "IIoT.Edge.Domain",
             "IIoT.Edge.Host.Bootstrap",
             "IIoT.Edge.Host.DataPipeline",
             "IIoT.Edge.Infrastructure.CloudClient",
@@ -43,9 +46,12 @@ public sealed class ModulePluginAssemblyResolver : IModulePluginAssemblyResolver
             "IIoT.Edge.Infrastructure.Persistence.Dapper",
             "IIoT.Edge.Infrastructure.Persistence.EfCore",
             "IIoT.Edge.Infrastructure.Update",
+            "IIoT.Edge.Module.Analyzers",
+            "IIoT.Edge.Presentation.Navigation",
             "IIoT.Edge.Presentation.Panels",
             "IIoT.Edge.Presentation.Shell",
             "IIoT.Edge.Presentation.VisualTestData",
+            "IIoT.Edge.SharedKernel",
             "IIoT.Edge.Shell",
             "IIoT.Edge.Launcher",
             "IIoT.Edge.Installer",

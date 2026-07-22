@@ -1,5 +1,5 @@
-using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Plc;
+using IIoT.Edge.Module.Contracts.Device;
+using IIoT.Edge.Module.Contracts.Plc;
 using System.Text;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Barcode.Readers;

@@ -1,5 +1,5 @@
-using IIoT.Edge.Application.Abstractions.Config;
-using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Module.Contracts.Config;
+using IIoT.Edge.Module.Contracts.Logging;
 using log4net;
 using log4net.Config;
 using System.IO;

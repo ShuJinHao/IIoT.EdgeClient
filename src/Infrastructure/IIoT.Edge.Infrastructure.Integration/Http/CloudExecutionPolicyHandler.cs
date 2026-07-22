@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Module.Contracts.Cloud;
 using System.Net;
 
 namespace IIoT.Edge.Infrastructure.Integration.Http;

@@ -1,6 +1,7 @@
-using IIoT.Edge.Application.Modules.Descriptors;
-using IIoT.Edge.Application.Abstractions.Auth;
-using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Module.Contracts.UI;
+using IIoT.Edge.Module.Contracts.Auth;
+using IIoT.Edge.Module.Contracts.Modules;
+using IIoT.Edge.UI.Shared.PluginSystem;
 using IIoT.Edge.Presentation.Navigation.Features.Config.ParamView;
 using IIoT.Edge.Presentation.Navigation.Features.Formula.RecipeView;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
@@ -8,7 +9,7 @@ using IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.PlcTaskBindingView;
 using IIoT.Edge.Presentation.Navigation.Features.Production.CapacityView;
 using IIoT.Edge.Presentation.Navigation.Features.Production.Monitor;
-using IIoT.Edge.SharedKernel.Enums;
+using IIoT.Edge.Module.Contracts.Hardware;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.Presentation.Navigation.PluginSystem;

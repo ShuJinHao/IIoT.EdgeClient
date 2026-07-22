@@ -1,6 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
-using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Module.Contracts.Cloud;
 using IIoT.Edge.Application.Features.Production.CapacityView;
 using IIoT.Edge.Presentation.Navigation.Features.Production.CapacityView;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;

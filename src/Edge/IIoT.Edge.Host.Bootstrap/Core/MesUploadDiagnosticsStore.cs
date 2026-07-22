@@ -1,6 +1,6 @@
-using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Module.Contracts.Modules;
 
-using IIoT.Edge.Application.Abstractions.Mes;
+using IIoT.Edge.Module.Contracts.Mes;
 namespace IIoT.Edge.Shell.Core;
 
 public sealed class MesUploadDiagnosticsStore : IMesUploadDiagnosticsStore

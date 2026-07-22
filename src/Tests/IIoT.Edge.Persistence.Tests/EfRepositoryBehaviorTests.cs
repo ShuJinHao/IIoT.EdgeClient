@@ -2,7 +2,7 @@ using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.Persistence.EfCore;
 using IIoT.Edge.Infrastructure.Persistence.EfCore.Repositories;
 using IIoT.Edge.SharedKernel.Domain;
-using IIoT.Edge.SharedKernel.Enums;
+using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.SharedKernel.Specification;
 using Microsoft.Data.Sqlite;

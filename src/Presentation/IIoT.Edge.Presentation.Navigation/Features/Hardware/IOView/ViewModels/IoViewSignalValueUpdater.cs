@@ -1,10 +1,10 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text;
-using IIoT.Edge.Application.Abstractions.Plc;
-using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Module.Contracts.Plc.Store;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
-
+using IIoT.Edge.Module.Sdk.Hardware;
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 
 public interface IIoViewSignalValueUpdater

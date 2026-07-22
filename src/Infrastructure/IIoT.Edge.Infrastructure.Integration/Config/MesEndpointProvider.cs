@@ -1,8 +1,8 @@
-using IIoT.Edge.Application.Abstractions.Config;
-using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Module.Contracts.Config;
+using IIoT.Edge.Module.Contracts.Modules;
 using Microsoft.Extensions.Options;
 
-using IIoT.Edge.Application.Abstractions.Mes;
+using IIoT.Edge.Module.Contracts.Mes;
 namespace IIoT.Edge.Infrastructure.Integration.Config;
 
 public sealed class MesEndpointProvider(

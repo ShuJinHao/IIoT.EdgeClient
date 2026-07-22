@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Device;
+using IIoT.Edge.Module.Contracts.Device;
 using IIoT.Edge.Application.Common.Device;
 using IIoT.Edge.Infrastructure.Integration.Http;
 using System.Net;
@@ -6,7 +6,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
-using IIoT.Edge.Application.Abstractions.Cloud;
+using IIoT.Edge.Module.Contracts.Cloud;
 namespace IIoT.Edge.Cloud.ContractTests;
 
 public sealed class CloudHttpClientBehaviorTests

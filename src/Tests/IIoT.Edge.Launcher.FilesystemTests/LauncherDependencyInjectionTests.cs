@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Updates;
+using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.Infrastructure.Update.Configuration;
 using IIoT.Edge.Infrastructure.Update.Host;
 using IIoT.Edge.Launcher;

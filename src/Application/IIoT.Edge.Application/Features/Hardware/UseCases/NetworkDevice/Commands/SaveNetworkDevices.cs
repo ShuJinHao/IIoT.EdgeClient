@@ -1,5 +1,5 @@
 ﻿using IIoT.Edge.Application.Common.Crud;
-using IIoT.Edge.SharedKernel.Enums;
+using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.SharedKernel.Messaging;
 using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.SharedKernel.Result;
@@ -155,8 +155,8 @@ public class SaveNetworkDevicesHandler(
            && string.Equals(dto.DeviceModel?.Trim(), PlcType.Mc.ToString(), StringComparison.OrdinalIgnoreCase);
 
     private static bool IsSupportedMcFrame(string value)
-        => string.Equals(value.Trim(), nameof(IIoT.Edge.Application.Abstractions.Plc.McPlcFrameType.E3), StringComparison.OrdinalIgnoreCase)
-           || string.Equals(value.Trim(), nameof(IIoT.Edge.Application.Abstractions.Plc.McPlcFrameType.E4), StringComparison.OrdinalIgnoreCase);
+        => string.Equals(value.Trim(), nameof(IIoT.Edge.Module.Contracts.Plc.McPlcFrameType.E3), StringComparison.OrdinalIgnoreCase)
+           || string.Equals(value.Trim(), nameof(IIoT.Edge.Module.Contracts.Plc.McPlcFrameType.E4), StringComparison.OrdinalIgnoreCase);
 
     private static string? Normalize(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();

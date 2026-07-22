@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using System.IO;
 using System.Text.Json;
-using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Host.Bootstrap;
 
 namespace IIoT.Edge.Host.Bootstrap.Modules;

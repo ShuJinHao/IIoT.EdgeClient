@@ -19,7 +19,7 @@ public sealed class RecipeServicePersistenceBehaviorTests
             var service = CreateService(recipeDirectory, fileSystem, logger);
             var changedCount = 0;
             service.RecipeChanged += () => changedCount++;
-            service.SwitchSource(IIoT.Edge.SharedKernel.DataPipeline.Recipe.RecipeSource.Local);
+            service.SwitchSource(IIoT.Edge.Module.Contracts.DataPipeline.Recipe.RecipeSource.Local);
             changedCount = 0;
             service.SetLocalParam("Existing", 1, 2, "V");
             var persistedBefore = File.ReadAllText(Path.Combine(recipeDirectory, "local_recipe.json"));

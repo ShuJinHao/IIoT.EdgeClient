@@ -1,5 +1,5 @@
 using Avalonia.Controls;
-using IIoT.Edge.Application.Features.Production.Planning;
+using IIoT.Edge.Module.Contracts.Production;
 using IIoT.Edge.UI.Shared.Avalonia.Windowing;
 using Microsoft.Extensions.DependencyInjection;
 

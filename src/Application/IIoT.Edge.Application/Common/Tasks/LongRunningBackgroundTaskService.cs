@@ -1,5 +1,5 @@
-using IIoT.Edge.Application.Abstractions.Tasks;
-using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Module.Contracts.Tasks;
+using IIoT.Edge.Module.Contracts.Logging;
 
 namespace IIoT.Edge.Application.Common.Tasks;
 

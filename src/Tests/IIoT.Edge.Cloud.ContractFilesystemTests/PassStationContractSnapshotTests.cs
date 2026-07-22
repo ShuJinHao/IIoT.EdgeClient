@@ -1,7 +1,7 @@
 using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using IIoT.Edge.Application.Common.Http;
+using IIoT.Edge.Module.Sdk.Cloud;
 using IIoT.Edge.Infrastructure.Integration.PassStation;
 
 namespace IIoT.Edge.Cloud.ContractFilesystemTests;

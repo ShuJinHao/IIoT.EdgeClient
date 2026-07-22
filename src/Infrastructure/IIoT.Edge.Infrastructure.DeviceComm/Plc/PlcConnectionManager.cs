@@ -1,7 +1,7 @@
-using IIoT.Edge.Application.Abstractions.Context;
-using IIoT.Edge.Application.Abstractions.Plc;
-using IIoT.Edge.Application.Abstractions.Plc.Store;
-using IIoT.Edge.SharedKernel.Context;
+using IIoT.Edge.Module.Contracts.Context;
+using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Module.Contracts.Plc.Store;
+using IIoT.Edge.Module.Contracts.Runtime;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc;
 

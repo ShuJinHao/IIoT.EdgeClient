@@ -1,5 +1,5 @@
-using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Module.Contracts.Device;
+using IIoT.Edge.Module.Contracts.Logging;
 
 namespace IIoT.Edge.Infrastructure.Integration.Device.Cache;
 

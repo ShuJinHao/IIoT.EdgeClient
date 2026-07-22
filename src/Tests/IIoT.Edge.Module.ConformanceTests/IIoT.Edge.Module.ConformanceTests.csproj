@@ -8,7 +8,7 @@
     <ProjectReference Include="..\..\Edge\IIoT.Edge.Host.Bootstrap\IIoT.Edge.Host.Bootstrap.csproj" />
     <ProjectReference Include="..\..\Edge\IIoT.Edge.Shell\IIoT.Edge.Shell.csproj" />
     <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.DeviceComm\IIoT.Edge.Infrastructure.DeviceComm.csproj" />
-    <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Sdk\IIoT.Edge.Module.Sdk.csproj" />
+    <PackageReference Include="IIoT.Edge.Module.Sdk" />
     <ProjectReference Include="..\..\Testing\IIoT.Edge.TestPlugin\IIoT.Edge.TestPlugin.csproj">
       <ExternallyResolved>true</ExternallyResolved>
     </ProjectReference>

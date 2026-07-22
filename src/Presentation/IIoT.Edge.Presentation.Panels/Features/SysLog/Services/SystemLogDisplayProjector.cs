@@ -1,5 +1,5 @@
 using System.Text.RegularExpressions;
-using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Module.Contracts.Logging;
 
 namespace IIoT.Edge.Presentation.Panels.Features.SysLog;
 

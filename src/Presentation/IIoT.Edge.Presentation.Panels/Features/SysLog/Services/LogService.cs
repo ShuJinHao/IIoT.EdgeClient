@@ -4,7 +4,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using Avalonia.Threading;
 using AvaloniaDispatcher = Avalonia.Threading.Dispatcher;
-using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Module.Contracts.Logging;
 
 namespace IIoT.Edge.Presentation.Panels.Features.SysLog;
 

@@ -1,4 +1,4 @@
-namespace IIoT.Edge.Application.Abstractions.Config;
+namespace IIoT.Edge.Module.Contracts.Config;
 
 public static class ModuleParamRoleProviderExtensions
 {

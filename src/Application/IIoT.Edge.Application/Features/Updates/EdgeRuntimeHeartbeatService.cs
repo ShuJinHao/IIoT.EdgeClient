@@ -1,7 +1,7 @@
 using System.Reflection;
-using IIoT.Edge.Application.Abstractions.Config;
-using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Application.Abstractions.Updates;
+using IIoT.Edge.Module.Contracts.Config;
+using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.SharedKernel.Runtime;
 
 namespace IIoT.Edge.Application.Features.Updates;

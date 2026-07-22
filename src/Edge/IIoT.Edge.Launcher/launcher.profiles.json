@@ -1,12 +1,11 @@
 [
   {
-    "ProfileId": "HomogenizationLine",
-    "DisplayName": "匀浆",
-    "Description": "使用匀浆工序的 profile 启动客户端，后续新增匀浆业务时只需要部署插件与 profile 配置。",
-    "ImagePath": "Assets/Profiles/homogenization.png",
-    "IconKind": "BeakerOutline",
-    "AccentColor": "#4D7C0F",
-    "MachineProfile": "HomogenizationLine",
+    "ProfileId": "Default",
+    "DisplayName": "Edge Host",
+    "Description": "未绑定业务插件的通用 Host profile；具体工序由独立插件仓提供 profile 配置。",
+    "IconKind": "Cog",
+    "AccentColor": "#0F766E",
+    "MachineProfile": "Default",
     "ExecutablePath": "../host/IIoT.Edge.Shell"
   }
 ]

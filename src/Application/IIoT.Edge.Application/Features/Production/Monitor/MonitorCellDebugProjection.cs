@@ -1,6 +1,6 @@
-using IIoT.Edge.Application.Abstractions.Time;
-using IIoT.Edge.SharedKernel.Context;
-using IIoT.Edge.SharedKernel.DataPipeline.CellData;
+using IIoT.Edge.Module.Contracts.Time;
+using IIoT.Edge.Module.Contracts.Runtime;
+using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 using System.Collections;
 using System.Globalization;
 using System.Reflection;

@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Module.Contracts.Config;
 using IIoT.Edge.Presentation.Navigation.Common;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Config.ParamView.Models;

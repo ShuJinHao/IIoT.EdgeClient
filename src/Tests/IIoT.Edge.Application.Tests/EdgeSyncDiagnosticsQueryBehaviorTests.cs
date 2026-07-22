@@ -1,16 +1,16 @@
-using IIoT.Edge.Application.Context;
+using IIoT.Edge.Module.Contracts.Runtime;
 using IIoT.Edge.Application.Common.Diagnostics;
-using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
-using IIoT.Edge.Application.Abstractions.Context;
-using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.SharedKernel.DataPipeline;
-using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
-using IIoT.Edge.SharedKernel.DataPipeline.DeviceLog;
+using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
+using IIoT.Edge.Module.Contracts.Context;
+using IIoT.Edge.Module.Contracts.Device;
+using IIoT.Edge.Module.Contracts.Modules;
+using IIoT.Edge.Module.Contracts.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
+using IIoT.Edge.Module.Contracts.DataPipeline.DeviceLog;
 using IIoT.Edge.Application.Common.Persistence;
 
-using IIoT.Edge.Application.Abstractions.Cloud;
-using IIoT.Edge.Application.Abstractions.Mes;
+using IIoT.Edge.Module.Contracts.Cloud;
+using IIoT.Edge.Module.Contracts.Mes;
 namespace IIoT.Edge.Application.Tests;
 
 public sealed class EdgeSyncDiagnosticsQueryBehaviorTests

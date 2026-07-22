@@ -1,5 +1,5 @@
 
-using IIoT.Edge.Application.Abstractions.Shared;
+using IIoT.Edge.Module.Contracts.Shared;
 namespace IIoT.Edge.Shell.Core;
 
 public sealed class ExternalHeartbeatStateStore : IExternalHeartbeatStateStore

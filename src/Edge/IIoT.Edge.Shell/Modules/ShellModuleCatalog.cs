@@ -1,4 +1,4 @@
-﻿using IIoT.Edge.Application.Abstractions.Modules;
+﻿using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Host.Bootstrap.Modules;
 using IIoT.Edge.SharedKernel.Configuration;
 using Microsoft.Extensions.Configuration;

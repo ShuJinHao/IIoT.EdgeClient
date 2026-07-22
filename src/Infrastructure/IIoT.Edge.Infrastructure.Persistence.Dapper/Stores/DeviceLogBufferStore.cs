@@ -1,8 +1,8 @@
 using Dapper;
-using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
-using IIoT.Edge.Application.Abstractions.Logging;
+using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
+using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
-using IIoT.Edge.SharedKernel.DataPipeline.DeviceLog;
+using IIoT.Edge.Module.Contracts.DataPipeline.DeviceLog;
 
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 

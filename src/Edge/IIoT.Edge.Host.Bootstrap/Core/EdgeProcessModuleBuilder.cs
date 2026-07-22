@@ -1,8 +1,11 @@
-using IIoT.Edge.Application.Modules.Descriptors;
-using IIoT.Edge.Application.Abstractions.Config;
-using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Module.Contracts.UI;
+using IIoT.Edge.Module.Contracts.Config;
+using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
+using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.Application.Modules.Hardware;
+using IIoT.Edge.Module.Contracts.Hardware;
+using IIoT.Edge.Presentation.Navigation.PluginSystem;
 using IIoT.Edge.UI.Shared.Modularity;
 using IIoT.Edge.UI.Shared.PluginSystem;
 using Microsoft.Extensions.Configuration;
@@ -51,6 +54,21 @@ internal sealed class EdgeProcessModuleBuilder : IEdgeProcessModuleBuilder
     public IServiceCollection Services { get; }
 
     public IConfiguration Configuration { get; }
+
+    public void RegisterStandardViews(StandardModuleViewRegistration registration)
+    {
+        ArgumentNullException.ThrowIfNull(registration);
+        this.RegisterStandardModuleViews(
+            registration.ModuleId,
+            registration.DataViewTitle,
+            registration.DataViewTitleResourceKey,
+            registration.CustomDataViewType,
+            registration.CustomDataViewModelType,
+            registration.DataMenuTitle,
+            registration.DataMenuTitleResourceKey,
+            registration.CacheDataView,
+            registration.SupportsRecipe);
+    }
 
     public void RegisterRoute(string viewId, Type viewType, Type viewModelType, bool cacheView = true)
         => _viewRegistry.RegisterRoute(viewId, viewType, viewModelType, cacheView);

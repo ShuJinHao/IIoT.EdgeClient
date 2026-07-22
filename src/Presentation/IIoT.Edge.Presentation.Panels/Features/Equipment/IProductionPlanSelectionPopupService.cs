@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Features.Production.Planning;
+using IIoT.Edge.Module.Contracts.Production;
 
 namespace IIoT.Edge.Presentation.Panels.Features.Equipment;
 

@@ -1,5 +1,5 @@
-using IIoT.Edge.Application.Modules.Diagnostics;
-using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
+using IIoT.Edge.Module.Contracts.Diagnostics;
+using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
 using Microsoft.Extensions.Configuration;
 
 namespace IIoT.Edge.Shell.Core;

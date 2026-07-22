@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
+using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;

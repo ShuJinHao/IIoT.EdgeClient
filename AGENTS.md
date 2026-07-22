@@ -16,6 +16,7 @@
 - 新工序必须通过模块扩展，不得写回宿主硬编码。
 - Edge UI 只接真实路由、真实数据、真实命令、真实权限；禁止假按钮、假状态、假数据。
 - 可复用 UI 控件和视觉必须归口 `IIoT.Edge.UI.Shared`。
+- Host 只经正式 `PackageReference` 消费同级独立 `IIoT.Edge.Sdk` 仓产出的 Contracts/Module.Sdk/UI.Shared/Analyzer 包；具体工序源码、资源、配置和 pack 实现只归插件仓，三仓不得跨仓引用源码或项目。
 
 ## Validation
 

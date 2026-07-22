@@ -1,6 +1,0 @@
-{
-  "bundleId": "all-official",
-  "displayName": "Official Edge Modules",
-  "includeModules": [ "Homogenization" ],
-  "machineProfiles": [ "HomogenizationLine" ]
-}

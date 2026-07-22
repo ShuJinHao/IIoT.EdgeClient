@@ -5,7 +5,7 @@
       "commandName": "Project",
       "environmentVariables": {
         "DOTNET_ENVIRONMENT": "Development",
-        "Shell__MachineProfile": "HomogenizationLine",
+        "Shell__MachineProfile": "Default",
         "NO_PROXY": "localhost,127.0.0.1",
         "no_proxy": "localhost,127.0.0.1"
       }

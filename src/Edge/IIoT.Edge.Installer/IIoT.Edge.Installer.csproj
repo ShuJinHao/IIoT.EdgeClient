@@ -8,7 +8,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>IIoT.Edge.Setup</AssemblyName>
     <AssemblyTitle>IIoT Edge Client</AssemblyTitle>
-    <ApplicationIcon>..\..\Shared\IIoT.Edge.UI.Shared\Assets\images\icon.ico</ApplicationIcon>
+    <ApplicationIcon>..\Assets\icon.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
 
@@ -35,7 +35,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
-    <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
+    <PackageReference Include="IIoT.Edge.UI.Shared" />
   </ItemGroup>
 
 </Project>

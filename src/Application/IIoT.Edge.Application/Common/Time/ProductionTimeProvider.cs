@@ -1,5 +1,5 @@
 using System.Globalization;
-using IIoT.Edge.Application.Abstractions.Time;
+using IIoT.Edge.Module.Contracts.Time;
 
 namespace IIoT.Edge.Application.Common.Time;
 

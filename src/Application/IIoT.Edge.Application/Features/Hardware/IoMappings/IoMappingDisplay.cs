@@ -1,3 +1,5 @@
+using IIoT.Edge.Module.Sdk.Hardware;
+
 namespace IIoT.Edge.Application.Features.Hardware.IoMappings;
 
 /// <summary>

@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 

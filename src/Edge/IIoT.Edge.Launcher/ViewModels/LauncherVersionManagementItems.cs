@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Updates;
+using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.UI.Shared.Mvvm;
 
 namespace IIoT.Edge.Launcher.ViewModels;

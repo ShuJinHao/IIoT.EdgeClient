@@ -1,6 +1,6 @@
 using Avalonia.Threading;
-using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Application.Context;
+using IIoT.Edge.Module.Contracts.Modules;
+using IIoT.Edge.Module.Contracts.Runtime;
 using IIoT.Edge.Application.Features.Production.Monitor;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;

@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Context;
+using IIoT.Edge.Module.Contracts.Runtime;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.UI.Shared.Localization;
 

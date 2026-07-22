@@ -1,15 +1,16 @@
 ﻿using System.Globalization;
-using IIoT.Edge.Application.Abstractions.Plc;
-using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Module.Contracts.Plc.Store;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
+using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.Application.Features.Hardware.IOView;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
-using IIoT.Edge.SharedKernel.Context;
-using IIoT.Edge.SharedKernel.Enums;
+using IIoT.Edge.Module.Contracts.Runtime;
+using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.SharedKernel.Result;
 using IIoT.Edge.UI.Shared.Localization;
 

@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Events;
+using IIoT.Edge.Module.Contracts.Events;
 using MediatR;
 
 namespace IIoT.Edge.Presentation.Panels.Features.Equipment;

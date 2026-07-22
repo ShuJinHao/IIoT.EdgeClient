@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Cache;
+using IIoT.Edge.Module.Contracts.Cache;
 using IIoT.Edge.Application.Features.Config.CloudApi;
 using IIoT.Edge.Domain.Config.Aggregates;
 using IIoT.Edge.SharedKernel.Repository;

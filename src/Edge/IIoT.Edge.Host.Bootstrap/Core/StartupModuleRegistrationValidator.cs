@@ -1,5 +1,5 @@
-using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Application.Modules.Diagnostics;
+using IIoT.Edge.Module.Contracts.Modules;
+using IIoT.Edge.Module.Contracts.Diagnostics;
 
 namespace IIoT.Edge.Shell.Core;
 

@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Module.Contracts.Config;
 using System.Reflection;
 
 namespace IIoT.Edge.Application.Features.Config.CloudApi;

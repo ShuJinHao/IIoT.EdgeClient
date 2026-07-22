@@ -1,7 +1,7 @@
 using System.Linq.Expressions;
-using IIoT.Edge.Application.Abstractions.Auth;
-using IIoT.Edge.Application.Abstractions.Cache;
-using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Module.Contracts.Auth;
+using IIoT.Edge.Module.Contracts.Cache;
+using IIoT.Edge.Module.Contracts.Config;
 using IIoT.Edge.Application.Features.Config;
 using IIoT.Edge.Application.Features.Config.LocalParameterConfig;
 using IIoT.Edge.Application.Features.Config.CloudApi;

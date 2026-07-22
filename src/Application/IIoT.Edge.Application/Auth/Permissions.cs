@@ -1,4 +1,4 @@
-namespace IIoT.Edge.Application.Abstractions.Auth;
+namespace IIoT.Edge.Module.Contracts.Auth;
 
 /// <summary>
 /// 权限标识常量定义。

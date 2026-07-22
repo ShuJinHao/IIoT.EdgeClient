@@ -1,5 +1,5 @@
-using IIoT.Edge.Application.Abstractions.Plc;
-using IIoT.Edge.Application.Abstractions.Plc.Store;
+using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Module.Contracts.Plc.Store;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 

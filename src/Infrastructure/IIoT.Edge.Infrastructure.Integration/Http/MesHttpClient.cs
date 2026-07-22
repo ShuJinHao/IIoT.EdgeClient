@@ -1,9 +1,9 @@
-using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Module.Contracts.Modules;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 
-using IIoT.Edge.Application.Abstractions.Mes;
+using IIoT.Edge.Module.Contracts.Mes;
 namespace IIoT.Edge.Infrastructure.Integration.Http;
 
 public sealed class MesHttpClient : IMesHttpClient

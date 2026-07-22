@@ -1,7 +1,7 @@
-using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Application.Abstractions.Recipe;
-using IIoT.Edge.Application.Abstractions.Tasks;
+using IIoT.Edge.Module.Contracts.Device;
+using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Module.Contracts.Recipe;
+using IIoT.Edge.Module.Contracts.Tasks;
 
 namespace IIoT.Edge.Infrastructure.Integration.Recipe;
 

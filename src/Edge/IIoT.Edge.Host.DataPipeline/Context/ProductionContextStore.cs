@@ -1,8 +1,8 @@
-using IIoT.Edge.Application.Context;
-using IIoT.Edge.Application.Abstractions.Context;
-using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.SharedKernel.Context;
-using IIoT.Edge.SharedKernel.DataPipeline.CellData;
+using IIoT.Edge.Module.Contracts.Runtime;
+using IIoT.Edge.Module.Contracts.Context;
+using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Module.Contracts.Runtime;
+using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 using System.Text.Json;
 
 namespace IIoT.Edge.Host.DataPipeline.Context;

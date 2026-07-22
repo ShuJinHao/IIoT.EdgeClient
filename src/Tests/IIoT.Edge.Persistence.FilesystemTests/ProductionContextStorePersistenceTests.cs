@@ -1,7 +1,7 @@
-using IIoT.Edge.Application.Abstractions.Context;
+using IIoT.Edge.Module.Contracts.Context;
 using IIoT.Edge.Host.DataPipeline.Context;
-using IIoT.Edge.SharedKernel.DataPipeline.CellData;
-using IIoT.Edge.SharedKernel.Context;
+using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
+using IIoT.Edge.Module.Contracts.Runtime;
 
 namespace IIoT.Edge.Persistence.FilesystemTests;
 

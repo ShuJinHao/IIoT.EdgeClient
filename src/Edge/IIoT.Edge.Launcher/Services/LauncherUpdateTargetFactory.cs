@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Updates;
+using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.Launcher.Models;
 
 namespace IIoT.Edge.Launcher.Services;

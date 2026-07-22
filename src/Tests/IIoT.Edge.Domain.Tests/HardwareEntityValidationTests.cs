@@ -1,5 +1,5 @@
 using IIoT.Edge.Domain.Hardware.Aggregates;
-using IIoT.Edge.SharedKernel.Enums;
+using IIoT.Edge.Module.Contracts.Hardware;
 
 namespace IIoT.Edge.Domain.Tests;
 

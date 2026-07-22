@@ -1,5 +1,5 @@
-using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Application.Modules.Diagnostics;
+using IIoT.Edge.Module.Contracts.Modules;
+using IIoT.Edge.Module.Contracts.Diagnostics;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Host.Bootstrap.Modules;
 

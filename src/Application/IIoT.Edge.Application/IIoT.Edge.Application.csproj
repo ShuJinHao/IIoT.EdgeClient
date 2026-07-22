@@ -15,9 +15,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="IIoT.Edge.Module.Contracts" />
+    <PackageReference Include="IIoT.Edge.Module.Sdk" />
     <ProjectReference Include="..\..\Core\IIoT.Edge.Domain\IIoT.Edge.Domain.csproj" />
     <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
   </ItemGroup>
 
 </Project>
-

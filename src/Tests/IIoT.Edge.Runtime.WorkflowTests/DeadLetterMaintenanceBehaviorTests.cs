@@ -1,6 +1,6 @@
 using IIoT.Edge.Application.Features.DataPipeline.DeadLetters;
-using IIoT.Edge.Application.Abstractions.DataPipeline;
-using IIoT.Edge.SharedKernel.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline;
 
 namespace IIoT.Edge.Runtime.WorkflowTests;
 

@@ -1,5 +1,5 @@
-using IIoT.Edge.Application.Abstractions.Config;
-using IIoT.Edge.Application.Modules.Diagnostics;
+using IIoT.Edge.Module.Contracts.Config;
+using IIoT.Edge.Module.Contracts.Diagnostics;
 using IIoT.Edge.Host.Bootstrap;
 using IIoT.Edge.SharedKernel.Configuration;
 using System.IO;

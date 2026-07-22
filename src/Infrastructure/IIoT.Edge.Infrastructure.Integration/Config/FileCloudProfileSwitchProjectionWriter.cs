@@ -1,5 +1,5 @@
 using System.Text.Json;
-using IIoT.Edge.Application.Abstractions.Config;
+using IIoT.Edge.Module.Contracts.Config;
 using IIoT.Edge.SharedKernel.Configuration;
 
 namespace IIoT.Edge.Infrastructure.Integration.Config;

@@ -1,5 +1,5 @@
-using IIoT.Edge.Application.Abstractions.Context;
-using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Module.Contracts.Context;
+using IIoT.Edge.Module.Contracts.Modules;
 using MediatR;
 
 namespace IIoT.Edge.Application.Features.Production.Monitor;

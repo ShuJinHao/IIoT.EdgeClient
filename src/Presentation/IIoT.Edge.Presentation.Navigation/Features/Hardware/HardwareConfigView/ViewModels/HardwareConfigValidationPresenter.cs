@@ -1,7 +1,7 @@
 using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView.Models;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
-
+using IIoT.Edge.Module.Sdk.Hardware;
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.HardwareConfigView;
 
 public interface IHardwareConfigValidationPresenter

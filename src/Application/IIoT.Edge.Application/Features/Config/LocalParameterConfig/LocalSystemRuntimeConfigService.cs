@@ -1,6 +1,6 @@
-using IIoT.Edge.Application.Abstractions.Config;
-using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Application.Abstractions.Modules;
+using IIoT.Edge.Module.Contracts.Config;
+using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Application.Features.Config.CloudApi;
 
 namespace IIoT.Edge.Application.Features.Config.LocalParameterConfig;

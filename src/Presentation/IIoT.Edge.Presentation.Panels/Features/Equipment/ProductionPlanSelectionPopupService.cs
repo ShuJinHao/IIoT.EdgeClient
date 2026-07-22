@@ -2,7 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
-using IIoT.Edge.Application.Features.Production.Planning;
+using IIoT.Edge.Module.Contracts.Production;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.Presentation.Panels.Features.Equipment;

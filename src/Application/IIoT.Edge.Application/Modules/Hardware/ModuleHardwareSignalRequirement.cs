@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
-
+using IIoT.Edge.Module.Contracts.Hardware;
+using IIoT.Edge.Module.Sdk.Hardware;
 namespace IIoT.Edge.Application.Modules.Hardware;
 
 public sealed record ModuleHardwareSignalRequirement(

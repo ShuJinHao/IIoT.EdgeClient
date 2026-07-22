@@ -5,10 +5,10 @@
   "pluginsRoot": "plugins",
   "profiles": [
     {
-      "profileId": "HomogenizationLine",
-      "machineProfile": "HomogenizationLine",
-      "machineConfig": "src/Edge/IIoT.Edge.Shell/appsettings.machine.HomogenizationLine.json",
-      "moduleIds": [ "Homogenization" ]
+      "profileId": "Default",
+      "machineProfile": "Default",
+      "machineConfig": "src/Edge/IIoT.Edge.Shell/appsettings.machine.Default.json",
+      "moduleIds": []
     }
   ]
 }

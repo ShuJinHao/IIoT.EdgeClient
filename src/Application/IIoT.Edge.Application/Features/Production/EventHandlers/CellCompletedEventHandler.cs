@@ -1,5 +1,5 @@
-﻿using IIoT.Edge.Application.Abstractions.Events;
-using IIoT.Edge.Application.Abstractions.Logging;
+﻿using IIoT.Edge.Module.Contracts.Events;
+using IIoT.Edge.Module.Contracts.Logging;
 using MediatR;
 
 namespace IIoT.Edge.Application.Features.Production.EventHandlers;

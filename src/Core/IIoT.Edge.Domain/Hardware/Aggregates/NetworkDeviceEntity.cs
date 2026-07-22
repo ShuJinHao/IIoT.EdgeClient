@@ -1,6 +1,6 @@
 ﻿using IIoT.Edge.SharedKernel.Domain;
-using IIoT.Edge.SharedKernel.Enums;
-using IIoT.Edge.SharedKernel.Identity;
+using IIoT.Edge.Module.Contracts.Hardware;
+using IIoT.Edge.Module.Contracts.Identity;
 
 namespace IIoT.Edge.Domain.Hardware.Aggregates;
 

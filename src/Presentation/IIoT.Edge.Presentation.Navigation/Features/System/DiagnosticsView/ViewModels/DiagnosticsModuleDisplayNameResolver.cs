@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Modules.Diagnostics;
+using IIoT.Edge.Module.Contracts.Diagnostics;
 using IIoT.Edge.Presentation.Navigation.Localization;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;

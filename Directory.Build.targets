@@ -8,17 +8,11 @@
           CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <PropertyGroup>
-    <EdgeArchitectureAnalyzerProject>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src/Analyzers/IIoT.Edge.Architecture.Analyzers/IIoT.Edge.Architecture.Analyzers.csproj'))</EdgeArchitectureAnalyzerProject>
-  </PropertyGroup>
-
   <ItemGroup Condition="'$(IsTestProject)' != 'true'
-                        and '$(MSBuildProjectFullPath)' != '$(EdgeArchitectureAnalyzerProject)'
                         and '$(IsEdgePluginTestFixture)' != 'true'">
-    <ProjectReference Include="$(EdgeArchitectureAnalyzerProject)"
-                      ReferenceOutputAssembly="false"
-                      OutputItemType="Analyzer"
-                      PrivateAssets="all" />
+    <PackageReference Include="IIoT.Edge.Module.Analyzers"
+                      PrivateAssets="all"
+                      IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(EdgeModuleRole)' != ''">

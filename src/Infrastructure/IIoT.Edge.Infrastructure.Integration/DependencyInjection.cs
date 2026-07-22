@@ -1,13 +1,13 @@
-using IIoT.Edge.Application.Abstractions.Auth;
-using IIoT.Edge.Application.Abstractions.Config;
-using IIoT.Edge.Application.Abstractions.DataPipeline;
-using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
-using IIoT.Edge.Application.Abstractions.Cloud;
-using IIoT.Edge.Application.Abstractions.Device;
-using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Application.Abstractions.Recipe;
-using IIoT.Edge.Application.Abstractions.Time;
+using IIoT.Edge.Module.Contracts.Auth;
+using IIoT.Edge.Module.Contracts.Config;
+using IIoT.Edge.Module.Contracts.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline.Consumers;
+using IIoT.Edge.Module.Contracts.Cloud;
+using IIoT.Edge.Module.Contracts.Device;
+using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Module.Contracts.Modules;
+using IIoT.Edge.Module.Contracts.Recipe;
+using IIoT.Edge.Module.Contracts.Time;
 using IIoT.Edge.Infrastructure.Integration.Auth;
 using IIoT.Edge.Infrastructure.Integration.Capacity;
 using IIoT.Edge.Infrastructure.Integration.Config;
@@ -20,7 +20,6 @@ using IIoT.Edge.Infrastructure.Integration.Http;
 using IIoT.Edge.Infrastructure.Integration.Mes;
 using IIoT.Edge.Infrastructure.Integration.PassStation;
 using IIoT.Edge.Infrastructure.Integration.Recipe;
-using IIoT.Edge.Application.Modules;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
@@ -28,7 +27,7 @@ using Microsoft.Extensions.Options;
 using Polly;
 using System.Threading;
 
-using IIoT.Edge.Application.Abstractions.Mes;
+using IIoT.Edge.Module.Contracts.Mes;
 namespace IIoT.Edge.Infrastructure.Integration;
 
 public static class DependencyInjection
@@ -135,7 +134,6 @@ public static class DependencyInjection
         services.AddSingleton<IMesHeartbeatProbe, MesHeartbeatProbe>();
         services.AddSingleton<ICloudUploadGate, CloudUploadGate>();
         services.AddSingleton<IMesUploadGate, MesUploadGate>();
-        services.AddSingleton<MesRequestExecutor>();
         services.AddSingleton<MesHeartbeatTask>();
         services.AddSingleton<IEdgeHostPlcRuntimeStateSnapshotProvider, EdgeHostPlcRuntimeStateSnapshotProvider>();
         services.AddSingleton<IEdgeHostPlcRuntimeStateReporter, EdgeHostPlcRuntimeStateReporter>();

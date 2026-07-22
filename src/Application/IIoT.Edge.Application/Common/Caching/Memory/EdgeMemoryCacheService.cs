@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Cache;
+using IIoT.Edge.Module.Contracts.Cache;
 using System.Collections.Concurrent;
 
 namespace IIoT.Edge.Application.Common.Caching.Memory;

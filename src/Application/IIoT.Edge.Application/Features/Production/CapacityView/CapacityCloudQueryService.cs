@@ -1,8 +1,8 @@
 using System.Globalization;
 using System.Text.Json;
-using IIoT.Edge.Application.Abstractions.Cloud;
-using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
+using IIoT.Edge.Module.Contracts.Cloud;
+using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
 
 namespace IIoT.Edge.Application.Features.Production.CapacityView;
 

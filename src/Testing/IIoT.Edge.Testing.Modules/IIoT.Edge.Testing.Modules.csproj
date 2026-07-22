@@ -8,8 +8,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Edge\IIoT.Edge.Host.Bootstrap\IIoT.Edge.Host.Bootstrap.csproj" />
     <ProjectReference Include="..\..\Edge\IIoT.Edge.Shell\IIoT.Edge.Shell.csproj" />
-    <ProjectReference Include="..\..\Modules\IIoT.Edge.Module.Sdk\IIoT.Edge.Module.Sdk.csproj" />
-    <ProjectReference Include="..\..\Shared\IIoT.Edge.UI.Shared\IIoT.Edge.UI.Shared.csproj" />
+    <PackageReference Include="IIoT.Edge.Module.Sdk" />
+    <PackageReference Include="IIoT.Edge.UI.Shared" />
     <ProjectReference Include="..\IIoT.Edge.Testing.Core\IIoT.Edge.Testing.Core.csproj" />
   </ItemGroup>
 </Project>

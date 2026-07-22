@@ -1,9 +1,9 @@
-using IIoT.Edge.SharedKernel.DataPipeline;
-using IIoT.Edge.SharedKernel.DataPipeline.CellData;
-using IIoT.Edge.Application.Abstractions.Logging;
-using IIoT.Edge.Application.Abstractions.DataPipeline;
-using IIoT.Edge.Application.Abstractions.DataPipeline.Consumers;
-using IIoT.Edge.Application.Abstractions.Time;
+using IIoT.Edge.Module.Contracts.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
+using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Module.Contracts.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline.Consumers;
+using IIoT.Edge.Module.Contracts.Time;
 using System.Reflection;
 
 namespace IIoT.Edge.Infrastructure.Integration.Export.Excel;
@@ -22,8 +22,8 @@ internal sealed class ExcelConsumer : IExcelConsumer
     private readonly IProductionTimeProvider _productionTime;
     private readonly IExcelWriter _excelWriter;
     private readonly object _fileLock = new();
-    public IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode FailureMode
-        => IIoT.Edge.Application.Abstractions.DataPipeline.ConsumerFailureMode.BestEffort;
+    public IIoT.Edge.Module.Contracts.DataPipeline.ConsumerFailureMode FailureMode
+        => IIoT.Edge.Module.Contracts.DataPipeline.ConsumerFailureMode.BestEffort;
     public DataPipelineRetryChannel RetryChannel => DataPipelineRetryChannel.None;
     public string Name => "Excel";
     public int Order => 30;

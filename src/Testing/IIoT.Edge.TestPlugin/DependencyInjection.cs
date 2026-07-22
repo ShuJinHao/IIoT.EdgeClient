@@ -1,11 +1,11 @@
-using IIoT.Edge.Application.Abstractions.Modules;
-using IIoT.Edge.Application.Abstractions.Plc;
-using IIoT.Edge.Application.Abstractions.Plc.Store;
-using IIoT.Edge.Application.Abstractions.Tasks;
-using IIoT.Edge.Application.Modules.Descriptors;
+using IIoT.Edge.Module.Contracts.Modules;
+using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Module.Contracts.Plc.Store;
+using IIoT.Edge.Module.Contracts.Tasks;
+using IIoT.Edge.Module.Contracts.UI;
 using IIoT.Edge.Module.TestPlugin.Companion;
-using IIoT.Edge.SharedKernel.Context;
-using IIoT.Edge.SharedKernel.DataPipeline.CellData;
+using IIoT.Edge.Module.Contracts.Runtime;
+using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.TestPlugin;

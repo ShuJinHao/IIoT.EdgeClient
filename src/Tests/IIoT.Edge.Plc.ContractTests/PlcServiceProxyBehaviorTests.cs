@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.Plc;
+using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Services;
 
 namespace IIoT.Edge.Plc.ContractTests;

@@ -1,4 +1,4 @@
-using IIoT.Edge.SharedKernel.DataPipeline.Capacity;
+using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
 
 namespace IIoT.Edge.Application.Tests;
 

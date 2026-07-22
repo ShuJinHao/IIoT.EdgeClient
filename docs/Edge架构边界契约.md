@@ -14,7 +14,7 @@
 
 ## 2. 当前项目图与角色
 
-当前 solution 与仓库项目图均为 61 个项目，其中 32 个是 required 测试 runner，1 个是位于 `src/Testing` 的中性插件 fixture，Analyzer 实现项目不是测试项目。`IIoT.Edge.Module.TestPlugin.Companion` 是该 fixture artifact 的 plugin-owned TestSupport，不是第二个 fixture，也不计入 32 个 required runner。当前数量不得由历史文档回填。生产项目不得直接或传递引用 Tests/Testing/TestKit；`Host.Bootstrap -> Presentation.VisualTestData` 仅在 Debug 生效，Release 图不得包含该边。项目数只是 inventory，不是永久冻结；任何增减必须同时更新清单、构建图、真实发现数和滚动复盘。
+物理拆分前冻结基线曾登记 61 个项目与 32 个 required runner；2026-07-22 本地三仓源码候选已移出 SDK、Analyzer、UI Shared、Homogenization 及其专属测试项目，但按授权尚未运行 inventory、discovery、build 或 TRX 对账，因此本文不把旧数量回填成当前真值。候选统一标记 `NOT-VERIFIED`，后续只有获批 V1–V5 才能重建项目与测试真值。生产项目仍不得直接或传递引用 Tests/Testing/TestKit；`Host.Bootstrap -> Presentation.VisualTestData` 仅在 Debug 生效，Release 图不得包含该边。
 
 角色不是仅按目录推断，当前登记如下：
 
@@ -23,31 +23,32 @@
 | Domain/Core | `IIoT.Edge.Domain` |
 | Application | `IIoT.Edge.Application` |
 | SharedKernel | `IIoT.Edge.SharedKernel` |
-| UI Shared | `IIoT.Edge.UI.Shared` |
-| Module SDK | `IIoT.Edge.Module.Sdk` |
+| SDK Contracts | 独立 `IIoT.Edge.Sdk` 仓的 `IIoT.Edge.Module.Contracts` 包 |
+| UI Shared | 独立 `IIoT.Edge.Sdk` 仓的 `IIoT.Edge.UI.Shared` 包 |
+| Module SDK | 独立 `IIoT.Edge.Sdk` 仓的 `IIoT.Edge.Module.Sdk` 包 |
 | Infrastructure | `CloudClient`、`DeviceComm`、`Integration`、`Persistence.Dapper`、`Persistence.EfCore`、`Update` |
 | Presentation | `Presentation.Navigation`、`Presentation.Panels`、`Presentation.Shell`、`Presentation.VisualTestData` |
 | Host/Tool | `Host.Bootstrap`、`Host.DataPipeline`、`Shell`、`Launcher`、`Installer`、`RuntimeLayoutSync` |
-| Plugin SDK | `Module.Sdk`，只提供通用 contract 和基础能力，不承载具体工序 |
-| Concrete plugin | 只作当前实现库存；任何具体工序都不是宿主规则来源，未来仓库归属由审核通过后的 `Edge宿主SDK私有插件三仓拆分计划.md` 裁决 |
-| Analyzer | `IIoT.Edge.Architecture.Analyzers`；只作为生产构建的 Analyzer 引用 |
-| Test | 当前 32 个 `src/Tests` required runner；物理迁移时必须同步更新 inventory 与真实 runner 对账 |
+| Plugin SDK | Contracts + Module.Sdk，只提供通用 contract/基础能力，不承载具体工序 |
+| Concrete plugin | 独立 `IIoT.Edge.Plugins.Private` 仓的 `IIoT.Edge.Module.Homogenization`；Host 无源码副本 |
+| Analyzer | 独立 `IIoT.Edge.Sdk` 仓的 `IIoT.Edge.Module.Analyzers` 包；作为生产构建 Analyzer 引用 |
+| Test | Host、SDK、插件各自拥有本仓测试；当前拆分候选未重跑 inventory/discovery，数量不得断言 |
 | Test fixture | `src/Testing/IIoT.Edge.TestPlugin`；只用于测试构建与 staging，禁止成为生产发布输入 |
-| TestSupport | `IIoT.Edge.Testing.*` 及 `IIoT.Edge.Module.TestPlugin.Companion`；不包含 case，后者只能随中性 fixture staged artifact 消费 |
+| TestSupport | Host 只保留通用 `IIoT.Edge.Testing.*` 与中性 fixture companion；`Testing.Homogenization` 已归私有插件仓，当前测试适配状态为 `NOT-VERIFIED` |
 
 ### 2.1 允许的直接依赖方向
 
-| Source role | 允许的直接 ProjectReference |
+| Source role | 允许的直接依赖 |
 |---|---|
-| Domain/Core | SharedKernel |
-| Application | Domain/Core、SharedKernel |
-| SharedKernel | 无 |
-| UI Shared | SharedKernel |
-| Module SDK | Application、SharedKernel |
+| Domain/Core | Host 内 `ProjectReference -> SharedKernel`；SDK contract 只经包传递或显式包引用 |
+| Application | Host 内 `ProjectReference -> Domain/Core、SharedKernel`；`PackageReference -> Contracts、Module.Sdk` |
+| SharedKernel | `PackageReference -> Contracts` |
+| UI Shared | SDK 仓内独立项目；不得引用 Host，实现通过正式包交付 |
+| Module SDK | SDK 仓内只 `ProjectReference -> Contracts`；不得引用 Host 或具体插件 |
 | Infrastructure | Application；同层只允许登记的窄边，当前为 Integration/Update → CloudClient，Update 另可 → SharedKernel |
-| Presentation | Application、UI Shared、SharedKernel；同层只允许 Navigation → Panels 的过渡边 |
+| Presentation | Host 内 Application、SharedKernel；`PackageReference -> UI Shared/Module SDK`；同层只允许 Navigation → Panels 的过渡边 |
 | Host composition | Application、批准的 Infrastructure/Presentation/Shared/Host runtime contract；禁止具体 Plugin |
-| Plugin implementation | Application、Module SDK、SharedKernel、UI Shared；其他默认禁止 |
+| Plugin implementation | 只允许 `PackageReference -> Contracts、Module SDK、UI Shared、Analyzer` 及公共第三方包；禁止任何 Host 项目/源码/程序集引用 |
 | Tool | 默认无项目依赖；自定义 MSBuild orchestration 必须进入隐藏边 ledger |
 | VisualTestData | 只能 → Application；只允许测试项目和精确 Debug-only Host 引用；Release closure/artifact 必须为零 |
 | Test | 由目标 TestKind 项目自身的精确依赖矩阵决定，禁止用一个测试巨石获得所有生产层访问权 |
@@ -56,7 +57,7 @@
 
 以下不是层级通配，只批准当前精确边：
 
-1. `当前具体插件 -> Presentation.Navigation`：现有树中的精确临时导航 seam；宿主/插件仓拆分前必须抽出稳定 UI registration contract，不得把某一工序名称或实现结构固化进宿主规则，具体插件也不得传递获得 Panels 实现。
+1. 原 `具体插件 -> Presentation.Navigation` 过渡 seam 已在本地候选关闭；UI 注册改走 `IIoT.Edge.Module.Contracts.UI` DTO 与 `IIoT.Edge.UI.Shared.PluginSystem`，不得恢复旧边。
 2. `Host.Bootstrap -> Presentation.VisualTestData`：仅批准当前精确 Debug condition；任何 Release、无条件或传递进入 artifact 的形式均禁止。
 3. `Launcher -> Shell`：仅批准 `ReferenceOutputAssembly=false` 的 build-only 边。
 4. `Launcher -> RuntimeLayoutSync` 的自定义 `<MSBuild Projects=...>`、测试 plugin staging 的 MSBuild 边必须进入统一图和环检测，不能因不是 `ProjectReference` 而漏检。
@@ -64,7 +65,7 @@
 ### 2.3 已确认的项目/包技术债
 
 - `Presentation.Panels` 持有具体 `log4net` provider 实现，属于 Presentation → Infrastructure 泄漏；迁移前只能精确过渡，禁止扩大为 Presentation 可任意引用 provider。
-- Plugin 经 Navigation 传递得到具体 Panels；只批准两条 direct Navigation seam，不批准整个传递闭包成为永久 contract。
+- 旧 Plugin -> Navigation/Panels 传递闭包已从生产插件源码移除；后续门禁应按包程序集身份证明该边保持为零。
 - Application 的 `Microsoft.Extensions.Hosting.Abstractions` 当前无源码消费证据，应删除验证；删除前只列精确 legacy exception。
 - Shell 的 `Microsoft.EntityFrameworkCore.Design` 应迁回 persistence/design-time owner；不得据此批准普通 Host 使用 EF API。
 - 14 个生产项目存在 16 条 `InternalsVisibleTo`。必须建立精确 friend ledger；`IIoT.Edge.TestSimulator` 不在当前项目图中，是 stale friend，需删除。
@@ -121,14 +122,15 @@ EF navigation、`DbSet` 和 cascade 只表达 ORM 关系，不自动证明 DDD o
 - `Update` 继续按主键 load 后 `CurrentValues.SetValues`，不得退化为 `DbContext.Update`，避免不存在记录被插入或 navigation graph 被错误追踪。
 - Stateless `IReadRepository<T>` 保持独立只读端口，泄漏 context 的 `GetQueryable()` 已物理删除；任何跨多步一致性读取必须从当前 UoW session 获取。
 - 每个 UoW connection 在 transaction 前设置 `PRAGMA foreign_keys=ON` 和 busy timeout，并由真实临时 SQLite 测试验证连接隔离、并发串行、flush 后 rollback、跨聚合 commit、外键、replace rollback 和主异常/rollback 异常优先级。
+- 插件开发样本只提交 `ModuleDevelopmentSeedRequest` DTO；Host 的 `ModuleDevelopmentSeedWriter` 是 DTO → Domain 唯一写入端口，同一请求只创建一个 UoW/transaction，delete 与 identity 允许 non-durable `FlushAsync`，最终只允许一次 `CommitAsync`。本地候选尚未运行 SQLite rollback/同 PlcCode 重建验证，状态保持 `NOT-VERIFIED`。
 - Cloud 文件 projection 不放进 SQLite transaction。保留 fail-closed saga：数据库与文件任一步失败都不得报告成功，并以独立原子补偿恢复禁用状态。
 
 ## 5. 插件、Outbound 与 PLC Owner
 
 ### 5.1 插件 contract seam
 
-- Plugin entry、Module SDK 必须有显式角色 metadata；`Module.Sdk` 不能继续靠名称和测试跳过识别，禁止新增插件族 `*.Shared` 业务工程。
-- 插件默认只允许 Application、Module SDK、SharedKernel、UI Shared。当前 Navigation 是精确过渡 seam。
+- Plugin entry、Contracts、Module SDK、UI Shared、Analyzer 必须有显式包/角色 metadata；Analyzer 将 `IIoT.Edge.Module.Contracts` 与 `IIoT.Edge.Module.Sdk` 识别为 SDK 面，不能把 Contracts 误判成具体插件。
+- 插件生产源码只允许正式 SDK 包及公共第三方依赖；Application、Domain、SharedKernel、Infrastructure、Presentation、Host 均禁止，Navigation 不再有过渡例外。
 - 具体插件禁止互引，也不得通过 family shared 工程共享具体工序实现；确需通用能力时只能进入经过裁决的 Module SDK 或稳定 contract。
 - Host/Application/Core/Shared/Infrastructure/Presentation 禁止引用动态发现的具体插件 symbol；配置中的稳定 ModuleId 字符串不按 type reference 误报。
 
@@ -147,7 +149,7 @@ EF navigation、`DbSet` 和 cascade 只表达 ORM 关系，不自动证明 DDD o
 
 ### 5.4 插件包动态边界
 
-当前宿主加载边界允许 `entry + plugin-owned assembly/resources/config + 声明的非宿主依赖`。中性正例使用常规插件命名的 `IIoT.Edge.Module.TestPlugin.Companion`：入口程序集真实引用 companion 类型，触发时必须由同一 plugin ALC 从 staged 目录加载。预检使用 PE metadata 校验引用，并精确拒绝当前已知 Host、Infrastructure、非共享 Presentation、Shell/Launcher/Installer/RuntimeLayoutSync 程序集；不得通配拒绝所有 `IIoT.Edge.Module.*`，也不得回退到默认 ALC、测试输出根或源项目 `bin`。生产打包仍需静态 pack allowlist 收紧全量 module build output，真实包内容由 `EDGEPLUGCON001` 持续阻断验证。
+当前宿主加载边界允许 `entry + plugin-owned assembly/resources/config + 声明的非宿主依赖`，并把 `IIoT.Edge.Module.Contracts`、`IIoT.Edge.Module.Sdk`、`IIoT.Edge.UI.Shared` 作为 Host 提供的共享程序集。中性正例继续使用 `IIoT.Edge.Module.TestPlugin.Companion`；预检以 PE metadata 精确拒绝 Application、Domain、SharedKernel、Host、Infrastructure、Presentation、Shell/Launcher/Installer/RuntimeLayoutSync，不得回退到默认 ALC、测试输出根或源项目 `bin`。插件仓唯一 `eng/PackEdgePlugin.ps1` 以静态 allowlist 生成包并排除 SDK/Host DLL；真实包内容仍待获批 pack/组合门确认，当前不得写成 PASS。
 
 ## 6. 稳定 Rule ID 与启用状态
 
@@ -174,10 +176,10 @@ EF navigation、`DbSet` 和 cascade 只表达 ORM 关系，不自动证明 DDD o
 | `DATA005` | provider commit 只允许登记 owner | 已启用 error；不证明现有事务正确 |
 | `DATA006` | Dapper 写只允许当前 persistence owner | 已启用 error；解析 Dapper extension symbol |
 | `DATA007` | migration/schema DDL 只允许唯一 owner | 先禁止新增 owner；SchemaRepair 迁移后收紧为零例外 |
-| `PLUG001` | 插件禁止 Host/Infrastructure/DataPipeline/具体 Presentation | 已启用 error；Navigation 临时 exact seam |
+| `PLUG001` | 插件禁止 Application/Domain/SharedKernel/Host/Infrastructure/DataPipeline/Presentation 实现 | 候选已关闭 Navigation seam；待 V1–V4 验证，不得恢复例外 |
 | `PLUG002` | 具体插件禁止互引，禁止插件族 Shared 业务工程 | 已启用 error；通用能力只能进入 SDK/contract |
 | `PLUG003` | Host/Application/Core/Shared/Infra/Presentation 禁具体插件 symbol | 已启用 error，动态发现全部入口 |
-| `PLUG004` | 插件/Shared/SDK 角色、manifest、identity metadata 完整 | 已补 metadata 并启用 Analyzer + project-graph error |
+| `PLUG004` | Contracts/SDK/UI/Analyzer/插件角色、manifest、identity metadata 完整 | 已形成包级候选；Analyzer/project-graph/runtime 结果仍为 `NOT-VERIFIED` |
 | `PLUG005` | 插件硬件/样例契约必须经 module builder，Cloud uploader 必须使用标准通道基类 | 已启用 error；普通插件私有服务注册为正例 |
 | `PLUG006` | 静态 pack item/metadata/dependency allowlist | 改打包入口后 error |
 | `EDGEOUT001` | 模块 Task 禁直接 outbound，允许 DataPipeline | 已启用 error |

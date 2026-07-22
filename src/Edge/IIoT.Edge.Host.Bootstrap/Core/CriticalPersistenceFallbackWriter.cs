@@ -1,4 +1,4 @@
-using IIoT.Edge.Application.Abstractions.DataPipeline.Stores;
+using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
 
 namespace IIoT.Edge.Shell.Core;
 
