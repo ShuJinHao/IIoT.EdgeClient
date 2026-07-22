@@ -1,7 +1,7 @@
 # Edge 宿主、SDK 与私有插件三仓拆分计划
 
 > 版本：v0.3（单维护者、单真实链路版）
-> 状态：Phase 0–5 formal/ledger 候选只保留在冻结证据 worktree；2026-07-22 已按独立权威执行计划完成 Phase 6–8 的本地物理三仓源码候选及 V1–V5 本地验证；Phase 9–10、建远端仓、远端发包、发布与部署仍未授权
+> 状态：Phase 0–5 formal/ledger 候选只保留在冻结证据 worktree；2026-07-22 已完成 Phase 6–8 的本地物理三仓源码候选及 V1–V5 本地验证，Phase 9 三仓唯一发布入口和 Phase 10 Launcher 组合升级保护已进入产品候选，两个新私有 GitHub 远端已建立。最终三仓兼容门、push、`stable` 发布、下载与 Windows 实机结果以最新滚动复盘/发布交接为准，未实际执行项不得提前宣布完成。
 > 日期：2026-07-17
 > 当前范围：只定义 `IIoT.EdgeClient` 的拆分目标、批次、门禁与未来三仓协作方式
 > 权威上位规则：[总规则](../../docs/总规则.md)、[客户端规则](客户端规则.md)、[Edge 架构边界契约](Edge架构边界契约.md)、[Edge 客户端宿主插件分发契约](Edge客户端宿主插件分发契约.md)、[三项目测试架构治理总计划](../../docs/三项目测试架构治理总计划.md)
@@ -603,6 +603,8 @@ Phase 6 至 Phase 9 是一次受控的仓库迁移窗口：期间不执行新的
 - 包、hash、release metadata、Cloud catalog 和下载字节一致。
 - 所有部署 policy/behavior/preflight/Windows 下载验收通过；未执行的生产/Windows/现场项目明确标为未执行。
 
+2026-07-22 产品候选实现：根入口已按 Host/SDK/Private Plugins 三个生产基线计算 schema v2 影响计划，SDK runtime/API 影响调用 SDK 唯一兼容门，插件发布显式调用 Private Plugins 唯一 pack，Host 不再打包业务插件；Host API 代际变化要求显式产品版本等于新 API 版本。该段只登记实现形状，完整门禁和生产结果仍以本批复盘为准。
+
 ### Phase 10：Launcher 组合升级保护
 
 批次：`EDGE-SPLIT-100`
@@ -620,6 +622,8 @@ Phase 6 至 Phase 9 是一次受控的仓库迁移窗口：期间不执行新的
 - `Host 1.x + Plugin 1.0.1` 和目标新组合均有不可变真实证据。
 - 不兼容组合在安装前被阻止，在手工放入错误包时由宿主拒载且启动非阻断。
 - UI 不显示伪造“可升级”“已兼容”或“已安装”状态。
+
+2026-07-22 产品候选实现：Host 版本选项已按真实 catalog、本机已启用/已安装插件计算 `RequiredComposition`；多 profile 合并按缺 catalog、缺版本和插件版本冲突 fail-closed；确认窗口展示所需插件组合，直接 Host apply 在组合存在时拒绝，组合入口先按目标 Host/API 校验并安装插件，再调用 Velopack Host 更新。最终跨代真实字节、行为回归和 Windows 实机结果仍以本批复盘为准。
 
 ## 11. 各仓测试与 CI 归属
 
@@ -694,45 +698,11 @@ PR 不连接生产和现场。真实 PLC/MES/Cloud/Windows 现场属于 Release/
 
 ## 14. 批次验证命令
 
-Phase 0 当前使用以下已存在入口分段执行；本节所有命令当前均为 `NOT_RUN`，不能只选择其中一段宣布完成。
+拆仓前 Phase 0 的 StaticGuard、generator、ledger、formal/authority 命令只属于冻结证据 worktree，不是产品 Host 当前命令；它们已从产品 Host 活动树物理删除，不重新运行、不改写为跨仓扫描器。冻结候选的原始入口与状态只在指定 worktree、权威 handoff 和 Git 历史中查阅。
 
-### 14.1 Dirty candidate qualification
-
-```bash
-pwsh -NoLogo -NoProfile -NonInteractive -File scripts/tests/Test-EdgePluginContractStaticGuard.ps1 -RepositoryRoot .
-pwsh -NoLogo -NoProfile -File scripts/tests/Test-EdgePluginContractLedgerPrimitives.ps1 -RepositoryRoot .
-pwsh -NoLogo -NoProfile -NonInteractive -File scripts/tests/Test-EdgePluginContractAuthorityProtocol.ps1 -RepositoryRoot . -LedgerPath .artifacts/phase0-ledger-dev-3.json
-pwsh -NoLogo -NoProfile -NonInteractive -File scripts/tests/Invoke-EdgePluginContractDevelopmentValidation.ps1 -RepositoryRoot . -Configuration Release -CurrentBatch EDGE-SPLIT-000 -AuthorityTimeoutSeconds 900
-dotnet build src/Tests/IIoT.Edge.Architecture.Tests/IIoT.Edge.Architecture.Tests.csproj -c Release --no-restore -t:Rebuild --disable-build-servers --nologo -noAutoResponse /p:UseSharedCompilation=false /nodeReuse:false
-dotnet test src/Tests/IIoT.Edge.Architecture.Tests/IIoT.Edge.Architecture.Tests.csproj -c Release --no-build --no-restore --disable-build-servers --nologo --filter "FullyQualifiedName=IIoT.Edge.Architecture.Tests.EdgePluginContractLedgerTests.CanonicalLedgerValidator_ShouldRejectSemanticBypassFixtures"
-```
-
-顺序固定为 StaticGuard → Primitives → AuthorityProtocol synthetic → Development → forced rebuild/freshness → exact xUnit；synthetic 不得替代 actual formal。DLL freshness 与 F0 checkpoint 字段按 `客户端架构治理清单.md` 第 8.1 节执行。
-
-### 14.2 Clean `I` 上唯一 generator
-
-```bash
-pwsh -NoLogo -NoProfile -NonInteractive -File eng/Generate-EdgePluginContractLedger.ps1 -PluginProject src/Modules/IIoT.Edge.Module.Homogenization/IIoT.Edge.Module.Homogenization.csproj -OutputPath eng/baselines/edge-plugin-contract-ledger.json -Configuration Release -CurrentBatch EDGE-SPLIT-000
-```
-
-全部实现、测试、schema 和 tracked docs 必须先进入 clean 本地 `I`；generator 后只允许 canonical ledger 成为差异，当前仍禁止 push。
-
-### 14.3 Ledger-only `E` 与 actual formal
-
-```bash
-pwsh -NoLogo -NoProfile -NonInteractive -File scripts/tests/Test-EdgePluginContractLedger.ps1 -RepositoryRoot . -LedgerPath eng/baselines/edge-plugin-contract-ledger.json -CommitPairGateOnly
-pwsh -NoLogo -NoProfile -NonInteractive -File scripts/tests/Invoke-EdgePluginContractFormalValidation.ps1
-pwsh -NoLogo -NoProfile -NonInteractive -File scripts/tests/Test-EdgePluginContractLedger.ps1 -RepositoryRoot . -LedgerPath eng/baselines/edge-plugin-contract-ledger.json
-```
-
-第二条是 E 上 actual formal，必须保持无参数；第三条是 actual formal 成功后的 canonical validator。随后必须继续执行 `客户端架构治理清单.md` 第 8.4 节的 post-E full gates，才可评估 Phase 0 是否关闭。
-
-### 14.4 后续 Phase 命令
-
-以下唯一跨仓兼容入口属于后续 Phase，在对应实现创建前只保留为计划契约，不得写成当前已存在或已通过：
+当前产品三仓只运行一个兼容编排入口：
 
 ```powershell
-
 pwsh ./eng/Verify-EdgeSdkCompatibility.ps1 `
   -HostRepository <IIoT.EdgeClient> `
   -SdkRepository <IIoT.Edge.Sdk> `
@@ -741,7 +711,7 @@ pwsh ./eng/Verify-EdgeSdkCompatibility.ps1 `
   -TargetRuntime win-x64
 ```
 
-Phase 0 不运行该未来入口，也不以它替代当前 I/E/formal/post-E 链。
+该入口必须在三个 clean、已提交的独立仓之间只交换 SDK nupkg、Host artifact、Private Plugin bundle、manifest 与 digest；同时验证当前候选组合、生产上一代真实 artifact byte evidence和旧插件对新 Host API 的拒绝。Host required/coverage、发布恢复、Cloud catalog/download 与 Windows 实机验收仍由各自唯一入口执行，不能用兼容门替代。
 
 ## 15. 最终完成定义
 

@@ -1,4 +1,6 @@
-param()
+param(
+    [string]$PluginRepositoryRoot = ''
+)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -7,6 +9,11 @@ Set-StrictMode -Version Latest
 
 $scriptsRoot = Split-Path -Parent $PSScriptRoot
 $sourceRepoRoot = Split-Path -Parent $scriptsRoot
+$resolvedPluginSourceRepoRoot = if ([string]::IsNullOrWhiteSpace($PluginRepositoryRoot)) {
+    Join-Path (Split-Path -Parent $sourceRepoRoot) 'IIoT.Edge.Plugins.Private'
+} else {
+    [System.IO.Path]::GetFullPath($PluginRepositoryRoot)
+}
 $testTempRoot = if ([string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
     [System.IO.Path]::GetTempPath()
 } else {
@@ -15,6 +22,8 @@ $testTempRoot = if ([string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
 $testRoot = Join-Path $testTempRoot ("er-{0}" -f ([Guid]::NewGuid().ToString('N')))
 $cloneRoot = Join-Path $testRoot 'r'
 $remoteRoot = Join-Path $testRoot 'g.git'
+$pluginCloneRoot = Join-Path $testRoot 'p'
+$pluginRemoteRoot = Join-Path $testRoot 'pg.git'
 $fakeCloudServer = $null
 $oldEnvironment = @{
     Dispatch = $env:IIOT_EDGE_WORKSPACE_DISPATCH
@@ -67,7 +76,11 @@ function Get-RequestCount {
 }
 
 try {
-    New-Item -ItemType Directory -Path $testRoot, $cloneRoot | Out-Null
+    if (-not (Test-Path -LiteralPath $resolvedPluginSourceRepoRoot -PathType Container)) {
+        throw "Independent plugin repository was not found: $resolvedPluginSourceRepoRoot"
+    }
+
+    New-Item -ItemType Directory -Path $testRoot, $cloneRoot, $pluginCloneRoot | Out-Null
     & git init -q $cloneRoot
     if ($LASTEXITCODE -ne 0) { throw 'Could not initialize isolated Edge test clone.' }
     Invoke-GitChecked -Directory $cloneRoot -Arguments @('config', 'core.longpaths', 'true')
@@ -79,7 +92,19 @@ try {
     Invoke-GitChecked -Directory $cloneRoot -Arguments @('remote', 'add', 'origin', $remoteRoot)
     Invoke-GitChecked -Directory $cloneRoot -Arguments @('push', '-q', '-u', 'origin', 'edge-resume-test')
     $head = (& git -C $cloneRoot rev-parse HEAD).Trim()
-    $pluginManifestPath = Join-Path $cloneRoot 'src/Modules/IIoT.Edge.Module.Homogenization/plugin.json'
+
+    & git init -q $pluginCloneRoot
+    if ($LASTEXITCODE -ne 0) { throw 'Could not initialize isolated Edge plugin test clone.' }
+    Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('config', 'core.longpaths', 'true')
+    Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('remote', 'add', 'source', $resolvedPluginSourceRepoRoot)
+    Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('fetch', '-q', 'source', 'HEAD')
+    Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('checkout', '-q', '-b', 'edge-plugin-resume-test', 'FETCH_HEAD')
+    & git init --bare -q $pluginRemoteRoot
+    if ($LASTEXITCODE -ne 0) { throw 'Could not initialize isolated Edge plugin test remote.' }
+    Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('remote', 'add', 'origin', $pluginRemoteRoot)
+    Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('push', '-q', '-u', 'origin', 'edge-plugin-resume-test')
+    $pluginHead = (& git -C $pluginCloneRoot rev-parse HEAD).Trim()
+    $pluginManifestPath = Join-Path $pluginCloneRoot 'src/IIoT.Edge.Module.Homogenization/plugin.json'
     $pluginVersion = [string]((Get-Content -Raw -Encoding UTF8 -LiteralPath $pluginManifestPath | ConvertFrom-Json).version)
     if ([string]::IsNullOrWhiteSpace($pluginVersion)) { throw 'Homogenization plugin manifest version is required.' }
 
@@ -108,14 +133,14 @@ try {
     $pluginFileName = "IIoT.EdgePlugin.Homogenization-$pluginVersion-win-x64.zip"
     'preserved plugin package' | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $pluginPackageRoot $pluginFileName)
     @{
-        packageSchemaVersion = 1
+        packageSchemaVersion = 2
         moduleId = 'Homogenization'
         processType = 'Homogenization'
         displayName = 'Homogenization'
         version = $pluginVersion
-        hostApiVersion = '1.0.0'
-        minHostVersion = '1.0.0'
-        maxHostVersion = '99.0.0'
+        hostApiVersion = '2.0.0'
+        minHostVersion = '2.0.0'
+        maxHostVersion = '2.0.0'
         dependencies = @()
         targetRuntime = 'win-x64'
         targetFramework = 'net10.0'
@@ -124,6 +149,7 @@ try {
         sha256 = 'FAKE'
         signature = ''
         publisher = 'IIoT'
+        sourceCommit = $pluginHead
     } | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $pluginPackageRoot "$pluginFileName.json")
     'preserved plugin wrapper' | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $pluginReleaseRoot "edge-plugin-release-Homogenization-$pluginVersion-win-x64.zip")
     @{
@@ -132,7 +158,7 @@ try {
         invocationId = [Guid]::NewGuid().ToString('D')
         stage = 'uploading'
         status = 'failed'
-        facts = @{ moduleId = 'Homogenization'; version = $pluginVersion; sourceCommit = $head }
+        facts = @{ moduleId = 'Homogenization'; version = $pluginVersion; sourceCommit = $pluginHead }
     } | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $pluginReleaseRoot 'edge-deployment-attempt.json')
 
     Set-Dispatch -Target EdgeHost
@@ -143,7 +169,8 @@ try {
 
     Set-Dispatch -Target EdgePlugin
     & (Join-Path $cloneRoot 'scripts/PublishEdgePluginRelease.ps1') `
-        -ModuleId Homogenization -CloudApiBaseUrl "$baseUrl/api/v1" -ReleaseNotes 'fake plugin release notes' `
+        -ModuleId Homogenization -PluginRepositoryRoot $pluginCloneRoot `
+        -CloudApiBaseUrl "$baseUrl/api/v1" -ReleaseNotes 'fake plugin release notes' `
         -ResumeReleaseRoot $pluginReleaseRoot -SkipPackageValidation
     Assert-State -ReleaseRoot $pluginReleaseRoot -Status succeeded
     $initialPostCount = Get-RequestCount -RequestLog $requestLog
@@ -156,7 +183,8 @@ try {
         -ResumeReleaseRoot $hostReleaseRoot -SkipVelopackValidation -SkipInstallerValidation
     Set-Dispatch -Target EdgePlugin
     & (Join-Path $cloneRoot 'scripts/PublishEdgePluginRelease.ps1') `
-        -ModuleId Homogenization -CloudApiBaseUrl "$baseUrl/existing/api/v1" -ReleaseNotes 'fake plugin release notes' `
+        -ModuleId Homogenization -PluginRepositoryRoot $pluginCloneRoot `
+        -CloudApiBaseUrl "$baseUrl/existing/api/v1" -ReleaseNotes 'fake plugin release notes' `
         -ResumeReleaseRoot $pluginReleaseRoot -SkipPackageValidation
     if ((Get-RequestCount -RequestLog $requestLog) -ne $initialPostCount) { throw 'Existing release reconciliation unexpectedly re-uploaded artifacts.' }
     $passed++
@@ -174,7 +202,8 @@ try {
     Set-Dispatch -Target EdgePlugin
     Assert-ThrowsContaining -Action {
         & (Join-Path $cloneRoot 'scripts/PublishEdgePluginRelease.ps1') `
-            -ModuleId Homogenization -CloudApiBaseUrl "$baseUrl/existing/api/v1" -ReleaseNotes 'new attempt'
+            -ModuleId Homogenization -PluginRepositoryRoot $pluginCloneRoot `
+            -CloudApiBaseUrl "$baseUrl/existing/api/v1" -ReleaseNotes 'new attempt'
     } -Needles @('already exists', 'No package build was started')
 
     Set-Dispatch -Target EdgeHost
@@ -200,7 +229,8 @@ try {
     Set-Dispatch -Target EdgePlugin
     Assert-ThrowsContaining -Action {
         & (Join-Path $cloneRoot 'scripts/PublishEdgePluginRelease.ps1') `
-            -ModuleId Homogenization -CloudApiBaseUrl "$baseUrl/catalog-error/api/v1" -ReleaseNotes 'fake plugin release notes' `
+            -ModuleId Homogenization -PluginRepositoryRoot $pluginCloneRoot `
+            -CloudApiBaseUrl "$baseUrl/catalog-error/api/v1" -ReleaseNotes 'fake plugin release notes' `
             -ResumeReleaseRoot $pluginReleaseRoot -SkipPackageValidation
     } -Needles @('httpStatus=500', 'catalog_unavailable', 'injected failure')
 

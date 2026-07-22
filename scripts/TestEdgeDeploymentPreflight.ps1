@@ -7,6 +7,8 @@ param(
 
     [string]$ModuleId = '',
 
+    [string]$PluginRepositoryRoot = '',
+
     [string]$CloudApiBaseUrl = $env:EDGE_CLOUD_API_BASE_URL,
 
     [string]$CloudToken = '',
@@ -29,6 +31,7 @@ Set-StrictMode -Version Latest
 
 $repoRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $resolvedWorkspaceRoot = ''
+$resolvedPluginRepositoryRoot = ''
 . (Join-Path $PSScriptRoot 'EdgeReleaseCredential.Common.ps1')
 . (Join-Path $PSScriptRoot 'EdgeDeployment.Common.ps1')
 $failures = [System.Collections.Generic.List[string]]::new()
@@ -208,6 +211,43 @@ function Resolve-RepoPath {
 function Resolve-WorkspacePath {
     param([Parameter(Mandatory = $true)][string]$RelativePath)
     return Join-Path $resolvedWorkspaceRoot $RelativePath
+}
+
+function Resolve-PluginRepoPath {
+    param([Parameter(Mandatory = $true)][string]$RelativePath)
+    if ([string]::IsNullOrWhiteSpace($resolvedPluginRepositoryRoot)) {
+        throw 'Plugin repository root has not been resolved.'
+    }
+    return Join-Path $resolvedPluginRepositoryRoot $RelativePath
+}
+
+function Resolve-ValidatedPluginRepositoryRoot {
+    param([string]$RequestedPath)
+
+    $canonical = [System.IO.Path]::GetFullPath((Join-Path $resolvedWorkspaceRoot 'IIoT.Edge.Plugins.Private'))
+    $candidate = if ([string]::IsNullOrWhiteSpace($RequestedPath)) {
+        $canonical
+    }
+    elseif ([System.IO.Path]::IsPathRooted($RequestedPath)) {
+        [System.IO.Path]::GetFullPath($RequestedPath)
+    }
+    else {
+        [System.IO.Path]::GetFullPath((Join-Path $resolvedWorkspaceRoot $RequestedPath))
+    }
+    if (-not (Test-Path -LiteralPath $candidate -PathType Container) -or
+        -not (Test-PathEquals -Left $candidate -Right $canonical)) {
+        throw "$workspaceRuleId reason=plugin-repository-invalid expected=$canonical actual=$candidate"
+    }
+
+    $gitCommand = Get-Command git -CommandType Application -ErrorAction Stop | Select-Object -First 1
+    $topLevel = Get-GitAbsolutePath -GitCommand $gitCommand -RepositoryRoot $candidate -Selector '--show-toplevel'
+    $gitDirectory = Get-GitAbsolutePath -GitCommand $gitCommand -RepositoryRoot $candidate -Selector '--git-dir'
+    $commonDirectory = Get-GitAbsolutePath -GitCommand $gitCommand -RepositoryRoot $candidate -Selector '--git-common-dir'
+    if (-not (Test-PathEquals -Left $topLevel -Right $candidate) -or
+        -not (Test-PathEquals -Left $gitDirectory -Right $commonDirectory)) {
+        throw "$workspaceRuleId reason=plugin-repository-invalid repository=$candidate"
+    }
+    return $candidate
 }
 
 function Assert-FileExists {
@@ -410,10 +450,7 @@ function Test-ClientSecurityRedLines {
         -Needles @('Read' + 'JwtToken')
 
     $mesFiles = Get-TextFiles `
-        -Roots @(
-            (Resolve-RepoPath 'src/Application/IIoT.Edge.Application/Modules/Mes'),
-            (Resolve-RepoPath 'src/Modules')
-        ) `
+        -Roots @((Resolve-RepoPath 'src/Application/IIoT.Edge.Application/Modules/Mes')) `
         -Includes @('*.cs')
     Add-ForbiddenTextFailures `
         -Description 'Legacy MES fixed token or MD5 signature' `
@@ -555,19 +592,20 @@ function Test-GitState {
     }
 
     try {
-        $inside = (& $git.Source -C $repoRoot rev-parse --is-inside-work-tree 2>$null).Trim()
+        $gitRepositoryRoot = if ($Mode -eq 'Plugin') { $resolvedPluginRepositoryRoot } else { $repoRoot }
+        $inside = (& $git.Source -C $gitRepositoryRoot rev-parse --is-inside-work-tree 2>$null).Trim()
         if ($inside -ne 'true') {
-            Add-Failure "EdgeClient path is not a git work tree: $repoRoot"
+            Add-Failure "Edge release source is not a git work tree: $gitRepositoryRoot"
             return
         }
 
-        $branch = (& $git.Source -C $repoRoot rev-parse --abbrev-ref HEAD).Trim()
-        $commit = (& $git.Source -C $repoRoot rev-parse --short HEAD).Trim()
-        $dirty = @(& $git.Source -C $repoRoot status --porcelain)
+        $branch = (& $git.Source -C $gitRepositoryRoot rev-parse --abbrev-ref HEAD).Trim()
+        $commit = (& $git.Source -C $gitRepositoryRoot rev-parse --short HEAD).Trim()
+        $dirty = @(& $git.Source -C $gitRepositoryRoot status --porcelain)
 
         Write-Host "Git: branch=$branch commit=$commit dirty=$($dirty.Count)"
         if ($dirty.Count -gt 0 -and -not $AllowDirty) {
-            Add-Failure "EdgeClient work tree has uncommitted changes. Commit/stash them or rerun preflight with -AllowDirty for local dry checks."
+            Add-Failure "Edge release source work tree has uncommitted changes: $gitRepositoryRoot"
         }
         if ($RequirePushedHead) {
             if ($dirty.Count -gt 0) {
@@ -575,7 +613,7 @@ function Test-GitState {
             }
             else {
                 try {
-                    $pushedState = Assert-EdgeReleaseGitState -RepoRoot $repoRoot
+                    $pushedState = Assert-EdgeReleaseGitState -RepoRoot $gitRepositoryRoot
                     Write-Host "Git release state: head=$($pushedState.Head) upstream=$($pushedState.Upstream)"
                 }
                 catch {
@@ -621,19 +659,18 @@ function Test-HostMode {
 function Test-PluginMode {
     Assert-FileExists (Resolve-RepoPath 'scripts/EdgeDeployment.Common.ps1') 'Shared Edge deployment guard script'
     Assert-FileExists (Resolve-RepoPath 'scripts/PublishEdgePluginRelease.ps1') 'Plugin release script'
-    Assert-FileExists (Resolve-RepoPath 'scripts/PackEdgePlugin.ps1') 'Plugin package script'
-    Assert-FileExists (Resolve-RepoPath 'scripts/TestEdgePluginPackage.ps1') 'Plugin package validation script'
+    Assert-FileExists (Resolve-PluginRepoPath 'eng/PackEdgePlugin.ps1') 'Plugin repository package script'
 
     if ([string]::IsNullOrWhiteSpace($ModuleId)) {
         Add-Failure 'ModuleId is required for -Mode Plugin.'
         return
     }
 
-    $pluginManifest = Resolve-RepoPath "src/Modules/IIoT.Edge.Module.$ModuleId/plugin.json"
+    $pluginManifest = Resolve-PluginRepoPath "src/IIoT.Edge.Module.$ModuleId/plugin.json"
     Assert-FileExists $pluginManifest "Plugin manifest for $ModuleId"
 
     $scriptText = Read-FileIfExists (Resolve-RepoPath 'scripts/PublishEdgePluginRelease.ps1')
-    foreach ($requiredText in @('Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgePlugin', 'Enter-EdgeDeploymentLock', 'ResumeReleaseRoot', 'UploadTimeoutSeconds')) {
+    foreach ($requiredText in @('Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgePlugin', 'Enter-EdgeDeploymentLock', 'ResumeReleaseRoot', 'UploadTimeoutSeconds', 'eng/PackEdgePlugin.ps1')) {
         if (-not $scriptText.Contains($requiredText, [System.StringComparison]::Ordinal)) {
             Add-Failure "PublishEdgePluginRelease.ps1 is missing deployment guard '$requiredText'."
         }
@@ -703,6 +740,9 @@ function Write-NextCommand {
 Write-Host "Edge deployment preflight: mode=$Mode"
 try {
     $resolvedWorkspaceRoot = Resolve-ValidatedWorkspaceRoot -RequestedWorkspaceRoot $WorkspaceRoot
+    if ($Mode -eq 'Plugin') {
+        $resolvedPluginRepositoryRoot = Resolve-ValidatedPluginRepositoryRoot -RequestedPath $PluginRepositoryRoot
+    }
 }
 catch {
     $workspaceFailure = $_.Exception.Message

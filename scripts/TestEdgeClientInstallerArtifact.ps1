@@ -6,7 +6,7 @@ param(
 
     [string]$ExpectedVersion,
 
-    [string]$ExpectedModuleId = 'Homogenization'
+    [string]$ExpectedHostApiVersion = '2.0.0'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -200,8 +200,9 @@ function Assert-InstallerVersionInfo {
         throw "Installer FileDescription must be 'IIoT Edge Client', actual: '$($versionInfo.FileDescription)'."
     }
 
-    if ($versionInfo.FileVersion -ne '1.0.0.0') {
-        throw "Installer FileVersion must be '1.0.0.0', actual: '$($versionInfo.FileVersion)'."
+    $expectedFileVersion = "$ExpectedHostApiVersion.0"
+    if ($versionInfo.FileVersion -ne $expectedFileVersion) {
+        throw "Installer FileVersion must be '$expectedFileVersion', actual: '$($versionInfo.FileVersion)'."
     }
 
     if ($versionInfo.ProductVersion -ne $ExpectedProductVersion) {
@@ -238,6 +239,10 @@ if ($manifest.channel -ne $ExpectedChannel) {
 
 if (-not [string]::IsNullOrWhiteSpace($ExpectedVersion) -and $manifest.version -ne $ExpectedVersion) {
     throw "Artifact version '$($manifest.version)' does not match expected '$ExpectedVersion'."
+}
+
+if ([string]$manifest.hostApiVersion -ne $ExpectedHostApiVersion) {
+    throw "Artifact hostApiVersion '$($manifest.hostApiVersion)' does not match expected '$ExpectedHostApiVersion'."
 }
 
 foreach ($requiredProperty in @('generatedAtUtc', 'sourceCommit', 'previousVersion', 'previousSourceCommit', 'releaseNotes')) {
@@ -310,25 +315,14 @@ if ([long]$manifest.hostDirectorySize -ne (Get-TestDirectorySize -Directory $hos
     throw "Host directory size does not match installer-artifact.json."
 }
 
-$module = @($manifest.modules | Where-Object { $_.moduleId -eq $ExpectedModuleId }) | Select-Object -First 1
-if ($null -eq $module) {
-    throw "Artifact manifest does not contain module '$ExpectedModuleId'."
+$modules = @($manifest.modules)
+if ($modules.Count -ne 0) {
+    throw "Host installer artifact must not contain business module metadata: $($modules[0].moduleId)"
 }
 
-if ([string]::IsNullOrWhiteSpace($module.pluginDirectory)) {
-    throw "Module '$ExpectedModuleId' pluginDirectory is empty."
-}
-
-$pluginPath = Join-Path $pluginsPath ([string]$module.pluginDirectory)
-Assert-PathExists -PathValue $pluginPath -Message "Plugin directory was not found: $pluginPath"
-Assert-PathExists -PathValue (Join-Path $pluginPath 'plugin.json') -Message "Module plugin manifest was not found."
-
-if ($module.pluginSha256 -ne (Get-TestDirectorySha256 -Directory $pluginPath)) {
-    throw "Plugin directory sha256 does not match installer-artifact.json."
-}
-
-if ([long]$module.pluginSize -ne (Get-TestDirectorySize -Directory $pluginPath)) {
-    throw "Plugin directory size does not match installer-artifact.json."
+$pluginFiles = @(Get-ChildItem -LiteralPath $pluginsPath -Recurse -File -ErrorAction Stop)
+if ($pluginFiles.Count -ne 0) {
+    throw "Host installer artifact plugins root must be empty; found: $($pluginFiles[0].FullName)"
 }
 
 foreach ($directory in @($launcherPath, $hostPath, $pluginsPath)) {

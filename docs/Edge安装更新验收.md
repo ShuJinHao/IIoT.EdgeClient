@@ -2,7 +2,7 @@
 
 本文档是 EdgeClient 安装、更新和 Windows 分发安全策略的唯一客户端侧验收入口。上传部署总口径见 `../../docs/上传部署总览.md`；云端生成安装包的字段写入规则由 CloudPlatform 单独验收，本文件只约束 EdgeClient 本仓库能验证的内容。工作区日常唯一对外入口是根目录 `deploy/Deploy-Changed.ps1`；`deploy/Invoke-WorkspaceDeploy.ps1` 只作为宿主/插件内部执行器和显式恢复入口。本文件保留项目级验收细节。
 
-> 当前状态（2026-07-10）：隔离提交 `37ec98b` 的部署行为、失败恢复与发布契约回归已通过；本轮没有执行真实 Cloud `stable` 上传/catalog/DB/静态 HEAD，也没有执行 Windows runtime/installer/Velopack/targetRuntime 实机验收，因此本清单不能作为生产已验收证明。
+> 当前状态（2026-07-22）：三仓发布和 Launcher 组合升级候选已经形成；最终三仓兼容门、真实 Cloud `stable` 上传/catalog/DB/静态 HEAD、Windows runtime/installer/Velopack 下载与 `targetRuntime` 实机结果必须以本批最新滚动复盘和发布交接为准。未实际执行的项目不得由本清单冒充已验收。
 
 EdgeClient 验收分为开发阶段和实际部署阶段：macOS 是主力开发环境，必须承担真实 Launcher/Shell 启动、登录后 UI、更新进度和隔离安装验证；Windows 是现场部署目标，必须承担 Release runtime、安装器、快捷方式、Velopack 更新和 `targetRuntime` 实机验收。两层证据必须分别记录，互不替代；开发阶段通过不代表已经进入发布或部署。
 
@@ -12,11 +12,12 @@ EdgeClient 不发布 Docker 镜像，不推 Harbor，也不从 GitHub hosted run
 
 - `push main`：只跑 smoke 编译和测试，不生成安装包和 Velopack 发布包。
 - `workflow_dispatch` 或 `edge-v*` / `v*` tag：完整 GitHub 打包并发布到内网静态目录，渠道固定为 `stable`。
-- 本机宿主快发：操作者或 AI 从工作区根运行 `deploy/Invoke-WorkspaceDeploy.ps1 -Target EdgeHost`，统一入口内部调度 `LocalPublishAndDeploy.ps1 -Transport http`，本机编译、打包、生成 installer artifact 后通过 Cloud Human API 上传 release bundle；这是运维快发路径，不属于 GitHub CI/CD job。生产 `stable` 不允许走 `rsync/scp`。
-- 本机插件快发：只改工序插件时从工作区根运行 `deploy/Invoke-WorkspaceDeploy.ps1 -Target EdgePlugin -ModuleId <真实ModuleId>`；内部脚本只上传独立插件 zip 并登记插件 release，不生成宿主版本。
+- 日常自动增量发布：操作者或 AI 从工作区根运行 `deploy/Deploy-Changed.ps1 -Targets Edge`；入口分别校验并 push Host、SDK、Private Plugins 三仓 clean `main`，按三仓生产基线和依赖闭包决定 Host/Module，并在 runtime/API 影响时先运行 SDK 唯一兼容门。
+- 本机宿主内部执行：统一入口调度 `Invoke-WorkspaceDeploy.ps1 -Target EdgeHost` 与 `LocalPublishAndDeploy.ps1 -Transport http`，本机编译、打包、生成 installer artifact 后通过 Cloud Human API 上传 release bundle；Host bundle 不含具体工序插件。生产 `stable` 不允许走 `rsync/scp`。
+- 本机插件内部执行：只改工序插件时统一入口调度 `Invoke-WorkspaceDeploy.ps1 -Target EdgePlugin -ModuleId <真实ModuleId>`；Host 传输脚本调用 Private Plugins 仓唯一 pack，只上传独立插件 zip并登记插件 release，不生成宿主版本，source commit 归因到插件仓 HEAD。
 - 本机快发和正式发布上传前，发布凭据必须优先使用 Edge Release API key 换短期发布 JWT；Human refresh token 只作为临时应急 fallback，不得作为稳定发布凭据。
 - 更新内容必须显式填写：本机快发传 `-ReleaseNotes` 或 `-ReleaseNotesPath`；`workflow_dispatch` 填 `release_notes`；tag 发布必须使用带正文的 annotated tag。
-- 本机正式发布必须由工作区统一入口生成内部调度标记；项目实现脚本拒绝直接执行。EdgeHost/EdgePlugin 共用本地互斥锁，且构建前必须确认工作树 clean、HEAD 已推送到 upstream。
+- 本机正式发布必须由工作区统一入口生成内部调度标记；项目实现脚本拒绝直接执行。EdgeHost/EdgePlugin 共用本地互斥锁，且三仓构建前必须确认各自工作树 clean、位于 `main`、HEAD 已推送到 upstream。
 - catalog、HTTP 上传和静态 HEAD 验证必须执行连接、总时限与低速停滞门禁，并把受限长度的 `4xx/5xx` 正文写入错误摘要。失败产物和 `edge-deployment-attempt.json` 必须保留，后续通过统一入口 `-ResumeReleaseRoot` 只做校验、重传或已发布对账；不得反复从头全量构建或跳过 release notes、DB 登记、审计和保留策略。
 - 生产服务器只允许 `stable` 渠道，不保留 `ci`、`dev`、`test` 或其他测试渠道目录。
 
@@ -45,7 +46,6 @@ ${EDGE_UPDATES_DIR}/
     IIoT.Edge.Setup.exe
     launcher/
     host/
-    plugins/
     velopack/
   velopack/stable/
     releases.stable.json
@@ -72,8 +72,10 @@ HTTP 快发会先让文件安全落盘，再由 Cloud 服务端从 manifest 派�
 插件独立发布必须满足：
 
 - `PublishEdgePluginRelease.ps1` 必须显式传 `-ReleaseNotes` 或 `-ReleaseNotesPath`。
+- `PublishEdgePluginRelease.ps1` 必须显式接收 canonical `-PluginRepositoryRoot`，只调用 Private Plugins 的 `eng/PackEdgePlugin.ps1`；Host 仓不得保留第二份插件 pack 或 package validator。
 - 根入口必须显式传 `-ModuleId`；缺失时禁止用示例/default 模块继续发布。
 - 发布前查 Cloud catalog；相同 `(moduleId, channel, version, targetRuntime)` 已存在时必须失败。
+- 插件 schema v2 metadata 与 wrapper 的 `sourceCommit` 必须等于 Private Plugins clean/pushed HEAD，不能写 Host commit。
 - Cloud `plugin-packages` 接口落盘到 `${EDGE_UPDATES_DIR}/plugins/stable/<ModuleId>/<version>/`，DB 插件 release 的 `downloadUrl` 必须指向真实 zip。
 - Launcher 只安装插件时，宿主版本不得递增。
 
@@ -83,6 +85,7 @@ HTTP 快发会先让文件安全落盘，再由 Cloud 服务端从 manifest 派�
 - 首装配置只落到 `data/IIoT/EdgeClient/launcher/`，Launcher 不读取 exe 旁边的旧绑定文件。
 - Velopack 管理的 `current/` 目录不得包含可变数据、插件目录、真实账号、真实更新源或 bootstrap 文件。
 - 外部插件目录固定为安装根下的 `plugins/<ModuleId>/`。
+- Host 安装素材和 Velopack 包不得包含业务插件；业务插件只在外部目录由独立 catalog/package 安装。
 - 卸载默认只清程序文件和快捷方式，`data/IIoT/EdgeClient/`、`data/IIoT/EdgeData/` 的配置、日志、缓存、SQLite、配方和诊断文件保留。
 
 ## 2. 必跑验证
@@ -115,11 +118,13 @@ CI 发布验收：
 - 本机快发未显式传 `-Version` 时必须自动生成下一个 stable patch 版本，并在 `installer-artifact.json` 写入 `sourceCommit`、`previousVersion`、`previousSourceCommit`、`releaseNotes` 和 `generatedAtUtc`。
 - `PublishEdgeRuntime.ps1 -Version` 必须同步写入 runtime 的 `AssemblyVersion` / `FileVersion`，否则 `TestEdgeVelopackPackage.ps1` 会拒绝包版本和 Launcher 程序集版本不一致。
 - CI 允许对 `PackEdgeClientVelopack.ps1` 使用 `-SkipVeloAppCheck:$true`，原因是 Launcher 通过 `EdgeUpdateVelopackStartup.Run()` 包装 `VelopackApp.Build().Run()`，Velopack CLI 静态扫描无法识别该包装；真实包仍必须通过 `TestEdgeVelopackPackage.ps1`。
-- `edge-installer-artifact` 必须通过 `TestEdgeClientInstallerArtifact.ps1`，并包含 `installer-artifact.json`、安装器 exe、宿主、Launcher、插件和 Velopack setup。
+- `edge-installer-artifact` 必须通过 `TestEdgeClientInstallerArtifact.ps1`，并包含 `installer-artifact.json`、安装器 exe、宿主、Launcher 和 Velopack setup；不得包含具体工序插件。
 - `edge-velopack-releases` 必须通过 `TestEdgeVelopackPackage.ps1`，并包含 `releases.stable.json`、`assets.stable.json`、full nupkg、setup exe 和 portable zip。
 - `publish-edge-updates` 发布后必须通过 Cloud API 返回的 `verificationUrls` 做 HEAD 验证；服务器上必须能在 `${EDGE_UPDATES_DIR}/installers/stable/<version>/installer-artifact.json` 和 `${EDGE_UPDATES_DIR}/velopack/stable/releases.stable.json` 找到对应产物。
 - 发布失败后优先重跑失败 job 或复用已生成 artifacts；不得未经定位反复全量 CI。Cloud 返回 `400 hash/size` 不一致时，先在下载后的 artifact 目录对比文件列表、manifest 和 Cloud 校验算法，再决定是否修改脚本。
 - 独立插件发布后必须能在 `${EDGE_UPDATES_DIR}/plugins/stable/<ModuleId>/<version>/` 找到插件 zip，且 Cloud catalog 中对应插件 release 的 `downloadUrl` 可 HEAD 成功。
+- SDK runtime/API、Host runtime 或具体插件受影响时，发布前必须由 SDK 仓唯一兼容门绑定三仓候选 HEAD，验证四个 SDK 包、插件唯一 zip、旧生产不可变组合、候选接受和跨代旧插件拒载；Analyzer/docs-only SDK 改动不得触发 Host/Plugin 发布。
+- Host API 代际变化时，首个产品版本必须显式等于新 `hostApiVersion`；不得把 API 2.0.0 宿主按旧 1.x catalog 自动递增为 patch。
 
 Windows 实际部署阶段实机验收：
 

@@ -138,6 +138,8 @@
     <sys:String x:Key="Launcher_VersionManagement_ConfirmRollbackMessage">确定将 {0} 从 {1} 回退到 {2}？程序文件会替换为所选版本，现场数据和配置不会被清理。</sys:String>
     <sys:String x:Key="Launcher_VersionManagement_ConfirmDeprecatedTitle">确认使用已弃用版本</sys:String>
     <sys:String x:Key="Launcher_VersionManagement_ConfirmDeprecatedMessage">{0} 的目标版本 {2} 已标记为弃用。当前版本为 {1}。确认后仍会按所选版本应用，现场数据和配置不会被清理。</sys:String>
+    <sys:String x:Key="Launcher_VersionManagement_ConfirmCompositionTitle">确认切换宿主与插件组合</sys:String>
+    <sys:String x:Key="Launcher_VersionManagement_ConfirmCompositionMessage">将 {0} 从 {1} 切换到 {2} 前，必须先下载并校验以下兼容插件：{3}。只有全部插件安装成功后才会启动宿主更新；也可以取消并保持当前组合。</sys:String>
     <sys:String x:Key="Launcher_VersionManagement_ConfirmAccept">确认执行</sys:String>
     <sys:String x:Key="Launcher_VersionManagement_ConfirmCancel">取消</sys:String>
     <sys:String x:Key="Launcher_VersionHistory_WindowTitle">历史版本</sys:String>

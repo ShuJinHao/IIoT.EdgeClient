@@ -447,55 +447,6 @@
       ]
     },
     {
-      "token": "legacy",
-      "kind": "method",
-      "symbol": "CreateLegacyTemplateRemarks",
-      "declarationPath": "src/Application/IIoT.Edge.Application/Modules/Hardware/ModuleHardwareProfileProviderBase.cs",
-      "status": "MigrationWindow",
-      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
-      "coverageTests": [
-        {
-          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceFilesystemTests/HomogenizationHardwareProfileBehaviorTests.cs",
-          "test": "HomogenizationHardwareProfileProvider_ShouldKeepTemplateMetadataInPluginProfile"
-        }
-      ],
-      "rationale": "Bounded virtual hook consumed by the active hardware-schema requirement builder.",
-      "callEvidence": [
-        {
-          "path": "src/Application/IIoT.Edge.Application/Modules/Hardware/ModuleHardwareProfileProviderBase.cs",
-          "pattern": "CreateLegacyTemplateRemarks\\(signal\\)\\)",
-          "expectedOccurrences": 1
-        }
-      ]
-    },
-    {
-      "token": "legacy",
-      "kind": "method",
-      "symbol": "CreateLegacyTemplateRemarks",
-      "declarationPath": "src/Application/IIoT.Edge.Application/Modules/Hardware/StandardModuleHardwareProfileProviderBase.cs",
-      "status": "MigrationWindow",
-      "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
-      "coverageTests": [
-        {
-          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceFilesystemTests/HomogenizationHardwareProfileBehaviorTests.cs",
-          "test": "HomogenizationHardwareProfileProvider_ShouldKeepTemplateMetadataInPluginProfile"
-        }
-      ],
-      "rationale": "Active override reached by the base schema builder for the concrete homogenization profile.",
-      "callEvidence": [
-        {
-          "path": "src/Application/IIoT.Edge.Application/Modules/Hardware/ModuleHardwareProfileProviderBase.cs",
-          "pattern": "CreateLegacyTemplateRemarks\\(signal\\)\\)",
-          "expectedOccurrences": 1
-        },
-        {
-          "path": "src/Modules/IIoT.Edge.Module.Homogenization/Config/Io/HomogenizationHardwareProfileProvider.cs",
-          "pattern": "StandardModuleHardwareProfileProviderBase<",
-          "expectedOccurrences": 1
-        }
-      ]
-    },
-    {
       "token": "fallback",
       "kind": "method",
       "symbol": "BuildFallbackEntry",
@@ -791,21 +742,6 @@
         {
           "path": "src/Infrastructure/IIoT.Edge.Infrastructure.Integration/Device/DeviceUploadGatePolicy.cs",
           "pattern": "\\? ResolveFallbackTokenReason\\(session\\)",
-          "expectedOccurrences": 1
-        }
-      ]
-    },
-    {
-      "token": "fallback",
-      "kind": "method",
-      "symbol": "ToFallbackBindings",
-      "declarationPath": "src/Modules/IIoT.Edge.Module.Sdk/Signals/BufferLogicalSignalAccessor.cs",
-      "status": "OrdinaryAbstraction",
-      "rationale": "Current SDK signal accessor invokes this binding derivation only when explicit profile bindings are absent.",
-      "callEvidence": [
-        {
-          "path": "src/Modules/IIoT.Edge.Module.Sdk/Signals/BufferLogicalSignalAccessor.cs",
-          "pattern": ": ToFallbackBindings\\(profile\\)",
           "expectedOccurrences": 1
         }
       ]
@@ -1672,21 +1608,6 @@
         {
           "path": "src/Infrastructure/IIoT.Edge.Infrastructure.Update/Packages/EdgePluginPackageInstaller.cs",
           "pattern": "_compatibilityPolicy\\.IsReleaseCompatible",
-          "expectedOccurrences": 2
-        }
-      ]
-    },
-    {
-      "token": "fallback",
-      "kind": "record-property",
-      "symbol": "FallbackOffset",
-      "declarationPath": "src/Modules/IIoT.Edge.Module.Sdk/Signals/BufferLogicalSignalAccessor.cs",
-      "status": "OrdinaryAbstraction",
-      "rationale": "Current SDK signal binding offset consumed by both read and write access.",
-      "callEvidence": [
-        {
-          "path": "src/Modules/IIoT.Edge.Module.Sdk/Signals/BufferLogicalSignalAccessor.cs",
-          "pattern": "binding\\.FallbackOffset",
           "expectedOccurrences": 2
         }
       ]

@@ -2,6 +2,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$ModuleId,
 
+    [Parameter(Mandatory = $true)]
+    [string]$PluginRepositoryRoot,
+
     [ValidateSet('stable')]
     [string]$Channel = 'stable',
 
@@ -43,7 +46,11 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$repoRoot = Split-Path -Parent $PSScriptRoot
+$repoRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
+$pluginRepoRoot = [System.IO.Path]::GetFullPath($PluginRepositoryRoot)
+if (-not (Test-Path -LiteralPath $pluginRepoRoot -PathType Container)) {
+    throw "Plugin repository was not found: $pluginRepoRoot"
+}
 . (Join-Path $PSScriptRoot 'EdgeRuntime.Common.ps1')
 . (Join-Path $PSScriptRoot 'EdgeReleaseCredential.Common.ps1')
 . (Join-Path $PSScriptRoot 'EdgeDeployment.Common.ps1')
@@ -84,23 +91,68 @@ function Resolve-ExplicitReleaseNotes {
     return $resolvedNotes
 }
 
-function Invoke-EdgeScript {
+function Invoke-PluginPack {
     param(
-        [Parameter(Mandatory = $true)]
-        [string]$ScriptName,
-
         [AllowEmptyCollection()]
         [object[]]$Arguments = @()
     )
 
-    $scriptPath = Join-Path $PSScriptRoot $ScriptName
-    if (-not (Test-Path $scriptPath)) {
-        throw "Script was not found: $scriptPath"
+    $scriptPath = Join-Path $pluginRepoRoot 'eng/PackEdgePlugin.ps1'
+    if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
+        throw "Plugin repository pack script was not found: $scriptPath"
     }
 
     & $scriptPath @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "$ScriptName failed with exit code $LASTEXITCODE."
+        throw "eng/PackEdgePlugin.ps1 failed with exit code $LASTEXITCODE."
+    }
+}
+
+function Test-PreservedPluginPackage {
+    param(
+        [Parameter(Mandatory = $true)]$Metadata,
+        [Parameter(Mandatory = $true)][string]$PackagePath
+    )
+
+    if ([int]$Metadata.packageSchemaVersion -ne 2) {
+        throw "Unexpected plugin package metadata schema: $($Metadata.packageSchemaVersion)"
+    }
+    if ([string]$Metadata.moduleId -ne $ModuleId -or
+        [string]$Metadata.version -ne $declaredVersion -or
+        [string]$Metadata.targetRuntime -ne $RuntimeIdentifier) {
+        throw 'Plugin package metadata does not match the requested module/version/runtime.'
+    }
+    if ([string]$Metadata.sourceCommit -ne [string]$gitFacts.Head) {
+        throw "Plugin package sourceCommit '$($Metadata.sourceCommit)' does not match release HEAD '$($gitFacts.Head)'."
+    }
+    $package = Get-Item -LiteralPath $PackagePath
+    if ($package.Length -ne [int64]$Metadata.packageSize) {
+        throw "Plugin package size does not match metadata: expected=$($Metadata.packageSize) actual=$($package.Length)"
+    }
+    $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $PackagePath).Hash.ToUpperInvariant()
+    if ($hash -ne ([string]$Metadata.sha256).ToUpperInvariant()) {
+        throw "Plugin package SHA256 does not match metadata: expected=$($Metadata.sha256) actual=$hash"
+    }
+
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $archive = [System.IO.Compression.ZipFile]::OpenRead($PackagePath)
+    try {
+        $manifestEntry = $archive.Entries | Where-Object { $_.FullName -eq 'plugin.json' } | Select-Object -First 1
+        if ($null -eq $manifestEntry) { throw 'Plugin package root is missing plugin.json.' }
+        $reader = [System.IO.StreamReader]::new($manifestEntry.Open(), [System.Text.Encoding]::UTF8)
+        try { $packagedManifest = $reader.ReadToEnd() | ConvertFrom-Json } finally { $reader.Dispose() }
+        if ([string]$packagedManifest.moduleId -ne $ModuleId -or
+            [string]$packagedManifest.version -ne $declaredVersion -or
+            [string]$packagedManifest.hostApiVersion -ne [string]$Metadata.hostApiVersion) {
+            throw 'Packaged plugin.json does not match package metadata.'
+        }
+        if ($archive.Entries.FullName -notcontains [string]$packagedManifest.entryAssembly) {
+            throw "Plugin package entry assembly is missing: $($packagedManifest.entryAssembly)"
+        }
+    }
+    finally {
+        $archive.Dispose()
     }
 }
 
@@ -197,7 +249,7 @@ function New-PluginReleaseWrapper {
     Copy-Item -Path $PackagePath -Destination (Join-Path $wrapperRoot 'plugin') -Force
 
     $releaseManifest = [ordered]@{
-        packageSchemaVersion = [int]$Metadata.packageSchemaVersion
+        packageSchemaVersion = 1
         channel = $Channel
         moduleId = [string]$Metadata.moduleId
         processType = [string]$Metadata.processType
@@ -217,6 +269,7 @@ function New-PluginReleaseWrapper {
         sha256 = [string]$Metadata.sha256
         signature = [string]$Metadata.signature
         publisher = [string]$Metadata.publisher
+        sourceCommit = [string]$Metadata.sourceCommit
         releaseNotes = $ReleaseNotesText
         createdAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
     }
@@ -258,7 +311,7 @@ function Invoke-PluginPackageUpload {
 }
 
 $dispatchInvocationId = Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgePlugin
-$gitFacts = Assert-EdgeReleaseGitState -RepoRoot $repoRoot
+$gitFacts = Assert-EdgeReleaseGitState -RepoRoot $pluginRepoRoot
 $deploymentLock = Enter-EdgeDeploymentLock -RepoRoot $repoRoot -InvocationId $dispatchInvocationId -Target EdgePlugin
 $locationPushed = $false
 $attemptReleaseRoot = ''
@@ -268,7 +321,7 @@ try {
     Push-Location $repoRoot
     $locationPushed = $true
     $releaseNotesText = Resolve-ExplicitReleaseNotes
-    $sourceManifestPath = Join-Path $repoRoot "src/Modules/IIoT.Edge.Module.$ModuleId/plugin.json"
+    $sourceManifestPath = Join-Path $pluginRepoRoot "src/IIoT.Edge.Module.$ModuleId/plugin.json"
     if (-not (Test-Path -LiteralPath $sourceManifestPath -PathType Leaf)) {
         throw "Plugin manifest was not found: $sourceManifestPath"
     }
@@ -330,17 +383,21 @@ try {
     $packageOutputRoot = Join-Path $releaseRoot 'package'
     if (-not $isResume) {
         New-Item -Path $packageOutputRoot -ItemType Directory -Force | Out-Null
+        $pluginPackageScratchRoot = Join-Path $pluginRepoRoot "artifacts/deploy-pack/$dispatchInvocationId"
         $attemptStage = 'building-package'
         Write-EdgeDeploymentAttemptState -ReleaseRoot $releaseRoot -Target EdgePlugin -InvocationId $dispatchInvocationId `
             -Stage $attemptStage -Status running `
             -Facts @{ moduleId = $ModuleId; version = $declaredVersion; sourceCommit = $gitFacts.Head; resumeReleaseRoot = $releaseRoot } | Out-Null
-        Invoke-EdgeScript 'PackEdgePlugin.ps1' @(
+        Invoke-PluginPack @(
             '-ModuleId', $ModuleId,
             '-Configuration', $Configuration,
             '-TargetRuntime', $RuntimeIdentifier,
-            '-OutputRoot', $packageOutputRoot,
+            '-OutputRoot', $pluginPackageScratchRoot,
+            '-SourceCommit', $gitFacts.Head,
             '-CleanOutput'
         )
+        Get-ChildItem -LiteralPath $pluginPackageScratchRoot -File |
+            Copy-Item -Destination $packageOutputRoot -Force
     }
 
     $metadataPath = Get-ChildItem -Path $packageOutputRoot -Filter '*.zip.json' -File | Select-Object -First 1
@@ -361,12 +418,7 @@ try {
         -Stage $attemptStage -Status running `
         -Facts @{ moduleId = $ModuleId; version = $declaredVersion; sourceCommit = $gitFacts.Head; resumed = $isResume } | Out-Null
     if (-not $SkipPackageValidation) {
-        Invoke-EdgeScript 'TestEdgePluginPackage.ps1' @(
-            '-OutputRoot', $packageOutputRoot,
-            '-ModuleId', $ModuleId,
-            '-Version', ([string]$metadata.version),
-            '-TargetRuntime', $RuntimeIdentifier
-        )
+        Test-PreservedPluginPackage -Metadata $metadata -PackagePath $packagePath
     }
 
     $wrapperZip = Join-Path $releaseRoot "edge-plugin-release-$ModuleId-$($metadata.version)-$RuntimeIdentifier.zip"

@@ -8,7 +8,8 @@ public sealed record LauncherVersionChangeConfirmationRequest(
     string DisplayName,
     string CurrentVersion,
     string TargetVersion,
-    EdgeVersionStatus Status);
+    EdgeVersionStatus Status,
+    IReadOnlyDictionary<string, string>? RequiredPluginVersions = null);
 
 public sealed class LauncherVersionComponentItem : BaseNotifyPropertyChanged
 {
@@ -118,7 +119,8 @@ public sealed class LauncherVersionOptionItem : BaseNotifyPropertyChanged
         string statusKind,
         string statusText,
         string actionKind,
-        string actionText)
+        string actionText,
+        EdgeVersionSelection? requiredComposition = null)
     {
         ComponentKind = componentKind;
         ModuleId = moduleId;
@@ -135,6 +137,7 @@ public sealed class LauncherVersionOptionItem : BaseNotifyPropertyChanged
         _statusText = statusText;
         ActionKind = actionKind;
         _actionText = actionText;
+        RequiredComposition = requiredComposition;
     }
 
     public EdgeComponentKind ComponentKind { get; }
@@ -153,7 +156,11 @@ public sealed class LauncherVersionOptionItem : BaseNotifyPropertyChanged
 
     public bool HasNoApplyAction => !CanApply;
 
-    public bool RequiresConfirmation => Status is EdgeVersionStatus.Older or EdgeVersionStatus.Deprecated;
+    public bool RequiresConfirmation
+        => Status is EdgeVersionStatus.Older or EdgeVersionStatus.Deprecated
+           || RequiredComposition?.PluginVersions.Count > 0;
+
+    public EdgeVersionSelection? RequiredComposition { get; }
 
     public string CompatibilityIssue { get; }
 

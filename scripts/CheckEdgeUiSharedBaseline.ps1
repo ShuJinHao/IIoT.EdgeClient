@@ -519,7 +519,6 @@ if ($legacyTableClassHits.Count -ne 0) {
 
 $businessUiRoots = @(
     (Join-Path $repoRoot "src/Presentation"),
-    (Join-Path $repoRoot "src/Modules"),
     (Join-Path $repoRoot "src/Edge")
 ) | Where-Object { Test-Path $_ }
 

@@ -584,7 +584,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         var version = Assembly.GetExecutingAssembly().GetName().Version;
         if (version is null)
         {
-            return "v1.0.0";
+            return "v2.0.0";
         }
 
         return $"v{version.Major}.{Math.Max(version.Minor, 0)}.{Math.Max(version.Build, 0)}";

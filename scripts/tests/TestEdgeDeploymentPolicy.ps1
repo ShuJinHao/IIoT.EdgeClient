@@ -66,6 +66,8 @@ function Get-UniqueSortedPaths {
 Require-Text 'scripts/LocalPublishAndDeploy.ps1' 'Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgeHost' 'Edge host publication must require the workspace dispatch gate.'
 Require-Text 'scripts/LocalPublishAndDeploy.ps1' "Formal stable Edge host releases only support Cloud Human HTTP publication" 'Edge host publication must remain a Mac-build-to-Cloud-HTTP workflow.'
 Require-Text 'scripts/PublishEdgePluginRelease.ps1' 'Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgePlugin' 'Edge plugin publication must remain independent from the host release.'
+Require-Text 'scripts/PublishEdgePluginRelease.ps1' '\[string\]\$PluginRepositoryRoot' 'Edge plugin publication must require the independent Private Plugins repository root.'
+Require-Text 'scripts/PublishEdgePluginRelease.ps1' 'eng/PackEdgePlugin\.ps1' 'Edge plugin publication must call the Private Plugins unique pack implementation.'
 Require-Text 'scripts/TestEdgeDeploymentPreflight.ps1' 'RequirePushedHead' 'Edge production publication must require a pushed Git HEAD.'
 Require-Text 'scripts/TestEdgeDeploymentPreflight.ps1' '\[string\]\$WorkspaceRoot' 'Edge deployment preflight must expose an explicit workspace root.'
 Require-Text 'scripts/TestEdgeDeploymentPreflight.ps1' 'EDGE-DEPLOY-WORKSPACE-001' 'Edge deployment preflight must retain its stable workspace ownership failure code.'
@@ -97,6 +99,24 @@ Require-Text 'scripts/tests/TestEdgeDeploymentBehavior.ps1' 'workspace root with
 Require-Text 'scripts/GetEdgePublishedState.ps1' 'hostSourceCommit' 'Edge incremental planning must inspect the published Windows-download baseline.'
 Require-Text 'docs/客户端规则.md' 'Windows.*下载|下载.*Windows' 'Edge deployment definition must say that the server exposes artifacts for Windows download.'
 Forbid-Text 'scripts/LocalPublishAndDeploy.ps1' "'scp'|'rsync'" 'The formal Edge host implementation must not restore scp/rsync transport.'
+Forbid-Text 'scripts/EdgeRuntime.Common.ps1' 'src[\\/]Modules|Publish-EdgeModulesToPluginsRoot|Build-EdgeModuleProjects' 'Host runtime publication must not scan, build, or copy business plugin source.'
+Forbid-Text 'scripts/TestEdgeDeploymentPreflight.ps1' 'src[\\/]Modules' 'Host deployment preflight must not inspect the retired monorepo plugin source root.'
+Forbid-Text 'scripts/PublishEdgeClientInstallerArtifact.ps1' 'Read-ArtifactPluginManifest' 'Host installer publication must not rebuild a business plugin manifest from Host-owned files.'
+foreach ($retiredHostPluginEntry in @(
+    'scripts/PublishEdgeModules.ps1',
+    'scripts/TestEdgePluginPackage.ps1'
+)) {
+    if (Test-Path -LiteralPath (Join-Path $root $retiredHostPluginEntry)) {
+        throw "Host must not retain retired business plugin pack entry: $retiredHostPluginEntry"
+    }
+}
+
+$runtimePublishManifest = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $root 'scripts/edge-runtime.publish.json') | ConvertFrom-Json
+foreach ($profile in @($runtimePublishManifest.profiles)) {
+    if (@($profile.moduleIds).Count -ne 0) {
+        throw "Host runtime publish profile must not own business plugin modules: $($profile.profileId)"
+    }
+}
 
 $privateAddressPattern = '\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})\b'
 $certificateBypassPattern = 'DangerousAcceptAnyServerCertificateValidator|ServerCertificateCustomValidationCallback|TrustAllCertificates|SkipCertificateValidation'

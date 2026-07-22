@@ -4,7 +4,7 @@ param(
 
     [string]$ReleaseChannel = 'stable',
 
-    [string]$HostApiVersion = '1.0.0',
+    [string]$HostApiVersion = '2.0.0',
 
     [string]$Configuration = 'Release',
 
@@ -268,20 +268,6 @@ function Copy-ArtifactDirectory {
     }
 }
 
-function Read-ArtifactPluginManifest {
-    param(
-        [Parameter(Mandatory = $true)][string]$PluginDirectory,
-        [Parameter(Mandatory = $true)][string]$ModuleId
-    )
-
-    $pluginPath = Join-Path $PluginDirectory 'plugin.json'
-    if (-not (Test-Path $pluginPath)) {
-        throw "Plugin directory '$PluginDirectory' is missing module plugin manifest: $ModuleId"
-    }
-
-    return Get-Content -Raw -Encoding UTF8 -Path $pluginPath | ConvertFrom-Json
-}
-
 function Publish-InstallerStub {
     param(
         [Parameter(Mandatory = $true)][string]$OutputDirectory
@@ -543,25 +529,15 @@ $artifactDirectoriesToValidate = @(
     (Join-Path $artifactRoot $manifest.pluginsRoot)
 )
 
-$modules = @()
 $moduleIds = @($manifest.profiles | ForEach-Object { $_.moduleIds } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
-foreach ($moduleId in $moduleIds) {
-    $pluginDirectory = Join-Path (Join-Path $resolvedRuntimeLayoutRoot $manifest.pluginsRoot) $moduleId
-    $artifactPluginDirectory = Join-Path (Join-Path $artifactRoot $manifest.pluginsRoot) $moduleId
-    $plugin = Read-ArtifactPluginManifest -PluginDirectory $pluginDirectory -ModuleId $moduleId
-    $modules += [PSCustomObject]@{
-        moduleId = [string]$plugin.moduleId
-        displayName = [string]$plugin.displayName
-        description = if ($plugin.PSObject.Properties['description']) { [string]$plugin.description } else { $null }
-        version = [string]$plugin.version
-        hostApiVersion = [string]$plugin.hostApiVersion
-        minHostVersion = [string]$plugin.minHostVersion
-        maxHostVersion = [string]$plugin.maxHostVersion
-        pluginDirectory = [string]$moduleId
-        pluginSha256 = Get-ArtifactDirectorySha256 -Directory $artifactPluginDirectory
-        pluginSize = Get-ArtifactDirectorySize -Directory $artifactPluginDirectory
-    }
+if ($moduleIds.Count -ne 0) {
+    throw "Host installer artifact cannot declare business modules: $($moduleIds -join ', ')"
 }
+$packagedPluginFiles = @(Get-ChildItem -LiteralPath (Join-Path $artifactRoot $manifest.pluginsRoot) -Recurse -File -ErrorAction Stop)
+if ($packagedPluginFiles.Count -ne 0) {
+    throw "Host installer artifact plugins root must be empty; found: $($packagedPluginFiles[0].FullName)"
+}
+$modules = @()
 
 foreach ($directory in $artifactDirectoriesToValidate) {
     Assert-ArtifactForbiddenContentMissing -Directory $directory

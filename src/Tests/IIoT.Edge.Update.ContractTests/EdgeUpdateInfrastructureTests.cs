@@ -364,7 +364,7 @@ public sealed class EdgeUpdateInfrastructureTests
     {
         var catalog = Catalog(
             PluginComponent("TestPlugin", Release("TestPlugin", "1.2.0", EdgeClientHostRuntime.HostApiVersion)),
-            PluginComponent("Welding", Release("Welding", "1.0.0", "2.0.0")));
+            PluginComponent("Welding", Release("Welding", "1.0.0", "999.0.0")));
         var installed = new[]
         {
             new EdgeInstalledPlugin(
@@ -430,6 +430,164 @@ public sealed class EdgeUpdateInfrastructureTests
 
         Assert.Single(plans);
         Assert.Equal(EdgeComponentKind.Host, plans[0].ComponentKind);
+    }
+
+    [Fact]
+    public void BuildVersionPlans_WhenTargetHostNeedsNewPlugin_ShouldRequireCompleteComposition()
+    {
+        var catalog = CatalogWithHostVersions(
+            [
+                HostRelease("2.0.0", EdgeClientHostRuntime.HostApiVersion),
+                HostRelease("1.0.0", EdgeClientHostRuntime.HostApiVersion)
+            ],
+            PluginComponent(
+                "TestPlugin",
+                Release(
+                    "TestPlugin",
+                    "2.0.0",
+                    EdgeClientHostRuntime.HostApiVersion,
+                    "2.0.0",
+                    "2.9.9"),
+                Release(
+                    "TestPlugin",
+                    "1.0.0",
+                    EdgeClientHostRuntime.HostApiVersion,
+                    "1.0.0",
+                    "1.9.9")));
+        var installed = new[]
+        {
+            InstalledPlugin("TestPlugin", "1.0.0", "1.0.0", "1.9.9")
+        };
+
+        var plans = EdgeReleaseService.BuildVersionPlans(
+            catalog,
+            installed,
+            "1.0.0",
+            EdgeClientHostRuntime.HostApiVersion,
+            new EdgeVersionCompatibilityPolicy(),
+            ["TestPlugin"]);
+
+        var host = plans.Single(plan => plan.ComponentKind == EdgeComponentKind.Host);
+        var target = host.Versions.Single(option => option.Version == "2.0.0");
+        Assert.True(target.CanApply);
+        Assert.NotNull(target.RequiredComposition);
+        Assert.Equal("2.0.0", target.RequiredComposition!.HostVersion);
+        Assert.Equal("2.0.0", target.RequiredComposition.PluginVersions["TestPlugin"]);
+        Assert.Contains("TestPlugin 2.0.0", target.CompatibilityIssue, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildVersionPlans_WhenTargetHostHasNoCompatiblePlugin_ShouldBlockBeforeInstall()
+    {
+        var catalog = CatalogWithHostVersions(
+            [HostRelease("2.0.0", EdgeClientHostRuntime.HostApiVersion)],
+            PluginComponent(
+                "TestPlugin",
+                Release(
+                    "TestPlugin",
+                    "1.0.0",
+                    EdgeClientHostRuntime.HostApiVersion,
+                    "1.0.0",
+                    "1.9.9")));
+
+        var plans = EdgeReleaseService.BuildVersionPlans(
+            catalog,
+            [InstalledPlugin("TestPlugin", "1.0.0", "1.0.0", "1.9.9")],
+            "1.0.0",
+            EdgeClientHostRuntime.HostApiVersion,
+            new EdgeVersionCompatibilityPolicy(),
+            ["TestPlugin"]);
+
+        var target = plans
+            .Single(plan => plan.ComponentKind == EdgeComponentKind.Host)
+            .Versions.Single();
+        Assert.False(target.CanApply);
+        Assert.Null(target.RequiredComposition);
+        Assert.Contains("没有兼容宿主 2.0.0", target.CompatibilityIssue, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildVersionPlans_WhenEnabledPluginIsNotInstalled_ShouldRequireItsCompatibleVersion()
+    {
+        var catalog = CatalogWithHostVersions(
+            [HostRelease("2.0.0", EdgeClientHostRuntime.HostApiVersion)],
+            PluginComponent(
+                "TestPlugin",
+                Release(
+                    "TestPlugin",
+                    "2.0.0",
+                    EdgeClientHostRuntime.HostApiVersion,
+                    "2.0.0",
+                    "2.9.9")));
+
+        var plans = EdgeReleaseService.BuildVersionPlans(
+            catalog,
+            [],
+            "1.0.0",
+            EdgeClientHostRuntime.HostApiVersion,
+            new EdgeVersionCompatibilityPolicy(),
+            ["TestPlugin"]);
+
+        var target = plans
+            .Single(plan => plan.ComponentKind == EdgeComponentKind.Host)
+            .Versions.Single();
+        Assert.True(target.CanApply);
+        Assert.NotNull(target.RequiredComposition);
+        Assert.Equal("2.0.0", target.RequiredComposition!.PluginVersions["TestPlugin"]);
+    }
+
+    [Fact]
+    public async Task ApplyVersionCompositionAsync_WhenMultipleProfilesShareHost_ShouldInstallPluginOnceAndApplyHostOnce()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            const string targetVersion = "99.0.0";
+            var catalog = CatalogWithHostVersions(
+                [HostRelease(targetVersion, EdgeClientHostRuntime.HostApiVersion)],
+                PluginComponent(
+                    "TestPlugin",
+                    Release(
+                        "TestPlugin",
+                        targetVersion,
+                        EdgeClientHostRuntime.HostApiVersion,
+                        targetVersion,
+                        targetVersion)));
+            var packageInstaller = new RecordingPluginPackageInstaller();
+            var hostUpdateService = new RecordingHostUpdateService();
+            var service = new EdgeReleaseService(
+                new SuccessfulCloudConfigurationProvider(),
+                new SuccessfulDeviceSessionClient(),
+                new FixedCatalogClient(catalog),
+                new NoopVersionReporter(),
+                new FileInstalledPluginCatalog(),
+                new FixedProfileModuleConfigurationStore(["TestPlugin"]),
+                packageInstaller,
+                hostUpdateService,
+                new NoopUpdateConfigInitializer(),
+                new EdgeVersionCompatibilityPolicy());
+            var firstTarget = Target(tempDirectory);
+            var secondTarget = firstTarget with { MachineProfile = "LineB" };
+
+            var result = await service.ApplyVersionCompositionAsync(
+                [firstTarget, secondTarget],
+                new EdgeVersionSelection(
+                    targetVersion,
+                    new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["TestPlugin"] = targetVersion
+                    }),
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.True(result.Success, result.ErrorMessage);
+            Assert.Equal(1, packageInstaller.InstallCallCount);
+            Assert.Equal(1, hostUpdateService.ApplyCallCount);
+            Assert.Equal(targetVersion, hostUpdateService.AppliedVersion);
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
     }
 
     [Fact]
@@ -610,6 +768,13 @@ public sealed class EdgeUpdateInfrastructureTests
             "/api/v1/edge/runtime-heartbeats");
 
     private static EdgeReleaseCatalog Catalog(params EdgePluginReleaseComponent[] plugins)
+        => CatalogWithHostVersions(
+            [HostRelease("1.0.0", EdgeClientHostRuntime.HostApiVersion)],
+            plugins);
+
+    private static EdgeReleaseCatalog CatalogWithHostVersions(
+        IReadOnlyList<EdgeHostVersionEntry> hostVersions,
+        params EdgePluginReleaseComponent[] plugins)
         => new(
             2,
             "stable",
@@ -617,30 +782,31 @@ public sealed class EdgeUpdateInfrastructureTests
             new EdgeHostReleaseComponent(
                 "Host",
                 "Edge Host",
-                [
-                    new EdgeHostVersionEntry(
-                        Guid.NewGuid(),
-                        "stable",
-                        "1.0.0",
-                        EdgeClientHostRuntime.HostApiVersion,
-                        "win-x64",
-                        "net10.0",
-                        "https://cloud.example.test/host.nupkg",
-                        new string('A', 64),
-                        1,
-                        null,
-                        "Published",
-                        null,
-                        "IIoT",
-                        DateTime.UtcNow,
-                        DateTime.UtcNow)
-                ]),
+                hostVersions),
             plugins,
+            DateTime.UtcNow);
+
+    private static EdgeHostVersionEntry HostRelease(string version, string hostApiVersion)
+        => new(
+            Guid.NewGuid(),
+            "stable",
+            version,
+            hostApiVersion,
+            "win-x64",
+            "net10.0",
+            $"https://cloud.example.test/host-{version}.nupkg",
+            new string('A', 64),
+            1,
+            null,
+            "Published",
+            null,
+            "IIoT",
+            DateTime.UtcNow,
             DateTime.UtcNow);
 
     private static EdgePluginReleaseComponent PluginComponent(
         string moduleId,
-        EdgePluginVersionEntry release)
+        params EdgePluginVersionEntry[] releases)
         => new(
             "Plugin",
             moduleId,
@@ -648,16 +814,24 @@ public sealed class EdgeUpdateInfrastructureTests
             null,
             null,
             null,
-            [release]);
+            releases);
 
     private static EdgePluginVersionEntry Release(string moduleId, string version, string hostApiVersion)
+        => Release(moduleId, version, hostApiVersion, "1.0.0", "99.0.0");
+
+    private static EdgePluginVersionEntry Release(
+        string moduleId,
+        string version,
+        string hostApiVersion,
+        string minHostVersion,
+        string maxHostVersion)
         => new(
             Guid.NewGuid(),
             "stable",
             version,
             hostApiVersion,
-            "1.0.0",
-            "99.0.0",
+            minHostVersion,
+            maxHostVersion,
             "win-x64",
             "net10.0",
             $"https://cloud.example.test/{moduleId}.zip",
@@ -670,6 +844,23 @@ public sealed class EdgeUpdateInfrastructureTests
             "IIoT",
             DateTime.UtcNow,
             DateTime.UtcNow);
+
+    private static EdgeInstalledPlugin InstalledPlugin(
+        string moduleId,
+        string version,
+        string minHostVersion,
+        string maxHostVersion)
+        => new(
+            moduleId,
+            moduleId,
+            moduleId,
+            version,
+            EdgeClientHostRuntime.HostApiVersion,
+            minHostVersion,
+            maxHostVersion,
+            [],
+            "plugin.json",
+            "current");
 
     private static EdgePluginVersionRelease ReleaseWithPackage(string packagePath)
     {
@@ -951,6 +1142,31 @@ public sealed class EdgeUpdateInfrastructureTests
             IProgress<int>? progress = null,
             CancellationToken cancellationToken = default)
             => Task.FromResult(new EdgeHostUpdateApplyResult(false, "No host update in test."));
+    }
+
+    private sealed class RecordingHostUpdateService : IEdgeHostUpdateService
+    {
+        public int ApplyCallCount { get; private set; }
+
+        public string? AppliedVersion { get; private set; }
+
+        public Task<EdgeHostUpdateCheckResult> CheckForUpdatesAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new EdgeHostUpdateCheckResult(EdgeHostUpdateCheckState.UpdateAvailable));
+
+        public Task<EdgeHostUpdateApplyResult> DownloadAndApplyUpdateAsync(
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new EdgeHostUpdateApplyResult(true));
+
+        public Task<EdgeHostUpdateApplyResult> ApplyVersionAsync(
+            EdgeHostVersionRelease release,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            ApplyCallCount++;
+            AppliedVersion = release.Version.Version;
+            return Task.FromResult(new EdgeHostUpdateApplyResult(true));
+        }
     }
 
     private sealed class NoopUpdateConfigInitializer : IEdgeUpdateConfigInitializer

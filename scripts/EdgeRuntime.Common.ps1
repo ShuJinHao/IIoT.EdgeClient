@@ -31,30 +31,6 @@ function Resolve-EdgeAbsolutePath {
     return [System.IO.Path]::GetFullPath((Join-Path $BasePath $PathValue))
 }
 
-function Get-EdgeProjectPropertyValue {
-    param(
-        [Parameter(Mandatory = $true)]
-        [xml]$ProjectXml,
-
-        [Parameter(Mandatory = $true)]
-        [string]$PropertyName
-    )
-
-    foreach ($propertyGroup in $ProjectXml.Project.PropertyGroup) {
-        $property = $propertyGroup.PSObject.Properties[$PropertyName]
-        if ($null -eq $property) {
-            continue
-        }
-
-        $value = $property.Value
-        if (-not [string]::IsNullOrWhiteSpace($value)) {
-            return $value.Trim()
-        }
-    }
-
-    return $null
-}
-
 function Load-EdgeRuntimePublishManifest {
     param(
         [Parameter(Mandatory = $true)]
@@ -100,8 +76,12 @@ function Load-EdgeRuntimePublishManifest {
             }
         }
 
-        if ($null -eq $profile.moduleIds -or $profile.moduleIds.Count -eq 0) {
+        if ($null -eq $profile.PSObject.Properties['moduleIds']) {
             throw "Profile entry '$($profile.profileId)' in '$resolvedManifestPath' does not define moduleIds."
+        }
+
+        if (@($profile.moduleIds).Count -ne 0) {
+            throw "Host runtime profile '$($profile.profileId)' must not declare business plugin moduleIds. Plugins are published only from IIoT.Edge.Plugins.Private."
         }
 
         if (-not $profileIds.Add($profile.profileId)) {
@@ -110,72 +90,6 @@ function Load-EdgeRuntimePublishManifest {
     }
 
     return $manifest
-}
-
-function Get-EdgeModuleProjectMap {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$RepoRoot
-    )
-
-    $map = @{}
-    $projectFiles = Get-ChildItem -Path (Join-Path $RepoRoot 'src\Modules') -Recurse -Filter *.csproj -File
-    foreach ($projectFile in $projectFiles) {
-        [xml]$projectXml = Get-Content -Path $projectFile.FullName
-        $moduleId = Get-EdgeProjectPropertyValue -ProjectXml $projectXml -PropertyName 'PluginModuleId'
-        if ([string]::IsNullOrWhiteSpace($moduleId)) {
-            continue
-        }
-
-        $targetFramework = Get-EdgeProjectPropertyValue -ProjectXml $projectXml -PropertyName 'TargetFramework'
-        if ([string]::IsNullOrWhiteSpace($targetFramework)) {
-            throw "Module project '$($projectFile.FullName)' is missing TargetFramework."
-        }
-
-        $map[$moduleId] = [PSCustomObject]@{
-            ModuleId = $moduleId
-            ProjectPath = $projectFile.FullName
-            ProjectDirectory = $projectFile.Directory.FullName
-            TargetFramework = $targetFramework
-        }
-    }
-
-    return $map
-}
-
-function Build-EdgeModuleProjects {
-    param(
-        [Parameter(Mandatory = $true)]
-        [System.Collections.IEnumerable]$ModuleIds,
-
-        [Parameter(Mandatory = $true)]
-        [hashtable]$ModuleProjectMap,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Configuration
-    )
-
-    foreach ($moduleId in ($ModuleIds | Select-Object -Unique)) {
-        if (-not $ModuleProjectMap.ContainsKey($moduleId)) {
-            throw "Module '$moduleId' was not found under src\\Modules."
-        }
-
-        $project = $ModuleProjectMap[$moduleId]
-        Invoke-EdgeNativeCommand `
-            -FilePath 'dotnet' `
-            -Arguments @(
-                'build',
-                $project.ProjectPath,
-                '--configuration',
-                $Configuration,
-                '--nologo',
-                '--verbosity',
-                'minimal',
-                '--disable-build-servers',
-                '-p:BuildInParallel=false',
-                '-p:RestoreDisableParallel=true'
-            )
-    }
 }
 
 function Get-EdgeLauncherProfileCatalog {
@@ -438,69 +352,6 @@ function Copy-EdgeDirectoryContent {
     Copy-Item -Path (Join-Path $SourceDirectory '*') -Destination $TargetDirectory -Recurse -Force
 }
 
-function Test-EdgePluginManifestFile {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$ManifestPath
-    )
-
-    if (-not (Test-Path $ManifestPath)) {
-        throw "Plugin manifest was not found: $ManifestPath"
-    }
-
-    $manifest = Get-Content -Raw -Encoding UTF8 -Path $ManifestPath | ConvertFrom-Json
-    foreach ($requiredProperty in @('moduleId', 'displayName', 'version', 'hostApiVersion', 'minHostVersion', 'maxHostVersion', 'entryAssembly', 'entryType', 'supportedProcessType')) {
-        if ([string]::IsNullOrWhiteSpace($manifest.$requiredProperty)) {
-            throw "Plugin manifest '$ManifestPath' is missing $requiredProperty."
-        }
-    }
-}
-
-function Publish-EdgeModulesToPluginsRoot {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$RepoRoot,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Configuration,
-
-        [Parameter(Mandatory = $true)]
-        [string[]]$ModuleIds,
-
-        [Parameter(Mandatory = $true)]
-        [string]$TargetPluginsRoot,
-
-        [switch]$CleanPluginsDirectory
-    )
-
-    $moduleProjectMap = Get-EdgeModuleProjectMap -RepoRoot $RepoRoot
-    Build-EdgeModuleProjects -ModuleIds $ModuleIds -ModuleProjectMap $moduleProjectMap -Configuration $Configuration
-
-    if ($CleanPluginsDirectory -and (Test-Path $TargetPluginsRoot)) {
-        Remove-Item -Path $TargetPluginsRoot -Recurse -Force
-    }
-
-    New-Item -Path $TargetPluginsRoot -ItemType Directory -Force | Out-Null
-
-    foreach ($moduleId in ($ModuleIds | Select-Object -Unique)) {
-        $project = $moduleProjectMap[$moduleId]
-        $moduleBuildRoot = Join-Path $project.ProjectDirectory "bin\$Configuration\$($project.TargetFramework)"
-        if (-not (Test-Path $moduleBuildRoot)) {
-            throw "Module build output was not found: $moduleBuildRoot"
-        }
-
-        $modulePluginDirectory = Join-Path $TargetPluginsRoot $moduleId
-        if (Test-Path $modulePluginDirectory) {
-            Remove-Item -Path $modulePluginDirectory -Recurse -Force
-        }
-
-        New-Item -Path $modulePluginDirectory -ItemType Directory -Force | Out-Null
-        Copy-Item -Path (Join-Path $moduleBuildRoot '*') -Destination $modulePluginDirectory -Recurse -Force
-
-        Test-EdgePluginManifestFile -ManifestPath (Join-Path $modulePluginDirectory 'plugin.json')
-    }
-}
-
 function Sync-EdgeHostLayout {
     param(
         [Parameter(Mandatory = $true)]
@@ -553,24 +404,20 @@ function Sync-EdgeHostLayout {
 function Sync-EdgePluginsLayout {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$RepoRoot,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Configuration,
-
-        [Parameter(Mandatory = $true)]
         $Manifest,
 
         [Parameter(Mandatory = $true)]
         [string]$LayoutRoot
     )
 
-    $moduleIds = @($Manifest.profiles | ForEach-Object { $_.moduleIds } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    $moduleIds = @($Manifest.profiles | ForEach-Object { @($_.moduleIds) } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($moduleIds.Count -ne 0) {
+        throw 'Host runtime publication cannot stage business plugins. Publish plugins only from IIoT.Edge.Plugins.Private.'
+    }
+
     $pluginsRoot = Join-Path $LayoutRoot $Manifest.pluginsRoot
-    Publish-EdgeModulesToPluginsRoot `
-        -RepoRoot $RepoRoot `
-        -Configuration $Configuration `
-        -ModuleIds $moduleIds `
-        -TargetPluginsRoot $pluginsRoot `
-        -CleanPluginsDirectory
+    if (Test-Path -LiteralPath $pluginsRoot) {
+        Remove-Item -LiteralPath $pluginsRoot -Recurse -Force
+    }
+    New-Item -Path $pluginsRoot -ItemType Directory -Force | Out-Null
 }

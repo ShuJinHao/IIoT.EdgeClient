@@ -12,8 +12,6 @@ param(
 
     [string]$ExpectedPluginsRoot = 'plugins',
 
-    [string]$ExpectedModuleId = 'Homogenization',
-
     [switch]$RequireDelta
 )
 
@@ -194,7 +192,12 @@ try {
     Assert-ZipEntryExists -Archive $archive -EntryName 'lib/app/IIoT.Edge.Launcher.exe' | Out-Null
     $launcherAssemblyEntry = Assert-ZipEntryExists -Archive $archive -EntryName 'lib/app/IIoT.Edge.Launcher.dll'
     Assert-ZipEntryExists -Archive $archive -EntryName "lib/app/$ExpectedHostDirectory/IIoT.Edge.Shell.exe" | Out-Null
-    Test-ZipEntryMissing -Archive $archive -EntryName "lib/app/$ExpectedPluginsRoot/$ExpectedModuleId/plugin.json"
+    $packagedPluginEntries = @($archive.Entries | Where-Object {
+        $_.FullName.StartsWith("lib/app/$ExpectedPluginsRoot/", [System.StringComparison]::OrdinalIgnoreCase)
+    })
+    if ($packagedPluginEntries.Count -ne 0) {
+        throw "Host Velopack package must not contain business plugin files: $($packagedPluginEntries[0].FullName)"
+    }
     Assert-ZipEntryExists -Archive $archive -EntryName 'lib/app/launcher.accounts.sample.json' | Out-Null
     Assert-ZipEntryExists -Archive $archive -EntryName 'lib/app/launcher.update.sample.json' | Out-Null
 
@@ -226,7 +229,7 @@ try {
 
     $profilesJson = Read-ZipEntryText -Archive $archive -EntryName 'lib/app/launcher.profiles.json'
     $profiles = @($profilesJson | ConvertFrom-Json)
-    $expectedProfileIds = @('HomogenizationLine')
+    $expectedProfileIds = @('Default')
     if ($profiles.Count -lt $expectedProfileIds.Count) {
         throw "Velopack package launcher.profiles.json contains $($profiles.Count) profile(s), expected at least $($expectedProfileIds.Count)."
     }

@@ -51,6 +51,7 @@ foreach ($plugin in @($catalog.plugins)) {
 [ordered]@{
     schemaVersion = 1
     hostVersion = if ($null -eq $latestHost) { '' } else { [string]$latestHost.version }
+    hostApiVersion = if ($null -eq $latestHost) { '' } else { [string]$latestHost.hostApiVersion }
     hostSourceCommit = $hostSourceCommit
     pluginVersions = $plugins
 } | ConvertTo-Json -Depth 8
