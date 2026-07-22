@@ -17,6 +17,7 @@
 - Edge UI 只接真实路由、真实数据、真实命令、真实权限；禁止假按钮、假状态、假数据。
 - 可复用 UI 控件和视觉必须归口 `IIoT.Edge.UI.Shared`。
 - Host 只经正式 `PackageReference` 消费同级独立 `IIoT.Edge.Sdk` 仓产出的 Contracts/Module.Sdk/UI.Shared/Analyzer 包；具体工序源码、资源、配置和 pack 实现只归插件仓，三仓不得跨仓引用源码或项目。
+- Host 仓提交的 bootstrap SDK local feed 必须与 Private Plugins 仓逐字节一致，并由 `sdk-package-set.json` 固定 clean SDK source commit、四包文件名、SHA256 与大小；禁止两个 consumer 分别 repack 同版本 SDK。
 
 ## Validation
 

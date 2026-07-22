@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "sdkRepository": "ShuJinHao/IIoT.Edge.Sdk",
+  "sdkSourceCommit": "e9c38afeddd59b904c3f90dfee4448d2d8b4b85c",
+  "version": "2.0.1",
+  "packages": [
+    {
+      "id": "IIoT.Edge.Module.Analyzers",
+      "fileName": "IIoT.Edge.Module.Analyzers.2.0.1.nupkg",
+      "sha256": "749f8d58b0c8f849470c8b3d7c8f31292da43116e00d5ef36dd0f9f6ff96d863",
+      "size": 37574
+    },
+    {
+      "id": "IIoT.Edge.Module.Contracts",
+      "fileName": "IIoT.Edge.Module.Contracts.2.0.1.nupkg",
+      "sha256": "26b7f0b11c6fbe996c7201f11fc802f276152e1b9509daa1aaef3d4955e32412",
+      "size": 119175
+    },
+    {
+      "id": "IIoT.Edge.Module.Sdk",
+      "fileName": "IIoT.Edge.Module.Sdk.2.0.1.nupkg",
+      "sha256": "0d9d75bd0343fb11bcb53f21b646f2974b6005db4f77d5190b32c69f74e1b120",
+      "size": 43623
+    },
+    {
+      "id": "IIoT.Edge.UI.Shared",
+      "fileName": "IIoT.Edge.UI.Shared.2.0.1.nupkg",
+      "sha256": "c679aaa35280cdbe3307afbf134a38ffdb0c9f7ce072181e475e767f0e64ed3b",
+      "size": 127669
+    }
+  ]
+}

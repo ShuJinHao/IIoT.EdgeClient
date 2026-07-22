@@ -14,7 +14,7 @@ public sealed class InstallerMetadataTests
         Assert.Equal("IIoT", assembly.GetCustomAttribute<AssemblyCompanyAttribute>()?.Company);
         Assert.Equal("IIoT Edge Client", assembly.GetCustomAttribute<AssemblyProductAttribute>()?.Product);
         Assert.Equal("IIoT Edge Client", assembly.GetCustomAttribute<AssemblyDescriptionAttribute>()?.Description);
-        Assert.Equal("1.0.0.0", assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version);
-        Assert.Equal("1.0.0-dev", assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion);
+        Assert.Equal("2.0.0.0", assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version);
+        Assert.Equal("2.0.0-dev", assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion);
     }
 }

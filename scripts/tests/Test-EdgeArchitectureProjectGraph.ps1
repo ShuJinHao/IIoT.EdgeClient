@@ -450,8 +450,17 @@ $catalogRepositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'
 $architectureCatalog = & (Join-Path $PSScriptRoot 'Get-EdgeArchitectureDiagnosticCatalog.ps1') `
     -RepositoryRoot $catalogRepositoryRoot `
     -AnalyzerPackageRoot $AnalyzerPackageRoot
-if ((Split-Path ([string]$architectureCatalog.AnalyzerPackageRoot) -Leaf) -cne '2.0.0') {
-    throw "WSARCH006 resolved Edge Analyzer package must remain pinned to 2.0.0: $($architectureCatalog.AnalyzerPackageRoot)"
+$centralPackagesPath = Join-Path $catalogRepositoryRoot 'Directory.Packages.props'
+[xml]$centralPackages = Get-Content -Raw -Encoding UTF8 -LiteralPath $centralPackagesPath
+$analyzerPackageVersionNodes = @($centralPackages.SelectNodes(
+    "/Project/ItemGroup/PackageVersion[@Include='IIoT.Edge.Module.Analyzers']"))
+if ($analyzerPackageVersionNodes.Count -ne 1) {
+    throw "WSARCH006 central Edge Analyzer package version must be declared exactly once: $centralPackagesPath"
+}
+$expectedAnalyzerPackageVersion = ([string]$analyzerPackageVersionNodes[0].Version).Trim()
+if ([string]::IsNullOrWhiteSpace($expectedAnalyzerPackageVersion) -or
+    (Split-Path ([string]$architectureCatalog.AnalyzerPackageRoot) -Leaf) -cne $expectedAnalyzerPackageVersion) {
+    throw "WSARCH006 resolved Edge Analyzer package must remain pinned to ${expectedAnalyzerPackageVersion}: $($architectureCatalog.AnalyzerPackageRoot)"
 }
 $architectureCompilerIds = [System.Collections.Generic.HashSet[string]]::new(
     [string[]]$architectureCatalog.CompilerIds,

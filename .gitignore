@@ -1,5 +1,6 @@
 # Generated artifacts
 .artifacts/
+artifacts/
 .claude/
 .codex-temp/
 .dotnet/
@@ -16,7 +17,6 @@ dist/
 node_modules/
 __pycache__/
 *.py[cod]
-eng/local-package-feed/*.nupkg
 
 # Local logs and diagnostics
 *.log
