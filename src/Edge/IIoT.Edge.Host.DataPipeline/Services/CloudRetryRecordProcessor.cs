@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline.Consumers;
 using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
@@ -5,7 +6,6 @@ using IIoT.Edge.Module.Contracts.Device;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Module.Sdk.DataPipeline;
-using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 
 using IIoT.Edge.Module.Contracts.Cloud;

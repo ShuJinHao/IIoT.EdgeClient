@@ -6,6 +6,7 @@ using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Module.Contracts.Recipe;
 using IIoT.Edge.Module.Contracts.Production;
 using IIoT.Edge.Application.Features.Production.Equipment;
+using IIoT.Edge.Application.Features.Production.Planning;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;

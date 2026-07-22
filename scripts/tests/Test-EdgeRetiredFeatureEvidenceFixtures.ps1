@@ -13,17 +13,13 @@ if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
 }
 
 $gatePath = Join-Path $RepositoryRoot 'scripts/tests/Test-EdgeRetiredFeatureEvidence.ps1'
-$canonicalLedgerPath = Join-Path $RepositoryRoot 'scripts/tests/baselines/edge-regression-ledger.json'
+$canonicalLedgerPath = Join-Path $RepositoryRoot 'scripts/tests/baselines/edge-retired-feature-evidence.json'
 $canonicalDiscoveredPath = Join-Path $RepositoryRoot 'scripts/tests/discovered-test-inventory.json'
-$canonicalInventoryPath = Join-Path $RepositoryRoot 'scripts/tests/edge-test-inventory.json'
-$canonicalValidatorPath = Join-Path $RepositoryRoot 'scripts/tests/Test-EdgeRegressionLedger.ps1'
 
 foreach ($requiredPath in @(
     $gatePath,
     $canonicalLedgerPath,
-    $canonicalDiscoveredPath,
-    $canonicalInventoryPath,
-    $canonicalValidatorPath)) {
+    $canonicalDiscoveredPath)) {
     if (-not (Test-Path $requiredPath -PathType Leaf)) {
         throw "EDGE-RETIRED-FEATURE-FIXTURE-001 required file does not exist: $requiredPath"
     }
@@ -45,11 +41,8 @@ function Write-JsonFile {
 function Copy-AllowedActiveInputs {
     param([Parameter(Mandatory)][string]$ActiveInputRoot)
 
-    $validatorTarget = Join-Path $ActiveInputRoot 'scripts/tests/Test-EdgeRegressionLedger.ps1'
-    $ledgerTarget = Join-Path $ActiveInputRoot 'scripts/tests/baselines/edge-regression-ledger.json'
-    [void](New-Item (Split-Path $validatorTarget -Parent) -ItemType Directory -Force)
+    $ledgerTarget = Join-Path $ActiveInputRoot 'scripts/tests/baselines/edge-retired-feature-evidence.json'
     [void](New-Item (Split-Path $ledgerTarget -Parent) -ItemType Directory -Force)
-    Copy-Item $canonicalValidatorPath $validatorTarget -Force
     Copy-Item $canonicalLedgerPath $ledgerTarget -Force
 }
 
@@ -85,7 +78,6 @@ function Invoke-GateFixture {
             -RepositoryRoot $RepositoryRoot `
             -LedgerPath $ledgerPath `
             -DiscoveredInventoryPath $discoveredPath `
-            -InventoryPath $canonicalInventoryPath `
             -ActiveInputRoot $activeInputRoot 2>&1 | Out-String).TrimEnd()
         $exitCode = $LASTEXITCODE
         $global:LASTEXITCODE = 0

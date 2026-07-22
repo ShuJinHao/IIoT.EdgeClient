@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Sdk.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;

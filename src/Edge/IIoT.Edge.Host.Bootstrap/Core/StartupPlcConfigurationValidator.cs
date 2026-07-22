@@ -5,7 +5,6 @@ using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Host.Bootstrap.Modules;
-using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.SharedKernel.Repository;
 
 namespace IIoT.Edge.Shell.Core;

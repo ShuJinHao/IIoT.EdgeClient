@@ -3,7 +3,6 @@ using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
-using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.SharedKernel.Repository;
 
 namespace IIoT.Edge.Application.Features.Config.SchemaReconciliation;

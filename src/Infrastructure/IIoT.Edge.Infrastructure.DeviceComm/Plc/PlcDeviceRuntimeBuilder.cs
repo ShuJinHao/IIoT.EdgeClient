@@ -10,7 +10,6 @@ using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Signals;
 using IIoT.Edge.Module.Contracts.Runtime;
-using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.SharedKernel.Repository;
 using System.Globalization;
 

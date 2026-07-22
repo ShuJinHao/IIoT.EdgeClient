@@ -157,23 +157,6 @@ function Test-IsActiveEdge {
     return $true
 }
 
-function Test-IsApprovedAnalyzerToolEdge {
-    param(
-        [Parameter(Mandatory)][object]$Item,
-        [Parameter(Mandatory)][string]$TargetPath
-    )
-
-    $expectedTarget = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../src/Analyzers/IIoT.Edge.Architecture.Analyzers/IIoT.Edge.Architecture.Analyzers.csproj'))
-    $expectedTargetsFile = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../Directory.Build.targets'))
-    return [IO.Path]::GetFullPath($TargetPath).Equals($expectedTarget, [StringComparison]::OrdinalIgnoreCase) -and
-        $Item.GetMetadataValue('OutputItemType').Equals('Analyzer', [StringComparison]::OrdinalIgnoreCase) -and
-        $Item.GetMetadataValue('ReferenceOutputAssembly').Equals('false', [StringComparison]::OrdinalIgnoreCase) -and
-        $Item.GetMetadataValue('PrivateAssets').Equals('all', [StringComparison]::OrdinalIgnoreCase) -and
-        [IO.Path]::GetFullPath($Item.GetMetadataValue('DefiningProjectFullPath')).Equals(
-            $expectedTargetsFile,
-            [StringComparison]::OrdinalIgnoreCase)
-}
-
 function Test-IsArchitectureDiagnosticText {
     param([AllowEmptyString()][string]$Value)
     return $Value -match [string]$architectureCatalog.CompilerIdPattern
@@ -235,31 +218,6 @@ function Test-ContainsRealSuppressMessageAttribute {
         }
     }
     return $false
-}
-
-function Test-IsApprovedAnalyzerToolDeclaration {
-    param(
-        [Parameter(Mandatory)][System.Xml.XmlElement]$Item,
-        [Parameter(Mandatory)][string]$DefiningFile,
-        [Parameter(Mandatory)][string]$TargetPath
-    )
-
-    function Get-ItemMetadataValue {
-        param([Parameter(Mandatory)][string]$Name)
-        $attributeValue = $Item.GetAttribute($Name).Trim()
-        if (-not [string]::IsNullOrWhiteSpace($attributeValue)) { return $attributeValue }
-        $child = $Item.SelectSingleNode($Name)
-        if ($null -eq $child) { return '' }
-        return ([string]$child.InnerText).Trim()
-    }
-
-    $expectedTarget = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../src/Analyzers/IIoT.Edge.Architecture.Analyzers/IIoT.Edge.Architecture.Analyzers.csproj'))
-    $expectedTargetsFile = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../Directory.Build.targets'))
-    return [IO.Path]::GetFullPath($TargetPath).Equals($expectedTarget, [StringComparison]::OrdinalIgnoreCase) -and
-        (Get-ItemMetadataValue 'OutputItemType').Equals('Analyzer', [StringComparison]::OrdinalIgnoreCase) -and
-        (Get-ItemMetadataValue 'ReferenceOutputAssembly').Equals('false', [StringComparison]::OrdinalIgnoreCase) -and
-        (Get-ItemMetadataValue 'PrivateAssets').Equals('all', [StringComparison]::OrdinalIgnoreCase) -and
-        [IO.Path]::GetFullPath($DefiningFile).Equals($expectedTargetsFile, [StringComparison]::OrdinalIgnoreCase)
 }
 
 function Add-Finding {
@@ -658,8 +616,25 @@ foreach ($project in $projects) {
         Add-Finding 'WSARCH005' "$($project.RelativePath) production role '$($project.Role)' cannot use test identity: AssemblyName='$($project.EffectiveAssemblyName)', IsTestProject='$($project.EffectiveIsTestProject)'."
     }
 
+    $approvedAnalyzerReferenceCount = 0
     foreach ($package in @($project.EvaluatedProject.GetItems('PackageReference'))) {
         $packageName = $package.EvaluatedInclude.Trim()
+        if ($packageName.Equals('IIoT.Edge.Module.Analyzers', [StringComparison]::OrdinalIgnoreCase)) {
+            $definingPath = [IO.Path]::GetFullPath($package.GetMetadataValue('DefiningProjectFullPath'))
+            $expectedTargetsPath = [IO.Path]::GetFullPath((Join-Path $RepositoryRoot 'Directory.Build.targets'))
+            $includeAssets = [regex]::Replace(
+                $package.GetMetadataValue('IncludeAssets'),
+                '\s+',
+                '').ToLowerInvariant()
+            $expectedIncludeAssets = 'runtime;build;native;contentfiles;analyzers;buildtransitive'
+            if (-not $definingPath.Equals($expectedTargetsPath, [StringComparison]::OrdinalIgnoreCase) -or
+                -not $package.GetMetadataValue('PrivateAssets').Equals('all', [StringComparison]::OrdinalIgnoreCase) -or
+                $includeAssets -cne $expectedIncludeAssets) {
+                Add-Finding 'WSARCH006' "$($project.RelativePath) receives an unpinned Edge Analyzer package reference."
+            } else {
+                $approvedAnalyzerReferenceCount++
+            }
+        }
         if ($project.Role -notin @('Test', 'Analyzer') -and
             ($packageName -match '(?i)(^xunit|Test\.Sdk|TestPlatform|Moq|NSubstitute|FluentAssertions)')) {
             $definingPath = $package.GetMetadataValue('DefiningProjectFullPath')
@@ -703,18 +678,12 @@ foreach ($project in $projects) {
     }
 
     $registeredProjectReferencePaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-    $approvedAnalyzerReferenceCount = 0
     foreach ($item in @($project.EvaluatedProject.GetItems('ProjectReference'))) {
         $targetPath = $item.GetMetadataValue('FullPath')
         if ([string]::IsNullOrWhiteSpace($targetPath)) {
             $targetPath = Resolve-FullPath $project.Directory $item.EvaluatedInclude
         } else {
             $targetPath = [IO.Path]::GetFullPath($targetPath)
-        }
-
-        if (Test-IsApprovedAnalyzerToolEdge -Item $item -TargetPath $targetPath) {
-            $approvedAnalyzerReferenceCount++
-            continue
         }
 
         $edge = [pscustomobject]@{
@@ -948,9 +917,6 @@ foreach ($project in $projects) {
 
             foreach ($candidate in $expandedInclude.Split(';', [StringSplitOptions]::RemoveEmptyEntries)) {
                 $targetPath = Resolve-FullPath $project.Directory $candidate.Trim()
-                if (Test-IsApprovedAnalyzerToolDeclaration -Item $itemElement -DefiningFile $declarationFile -TargetPath $targetPath) {
-                    continue
-                }
                 if ($registeredProjectReferencePaths.Add($targetPath)) {
                     $project.ActiveEdges.Add([pscustomobject]@{
                         Kind = 'ProjectReference'

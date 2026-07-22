@@ -4,7 +4,6 @@ using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Module.Sdk.Base;
 using IIoT.Edge.Host.DataPipeline.Services;
-using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 using System.Threading.Channels;
 

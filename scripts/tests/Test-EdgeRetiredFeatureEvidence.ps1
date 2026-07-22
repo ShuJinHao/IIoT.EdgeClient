@@ -3,7 +3,6 @@ param(
     [string]$RepositoryRoot,
     [string]$LedgerPath,
     [string]$DiscoveredInventoryPath,
-    [string]$InventoryPath,
     [string]$ActiveInputRoot
 )
 
@@ -23,14 +22,11 @@ function Resolve-RepositoryPath([string]$PathValue) {
 }
 
 $LedgerPath = if ([string]::IsNullOrWhiteSpace($LedgerPath)) {
-    Join-Path $RepositoryRoot 'scripts/tests/baselines/edge-regression-ledger.json'
+    Join-Path $RepositoryRoot 'scripts/tests/baselines/edge-retired-feature-evidence.json'
 } else { Resolve-RepositoryPath $LedgerPath }
 $DiscoveredInventoryPath = if ([string]::IsNullOrWhiteSpace($DiscoveredInventoryPath)) {
     Join-Path $RepositoryRoot 'scripts/tests/discovered-test-inventory.json'
 } else { Resolve-RepositoryPath $DiscoveredInventoryPath }
-$InventoryPath = if ([string]::IsNullOrWhiteSpace($InventoryPath)) {
-    Join-Path $RepositoryRoot 'scripts/tests/edge-test-inventory.json'
-} else { Resolve-RepositoryPath $InventoryPath }
 $ActiveInputRoot = if ([string]::IsNullOrWhiteSpace($ActiveInputRoot)) {
     $RepositoryRoot
 } elseif ([IO.Path]::IsPathRooted($ActiveInputRoot)) {
@@ -38,9 +34,7 @@ $ActiveInputRoot = if ([string]::IsNullOrWhiteSpace($ActiveInputRoot)) {
 } else {
     [IO.Path]::GetFullPath((Join-Path $RepositoryRoot $ActiveInputRoot))
 }
-$ledgerValidatorPath = Join-Path $RepositoryRoot 'scripts/tests/Test-EdgeRegressionLedger.ps1'
-
-foreach ($requiredPath in @($LedgerPath, $DiscoveredInventoryPath, $InventoryPath, $ledgerValidatorPath)) {
+foreach ($requiredPath in @($LedgerPath, $DiscoveredInventoryPath)) {
     if (-not (Test-Path $requiredPath -PathType Leaf)) {
         throw "$ruleMarker required file does not exist: $requiredPath"
     }
@@ -157,10 +151,7 @@ foreach ($identity in @($discovered.cases | ForEach-Object { [string]$_.identity
     [void]$currentSet.Add((Get-CurrentDeclarationKey $identity))
 }
 
-$requiredAllowedPaths = @(
-    'scripts/tests/Test-EdgeRegressionLedger.ps1',
-    'scripts/tests/baselines/edge-regression-ledger.json'
-)
+$requiredAllowedPaths = @('scripts/tests/baselines/edge-retired-feature-evidence.json')
 $allTokenRegexes = [Collections.Generic.List[Text.RegularExpressions.Regex]]::new()
 $allPathRegexes = [Collections.Generic.List[Text.RegularExpressions.Regex]]::new()
 $totalExpectedDeclarations = 0
@@ -285,16 +276,5 @@ Assert-ExactStringSet `
     -Actual @($matchedPathSet) `
     -Expected $requiredAllowedPaths `
     -Label 'active non-documentation governance matches'
-
-$ledgerValidationOutput = @(& pwsh -NoLogo -NoProfile -File $ledgerValidatorPath `
-    -RepositoryRoot $RepositoryRoot `
-    -LedgerPath $LedgerPath `
-    -DiscoveredInventoryPath $DiscoveredInventoryPath `
-    -InventoryPath $InventoryPath 2>&1 | ForEach-Object { $_.ToString() })
-$ledgerValidationExitCode = $LASTEXITCODE
-$global:LASTEXITCODE = 0
-if ($ledgerValidationExitCode -ne 0) {
-    throw "$ruleMarker regression ledger validation failed:`n$($ledgerValidationOutput -join "`n")"
-}
 
 Write-Host "$ruleMarker passed: evidence=$($retirementEvidence.Count), declarations=$totalExpectedDeclarations, activeFiles=$activeFileCount, allowedMatches=$($matchedPathSet.Count), unexpected=0."

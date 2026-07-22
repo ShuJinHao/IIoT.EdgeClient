@@ -12,27 +12,70 @@ if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
     $RepositoryRoot = [IO.Path]::GetFullPath($RepositoryRoot)
 }
 
-$analyzerRoot = Join-Path $RepositoryRoot 'src/Analyzers/IIoT.Edge.Architecture.Analyzers'
-$releasePaths = @(
-    Join-Path $analyzerRoot 'AnalyzerReleases.Shipped.md'
-    Join-Path $analyzerRoot 'AnalyzerReleases.Unshipped.md'
-)
-$diagnosticsPath = Join-Path $analyzerRoot 'EdgeArchitectureDiagnostics.cs'
-foreach ($requiredPath in @($releasePaths + $diagnosticsPath)) {
-    if (-not (Test-Path $requiredPath -PathType Leaf)) {
-        throw "EDGE-ARCH-CATALOG-001 required catalog source does not exist: $requiredPath"
+$packagesPropsPath = Join-Path $RepositoryRoot 'Directory.Packages.props'
+if (-not (Test-Path $packagesPropsPath -PathType Leaf)) {
+    throw "EDGE-ARCH-CATALOG-001 package version registry does not exist: $packagesPropsPath"
+}
+
+[xml]$packagesProps = Get-Content $packagesPropsPath -Raw
+$analyzerVersionNodes = @($packagesProps.Project.ItemGroup.PackageVersion | Where-Object {
+    [string]$_.Include -ceq 'IIoT.Edge.Module.Analyzers'
+})
+if ($analyzerVersionNodes.Count -ne 1 -or
+    [string]::IsNullOrWhiteSpace([string]$analyzerVersionNodes[0].Version)) {
+    throw 'EDGE-ARCH-CATALOG-001 IIoT.Edge.Module.Analyzers must have exactly one centrally managed package version.'
+}
+
+$analyzerPackagePath = Join-Path $RepositoryRoot (
+    "eng/local-package-feed/IIoT.Edge.Module.Analyzers.$([string]$analyzerVersionNodes[0].Version).nupkg")
+if (-not (Test-Path $analyzerPackagePath -PathType Leaf)) {
+    throw "EDGE-ARCH-CATALOG-001 analyzer package does not exist: $analyzerPackagePath"
+}
+
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$archive = [IO.Compression.ZipFile]::OpenRead($analyzerPackagePath)
+try {
+    $releaseEntryNames = @(
+        'analyzers/dotnet/cs/AnalyzerReleases.Shipped.md',
+        'analyzers/dotnet/cs/AnalyzerReleases.Unshipped.md'
+    )
+    $releaseDocuments = [Collections.Generic.List[object]]::new()
+    foreach ($entryName in $releaseEntryNames) {
+        $entry = $archive.GetEntry($entryName)
+        if ($null -eq $entry) {
+            throw "EDGE-ARCH-CATALOG-001 analyzer package is missing catalog entry: $entryName"
+        }
+
+        $stream = $entry.Open()
+        $reader = [IO.StreamReader]::new($stream, [Text.Encoding]::UTF8, $true)
+        try {
+            $releaseDocuments.Add([pscustomobject]@{
+                Name = $entryName
+                Text = $reader.ReadToEnd()
+            })
+        } finally {
+            $reader.Dispose()
+            $stream.Dispose()
+        }
     }
+
+    $analyzerAssemblyEntry = $archive.GetEntry('analyzers/dotnet/cs/IIoT.Edge.Module.Analyzers.dll')
+    if ($null -eq $analyzerAssemblyEntry -or $analyzerAssemblyEntry.Length -le 0) {
+        throw 'EDGE-ARCH-CATALOG-001 analyzer package does not contain its compiler assembly.'
+    }
+} finally {
+    $archive.Dispose()
 }
 
 $releaseIds = [System.Collections.Generic.List[string]]::new()
-foreach ($releasePath in $releasePaths) {
-    foreach ($line in Get-Content $releasePath) {
+foreach ($releaseDocument in $releaseDocuments) {
+    foreach ($line in ([string]$releaseDocument.Text -split "`r?`n")) {
         if ($line -notmatch '^\s*(?<id>[A-Z][A-Z0-9]*\d{3})\s*\|\s*(?<category>[^|]+?)\s*\|\s*(?<severity>[^|]+?)\s*\|') {
             continue
         }
         if ($Matches['category'].Trim() -cne 'IIoT.Architecture' -or
             $Matches['severity'].Trim() -cne 'Error') {
-            throw "EDGE-ARCH-CATALOG-001 $($Matches['id']) must remain IIoT.Architecture/Error in $(Split-Path $releasePath -Leaf)."
+            throw "EDGE-ARCH-CATALOG-001 $($Matches['id']) must remain IIoT.Architecture/Error in $($releaseDocument.Name)."
         }
         $releaseIds.Add($Matches['id'])
     }
@@ -42,18 +85,6 @@ $orderedReleaseIds = @($releaseIds | Sort-Object)
 if ($orderedReleaseIds.Count -ne 23 -or
     @($orderedReleaseIds | Sort-Object -Unique).Count -ne 23) {
     throw "EDGE-ARCH-CATALOG-001 release catalog must contain exactly 23 unique compiler diagnostic IDs; actual=$($orderedReleaseIds.Count)."
-}
-
-$diagnosticsText = Get-Content $diagnosticsPath -Raw
-$sourceIds = @([regex]::Matches(
-    $diagnosticsText,
-    '(?ms)\bCreate\s*\(\s*"(?<id>[A-Z][A-Z0-9]*\d{3})"\s*,') |
-    ForEach-Object { $_.Groups['id'].Value } |
-    Sort-Object)
-if ($sourceIds.Count -ne 23 -or
-    @($sourceIds | Sort-Object -Unique).Count -ne 23 -or
-    ($sourceIds -join '|') -cne ($orderedReleaseIds -join '|')) {
-    throw "EDGE-ARCH-CATALOG-001 EdgeArchitectureDiagnostics.Create IDs must exactly match shipped+unshipped release IDs. release=[$($orderedReleaseIds -join ', ')] source=[$($sourceIds -join ', ')]."
 }
 
 $projectGraphOnlyIds = @('WSARCH001', 'WSARCH005', 'WSARCH006', 'WSARCH007')

@@ -8,7 +8,6 @@ using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
 using IIoT.Edge.Host.DataPipeline.Services;
 using IIoT.Edge.Host.DataPipeline.Tasks;
-using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 using Microsoft.Extensions.Options;
 using System.Text.Json;

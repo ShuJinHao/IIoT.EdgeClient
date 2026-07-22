@@ -1,7 +1,6 @@
 using IIoT.Edge.Module.Contracts.Config;
 using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Host.DataPipeline.Services;
-using IIoT.Edge.Module.Contracts.DataPipeline;
 
 namespace IIoT.Edge.Persistence.Tests;
 

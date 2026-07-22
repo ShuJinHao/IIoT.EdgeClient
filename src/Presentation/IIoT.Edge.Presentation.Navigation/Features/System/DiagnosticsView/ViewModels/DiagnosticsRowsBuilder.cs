@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.Device;
 using IIoT.Edge.Module.Contracts.Mes;
@@ -7,7 +8,6 @@ using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.Module.Contracts.Diagnostics;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
-using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
 using System.Text.Json;

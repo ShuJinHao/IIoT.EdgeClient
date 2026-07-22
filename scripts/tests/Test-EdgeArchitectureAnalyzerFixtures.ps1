@@ -101,23 +101,26 @@ function Assert-ArchitectureGateTextIsPinned {
     $targetsPath = Join-Path $RepositoryRoot 'Directory.Build.targets'
     $targetsText = Get-Content $targetsPath -Raw
 
-    if ($targetsText.Contains('UseEdgeArchitectureAnalyzer', [StringComparison]::Ordinal)) {
-        throw 'EDGE-ARCH-FIXTURE-001 production Analyzer wiring must not expose UseEdgeArchitectureAnalyzer.'
-    }
-    if (-not $targetsText.Contains("'`$(IsTestProject)' != 'true'", [StringComparison]::Ordinal) -or
-        -not $targetsText.Contains("'`$(MSBuildProjectFullPath)' != '`$(EdgeArchitectureAnalyzerProject)'", [StringComparison]::Ordinal) -or
-        -not $targetsText.Contains("'`$(IsEdgePluginTestFixture)' != 'true'", [StringComparison]::Ordinal) -or
-        $targetsText.Contains("'`$(MSBuildProjectName)' != 'IIoT.Edge.Architecture.Analyzers'", [StringComparison]::Ordinal) -or
-        $targetsText.Contains('[/\\]src[/\\]Tests[/\\]', [StringComparison]::Ordinal)) {
-        throw 'EDGE-ARCH-FIXTURE-001 Analyzer exclusions must remain tied to validated test/fixture roles and the exact Analyzer path.'
-    }
-
     [xml]$targets = $targetsText
-    $analyzerProjectNodes = @($targets.SelectNodes('/Project/PropertyGroup/EdgeArchitectureAnalyzerProject'))
-    $expectedAnalyzerProject = '$([System.IO.Path]::GetFullPath(''$(MSBuildThisFileDirectory)src/Analyzers/IIoT.Edge.Architecture.Analyzers/IIoT.Edge.Architecture.Analyzers.csproj''))'
-    if ($analyzerProjectNodes.Count -ne 1 -or
-        $analyzerProjectNodes[0].InnerText.Trim() -cne $expectedAnalyzerProject) {
-        throw 'EDGE-ARCH-FIXTURE-001 Analyzer self-exclusion path must use one canonical absolute GetFullPath expression so Windows and Unix compare the same project identity.'
+    $analyzerPackageNodes = @($targets.SelectNodes(
+        "/Project/ItemGroup/PackageReference[@Include='IIoT.Edge.Module.Analyzers']"))
+    if ($analyzerPackageNodes.Count -ne 1) {
+        throw 'EDGE-ARCH-FIXTURE-001 production projects must receive exactly one Edge Analyzer package reference.'
+    }
+    $analyzerPackageNode = [System.Xml.XmlElement]$analyzerPackageNodes[0]
+    $analyzerItemGroup = [System.Xml.XmlElement]$analyzerPackageNode.ParentNode
+    $analyzerCondition = $analyzerItemGroup.GetAttribute('Condition')
+    $includeAssets = [regex]::Replace(
+        $analyzerPackageNode.GetAttribute('IncludeAssets'),
+        '\s+',
+        '').ToLowerInvariant()
+    if (-not $analyzerCondition.Contains("'`$(IsTestProject)' != 'true'", [StringComparison]::Ordinal) -or
+        -not $analyzerCondition.Contains("'`$(IsEdgePluginTestFixture)' != 'true'", [StringComparison]::Ordinal) -or
+        -not $analyzerPackageNode.GetAttribute('PrivateAssets').Equals('all', [StringComparison]::OrdinalIgnoreCase) -or
+        $includeAssets -cne 'runtime;build;native;contentfiles;analyzers;buildtransitive' -or
+        $targetsText.Contains('EdgeArchitectureAnalyzerProject', [StringComparison]::Ordinal) -or
+        $targetsText.Contains('UseEdgeArchitectureAnalyzer', [StringComparison]::Ordinal)) {
+        throw 'EDGE-ARCH-FIXTURE-001 Analyzer wiring must remain a pinned package reference excluded only from test and fixture roles.'
     }
 
     $shellTarget = $targets.SelectSingleNode("/Project/Target[@Name='ValidateEdgeArchitectureProjectGraph']")
@@ -159,7 +162,7 @@ function Assert-ArchitectureGateTextIsPinned {
         throw 'EDGE-ARCH-FIXTURE-001 isolated fixture graph paths must be canonicalized without a Windows trailing-separator quote escape.'
     }
 
-    Write-Host 'Edge architecture gate text passed: Analyzer is mandatory and Shell graph paths are pinned.'
+    Write-Host 'Edge architecture gate text passed: Analyzer package is mandatory and Shell graph paths are pinned.'
 }
 
 function Assert-ShellGraphCliOverrideCannotBypass {

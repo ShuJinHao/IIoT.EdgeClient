@@ -20,5 +20,6 @@
 
 ## Validation
 
+- Edge 架构边界由 Analyzer、ArchitectureTests、ConformanceTests 和项目图严格阻断；业务 Unit/Aggregate/Application/Workflow/Contract/Persistence/UI 测试可随功能同批增删改移。inventory/count/quality baseline 只防止静默丢失、漏跑、Skip 和未说明的质量回退，不得恢复 transition、waiver、receipt 或其他测试变更授权机制。
 - 业务、Runtime、PLC、MES、Cloud、缓存改动：跑对应 build/test，并验证启动路径或等价集成测试。
 - UI 改动：build 通过后必须真实运行 Shell/Launcher 或截图/UIAutomation 验收。
