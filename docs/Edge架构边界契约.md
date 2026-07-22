@@ -264,7 +264,7 @@ Host 每个 runner 的当前精确发现数只以 `scripts/tests/required-test-c
 
 三仓 Windows required CI 在获得 Phase 9/10 与 CI 入口单独授权后，必须在 25 分钟 hard timeout 内聚合 Host 26、SDK 2、Private Plugins 4 个 owner runner，并完成 Release build、Analyzer/project graph、正反 build fixture、source-quality、各仓 discovery/执行、Host TRX/coverage、compatibility、duplication与基线单调校验；不得退化回单仓源码 checkout或跨仓 ProjectReference。mutation 使用独立 report job，并先执行伪分数/状态漂移 behavior fixture，不伪装成编译错误。故意执行非法 native build 的 PowerShell fixture在完成全部断言后必须显式清零 `$LASTEXITCODE`，不得把预期失败残留为 job 失败。本批仅有 macOS 本地 V1–V5 owner 结果；Windows 远端 job 与 Windows 实机 Installer/Velopack/DPI 验收在取得对应证据前不得写成已验证。
 
-宿主、SDK 与私有插件三仓拆分当前只授权执行 `Edge宿主SDK私有插件三仓拆分计划.md` 的 Phase 0–5，并继续在现有 `IIoT.EdgeClient` 仓内形成可验证、可回滚的批次；Phase 6–10、新 remote 仓、远端 NuGet 发布、生产部署和 `stable` 均未授权。`deploy/Deploy-Changed.ps1` 是生产 CD 入口，不属于 required 测试 CI；当前拆分批次不得运行发布或部署。
+宿主、SDK 与私有插件的 Phase 6–8 本地物理拆分及 V1–V5 已于 2026-07-22 在三个独立本地 Git 仓收口；冻结 Phase 0 formal/ledger 候选不接入产品 Host。Phase 9–10、新 remote、远端 NuGet、Windows CI/实机、生产部署和 `stable` 均未授权且未执行。`deploy/Deploy-Changed.ps1` 是生产 CD 入口，不属于本地三仓 V1–V5，本批不得运行发布或部署。
 
 ## 12. 非声明范围
 
