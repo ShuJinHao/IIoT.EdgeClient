@@ -4,7 +4,7 @@ namespace IIoT.Edge.SharedKernel.Runtime;
 
 public static class EdgeClientHostRuntime
 {
-    public const string HostApiVersion = "1.0.0";
+    public const string HostApiVersion = "2.0.0";
 
     public static string ResolveHostVersion(Assembly assembly)
     {

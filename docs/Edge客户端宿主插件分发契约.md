@@ -75,12 +75,12 @@ install-root/
 
 ### 3.1 插件工程角色
 
-仓库中的 `src/Modules` 必须让工程角色从名称和项目属性上可见：
+具体插件只存在于 `IIoT.Edge.Plugins.Private/src/IIoT.Edge.Module.<Process>`；Host 仓不得保留 `src/Modules` 业务源码。私有插件仓必须让工程角色从名称和项目属性上可见：
 
 - 插件入口工程：目录/工程名为 `IIoT.Edge.Module.<Process>` 或 `IIoT.Edge.Module.<Process><Variant>`，必须声明 `PluginModuleId`、`IsEdgePluginModule=true`、`IsPackable=true`，并携带 `plugin.json`。只有这类工程允许进入插件 catalog、独立插件包和 Launcher 工序卡片。
 - 每个具体插件必须独立构建、测试和打包，不得新增插件族 `*.Shared` 业务工程，也不得让一个具体插件入口引用另一具体插件。
 - 多个插件真正共用且与工序无关的能力，只能经评审进入 `IIoT.Edge.Module.Sdk` 或稳定通用 contract；具体点位、MES 字段、业务状态、页面和持久化实现不得伪装成 SDK 通用能力。
-- `src/Testing` 下带 `IsEdgePluginTestFixture=true` 的中性 fixture 只允许由测试项目显式 staging；生产 catalog、bundle、Launcher profile、impact mapping 和发布脚本只能从 `src/Modules` 解析，不得把 fixture 当发布模块。
+- Host `src/Testing` 下带 `IsEdgePluginTestFixture=true` 的中性 fixture 只允许由测试项目显式 staging；生产 catalog、bundle、Launcher profile、impact mapping 和发布脚本只能从 Private Plugins 的真实 `src/IIoT.Edge.Module.<Process>/plugin.json` 解析，不得把 fixture 当发布模块。
 
 禁止再出现没有 `PluginModuleId` 但名称像插件入口的模块工程。此类工程会误导部署、Launcher、catalog 和人工排查，必须通过仓库卫生测试拦截。
 
@@ -267,7 +267,7 @@ Phase 1 只完成 Edge 地基：
 - 宿主版本来自真实程序集版本，`hostApiVersion` 保留为独立契约值。
 - Shell 从配置化 `Modules:PluginRoots` 发现插件，默认 `../plugins`。
 - Shell 加载所配置插件根中的 `*.module.json` 默认配置；后配置的插件根可以覆盖前配置的插件根，应用配置和外部机器配置仍然优先。
-- 发布脚本输出 `launcher/ + host/ + plugins/ + data/`，并生成 `installer-artifact.json` v2。
+- Host 发布脚本输出 `launcher/ + host/ + data/` 与 Velopack 素材，并生成 `installer-artifact.json` v2；安装根可创建外部 `plugins/`，但 Host artifact 不携带具体工序插件。
 - 增加测试覆盖单 host 布局、host 无 `Modules/`、配置化插件路径、真实宿主版本格式。
 
 Cloud 下载中心、插件选择安装、设备盘点和版本上报属于后续阶段。
@@ -276,9 +276,9 @@ Cloud 下载中心、插件选择安装、设备盘点和版本上报属于后�
 
 EdgeClient 的交付物是 Windows 安装器、安装素材和 Velopack 更新包，不是 Docker 镜像。CI/CD 不允许推 Harbor、GHCR，也不允许从 GitHub hosted runner 通过 SSH/SCP 直连内网服务器。
 
-`push main` 只跑 smoke 编译和测试，不生成安装包。完整 GitHub 打包只在 `workflow_dispatch` 或 `edge-v*` / `v*` tag 时执行。日常自动发布由工作区 `deploy/Deploy-Changed.ps1` 先 push 已提交的 main、读取已发布宿主基线并按改动自动选择 EdgeHost 或具体 EdgePlugin；内部才允许 `Invoke-WorkspaceDeploy.ps1` 调度 `LocalPublishAndDeploy.ps1 -Transport http` 或插件实现。部署结果是服务器提供 Windows 安装器/Velopack/插件下载，不是远程安装 Windows，也不走 Harbor。正式发布要求 clean + pushed HEAD，Host/Plugin 共用本地互斥锁，catalog/HTTP/HEAD 必须 fail-fast；失败后从统一入口用 `-ResumeReleaseRoot` 复用产物。更新内容必须显式填写。生产 `stable` 不允许 `rsync/scp` 绕过 Cloud DB、审计和保留策略。
+`push main` 只跑 smoke 编译和测试，不生成安装包。完整 GitHub 打包只在 `workflow_dispatch` 或 `edge-v*` / `v*` tag 时执行。日常自动发布由工作区 `deploy/Deploy-Changed.ps1` 分别同步 Host、SDK、Private Plugins 三仓 clean `main`，读取 Cloud Host 基线与 SDK/Plugin 远端生产 baseline refs，按依赖闭包自动选择 EdgeHost 和具体 EdgePlugin；SDK runtime/API、Host runtime 或具体插件影响先运行 SDK 仓唯一兼容门。内部才允许 `Invoke-WorkspaceDeploy.ps1` 调度 `LocalPublishAndDeploy.ps1 -Transport http` 或插件传输实现。部署结果是服务器提供 Windows 安装器/Velopack/插件下载，不是远程安装 Windows，也不走 Harbor。正式发布要求三仓 clean + pushed HEAD，Host/Plugin 共用本地互斥锁，catalog/HTTP/HEAD 必须 fail-fast；失败后从统一入口用 `-ResumeReleaseRoot` 复用产物。更新内容必须显式填写。生产 `stable` 不允许 `rsync/scp` 绕过 Cloud DB、审计和保留策略。
 
-只改工序插件时走独立插件发布：
+只改工序插件时仍由 `Deploy-Changed.ps1 -Targets Edge` 自动选择独立插件发布；下列命令只作为统一入口内部执行/显式恢复形式：
 
 ```powershell
 pwsh ./deploy/Invoke-WorkspaceDeploy.ps1 `
@@ -287,7 +287,7 @@ pwsh ./deploy/Invoke-WorkspaceDeploy.ps1 `
   -ReleaseNotesPath ./release-notes.md
 ```
 
-内部插件脚本只上传 `IIoT.EdgePlugin.<ModuleId>-<version>-<runtime>.zip` 并写插件 release，不生成宿主 Velopack 版本。统一入口必须显式要求 `ModuleId`；脚本在打包前查 Cloud catalog，发现相同 `(moduleId, channel, version, targetRuntime)` 已存在时直接失败，要求提升插件 `plugin.json` 版本。
+内部插件脚本显式接收 canonical `PluginRepositoryRoot`，调用 Private Plugins 唯一 `eng/PackEdgePlugin.ps1`，只上传 `IIoT.EdgePlugin.<ModuleId>-<version>-<runtime>.zip` 并写插件 release，不生成宿主 Velopack 版本。schema v2 metadata 与 release wrapper 的 `sourceCommit` 必须等于插件仓 clean/pushed HEAD。统一入口必须显式要求 `ModuleId`；脚本在打包前查 Cloud catalog，发现相同 `(moduleId, channel, version, targetRuntime)` 已存在时直接失败，要求提升插件 `plugin.json` 版本或使用显式恢复/对账。
 
 正式 GitHub 发布分两段：
 
@@ -317,14 +317,13 @@ edge-updates/
   installers/stable/<version>/IIoT.Edge.Setup.exe
   installers/stable/<version>/launcher/
   installers/stable/<version>/host/
-  installers/stable/<version>/plugins/
   installers/stable/<version>/velopack/
   velopack/stable/releases.stable.json
   velopack/stable/assets.stable.json
   plugins/stable/<ModuleId>/<version>/IIoT.EdgePlugin.<ModuleId>-<version>-<runtime>.zip
 ```
 
-Cloud HttpApi 通过内网受控 HTTP 发布接口对 `edge-updates` 持有可写挂载，只允许写 staging 和发布目录；nginx 对同一目录保持只读静态下载。Cloud catalog 扫描 `edge-updates/installers/stable/<version>/installer-artifact.json` 和 `edge-updates/plugins/stable/<ModuleId>/<version>/`，并把文件版本合并到公开下载目录、Edge catalog 和 Human catalog。数据库 release 记录仍是状态管理来源：同 key 数据库记录优先，Draft/Archived 可抑制已经落盘的文件版本。Cloud HTTP 发布必须按 SemVer 控制为最新 3 个 stable 版本；已归档且无设备在用的插件 zip 才允许回收。
+Cloud HttpApi 通过内网受控 HTTP 发布接口对 `edge-updates` 持有可写挂载，只允许写 staging 和发布目录；nginx 对同一目录保持只读静态下载。Cloud catalog、下载中心和首装版本集合只读取数据库 release 记录；文件系统只验证记录中已登记 artifact 的存在性、完整性与可下载性，不得扫描残留目录补出版本。Cloud HTTP 发布必须按 SemVer 控制为最新 3 个 stable 版本；已归档且无设备在用的插件 zip 才允许回收。
 
 `installer-artifact.json` 必须包含发布追溯字段：`sourceCommit`、`previousVersion`、`previousSourceCommit`、`releaseNotes` 和 `generatedAtUtc`。首次发布或旧 artifact 无 commit 记录时，`previousVersion` / `previousSourceCommit` 可为空，但 `sourceCommit` 和 `releaseNotes` 不得为空。
 
@@ -452,7 +451,7 @@ Launcher 读取以下配置后才会启用云端插件 catalog：
 
 ### 10.2 首次安装/选择插件流程
 
-Windows 首次安装由 Cloud 生成绑定安装包，payload 内包含 `launcher/`、一份 `host/`、所选 `plugins/<ModuleId>/` 和本次生成的绑定 JSON。操作员打开 Launcher 后：
+Windows 首次安装由 Cloud 生成绑定安装包，payload 内包含 `launcher/`、一份 `host/` 和本次生成的绑定 JSON；具体工序插件不进入 Host artifact，由 Launcher 按真实 catalog 安装到外部 `plugins/<ModuleId>/`。操作员打开 Launcher 后：
 
 1. Launcher 使用 `ClientCode + BootstrapSecret` bootstrap 当前设备，获取设备 token 和 `deviceId`。
 2. Launcher 使用设备 token 拉取 catalog，并按 `channel`、`targetRuntime` 读取可用宿主和插件版本。
@@ -473,7 +472,7 @@ Shell 正在运行时不得替换插件。Launcher 必须提示关闭 Shell 后�
 - 宿主：当前宿主版本、Cloud 最新宿主版本。
 - 插件：当前版本、Cloud 最新版本、包大小、安装/更新/已最新/不兼容状态。
 
-插件更新仍走 staging 校验和原子替换流程。宿主更新继续使用既有 Velopack 更新链路；Phase 3 只把 Cloud catalog 中的最新宿主版本纳入 Launcher 的两级版本展示。
+插件更新仍走 staging、SHA256/manifest/兼容校验和目录原子替换流程。宿主更新继续使用既有 Velopack 更新链路；Launcher 在替换宿主前必须按所有可用 profile 的真实 catalog 与本机已启用/已安装清单合并计算组合。目标宿主会使插件失效时，必须明确展示并确认所需插件版本，先完成插件包校验/安装再进入宿主替换；任一 profile catalog 不可用、插件版本冲突、缺包或 hash/兼容失败都必须阻止宿主应用。操作员可以保持旧组合，Shell 运行时不得替换插件。
 
 ### 10.4 版本上报内容
 

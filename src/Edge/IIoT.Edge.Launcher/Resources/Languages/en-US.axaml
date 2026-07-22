@@ -138,6 +138,8 @@
     <sys:String x:Key="Launcher_VersionManagement_ConfirmRollbackMessage">Rollback {0} from {1} to {2}? Program files will be replaced with the selected version. Site data and configuration will not be cleared.</sys:String>
     <sys:String x:Key="Launcher_VersionManagement_ConfirmDeprecatedTitle">Confirm deprecated version</sys:String>
     <sys:String x:Key="Launcher_VersionManagement_ConfirmDeprecatedMessage">Target version {2} for {0} is marked deprecated. Current version is {1}. If confirmed, the selected version will still be applied. Site data and configuration will not be cleared.</sys:String>
+    <sys:String x:Key="Launcher_VersionManagement_ConfirmCompositionTitle">Confirm host and plugin composition</sys:String>
+    <sys:String x:Key="Launcher_VersionManagement_ConfirmCompositionMessage">Before switching {0} from {1} to {2}, the following compatible plugins must be downloaded and verified: {3}. The host update starts only after every plugin installs successfully; cancel to keep the current composition.</sys:String>
     <sys:String x:Key="Launcher_VersionManagement_ConfirmAccept">Confirm</sys:String>
     <sys:String x:Key="Launcher_VersionManagement_ConfirmCancel">Cancel</sys:String>
     <sys:String x:Key="Launcher_VersionHistory_WindowTitle">Version history</sys:String>

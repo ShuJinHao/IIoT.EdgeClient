@@ -2,6 +2,7 @@
 param(
     [string]$RepositoryRoot,
     [string]$SolutionPath,
+    [string]$AnalyzerPackageRoot,
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Release'
 )
@@ -155,6 +156,14 @@ function Test-IsActiveEdge {
 
     # Compound and unknown conditions remain visible; only exact simple configuration predicates may hide an edge.
     return $true
+}
+
+function Test-IsForbiddenAnalyzerSourceEdge {
+    param([Parameter(Mandatory)][string]$TargetPath)
+
+    return [IO.Path]::GetFileNameWithoutExtension($TargetPath) -in @(
+        'IIoT.Edge.Module.Analyzers',
+        'IIoT.Edge.Architecture.Analyzers')
 }
 
 function Test-IsArchitectureDiagnosticText {
@@ -439,7 +448,11 @@ if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
 
 $catalogRepositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $architectureCatalog = & (Join-Path $PSScriptRoot 'Get-EdgeArchitectureDiagnosticCatalog.ps1') `
-    -RepositoryRoot $catalogRepositoryRoot
+    -RepositoryRoot $catalogRepositoryRoot `
+    -AnalyzerPackageRoot $AnalyzerPackageRoot
+if ((Split-Path ([string]$architectureCatalog.AnalyzerPackageRoot) -Leaf) -cne '2.0.0') {
+    throw "WSARCH006 resolved Edge Analyzer package must remain pinned to 2.0.0: $($architectureCatalog.AnalyzerPackageRoot)"
+}
 $architectureCompilerIds = [System.Collections.Generic.HashSet[string]]::new(
     [string[]]$architectureCatalog.CompilerIds,
     [StringComparer]::OrdinalIgnoreCase)
@@ -629,6 +642,7 @@ foreach ($project in $projects) {
             $expectedIncludeAssets = 'runtime;build;native;contentfiles;analyzers;buildtransitive'
             if (-not $definingPath.Equals($expectedTargetsPath, [StringComparison]::OrdinalIgnoreCase) -or
                 -not $package.GetMetadataValue('PrivateAssets').Equals('all', [StringComparison]::OrdinalIgnoreCase) -or
+                -not $package.GetMetadataValue('GeneratePathProperty').Equals('true', [StringComparison]::OrdinalIgnoreCase) -or
                 $includeAssets -cne $expectedIncludeAssets) {
                 Add-Finding 'WSARCH006' "$($project.RelativePath) receives an unpinned Edge Analyzer package reference."
             } else {
@@ -684,6 +698,11 @@ foreach ($project in $projects) {
             $targetPath = Resolve-FullPath $project.Directory $item.EvaluatedInclude
         } else {
             $targetPath = [IO.Path]::GetFullPath($targetPath)
+        }
+
+        if (Test-IsForbiddenAnalyzerSourceEdge -TargetPath $targetPath) {
+            Add-Finding 'WSARCH006' "$($project.RelativePath) must consume the Edge Analyzer package, not its source project."
+            continue
         }
 
         $edge = [pscustomobject]@{
@@ -917,6 +936,10 @@ foreach ($project in $projects) {
 
             foreach ($candidate in $expandedInclude.Split(';', [StringSplitOptions]::RemoveEmptyEntries)) {
                 $targetPath = Resolve-FullPath $project.Directory $candidate.Trim()
+                if (Test-IsForbiddenAnalyzerSourceEdge -TargetPath $targetPath) {
+                    Add-Finding 'WSARCH006' "$($project.RelativePath) declares a forbidden Edge Analyzer source ProjectReference in $(Get-RepositoryPath $declarationFile)."
+                    continue
+                }
                 if ($registeredProjectReferencePaths.Add($targetPath)) {
                     $project.ActiveEdges.Add([pscustomobject]@{
                         Kind = 'ProjectReference'

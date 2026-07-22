@@ -38,8 +38,7 @@ Assert-EdgeExecutablePath `
 $launcherRequiredFiles = @(
     'launcher.profiles.json',
     'launcher.accounts.sample.json',
-    'launcher.update.sample.json',
-    'Assets\Profiles\homogenization.png'
+    'launcher.update.sample.json'
 )
 
 foreach ($relativePath in $launcherRequiredFiles) {
@@ -113,8 +112,13 @@ if ($actualModuleKey -ne $expectedModuleKey) {
     throw "Plugins root modules do not match manifest. Expected: $($expectedModules -join ', ') / Actual: $($moduleDirectories -join ', ')"
 }
 
-foreach ($moduleId in $expectedModules) {
-    Test-EdgePluginManifestFile -ManifestPath (Join-Path (Join-Path $pluginsRoot $moduleId) 'plugin.json')
+if ($expectedModules.Count -ne 0) {
+    throw "Host runtime publish manifest must not declare business modules: $($expectedModules -join ', ')"
+}
+
+$packagedPluginFiles = @(Get-ChildItem -LiteralPath $pluginsRoot -Recurse -File -ErrorAction Stop)
+if ($packagedPluginFiles.Count -ne 0) {
+    throw "Host runtime plugins root must be empty; found: $($packagedPluginFiles[0].FullName)"
 }
 
 $dataRoot = Join-Path $resolvedOutputRoot 'data'

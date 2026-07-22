@@ -114,8 +114,6 @@ try {
         -LayoutRoot $resolvedOutputRoot
 
     Sync-EdgePluginsLayout `
-        -RepoRoot $repoRoot `
-        -Configuration $Configuration `
         -Manifest $manifest `
         -LayoutRoot $resolvedOutputRoot
 

@@ -16,6 +16,7 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
     private readonly IAppLanguageService? _languageService;
     private readonly Dictionary<string, LauncherProfileDefinition> _profileByModuleId = new(StringComparer.OrdinalIgnoreCase);
     private LauncherProfileDefinition? _activeProfile;
+    private LauncherProfileDefinition? _hostUpdateProfile;
     private IReadOnlyList<LauncherProfileDefinition> _activeProfiles = [];
     private string _statusKey = "Launcher_ClientRelease_StatusInitial";
     private object[] _statusArgs = [];
@@ -176,7 +177,8 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
                     option.DisplayName,
                     option.CurrentVersion,
                     option.Version,
-                    option.Status))
+                    option.Status,
+                    option.RequiredComposition?.PluginVersions))
                 .ConfigureAwait(true);
             if (!confirmed)
             {
@@ -241,6 +243,7 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
         Components.Clear();
         OnPropertyChanged(nameof(Components));
         _activeProfile = null;
+        _hostUpdateProfile = null;
         _activeProfiles = [];
         _profileByModuleId.Clear();
         IsVisible = false;
@@ -292,6 +295,25 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
             return;
         }
 
+        if (option.RequiredComposition?.PluginVersions.Count > 0)
+        {
+            var compositionResult = await _clientReleaseService
+                .ApplyVersionCompositionAsync(
+                    _activeProfiles.Select(_targetFactory.Create).ToArray(),
+                    option.RequiredComposition,
+                    progress)
+                .ConfigureAwait(true);
+            if (!compositionResult.Success)
+            {
+                SetStatus("Launcher_ClientRelease_StatusFailed");
+                DetailText = LauncherText.Compact(compositionResult.ErrorMessage);
+                return;
+            }
+
+            SetStatus("Launcher_ClientRelease_StatusHostApplyStarted", option.Version);
+            return;
+        }
+
         var result = await _clientReleaseService
             .ApplyHostVersionAsync(_targetFactory.Create(profile), option.Version, progress)
             .ConfigureAwait(true);
@@ -336,7 +358,7 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
     {
         if (option.ComponentKind == EdgeComponentKind.Host)
         {
-            return _activeProfile ?? _activeProfiles.FirstOrDefault();
+            return _hostUpdateProfile ?? _activeProfile ?? _activeProfiles.FirstOrDefault();
         }
 
         return _profileByModuleId.TryGetValue(option.ModuleId, out var profile)
@@ -415,6 +437,10 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
     {
         var plans = new List<EdgeComponentVersionPlan>();
         var plannedModules = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var hostPlans = new List<EdgeComponentVersionPlan>();
+        _hostUpdateProfile = results
+            .FirstOrDefault(static item => item.Result.State == EdgeReleaseCatalogState.Succeeded)?
+            .Profile;
         foreach (var item in results)
         {
             foreach (var plan in item.Result.Components
@@ -423,12 +449,7 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
             {
                 if (plan.ComponentKind == EdgeComponentKind.Host)
                 {
-                    if (plans.Any(static component => component.ComponentKind == EdgeComponentKind.Host))
-                    {
-                        continue;
-                    }
-
-                    plans.Add(plan);
+                    hostPlans.Add(plan);
                     continue;
                 }
 
@@ -442,10 +463,92 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
             }
         }
 
+        var mergedHostPlan = MergeHostPlans(hostPlans, results);
+        if (mergedHostPlan is not null)
+        {
+            plans.Add(mergedHostPlan);
+        }
+
         return plans
             .OrderBy(static component => component.ComponentKind == EdgeComponentKind.Host ? 0 : 1)
             .ThenBy(static component => component.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+    }
+
+    private static EdgeComponentVersionPlan? MergeHostPlans(
+        IReadOnlyList<EdgeComponentVersionPlan> hostPlans,
+        IReadOnlyList<ProfileReleaseCheckResult> results)
+    {
+        var primary = hostPlans.FirstOrDefault(static plan => plan.Versions.Count > 0)
+                      ?? hostPlans.FirstOrDefault();
+        if (primary is null)
+        {
+            return null;
+        }
+
+        var succeededProfileCount = results.Count(static item => item.Result.State == EdgeReleaseCatalogState.Succeeded);
+        var unavailableProfileCount = results.Count - succeededProfileCount;
+        var mergedVersions = new List<EdgeVersionOption>();
+        foreach (var primaryOption in primary.Versions)
+        {
+            var matching = hostPlans
+                .Select(plan => plan.Versions.FirstOrDefault(option =>
+                    string.Equals(option.Version, primaryOption.Version, StringComparison.OrdinalIgnoreCase)))
+                .Where(static option => option is not null)
+                .Cast<EdgeVersionOption>()
+                .ToArray();
+            var issues = matching
+                .Select(static option => option.CompatibilityIssue)
+                .Where(static issue => !string.IsNullOrWhiteSpace(issue))
+                .Cast<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var requiredPlugins = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var hasConflict = false;
+            foreach (var option in matching)
+            {
+                foreach (var required in option.RequiredComposition?.PluginVersions
+                             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase))
+                {
+                    if (requiredPlugins.TryGetValue(required.Key, out var existing)
+                        && !string.Equals(existing, required.Value, StringComparison.OrdinalIgnoreCase))
+                    {
+                        hasConflict = true;
+                        issues.Add($"插件 {required.Key} 在不同工序中要求了冲突版本 {existing} / {required.Value}。");
+                        continue;
+                    }
+
+                    requiredPlugins[required.Key] = required.Value;
+                }
+            }
+
+            if (unavailableProfileCount > 0)
+            {
+                issues.Add($"仍有 {unavailableProfileCount} 个工序未取得真实 Cloud catalog，无法确认完整宿主/插件组合。");
+            }
+
+            if (matching.Length < succeededProfileCount)
+            {
+                issues.Add($"宿主版本 {primaryOption.Version} 未出现在全部可用工序 catalog 中。");
+            }
+
+            var canApply = primaryOption.CanApply
+                           && matching.All(static option => option.CanApply)
+                           && unavailableProfileCount == 0
+                           && matching.Length == succeededProfileCount
+                           && !hasConflict;
+            var requiredComposition = canApply
+                ? new EdgeVersionSelection(primaryOption.Version, requiredPlugins)
+                : null;
+            mergedVersions.Add(primaryOption with
+            {
+                CanApply = canApply,
+                CompatibilityIssue = issues.Count == 0 ? null : string.Join(Environment.NewLine, issues),
+                RequiredComposition = requiredComposition
+            });
+        }
+
+        return primary with { Versions = mergedVersions };
     }
 
     private static EdgeReleaseCatalogResult ResolveStatusResult(IReadOnlyList<ProfileReleaseCheckResult> results)
@@ -492,7 +595,8 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
             ResolveVersionStatusKind(option.Status),
             ResolveVersionStatusText(option.Status),
             ResolveVersionActionKind(option.Status),
-            ResolveVersionActionText(option.Status, currentVersion, option.Version));
+            ResolveVersionActionText(option.Status, currentVersion, option.Version),
+            option.RequiredComposition);
     }
 
     private static string ResolveHostTargetVersion(EdgeReleaseCatalogResult result)

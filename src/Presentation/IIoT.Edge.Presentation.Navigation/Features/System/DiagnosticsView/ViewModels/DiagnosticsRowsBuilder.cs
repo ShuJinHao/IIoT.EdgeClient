@@ -4,6 +4,7 @@ using IIoT.Edge.Module.Contracts.Device;
 using IIoT.Edge.Module.Contracts.Mes;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Module.Sdk.DataPipeline;
+using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.Module.Contracts.Diagnostics;
 using IIoT.Edge.Presentation.Navigation.Localization;

@@ -56,12 +56,22 @@ public partial class VersionChangeConfirmationWindow : Window
             LauncherVersionChangeConfirmationRequest request,
             IAppLanguageService languageService)
         {
-            var messageKey = request.Status == EdgeVersionStatus.Deprecated
-                ? "Launcher_VersionManagement_ConfirmDeprecatedMessage"
-                : "Launcher_VersionManagement_ConfirmRollbackMessage";
-            var titleKey = request.Status == EdgeVersionStatus.Deprecated
-                ? "Launcher_VersionManagement_ConfirmDeprecatedTitle"
-                : "Launcher_VersionManagement_ConfirmRollbackTitle";
+            var requiresComposition = request.RequiredPluginVersions?.Count > 0;
+            var messageKey = requiresComposition
+                ? "Launcher_VersionManagement_ConfirmCompositionMessage"
+                : request.Status == EdgeVersionStatus.Deprecated
+                    ? "Launcher_VersionManagement_ConfirmDeprecatedMessage"
+                    : "Launcher_VersionManagement_ConfirmRollbackMessage";
+            var titleKey = requiresComposition
+                ? "Launcher_VersionManagement_ConfirmCompositionTitle"
+                : request.Status == EdgeVersionStatus.Deprecated
+                    ? "Launcher_VersionManagement_ConfirmDeprecatedTitle"
+                    : "Launcher_VersionManagement_ConfirmRollbackTitle";
+            var composition = requiresComposition
+                ? string.Join(", ", request.RequiredPluginVersions!
+                    .OrderBy(static item => item.Key, StringComparer.OrdinalIgnoreCase)
+                    .Select(static item => $"{item.Key} {item.Value}"))
+                : string.Empty;
 
             Badge = LauncherText.Get(languageService, "Launcher_VersionManagement_ConfirmBadge");
             Title = LauncherText.Get(languageService, titleKey);
@@ -70,7 +80,8 @@ public partial class VersionChangeConfirmationWindow : Window
                 messageKey,
                 request.DisplayName,
                 request.CurrentVersion,
-                request.TargetVersion);
+                request.TargetVersion,
+                composition);
         }
 
         public string Badge { get; }

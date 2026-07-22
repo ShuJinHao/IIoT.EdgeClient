@@ -40,11 +40,6 @@ $highRiskThresholds = @(
         path = 'src/Application/IIoT.Edge.Application/Common/Caching/Memory/EdgeMemoryCacheService.cs'
         minimumLineRate = 0.90
         minimumBranchRate = 0.85
-    },
-    [ordered]@{
-        path = 'src/Application/IIoT.Edge.Application/Abstractions/DataPipeline/DataPipelineNonRetryableException.cs'
-        minimumLineRate = 0.90
-        minimumBranchRate = 0.85
     }
 )
 

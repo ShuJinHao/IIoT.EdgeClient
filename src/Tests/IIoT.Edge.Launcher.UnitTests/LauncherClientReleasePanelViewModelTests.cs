@@ -83,6 +83,98 @@ public sealed class LauncherClientReleasePanelViewModelTests
     }
 
     [Fact]
+    public async Task ApplyVersionAsync_WhenHostNeedsPluginComposition_ShouldConfirmAndApplyComposition()
+    {
+        var requiredComposition = new EdgeVersionSelection(
+            "1.1.0",
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                [ModuleId] = "1.1.0"
+            });
+        var catalog = CreateReleaseCatalog();
+        var host = catalog.Components.Single(component => component.ComponentKind == EdgeComponentKind.Host);
+        var composedHost = host with
+        {
+            Versions = host.Versions
+                .Select(option => option.Version == "1.1.0"
+                    ? option with
+                    {
+                        CompatibilityIssue = $"需要 {ModuleId} 1.1.0。",
+                        RequiredComposition = requiredComposition
+                    }
+                    : option)
+                .ToArray()
+        };
+        var service = new RecordingReleaseService(catalog with
+        {
+            Components = catalog.Components
+                .Select(component => component.ComponentKind == EdgeComponentKind.Host ? composedHost : component)
+                .ToArray()
+        });
+        var panel = CreatePanel(service);
+        LauncherVersionChangeConfirmationRequest? confirmation = null;
+        panel.ConfirmVersionChangeAsync = request =>
+        {
+            confirmation = request;
+            return Task.FromResult(true);
+        };
+        await panel.CheckAsync(Profile());
+        var hostVersion = panel.Components
+            .Single(component => component.ComponentKind == EdgeComponentKind.Host)
+            .Versions.Single(option => option.Version == "1.1.0");
+
+        await panel.ApplyVersionAsync(hostVersion);
+
+        Assert.NotNull(confirmation);
+        Assert.Equal("1.1.0", confirmation!.RequiredPluginVersions![ModuleId]);
+        Assert.NotNull(service.AppliedComposition);
+        Assert.Equal(requiredComposition.HostVersion, service.AppliedComposition!.HostVersion);
+        Assert.Equal("1.1.0", service.AppliedComposition.PluginVersions[ModuleId]);
+        Assert.Null(service.AppliedHostVersion);
+    }
+
+    [Fact]
+    public async Task ApplyVersionAsync_WhenHostCompositionCoversMultipleProfiles_ShouldPassEveryTarget()
+    {
+        var requiredComposition = new EdgeVersionSelection(
+            "1.1.0",
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                [ModuleId] = "1.1.0"
+            });
+        var catalog = CreateReleaseCatalog();
+        var host = catalog.Components.Single(component => component.ComponentKind == EdgeComponentKind.Host);
+        var service = new RecordingReleaseService(catalog with
+        {
+            Components = catalog.Components
+                .Select(component => component.ComponentKind == EdgeComponentKind.Host
+                    ? host with
+                    {
+                        Versions = host.Versions.Select(option => option.Version == "1.1.0"
+                                ? option with { RequiredComposition = requiredComposition }
+                                : option)
+                            .ToArray()
+                    }
+                    : component)
+                .ToArray()
+        });
+        var panel = CreatePanel(service);
+        panel.ConfirmVersionChangeAsync = _ => Task.FromResult(true);
+        await panel.CheckAsync([Profile("line-a"), Profile("line-b")]);
+        var hostVersion = panel.Components
+            .Single(component => component.ComponentKind == EdgeComponentKind.Host)
+            .Versions.Single(option => option.Version == "1.1.0");
+
+        await panel.ApplyVersionAsync(hostVersion);
+
+        Assert.NotNull(service.AppliedCompositionTargets);
+        Assert.Equal(2, service.AppliedCompositionTargets!.Count);
+        Assert.Equal(["line-a", "line-b"], service.AppliedCompositionTargets.Select(target => target.MachineProfile));
+        Assert.Equal("1.1.0", service.AppliedComposition!.PluginVersions[ModuleId]);
+        Assert.Null(service.AppliedHostVersion);
+    }
+
+    [Fact]
     public async Task ApplyVersionAsync_WhenShellRunning_ShouldNotApplyPluginVersion()
     {
         var service = new RecordingReleaseService(CreateReleaseCatalog());
@@ -128,8 +220,8 @@ public sealed class LauncherClientReleasePanelViewModelTests
             shellLaunchService ?? new StubShellLaunchService(),
             languageService);
 
-    private static LauncherProfileDefinition Profile()
-        => new("testplugin", "测试插件", "测试工序", null, "testplugin", "IIoT.Edge.Shell", "Shell", "#000000");
+    private static LauncherProfileDefinition Profile(string profileId = "testplugin")
+        => new(profileId, "测试插件", "测试工序", null, profileId, "IIoT.Edge.Shell", "Shell", "#000000");
 
     private static EdgeReleaseCatalogResult CreateReleaseCatalog()
         => new(
@@ -255,6 +347,10 @@ public sealed class LauncherClientReleasePanelViewModelTests
 
         public string? AppliedHostVersion { get; private set; }
 
+        public EdgeVersionSelection? AppliedComposition { get; private set; }
+
+        public IReadOnlyList<EdgeUpdateTarget>? AppliedCompositionTargets { get; private set; }
+
         public Task<EdgeReleaseCatalogResult> CheckReleaseCatalogAsync(
             EdgeUpdateTarget target,
             CancellationToken cancellationToken = default)
@@ -289,7 +385,24 @@ public sealed class LauncherClientReleasePanelViewModelTests
             EdgeVersionSelection selection,
             IProgress<int>? progress = null,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(EdgePluginInstallResult.Failed("not used"));
+        {
+            AppliedComposition = selection;
+            AppliedCompositionTargets = [target];
+            progress?.Report(100);
+            return Task.FromResult(EdgePluginInstallResult.Succeeded(selection.PluginVersions.Keys.ToArray()));
+        }
+
+        public Task<EdgePluginInstallResult> ApplyVersionCompositionAsync(
+            IReadOnlyList<EdgeUpdateTarget> targets,
+            EdgeVersionSelection selection,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            AppliedComposition = selection;
+            AppliedCompositionTargets = targets;
+            progress?.Report(100);
+            return Task.FromResult(EdgePluginInstallResult.Succeeded(selection.PluginVersions.Keys.ToArray()));
+        }
 
         public Task<EdgeVersionReportResult> ReportCurrentVersionsAsync(
             EdgeUpdateTarget target,

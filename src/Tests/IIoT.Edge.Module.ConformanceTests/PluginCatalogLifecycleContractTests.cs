@@ -153,7 +153,7 @@ public sealed class PluginCatalogLifecycleContractTests
         Assert.Equal(assemblyVersion!.Major, hostVersion.Major);
         Assert.Equal(assemblyVersion.Minor, hostVersion.Minor);
         Assert.Equal(Math.Max(assemblyVersion.Build, 0), hostVersion.Build);
-        Assert.Equal("1.0.0", ModulePluginHostRuntime.HostApiVersion);
+        Assert.Equal("2.0.0", ModulePluginHostRuntime.HostApiVersion);
     }
 
     [Fact]

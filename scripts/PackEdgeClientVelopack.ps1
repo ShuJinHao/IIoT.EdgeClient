@@ -375,7 +375,7 @@ if ($RuntimeIdentifier.StartsWith('win', [System.StringComparison]::OrdinalIgnor
     $vpkArgs += '[win]'
 }
 
-$iconPath = Join-Path $repoRoot 'src\Shared\IIoT.Edge.UI.Shared\Assets\images\icon.ico'
+$iconPath = Join-Path $repoRoot 'src\Edge\Assets\icon.ico'
 $vpkArgs += @(
     'pack',
     '--packId', $PackId,

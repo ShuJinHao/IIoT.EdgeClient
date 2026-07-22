@@ -12,9 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
     <PackageReference Include="IIoT.Edge.Module.Sdk" />
-    <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
     <PluginOwnedProject Include="..\IIoT.Edge.Module.TestPlugin.Companion\IIoT.Edge.Module.TestPlugin.Companion.csproj" />
     <Reference Include="IIoT.Edge.Module.TestPlugin.Companion">
       <HintPath>..\IIoT.Edge.Module.TestPlugin.Companion\bin\$(Configuration)\$(TargetFramework)\IIoT.Edge.Module.TestPlugin.Companion.dll</HintPath>

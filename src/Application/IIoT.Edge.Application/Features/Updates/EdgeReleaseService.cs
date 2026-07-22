@@ -162,6 +162,9 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
             context,
             targetRelease,
             selectedByModule,
+            context.HostVersion,
+            context.HostApiVersion,
+            reportAfterInstall: true,
             progress,
             cancellationToken).ConfigureAwait(false);
     }
@@ -183,11 +186,33 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
 
         var release = context.Catalog!.Host.Versions
             .FirstOrDefault(entry => string.Equals(entry.Version, version.Trim(), StringComparison.OrdinalIgnoreCase));
-        return release is null
-            ? new EdgeHostUpdateApplyResult(false, $"Cloud catalog 中未找到宿主版本 {version}。")
-            : await _hostUpdateService
-                .ApplyVersionAsync(new EdgeHostVersionRelease(release), progress, cancellationToken)
-                .ConfigureAwait(false);
+        if (release is null)
+        {
+            return new EdgeHostUpdateApplyResult(false, $"Cloud catalog 中未找到宿主版本 {version}。");
+        }
+
+        var option = BuildHostVersionOption(
+            release,
+            context.HostVersion,
+            context.Catalog,
+            _installedPluginCatalog.LoadInstalledPlugins(target),
+            CreateEnabledModuleSet(_profileModuleConfigurationStore.ReadEnabledModules(target)),
+            _compatibilityPolicy);
+        if (!option.CanApply)
+        {
+            return new EdgeHostUpdateApplyResult(
+                false,
+                option.CompatibilityIssue ?? $"宿主版本 {version} 当前不可应用。");
+        }
+
+        if (option.RequiredComposition?.PluginVersions.Count > 0)
+        {
+            return new EdgeHostUpdateApplyResult(
+                false,
+                option.CompatibilityIssue ?? $"宿主版本 {version} 必须通过完整插件组合应用。");
+        }
+
+        return await ApplyHostReleaseAsync(release, progress, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<EdgePluginInstallResult> ApplyVersionCompositionAsync(
@@ -215,9 +240,57 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
         }
 
         var releases = FlattenPluginVersions(context.Catalog!);
+        EdgeHostVersionEntry? targetHostRelease = null;
+        var compatibilityHostVersion = context.HostVersion;
+        var compatibilityHostApiVersion = context.HostApiVersion;
+        if (!string.IsNullOrWhiteSpace(selection.HostVersion))
+        {
+            targetHostRelease = context.Catalog!.Host.Versions.FirstOrDefault(entry =>
+                string.Equals(entry.Version, selection.HostVersion.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (targetHostRelease is null)
+            {
+                return EdgePluginInstallResult.Failed(
+                    $"Cloud catalog 中未找到宿主版本 {selection.HostVersion}。");
+            }
+
+            var hostOption = BuildHostVersionOption(
+                targetHostRelease,
+                context.HostVersion,
+                context.Catalog,
+                _installedPluginCatalog.LoadInstalledPlugins(target),
+                CreateEnabledModuleSet(_profileModuleConfigurationStore.ReadEnabledModules(target)),
+                _compatibilityPolicy);
+            if (!hostOption.CanApply)
+            {
+                return EdgePluginInstallResult.Failed(
+                    hostOption.CompatibilityIssue ?? $"宿主版本 {selection.HostVersion} 当前不可应用。");
+            }
+
+            foreach (var required in hostOption.RequiredComposition?.PluginVersions
+                         ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase))
+            {
+                if (!selection.PluginVersions.TryGetValue(required.Key, out var selectedVersion)
+                    || !string.Equals(selectedVersion, required.Value, StringComparison.OrdinalIgnoreCase))
+                {
+                    return EdgePluginInstallResult.Failed(
+                        $"宿主 {selection.HostVersion} 的插件组合不完整：必须准备 {required.Key} {required.Value}。");
+                }
+            }
+
+            compatibilityHostVersion = targetHostRelease.Version;
+            compatibilityHostApiVersion = targetHostRelease.HostApiVersion;
+        }
+
         var selectedByModule = releases.ToDictionary(
             pair => pair.Key,
-            pair => pair.Value.First(),
+            pair => pair.Value.FirstOrDefault(release =>
+                        !string.Equals(release.Status, "Deprecated", StringComparison.OrdinalIgnoreCase)
+                        && _compatibilityPolicy.IsReleaseCompatible(
+                            release,
+                            compatibilityHostVersion,
+                            compatibilityHostApiVersion,
+                            out _))
+                    ?? pair.Value.First(),
             StringComparer.OrdinalIgnoreCase);
 
         foreach (var item in selection.PluginVersions)
@@ -232,6 +305,18 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
             selectedByModule[item.Key] = selected;
         }
 
+        var compositionIssue = ValidateCompositionBeforeInstall(
+            target,
+            context.Catalog!,
+            selectedByModule,
+            selection,
+            compatibilityHostVersion,
+            compatibilityHostApiVersion);
+        if (compositionIssue is not null)
+        {
+            return EdgePluginInstallResult.Failed(compositionIssue);
+        }
+
         var installedModuleIds = new List<string>();
         var steps = selection.PluginVersions.Count + (string.IsNullOrWhiteSpace(selection.HostVersion) ? 0 : 1);
         var stepBase = 0;
@@ -243,6 +328,9 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
                 context,
                 release,
                 selectedByModule,
+                compatibilityHostVersion,
+                compatibilityHostApiVersion,
+                reportAfterInstall: false,
                 CreateStepProgress(progress, stepBase, steps),
                 cancellationToken).ConfigureAwait(false);
             if (!result.Success)
@@ -256,9 +344,8 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
 
         if (!string.IsNullOrWhiteSpace(selection.HostVersion))
         {
-            var hostResult = await ApplyHostVersionAsync(
-                target,
-                selection.HostVersion,
+            var hostResult = await ApplyHostReleaseAsync(
+                targetHostRelease!,
                 CreateStepProgress(progress, stepBase, steps),
                 cancellationToken).ConfigureAwait(false);
             if (!hostResult.Started)
@@ -269,6 +356,214 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
 
         progress?.Report(100);
         return EdgePluginInstallResult.Succeeded(installedModuleIds.Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
+    }
+
+    public async Task<EdgePluginInstallResult> ApplyVersionCompositionAsync(
+        IReadOnlyList<EdgeUpdateTarget> targets,
+        EdgeVersionSelection selection,
+        IProgress<int>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(targets);
+        ArgumentNullException.ThrowIfNull(selection);
+        if (targets.Count == 0)
+        {
+            return EdgePluginInstallResult.Failed("没有可用于组合升级的工序目标。");
+        }
+
+        if (targets.Count == 1)
+        {
+            return await ApplyVersionCompositionAsync(
+                targets[0],
+                selection,
+                progress,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        if (string.IsNullOrWhiteSpace(selection.HostVersion))
+        {
+            return EdgePluginInstallResult.Failed("跨多个工序应用插件时必须指定同一目标宿主版本。");
+        }
+
+        if (!TargetsShareHostLayout(targets, out var layoutIssue))
+        {
+            return EdgePluginInstallResult.Failed(layoutIssue!);
+        }
+
+        var targetContexts = new List<CompositionTargetContext>();
+        foreach (var target in targets)
+        {
+            var context = await CreateOperationContextAsync(target, cancellationToken).ConfigureAwait(false);
+            if (context.Error is not null)
+            {
+                return EdgePluginInstallResult.Failed(
+                    $"工序 {target.MachineProfile} 无法取得真实发布目录：{context.Error}");
+            }
+
+            var targetHostRelease = context.Catalog!.Host.Versions.FirstOrDefault(entry =>
+                string.Equals(entry.Version, selection.HostVersion.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (targetHostRelease is null)
+            {
+                return EdgePluginInstallResult.Failed(
+                    $"工序 {target.MachineProfile} 的 Cloud catalog 中没有宿主版本 {selection.HostVersion}。");
+            }
+
+            var enabledModules = new HashSet<string>(
+                _profileModuleConfigurationStore.ReadEnabledModules(target),
+                StringComparer.OrdinalIgnoreCase);
+            var hostOption = BuildHostVersionOption(
+                targetHostRelease,
+                context.HostVersion,
+                context.Catalog,
+                _installedPluginCatalog.LoadInstalledPlugins(target),
+                enabledModules,
+                _compatibilityPolicy);
+            if (!hostOption.CanApply)
+            {
+                return EdgePluginInstallResult.Failed(
+                    $"工序 {target.MachineProfile} 无法应用宿主 {selection.HostVersion}：{hostOption.CompatibilityIssue ?? "组合不兼容。"}");
+            }
+
+            foreach (var required in hostOption.RequiredComposition?.PluginVersions
+                         ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase))
+            {
+                if (!selection.PluginVersions.TryGetValue(required.Key, out var selectedVersion)
+                    || !string.Equals(selectedVersion, required.Value, StringComparison.OrdinalIgnoreCase))
+                {
+                    return EdgePluginInstallResult.Failed(
+                        $"工序 {target.MachineProfile} 的宿主 {selection.HostVersion} 组合不完整：必须准备 {required.Key} {required.Value}。");
+                }
+            }
+
+            targetContexts.Add(new CompositionTargetContext(
+                target,
+                context,
+                targetHostRelease,
+                enabledModules));
+        }
+
+        var canonicalHostRelease = targetContexts[0].HostRelease;
+        foreach (var targetContext in targetContexts.Skip(1))
+        {
+            if (!HasSameHostArtifact(canonicalHostRelease, targetContext.HostRelease))
+            {
+                return EdgePluginInstallResult.Failed(
+                    $"工序 {targetContext.Target.MachineProfile} 的宿主 {selection.HostVersion} artifact 与其他工序不一致。");
+            }
+        }
+
+        foreach (var moduleId in selection.PluginVersions.Keys)
+        {
+            if (!targetContexts.Any(item => item.EnabledModules.Contains(moduleId)))
+            {
+                return EdgePluginInstallResult.Failed(
+                    $"插件 {moduleId} 未在任何本次工序 profile 中启用，拒绝把它加入宿主组合。");
+            }
+        }
+
+        var selectedByModule = MergePluginVersions(
+            targetContexts.Select(static item => item.Operation.Catalog!),
+            canonicalHostRelease.Version,
+            canonicalHostRelease.HostApiVersion,
+            out var mergeIssue);
+        if (mergeIssue is not null)
+        {
+            return EdgePluginInstallResult.Failed(mergeIssue);
+        }
+
+        foreach (var item in selection.PluginVersions)
+        {
+            if (!selectedByModule.TryGetValue(item.Key, out var releases)
+                || releases.FirstOrDefault(release =>
+                    string.Equals(release.PackageVersion, item.Value, StringComparison.OrdinalIgnoreCase)) is not { } selected)
+            {
+                return EdgePluginInstallResult.Failed(
+                    $"全部工序 Cloud catalog 中均未找到插件 {item.Key} 的版本 {item.Value}。");
+            }
+
+            selectedByModule[item.Key] = [selected];
+        }
+
+        var selectedReleaseByModule = selectedByModule.ToDictionary(
+            static pair => pair.Key,
+            pair => pair.Value.FirstOrDefault(release =>
+                        !string.Equals(release.Status, "Deprecated", StringComparison.OrdinalIgnoreCase)
+                        && _compatibilityPolicy.IsReleaseCompatible(
+                            release,
+                            canonicalHostRelease.Version,
+                            canonicalHostRelease.HostApiVersion,
+                            out _))
+                    ?? pair.Value.First(),
+            StringComparer.OrdinalIgnoreCase);
+        foreach (var item in selection.PluginVersions)
+        {
+            selectedReleaseByModule[item.Key] = selectedByModule[item.Key][0];
+        }
+
+        foreach (var targetContext in targetContexts)
+        {
+            var compositionIssue = ValidateCompositionBeforeInstall(
+                targetContext.Target,
+                targetContext.Operation.Catalog!,
+                selectedReleaseByModule,
+                selection,
+                canonicalHostRelease.Version,
+                canonicalHostRelease.HostApiVersion);
+            if (compositionIssue is not null)
+            {
+                return EdgePluginInstallResult.Failed(
+                    $"工序 {targetContext.Target.MachineProfile} 的组合校验失败：{compositionIssue}");
+            }
+        }
+
+        var installedModuleIds = new List<string>();
+        var steps = selection.PluginVersions.Count + 1;
+        var stepBase = 0;
+        foreach (var item in selection.PluginVersions)
+        {
+            var release = selectedReleaseByModule[item.Key];
+            var owner = targetContexts.FirstOrDefault(targetContext =>
+                targetContext.EnabledModules.Contains(item.Key)
+                && FlattenPluginVersions(targetContext.Operation.Catalog!).TryGetValue(item.Key, out var available)
+                && available.Any(candidate =>
+                    string.Equals(candidate.PackageVersion, item.Value, StringComparison.OrdinalIgnoreCase)));
+            if (owner is null)
+            {
+                return EdgePluginInstallResult.Failed(
+                    $"找不到同时启用并提供插件 {item.Key} {item.Value} 的工序 catalog。");
+            }
+
+            var result = await InstallPluginReleasesAsync(
+                owner.Target,
+                owner.Operation,
+                release,
+                selectedReleaseByModule,
+                canonicalHostRelease.Version,
+                canonicalHostRelease.HostApiVersion,
+                reportAfterInstall: false,
+                CreateStepProgress(progress, stepBase, steps),
+                cancellationToken).ConfigureAwait(false);
+            if (!result.Success)
+            {
+                return result;
+            }
+
+            installedModuleIds.AddRange(result.InstalledModuleIds);
+            stepBase += 100 / Math.Max(steps, 1);
+        }
+
+        var hostResult = await ApplyHostReleaseAsync(
+            canonicalHostRelease,
+            CreateStepProgress(progress, stepBase, steps),
+            cancellationToken).ConfigureAwait(false);
+        if (!hostResult.Started)
+        {
+            return EdgePluginInstallResult.Failed(hostResult.ErrorMessage ?? "宿主版本应用失败。");
+        }
+
+        progress?.Report(100);
+        return EdgePluginInstallResult.Succeeded(
+            installedModuleIds.Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
     }
 
     public async Task<EdgeVersionReportResult> ReportCurrentVersionsAsync(
@@ -317,6 +612,11 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
         ArgumentNullException.ThrowIfNull(installedPlugins);
         ArgumentNullException.ThrowIfNull(compatibilityPolicy);
 
+        var installedByModule = installedPlugins.ToDictionary(
+            static plugin => plugin.ModuleId,
+            StringComparer.OrdinalIgnoreCase);
+        var plannedModules = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var enabledModuleSet = CreateEnabledModuleSet(enabledModuleIds);
         var plans = new List<EdgeComponentVersionPlan>
         {
             new(
@@ -325,20 +625,15 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
                 string.IsNullOrWhiteSpace(catalog.Host.DisplayName) ? "Edge Host" : catalog.Host.DisplayName,
                 hostVersion,
                 catalog.Host.Versions
-                    .Select(version => new EdgeVersionOption(
-                        version.Version,
-                        ResolveHostVersionStatus(hostVersion, version),
-                        !string.Equals(hostVersion, version.Version, StringComparison.OrdinalIgnoreCase),
-                        null,
-                        HostRelease: new EdgeHostVersionRelease(version)))
+                    .Select(version => BuildHostVersionOption(
+                        version,
+                        hostVersion,
+                        catalog,
+                        installedPlugins,
+                        enabledModuleSet,
+                        compatibilityPolicy))
                     .ToList())
         };
-
-        var installedByModule = installedPlugins.ToDictionary(
-            static plugin => plugin.ModuleId,
-            StringComparer.OrdinalIgnoreCase);
-        var plannedModules = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var enabledModuleSet = CreateEnabledModuleSet(enabledModuleIds);
         foreach (var component in catalog.Plugins.OrderBy(static plugin => plugin.DisplayName, StringComparer.OrdinalIgnoreCase))
         {
             if (!IsModuleVisible(component.ModuleId, enabledModuleSet))
@@ -450,11 +745,331 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
             installed.Version,
             []);
 
+    private static bool TargetsShareHostLayout(
+        IReadOnlyList<EdgeUpdateTarget> targets,
+        out string? issue)
+    {
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        try
+        {
+            var canonicalDirectory = Path.GetFullPath(targets[0].HostDirectory);
+            var canonicalExecutable = Path.GetFullPath(targets[0].HostExecutablePath);
+            foreach (var target in targets.Skip(1))
+            {
+                if (!string.Equals(canonicalDirectory, Path.GetFullPath(target.HostDirectory), comparison)
+                    || !string.Equals(canonicalExecutable, Path.GetFullPath(target.HostExecutablePath), comparison))
+                {
+                    issue = "多个工序不属于同一 Host 布局，不能合并为一次宿主更新。";
+                    return false;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            issue = $"组合升级的 Host 路径无效：{ex.Message}";
+            return false;
+        }
+
+        issue = null;
+        return true;
+    }
+
+    private static bool HasSameHostArtifact(
+        EdgeHostVersionEntry left,
+        EdgeHostVersionEntry right)
+        => string.Equals(left.Version, right.Version, StringComparison.OrdinalIgnoreCase)
+           && string.Equals(left.HostApiVersion, right.HostApiVersion, StringComparison.OrdinalIgnoreCase)
+           && string.Equals(left.TargetRuntime, right.TargetRuntime, StringComparison.OrdinalIgnoreCase)
+           && string.Equals(left.TargetFramework, right.TargetFramework, StringComparison.OrdinalIgnoreCase)
+           && string.Equals(left.Sha256, right.Sha256, StringComparison.OrdinalIgnoreCase)
+           && left.PackageSize == right.PackageSize;
+
+    private static Dictionary<string, List<EdgePluginVersionRelease>> MergePluginVersions(
+        IEnumerable<EdgeReleaseCatalog> catalogs,
+        string targetHostVersion,
+        string targetHostApiVersion,
+        out string? issue)
+    {
+        var merged = new Dictionary<string, List<EdgePluginVersionRelease>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var catalog in catalogs)
+        {
+            foreach (var pair in FlattenPluginVersions(catalog))
+            {
+                if (!merged.TryGetValue(pair.Key, out var releases))
+                {
+                    releases = [];
+                    merged[pair.Key] = releases;
+                }
+
+                foreach (var release in pair.Value)
+                {
+                    var existing = releases.FirstOrDefault(candidate =>
+                        string.Equals(candidate.PackageVersion, release.PackageVersion, StringComparison.OrdinalIgnoreCase));
+                    if (existing is null)
+                    {
+                        releases.Add(release);
+                        continue;
+                    }
+
+                    if (!HasSamePluginArtifact(existing, release))
+                    {
+                        issue = $"不同工序 catalog 对插件 {release.ModuleId} {release.PackageVersion} 给出了不一致的 artifact。";
+                        return merged;
+                    }
+                }
+            }
+        }
+
+        foreach (var pair in merged)
+        {
+            pair.Value.Sort((left, right) =>
+            {
+                var leftCompatible = IsCompatibleWithTarget(left, targetHostVersion, targetHostApiVersion);
+                var rightCompatible = IsCompatibleWithTarget(right, targetHostVersion, targetHostApiVersion);
+                if (leftCompatible != rightCompatible)
+                {
+                    return leftCompatible ? -1 : 1;
+                }
+
+                return VersionStringComparer.Instance.Compare(right.PackageVersion, left.PackageVersion);
+            });
+        }
+
+        issue = null;
+        return merged;
+    }
+
+    private static bool IsCompatibleWithTarget(
+        EdgePluginVersionRelease release,
+        string hostVersion,
+        string hostApiVersion)
+        => string.Equals(release.HostApiVersion, hostApiVersion, StringComparison.OrdinalIgnoreCase)
+           && CompareVersions(hostVersion, release.MinHostVersion) >= 0
+           && CompareVersions(hostVersion, release.MaxHostVersion) <= 0
+           && !string.Equals(release.Status, "Deprecated", StringComparison.OrdinalIgnoreCase);
+
+    private static bool HasSamePluginArtifact(
+        EdgePluginVersionRelease left,
+        EdgePluginVersionRelease right)
+        => string.Equals(left.ModuleId, right.ModuleId, StringComparison.OrdinalIgnoreCase)
+           && string.Equals(left.PackageVersion, right.PackageVersion, StringComparison.OrdinalIgnoreCase)
+           && string.Equals(left.HostApiVersion, right.HostApiVersion, StringComparison.OrdinalIgnoreCase)
+           && string.Equals(left.MinHostVersion, right.MinHostVersion, StringComparison.OrdinalIgnoreCase)
+           && string.Equals(left.MaxHostVersion, right.MaxHostVersion, StringComparison.OrdinalIgnoreCase)
+           && string.Equals(left.TargetRuntime, right.TargetRuntime, StringComparison.OrdinalIgnoreCase)
+           && string.Equals(left.TargetFramework, right.TargetFramework, StringComparison.OrdinalIgnoreCase)
+           && string.Equals(left.Sha256, right.Sha256, StringComparison.OrdinalIgnoreCase)
+           && left.PackageSize == right.PackageSize
+           && string.Equals(left.Status, right.Status, StringComparison.OrdinalIgnoreCase)
+           && left.Dependencies.OrderBy(static value => value, StringComparer.OrdinalIgnoreCase)
+               .SequenceEqual(
+                   right.Dependencies.OrderBy(static value => value, StringComparer.OrdinalIgnoreCase),
+                   StringComparer.OrdinalIgnoreCase);
+
+    private static EdgeVersionOption BuildHostVersionOption(
+        EdgeHostVersionEntry targetHost,
+        string currentHostVersion,
+        EdgeReleaseCatalog catalog,
+        IReadOnlyList<EdgeInstalledPlugin> installedPlugins,
+        IReadOnlySet<string>? enabledModuleIds,
+        IEdgeVersionCompatibilityPolicy compatibilityPolicy)
+    {
+        var status = ResolveHostVersionStatus(currentHostVersion, targetHost);
+        if (string.Equals(currentHostVersion, targetHost.Version, StringComparison.OrdinalIgnoreCase))
+        {
+            return new EdgeVersionOption(
+                targetHost.Version,
+                status,
+                false,
+                null,
+                HostRelease: new EdgeHostVersionRelease(targetHost));
+        }
+
+        var releases = FlattenPluginVersions(catalog);
+        var requiredPlugins = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var issues = new List<string>();
+        var installedModuleIds = new HashSet<string>(
+            installedPlugins.Select(static plugin => plugin.ModuleId),
+            StringComparer.OrdinalIgnoreCase);
+        foreach (var installed in installedPlugins
+                     .Where(plugin => IsModuleVisible(plugin.ModuleId, enabledModuleIds))
+                     .OrderBy(static plugin => plugin.ModuleId, StringComparer.OrdinalIgnoreCase))
+        {
+            if (!releases.TryGetValue(installed.ModuleId, out var moduleReleases))
+            {
+                issues.Add($"Cloud catalog 中没有已启用插件 {installed.ModuleId} 的发布记录。");
+                continue;
+            }
+
+            var installedRelease = moduleReleases.FirstOrDefault(release =>
+                string.Equals(release.PackageVersion, installed.Version, StringComparison.OrdinalIgnoreCase));
+            if (installedRelease is not null
+                && !string.Equals(installedRelease.Status, "Deprecated", StringComparison.OrdinalIgnoreCase)
+                && compatibilityPolicy.IsReleaseCompatible(
+                    installedRelease,
+                    targetHost.Version,
+                    targetHost.HostApiVersion,
+                    out _))
+            {
+                continue;
+            }
+
+            var replacement = moduleReleases.FirstOrDefault(release =>
+                !string.Equals(release.Status, "Deprecated", StringComparison.OrdinalIgnoreCase)
+                && compatibilityPolicy.IsReleaseCompatible(
+                    release,
+                    targetHost.Version,
+                    targetHost.HostApiVersion,
+                    out _));
+            if (replacement is null)
+            {
+                var currentDescription = installedRelease is null
+                    ? $"本机版本 {installed.Version} 未出现在当前 catalog"
+                    : $"本机版本 {installed.Version} 与目标宿主不兼容";
+                issues.Add(
+                    $"插件 {installed.ModuleId} {currentDescription}，且 catalog 中没有兼容宿主 {targetHost.Version} / API {targetHost.HostApiVersion} 的可用版本。");
+                continue;
+            }
+
+            requiredPlugins[installed.ModuleId] = replacement.PackageVersion;
+        }
+
+        if (enabledModuleIds is not null)
+        {
+            foreach (var enabledModuleId in enabledModuleIds
+                         .Where(moduleId => !installedModuleIds.Contains(moduleId))
+                         .OrderBy(static moduleId => moduleId, StringComparer.OrdinalIgnoreCase))
+            {
+                if (!releases.TryGetValue(enabledModuleId, out var moduleReleases))
+                {
+                    issues.Add($"Cloud catalog 中没有已启用但未安装的插件 {enabledModuleId} 发布记录。");
+                    continue;
+                }
+
+                var replacement = moduleReleases.FirstOrDefault(release =>
+                    !string.Equals(release.Status, "Deprecated", StringComparison.OrdinalIgnoreCase)
+                    && compatibilityPolicy.IsReleaseCompatible(
+                        release,
+                        targetHost.Version,
+                        targetHost.HostApiVersion,
+                        out _));
+                if (replacement is null)
+                {
+                    issues.Add(
+                        $"已启用插件 {enabledModuleId} 尚未安装，且 catalog 中没有兼容宿主 {targetHost.Version} / API {targetHost.HostApiVersion} 的可用版本。");
+                    continue;
+                }
+
+                requiredPlugins[enabledModuleId] = replacement.PackageVersion;
+            }
+        }
+
+        if (issues.Count > 0)
+        {
+            return new EdgeVersionOption(
+                targetHost.Version,
+                status,
+                false,
+                string.Join(Environment.NewLine, issues),
+                HostRelease: new EdgeHostVersionRelease(targetHost));
+        }
+
+        var issue = requiredPlugins.Count == 0
+            ? null
+            : $"目标宿主 {targetHost.Version} 需要先准备插件组合：{string.Join(", ", requiredPlugins.Select(static item => $"{item.Key} {item.Value}"))}。";
+        return new EdgeVersionOption(
+            targetHost.Version,
+            status,
+            true,
+            issue,
+            HostRelease: new EdgeHostVersionRelease(targetHost),
+            RequiredComposition: new EdgeVersionSelection(targetHost.Version, requiredPlugins));
+    }
+
+    private string? ValidateCompositionBeforeInstall(
+        EdgeUpdateTarget target,
+        EdgeReleaseCatalog catalog,
+        IReadOnlyDictionary<string, EdgePluginVersionRelease> selectedByModule,
+        EdgeVersionSelection selection,
+        string targetHostVersion,
+        string targetHostApiVersion)
+    {
+        foreach (var item in selection.PluginVersions)
+        {
+            var release = selectedByModule[item.Key];
+            var ordered = ResolveInstallOrder(release, selectedByModule, out var dependencyIssue);
+            if (dependencyIssue is not null)
+            {
+                return dependencyIssue;
+            }
+
+            foreach (var candidate in ordered)
+            {
+                if (!_compatibilityPolicy.IsReleaseCompatible(
+                        candidate,
+                        targetHostVersion,
+                        targetHostApiVersion,
+                        out var compatibilityIssue))
+                {
+                    return compatibilityIssue;
+                }
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(selection.HostVersion))
+        {
+            return null;
+        }
+
+        var enabledModules = CreateEnabledModuleSet(_profileModuleConfigurationStore.ReadEnabledModules(target));
+        var releases = FlattenPluginVersions(catalog);
+        foreach (var installed in _installedPluginCatalog.LoadInstalledPlugins(target)
+                     .Where(plugin => IsModuleVisible(plugin.ModuleId, enabledModules)))
+        {
+            if (selection.PluginVersions.ContainsKey(installed.ModuleId))
+            {
+                continue;
+            }
+
+            if (!releases.TryGetValue(installed.ModuleId, out var moduleReleases)
+                || moduleReleases.FirstOrDefault(release =>
+                    string.Equals(release.PackageVersion, installed.Version, StringComparison.OrdinalIgnoreCase)) is not { } installedRelease)
+            {
+                return $"宿主 {selection.HostVersion} 的插件组合不完整：catalog 中没有本机插件 {installed.ModuleId} {installed.Version}。";
+            }
+
+            if (!_compatibilityPolicy.IsReleaseCompatible(
+                    installedRelease,
+                    targetHostVersion,
+                    targetHostApiVersion,
+                    out var issue))
+            {
+                return issue;
+            }
+        }
+
+        return null;
+    }
+
+    private Task<EdgeHostUpdateApplyResult> ApplyHostReleaseAsync(
+        EdgeHostVersionEntry release,
+        IProgress<int>? progress,
+        CancellationToken cancellationToken)
+        => _hostUpdateService.ApplyVersionAsync(
+            new EdgeHostVersionRelease(release),
+            progress,
+            cancellationToken);
+
     private async Task<EdgePluginInstallResult> InstallPluginReleasesAsync(
         EdgeUpdateTarget target,
         OperationContext context,
         EdgePluginVersionRelease targetRelease,
         IReadOnlyDictionary<string, EdgePluginVersionRelease> selectedByModule,
+        string compatibilityHostVersion,
+        string compatibilityHostApiVersion,
+        bool reportAfterInstall,
         IProgress<int>? progress,
         CancellationToken cancellationToken)
     {
@@ -470,8 +1085,8 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
         {
             if (!_compatibilityPolicy.IsReleaseCompatible(
                     release,
-                    context.HostVersion,
-                    context.HostApiVersion,
+                    compatibilityHostVersion,
+                    compatibilityHostApiVersion,
                     out var compatibilityIssue))
             {
                 return EdgePluginInstallResult.Failed(compatibilityIssue!);
@@ -482,8 +1097,8 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
                     target,
                     release,
                     context.CloudOptions!,
-                    context.HostVersion,
-                    context.HostApiVersion,
+                    compatibilityHostVersion,
+                    compatibilityHostApiVersion,
                     CreateStepProgress(progress, stepBase, ordered.Count),
                     cancellationToken)
                 .ConfigureAwait(false);
@@ -498,7 +1113,10 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
 
         _profileModuleConfigurationStore.EnableModules(target, installedModuleIds);
         progress?.Report(100);
-        await ReportCurrentVersionsAsync(target, cancellationToken).ConfigureAwait(false);
+        if (reportAfterInstall)
+        {
+            await ReportCurrentVersionsAsync(target, cancellationToken).ConfigureAwait(false);
+        }
         return EdgePluginInstallResult.Succeeded(installedModuleIds);
     }
 
@@ -752,6 +1370,12 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
             return CompareVersions(x, y);
         }
     }
+
+    private sealed record CompositionTargetContext(
+        EdgeUpdateTarget Target,
+        OperationContext Operation,
+        EdgeHostVersionEntry HostRelease,
+        IReadOnlySet<string> EnabledModules);
 
     private sealed record OperationContext(
         EdgeUpdateCloudApiOptions? CloudOptions,
