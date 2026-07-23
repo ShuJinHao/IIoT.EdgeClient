@@ -4,12 +4,12 @@
   "inventoryPath": "scripts/tests/edge-test-inventory.json",
   "configuration": "Release",
   "projectCount": 26,
-  "caseCount": 1068,
+  "caseCount": 1069,
   "projects": [
     {
       "projectPath": "src/Tests/IIoT.Edge.Application.Tests/IIoT.Edge.Application.Tests.csproj",
       "projectName": "IIoT.Edge.Application.Tests",
-      "discovered": 78
+      "discovered": 79
     },
     {
       "projectPath": "src/Tests/IIoT.Edge.Architecture.Tests/IIoT.Edge.Architecture.Tests.csproj",
@@ -1155,6 +1155,29 @@
       "assembly": "IIoT.Edge.Application.Tests",
       "projectPath": "src/Tests/IIoT.Edge.Application.Tests/IIoT.Edge.Application.Tests.csproj",
       "identity": "IIoT.Edge.Application.Tests.ModuleDevelopmentSeedWriterBehaviorTests.ApplyAsync_WhenSeedIsNew_ShouldMaterializeOnceAndRemainIdempotent",
+      "source": null,
+      "testKind": "Application",
+      "runtime": "Pure",
+      "runtimeDependencies": [
+        "FakeTime"
+      ],
+      "runnerMode": "Parallel",
+      "cadence": "PR",
+      "capability": "Application.UseCases",
+      "risk": "P1",
+      "concern": "Reliability",
+      "profile": "Simulation",
+      "owner": "Edge.Application",
+      "ruleId": "EDGE-APP-TEST-001",
+      "regressionId": "EDGE-APP-TEST-001",
+      "required": true,
+      "skipped": false
+    },
+    {
+      "caseKey": "IIoT.Edge.Application.Tests|IIoT.Edge.Application.Tests.ModuleDevelopmentSeedWriterBehaviorTests.ApplyAsync_WhenSeedProvidesStableIdentityAndProtocolFrame_ShouldPersistBoth",
+      "assembly": "IIoT.Edge.Application.Tests",
+      "projectPath": "src/Tests/IIoT.Edge.Application.Tests/IIoT.Edge.Application.Tests.csproj",
+      "identity": "IIoT.Edge.Application.Tests.ModuleDevelopmentSeedWriterBehaviorTests.ApplyAsync_WhenSeedProvidesStableIdentityAndProtocolFrame_ShouldPersistBoth",
       "source": null,
       "testKind": "Application",
       "runtime": "Pure",

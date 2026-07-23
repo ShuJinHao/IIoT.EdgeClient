@@ -25,7 +25,9 @@ public sealed class ModuleDevelopmentSeedWriterBehaviorTests
 
         var device = Assert.Single(devices.Items);
         Assert.Equal("PLC-Test-01", device.DeviceName);
+        Assert.Equal("PLC-TEST-01", device.PlcCode);
         Assert.Equal("Mc", device.DeviceModel);
+        Assert.Null(device.ProtocolFrame);
         Assert.Equal(2, mappings.Items.Count);
         Assert.Contains(mappings.Items, static mapping =>
             mapping.SignalKey == "TestModule.SignalA"
@@ -38,9 +40,39 @@ public sealed class ModuleDevelopmentSeedWriterBehaviorTests
     }
 
     [Fact]
+    public async Task ApplyAsync_WhenSeedProvidesStableIdentityAndProtocolFrame_ShouldPersistBoth()
+    {
+        var devices = new InMemoryRepository<NetworkDeviceEntity>();
+        var mappings = new InMemoryRepository<IoMappingEntity>();
+        var writer = new ModuleDevelopmentSeedWriter(new TestEdgeUnitOfWorkFactory(devices, mappings));
+        var template = Assert.Single(CreateRequest(resetBeforeImport: false).Devices);
+        var request = new ModuleDevelopmentSeedRequest(
+            "CP",
+            ResetBeforeImport: false,
+            [
+                template with
+                {
+                    DeviceName = "正极模切01",
+                    PlcCode = "P2-CP01",
+                    ProtocolFrame = "E4"
+                }
+            ]);
+
+        var result = await writer.ApplyAsync(request, TestContext.Current.CancellationToken);
+
+        var device = Assert.Single(devices.Items);
+        Assert.Equal("正极模切01", device.DeviceName);
+        Assert.Equal("P2-CP01", device.PlcCode);
+        Assert.Equal("Mc", device.DeviceModel);
+        Assert.Equal("E4", device.ProtocolFrame);
+        Assert.Equal(new ModuleDevelopmentSeedResult(1, 2, 0, 0), result);
+    }
+
+    [Fact]
     public async Task ApplyAsync_WhenDeviceAlreadyHasMappings_ShouldPreserveOperatorValues()
     {
-        var existingDevice = CreateDevice("PLC-Test-01", "D999");
+        var existingDevice = CreateDevice("PLC-Test-01", "D999", plcCode: "SITE-PLC-01");
+        existingDevice.UpdateProtocolFrame("E3");
         var existingMapping = IoMappingEntity.Create(
             existingDevice.Id,
             "TestModule.SignalA",
@@ -60,6 +92,8 @@ public sealed class ModuleDevelopmentSeedWriterBehaviorTests
 
         Assert.Equal(new ModuleDevelopmentSeedResult(0, 0, 0, 0), result);
         Assert.Equal("D999", Assert.Single(mappings.Items).PlcAddress);
+        Assert.Equal("SITE-PLC-01", Assert.Single(devices.Items).PlcCode);
+        Assert.Equal("E3", Assert.Single(devices.Items).ProtocolFrame);
     }
 
     [Fact]
@@ -124,9 +158,13 @@ public sealed class ModuleDevelopmentSeedWriterBehaviorTests
                     ])
             ]);
 
-    private static NetworkDeviceEntity CreateDevice(string name, string markerAddress, int id = 1)
+    private static NetworkDeviceEntity CreateDevice(
+        string name,
+        string markerAddress,
+        int id = 1,
+        string? plcCode = null)
     {
-        var device = NetworkDeviceEntity.Create(name, DeviceType.PLC, "127.0.0.1", 6000).WithId(id);
+        var device = NetworkDeviceEntity.Create(name, DeviceType.PLC, "127.0.0.1", 6000, plcCode).WithId(id);
         device.UpdateDeviceModel("Mc");
         device.UpdateRemark(markerAddress);
         return device;

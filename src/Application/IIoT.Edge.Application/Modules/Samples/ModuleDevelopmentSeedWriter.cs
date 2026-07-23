@@ -110,8 +110,10 @@ public sealed class ModuleDevelopmentSeedWriter : IModuleDevelopmentSeedWriter
             seed.DeviceName,
             DeviceType.PLC,
             seed.IpAddress,
-            seed.Port);
+            seed.Port,
+            seed.PlcCode);
         device.UpdateDeviceModel(seed.DeviceModel);
+        device.UpdateProtocolFrame(seed.ProtocolFrame);
         device.UpdateEndpoint(device.IpAddress, device.Port1, device.Port2, seed.ConnectTimeout);
         device.SetEnabled(seed.IsEnabled);
         device.UpdateRemark(seed.Remark);
