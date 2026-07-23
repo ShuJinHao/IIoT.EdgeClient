@@ -93,8 +93,8 @@ function Resolve-ExplicitReleaseNotes {
 
 function Invoke-PluginPack {
     param(
-        [AllowEmptyCollection()]
-        [object[]]$Arguments = @()
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Parameters
     )
 
     $scriptPath = Join-Path $pluginRepoRoot 'eng/PackEdgePlugin.ps1'
@@ -102,10 +102,30 @@ function Invoke-PluginPack {
         throw "Plugin repository pack script was not found: $scriptPath"
     }
 
-    & $scriptPath @Arguments
+    & $scriptPath @Parameters
     if ($LASTEXITCODE -ne 0) {
         throw "eng/PackEdgePlugin.ps1 failed with exit code $LASTEXITCODE."
     }
+}
+
+function Get-PreservedPluginMetadataPath {
+    param([Parameter(Mandatory = $true)][string]$PackageRoot)
+
+    foreach ($candidate in @(Get-ChildItem -LiteralPath $PackageRoot -Filter '*.zip.json' -File -ErrorAction SilentlyContinue | Sort-Object FullName)) {
+        try {
+            $candidateMetadata = Get-Content -Raw -Encoding UTF8 -LiteralPath $candidate.FullName | ConvertFrom-Json
+            $candidatePackageFileName = [string]$candidateMetadata.packageFileName
+            if (-not [string]::IsNullOrWhiteSpace($candidatePackageFileName) -and
+                (Test-Path -LiteralPath (Join-Path $PackageRoot $candidatePackageFileName) -PathType Leaf)) {
+                return $candidate
+            }
+        }
+        catch {
+            # A failed pack may leave partial metadata. Resume rebuilds instead of trusting it.
+        }
+    }
+
+    return $null
 }
 
 function Test-PreservedPluginPackage {
@@ -381,26 +401,27 @@ try {
     }
 
     $packageOutputRoot = Join-Path $releaseRoot 'package'
-    if (-not $isResume) {
-        New-Item -Path $packageOutputRoot -ItemType Directory -Force | Out-Null
+    New-Item -Path $packageOutputRoot -ItemType Directory -Force | Out-Null
+    $metadataPath = Get-PreservedPluginMetadataPath -PackageRoot $packageOutputRoot
+    if ($null -eq $metadataPath) {
         $pluginPackageScratchRoot = Join-Path $pluginRepoRoot "artifacts/deploy-pack/$dispatchInvocationId"
         $attemptStage = 'building-package'
         Write-EdgeDeploymentAttemptState -ReleaseRoot $releaseRoot -Target EdgePlugin -InvocationId $dispatchInvocationId `
             -Stage $attemptStage -Status running `
-            -Facts @{ moduleId = $ModuleId; version = $declaredVersion; sourceCommit = $gitFacts.Head; resumeReleaseRoot = $releaseRoot } | Out-Null
-        Invoke-PluginPack @(
-            '-ModuleId', $ModuleId,
-            '-Configuration', $Configuration,
-            '-TargetRuntime', $RuntimeIdentifier,
-            '-OutputRoot', $pluginPackageScratchRoot,
-            '-SourceCommit', $gitFacts.Head,
-            '-CleanOutput'
-        )
+            -Facts @{ moduleId = $ModuleId; version = $declaredVersion; sourceCommit = $gitFacts.Head; resumeReleaseRoot = $releaseRoot; resumed = $isResume } | Out-Null
+        Invoke-PluginPack -Parameters @{
+            ModuleId      = $ModuleId
+            Configuration = $Configuration
+            TargetRuntime = $RuntimeIdentifier
+            OutputRoot    = $pluginPackageScratchRoot
+            SourceCommit  = $gitFacts.Head
+            CleanOutput   = $true
+        }
         Get-ChildItem -LiteralPath $pluginPackageScratchRoot -File |
             Copy-Item -Destination $packageOutputRoot -Force
+        $metadataPath = Get-PreservedPluginMetadataPath -PackageRoot $packageOutputRoot
     }
 
-    $metadataPath = Get-ChildItem -Path $packageOutputRoot -Filter '*.zip.json' -File | Select-Object -First 1
     if ($null -eq $metadataPath) {
         throw "Plugin package metadata was not generated under $packageOutputRoot."
     }
