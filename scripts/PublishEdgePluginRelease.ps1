@@ -336,6 +336,7 @@ $deploymentLock = Enter-EdgeDeploymentLock -RepoRoot $repoRoot -InvocationId $di
 $locationPushed = $false
 $attemptReleaseRoot = ''
 $attemptStage = 'initializing'
+$declaredVersion = ''
 
 try {
     Push-Location $repoRoot
@@ -370,11 +371,44 @@ try {
             throw "Resume release root is missing edge-deployment-attempt.json: $releaseRoot"
         }
         $savedState = Get-Content -Raw -Encoding UTF8 -LiteralPath $statePath | ConvertFrom-Json
-        if ([string]$savedState.facts.sourceCommit -ne [string]$gitFacts.Head) {
-            throw "Resume artifact sourceCommit '$($savedState.facts.sourceCommit)' does not match pushed HEAD '$($gitFacts.Head)'."
+        $savedFacts = $savedState.facts
+        $savedSourceCommit = if ($null -ne $savedFacts -and $savedFacts.PSObject.Properties['sourceCommit']) {
+            [string]$savedFacts.sourceCommit
         }
-        if ([string]$savedState.facts.version -ne $declaredVersion) {
-            throw "Resume artifact version '$($savedState.facts.version)' does not match current plugin manifest '$declaredVersion'."
+        else { '' }
+        $savedVersion = if ($null -ne $savedFacts -and $savedFacts.PSObject.Properties['version']) {
+            [string]$savedFacts.version
+        }
+        else { '' }
+        $savedModuleId = if ($null -ne $savedFacts -and $savedFacts.PSObject.Properties['moduleId']) {
+            [string]$savedFacts.moduleId
+        }
+        else { '' }
+
+        if ([string]::IsNullOrWhiteSpace($savedSourceCommit) -or [string]::IsNullOrWhiteSpace($savedVersion)) {
+            $resumePackageRoot = Join-Path $releaseRoot 'package'
+            $hasCompletePreservedPackage = $null -ne (Get-PreservedPluginMetadataPath -PackageRoot $resumePackageRoot)
+            $isLegacyEmptyPackFailure =
+                [string]$savedState.target -eq 'EdgePlugin' -and
+                [string]$savedState.stage -eq 'building-package' -and
+                [string]$savedState.status -eq 'failed' -and
+                -not $hasCompletePreservedPackage
+            if (-not $isLegacyEmptyPackFailure) {
+                throw 'Resume attempt is missing sourceCommit/version facts and is not an empty legacy building-package failure.'
+            }
+            Write-Host "Resuming legacy empty plugin pack failure from current clean pushed HEAD: module=$ModuleId version=$declaredVersion sourceCommit=$($gitFacts.Head)"
+        }
+        else {
+            if ($savedSourceCommit -ne [string]$gitFacts.Head) {
+                throw "Resume artifact sourceCommit '$savedSourceCommit' does not match pushed HEAD '$($gitFacts.Head)'."
+            }
+            if ($savedVersion -ne $declaredVersion) {
+                throw "Resume artifact version '$savedVersion' does not match current plugin manifest '$declaredVersion'."
+            }
+        }
+        if (-not [string]::IsNullOrWhiteSpace($savedModuleId) -and
+            -not [string]::Equals($savedModuleId, $ModuleId, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Resume artifact moduleId '$savedModuleId' does not match requested module '$ModuleId'."
         }
     }
     else {
@@ -480,7 +514,8 @@ try {
 catch [System.Management.Automation.PipelineStoppedException] {
     if (-not [string]::IsNullOrWhiteSpace($attemptReleaseRoot)) {
         Write-EdgeDeploymentAttemptState -ReleaseRoot $attemptReleaseRoot -Target EdgePlugin -InvocationId $dispatchInvocationId `
-            -Stage $attemptStage -Status cancelled -Facts @{ resumeReleaseRoot = $attemptReleaseRoot } | Out-Null
+            -Stage $attemptStage -Status cancelled `
+            -Facts @{ moduleId = $ModuleId; version = $declaredVersion; sourceCommit = $gitFacts.Head; resumeReleaseRoot = $attemptReleaseRoot } | Out-Null
     }
     throw
 }
@@ -489,7 +524,8 @@ catch {
     if (-not [string]::IsNullOrWhiteSpace($attemptReleaseRoot)) {
         try {
             Write-EdgeDeploymentAttemptState -ReleaseRoot $attemptReleaseRoot -Target EdgePlugin -InvocationId $dispatchInvocationId `
-                -Stage $attemptStage -Status failed -Facts @{ error = $message; resumeReleaseRoot = $attemptReleaseRoot } | Out-Null
+                -Stage $attemptStage -Status failed `
+                -Facts @{ moduleId = $ModuleId; version = $declaredVersion; sourceCommit = $gitFacts.Head; error = $message; resumeReleaseRoot = $attemptReleaseRoot } | Out-Null
         }
         catch {
             Write-Warning "Could not write Edge plugin failure state. $($_.Exception.Message)"

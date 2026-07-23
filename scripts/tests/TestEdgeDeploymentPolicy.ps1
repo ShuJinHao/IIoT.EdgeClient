@@ -70,6 +70,8 @@ Require-Text 'scripts/PublishEdgePluginRelease.ps1' '\[string\]\$PluginRepositor
 Require-Text 'scripts/PublishEdgePluginRelease.ps1' 'eng/PackEdgePlugin\.ps1' 'Edge plugin publication must call the Private Plugins unique pack implementation.'
 Require-Text 'scripts/PublishEdgePluginRelease.ps1' 'function\s+Invoke-PluginPack\s*\{[\s\S]*?\[hashtable\]\$Parameters[\s\S]*?&\s+\$scriptPath\s+@Parameters' 'PowerShell plugin pack dispatch must use named hashtable splatting.'
 Require-Text 'scripts/PublishEdgePluginRelease.ps1' 'Get-PreservedPluginMetadataPath[\s\S]*?if\s*\(\$null\s+-eq\s+\$metadataPath\)[\s\S]*?Invoke-PluginPack\s+-Parameters' 'A resumed plugin release must rebuild when the failed attempt has no complete package.'
+Require-Text 'scripts/PublishEdgePluginRelease.ps1' '\$isLegacyEmptyPackFailure\s*=[\s\S]*?building-package[\s\S]*?failed[\s\S]*?-not\s+\$hasCompletePreservedPackage' 'An old failed pack state may be recovered only when no complete package exists.'
+Require-Text 'scripts/PublishEdgePluginRelease.ps1' '-Status\s+failed[\s\S]*?moduleId\s*=\s*\$ModuleId[\s\S]*?version\s*=\s*\$declaredVersion[\s\S]*?sourceCommit\s*=\s*\$gitFacts\.Head' 'Plugin failure state must preserve the immutable source identity required by resume.'
 Forbid-Text 'scripts/PublishEdgePluginRelease.ps1' 'Invoke-PluginPack\s+@\(' 'PowerShell array splatting is positional and must not be used for named plugin pack parameters.'
 Require-Text 'scripts/TestEdgeDeploymentPreflight.ps1' 'RequirePushedHead' 'Edge production publication must require a pushed Git HEAD.'
 Require-Text 'scripts/TestEdgeDeploymentPreflight.ps1' '\[string\]\$WorkspaceRoot' 'Edge deployment preflight must expose an explicit workspace root.'
