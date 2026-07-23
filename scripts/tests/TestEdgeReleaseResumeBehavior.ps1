@@ -29,7 +29,6 @@ $oldEnvironment = @{
     Dispatch = $env:IIOT_EDGE_WORKSPACE_DISPATCH
     Target = $env:IIOT_EDGE_WORKSPACE_TARGET
     Invocation = $env:IIOT_EDGE_WORKSPACE_INVOCATION_ID
-    Token = $env:IIOT_CLOUD_RELEASE_TOKEN
 }
 $passed = 0
 
@@ -40,11 +39,20 @@ function Invoke-GitChecked {
 }
 
 function Set-Dispatch {
-    param([Parameter(Mandatory = $true)][ValidateSet('EdgeHost', 'EdgePlugin')][string]$Target)
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('EdgeHost', 'EdgePlugin')]
+        [string]$Target,
+        [string]$InvocationId = ''
+    )
     $env:IIOT_EDGE_WORKSPACE_DISPATCH = '1'
     $env:IIOT_EDGE_WORKSPACE_TARGET = $Target
-    $env:IIOT_EDGE_WORKSPACE_INVOCATION_ID = [Guid]::NewGuid().ToString('D')
-    $env:IIOT_CLOUD_RELEASE_TOKEN = 'fake-token'
+    $env:IIOT_EDGE_WORKSPACE_INVOCATION_ID = if ([string]::IsNullOrWhiteSpace($InvocationId)) {
+        [Guid]::NewGuid().ToString('D')
+    }
+    else {
+        $InvocationId
+    }
 }
 
 function Assert-ThrowsContaining {
@@ -84,33 +92,151 @@ try {
     & git init -q $cloneRoot
     if ($LASTEXITCODE -ne 0) { throw 'Could not initialize isolated Edge test clone.' }
     Invoke-GitChecked -Directory $cloneRoot -Arguments @('config', 'core.longpaths', 'true')
+    Invoke-GitChecked -Directory $cloneRoot -Arguments @('config', 'user.name', 'edge-release-contract-test')
+    Invoke-GitChecked -Directory $cloneRoot -Arguments @('config', 'user.email', 'edge-release-contract-test@example.invalid')
     Invoke-GitChecked -Directory $cloneRoot -Arguments @('remote', 'add', 'source', $sourceRepoRoot)
     Invoke-GitChecked -Directory $cloneRoot -Arguments @('fetch', '-q', 'source', 'HEAD')
-    Invoke-GitChecked -Directory $cloneRoot -Arguments @('checkout', '-q', '-b', 'edge-resume-test', 'FETCH_HEAD')
+    Invoke-GitChecked -Directory $cloneRoot -Arguments @('checkout', '-q', '-B', 'main', 'FETCH_HEAD')
+    foreach ($currentDeploymentScript in @(
+        'EdgeDeployment.Common.ps1',
+        'EdgeReleaseCredential.Common.ps1',
+        'LocalPublishAndDeploy.ps1',
+        'PublishEdgeClientInstallerArtifact.ps1',
+        'PublishEdgePluginRelease.ps1',
+        'SaveEdgeReleaseToken.ps1',
+        'TestEdgeDeploymentPreflight.ps1'
+    )) {
+        Copy-Item `
+            -LiteralPath (Join-Path $scriptsRoot $currentDeploymentScript) `
+            -Destination (Join-Path $cloneRoot "scripts/$currentDeploymentScript") `
+            -Force
+    }
+    Invoke-GitChecked -Directory $cloneRoot -Arguments @('add', 'scripts')
+    Invoke-GitChecked -Directory $cloneRoot -Arguments @(
+        'commit', '-q', '--allow-empty', '-m', 'test current deployment scripts')
     & git init --bare -q $remoteRoot
     if ($LASTEXITCODE -ne 0) { throw 'Could not initialize isolated Edge test remote.' }
     Invoke-GitChecked -Directory $cloneRoot -Arguments @('remote', 'add', 'origin', $remoteRoot)
-    Invoke-GitChecked -Directory $cloneRoot -Arguments @('push', '-q', '-u', 'origin', 'edge-resume-test')
+    Invoke-GitChecked -Directory $cloneRoot -Arguments @('push', '-q', '-u', 'origin', 'main')
     $head = (& git -C $cloneRoot rev-parse HEAD).Trim()
 
     & git init -q $pluginCloneRoot
     if ($LASTEXITCODE -ne 0) { throw 'Could not initialize isolated Edge plugin test clone.' }
     Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('config', 'core.longpaths', 'true')
+    Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('config', 'user.name', 'edge-release-contract-test')
+    Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('config', 'user.email', 'edge-release-contract-test@example.invalid')
     Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('remote', 'add', 'source', $resolvedPluginSourceRepoRoot)
     Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('fetch', '-q', 'source', 'HEAD')
-    Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('checkout', '-q', '-b', 'edge-plugin-resume-test', 'FETCH_HEAD')
+    Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('checkout', '-q', '-B', 'main', 'FETCH_HEAD')
+    $pluginManifestPath = Join-Path $pluginCloneRoot 'src/IIoT.Edge.Module.Homogenization/plugin.json'
+    $pluginManifestJson = Get-Content -Raw -Encoding UTF8 -LiteralPath $pluginManifestPath
+    $pluginManifest = $pluginManifestJson | ConvertFrom-Json
+    $pluginVersion = [string]$pluginManifest.version
+    if ([string]::IsNullOrWhiteSpace($pluginVersion)) { throw 'Homogenization plugin manifest version is required.' }
+    $pluginPackageMemory = [IO.MemoryStream]::new()
+    $pluginPackageArchive = [IO.Compression.ZipArchive]::new(
+        $pluginPackageMemory,
+        [IO.Compression.ZipArchiveMode]::Create,
+        $true)
+    try {
+        $manifestEntry = $pluginPackageArchive.CreateEntry('plugin.json')
+        $manifestEntry.LastWriteTime = [DateTimeOffset]::Parse('2020-01-01T00:00:00Z')
+        $manifestWriter = [IO.StreamWriter]::new(
+            $manifestEntry.Open(),
+            [Text.UTF8Encoding]::new($false))
+        try {
+            $manifestWriter.Write($pluginManifestJson)
+        }
+        finally {
+            $manifestWriter.Dispose()
+        }
+        $assemblyEntry = $pluginPackageArchive.CreateEntry([string]$pluginManifest.entryAssembly)
+        $assemblyEntry.LastWriteTime = [DateTimeOffset]::Parse('2020-01-01T00:00:00Z')
+        $assemblyStream = $assemblyEntry.Open()
+        try {
+            $assemblyBytes = [Text.Encoding]::ASCII.GetBytes('release-contract-fixture')
+            $assemblyStream.Write($assemblyBytes, 0, $assemblyBytes.Length)
+        }
+        finally {
+            $assemblyStream.Dispose()
+        }
+    }
+    finally {
+        $pluginPackageArchive.Dispose()
+    }
+    $pluginPackageBytes = $pluginPackageMemory.ToArray()
+    $pluginPackageMemory.Dispose()
+    $pluginPackageSize = [int64]$pluginPackageBytes.Length
+    $pluginPackageHash = [Convert]::ToHexString(
+        [Security.Cryptography.SHA256]::HashData($pluginPackageBytes))
+    [Convert]::ToBase64String($pluginPackageBytes) |
+        Set-Content -Encoding ascii -NoNewline -LiteralPath (
+            Join-Path $pluginCloneRoot 'eng/release-contract-package.b64')
+    @'
+param(
+    [Parameter(Mandatory = $true)][string]$ModuleId,
+    [string]$Configuration = 'Release',
+    [string]$TargetRuntime = 'win-x64',
+    [Parameter(Mandatory = $true)][string]$OutputRoot,
+    [Parameter(Mandatory = $true)][string]$SourceCommit,
+    [switch]$CleanOutput
+)
+$ErrorActionPreference = 'Stop'
+if ($CleanOutput -and (Test-Path -LiteralPath $OutputRoot)) {
+    Remove-Item -LiteralPath $OutputRoot -Recurse -Force
+}
+New-Item -ItemType Directory -Force -Path $OutputRoot | Out-Null
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$manifest = Get-Content -Raw -Encoding UTF8 -LiteralPath (
+    Join-Path $repoRoot "src/IIoT.Edge.Module.$ModuleId/plugin.json") | ConvertFrom-Json
+$packageFileName = "IIoT.EdgePlugin.$ModuleId-$($manifest.version)-$TargetRuntime.zip"
+$packagePath = Join-Path $OutputRoot $packageFileName
+$packageBytes = [Convert]::FromBase64String((
+    Get-Content -Raw -Encoding ASCII -LiteralPath (
+        Join-Path $PSScriptRoot 'release-contract-package.b64')).Trim())
+[IO.File]::WriteAllBytes($packagePath, $packageBytes)
+$package = Get-Item -LiteralPath $packagePath
+$packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagePath).Hash
+@{
+    packageSchemaVersion = 2
+    moduleId = [string]$manifest.moduleId
+    processType = $ModuleId
+    displayName = $ModuleId
+    version = [string]$manifest.version
+    hostApiVersion = '2.0.0'
+    minHostVersion = '2.0.0'
+    maxHostVersion = '2.0.0'
+    dependencies = @()
+    targetRuntime = $TargetRuntime
+    targetFramework = 'net10.0'
+    packageFileName = $packageFileName
+    packageSize = [int64]$package.Length
+    sha256 = $packageHash
+    signature = ''
+    publisher = 'IIoT'
+    sourceCommit = $SourceCommit
+} | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8NoBOM -LiteralPath "$packagePath.json"
+'@ | Set-Content -Encoding utf8NoBOM -LiteralPath (
+        Join-Path $pluginCloneRoot 'eng/PackEdgePlugin.ps1')
+    Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @(
+        'add', 'eng/PackEdgePlugin.ps1', 'eng/release-contract-package.b64')
+    Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @(
+        'commit', '-q', '--allow-empty', '-m', 'add deterministic release contract pack fixture')
     & git init --bare -q $pluginRemoteRoot
     if ($LASTEXITCODE -ne 0) { throw 'Could not initialize isolated Edge plugin test remote.' }
     Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('remote', 'add', 'origin', $pluginRemoteRoot)
-    Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('push', '-q', '-u', 'origin', 'edge-plugin-resume-test')
+    Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('push', '-q', '-u', 'origin', 'main')
     $pluginHead = (& git -C $pluginCloneRoot rev-parse HEAD).Trim()
-    $pluginManifestPath = Join-Path $pluginCloneRoot 'src/IIoT.Edge.Module.Homogenization/plugin.json'
-    $pluginVersion = [string]((Get-Content -Raw -Encoding UTF8 -LiteralPath $pluginManifestPath | ConvertFrom-Json).version)
-    if ([string]::IsNullOrWhiteSpace($pluginVersion)) { throw 'Homogenization plugin manifest version is required.' }
 
     $portFile = Join-Path $testRoot 'port.txt'
     $requestLog = Join-Path $testRoot 'requests.jsonl'
-    $fakeCloudServer = Start-EdgeLoopbackFakeCloud -PortFile $portFile -RequestLog $requestLog -PluginVersion $pluginVersion
+    $fakeCloudServer = Start-EdgeLoopbackFakeCloud `
+        -PortFile $portFile `
+        -RequestLog $requestLog `
+        -PluginVersion $pluginVersion `
+        -PluginSha256 $pluginPackageHash `
+        -PluginPackageSize $pluginPackageSize `
+        -HostSourceCommit $head
     $baseUrl = $fakeCloudServer.BaseUrl
 
     $hostReleaseRoot = Join-Path $testRoot 'host-release'
@@ -126,12 +252,24 @@ try {
     } | ConvertTo-Json | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $hostArtifactRoot 'installer-artifact.json')
     '{}' | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $hostVelopackRoot 'releases.stable.json')
     'preserved host bundle' | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $hostReleaseRoot 'edge-release-bundle-stable-9.9.9.zip')
+    $hostInvocation = [Guid]::NewGuid().ToString('D')
+    @{
+        schemaVersion = 1
+        target = 'EdgeHost'
+        invocationId = $hostInvocation
+        stage = 'uploading'
+        status = 'failed'
+        facts = @{ version = '9.9.9'; sourceCommit = $head }
+    } | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 -LiteralPath (
+        Join-Path $hostReleaseRoot 'edge-deployment-attempt.json')
 
     $pluginReleaseRoot = Join-Path $testRoot 'plugin-release'
     $pluginPackageRoot = Join-Path $pluginReleaseRoot 'package'
     New-Item -ItemType Directory -Force -Path $pluginPackageRoot | Out-Null
     $pluginFileName = "IIoT.EdgePlugin.Homogenization-$pluginVersion-win-x64.zip"
-    'preserved plugin package' | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $pluginPackageRoot $pluginFileName)
+    [IO.File]::WriteAllBytes(
+        (Join-Path $pluginPackageRoot $pluginFileName),
+        $pluginPackageBytes)
     @{
         packageSchemaVersion = 2
         moduleId = 'Homogenization'
@@ -145,54 +283,81 @@ try {
         targetRuntime = 'win-x64'
         targetFramework = 'net10.0'
         packageFileName = $pluginFileName
-        packageSize = 24
-        sha256 = 'FAKE'
+        packageSize = $pluginPackageSize
+        sha256 = $pluginPackageHash
         signature = ''
         publisher = 'IIoT'
         sourceCommit = $pluginHead
     } | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $pluginPackageRoot "$pluginFileName.json")
     'preserved plugin wrapper' | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $pluginReleaseRoot "edge-plugin-release-Homogenization-$pluginVersion-win-x64.zip")
+    $pluginInvocation = [Guid]::NewGuid().ToString('D')
     @{
         schemaVersion = 1
         target = 'EdgePlugin'
-        invocationId = [Guid]::NewGuid().ToString('D')
+        invocationId = $pluginInvocation
         stage = 'uploading'
         status = 'failed'
         facts = @{ moduleId = 'Homogenization'; version = $pluginVersion; sourceCommit = $pluginHead }
     } | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $pluginReleaseRoot 'edge-deployment-attempt.json')
 
-    Set-Dispatch -Target EdgeHost
+    Set-Dispatch -Target EdgeHost -InvocationId $hostInvocation
     & (Join-Path $cloneRoot 'scripts/LocalPublishAndDeploy.ps1') `
         -Version '9.9.9' -CloudApiBaseUrl "$baseUrl/api/v1" -ReleaseNotes 'fake host release notes' `
+        -CloudToken 'fake-token' -ExpectedSha $head `
         -ResumeReleaseRoot $hostReleaseRoot -SkipVelopackValidation -SkipInstallerValidation
     Assert-State -ReleaseRoot $hostReleaseRoot -Status succeeded
 
-    Set-Dispatch -Target EdgePlugin
+    Set-Dispatch -Target EdgePlugin -InvocationId $pluginInvocation
     & (Join-Path $cloneRoot 'scripts/PublishEdgePluginRelease.ps1') `
         -ModuleId Homogenization -PluginRepositoryRoot $pluginCloneRoot `
         -CloudApiBaseUrl "$baseUrl/api/v1" -ReleaseNotes 'fake plugin release notes' `
+        -CloudToken 'fake-token' -ExpectedSha $pluginHead `
         -ResumeReleaseRoot $pluginReleaseRoot -SkipPackageValidation
     Assert-State -ReleaseRoot $pluginReleaseRoot -Status succeeded
     $initialPostCount = Get-RequestCount -RequestLog $requestLog
     if ($initialPostCount -ne 2) { throw "Expected two fake Cloud uploads, got $initialPostCount." }
     $passed++
 
-    Set-Dispatch -Target EdgeHost
+    Set-Dispatch -Target EdgeHost -InvocationId $hostInvocation
     & (Join-Path $cloneRoot 'scripts/LocalPublishAndDeploy.ps1') `
         -Version '9.9.9' -CloudApiBaseUrl "$baseUrl/existing/api/v1" -ReleaseNotes 'fake host release notes' `
+        -CloudToken 'fake-token' -ExpectedSha $head `
         -ResumeReleaseRoot $hostReleaseRoot -SkipVelopackValidation -SkipInstallerValidation
-    Set-Dispatch -Target EdgePlugin
+    Set-Dispatch -Target EdgePlugin -InvocationId $pluginInvocation
     & (Join-Path $cloneRoot 'scripts/PublishEdgePluginRelease.ps1') `
         -ModuleId Homogenization -PluginRepositoryRoot $pluginCloneRoot `
         -CloudApiBaseUrl "$baseUrl/existing/api/v1" -ReleaseNotes 'fake plugin release notes' `
+        -CloudToken 'fake-token' -ExpectedSha $pluginHead `
         -ResumeReleaseRoot $pluginReleaseRoot -SkipPackageValidation
     if ((Get-RequestCount -RequestLog $requestLog) -ne $initialPostCount) { throw 'Existing release reconciliation unexpectedly re-uploaded artifacts.' }
+    $passed++
+
+    $reconcileOutputRoot = Join-Path $testRoot 'from-zero-plugin-reconcile'
+    Set-Dispatch -Target EdgePlugin
+    $reconcileInvocation = $env:IIOT_EDGE_WORKSPACE_INVOCATION_ID
+    & (Join-Path $cloneRoot 'scripts/PublishEdgePluginRelease.ps1') `
+        -ModuleId Homogenization -PluginRepositoryRoot $pluginCloneRoot `
+        -CloudApiBaseUrl "$baseUrl/existing/api/v1" -ReleaseNotes 'from-zero reconciliation' `
+        -CloudToken 'fake-token' -ExpectedSha $pluginHead `
+        -OutputRoot $reconcileOutputRoot -ReconcileExistingRelease -SkipPackageValidation
+    $reconcileReleaseRoot = Join-Path $reconcileOutputRoot "stable/Homogenization/reconcile-$reconcileInvocation"
+    Assert-State -ReleaseRoot $reconcileReleaseRoot -Status succeeded
+    $reconcileState = Get-Content -Raw -Encoding UTF8 -LiteralPath (
+        Join-Path $reconcileReleaseRoot 'edge-deployment-attempt.json') | ConvertFrom-Json
+    if (-not [bool]$reconcileState.facts.rebuiltAndCompared -or
+        -not [bool]$reconcileState.facts.alreadyPublished) {
+        throw 'From-zero plugin reconciliation did not record rebuiltAndCompared/alreadyPublished evidence.'
+    }
+    if ((Get-RequestCount -RequestLog $requestLog) -ne $initialPostCount) {
+        throw 'From-zero plugin reconciliation unexpectedly uploaded or replaced restored release bytes.'
+    }
     $passed++
 
     Set-Dispatch -Target EdgeHost
     Assert-ThrowsContaining -Action {
         & (Join-Path $cloneRoot 'scripts/LocalPublishAndDeploy.ps1') `
-            -Version '9.9.9' -CloudApiBaseUrl "$baseUrl/existing/api/v1" -ReleaseNotes 'new attempt'
+            -Version '9.9.9' -CloudApiBaseUrl "$baseUrl/existing/api/v1" -ReleaseNotes 'new attempt' `
+            -CloudToken 'fake-token' -ExpectedSha $head
     } -Needles @('already exists', 'No build was started')
     if (Test-Path -LiteralPath (Join-Path $cloneRoot 'publish/local-edge-release/stable/9.9.9/edge-runtime')) {
         throw 'Duplicate Host version unexpectedly started a runtime build.'
@@ -203,22 +368,25 @@ try {
     Assert-ThrowsContaining -Action {
         & (Join-Path $cloneRoot 'scripts/PublishEdgePluginRelease.ps1') `
             -ModuleId Homogenization -PluginRepositoryRoot $pluginCloneRoot `
-            -CloudApiBaseUrl "$baseUrl/existing/api/v1" -ReleaseNotes 'new attempt'
+            -CloudApiBaseUrl "$baseUrl/existing/api/v1" -ReleaseNotes 'new attempt' `
+            -CloudToken 'fake-token' -ExpectedSha $pluginHead
     } -Needles @('already exists', 'No package build was started')
 
-    Set-Dispatch -Target EdgeHost
+    Set-Dispatch -Target EdgeHost -InvocationId $hostInvocation
     Assert-ThrowsContaining -Action {
         & (Join-Path $cloneRoot 'scripts/LocalPublishAndDeploy.ps1') `
             -Version '9.9.9' -CloudApiBaseUrl "$baseUrl/error/api/v1" -ReleaseNotes 'fake host release notes' `
+            -CloudToken 'fake-token' -ExpectedSha $head `
             -ResumeReleaseRoot $hostReleaseRoot -SkipVelopackValidation -SkipInstallerValidation
     } -Needles @('httpStatus=413', 'bundle_too_large', 'Artifacts were preserved')
     Assert-State -ReleaseRoot $hostReleaseRoot -Status failed
 
-    Set-Dispatch -Target EdgeHost
+    Set-Dispatch -Target EdgeHost -InvocationId $hostInvocation
     $timer = [System.Diagnostics.Stopwatch]::StartNew()
     Assert-ThrowsContaining -Action {
         & (Join-Path $cloneRoot 'scripts/LocalPublishAndDeploy.ps1') `
             -Version '9.9.9' -CloudApiBaseUrl "$baseUrl/slow-upload/api/v1" -ReleaseNotes 'fake host release notes' `
+            -CloudToken 'fake-token' -ExpectedSha $head `
             -ResumeReleaseRoot $hostReleaseRoot -SkipVelopackValidation -SkipInstallerValidation `
             -UploadTimeoutSeconds 1 -LowSpeedTimeSeconds 1 -LowSpeedLimitBytesPerSecond 1
     } -Needles @('curlExit=28', 'Artifacts were preserved')
@@ -226,11 +394,12 @@ try {
     if ($timer.Elapsed.TotalSeconds -ge 4) { throw "Full Host upload timeout was not fail-fast: $($timer.Elapsed.TotalSeconds)s" }
     Assert-State -ReleaseRoot $hostReleaseRoot -Status failed
 
-    Set-Dispatch -Target EdgePlugin
+    Set-Dispatch -Target EdgePlugin -InvocationId $pluginInvocation
     Assert-ThrowsContaining -Action {
         & (Join-Path $cloneRoot 'scripts/PublishEdgePluginRelease.ps1') `
             -ModuleId Homogenization -PluginRepositoryRoot $pluginCloneRoot `
             -CloudApiBaseUrl "$baseUrl/catalog-error/api/v1" -ReleaseNotes 'fake plugin release notes' `
+            -CloudToken 'fake-token' -ExpectedSha $pluginHead `
             -ResumeReleaseRoot $pluginReleaseRoot -SkipPackageValidation
     } -Needles @('httpStatus=500', 'catalog_unavailable', 'injected failure')
 
@@ -243,5 +412,4 @@ finally {
     if ($null -eq $oldEnvironment.Dispatch) { Remove-Item Env:IIOT_EDGE_WORKSPACE_DISPATCH -ErrorAction SilentlyContinue } else { $env:IIOT_EDGE_WORKSPACE_DISPATCH = $oldEnvironment.Dispatch }
     if ($null -eq $oldEnvironment.Target) { Remove-Item Env:IIOT_EDGE_WORKSPACE_TARGET -ErrorAction SilentlyContinue } else { $env:IIOT_EDGE_WORKSPACE_TARGET = $oldEnvironment.Target }
     if ($null -eq $oldEnvironment.Invocation) { Remove-Item Env:IIOT_EDGE_WORKSPACE_INVOCATION_ID -ErrorAction SilentlyContinue } else { $env:IIOT_EDGE_WORKSPACE_INVOCATION_ID = $oldEnvironment.Invocation }
-    if ($null -eq $oldEnvironment.Token) { Remove-Item Env:IIOT_CLOUD_RELEASE_TOKEN -ErrorAction SilentlyContinue } else { $env:IIOT_CLOUD_RELEASE_TOKEN = $oldEnvironment.Token }
 }

@@ -11,12 +11,12 @@ function Assert-EdgeWorkspaceDispatch {
         throw "Workspace dispatch target mismatch. Expected '$ExpectedTarget'."
     }
 
-    $invocationId = [Guid]::Empty
-    if (-not [Guid]::TryParse($env:IIOT_EDGE_WORKSPACE_INVOCATION_ID, [ref]$invocationId) -or $invocationId -eq [Guid]::Empty) {
+    $invocationId = [string]$env:IIOT_EDGE_WORKSPACE_INVOCATION_ID
+    if ($invocationId -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$') {
         throw 'Workspace dispatch invocation id is missing or invalid.'
     }
 
-    return $invocationId.ToString('D')
+    return $invocationId
 }
 
 function Invoke-EdgeGitCapture {
@@ -40,7 +40,11 @@ function Invoke-EdgeGitCapture {
 }
 
 function Assert-EdgeReleaseGitState {
-    param([Parameter(Mandatory = $true)][string]$RepoRoot)
+    param(
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [ValidatePattern('^$|^[0-9A-Fa-f]{40}$')]
+        [string]$ExpectedSha = ''
+    )
 
     $status = Invoke-EdgeGitCapture -RepoRoot $RepoRoot -Arguments @('status', '--porcelain=v1')
     if (-not [string]::IsNullOrWhiteSpace($status.Text)) {
@@ -49,6 +53,15 @@ function Assert-EdgeReleaseGitState {
 
     $head = (Invoke-EdgeGitCapture -RepoRoot $RepoRoot -Arguments @('rev-parse', 'HEAD')).Text
     $branch = (Invoke-EdgeGitCapture -RepoRoot $RepoRoot -Arguments @('rev-parse', '--abbrev-ref', 'HEAD')).Text
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedSha)) {
+        if (-not [string]::Equals($head, $ExpectedSha, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Formal Edge release candidate changed after the deployment plan was frozen: expected='$ExpectedSha' actual='$head'."
+        }
+        if (-not [string]::Equals($branch, 'main', [System.StringComparison]::Ordinal)) {
+            throw "Formal Edge release candidate must remain on main: expectedSha='$ExpectedSha' branch='$branch'."
+        }
+    }
+
     $upstreamResult = Invoke-EdgeGitCapture -RepoRoot $RepoRoot -Arguments @('rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}') -AllowFailure
     if ($upstreamResult.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($upstreamResult.Text)) {
         throw "Formal Edge release requires HEAD '$head' to have a configured pushed upstream."
@@ -66,11 +79,56 @@ function Assert-EdgeReleaseGitState {
     if ($containsResult.ExitCode -ne 0) {
         throw "Formal Edge release requires HEAD '$head' to be pushed to '$upstream'."
     }
+    $upstreamHead = (Invoke-EdgeGitCapture -RepoRoot $RepoRoot -Arguments @('rev-parse', "$upstream^{commit}")).Text
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedSha) -and
+        -not [string]::Equals($upstreamHead, $ExpectedSha, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Formal Edge release upstream changed after the deployment plan was frozen: expected='$ExpectedSha' actual='$upstreamHead' upstream='$upstream'."
+    }
 
     return [PSCustomObject]@{
         Head = $head
         Branch = $branch
         Upstream = $upstream
+        UpstreamHead = $upstreamHead
+    }
+}
+
+function Assert-EdgeResumeAttemptIdentity {
+    param(
+        [Parameter(Mandatory = $true)]$State,
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('EdgeHost', 'EdgePlugin')]
+        [string]$ExpectedTarget,
+        [Parameter(Mandatory = $true)][string]$ExpectedInvocationId,
+        [Parameter(Mandatory = $true)]
+        [ValidatePattern('^[0-9A-Fa-f]{40}$')]
+        [string]$ExpectedSha
+    )
+
+    if ([int]$State.schemaVersion -ne 1 -or
+        -not [string]::Equals([string]$State.target, $ExpectedTarget, [System.StringComparison]::Ordinal)) {
+        throw "Resume attempt does not match the current Edge target: expected='$ExpectedTarget'."
+    }
+    if (-not [string]::Equals(
+            [string]$State.invocationId,
+            $ExpectedInvocationId,
+            [System.StringComparison]::Ordinal)) {
+        throw "Resume attempt invocation does not match the current release invocation: expected='$ExpectedInvocationId' actual='$($State.invocationId)'."
+    }
+
+    $savedSourceCommit = if (
+        $null -ne $State.facts -and
+        $null -ne $State.facts.PSObject.Properties['sourceCommit']) {
+        [string]$State.facts.sourceCommit
+    }
+    else {
+        ''
+    }
+    if (-not [string]::Equals(
+            $savedSourceCommit,
+            $ExpectedSha,
+            [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Resume attempt sourceCommit does not match the frozen candidate: expected='$ExpectedSha' actual='$savedSourceCommit'."
     }
 }
 

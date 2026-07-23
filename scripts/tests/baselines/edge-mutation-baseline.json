@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "ruleId": "TEST-GOV-007",
   "mode": "report-only",
   "testRunner": "mtp",
@@ -21,17 +21,5 @@
     "IoMappingEntity_WhenRequiredFieldsInvalid_ShouldReject",
     "IoMappingEntity_WhenPlcAddressEmpty_ShouldKeepUnconfiguredState"
   ],
-  "initialTestCount": 23,
-  "createdMutants": 257,
-  "totalMutants": 251,
-  "evaluatedMutants": 152,
-  "detected": 68,
-  "survived": 84,
-  "noCoverage": 45,
-  "ignored": 53,
-  "timeout": 0,
-  "compileErrors": 1,
-  "mutationScore": 0.345178,
-  "artifact": "artifacts/mutation/edge-domain/reports/mutation-report.json",
-  "traceLog": "artifacts/mutation/edge-domain/stryker-console.log"
+  "minimumMutationScore": 0.345178
 }

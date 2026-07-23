@@ -8,7 +8,7 @@
     <TestKind>Integration</TestKind>
     <TestRuntime>Filesystem</TestRuntime><TestRuntimeDependencies>ProcessEnvironment</TestRuntimeDependencies>
     <TestRunnerMode>Serial</TestRunnerMode>
-    <TestCadence>PR</TestCadence><TestCapability>Launcher.RuntimePaths</TestCapability><TestRisk>P1</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Launcher</TestOwner><TestRuleId>EDGE-LAUNCHER-001</TestRuleId><TestRequired>true</TestRequired>
+    <TestCapability>Launcher.RuntimePaths</TestCapability><TestRisk>P1</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Launcher</TestOwner><TestRuleId>EDGE-LAUNCHER-001</TestRuleId>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Edge\IIoT.Edge.Launcher\IIoT.Edge.Launcher.csproj" />

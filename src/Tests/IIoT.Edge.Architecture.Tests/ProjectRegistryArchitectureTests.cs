@@ -9,9 +9,97 @@ public sealed partial class ProjectRegistryArchitectureTests
     [
         "TestKind",
         "TestRuntime",
+        "TestRuntimeDependencies",
         "TestRunnerMode",
-        "TestCadence"
+        "TestCapability",
+        "TestRisk",
+        "TestConcern",
+        "TestProfile",
+        "TestOwner",
+        "TestRuleId"
     ];
+
+    private static readonly HashSet<string> AllowedTestKinds =
+    [
+        "Aggregate",
+        "Application",
+        "Architecture",
+        "Conformance",
+        "Contract",
+        "Deployment",
+        "Integration",
+        "Persistence",
+        "UI",
+        "Unit",
+        "Workflow"
+    ];
+
+    private static readonly HashSet<string> AllowedTestRuntimes =
+    [
+        "Pure",
+        "Filesystem",
+        "Network",
+        "Avalonia",
+        "SQLite",
+        "Windows"
+    ];
+
+    private static readonly HashSet<string> AllowedRuntimeDependencies =
+    [
+        "AssemblyLoad",
+        "ControlledConcurrency",
+        "FakeHttp",
+        "FakeTime",
+        "Filesystem",
+        "Headless",
+        "IsolatedDatabase",
+        "Loopback",
+        "MSBuild",
+        "PluginLoad",
+        "PowerShell",
+        "ProcessEnvironment",
+        "Reflection",
+        "Release",
+        "Roslyn",
+        "SharedOutputDirectory"
+    ];
+
+    private static readonly HashSet<string> AllowedTestConcerns =
+    [
+        "Security",
+        "Reliability",
+        "Compatibility",
+        "Accessibility",
+        "Performance"
+    ];
+
+    private static readonly HashSet<string> AllowedTestRisks = ["P0", "P1", "P2"];
+
+    private static readonly HashSet<string> AllowedRunnerModes = ["Parallel", "Serial"];
+
+    private static readonly HashSet<string> AllowedTestProfiles =
+    [
+        "Default",
+        "Simulation",
+        "GoldenDataset",
+        "LiveExternal"
+    ];
+
+    private static readonly IReadOnlyDictionary<string, HashSet<string>> AllowedRuntimesByKind =
+        new Dictionary<string, HashSet<string>>(StringComparer.Ordinal)
+        {
+            ["Aggregate"] = ["Pure"],
+            ["Application"] = ["Pure"],
+            ["Architecture"] = ["Pure", "Filesystem"],
+            ["Conformance"] = ["Pure", "Filesystem"],
+            ["Contract"] = ["Pure", "Filesystem", "Network"],
+            ["Deployment"] = ["Filesystem", "Windows"],
+            ["Integration"] = ["Pure", "Filesystem", "Network", "SQLite"],
+            ["Persistence"] = ["Filesystem", "SQLite"],
+            ["UI"] = ["Avalonia"],
+            ["Unit"] = ["Pure"],
+            ["Workflow"] = ["Pure", "Filesystem", "SQLite"]
+        };
 
     [Fact]
     public void MainSolution_ShouldRegisterEveryPhysicalProjectExactlyOnce()
@@ -42,12 +130,48 @@ public sealed partial class ProjectRegistryArchitectureTests
         foreach (var path in testProjects)
         {
             var project = XDocument.Load(path);
+            var relativePath = Normalize(Path.GetRelativePath(root, path));
             foreach (var property in RequiredTestMetadata)
             {
-                Assert.False(
-                    string.IsNullOrWhiteSpace(GetProjectProperty(project, property)),
-                    $"{Normalize(Path.GetRelativePath(root, path))} must declare {property}.");
+                var values = GetDirectProjectProperties(project, property);
+                Assert.True(
+                    values.Length == 1,
+                    $"{relativePath} must declare direct {property} exactly once; actual={values.Length}.");
+                if (property != "TestRuntimeDependencies")
+                {
+                    Assert.False(
+                        string.IsNullOrWhiteSpace(values[0]),
+                        $"{relativePath} direct {property} cannot be empty.");
+                }
             }
+
+            var testKind = GetProjectProperty(project, "TestKind")!;
+            var runtime = GetProjectProperty(project, "TestRuntime")!;
+            var runtimeDependencies = (GetProjectProperty(project, "TestRuntimeDependencies") ?? string.Empty)
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var runnerMode = GetProjectProperty(project, "TestRunnerMode")!;
+            var risk = GetProjectProperty(project, "TestRisk")!;
+            var concern = GetProjectProperty(project, "TestConcern")!;
+            var profile = GetProjectProperty(project, "TestProfile")!;
+            Assert.Contains(testKind, AllowedTestKinds);
+            Assert.Contains(runtime, AllowedTestRuntimes);
+            Assert.Equal(
+                runtimeDependencies.Length,
+                runtimeDependencies.Distinct(StringComparer.Ordinal).Count());
+            Assert.DoesNotContain(
+                runtimeDependencies,
+                dependency => dependency == "None" || !AllowedRuntimeDependencies.Contains(dependency));
+            Assert.Contains(risk, AllowedTestRisks);
+            Assert.Contains(concern, AllowedTestConcerns);
+            Assert.Contains(profile, AllowedTestProfiles);
+            Assert.Contains(runnerMode, AllowedRunnerModes);
+            Assert.True(
+                runtime == "Pure" ? runnerMode == "Parallel" : runnerMode == "Serial",
+                $"{relativePath} must use Parallel only for Pure tests and Serial for resource-backed tests.");
+            Assert.True(
+                !AllowedRuntimesByKind.TryGetValue(testKind, out var allowedRuntimes) ||
+                allowedRuntimes.Contains(runtime),
+                $"{relativePath} TestKind={testKind} is incompatible with TestRuntime={runtime}.");
 
             var linkedCompileItems = project.Descendants("Compile")
                 .Where(item => item.Attribute("Link") is not null || item.Element("Link") is not null)
@@ -85,6 +209,33 @@ public sealed partial class ProjectRegistryArchitectureTests
     }
 
     [Fact]
+    public void PluginTestFixtures_ShouldRemainNonProductionAndNonExecutable()
+    {
+        var root = FindRepositoryRoot();
+        var fixtures = EnumerateSourceFiles(Path.Combine(root, "src"), "*.csproj")
+            .Select(path => (Path: path, Project: XDocument.Load(path)))
+            .Where(item => IsTrue(GetProjectProperty(item.Project, "IsEdgePluginTestFixture")))
+            .ToArray();
+        Assert.NotEmpty(fixtures);
+
+        foreach (var fixture in fixtures)
+        {
+            var relativePath = Normalize(Path.GetRelativePath(root, fixture.Path));
+            Assert.True(
+                relativePath.StartsWith("src/Testing/", StringComparison.Ordinal),
+                $"{relativePath} must remain below src/Testing.");
+            Assert.True(IsTrue(GetProjectProperty(fixture.Project, "IsEdgePluginModule")));
+            Assert.True(
+                string.Equals(
+                    "false",
+                    GetProjectProperty(fixture.Project, "IsPackable"),
+                    StringComparison.OrdinalIgnoreCase),
+                $"{relativePath} must declare IsPackable=false.");
+            Assert.False(IsTrue(GetProjectProperty(fixture.Project, "IsTestProject")));
+        }
+    }
+
+    [Fact]
     public void LegacyBucketAndCompatibilityProjects_ShouldBePhysicallyAbsent()
     {
         var root = FindRepositoryRoot();
@@ -104,40 +255,6 @@ public sealed partial class ProjectRegistryArchitectureTests
             path => Directory.Exists(Path.Combine(root, NormalizeForOs(path))));
     }
 
-    [Fact]
-    public void RetiredProcessFamilyTokens_ShouldBeAbsentFromActiveWorkspace()
-    {
-        var root = FindRepositoryRoot();
-        var evidenceGate = Path.Combine(root, "scripts", "tests", "Test-EdgeRetiredFeatureEvidence.ps1");
-        var evidenceFixtures = Path.Combine(root, "scripts", "tests", "Test-EdgeRetiredFeatureEvidenceFixtures.ps1");
-        Assert.True(File.Exists(evidenceGate), $"Missing retired feature evidence gate: {evidenceGate}");
-        Assert.True(File.Exists(evidenceFixtures), $"Missing retired feature evidence fixtures: {evidenceFixtures}");
-
-        var evidenceCommand = "run: ./scripts/tests/Test-EdgeRetiredFeatureEvidence.ps1 -RepositoryRoot .";
-        var fixtureCommand = "run: ./scripts/tests/Test-EdgeRetiredFeatureEvidenceFixtures.ps1 -RepositoryRoot .";
-        var workflows = new[]
-        {
-            Path.Combine(root, ".github", "workflows", "edge-smoke-build.yml"),
-            Path.Combine(root, ".github", "workflows", "edge-pack-modules.yml")
-        };
-        foreach (var workflow in workflows)
-        {
-            Assert.True(File.Exists(workflow), $"Missing workflow: {workflow}");
-            var workflowText = File.ReadAllText(workflow);
-            Assert.Equal(1, workflowText.Split(evidenceCommand, StringSplitOptions.None).Length - 1);
-            Assert.Equal(1, workflowText.Split(fixtureCommand, StringSplitOptions.None).Length - 1);
-
-            var evidenceIndex = workflowText.IndexOf(evidenceCommand, StringComparison.Ordinal);
-            var fixtureIndex = workflowText.IndexOf(fixtureCommand, StringComparison.Ordinal);
-            var restoreIndex = workflowText.IndexOf("name: Restore ", StringComparison.Ordinal);
-            Assert.True(evidenceIndex >= 0 && evidenceIndex < fixtureIndex,
-                $"Retired feature evidence must run before its negative fixtures: {workflow}");
-            Assert.True(fixtureIndex < restoreIndex,
-                $"Retired feature evidence must remain in preflight before restore/package work: {workflow}");
-        }
-
-    }
-
     [GeneratedRegex("<Project\\s+Path=\"([^\"]+\\.csproj)\"", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ProjectPathPattern();
 
@@ -145,10 +262,19 @@ public sealed partial class ProjectRegistryArchitectureTests
     private static partial Regex TestAttributePattern();
 
     private static string? GetProjectProperty(XDocument project, string propertyName) =>
+        GetDirectProjectProperties(project, propertyName)
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+    private static string[] GetDirectProjectProperties(XDocument project, string propertyName) =>
         project.Root?
             .Elements("PropertyGroup")
-            .Select(group => group.Element(propertyName)?.Value?.Trim())
-            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+            .Elements(propertyName)
+            .Select(element => element.Value.Trim())
+            .ToArray()
+        ?? [];
+
+    private static bool IsTrue(string? value) =>
+        string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
 
     private static IEnumerable<string> EnumerateSourceFiles(string root, string pattern) =>
         Directory.EnumerateFiles(root, pattern, SearchOption.AllDirectories).Where(path => !ShouldSkip(path));

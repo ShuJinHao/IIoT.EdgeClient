@@ -123,7 +123,7 @@ try {
     ) | Set-Content $logPath -Encoding utf8
 
     $baseline = [ordered]@{
-        schemaVersion = 1
+        schemaVersion = 2
         ruleId = 'TEST-GOV-007'
         mode = 'report-only'
         testRunner = 'mtp'
@@ -132,53 +132,48 @@ try {
         testProject = 'src/Tests/IIoT.Edge.Domain.Tests/IIoT.Edge.Domain.Tests.csproj'
         mutate = @('Config/Aggregates/*.cs', 'Hardware/Aggregates/*.cs')
         requiredSemanticTests = $requiredSemanticTests
-        initialTestCount = 8
-        createdMutants = 14
-        totalMutants = 12
-        evaluatedMutants = 9
-        detected = 6
-        survived = 2
-        noCoverage = 1
-        ignored = 1
-        timeout = 1
-        compileErrors = 1
-        mutationScore = 0.7
-        artifact = 'artifacts/mutation/edge-domain/reports/mutation-report.json'
-        traceLog = 'artifacts/mutation/edge-domain/stryker-console.log'
+        minimumMutationScore = 0.7
     }
     Write-Json $baselinePath $baseline
 
     $valid = Invoke-Gate
     if ($valid.ExitCode -ne 0) {
-        throw "Exact mutation report and baseline should pass. output=$($valid.Output)"
+        throw "Mutation report meeting the production threshold should pass. output=$($valid.Output)"
     }
 
     $falsifiedScore = Get-Content $baselinePath -Raw | ConvertFrom-Json -Depth 32
-    $falsifiedScore.mutationScore = 0.9
+    $falsifiedScore.minimumMutationScore = 0.9
     Write-Json $baselinePath $falsifiedScore
-    Assert-Rejected (Invoke-Gate) 'Falsified baseline score' 'baseline result ledger is inconsistent'
+    Assert-Rejected (Invoke-Gate) 'Raised minimum score' 'below the production quality policy'
     Write-Json $baselinePath $baseline
 
-    $reportMutations = @(
-        [pscustomobject]@{ Label = 'killed-to-survived'; Index = 0; Status = 'Survived' },
+    $regressed = @($statuses)
+    $regressed[0] = 'Survived'
+    Write-Report -Statuses $regressed
+    Assert-Rejected (Invoke-Gate) 'Killed-to-survived score regression' 'below the production quality policy'
+
+    $nonRegressiveReshapes = @(
         [pscustomobject]@{ Label = 'no-coverage-to-ignored'; Index = 8; Status = 'Ignored' },
         [pscustomobject]@{ Label = 'ignored-to-compile-error'; Index = 9; Status = 'CompileError' },
         [pscustomobject]@{ Label = 'killed-to-timeout'; Index = 0; Status = 'Timeout' }
     )
-    foreach ($mutation in $reportMutations) {
+    foreach ($mutation in $nonRegressiveReshapes) {
         $changed = @($statuses)
         $changed[$mutation.Index] = $mutation.Status
         Write-Report -Statuses $changed
-        Assert-Rejected (Invoke-Gate) "Report status drift $($mutation.Label)" 'mutation result ledger changed'
+        $result = Invoke-Gate
+        if ($result.ExitCode -ne 0) {
+            throw "Non-regressive report reshape $($mutation.Label) should not be frozen by historical counts. output=$($result.Output)"
+        }
     }
 
     Write-Report -Statuses $statuses
     $final = Invoke-Gate
     if ($final.ExitCode -ne 0) {
-        throw "Restored exact mutation report should pass. output=$($final.Output)"
+        throw "Restored mutation report should pass. output=$($final.Output)"
     }
 
-    Write-Host 'EDGE_MUTATION_BASELINE_BEHAVIOR_OK valid=2 falsifiedScore=1 statusDrift=4'
+    Write-Host 'EDGE_MUTATION_BASELINE_BEHAVIOR_OK valid=2 raisedThreshold=1 scoreRegression=1 nonRegressiveReshape=3'
 } finally {
     Remove-Item $workingRoot -Recurse -Force -ErrorAction SilentlyContinue
     $global:LASTEXITCODE = 0

@@ -389,12 +389,6 @@
       "declarationPath": "src/Application/IIoT.Edge.Application/Features/Config/SchemaReconciliation/IoMappingSchemaMetadata.cs",
       "status": "MigrationWindow",
       "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
-      "coverageTests": [
-        {
-          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/IoMappingSchemaReconciliationBehaviorTests.cs",
-          "test": "ReconcileAsync_WhenRemarkMatchesModuleLegacyAlias_ShouldMigrateOnlyThatExactRemark"
-        }
-      ],
       "rationale": "Bounded schema-reconciliation reader used only to repair persisted historical IO remarks.",
       "callEvidence": [
         {
@@ -411,12 +405,6 @@
       "declarationPath": "src/Application/IIoT.Edge.Application/Features/Config/SchemaReconciliation/ModuleParamSchemaSource.cs",
       "status": "MigrationWindow",
       "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
-      "coverageTests": [
-        {
-          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/ModuleParamSchemaReconciliationBehaviorTests.cs",
-          "test": "ReconcileAsync_WhenExistingModuleParamMatchesLegacyDefault_ShouldRepairOnlyLegacyValue"
-        }
-      ],
       "rationale": "Bounded schema-reconciliation reader used only to repair persisted historical module defaults.",
       "callEvidence": [
         {
@@ -783,12 +771,6 @@
       "declarationPath": "src/Shared/IIoT.Edge.SharedKernel/Security/EdgePasswordHasher.cs",
       "status": "MigrationWindow",
       "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
-      "coverageTests": [
-        {
-          "path": "src/Tests/IIoT.Edge.Cloud.ContractTests/AuthServiceBehaviorTests.cs",
-          "test": "LoginLocalAsync_WhenStoredHashIsLegacySha256_ShouldRequireResetWithoutSession"
-        }
-      ],
       "rationale": "Bounded password-hash migration detector consumed by authentication and the in-place rehash path.",
       "callEvidence": [
         {
@@ -805,12 +787,6 @@
       "declarationPath": "src/Shared/IIoT.Edge.SharedKernel/Security/EdgePasswordHasher.cs",
       "status": "MigrationWindow",
       "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
-      "coverageTests": [
-        {
-          "path": "src/Tests/IIoT.Edge.Cloud.ContractTests/AuthServiceBehaviorTests.cs",
-          "test": "LoginLocalAsync_WhenStoredHashIsLegacySha256_ShouldRequireResetWithoutSession"
-        }
-      ],
       "rationale": "Bounded verifier invoked only after a stored hash is identified as the historical SHA-256 format.",
       "callEvidence": [
         {
@@ -872,12 +848,6 @@
       "declarationPath": "src/Application/IIoT.Edge.Application/Abstractions/Config/IModuleParamRegistry.cs",
       "status": "MigrationWindow",
       "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
-      "coverageTests": [
-        {
-          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/ModuleParamSchemaReconciliationBehaviorTests.cs",
-          "test": "ReconcileAsync_WhenExistingModuleParamMatchesLegacyDefault_ShouldRepairOnlyLegacyValue"
-        }
-      ],
       "rationale": "Bounded module-default migration input consumed by the registry.",
       "callEvidence": [
         {
@@ -954,12 +924,6 @@
       "declarationPath": "src/Application/IIoT.Edge.Application/Abstractions/Config/ModuleParamDescriptor.cs",
       "status": "MigrationWindow",
       "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
-      "coverageTests": [
-        {
-          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/ModuleParamSchemaReconciliationBehaviorTests.cs",
-          "test": "ReconcileAsync_WhenExistingModuleParamMatchesLegacyDefault_ShouldRepairOnlyLegacyValue"
-        }
-      ],
       "rationale": "Bounded persisted-default migration data consumed by schema reconciliation.",
       "callEvidence": [
         {
@@ -1066,12 +1030,6 @@
       "declarationPath": "src/Application/IIoT.Edge.Application/Features/Config/CloudApi/CloudSystemSwitchMigration.cs",
       "status": "MigrationWindow",
       "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
-      "coverageTests": [
-        {
-          "path": "src/Tests/IIoT.Edge.Cloud.ContractTests/LocalParameterConfigBehaviorTests.cs",
-          "test": "CloudSystemSwitchMigration_ShouldUseSystemAndAllLegacySwitchesFailClosed"
-        }
-      ],
       "rationale": "Bounded persisted Cloud-switch migration key consumed by the one-shot migration.",
       "callEvidence": [
         {
@@ -1133,12 +1091,6 @@
       "declarationPath": "src/Application/IIoT.Edge.Application/Features/Config/SchemaReconciliation/IoMappingSchemaMetadata.cs",
       "status": "MigrationWindow",
       "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
-      "coverageTests": [
-        {
-          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/IoMappingSchemaReconciliationBehaviorTests.cs",
-          "test": "ReconcileAsync_WhenRemarkMatchesModuleLegacyAlias_ShouldMigrateOnlyThatExactRemark"
-        }
-      ],
       "rationale": "Bounded IO remark migration metadata key consumed by reconciliation.",
       "callEvidence": [
         {
@@ -1155,12 +1107,6 @@
       "declarationPath": "src/Application/IIoT.Edge.Application/Features/Config/SchemaReconciliation/ModuleParamSchemaSource.cs",
       "status": "MigrationWindow",
       "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
-      "coverageTests": [
-        {
-          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/ModuleParamSchemaReconciliationBehaviorTests.cs",
-          "test": "ReconcileAsync_WhenExistingModuleParamMatchesLegacyDefault_ShouldRepairOnlyLegacyValue"
-        }
-      ],
       "rationale": "Bounded module-default migration metadata key consumed by reconciliation.",
       "callEvidence": [
         {
@@ -1192,12 +1138,6 @@
       "declarationPath": "src/Application/IIoT.Edge.Application/Modules/Hardware/ModuleHardwareProfileModels.cs",
       "status": "MigrationWindow",
       "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
-      "coverageTests": [
-        {
-          "path": "src/Tests/IIoT.Edge.Module.Homogenization.ConformanceTests/IoMappingSchemaReconciliationBehaviorTests.cs",
-          "test": "ReconcileAsync_WhenRemarkMatchesModuleLegacyAlias_ShouldMigrateOnlyThatExactRemark"
-        }
-      ],
       "rationale": "Bounded hardware-template remark migration data consumed by IO reconciliation metadata.",
       "callEvidence": [
         {
@@ -1889,12 +1829,6 @@
       "declarationPath": "src/Shared/IIoT.Edge.SharedKernel/Security/EdgePasswordHasher.cs",
       "status": "MigrationWindow",
       "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
-      "coverageTests": [
-        {
-          "path": "src/Tests/IIoT.Edge.Cloud.ContractTests/AuthServiceBehaviorTests.cs",
-          "test": "LoginLocalAsync_WhenStoredHashIsLegacySha256_ShouldRequireResetWithoutSession"
-        }
-      ],
       "rationale": "Bounded password migration result consumed by authentication before mandatory reset/rehash.",
       "callEvidence": [
         {
@@ -1911,12 +1845,6 @@
       "declarationPath": "src/Shared/IIoT.Edge.SharedKernel/Security/EdgePasswordHasher.cs",
       "status": "MigrationWindow",
       "windowId": "EDGE-CANDIDATE-LEGACY-BOUNDED-MIGRATIONS",
-      "coverageTests": [
-        {
-          "path": "src/Tests/IIoT.Edge.Cloud.ContractTests/AuthServiceBehaviorTests.cs",
-          "test": "LoginLocalAsync_WhenStoredHashIsLegacySha256_ShouldRequireResetWithoutSession"
-        }
-      ],
       "rationale": "Bounded password migration result emitted for a failed historical hash comparison.",
       "callEvidence": [
         {
@@ -2041,20 +1969,6 @@
           "pattern": "isLegacyCache",
           "expectedOccurrences": 3
         }
-      ],
-      "coverageTests": [
-        {
-          "path": "src/Tests/IIoT.Edge.Cloud.ContractTests/LocalParameterConfigBehaviorTests.cs",
-          "test": "CloudSystemSwitchMigration_ShouldUseSystemAndAllLegacySwitchesFailClosed"
-        },
-        {
-          "path": "src/Tests/IIoT.Edge.Cloud.ContractTests/AuthServiceBehaviorTests.cs",
-          "test": "LoginLocalAsync_WhenStoredHashIsLegacySha256_ShouldRequireResetWithoutSession"
-        },
-        {
-          "path": "src/Tests/IIoT.Edge.DeviceBootstrap.IntegrationTests/DeviceBootstrapBehaviorTests.cs",
-          "test": "TryLoad_ShouldMapLegacyMacAddressCacheToRequestedClientCode"
-        }
       ]
     },
     {
@@ -2124,13 +2038,7 @@
       ],
       "replacementPath": "Cloud provider first accepts a stable requestId/idempotency contract; Edge then supplies CloudRequestOptions.IdempotencyKey without changing the payload protocol unilaterally.",
       "deletionCondition": "Cloud capacity-hourly contract and deployed consumer accept the replacement idempotency field/header, and dual-path contract tests pass during the bounded migration window.",
-      "latestRemovalBatch": "EDGE-CLOUD-IDEMPOTENCY-002",
-      "coverageTests": [
-        {
-          "path": "src/Tests/IIoT.Edge.Runtime.WorkflowTests/CapacitySyncTaskBehaviorTests.cs",
-          "test": "RetryBuffer_WhenOnlineAndAllPostsSucceed_ShouldPostAllAndDeleteClaimedSummaries"
-        }
-      ]
+      "latestRemovalBatch": "EDGE-CLOUD-IDEMPOTENCY-002"
     },
     {
       "id": "EDGE-COMPAT-DEVICE-LOG-NO-IDEMPOTENCY",
@@ -2153,13 +2061,7 @@
       ],
       "replacementPath": "Cloud provider first accepts a stable requestId/idempotency contract; Edge then supplies CloudRequestOptions.IdempotencyKey without changing the payload protocol unilaterally.",
       "deletionCondition": "Cloud device-log contract and deployed consumer accept the replacement idempotency field/header, and dual-path contract tests pass during the bounded migration window.",
-      "latestRemovalBatch": "EDGE-CLOUD-IDEMPOTENCY-002",
-      "coverageTests": [
-        {
-          "path": "src/Tests/IIoT.Edge.Runtime.WorkflowTests/DeviceLogSyncTaskBehaviorTests.cs",
-          "test": "RetryBuffer_WhenOnline_ShouldPostAndDeleteClaimedRows"
-        }
-      ]
+      "latestRemovalBatch": "EDGE-CLOUD-IDEMPOTENCY-002"
     },
     {
       "id": "EDGE-COMPAT-CONTENT-HASH-IDEMPOTENCY",
@@ -2188,17 +2090,7 @@
       ],
       "replacementPath": "Provider-issued or persisted business requestId becomes the sole idempotency identity after every Cloud endpoint accepts it.",
       "deletionCondition": "All listed live consumers use the provider-approved stable business requestId and no production call site references the content-hash builder.",
-      "latestRemovalBatch": "EDGE-CLOUD-IDEMPOTENCY-003",
-      "coverageTests": [
-        {
-          "path": "src/Tests/IIoT.Edge.Runtime.WorkflowTests/CloudConsumerBehaviorTests.cs",
-          "test": "ProcessBatchAsync_WhenSameProcessContainsMultiplePlcs_ShouldUploadPerPlcContext"
-        },
-        {
-          "path": "src/Tests/IIoT.Edge.Cloud.ContractFilesystemTests/PassStationContractSnapshotTests.cs",
-          "test": "CanonicalSnapshot_RequestIdDescription_ShouldMatchRealHashBuilder"
-        }
-      ]
+      "latestRemovalBatch": "EDGE-CLOUD-IDEMPOTENCY-003"
     }
   ]
 }

@@ -2,170 +2,221 @@ name: edge-smoke-build
 
 on:
   pull_request:
-    branches:
-      - main
+    branches: [main]
   push:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "default=Architecture/Security + affected Business; heavy lanes require an explicit mode"
+        required: true
+        type: choice
+        default: default
+        options:
+          - default
+          - quality
+          - cross-project
+          - full
+      cloud_ref:
+        description: "Cloud ref used only by cross-project mode"
+        required: false
+        type: string
+        default: main
+
+permissions:
+  contents: read
 
 env:
   DOTNET_NOLOGO: true
-  EDGE_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+  CI_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'default' }}
+  EDGE_BASE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
 
 jobs:
   smoke-build:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.mode != 'cross-project' }}
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 90
+
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
           global-json-file: global.json
 
-      - name: Validate Edge governance baseline monotonicity behavior
+      - name: Select current scope and validate selector only when affected
+        id: select
         shell: pwsh
-        run: ./scripts/tests/Test-EdgeGovernanceBaselineMonotonicityBehavior.ps1
+        run: |
+          $baseRef = $env:EDGE_BASE_REF
+          if ([string]::IsNullOrWhiteSpace($baseRef)) {
+            $baseRef = 'HEAD^'
+          }
+          $selectorInputs = @(
+            & git diff --name-only $baseRef HEAD -- `
+              '.github/workflows/edge-smoke-build.yml' `
+              'scripts/tests/Select-EdgeCiTests.ps1' `
+              'scripts/tests/Invoke-EdgeCiSelectedTests.ps1' `
+              'scripts/tests/Test-EdgeCiTestSelection.ps1'
+          )
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Unable to determine whether the Edge CI selector changed.'
+          }
+          if ($selectorInputs.Count -gt 0) {
+            ./scripts/tests/Test-EdgeCiTestSelection.ps1
+          } else {
+            Write-Host 'Edge CI selector behavior test skipped because selector inputs are unaffected.'
+          }
+          ./scripts/tests/Select-EdgeCiTests.ps1 `
+            -Mode $env:CI_MODE `
+            -BaseRef $baseRef `
+            -HeadRef HEAD `
+            -OutputPath artifacts/ci-selection.json
 
-      - name: Validate Edge governance baselines against immutable history
+      - name: Restore selected test projects
         shell: pwsh
-        run: ./scripts/tests/Test-EdgeGovernanceBaselineMonotonicity.ps1 -RepositoryRoot . -BaseRef $env:EDGE_BASE_REF
+        run: |
+          $selection = Get-Content artifacts/ci-selection.json -Raw | ConvertFrom-Json
+          $restoreProjects = @(
+            'src/Edge/IIoT.Edge.Shell/IIoT.Edge.Shell.csproj'
+            @($selection.selectedDotNetProjects.path)
+          ) | Sort-Object -Unique
+          foreach ($projectPath in $restoreProjects) {
+            & dotnet restore $projectPath -p:RestoreDisableParallel=true --disable-build-servers -noAutoResponse
+            if ($LASTEXITCODE -ne 0) {
+              throw "Restore failed for selected architecture/test project: $projectPath"
+            }
+          }
 
-      - name: Validate Edge test inventory
+      - name: Validate architecture and security policies
         shell: pwsh
-        run: ./scripts/tests/Get-EdgeTestInventory.ps1 -OutputPath artifacts/test-inventory.actual.json
+        run: |
+          ./scripts/tests/Test-EdgeArchitectureProjectGraph.ps1 -RepositoryRoot . -SolutionPath IIoT.EdgeClient.slnx -Configuration Release
+          ./scripts/tests/Test-EdgeArchitectureAnalyzerFixtures.ps1 -RepositoryRoot . -Configuration Release
 
-      - name: Validate Edge architecture project graph
+      - name: Run selected tests and record current discovery
         shell: pwsh
-        run: ./scripts/tests/Test-EdgeArchitectureProjectGraph.ps1 -RepositoryRoot . -SolutionPath IIoT.EdgeClient.slnx -Configuration Release
+        run: |
+          $parameters = @{
+            SelectionPath = 'artifacts/ci-selection.json'
+            ResultsDirectory = 'artifacts/ci-test-results'
+            Configuration = 'Release'
+          }
+          if ($env:CI_MODE -eq 'full') {
+            $parameters.CollectCoverage = $true
+          }
+          ./scripts/tests/Invoke-EdgeCiSelectedTests.ps1 @parameters
 
-      - name: Validate Edge compatibility inventory
-        shell: pwsh
-        run: ./scripts/tests/Test-EdgeCompatibilityInventory.ps1 -RepositoryRoot .
-
-      - name: Validate Edge compatibility negative fixtures
-        shell: pwsh
-        run: ./scripts/tests/Test-EdgeCompatibilityInventoryFixtures.ps1 -RepositoryRoot .
-
-      - name: Validate Edge duplication ratchet
-        shell: pwsh
-        run: ./scripts/tests/Test-EdgeDuplicationBaseline.ps1 -RepositoryRoot .
-
-      - name: Validate Edge source quality policy
-        shell: pwsh
-        run: ./scripts/tests/Test-EdgeSourceQualityPolicy.ps1 -RepositoryRoot .
-
-      - name: Validate Edge retired feature evidence
-        shell: pwsh
-        run: ./scripts/tests/Test-EdgeRetiredFeatureEvidence.ps1 -RepositoryRoot .
-
-      - name: Validate Edge retired feature evidence negative fixtures
-        shell: pwsh
-        run: ./scripts/tests/Test-EdgeRetiredFeatureEvidenceFixtures.ps1 -RepositoryRoot .
-
-      - name: Validate Edge analyzer build fixtures
-        shell: pwsh
-        run: ./scripts/tests/Test-EdgeArchitectureAnalyzerFixtures.ps1 -RepositoryRoot . -Configuration Release
-
-      - name: Restore Edge solution
-        shell: pwsh
-        run: dotnet restore IIoT.EdgeClient.slnx -p:RestoreDisableParallel=true --disable-build-servers -noAutoResponse
-
-      - name: Setup Python for deployment behavior tests
+      - name: Setup Python only for affected deployment behavior
+        if: ${{ steps.select.outputs.deployment_affected == 'true' }}
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          python-version: '3.13'
+          python-version: "3.13"
 
-      - name: Run Edge deployment behavior tests
+      - name: Run affected deployment behavior
+        if: ${{ steps.select.outputs.deployment_affected == 'true' }}
         shell: pwsh
         run: |
           ./scripts/tests/TestEdgeDeploymentPolicy.ps1
           ./scripts/tests/TestEdgeDeploymentBehavior.ps1
           ./scripts/tests/TestEdgeReleaseResumeBehavior.ps1
 
-      - name: Enforce shared UI baseline
+      - name: Run explicit quality gates
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'quality' || inputs.mode == 'full') }}
         shell: pwsh
-        run: ./scripts/CheckEdgeUiSharedBaseline.ps1
+        run: |
+          ./scripts/tests/Test-EdgeSourceQualityPolicy.ps1 -RepositoryRoot .
+          ./scripts/CheckEdgeUiSharedBaseline.ps1
+          ./scripts/tests/Test-EdgeGovernanceBaselineMonotonicityBehavior.ps1
+          ./scripts/tests/Test-EdgeCompatibilityInventory.ps1 -RepositoryRoot .
+          ./scripts/tests/Test-EdgeCompatibilityInventoryFixtures.ps1 -RepositoryRoot .
+          ./scripts/tests/Test-EdgeDuplicationBaseline.ps1 -RepositoryRoot .
+          ./scripts/tests/Test-EdgeMutationBaselineBehavior.ps1
+          dotnet tool restore
+          ./scripts/tests/Test-EdgeMutationBaseline.ps1 -Collect
 
-      - name: Build Edge solution and test assemblies
-        shell: pwsh
-        run: dotnet build IIoT.EdgeClient.slnx -c Release --no-restore -m:1 -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse
-
-      - name: Reconcile Edge discovered test inventory
-        shell: pwsh
-        run: ./scripts/tests/Get-EdgeDiscoveredTestInventory.ps1 -RepositoryRoot . -Configuration Release -OutputPath artifacts/discovered-test-inventory.actual.json
-
-      - name: Run every required Edge test runner
-        shell: pwsh
-        run: ./scripts/tests/Invoke-EdgeRequiredTests.ps1 -ResultsDirectory artifacts/test-results -Configuration Release -CollectCoverage
-
-      - name: Confirm Edge required test results
-        shell: pwsh
-        run: ./scripts/tests/Confirm-EdgeRequiredTestResults.ps1 -ResultsDirectory artifacts/test-results -SummaryPath artifacts/test-results/summary.json
-
-      - name: Validate Edge coverage ratchet
-        shell: pwsh
-        run: ./scripts/tests/Test-EdgeCoverageBaseline.ps1 -ResultsDirectory artifacts/test-results
-
-      - name: Upload Edge required test and coverage evidence
-        if: ${{ always() }}
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: edge-required-test-evidence
-          path: |
-            artifacts/discovered-test-inventory.actual.json
-            artifacts/test-results/**/*.trx
-            artifacts/test-results/**/coverage.cobertura.xml
-            artifacts/test-results/summary.json
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Scan vulnerable NuGet packages
+      - name: Scan vulnerable packages only in explicit full mode
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'full' }}
         shell: pwsh
         run: ./scripts/TestEdgePackageVulnerabilities.ps1
 
-  mutation-report:
+      - name: Upload selected test evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: edge-ci-${{ env.CI_MODE }}-evidence
+          path: |
+            artifacts/ci-selection.json
+            artifacts/ci-test-results/**
+            artifacts/mutation/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  cross-project:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'cross-project' }}
     runs-on: windows-latest
-    timeout-minutes: 20
-    continue-on-error: true
+    timeout-minutes: 45
+
     steps:
-      - name: Checkout
+      - name: Checkout Edge candidate
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           fetch-depth: 0
+          path: IIoT.EdgeClient
+
+      - name: Checkout Cloud candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          repository: ShuJinHao/IIoT.CloudPlatform
+          ref: ${{ inputs.cloud_ref }}
+          fetch-depth: 0
+          persist-credentials: false
+          path: IIoT.CloudPlatform
 
       - name: Setup .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
-          global-json-file: global.json
+          global-json-file: IIoT.EdgeClient/global.json
 
-      - name: Validate Edge mutation baseline behavior
+      - name: Select and restore cross-project contract runners
         shell: pwsh
-        run: ./scripts/tests/Test-EdgeMutationBaselineBehavior.ps1
+        working-directory: IIoT.EdgeClient
+        run: |
+          ./scripts/tests/Select-EdgeCiTests.ps1 `
+            -Mode CrossProject `
+            -ChangedFiles @() `
+            -OutputPath artifacts/ci-selection.json `
+            -GitHubOutputPath ''
+          $selection = Get-Content artifacts/ci-selection.json -Raw | ConvertFrom-Json
+          foreach ($project in @($selection.selectedDotNetProjects)) {
+            & dotnet restore $project.path -p:RestoreDisableParallel=true --disable-build-servers -noAutoResponse
+            if ($LASTEXITCODE -ne 0) {
+              throw "Restore failed for cross-project runner: $($project.path)"
+            }
+          }
 
-      - name: Restore pinned Edge mutation tool
+      - name: Run selected contract tests and compare provider snapshot
         shell: pwsh
-        run: dotnet tool restore
+        working-directory: IIoT.EdgeClient
+        run: |
+          ./scripts/tests/Invoke-EdgeCiSelectedTests.ps1 -SelectionPath artifacts/ci-selection.json -ResultsDirectory artifacts/ci-test-results -Configuration Release
+          ./scripts/tests/Test-EdgeCloudContractAlignment.ps1 `
+            -CloudRepositoryRoot ../IIoT.CloudPlatform `
+            -OutputPath artifacts/cross-project/edge-cloud-contract.json
 
-      - name: Restore Edge Domain mutation target
-        shell: pwsh
-        run: dotnet restore src/Tests/IIoT.Edge.Domain.Tests/IIoT.Edge.Domain.Tests.csproj -p:RestoreDisableParallel=true --disable-build-servers -noAutoResponse
-
-      - name: Collect Edge report-only mutation baseline
-        shell: pwsh
-        run: ./scripts/tests/Test-EdgeMutationBaseline.ps1 -Collect
-
-      - name: Upload Edge mutation evidence
+      - name: Upload cross-project evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: edge-mutation-report
+          name: edge-cloud-cross-project-evidence
           path: |
-            artifacts/mutation/edge-domain/**/mutation-report.json
-            artifacts/mutation/edge-domain/stryker-console.log
+            IIoT.EdgeClient/artifacts/ci-selection.json
+            IIoT.EdgeClient/artifacts/ci-test-results/**
+            IIoT.EdgeClient/artifacts/cross-project/**
           if-no-files-found: warn
           retention-days: 14

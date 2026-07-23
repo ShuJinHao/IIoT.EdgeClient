@@ -63,6 +63,43 @@ function Get-UniqueSortedPaths {
     return ,$result
 }
 
+function Assert-PreflightVersionContract {
+    $preflightPath = Join-Path $root 'scripts/TestEdgeDeploymentPreflight.ps1'
+    $tokens = $null
+    $parseErrors = $null
+    $ast = [Management.Automation.Language.Parser]::ParseFile(
+        $preflightPath,
+        [ref]$tokens,
+        [ref]$parseErrors)
+    if ($parseErrors.Count -gt 0) {
+        throw "Edge deployment preflight cannot be parsed: $($parseErrors.Message -join '; ')"
+    }
+
+    $versionParameter = @($ast.ParamBlock.Parameters | Where-Object {
+        $_.Name.VariablePath.UserPath -ceq 'Version'
+    })
+    if ($versionParameter.Count -ne 1 -or
+        $versionParameter[0].StaticType -ne [string]) {
+        throw 'Edge deployment preflight must expose exactly one string Version parameter.'
+    }
+
+    $validatePattern = @($versionParameter[0].Attributes | Where-Object {
+        $_.TypeName.FullName -ceq 'ValidatePattern'
+    })
+    $patternValue = if ($validatePattern.Count -eq 1 -and
+        $validatePattern[0].PositionalArguments.Count -eq 1) {
+        $validatePattern[0].PositionalArguments[0].SafeGetValue()
+    }
+    else {
+        ''
+    }
+    if ([string]$patternValue -cne '^$|^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
+        throw "Edge deployment preflight Version must use the workspace SemVer contract; actual='$patternValue'."
+    }
+}
+
+Assert-PreflightVersionContract
+
 Require-Text 'scripts/LocalPublishAndDeploy.ps1' 'Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgeHost' 'Edge host publication must require the workspace dispatch gate.'
 Require-Text 'scripts/LocalPublishAndDeploy.ps1' "Formal stable Edge host releases only support Cloud Human HTTP publication" 'Edge host publication must remain a Mac-build-to-Cloud-HTTP workflow.'
 Require-Text 'scripts/PublishEdgePluginRelease.ps1' 'Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgePlugin' 'Edge plugin publication must remain independent from the host release.'
@@ -70,10 +107,21 @@ Require-Text 'scripts/PublishEdgePluginRelease.ps1' '\[string\]\$PluginRepositor
 Require-Text 'scripts/PublishEdgePluginRelease.ps1' 'eng/PackEdgePlugin\.ps1' 'Edge plugin publication must call the Private Plugins unique pack implementation.'
 Require-Text 'scripts/PublishEdgePluginRelease.ps1' 'function\s+Invoke-PluginPack\s*\{[\s\S]*?\[hashtable\]\$Parameters[\s\S]*?&\s+\$scriptPath\s+@Parameters' 'PowerShell plugin pack dispatch must use named hashtable splatting.'
 Require-Text 'scripts/PublishEdgePluginRelease.ps1' 'Get-PreservedPluginMetadataPath[\s\S]*?if\s*\(\$null\s+-eq\s+\$metadataPath\)[\s\S]*?Invoke-PluginPack\s+-Parameters' 'A resumed plugin release must rebuild when the failed attempt has no complete package.'
-Require-Text 'scripts/PublishEdgePluginRelease.ps1' '\$isLegacyEmptyPackFailure\s*=[\s\S]*?building-package[\s\S]*?failed[\s\S]*?-not\s+\$hasCompletePreservedPackage' 'An old failed pack state may be recovered only when no complete package exists.'
+Require-Text 'scripts/PublishEdgePluginRelease.ps1' '\[switch\]\$ReconcileExistingRelease' 'From-zero deployment must explicitly opt into restored plugin release reconciliation.'
+Require-Text 'scripts/PublishEdgePluginRelease.ps1' '\$ReconcileExistingRelease[\s\S]*?existingRelease\.sha256[\s\S]*?metadata\.sha256[\s\S]*?existingRelease\.packageSize[\s\S]*?metadata\.packageSize' 'A restored plugin release must be rebuilt and compared by hash and size before it can be reused.'
+Require-Text 'scripts/PublishEdgePluginRelease.ps1' '\$ReconcileExistingRelease[\s\S]*?Test-EdgeCurlUrl[\s\S]*?rebuiltAndCompared\s*=\s*\$true' 'A matching restored plugin release must still pass the real download contract before reconciliation succeeds.'
+Forbid-Text 'scripts/PublishEdgePluginRelease.ps1' 'isLegacyEmptyPackFailure|legacy empty pack' 'The exact-SHA resume path must not restore the retired legacy empty-pack compatibility.'
+Forbid-Text 'Directory.Build.targets' 'ValidateEdgeDeploymentPolicy|scripts/tests/TestEdgeDeploymentPolicy\.ps1' 'Ordinary Edge builds must not run DeploymentContract tests through an MSBuild hook.'
+Forbid-Text 'Directory.Build.targets' '<Target\s+Name="ValidateEdgeArchitectureProjectGraph"' 'Ordinary Edge builds must not hide an entire repository project-graph test behind the Shell build.'
 Require-Text 'scripts/PublishEdgePluginRelease.ps1' '-Status\s+failed[\s\S]*?moduleId\s*=\s*\$ModuleId[\s\S]*?version\s*=\s*\$declaredVersion[\s\S]*?sourceCommit\s*=\s*\$gitFacts\.Head' 'Plugin failure state must preserve the immutable source identity required by resume.'
 Forbid-Text 'scripts/PublishEdgePluginRelease.ps1' 'Invoke-PluginPack\s+@\(' 'PowerShell array splatting is positional and must not be used for named plugin pack parameters.'
 Require-Text 'scripts/TestEdgeDeploymentPreflight.ps1' 'RequirePushedHead' 'Edge production publication must require a pushed Git HEAD.'
+Require-Text 'scripts/TestEdgeDeploymentPreflight.ps1' 'mode=\$Mode version=\$versionDisplay' 'Edge deployment preflight must report the validated explicit or automatic version input.'
+Require-Text 'scripts/InitializeEdgeReleaseApiKey.ps1' '\[string\]\$RevokeNamePrefix[\s\S]*?-Method\s+Get[\s\S]*?-Method\s+Delete[\s\S]*?-Method\s+Post' 'From-zero Edge Release API key retries must revoke earlier active derived keys before issuing the replacement.'
+Require-Text 'scripts/InitializeEdgeReleaseApiKey.ps1' '\^iiot-edgehost-\[0-9a-f\]\{32\}\$' 'Derived-key revocation must be bounded to the deterministic from-zero invocation prefix.'
+Forbid-Text 'scripts/TestEdgeDeploymentPreflight.ps1' 'GitHubHost' 'Edge deployment preflight must not retain a second GitHub-hosted production mode.'
+Require-Text '.github/workflows/edge-pack-modules.yml' 'offline' 'The explicit Edge artifact workflow must identify itself as offline-only.'
+Forbid-Text '.github/workflows/edge-pack-modules.yml' 'self-hosted|publish-edge-updates|CLOUD_ADMIN_(?:USERNAME|PASSWORD)|EDGE_RELEASE_API_KEY' 'The Edge artifact workflow must stop at hosted offline artifacts and must not contain production publication credentials or jobs.'
 Require-Text 'scripts/TestEdgeDeploymentPreflight.ps1' '\[string\]\$WorkspaceRoot' 'Edge deployment preflight must expose an explicit workspace root.'
 Require-Text 'scripts/TestEdgeDeploymentPreflight.ps1' 'EDGE-DEPLOY-WORKSPACE-001' 'Edge deployment preflight must retain its stable workspace ownership failure code.'
 Require-Text 'scripts/TestEdgeDeploymentPreflight.ps1' '\$pathComparison\s*=\s*if\s*\(\$IsWindows\)[\s\S]*?OrdinalIgnoreCase[\s\S]*?Ordinal' 'Edge deployment path identity must be case-insensitive only on Windows and ordinal on other operating systems.'

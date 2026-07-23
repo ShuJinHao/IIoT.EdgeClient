@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
     <IsPackable>false</IsPackable><IsTestProject>true</IsTestProject>
-    <TestKind>Conformance</TestKind><TestRuntime>Filesystem</TestRuntime><TestRuntimeDependencies>AssemblyLoad</TestRuntimeDependencies><TestRunnerMode>Serial</TestRunnerMode><TestCadence>PR</TestCadence><TestCapability>Plugins.HostConformance</TestCapability><TestRisk>P0</TestRisk><TestConcern>Compatibility</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Plugins</TestOwner><TestRuleId>EDGE-PLUGIN-TEST-SEAM-001</TestRuleId><TestRequired>true</TestRequired><UseEdgeTestingCore>true</UseEdgeTestingCore>
+    <TestKind>Conformance</TestKind><TestRuntime>Filesystem</TestRuntime><TestRuntimeDependencies>AssemblyLoad</TestRuntimeDependencies><TestRunnerMode>Serial</TestRunnerMode><TestCapability>Plugins.HostConformance</TestCapability><TestRisk>P0</TestRisk><TestConcern>Compatibility</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Plugins</TestOwner><TestRuleId>EDGE-PLUGIN-TEST-SEAM-001</TestRuleId><UseEdgeTestingCore>true</UseEdgeTestingCore>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Edge\IIoT.Edge.Host.Bootstrap\IIoT.Edge.Host.Bootstrap.csproj" />

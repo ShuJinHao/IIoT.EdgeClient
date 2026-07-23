@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
     <IsPackable>false</IsPackable><IsTestProject>true</IsTestProject>
-    <TestKind>Integration</TestKind><TestRuntime>Filesystem</TestRuntime><TestRuntimeDependencies>ProcessEnvironment</TestRuntimeDependencies><TestRunnerMode>Serial</TestRunnerMode><TestCadence>PR</TestCadence><TestCapability>Shell.ConfigurationFilesystem</TestCapability><TestRisk>P1</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Shell</TestOwner><TestRuleId>EDGE-SHELL-001</TestRuleId><TestRequired>true</TestRequired><UseEdgeTestingCore>true</UseEdgeTestingCore>
+    <TestKind>Integration</TestKind><TestRuntime>Filesystem</TestRuntime><TestRuntimeDependencies>ProcessEnvironment</TestRuntimeDependencies><TestRunnerMode>Serial</TestRunnerMode><TestCapability>Shell.ConfigurationFilesystem</TestCapability><TestRisk>P1</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Shell</TestOwner><TestRuleId>EDGE-SHELL-001</TestRuleId><UseEdgeTestingCore>true</UseEdgeTestingCore>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="..\..\Edge\IIoT.Edge.Shell\IIoT.Edge.Shell.csproj" /><ProjectReference Include="..\..\Testing\IIoT.Edge.Testing.Core\IIoT.Edge.Testing.Core.csproj" /></ItemGroup>
 </Project>

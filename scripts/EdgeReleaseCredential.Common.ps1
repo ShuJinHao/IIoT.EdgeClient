@@ -12,7 +12,10 @@ function Get-EdgeReleaseKeychainSecret {
         return ''
     }
 
-    $value = & security find-generic-password -s $Service -w 2>$null
+    $value = & security find-generic-password `
+        -a $EdgeReleaseKeychainAccount `
+        -s $Service `
+        -w 2>$null
     if ($LASTEXITCODE -ne 0) {
         return ''
     }
@@ -218,37 +221,9 @@ function Resolve-EdgeReleaseCloudToken {
         return $CloudToken
     }
 
-    if (-not [string]::IsNullOrWhiteSpace($env:IIOT_CLOUD_RELEASE_TOKEN)) {
-        return $env:IIOT_CLOUD_RELEASE_TOKEN
-    }
-
-    $apiKey = if (-not [string]::IsNullOrWhiteSpace($env:IIOT_EDGE_RELEASE_API_KEY)) {
-        $env:IIOT_EDGE_RELEASE_API_KEY
-    }
-    else {
-        Get-EdgeReleaseKeychainSecret -Service $EdgeReleaseApiKeyService
-    }
-
+    $apiKey = Get-EdgeReleaseKeychainSecret -Service $EdgeReleaseApiKeyService
     if (-not [string]::IsNullOrWhiteSpace($apiKey)) {
         return Get-EdgeReleaseApiKeyToken -CloudApiBaseUrl $CloudApiBaseUrl -ApiKey $apiKey
-    }
-
-    $accessToken = Get-EdgeReleaseKeychainSecret -Service $EdgeReleaseAccessTokenService
-    $refreshToken = Get-EdgeReleaseKeychainSecret -Service $EdgeReleaseRefreshTokenService
-    $accessTokenExpiresAt = Get-EdgeReleaseKeychainSecret -Service $EdgeReleaseAccessTokenExpiresAtService
-
-    if (-not [string]::IsNullOrWhiteSpace($refreshToken) `
-        -and (Test-EdgeReleaseTokenExpiry -ExpiresAt $accessTokenExpiresAt)) {
-        return Refresh-EdgeReleaseCloudSession -CloudApiBaseUrl $CloudApiBaseUrl -RefreshToken $refreshToken
-    }
-
-    if (-not [string]::IsNullOrWhiteSpace($accessToken)) {
-        return $accessToken
-    }
-
-    $legacyToken = Get-EdgeReleaseKeychainSecret -Service 'iiot-cloud-release'
-    if (-not [string]::IsNullOrWhiteSpace($legacyToken)) {
-        return $legacyToken
     }
 
     return ''

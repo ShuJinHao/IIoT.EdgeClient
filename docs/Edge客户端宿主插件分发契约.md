@@ -276,7 +276,7 @@ Cloud 下载中心、插件选择安装、设备盘点和版本上报属于后�
 
 EdgeClient 的交付物是 Windows 安装器、安装素材和 Velopack 更新包，不是 Docker 镜像。CI/CD 不允许推 Harbor、GHCR，也不允许从 GitHub hosted runner 通过 SSH/SCP 直连内网服务器。
 
-`push main` 只跑 smoke 编译和测试，不生成安装包。完整 GitHub 打包只在 `workflow_dispatch` 或 `edge-v*` / `v*` tag 时执行。日常自动发布由工作区 `deploy/Deploy-Changed.ps1` 分别同步 Host、SDK、Private Plugins 三仓 clean `main`，读取 Cloud Host 基线与 SDK/Plugin 远端生产 baseline refs，按依赖闭包自动选择 EdgeHost 和具体 EdgePlugin；SDK runtime/API、Host runtime 或具体插件影响先运行 SDK 仓唯一兼容门。内部才允许 `Invoke-WorkspaceDeploy.ps1` 调度 `LocalPublishAndDeploy.ps1 -Transport http` 或插件传输实现。部署结果是服务器提供 Windows 安装器/Velopack/插件下载，不是远程安装 Windows，也不走 Harbor。正式发布要求三仓 clean + pushed HEAD，Host/Plugin 共用本地互斥锁，catalog/HTTP/HEAD 必须 fail-fast；失败后从统一入口用 `-ResumeReleaseRoot` 复用产物。更新内容必须显式填写。生产 `stable` 不允许 `rsync/scp` 绕过 Cloud DB、审计和保留策略。
+`push main` 只跑受影响验证，不生成安装包。GitHub 离线打包只在显式 `workflow_dispatch` 执行并在 artifact 上传后停止。日常自动发布由工作区 `deploy/Deploy-Changed.ps1` 分别同步 Host、SDK、Private Plugins 三仓 clean `main`，读取 Cloud Host 基线与 SDK/Plugin 远端生产 baseline refs，按依赖闭包自动选择 EdgeHost 和具体 EdgePlugin；SDK runtime/API、Host runtime 或具体插件影响先运行 SDK 仓唯一兼容门。内部才允许 `Invoke-WorkspaceDeploy.ps1` 调度 `LocalPublishAndDeploy.ps1 -Transport http` 或插件传输实现。部署结果是服务器提供 Windows 安装器/Velopack/插件下载，不是远程安装 Windows，也不走 Harbor。正式发布要求三仓 clean + pushed HEAD，Host/Plugin 共用本地互斥锁，catalog/HTTP/HEAD 必须 fail-fast；失败后从统一入口用 `-ResumeReleaseRoot` 复用产物。更新内容必须显式填写。生产 `stable` 不允许 `rsync/scp` 绕过 Cloud DB、审计和保留策略。
 
 只改工序插件时仍由 `Deploy-Changed.ps1 -Targets Edge` 自动选择独立插件发布；下列命令只作为统一入口内部执行/显式恢复形式：
 
@@ -289,7 +289,7 @@ pwsh ./deploy/Invoke-WorkspaceDeploy.ps1 `
 
 内部插件脚本显式接收 canonical `PluginRepositoryRoot`，调用 Private Plugins 唯一 `eng/PackEdgePlugin.ps1`，只上传 `IIoT.EdgePlugin.<ModuleId>-<version>-<runtime>.zip` 并写插件 release，不生成宿主 Velopack 版本。schema v2 metadata 与 release wrapper 的 `sourceCommit` 必须等于插件仓 clean/pushed HEAD。统一入口必须显式要求 `ModuleId`；脚本在打包前查 Cloud catalog，发现相同 `(moduleId, channel, version, targetRuntime)` 已存在时直接失败，要求提升插件 `plugin.json` 版本或使用显式恢复/对账。
 
-正式 GitHub 发布分两段：
+显式 GitHub workflow 只允许生成离线 artifact：
 
 ```text
 windows-latest
@@ -297,17 +297,12 @@ windows-latest
 -> PackEdgeClientVelopack.ps1
 -> PublishEdgeClientInstallerArtifact.ps1
 -> upload edge-runtime-package / edge-installer-artifact / edge-velopack-releases
-
-[self-hosted, iiot-linux-prod]
--> download GitHub Actions artifacts
--> assemble edge release bundle
--> login Cloud with release account secrets
--> POST Cloud Human edge-release-bundles API
+-> stop
 ```
 
-内网 Linux runner 只做发布编排，不重新构建 EdgeClient。原因是 Avalonia 桌面应用、Windows installer 和 Velopack Windows 包必须在 Windows runner 上构建和验证。Linux runner 必须用非 root 专用用户运行，通过 Cloud Human API 上传 release bundle，由 Cloud 服务端校验、落盘、写 DB、审计和执行保留策略。GitHub 正式发布不长期保存 Human JWT；`publish-edge-updates` 使用 `IIOT_CLOUD_RELEASE_EMPLOYEE_NO` / `IIOT_CLOUD_RELEASE_PASSWORD` 登录 `/api/v1/human/identity/login` 换取本次 job 的短期 access token，该发布账号只要求具备 `ClientRelease.Publish` 权限。
+该 workflow 不得包含 self-hosted runner、Cloud 人员账号密码、短期 JWT、服务器目录写入或 `publish-edge-updates`。离线 artifact 不是生产发布证据；生产只能由工作区根 `Deploy-Changed.ps1` 在 Mac 本机重建受影响 Windows 产物，并经 Cloud Human API 完成落盘、DB、审计、保留策略和下载链验证。
 
-版本号由打包入口确定。`workflow_dispatch` 必须输入生产版本号，tag 触发时版本来自 `edge-v*` 或 `v*` tag；HTTP 本机宿主快发未传 `-Version` 时读取 Cloud Human catalog 最新 stable 版本并自动递增 patch，传入 `-Version` 时严格使用传入值。`PublishEdgeRuntime.ps1 -Version` 会同步设置 Launcher/Shell runtime 的 `AssemblyVersion`、`FileVersion` 和 `InformationalVersion`，Velopack 包验收以该版本为准。不要把 runtime 程序集版本固定回 `1.0.0.0` 后再发布 Velopack 包。
+离线 artifact 版本由 `workflow_dispatch` 显式输入，但不产生生产版本。HTTP 本机宿主快发未传 `-Version` 时读取 Cloud Human catalog 最新 stable 版本并自动递增 patch，传入 `-Version` 时严格使用传入值。`PublishEdgeRuntime.ps1 -Version` 会同步设置 Launcher/Shell runtime 的 `AssemblyVersion`、`FileVersion` 和 `InformationalVersion`，Velopack 包验收以该版本为准。不要把 runtime 程序集版本固定回 `1.0.0.0` 后再发布 Velopack 包。
 
 发布目录固定为：
 

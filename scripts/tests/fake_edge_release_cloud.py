@@ -51,7 +51,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.endswith("/download"):
-            self._write_json(200, {"sourceCommit": "fake-source"})
+            self._write_json(200, {"sourceCommit": self.server.host_source_commit})
             return
         if "/human/client-releases/catalog" in self.path:
             if self.path.startswith("/catalog-error/"):
@@ -67,6 +67,7 @@ class Handler(BaseHTTPRequestHandler):
                                     "version": "9.9.9",
                                     "status": "Published",
                                     "downloadUrl": "/download",
+                                    "sourceCommit": self.server.host_source_commit,
                                 }
                             ]
                         },
@@ -78,6 +79,8 @@ class Handler(BaseHTTPRequestHandler):
                                         "version": self.server.plugin_version,
                                         "targetRuntime": "win-x64",
                                         "downloadUrl": "/download",
+                                        "sha256": self.server.plugin_sha256,
+                                        "packageSize": self.server.plugin_package_size,
                                     }
                                 ],
                             }
@@ -128,7 +131,7 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "channel": "stable",
                     "version": "9.9.9",
-                    "sourceCommit": "fake-source",
+                    "sourceCommit": self.server.host_source_commit,
                     "previousSourceCommit": "fake-previous",
                     "bundleSize": len(payload),
                     "uploadSeconds": 0.01,
@@ -174,10 +177,16 @@ def main():
     parser.add_argument("--port-file", required=True)
     parser.add_argument("--request-log", required=True)
     parser.add_argument("--plugin-version", default="1.0.0")
+    parser.add_argument("--plugin-sha256", default="FAKE")
+    parser.add_argument("--plugin-package-size", type=int, default=24)
+    parser.add_argument("--host-source-commit", default="fake-source")
     args = parser.parse_args()
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     server.request_log = args.request_log
     server.plugin_version = args.plugin_version
+    server.plugin_sha256 = args.plugin_sha256
+    server.plugin_package_size = args.plugin_package_size
+    server.host_source_commit = args.host_source_commit
     publish_bound_port(args.port_file, server)
 
     def stop(_signum, _frame):

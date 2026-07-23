@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
     <IsPackable>false</IsPackable><IsTestProject>true</IsTestProject>
-    <TestKind>Integration</TestKind><TestRuntime>SQLite</TestRuntime><TestRuntimeDependencies>Filesystem;PluginLoad;ProcessEnvironment;IsolatedDatabase</TestRuntimeDependencies><TestRunnerMode>Serial</TestRunnerMode><TestCadence>PR</TestCadence><TestCapability>Startup.HostLifecycle</TestCapability><TestRisk>P0</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Startup</TestOwner><TestRuleId>EDGE-STARTUP-NONBLOCKING-001</TestRuleId><TestRequired>true</TestRequired><UseEdgeTestingCore>true</UseEdgeTestingCore>
+    <TestKind>Integration</TestKind><TestRuntime>SQLite</TestRuntime><TestRuntimeDependencies>Filesystem;PluginLoad;ProcessEnvironment;IsolatedDatabase</TestRuntimeDependencies><TestRunnerMode>Serial</TestRunnerMode><TestCapability>Startup.HostLifecycle</TestCapability><TestRisk>P0</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Startup</TestOwner><TestRuleId>EDGE-STARTUP-NONBLOCKING-001</TestRuleId><UseEdgeTestingCore>true</UseEdgeTestingCore>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Edge\IIoT.Edge.Host.Bootstrap\IIoT.Edge.Host.Bootstrap.csproj" />

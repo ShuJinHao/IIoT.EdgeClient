@@ -8,7 +8,7 @@
     <TestKind>Integration</TestKind>
     <TestRuntime>Filesystem</TestRuntime><TestRuntimeDependencies />
     <TestRunnerMode>Serial</TestRunnerMode>
-    <TestCadence>PR</TestCadence><TestCapability>Export.Excel</TestCapability><TestRisk>P1</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Integration</TestOwner><TestRuleId>EDGE-EXCEL-001</TestRuleId><TestRequired>true</TestRequired>
+    <TestCapability>Export.Excel</TestCapability><TestRisk>P1</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Integration</TestOwner><TestRuleId>EDGE-EXCEL-001</TestRuleId>
     <UseEdgeTestingCore>true</UseEdgeTestingCore>
   </PropertyGroup>
   <ItemGroup>

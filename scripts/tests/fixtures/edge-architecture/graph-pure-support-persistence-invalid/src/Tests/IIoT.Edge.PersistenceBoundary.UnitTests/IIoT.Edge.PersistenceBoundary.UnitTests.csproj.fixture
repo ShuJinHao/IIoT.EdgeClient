@@ -4,7 +4,7 @@
     <IsEdgeArchitectureGraphFixture>true</IsEdgeArchitectureGraphFixture>
     <EdgeArchitectureFixtureRepositoryRoot>$(MSBuildThisFileDirectory)..\..\..</EdgeArchitectureFixtureRepositoryRoot>
     <EdgeArchitectureFixtureSolutionPath>$(MSBuildThisFileDirectory)..\..\..\EdgeArchitecture.Invalid.slnx</EdgeArchitectureFixtureSolutionPath>
-    <TestKind>Unit</TestKind><TestRuntime>Pure</TestRuntime><TestRuntimeDependencies>ControlledConcurrency</TestRuntimeDependencies><TestRunnerMode>Parallel</TestRunnerMode><TestCadence>PR</TestCadence><TestCapability>Persistence.Boundary</TestCapability><TestRisk>P0</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Architecture</TestOwner><TestRuleId>EDGE-PERSISTENCE-BOUNDARY-001</TestRuleId><TestRequired>true</TestRequired>
+    <TestKind>Unit</TestKind><TestRuntime>Pure</TestRuntime><TestRuntimeDependencies>ControlledConcurrency</TestRuntimeDependencies><TestRunnerMode>Parallel</TestRunnerMode><TestCapability>Persistence.Boundary</TestCapability><TestRisk>P0</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Architecture</TestOwner><TestRuleId>EDGE-PERSISTENCE-BOUNDARY-001</TestRuleId>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../../Testing/IIoT.Edge.Testing.Core/IIoT.Edge.Testing.Core.csproj" /></ItemGroup>
 </Project>

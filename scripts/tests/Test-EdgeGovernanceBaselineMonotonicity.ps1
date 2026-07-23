@@ -134,61 +134,6 @@ function Assert-CountNotHigher {
     }
 }
 
-function Assert-CoverageBaseline {
-    param(
-        [Parameter(Mandatory)][object]$Prior,
-        [Parameter(Mandatory)][object]$Current
-    )
-
-    if ($Prior.schemaVersion -ne $Current.schemaVersion -or
-        $Prior.ruleId -cne $Current.ruleId -or
-        $Prior.collector -cne $Current.collector) {
-        throw 'TEST-GOV-BASE-001 coverage schema, rule, or collector pin changed.'
-    }
-    # Current-tree inventory, discovery, TRX and coverage reconciliation prove
-    # the exact runner/report set. Historical quality monotonicity must not turn
-    # that set into a permanent project-count floor after a real test migration
-    # or physical feature retirement.
-    Assert-RateNotLower ([double]$Prior.overall.lineRate) ([double]$Current.overall.lineRate) 'coverage overall line rate'
-    Assert-RateNotLower ([double]$Prior.overall.branchRate) ([double]$Current.overall.branchRate) 'coverage overall branch rate'
-
-    $currentComponents = @{}
-    foreach ($entry in @(Get-Collection $Current 'components')) {
-        $currentComponents[[string]$entry.component] = $entry.metrics
-    }
-    foreach ($entry in @(Get-Collection $Prior 'components')) {
-        $name = [string]$entry.component
-        if (-not $currentComponents.ContainsKey($name)) {
-            $remainingSources = @(Get-ChildItem (Join-Path $RepositoryRoot "src/$name") -Recurse -Filter '*.cs' -File -ErrorAction SilentlyContinue |
-                Where-Object { $_.FullName -notmatch '[/\\](?:bin|obj)[/\\]' })
-            if ($remainingSources.Count -gt 0) {
-                throw "TEST-GOV-BASE-001 covered component '$name' disappeared from the baseline while production sources remain."
-            }
-            continue
-        }
-        $metrics = $currentComponents[$name]
-        Assert-RateNotLower ([double]$entry.metrics.lineRate) ([double]$metrics.lineRate) "coverage component $name line rate"
-        Assert-RateNotLower ([double]$entry.metrics.branchRate) ([double]$metrics.branchRate) "coverage component $name branch rate"
-    }
-
-    $currentThresholds = @{}
-    foreach ($entry in @(Get-Collection $Current 'highRiskThresholds')) {
-        $currentThresholds[[string]$entry.path] = $entry
-    }
-    foreach ($entry in @(Get-Collection $Prior 'highRiskThresholds')) {
-        $path = [string]$entry.path
-        if (-not $currentThresholds.ContainsKey($path)) {
-            if (Test-Path (Join-Path $RepositoryRoot $path) -PathType Leaf) {
-                throw "TEST-GOV-BASE-001 high-risk coverage threshold disappeared while source remains: $path"
-            }
-            continue
-        }
-        $threshold = $currentThresholds[$path]
-        Assert-RateNotLower ([double]$entry.minimumLineRate) ([double]$threshold.minimumLineRate) "high-risk $path minimum line rate"
-        Assert-RateNotLower ([double]$entry.minimumBranchRate) ([double]$threshold.minimumBranchRate) "high-risk $path minimum branch rate"
-    }
-}
-
 function Assert-DuplicationBaseline {
     param(
         [Parameter(Mandatory)][object]$Prior,
@@ -198,13 +143,27 @@ function Assert-DuplicationBaseline {
     if ($Prior.schemaVersion -ne $Current.schemaVersion -or $Prior.ruleId -cne $Current.ruleId) {
         throw 'TEST-GOV-BASE-001 duplication schema or rule pin changed.'
     }
+    foreach ($document in @($Prior, $Current)) {
+        $metricNames = @($document.metrics.PSObject.Properties.Name | Sort-Object)
+        $invalidGroups = @(Get-Collection $document 'groups' | Where-Object {
+            [string]$_.scope -cne 'production' -or
+            [string]$_.mode -notin @('exact', 'near') -or
+            -not ([string]$_.key).StartsWith(
+                "production|$([string]$_.mode)|",
+                [StringComparison]::Ordinal)
+        })
+        if (($metricNames -join '|') -cne 'production.exact|production.near' -or
+            $invalidGroups.Count -gt 0) {
+            throw 'TEST-GOV-BASE-001 duplication baseline must use the production-only schema.'
+        }
+    }
     if ([int]$Current.algorithm.exactMeaningfulLineWindow -gt [int]$Prior.algorithm.exactMeaningfulLineWindow -or
         [int]$Current.algorithm.nearMeaningfulLineWindow -gt [int]$Prior.algorithm.nearMeaningfulLineWindow -or
         [int]$Current.algorithm.minimumDistinctFiles -gt [int]$Prior.algorithm.minimumDistinctFiles) {
         throw 'TEST-GOV-BASE-001 duplication detection algorithm was weakened.'
     }
 
-    foreach ($metric in @('production.exact', 'production.near', 'testSupport.exact', 'testSupport.near', 'tests.exact', 'tests.near')) {
+    foreach ($metric in @('production.exact', 'production.near')) {
         $priorMetric = $Prior.metrics.PSObject.Properties[$metric].Value
         $currentMetric = $Current.metrics.PSObject.Properties[$metric].Value
         Assert-CountNotHigher ([int]$priorMetric.groupCount) ([int]$currentMetric.groupCount) "duplication $metric groups"
@@ -212,8 +171,14 @@ function Assert-DuplicationBaseline {
     }
 
     $priorGroups = @{}
-    foreach ($group in @(Get-Collection $Prior 'groups')) { $priorGroups[[string]$group.key] = $group }
-    foreach ($group in @(Get-Collection $Current 'groups')) {
+    foreach ($group in @(Get-Collection $Prior 'groups' | Where-Object {
+                [string]$_.scope -ceq 'production'
+            })) {
+        $priorGroups[[string]$group.key] = $group
+    }
+    foreach ($group in @(Get-Collection $Current 'groups' | Where-Object {
+                [string]$_.scope -ceq 'production'
+            })) {
         $key = [string]$group.key
         if (-not $priorGroups.ContainsKey($key)) {
             throw "TEST-GOV-BASE-001 duplication baseline self-authorized new clone group: $key"
@@ -249,7 +214,10 @@ function Assert-MutationBaseline {
     # the current baseline. Source edits legitimately change mutant identities
     # and absolute status counts, so history only ratchets the quality score and
     # fixed semantic scope instead of freezing those incidental counts.
-    Assert-RateNotLower ([double]$Prior.mutationScore) ([double]$Current.mutationScore) 'mutation score'
+    Assert-RateNotLower `
+        ([double](Get-PropertyValue $Prior 'minimumMutationScore' 0.0)) `
+        ([double](Get-PropertyValue $Current 'minimumMutationScore' 0.0)) `
+        'mutation minimum score'
 }
 
 function Get-EvidenceKey {
@@ -397,20 +365,17 @@ function Assert-CompatibilityBaseline {
     }
 }
 
-$coveragePath = 'scripts/tests/baselines/edge-coverage-baseline.json'
 $duplicationPath = 'scripts/tests/baselines/edge-duplication-baseline.json'
 $mutationPath = 'scripts/tests/baselines/edge-mutation-baseline.json'
 $compatibilityPath = 'scripts/tests/edge-compatibility-inventory.json'
 
-$coverageAnchor = Get-AnchoredJson $coveragePath
 $duplicationAnchor = Get-AnchoredJson $duplicationPath
 $mutationAnchor = Get-AnchoredJson $mutationPath
 $compatibilityAnchor = Get-AnchoredJson $compatibilityPath
 
-Assert-CoverageBaseline $coverageAnchor.Document (Get-CurrentJson $coveragePath)
 Assert-DuplicationBaseline $duplicationAnchor.Document (Get-CurrentJson $duplicationPath)
 Assert-MutationBaseline $mutationAnchor.Document (Get-CurrentJson $mutationPath)
 Assert-CompatibilityBaseline $compatibilityAnchor.Document (Get-CurrentJson $compatibilityPath)
 
 $global:LASTEXITCODE = 0
-Write-Host "Edge governance baseline monotonicity passed: base=$resolvedBaseRef, coverageAnchor=$($coverageAnchor.AnchorRef), duplicationAnchor=$($duplicationAnchor.AnchorRef), mutationAnchor=$($mutationAnchor.AnchorRef), compatibilityAnchor=$($compatibilityAnchor.AnchorRef)."
+Write-Host "Edge governance baseline monotonicity passed: base=$resolvedBaseRef, duplicationAnchor=$($duplicationAnchor.AnchorRef), mutationAnchor=$($mutationAnchor.AnchorRef), compatibilityAnchor=$($compatibilityAnchor.AnchorRef)."

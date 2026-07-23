@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
     <IsPackable>false</IsPackable><IsTestProject>true</IsTestProject>
-    <TestKind>Contract</TestKind><TestRuntime>Filesystem</TestRuntime><TestRuntimeDependencies /><TestRunnerMode>Serial</TestRunnerMode><TestCadence>PR</TestCadence><TestCapability>Update.Contract</TestCapability><TestRisk>P1</TestRisk><TestConcern>Compatibility</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Update</TestOwner><TestRuleId>EDGE-UPDATE-001</TestRuleId><TestRequired>true</TestRequired>
+    <TestKind>Contract</TestKind><TestRuntime>Filesystem</TestRuntime><TestRuntimeDependencies /><TestRunnerMode>Serial</TestRunnerMode><TestCapability>Update.Contract</TestCapability><TestRisk>P1</TestRisk><TestConcern>Compatibility</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Update</TestOwner><TestRuleId>EDGE-UPDATE-001</TestRuleId>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.Update\IIoT.Edge.Infrastructure.Update.csproj" /></ItemGroup>
 </Project>

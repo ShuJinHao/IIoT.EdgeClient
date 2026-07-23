@@ -22,6 +22,10 @@ param(
 
     [string]$ReleaseNotesPath = '',
 
+    [Parameter(Mandatory = $true)]
+    [ValidatePattern('^[0-9A-Fa-f]{40}$')]
+    [string]$ExpectedSha,
+
     [ValidateRange(1, 1000)]
     [int]$UploadRateLimitMbps = 1000,
 
@@ -117,7 +121,7 @@ function Assert-HttpPublishConfiguration {
     }
 
     if ([string]::IsNullOrWhiteSpace($script:CloudToken)) {
-        throw 'CloudToken is required when -Transport http is used. Pass -CloudToken, set $env:IIOT_CLOUD_RELEASE_TOKEN, set $env:IIOT_EDGE_RELEASE_API_KEY, or run scripts/SaveEdgeReleaseApiKey.ps1.'
+        throw 'CloudToken is required when -Transport http is used. Use -CloudToken only for controlled recovery, or store the Edge Release API key in macOS Keychain with scripts/SaveEdgeReleaseApiKey.ps1.'
     }
 }
 
@@ -345,7 +349,7 @@ function Write-EdgePublishSummary {
 }
 
 $dispatchInvocationId = Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgeHost
-$gitFacts = Assert-EdgeReleaseGitState -RepoRoot $repoRoot
+$gitFacts = Assert-EdgeReleaseGitState -RepoRoot $repoRoot -ExpectedSha $ExpectedSha
 $deploymentLock = Enter-EdgeDeploymentLock -RepoRoot $repoRoot -InvocationId $dispatchInvocationId -Target EdgeHost
 $locationPushed = $false
 $attemptReleaseRoot = ''
@@ -374,6 +378,16 @@ try {
         if (-not (Test-Path -LiteralPath $releaseRoot -PathType Container)) {
             throw "Resume release root was not found: $releaseRoot"
         }
+        $statePath = Join-Path $releaseRoot 'edge-deployment-attempt.json'
+        if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) {
+            throw "Resume release root is missing edge-deployment-attempt.json: $releaseRoot"
+        }
+        $savedState = Get-Content -Raw -Encoding UTF8 -LiteralPath $statePath | ConvertFrom-Json
+        Assert-EdgeResumeAttemptIdentity `
+            -State $savedState `
+            -ExpectedTarget EdgeHost `
+            -ExpectedInvocationId $dispatchInvocationId `
+            -ExpectedSha $ExpectedSha
 
         $manifestFile = Get-ChildItem -LiteralPath $releaseRoot -Recurse -File -Filter 'installer-artifact.json' | Select-Object -First 1
         if ($null -eq $manifestFile) {
@@ -421,6 +435,13 @@ try {
 
     $attemptReleaseRoot = $releaseRoot
     if ($existingVersion.Count -gt 0) {
+        $existingSourceCommit = Get-CloudReleaseManifestSourceCommit -Release $existingVersion[0]
+        if (-not [string]::Equals(
+                $existingSourceCommit,
+                $ExpectedSha,
+                [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Existing Edge host release does not match the frozen candidate: version='$Version' expectedSha='$ExpectedSha' actualSha='$existingSourceCommit'."
+        }
         $existingManifestUrl = [string]$existingVersion[0].downloadUrl
         if (-not [string]::IsNullOrWhiteSpace($existingManifestUrl)) {
             if (-not $existingManifestUrl.StartsWith('http', [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -442,6 +463,8 @@ try {
     $bundleZip = Join-Path $releaseRoot "edge-release-bundle-$Channel-$Version.zip"
 
     if (-not $isResume) {
+        $gitFacts = Assert-EdgeReleaseGitState -RepoRoot $repoRoot -ExpectedSha $ExpectedSha
+        $sourceCommit = [string]$gitFacts.Head
         Write-Host "Publishing Edge local release: version=$Version channel=$Channel runtime=$RuntimeIdentifier"
         if (-not [string]::IsNullOrWhiteSpace($previousVersion)) {
             Write-Host "Previous Edge stable release: $previousVersion"
@@ -511,6 +534,8 @@ try {
     }
 
     $attemptStage = 'uploading'
+    $gitFacts = Assert-EdgeReleaseGitState -RepoRoot $repoRoot -ExpectedSha $ExpectedSha
+    $sourceCommit = [string]$gitFacts.Head
     Write-EdgeDeploymentAttemptState -ReleaseRoot $releaseRoot -Target EdgeHost -InvocationId $dispatchInvocationId `
         -Stage $attemptStage -Status running -Facts @{ version = $Version; sourceCommit = $sourceCommit; bundle = $bundleZip } | Out-Null
     Write-Host "Publishing Edge release bundle over HTTP: $CloudApiBaseUrl (limit=${UploadRateLimitMbps}Mbps timeout=${UploadTimeoutSeconds}s)"
@@ -524,7 +549,8 @@ try {
 catch [System.Management.Automation.PipelineStoppedException] {
     if (-not [string]::IsNullOrWhiteSpace($attemptReleaseRoot)) {
         Write-EdgeDeploymentAttemptState -ReleaseRoot $attemptReleaseRoot -Target EdgeHost -InvocationId $dispatchInvocationId `
-            -Stage $attemptStage -Status cancelled -Facts @{ resumeReleaseRoot = $attemptReleaseRoot } | Out-Null
+            -Stage $attemptStage -Status cancelled `
+            -Facts @{ version = $Version; sourceCommit = $sourceCommit; resumeReleaseRoot = $attemptReleaseRoot } | Out-Null
     }
     throw
 }
@@ -533,7 +559,8 @@ catch {
     if (-not [string]::IsNullOrWhiteSpace($attemptReleaseRoot)) {
         try {
             Write-EdgeDeploymentAttemptState -ReleaseRoot $attemptReleaseRoot -Target EdgeHost -InvocationId $dispatchInvocationId `
-                -Stage $attemptStage -Status failed -Facts @{ error = $message; resumeReleaseRoot = $attemptReleaseRoot } | Out-Null
+                -Stage $attemptStage -Status failed `
+                -Facts @{ version = $Version; sourceCommit = $sourceCommit; error = $message; resumeReleaseRoot = $attemptReleaseRoot } | Out-Null
         }
         catch {
             Write-Warning "Could not write Edge host failure state. $($_.Exception.Message)"

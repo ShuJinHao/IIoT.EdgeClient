@@ -3,7 +3,8 @@ param(
     [string]$RepositoryRoot,
     [string]$AnalyzerPackageRoot,
     [ValidateSet('Debug', 'Release')]
-    [string]$Configuration = 'Release'
+    [string]$Configuration = 'Release',
+    [string[]]$FixtureNames = @()
 )
 
 Set-StrictMode -Version Latest
@@ -21,11 +22,25 @@ $architectureCatalog = & (Join-Path $PSScriptRoot 'Get-EdgeArchitectureDiagnosti
     -RepositoryRoot $RepositoryRoot `
     -AnalyzerPackageRoot $AnalyzerPackageRoot
 $architectureIdPattern = [string]$architectureCatalog.GateIdPattern
-$inventoryPath = Join-Path $PSScriptRoot 'edge-test-inventory.json'
-$expectedMainProjectCount = [int]((Get-Content $inventoryPath -Raw | ConvertFrom-Json -Depth 16).solutionProjectCount)
+$mainSolutionPath = Join-Path $RepositoryRoot 'IIoT.EdgeClient.slnx'
+$expectedMainProjectCount = @(
+    Select-Xml -Path $mainSolutionPath -XPath '//Project'
+).Count
 $fixtureGraphProjectCount = @(
     Select-Xml -Path (Join-Path $fixtureSourceRoot 'graph-valid/EdgeArchitecture.Valid.slnx.fixture') -XPath '/Solution/Project'
 ).Count
+$script:fixtureNameFilter = [System.Collections.Generic.HashSet[string]]::new(
+    [StringComparer]::OrdinalIgnoreCase)
+foreach ($fixtureName in $FixtureNames) {
+    if ([string]::IsNullOrWhiteSpace($fixtureName)) {
+        throw 'EDGE-ARCH-FIXTURE-001 FixtureNames cannot contain an empty value.'
+    }
+    [void]$script:fixtureNameFilter.Add($fixtureName)
+}
+$script:executedFixtureNames = [System.Collections.Generic.HashSet[string]]::new(
+    [StringComparer]::OrdinalIgnoreCase)
+$script:executedValidFixtures = 0
+$script:executedInvalidFixtures = 0
 
 function Initialize-FixtureWorkspace {
     if (-not (Test-Path $fixtureSourceRoot -PathType Container)) {
@@ -54,6 +69,10 @@ function Invoke-FixtureBuild {
         [string]$ExpectedOutputPattern,
         [string[]]$AdditionalBuildArguments = @()
     )
+
+    if ($script:fixtureNameFilter.Count -gt 0 -and -not $script:fixtureNameFilter.Contains($Name)) {
+        return
+    }
 
     $resolvedProject = Join-Path $workingRoot $ProjectPath
     if (-not (Test-Path $resolvedProject -PathType Leaf)) {
@@ -97,6 +116,12 @@ function Invoke-FixtureBuild {
         }
     }
 
+    [void]$script:executedFixtureNames.Add($Name)
+    if ($ShouldSucceed) {
+        $script:executedValidFixtures++
+    } else {
+        $script:executedInvalidFixtures++
+    }
     Write-Host "Edge architecture fixture passed: name=$Name, exitCode=$exitCode, diagnostics=[$($actualIds -join ', ')]."
 }
 
@@ -210,8 +235,12 @@ function Assert-ShellGraphCliOverrideCannotBypass {
 }
 
 Initialize-FixtureWorkspace
-Assert-ArchitectureGateTextIsPinned
-Assert-ShellGraphCliOverrideCannotBypass
+$bypassCheckCount = 0
+if ($script:fixtureNameFilter.Count -eq 0) {
+    Assert-ArchitectureGateTextIsPinned
+    Assert-ShellGraphCliOverrideCannotBypass
+    $bypassCheckCount = 2
+}
 
 Invoke-FixtureBuild -Name 'analyzer-valid' `
     -ProjectPath 'analyzer-valid/IIoT.Edge.Installer.ValidFixture.csproj' `
@@ -408,5 +437,17 @@ Invoke-FixtureBuild -Name 'graph-analyzer-exclusion-invalid' `
     -ShouldSucceed $false `
     -ExpectedDiagnosticIds @('WSARCH006')
 
-Write-Host 'Edge architecture analyzer/build fixtures passed: valid=7, invalid=43, bypass-checks=2.'
+$missingFixtureNames = @(
+    $script:fixtureNameFilter |
+        Where-Object { -not $script:executedFixtureNames.Contains($_) } |
+        Sort-Object
+)
+if ($missingFixtureNames.Count -gt 0) {
+    throw "EDGE-ARCH-FIXTURE-001 unknown FixtureNames: $($missingFixtureNames -join ', ')."
+}
+
+Write-Host ("Edge architecture analyzer/build fixtures passed: valid={0}, invalid={1}, bypass-checks={2}." -f
+    $script:executedValidFixtures,
+    $script:executedInvalidFixtures,
+    $bypassCheckCount)
 $global:LASTEXITCODE = 0

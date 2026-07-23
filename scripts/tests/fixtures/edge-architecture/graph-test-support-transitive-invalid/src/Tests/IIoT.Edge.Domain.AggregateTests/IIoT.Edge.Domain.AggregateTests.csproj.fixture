@@ -4,7 +4,7 @@
     <IsEdgeArchitectureGraphFixture>true</IsEdgeArchitectureGraphFixture>
     <EdgeArchitectureFixtureRepositoryRoot>$(MSBuildThisFileDirectory)..\..\..</EdgeArchitectureFixtureRepositoryRoot>
     <EdgeArchitectureFixtureSolutionPath>$(MSBuildThisFileDirectory)..\..\..\EdgeArchitecture.Invalid.slnx</EdgeArchitectureFixtureSolutionPath>
-    <TestKind>Aggregate</TestKind><TestRuntime>Pure</TestRuntime><TestRuntimeDependencies>ControlledConcurrency</TestRuntimeDependencies><TestRunnerMode>Parallel</TestRunnerMode><TestCadence>PR</TestCadence><TestCapability>Domain.Aggregates</TestCapability><TestRisk>P0</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Domain</TestOwner><TestRuleId>EDGE-DOMAIN-001</TestRuleId><TestRequired>true</TestRequired>
+    <TestKind>Aggregate</TestKind><TestRuntime>Pure</TestRuntime><TestRuntimeDependencies>ControlledConcurrency</TestRuntimeDependencies><TestRunnerMode>Parallel</TestRunnerMode><TestCapability>Domain.Aggregates</TestCapability><TestRisk>P0</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Domain</TestOwner><TestRuleId>EDGE-DOMAIN-001</TestRuleId>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../../Testing/IIoT.Edge.Testing.Core/IIoT.Edge.Testing.Core.csproj" /></ItemGroup>
 </Project>

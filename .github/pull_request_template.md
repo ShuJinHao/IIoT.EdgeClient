@@ -13,10 +13,11 @@ Compatibility notes:
 
 ## Verification
 
-- [ ] `dotnet build IIoT.EdgeClient.slnx -c Release -p:BuildInParallel=false --disable-build-servers`
-- [ ] `./scripts/tests/Get-EdgeTestInventory.ps1 && ./scripts/tests/Test-EdgeArchitectureProjectGraph.ps1 -RepositoryRoot . -SolutionPath IIoT.EdgeClient.slnx -Configuration Release`
-- [ ] `./scripts/tests/Invoke-EdgeRequiredTests.ps1 -ResultsDirectory artifacts/test-results -Configuration Release`
-- [ ] `./scripts/tests/Confirm-EdgeRequiredTestResults.ps1 -ResultsDirectory artifacts/test-results`
+- [ ] Default selector ran Architecture/Security and affected Business for this diff
+- [ ] Selector/workflow changed: `./scripts/tests/Test-EdgeCiTestSelection.ps1` ran; otherwise not applicable
+- [ ] `./scripts/tests/Select-EdgeCiTests.ps1 -Mode Default -BaseRef <base> -HeadRef HEAD -OutputPath artifacts/ci-selection.json`
+- [ ] `./scripts/tests/Invoke-EdgeCiSelectedTests.ps1 -SelectionPath artifacts/ci-selection.json -ResultsDirectory artifacts/ci-test-results -Configuration Release`
+- [ ] Quality/Full/CrossProject was not run, or its explicit user authorization is described below
 - [ ] Other verification described below
 
 Additional verification:

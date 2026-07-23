@@ -1,43 +1,39 @@
 # Edge 安装更新验收
 
+> 读取边界：只有本次实际发布 Host、Installer、Velopack 或具体插件时，才读取对应验收小节；Windows 实机、历史候选和其它产物章节不默认读取。
+
 本文档是 EdgeClient 安装、更新和 Windows 分发安全策略的唯一客户端侧验收入口。上传部署总口径见 `../../docs/上传部署总览.md`；云端生成安装包的字段写入规则由 CloudPlatform 单独验收，本文件只约束 EdgeClient 本仓库能验证的内容。工作区日常唯一对外入口是根目录 `deploy/Deploy-Changed.ps1`；`deploy/Invoke-WorkspaceDeploy.ps1` 只作为宿主/插件内部执行器和显式恢复入口。本文件保留项目级验收细节。
 
-> 当前状态（2026-07-22）：三仓发布和 Launcher 组合升级候选已经形成；最终三仓兼容门、真实 Cloud `stable` 上传/catalog/DB/静态 HEAD、Windows runtime/installer/Velopack 下载与 `targetRuntime` 实机结果必须以本批最新滚动复盘和发布交接为准。未实际执行的项目不得由本清单冒充已验收。
+> 本文只定义验收契约，不代表任何一次发布已经完成。真实 Cloud `stable` 上传、catalog/DB/静态 HEAD、Windows 下载与实机结果以对应部署 receipt/checkpoint 为准。
 
 EdgeClient 验收分为开发阶段和实际部署阶段：macOS 是主力开发环境，必须承担真实 Launcher/Shell 启动、登录后 UI、更新进度和隔离安装验证；Windows 是现场部署目标，必须承担 Release runtime、安装器、快捷方式、Velopack 更新和 `targetRuntime` 实机验收。两层证据必须分别记录，互不替代；开发阶段通过不代表已经进入发布或部署。
 
 ## 0. 标准发布链路
 
-EdgeClient 不发布 Docker 镜像，不推 Harbor，也不从 GitHub hosted runner 直连内网服务器。当前链路分为日常 smoke、正式 GitHub 打包和本机快发：
+EdgeClient 不发布 Docker 镜像，不推 Harbor，也不从 GitHub hosted runner 直连内网服务器。当前链路分为默认受影响验证、可选离线 artifact 构建和本机正式发布：
 
-- `push main`：只跑 smoke 编译和测试，不生成安装包和 Velopack 发布包。
-- `workflow_dispatch` 或 `edge-v*` / `v*` tag：完整 GitHub 打包并发布到内网静态目录，渠道固定为 `stable`。
-- 日常自动增量发布：操作者或 AI 从工作区根运行 `deploy/Deploy-Changed.ps1 -Targets Edge`；入口分别校验并 push Host、SDK、Private Plugins 三仓 clean `main`，按三仓生产基线和依赖闭包决定 Host/Module，并在 runtime/API 影响时先运行 SDK 唯一兼容门。
+- `push main` / PR：只跑 Architecture/Security 与 selector 选出的受影响 Business/DeploymentContract，不生成安装包和 Velopack 发布包；全量、coverage、mutation、duplication 不自动运行。
+- 显式 `workflow_dispatch`：只在 hosted Windows runner 构建并上传离线 Actions artifacts，到此停止；不连接 Cloud、不写生产、不构成发布证据。
+- 日常增量发布：操作者或 AI 从工作区根运行 `deploy/Deploy-Changed.ps1 -Targets Edge`；入口只接受三仓 clean、已提交的 `main`，可 push 现有 HEAD但不创建提交或修改文件，复用同 SHA 证据并按依赖闭包决定 Host/Module。
 - 本机宿主内部执行：统一入口调度 `Invoke-WorkspaceDeploy.ps1 -Target EdgeHost` 与 `LocalPublishAndDeploy.ps1 -Transport http`，本机编译、打包、生成 installer artifact 后通过 Cloud Human API 上传 release bundle；Host bundle 不含具体工序插件。生产 `stable` 不允许走 `rsync/scp`。
 - 本机插件内部执行：只改工序插件时统一入口调度 `Invoke-WorkspaceDeploy.ps1 -Target EdgePlugin -ModuleId <真实ModuleId>`；Host 传输脚本调用 Private Plugins 仓唯一 pack，只上传独立插件 zip并登记插件 release，不生成宿主版本，source commit 归因到插件仓 HEAD。
-- 本机快发和正式发布上传前，发布凭据必须优先使用 Edge Release API key 换短期发布 JWT；Human refresh token 只作为临时应急 fallback，不得作为稳定发布凭据。
-- 更新内容必须显式填写：本机快发传 `-ReleaseNotes` 或 `-ReleaseNotesPath`；`workflow_dispatch` 填 `release_notes`；tag 发布必须使用带正文的 annotated tag。
+- 本机快发和正式发布上传前，发布凭据必须从 macOS Keychain canonical Edge Release API key 换短期发布 JWT；Human refresh token、旧 session、Markdown 和旧 env 不得作为标准 fallback。
+- 生产更新内容必须由根入口显式传 `-EdgeReleaseNotes` 或 `-EdgeReleaseNotesPath`；离线 artifact workflow 的 `release_notes` 只进入离线产物。
 - 本机正式发布必须由工作区统一入口生成内部调度标记；项目实现脚本拒绝直接执行。EdgeHost/EdgePlugin 共用本地互斥锁，且三仓构建前必须确认各自工作树 clean、位于 `main`、HEAD 已推送到 upstream。
+- 三端从零部署只走 `deploy/Deploy-FromZero.ps1`；它在 Cloud 清空后按同一 invocation 前缀吊销失败尝试遗留的 active 派生 Release API key，再签发替代 key并覆盖写回 Keychain，但不得自动创建设备、注册 `ClientCode` 或轮换设备 bootstrap secret。导回的历史 release 不得删除；宿主必须发布新的 patch，已存在的同版本插件必须重建后按 hash/size 对账并验证真实下载，禁止覆盖历史字节。
 - catalog、HTTP 上传和静态 HEAD 验证必须执行连接、总时限与低速停滞门禁，并把受限长度的 `4xx/5xx` 正文写入错误摘要。失败产物和 `edge-deployment-attempt.json` 必须保留，后续通过统一入口 `-ResumeReleaseRoot` 只做校验、重传或已发布对账；不得反复从头全量构建或跳过 release notes、DB 登记、审计和保留策略。
 - 生产服务器只允许 `stable` 渠道，不保留 `ci`、`dev`、`test` 或其他测试渠道目录。
 
-正式 GitHub 打包链路固定为：
+可选 GitHub 离线 artifact 链路固定为：
 
 ```text
-workflow_dispatch / edge-v* tag / v* tag
+workflow_dispatch
 -> GitHub hosted Windows runner 构建 runtime、installer artifact、Velopack releases
 -> 上传 GitHub Actions artifacts
--> 内网 Linux self-hosted runner 下载 artifacts
--> 组装 release bundle 并调用 Cloud Human 发布 API
--> Cloud 下载中心读取 installers 目录，Launcher 从 velopack 目录拉更新
+-> 停止；不得下载到 self-hosted runner 或调用 Cloud 发布 API
 ```
 
-`.github/workflows/edge-pack-modules.yml` 必须保持两个职责分离：
-
-- `package-runtime`：只能跑在 `windows-latest`，负责 .NET/Avalonia/Velopack/installer 构建和验证。
-- `publish-edge-updates`：只能跑在 `[self-hosted, iiot-linux-prod]`，负责把 artifact 组装成 release bundle 并调用 Cloud Human API；该 job 不允许 `scp`、`ssh`、Docker、Harbor 或 GHCR。
-
-内网 runner 必须使用非 root 专用用户运行。发布目录使用 `${EDGE_UPDATES_DIR}`，真实生产路径以 Cloud `.env` 为准；当前生产现场口径是 `/data/iiot-platform/edge-client/edge-updates`。历史 `/srv/iiot/edge-updates` 只允许作为旧 `scp/rsync` 或非生产 fallback 说明，不再是标准 HTTP 发布路径。如需改目录只允许通过 GitHub Actions repository variable `EDGE_UPDATES_DIR` 或 Cloud 生产 `.env` 覆盖。客户端文档不得固化真实服务器 IP。目录结构固定为：
+`.github/workflows/edge-pack-modules.yml` 只能保留 hosted Windows 的 `package-runtime` artifact 生成；禁止 `self-hosted`、`publish-edge-updates`、Cloud 人员账号密码、短期 JWT、服务器目录写入或其它生产发布 job。生产目录使用 `${EDGE_UPDATES_DIR}`，真实值只来自 Cloud 生产配置；当前现场口径是 `/data/iiot-platform/edge-client/edge-updates`。历史 `/srv/iiot/edge-updates` 不是标准路径。目录结构固定为：
 
 ```text
 ${EDGE_UPDATES_DIR}/
@@ -60,14 +56,14 @@ ${EDGE_UPDATES_DIR}/
 工作区标准入口会调度本机快发实现脚本；操作者和 AI 只执行根入口：
 
 ```powershell
-pwsh ./deploy/Invoke-WorkspaceDeploy.ps1 `
-  -Target EdgeHost `
-  -ReleaseNotesPath ./release-notes.md
+pwsh ./deploy/Deploy-Changed.ps1 `
+  -Targets Edge `
+  -EdgeReleaseNotesPath ./release-notes.md
 ```
 
 未传 `-Version` 时，HTTP 发布会读取 Cloud Human catalog 最新 stable 版本并自动递增 patch；需要固定版本时才显式传 `-Version`。本机快发的完整操作入口见 `docs/客户端部署.md`。
 
-HTTP 快发会先让文件安全落盘，再由 Cloud 服务端从 manifest 派生 DB release 行、写审计、按 SemVer 执行最新 3 个 stable 版本保留策略，并返回部署摘要。GitHub 正式发布路径同样通过 Cloud Human 发布 API 上传 bundle，由服务端清理 `installers/stable`、`velopack/stable` 和独立插件 zip 中超出保留策略的文件。Cloud catalog、下载中心和首装版本集合只读取 Cloud release 记录；文件系统只验证记录中已登记 artifact 的存在性、完整性和可下载性，不得扫描残留目录补出版本。
+HTTP 快发会先让文件安全落盘，再由 Cloud 服务端从 manifest 派生 DB release 行、写审计、按 SemVer 执行最新 3 个 stable 版本保留策略，并返回部署摘要。Cloud catalog、下载中心和首装版本集合只读取 Cloud release 记录；文件系统只验证记录中已登记 artifact 的存在性、完整性和可下载性，不得扫描残留目录补出版本。
 
 插件独立发布必须满足：
 
@@ -88,14 +84,14 @@ HTTP 快发会先让文件安全落盘，再由 Cloud 服务端从 manifest 派�
 - Host 安装素材和 Velopack 包不得包含业务插件；业务插件只在外部目录由独立 catalog/package 安装。
 - 卸载默认只清程序文件和快捷方式，`data/IIoT/EdgeClient/`、`data/IIoT/EdgeData/` 的配置、日志、缓存、SQLite、配方和诊断文件保留。
 
-## 2. 必跑验证
+## 2. 按阶段触发的验收
 
 macOS 开发阶段运行态验收：
 
 - 使用当前源码构建的 Launcher/Shell，不用静态截图或 ViewModel stub 冒充真实运行。
 - Launcher 需要登录后验证的页面必须提供合法已登录环境；允许在隔离 `IIOT_EDGE_PROGRAM_DATA_ROOT` 中通过真实首次初始化 UI 创建临时本地账号，但不得读取、复制或覆盖开发者真实账号文件。
 - 更新进度验收必须使用隔离 runtime 和仅监听 loopback 的临时 catalog/package 源触发一次真实下载与安装，确认更新前版本、进度条可见、完成后状态和安装版本；不得修改正式 `publish/Debug`，不得连接生产发布源。
-- macOS 验收结束后必须关闭进程并删除临时账号、临时运行目录和临时更新源；结果记入滚动复盘。
+- macOS 验收结束后必须关闭进程并删除临时账号、临时运行目录和临时更新源；结果写入本次任务或发布证据。只有长期规则变化、历史回归、生产事故或部署机制变化才写滚动复盘。
 - 本阶段不得因为验证通过自动触发上传、发布、`stable` 或 Windows 部署。
 
 ```powershell
@@ -111,17 +107,16 @@ dotnet test src/Tests/IIoT.Edge.Installer.UiTests/IIoT.Edge.Installer.UiTests.cs
 CI 发布验收：
 
 - `push main` 不跑完整打包；只允许 smoke 编译和测试。
-- `workflow_dispatch` 或 tag 触发正式打包前，必须先运行 `scripts/TestEdgeDeploymentPreflight.ps1 -Mode GitHubHost`，确认版本号、release notes、workflow 包名、`publish-edge-updates`、manifest normalize 和 Cloud API 入口。
-- `edge-pack-modules.yml` 在 `workflow_dispatch` 或 `edge-v*` / `v*` tag 时必须生成 `edge-runtime-package`、`edge-installer-artifact`、`edge-velopack-releases` 三个 artifacts。
-- `workflow_dispatch` 必须显式输入生产版本号；tag 触发时版本来自 tag。
-- `workflow_dispatch` 必须显式输入 `release_notes`；tag 发布必须是 annotated tag 且正文非空；本机快发必须显式传 `-ReleaseNotes` 或 `-ReleaseNotesPath`。
+- `edge-pack-modules.yml` 在显式 `workflow_dispatch` 时只生成 `edge-runtime-package`、`edge-installer-artifact`、`edge-velopack-releases` 三个离线 artifacts；不得发布生产。
+- `workflow_dispatch` 必须显式输入生产版本号。
+- `workflow_dispatch` 必须显式输入 artifact notes；日常根入口必须显式传生产 `-EdgeReleaseNotes` 或 `-EdgeReleaseNotesPath`。
 - 本机快发未显式传 `-Version` 时必须自动生成下一个 stable patch 版本，并在 `installer-artifact.json` 写入 `sourceCommit`、`previousVersion`、`previousSourceCommit`、`releaseNotes` 和 `generatedAtUtc`。
 - `PublishEdgeRuntime.ps1 -Version` 必须同步写入 runtime 的 `AssemblyVersion` / `FileVersion`，否则 `TestEdgeVelopackPackage.ps1` 会拒绝包版本和 Launcher 程序集版本不一致。
 - CI 允许对 `PackEdgeClientVelopack.ps1` 使用 `-SkipVeloAppCheck:$true`，原因是 Launcher 通过 `EdgeUpdateVelopackStartup.Run()` 包装 `VelopackApp.Build().Run()`，Velopack CLI 静态扫描无法识别该包装；真实包仍必须通过 `TestEdgeVelopackPackage.ps1`。
 - `edge-installer-artifact` 必须通过 `TestEdgeClientInstallerArtifact.ps1`，并包含 `installer-artifact.json`、安装器 exe、宿主、Launcher 和 Velopack setup；不得包含具体工序插件。
 - `edge-velopack-releases` 必须通过 `TestEdgeVelopackPackage.ps1`，并包含 `releases.stable.json`、`assets.stable.json`、full nupkg、setup exe 和 portable zip。
-- `publish-edge-updates` 发布后必须通过 Cloud API 返回的 `verificationUrls` 做 HEAD 验证；服务器上必须能在 `${EDGE_UPDATES_DIR}/installers/stable/<version>/installer-artifact.json` 和 `${EDGE_UPDATES_DIR}/velopack/stable/releases.stable.json` 找到对应产物。
-- 发布失败后优先重跑失败 job 或复用已生成 artifacts；不得未经定位反复全量 CI。Cloud 返回 `400 hash/size` 不一致时，先在下载后的 artifact 目录对比文件列表、manifest 和 Cloud 校验算法，再决定是否修改脚本。
+- 正式发布后的 `verificationUrls` HEAD、服务器目录和 Cloud catalog 验证只由根级部署 receipt 负责；Actions artifact 成功不得冒充生产发布成功。
+- 发布失败后优先从根入口复用已生成 artifact 或恢复失败阶段；不得未经定位反复全量 CI。Cloud 返回 `400 hash/size` 不一致时，先对比 artifact 文件列表、manifest 和 Cloud 校验算法，再决定是否修改脚本。
 - 独立插件发布后必须能在 `${EDGE_UPDATES_DIR}/plugins/stable/<ModuleId>/<version>/` 找到插件 zip，且 Cloud catalog 中对应插件 release 的 `downloadUrl` 可 HEAD 成功。
 - SDK runtime/API、Host runtime 或具体插件受影响时，发布前必须由 SDK 仓唯一兼容门绑定三仓候选 HEAD，验证四个 SDK 包、插件唯一 zip、旧生产不可变组合、候选接受和跨代旧插件拒载；Analyzer/docs-only SDK 改动不得触发 Host/Plugin 发布。
 - Host API 代际变化时，首个产品版本必须显式等于新 `hostApiVersion`；不得把 API 2.0.0 宿主按旧 1.x catalog 自动递增为 patch。
@@ -139,7 +134,7 @@ Windows 实际部署阶段实机验收：
 
 该脚本会验证安装布局、首装绑定导入、`launcher.update.json` 标准落点与 camelCase 字段、开始菜单快捷方式目标、静默安装默认不创建桌面快捷方式和 Launcher 启动。
 
-Windows 实机验收必须在发布或现场部署前执行；macOS 开发阶段通过、GitHub Windows runner 构建通过或安装包静态检查通过，都不能替代该步骤。未实际进入 Windows 部署阶段时，复盘必须明确写“Windows 实机部署验收未执行”，不得写成全平台验收完成。
+Windows 实机验收只在本次确实进入 Windows 发布或现场部署阶段时执行；macOS 开发阶段通过、GitHub Windows runner 构建通过或安装包静态检查通过，都不能替代该步骤。未执行时在本次验收结果中明确标为 `NOT-RUN`，不得写成全平台验收完成，也不因此强制新增滚动复盘。
 
 ## 3. Defender 策略
 

@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
     <IsPackable>false</IsPackable><IsTestProject>true</IsTestProject>
-    <TestKind>Deployment</TestKind><TestRuntime>Filesystem</TestRuntime><TestRuntimeDependencies>PowerShell;Loopback</TestRuntimeDependencies><TestRunnerMode>Serial</TestRunnerMode><TestCadence>PR</TestCadence><TestCapability>Deployment.EdgeRuntime</TestCapability><TestRisk>P0</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Release</TestOwner><TestRuleId>EDGE-DEPLOY-001</TestRuleId><TestRequired>true</TestRequired>
+    <TestKind>Deployment</TestKind><TestRuntime>Filesystem</TestRuntime><TestRuntimeDependencies>PowerShell;Loopback</TestRuntimeDependencies><TestRunnerMode>Serial</TestRunnerMode><TestCapability>Deployment.EdgeRuntime</TestCapability><TestRisk>P0</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Release</TestOwner><TestRuleId>EDGE-DEPLOY-001</TestRuleId>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Edge\IIoT.Edge.Installer\IIoT.Edge.Installer.csproj" />

@@ -66,10 +66,6 @@ function New-MigrationDisposition {
     $disposition | Add-Member -NotePropertyName replacementPath -NotePropertyValue 'Current fixture contract.'
     $disposition | Add-Member -NotePropertyName deletionCondition -NotePropertyValue 'No historical fixture records remain.'
     $disposition | Add-Member -NotePropertyName latestRemovalBatch -NotePropertyValue 'FIXTURE-COMPAT-001'
-    $disposition | Add-Member -NotePropertyName coverageTests -NotePropertyValue @([pscustomobject][ordered]@{
-        path = 'src/Feature.cs'
-        test = 'Create'
-    })
     return $disposition
 }
 
@@ -164,7 +160,6 @@ function New-SymbolCandidate {
         [string]$Token = 'fallback',
         [ValidateSet('OrdinaryAbstraction', 'MigrationWindow')][string]$Status = 'OrdinaryAbstraction',
         [string]$WindowId,
-        [object[]]$CoverageTests = @(),
         [ValidateSet(
             'type', 'delegate', 'method', 'property', 'field', 'const', 'event', 'alias',
             'enum-member', 'record-property', 'primary-constructor-parameter')][string]$Kind = 'type'
@@ -177,7 +172,6 @@ function New-SymbolCandidate {
         status = $Status
         rationale = 'Fixture exact per-symbol registration.'
         windowId = $WindowId
-        coverageTests = $CoverageTests
         callEvidence = @([pscustomobject][ordered]@{
             path = 'src/Feature.cs'
             pattern = $ConsumerPattern
@@ -323,10 +317,6 @@ $migrationDisposition = New-MigrationDisposition `
     -Occurrences 3 `
     -ConsumerPattern 'new\s+LegacyBridge' `
     -ExpectedConsumers 1
-$migrationCoverage = @([pscustomobject][ordered]@{
-    path = 'src/Feature.cs'
-    test = 'Create'
-})
 Invoke-ExpectedFailure `
     -Name 'migration-symbol-missing-window-id' `
     -Source $migrationSource `
@@ -336,8 +326,7 @@ Invoke-ExpectedFailure `
         -Symbol LegacyBridge `
         -ConsumerPattern 'new\s+LegacyBridge' `
         -ExpectedConsumers 1 `
-        -Status MigrationWindow `
-        -CoverageTests $migrationCoverage)) `
+        -Status MigrationWindow)) `
     -ExpectedMessage "missing 'windowId'"
 Invoke-ExpectedFailure `
     -Name 'migration-symbol-unknown-window-id' `
@@ -349,23 +338,10 @@ Invoke-ExpectedFailure `
         -ConsumerPattern 'new\s+LegacyBridge' `
         -ExpectedConsumers 1 `
         -Status MigrationWindow `
-        -WindowId 'FIXTURE-UNKNOWN-WINDOW' `
-        -CoverageTests $migrationCoverage)) `
+        -WindowId 'FIXTURE-UNKNOWN-WINDOW')) `
     -ExpectedMessage '(?s)references unknown.*migration window'
-Invoke-ExpectedFailure `
-    -Name 'migration-symbol-missing-coverage' `
-    -Source $migrationSource `
-    -Dispositions @($migrationDisposition) `
-    -SymbolCandidates @((New-SymbolCandidate `
-        -Token legacy `
-        -Symbol LegacyBridge `
-        -ConsumerPattern 'new\s+LegacyBridge' `
-        -ExpectedConsumers 1 `
-        -Status MigrationWindow `
-        -WindowId $migrationDisposition.id)) `
-    -ExpectedMessage '(?s)lacks exact coverage.*tests'
 Invoke-ExpectedSuccess `
-    -Name 'migration-symbol-bound-to-covered-window' `
+    -Name 'migration-symbol-bound-to-window' `
     -Source $migrationSource `
     -Dispositions @($migrationDisposition) `
     -SymbolCandidates @((New-SymbolCandidate `
@@ -374,7 +350,6 @@ Invoke-ExpectedSuccess `
         -ConsumerPattern 'new\s+LegacyBridge' `
         -ExpectedConsumers 1 `
         -Status MigrationWindow `
-        -WindowId $migrationDisposition.id `
-        -CoverageTests $migrationCoverage))
+        -WindowId $migrationDisposition.id))
 
-Write-Host 'Edge compatibility inventory fixtures passed: invalid=10, valid=3, declarationKinds=4.'
+Write-Host 'Edge compatibility inventory fixtures passed: invalid=9, valid=3, declarationKinds=4.'

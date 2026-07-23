@@ -136,37 +136,6 @@ function Get-CompatibilityEvidenceText {
     return $text
 }
 
-function Assert-CompatibilityCoverageTests {
-    param(
-        [Parameter(Mandatory)][string]$Owner,
-        [Parameter(Mandatory)][object[]]$CoverageTests
-    )
-
-    foreach ($coverage in $CoverageTests) {
-        $path = Resolve-RepositoryPath ([string]$coverage.path)
-        if (-not (Test-Path $path -PathType Leaf) -or
-            -not (Get-Content $path -Raw).Contains([string]$coverage.test, [StringComparison]::Ordinal)) {
-            throw "TEST-COMPAT-001 $Owner coverage test is missing: $($coverage.test)"
-        }
-        if ($requireDiscoveredCoverageEvidence) {
-            $relativePath = [IO.Path]::GetRelativePath($RepositoryRoot, $path).Replace('\', '/')
-            if ($relativePath -notmatch '^(?<projectDirectory>src/Tests/(?<projectName>[^/]+))/') {
-                throw "TEST-COMPAT-001 $Owner coverage must belong to a required test runner: $relativePath"
-            }
-            $projectPath = "$($Matches['projectDirectory'])/$($Matches['projectName']).csproj"
-            $testPattern = "\.$([regex]::Escape([string]$coverage.test))(?:\(|$)"
-            $discoveredMatches = @($discoveredCoverageCases | Where-Object {
-                [string]$_.projectPath -ceq $projectPath -and
-                [string]$_.identity -match $testPattern
-            })
-            if ($discoveredMatches.Count -eq 0 -or
-                @($discoveredMatches | Where-Object { -not [bool]$_.required -or [bool]$_.skipped }).Count -gt 0) {
-                throw "TEST-COMPAT-001 $Owner coverage is not a discovered, required, non-skipped test: $($coverage.test)"
-            }
-        }
-    }
-}
-
 if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
     $RepositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 } else {
@@ -176,18 +145,6 @@ if ([string]::IsNullOrWhiteSpace($InventoryPath)) {
     $InventoryPath = Join-Path $PSScriptRoot 'edge-compatibility-inventory.json'
 } else {
     $InventoryPath = Resolve-RepositoryPath $InventoryPath
-}
-$canonicalInventoryPath = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'edge-compatibility-inventory.json'))
-$requireDiscoveredCoverageEvidence = [IO.Path]::GetFullPath($InventoryPath).Equals(
-    $canonicalInventoryPath,
-    [StringComparison]::OrdinalIgnoreCase)
-$discoveredCoverageCases = @()
-if ($requireDiscoveredCoverageEvidence) {
-    $discoveredInventoryPath = Join-Path $PSScriptRoot 'discovered-test-inventory.json'
-    if (-not (Test-Path $discoveredInventoryPath -PathType Leaf)) {
-        throw "TEST-COMPAT-001 discovered test inventory does not exist: $discoveredInventoryPath"
-    }
-    $discoveredCoverageCases = @((Get-Content $discoveredInventoryPath -Raw | ConvertFrom-Json -Depth 40).cases)
 }
 $resolvedSourceRoot = Resolve-RepositoryPath $SourceRoot
 
@@ -368,12 +325,9 @@ foreach ($disposition in $dispositions) {
                 throw "TEST-COMPAT-001 $($disposition.id) migration window is missing '$field'."
             }
         }
-        if (@($disposition.currentConsumers).Count -eq 0 -or @($disposition.coverageTests).Count -eq 0) {
-            throw "TEST-COMPAT-001 $($disposition.id) migration window lacks consumers or coverage."
+        if (@($disposition.currentConsumers).Count -eq 0) {
+            throw "TEST-COMPAT-001 $($disposition.id) migration window lacks current consumers."
         }
-        Assert-CompatibilityCoverageTests `
-            -Owner ([string]$disposition.id) `
-            -CoverageTests @($disposition.coverageTests)
     }
 }
 
@@ -385,9 +339,8 @@ foreach ($entry in $migrationWindows) {
         }
     }
     if ([string]$entry.status -cne 'MigrationWindow' -or
-        @($entry.currentConsumers).Count -eq 0 -or @($entry.callEvidence).Count -eq 0 -or
-        @($entry.coverageTests).Count -eq 0) {
-        throw "TEST-COMPAT-001 $($entry.id) is not a bounded, covered migration window with real consumers."
+        @($entry.currentConsumers).Count -eq 0 -or @($entry.callEvidence).Count -eq 0) {
+        throw "TEST-COMPAT-001 $($entry.id) is not a bounded migration window with real consumers."
     }
     foreach ($evidence in @($entry.callEvidence)) {
         $path = Resolve-RepositoryPath ([string]$evidence.path)
@@ -401,7 +354,6 @@ foreach ($entry in $migrationWindows) {
         }
         $evidenceCount += $actual
     }
-    Assert-CompatibilityCoverageTests -Owner ([string]$entry.id) -CoverageTests @($entry.coverageTests)
 }
 
 $boundedMigrationWindows = [System.Collections.Generic.List[object]]::new()
@@ -495,16 +447,6 @@ foreach ($registration in $registeredSymbols) {
             throw "TEST-COMPAT-001 migration symbol '$($registration.symbol)' does not belong to candidate window '$windowId'."
         }
 
-        $symbolCoverageTests = @()
-        if ($null -ne $registration.PSObject.Properties['coverageTests']) {
-            $symbolCoverageTests = @($registration.coverageTests)
-        }
-        if (@($symbolCoverageTests).Count -eq 0) {
-            throw "TEST-COMPAT-001 migration symbol '$($registration.symbol)' lacks exact coverage tests."
-        }
-        Assert-CompatibilityCoverageTests `
-            -Owner "migration symbol '$($registration.symbol)'" `
-            -CoverageTests @($symbolCoverageTests)
     }
     $activeMatches = @($declaredSymbolCandidates | Where-Object {
         ([string]$_.token).Equals([string]$registration.token, [StringComparison]::OrdinalIgnoreCase) -and

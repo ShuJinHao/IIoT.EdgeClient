@@ -4,6 +4,6 @@
     <IsEdgeArchitectureGraphFixture>true</IsEdgeArchitectureGraphFixture>
     <EdgeArchitectureFixtureRepositoryRoot>$(MSBuildThisFileDirectory)..\..\..</EdgeArchitectureFixtureRepositoryRoot>
     <EdgeArchitectureFixtureSolutionPath>$(MSBuildThisFileDirectory)..\..\..\EdgeArchitecture.Invalid.slnx</EdgeArchitectureFixtureSolutionPath>
-    <TestKind>Unit</TestKind><TestRuntime>Pure</TestRuntime><TestRuntimeDependencies>ControlledConcurrency</TestRuntimeDependencies><TestRunnerMode>Parallel</TestRunnerMode><TestCadence>PR</TestCadence><TestCapability>Architecture.WallClock</TestCapability><TestRisk>P0</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Architecture</TestOwner><TestRuleId>EDGE-WALLCLOCK-001</TestRuleId><TestRequired>true</TestRequired>
+    <TestKind>Unit</TestKind><TestRuntime>Pure</TestRuntime><TestRuntimeDependencies>ControlledConcurrency</TestRuntimeDependencies><TestRunnerMode>Parallel</TestRunnerMode><TestCapability>Architecture.WallClock</TestCapability><TestRisk>P0</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Architecture</TestOwner><TestRuleId>EDGE-WALLCLOCK-001</TestRuleId>
   </PropertyGroup>
 </Project>

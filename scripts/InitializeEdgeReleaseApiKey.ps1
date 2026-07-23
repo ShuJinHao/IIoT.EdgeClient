@@ -8,6 +8,8 @@ param(
 
     [string]$Name = '',
 
+    [string]$RevokeNamePrefix = '',
+
     [string]$ExpiresAtUtc = ''
 )
 
@@ -47,6 +49,54 @@ if (-not [string]::IsNullOrWhiteSpace($ExpiresAtUtc)) {
 }
 
 $apiRoot = Get-EdgeReleaseApiRoot -CloudApiBaseUrl $CloudApiBaseUrl
+if (-not [string]::IsNullOrWhiteSpace($RevokeNamePrefix)) {
+    $resolvedRevokePrefix = $RevokeNamePrefix.Trim()
+    if ($resolvedRevokePrefix -notmatch '^iiot-edgehost-[0-9a-f]{32}$') {
+        throw 'RevokeNamePrefix must be the deterministic from-zero EdgeHost invocation id.'
+    }
+
+    try {
+        $existingKeys = @(
+            Invoke-RestMethod `
+                -Method Get `
+                -Uri "$apiRoot/human/client-release-api-keys" `
+                -Headers @{ Authorization = "Bearer $($session.AccessToken)" } `
+                -TimeoutSec 30
+        )
+        foreach ($existingKey in $existingKeys) {
+            $existingName = [string]$existingKey.name
+            $existingStatus = [string]$existingKey.status
+            if ($existingStatus -cne 'Active' -or
+                $existingName -notmatch "^$([Regex]::Escape($resolvedRevokePrefix))-a[1-9][0-9]*$") {
+                continue
+            }
+
+            $existingId = [string]$existingKey.id
+            if ($existingId -notmatch '^[0-9a-fA-F-]{36}$') {
+                throw "Cloud returned an invalid Edge Release API key id for rotation: $existingId"
+            }
+            Invoke-RestMethod `
+                -Method Delete `
+                -Uri "$apiRoot/human/client-release-api-keys/$existingId" `
+                -Headers @{ Authorization = "Bearer $($session.AccessToken)" } `
+                -ContentType 'application/json' `
+                -Body (@{ reason = 'from-zero retry rotation' } | ConvertTo-Json -Compress) `
+                -TimeoutSec 30 | Out-Null
+        }
+    }
+    catch {
+        if ($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -eq 403) {
+            throw 'Current Cloud user does not have ClientRelease.Manage permission to rotate Edge Release API keys.'
+        }
+
+        if ($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -eq 401) {
+            throw 'Cloud login succeeded but the access token was rejected while rotating Edge Release API keys.'
+        }
+
+        throw
+    }
+}
+
 try {
     $response = Invoke-RestMethod `
         -Method Post `

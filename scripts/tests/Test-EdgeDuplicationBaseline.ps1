@@ -39,12 +39,6 @@ function Get-RelativePath([string]$Path) {
 }
 
 function Get-Scope([string]$RelativePath) {
-    if ($RelativePath.StartsWith('src/Tests/', [StringComparison]::Ordinal)) {
-        return 'tests'
-    }
-    if ($RelativePath.StartsWith('src/Testing/', [StringComparison]::Ordinal)) {
-        return 'testSupport'
-    }
     return 'production'
 }
 
@@ -110,7 +104,10 @@ function Add-Windows(
 $windows = [Collections.Generic.List[object]]::new()
 $sourceRoot = Join-Path $RepositoryRoot 'src'
 $sourceFiles = @(Get-ChildItem $sourceRoot -Recurse -Filter '*.cs' -File |
-    Where-Object { $_.FullName -notmatch '[/\\](?:bin|obj)[/\\]' } |
+    Where-Object {
+        $_.FullName -notmatch '[/\\](?:bin|obj)[/\\]' -and
+        (Get-RelativePath $_.FullName) -notmatch '^src/(?:Tests|Testing)/'
+    } |
     Sort-Object FullName)
 
 foreach ($file in $sourceFiles) {
@@ -160,7 +157,7 @@ foreach ($group in @($windows | Group-Object Scope, Mode, Hash)) {
 
 $orderedGroups = @($groups | Sort-Object key)
 $metrics = [ordered]@{}
-foreach ($scope in @('production', 'testSupport', 'tests')) {
+foreach ($scope in @('production')) {
     foreach ($mode in @('exact', 'near')) {
         $matching = @($orderedGroups | Where-Object { $_.scope -eq $scope -and $_.mode -eq $mode })
         $sum = if ($matching.Count -eq 0) {
@@ -202,6 +199,17 @@ if (-not (Test-Path $BaselinePath -PathType Leaf)) {
 $baseline = Get-Content $BaselinePath -Raw | ConvertFrom-Json -Depth 32
 if ($baseline.schemaVersion -ne 1 -or $baseline.ruleId -ne 'TEST-GOV-006') {
     throw 'TEST-GOV-006 duplication baseline schemaVersion/ruleId is invalid.'
+}
+$expectedMetricNames = @('production.exact', 'production.near')
+$actualMetricNames = @($baseline.metrics.PSObject.Properties.Name | Sort-Object)
+$invalidBaselineGroups = @($baseline.groups | Where-Object {
+    [string]$_.scope -cne 'production' -or
+    [string]$_.mode -notin @('exact', 'near') -or
+    -not ([string]$_.key).StartsWith("production|$([string]$_.mode)|", [StringComparison]::Ordinal)
+})
+if (($actualMetricNames -join '|') -cne (($expectedMetricNames | Sort-Object) -join '|') -or
+    $invalidBaselineGroups.Count -gt 0) {
+    throw 'TEST-GOV-006 duplication baseline must contain production.exact/production.near metrics and production groups only.'
 }
 if ($baseline.algorithm.exactMeaningfulLineWindow -ne $exactWindow -or
     $baseline.algorithm.nearMeaningfulLineWindow -ne $nearWindow) {

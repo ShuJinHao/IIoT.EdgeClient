@@ -65,19 +65,8 @@ try {
     Invoke-Git $workingRoot @('add', 'CANDIDATE.md') | Out-Null
     Invoke-Git $workingRoot @('commit', '-m', 'candidate change') | Out-Null
 
-    $coverage = [ordered]@{
-        schemaVersion = 1
-        ruleId = 'TEST-GOV-007'
-        collector = 'coverlet.collector/10.0.1'
-        requiredReportCount = 2
-        reportCount = 2
-        productionFileCount = 1
-        overall = [ordered]@{ lineValid = 10; lineCovered = 9; lineRate = 0.9; branchValid = 10; branchCovered = 8; branchRate = 0.8 }
-        components = @()
-        highRiskThresholds = @()
-    }
     $metrics = [ordered]@{}
-    foreach ($name in @('production.exact', 'production.near', 'testSupport.exact', 'testSupport.near', 'tests.exact', 'tests.near')) {
+    foreach ($name in @('production.exact', 'production.near')) {
         $metrics[$name] = [ordered]@{ groupCount = 0; instanceCount = 0 }
     }
     $duplication = [ordered]@{
@@ -89,7 +78,7 @@ try {
         groups = @()
     }
     $mutation = [ordered]@{
-        schemaVersion = 1
+        schemaVersion = 2
         ruleId = 'TEST-GOV-007'
         mode = 'report-only'
         testRunner = 'mtp'
@@ -98,19 +87,7 @@ try {
         testProject = 'src/Tests/IIoT.Edge.Domain.Tests/IIoT.Edge.Domain.Tests.csproj'
         mutate = @('Config/Aggregates/*.cs')
         requiredSemanticTests = @('Aggregate_ShouldRejectInvalidState')
-        initialTestCount = 2
-        createdMutants = 4
-        totalMutants = 4
-        evaluatedMutants = 4
-        detected = 3
-        survived = 1
-        noCoverage = 0
-        ignored = 0
-        timeout = 0
-        compileErrors = 0
-        mutationScore = 0.75
-        artifact = 'artifacts/mutation-report.json'
-        traceLog = 'artifacts/stryker-console.log'
+        minimumMutationScore = 0.75
     }
     $evidence = @([ordered]@{ path = 'src/Legacy.cs'; pattern = 'LegacyCall'; expectedOccurrences = 1 })
     $compatibility = [ordered]@{
@@ -140,11 +117,9 @@ try {
         })
     }
 
-    $coveragePath = Join-Path $workingRoot 'scripts/tests/baselines/edge-coverage-baseline.json'
     $duplicationPath = Join-Path $workingRoot 'scripts/tests/baselines/edge-duplication-baseline.json'
     $mutationPath = Join-Path $workingRoot 'scripts/tests/baselines/edge-mutation-baseline.json'
     $compatibilityPath = Join-Path $workingRoot 'scripts/tests/edge-compatibility-inventory.json'
-    Write-Json $coveragePath $coverage
     Write-Json $duplicationPath $duplication
     Write-Json $mutationPath $mutation
     Write-Json $compatibilityPath $compatibility
@@ -164,44 +139,45 @@ try {
 
     Assert-FailedWith (Invoke-Gate $workingRoot $bootstrapRef) 'BaseRef must identify the pre-change commit' 'Candidate HEAD base reference'
 
-    $weakenedCoverage = Get-Content $coveragePath -Raw | ConvertFrom-Json -Depth 32
-    $weakenedCoverage.overall.lineRate = 0.8
-    Write-Json $coveragePath $weakenedCoverage
-    Assert-FailedWith (Invoke-Gate $workingRoot $baseRef) 'coverage overall line rate weakened' 'Coverage self-authorization'
-    Invoke-Git $workingRoot @('checkout', '--', 'scripts/tests/baselines/edge-coverage-baseline.json') | Out-Null
-
-    $reshapedCoverage = Get-Content $coveragePath -Raw | ConvertFrom-Json -Depth 32
-    $reshapedCoverage.requiredReportCount = 1
-    $reshapedCoverage.reportCount = 1
-    Write-Json $coveragePath $reshapedCoverage
-    $reshapedCoverageResult = Invoke-Gate $workingRoot $baseRef
-    if ($reshapedCoverageResult.ExitCode -ne 0) {
-        throw "Historical quality ratchets must not freeze the current runner count. output=$($reshapedCoverageResult.Output)"
-    }
-    Invoke-Git $workingRoot @('checkout', '--', 'scripts/tests/baselines/edge-coverage-baseline.json') | Out-Null
-
     $expandedDuplication = Get-Content $duplicationPath -Raw | ConvertFrom-Json -Depth 32
     $expandedDuplication.metrics.'production.exact'.groupCount = 1
     Write-Json $duplicationPath $expandedDuplication
     Assert-FailedWith (Invoke-Gate $workingRoot $baseRef) 'duplication production.exact groups expanded' 'Duplication self-authorization'
     Invoke-Git $workingRoot @('checkout', '--', 'scripts/tests/baselines/edge-duplication-baseline.json') | Out-Null
 
+    $legacyDuplicationMetric = Get-Content $duplicationPath -Raw | ConvertFrom-Json -Depth 32
+    $legacyDuplicationMetric.metrics | Add-Member `
+        -NotePropertyName 'tests.exact' `
+        -NotePropertyValue ([pscustomobject][ordered]@{ groupCount = 0; instanceCount = 0 })
+    Write-Json $duplicationPath $legacyDuplicationMetric
+    Assert-FailedWith (Invoke-Gate $workingRoot $baseRef) 'production-only schema' 'Legacy duplication metric scope'
+    Invoke-Git $workingRoot @('checkout', '--', 'scripts/tests/baselines/edge-duplication-baseline.json') | Out-Null
+
+    $legacyDuplicationGroup = Get-Content $duplicationPath -Raw | ConvertFrom-Json -Depth 32
+    $legacyDuplicationGroup.groups = @([pscustomobject][ordered]@{
+        key = 'tests|exact|FIXTURE'
+        scope = 'tests'
+        mode = 'exact'
+        hash = 'FIXTURE'
+        instanceCount = 2
+        distinctFileCount = 2
+        instances = @()
+    })
+    Write-Json $duplicationPath $legacyDuplicationGroup
+    Assert-FailedWith (Invoke-Gate $workingRoot $baseRef) 'production-only schema' 'Legacy duplication group scope'
+    Invoke-Git $workingRoot @('checkout', '--', 'scripts/tests/baselines/edge-duplication-baseline.json') | Out-Null
+
     $weakenedMutation = Get-Content $mutationPath -Raw | ConvertFrom-Json -Depth 32
-    $weakenedMutation.mutationScore = 0.5
+    $weakenedMutation.minimumMutationScore = 0.5
     Write-Json $mutationPath $weakenedMutation
-    Assert-FailedWith (Invoke-Gate $workingRoot $baseRef) 'mutation score weakened' 'Mutation self-authorization'
+    Assert-FailedWith (Invoke-Gate $workingRoot $baseRef) 'mutation minimum score weakened' 'Mutation self-authorization'
     Invoke-Git $workingRoot @('checkout', '--', 'scripts/tests/baselines/edge-mutation-baseline.json') | Out-Null
 
     $reshapedMutation = Get-Content $mutationPath -Raw | ConvertFrom-Json -Depth 32
-    $reshapedMutation.initialTestCount = 3
-    $reshapedMutation.createdMutants = 14
-    $reshapedMutation.totalMutants = 12
-    $reshapedMutation.evaluatedMutants = 11
-    $reshapedMutation.detected = 9
-    $reshapedMutation.survived = 2
-    $reshapedMutation.noCoverage = 1
-    $reshapedMutation.ignored = 0
-    $reshapedMutation.compileErrors = 0
+    $reshapedMutation | Add-Member -NotePropertyName currentObservation -NotePropertyValue ([ordered]@{
+        tests = 3
+        mutants = 12
+    })
     Write-Json $mutationPath $reshapedMutation
     $reshapedMutationResult = Invoke-Gate $workingRoot $baseRef
     if ($reshapedMutationResult.ExitCode -ne 0) {
@@ -290,7 +266,7 @@ try {
     Invoke-Git $workingRoot @('checkout', '--', 'scripts/tests/edge-compatibility-inventory.json') | Out-Null
 
     $global:LASTEXITCODE = 0
-    Write-Host "EDGE_GOVERNANCE_BASELINE_MONOTONICITY_BEHAVIOR_OK bootstrap=$bootstrapRef firstRed=8 runnerReshape=1 mutationReshape=1 ordinaryGrowth=1 newOrdinary=1"
+    Write-Host "EDGE_GOVERNANCE_BASELINE_MONOTONICITY_BEHAVIOR_OK bootstrap=$bootstrapRef productionDuplication=1 productionOnlySchema=1 mutationThreshold=1 mutationObservation=1 ordinaryGrowth=1 newOrdinary=1"
 } finally {
     if (Test-Path $workingRoot) {
         Remove-Item $workingRoot -Recurse -Force

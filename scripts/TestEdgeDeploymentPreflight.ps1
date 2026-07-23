@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Host', 'Plugin', 'GitHubHost')]
+    [ValidateSet('Host', 'Plugin')]
     [string]$Mode = 'Host',
 
     [ValidatePattern('^$|^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$')]
@@ -23,7 +23,9 @@ param(
 
     [switch]$AllowDirty,
 
-    [switch]$RequirePushedHead
+    [switch]$RequirePushedHead,
+
+    [switch]$RunSourceSecurityScan
 )
 
 $ErrorActionPreference = 'Stop'
@@ -572,7 +574,7 @@ function Test-CloudAccess {
     }
 
     if ([string]::IsNullOrWhiteSpace($script:CloudToken)) {
-        Add-Failure 'CloudToken is required. Pass -CloudToken, set $env:IIOT_CLOUD_RELEASE_TOKEN, set $env:IIOT_EDGE_RELEASE_API_KEY, or run scripts/SaveEdgeReleaseApiKey.ps1 to store the Edge Release API key in macOS Keychain.'
+        Add-Failure 'CloudToken is required. Use -CloudToken only for controlled recovery, or store the Edge Release API key in macOS Keychain with scripts/SaveEdgeReleaseApiKey.ps1.'
         return
     }
 
@@ -633,7 +635,12 @@ function Test-CommonDeploymentInputs {
     Assert-FileExists (Resolve-RepoPath 'docs/客户端部署.md') 'EdgeClient deployment guide'
     Assert-FileExists (Resolve-RepoPath 'docs/Edge安装更新验收.md') 'Edge installer/update acceptance guide'
     Resolve-ReleaseNotes
-    Test-ClientSecurityRedLines
+    if ($RunSourceSecurityScan) {
+        Test-ClientSecurityRedLines
+    }
+    else {
+        Write-Host 'Source security scan: delegated to the exact-SHA affected selector; deployment preflight does not rescan the repository.'
+    }
     Test-GitState
     Test-CloudAccess
 }
@@ -677,47 +684,6 @@ function Test-PluginMode {
     }
 }
 
-function Test-GitHubHostMode {
-    if ([string]::IsNullOrWhiteSpace($Version)) {
-        Add-Failure 'Version is required for -Mode GitHubHost.'
-    }
-
-    $workflowPath = Resolve-RepoPath '.github/workflows/edge-pack-modules.yml'
-    Assert-FileExists $workflowPath 'Edge host GitHub workflow'
-    $workflow = Read-FileIfExists $workflowPath
-    if ([string]::IsNullOrWhiteSpace($workflow)) {
-        return
-    }
-
-    if ($workflow -notmatch 'EDGE_PACK_ID:\s*IIoT\.EdgeClient') {
-        Add-Failure 'edge-pack-modules.yml must use EDGE_PACK_ID: IIoT.EdgeClient.'
-    }
-
-    if ($workflow -match 'IIoT\.EdgeClient\.Homogenization') {
-        Add-Failure 'edge-pack-modules.yml still contains stale IIoT.EdgeClient.Homogenization package id.'
-    }
-
-    if ($workflow -notmatch 'publish-edge-updates:') {
-        Add-Failure 'edge-pack-modules.yml must contain publish-edge-updates job.'
-    }
-
-    if ($workflow -notmatch 'Normalize installer artifact manifest after download') {
-        Add-Failure 'edge-pack-modules.yml must normalize installer manifest after artifact download before Cloud upload.'
-    }
-
-    if ($workflow -notmatch 'release_notes:' -or $workflow -notmatch 'required:\s*true') {
-        Add-Failure 'edge-pack-modules.yml must require explicit release_notes for workflow_dispatch.'
-    }
-
-    if ($workflow -notmatch 'iiot-linux-prod') {
-        Add-Failure 'publish-edge-updates must run on the internal iiot-linux-prod runner.'
-    }
-
-    if ($workflow -match '\bscp\b|\brsync\b') {
-        Add-Failure 'edge-pack-modules.yml must not publish stable Edge releases through scp or rsync.'
-    }
-}
-
 function Write-NextCommand {
     Write-Host ''
     Write-Host 'Recommended next command:'
@@ -728,16 +694,14 @@ function Write-NextCommand {
         'Plugin' {
             Write-Host "  cd <workspace-root> && pwsh ./deploy/Invoke-WorkspaceDeploy.ps1 -Target EdgePlugin -ModuleId $ModuleId -ReleaseNotesPath ./release-notes.md"
         }
-        'GitHubHost' {
-            Write-Host "  gh workflow run edge-pack-modules.yml -f version=$Version -f release_notes='<manual release notes>'"
-        }
     }
 
     Write-Host ''
     Write-Host 'Failure handling rule: use the workspace summary and preserved edge-deployment-attempt.json; retry with -ResumeReleaseRoot instead of rebuilding. For hash/size mismatch compare artifact layout, manifest and Cloud verification algorithm first.'
 }
 
-Write-Host "Edge deployment preflight: mode=$Mode"
+$versionDisplay = if ([string]::IsNullOrWhiteSpace($Version)) { '<automatic>' } else { $Version }
+Write-Host "Edge deployment preflight: mode=$Mode version=$versionDisplay"
 try {
     $resolvedWorkspaceRoot = Resolve-ValidatedWorkspaceRoot -RequestedWorkspaceRoot $WorkspaceRoot
     if ($Mode -eq 'Plugin') {
@@ -758,7 +722,6 @@ if ($failures.Count -eq 0) {
     switch ($Mode) {
         'Host' { Test-HostMode }
         'Plugin' { Test-PluginMode }
-        'GitHubHost' { Test-GitHubHostMode }
     }
 }
 

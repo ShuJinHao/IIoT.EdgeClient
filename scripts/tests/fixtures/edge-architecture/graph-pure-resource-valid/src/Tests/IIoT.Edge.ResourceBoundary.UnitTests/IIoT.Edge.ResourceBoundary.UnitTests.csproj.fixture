@@ -4,6 +4,6 @@
     <IsEdgeArchitectureGraphFixture>true</IsEdgeArchitectureGraphFixture>
     <EdgeArchitectureFixtureRepositoryRoot>$(MSBuildThisFileDirectory)..\..\..</EdgeArchitectureFixtureRepositoryRoot>
     <EdgeArchitectureFixtureSolutionPath>$(MSBuildThisFileDirectory)..\..\..\EdgeArchitecture.Valid.slnx</EdgeArchitectureFixtureSolutionPath>
-    <TestKind>Unit</TestKind><TestRuntime>Pure</TestRuntime><TestRuntimeDependencies>FakeHttp</TestRuntimeDependencies><TestRunnerMode>Parallel</TestRunnerMode><TestCadence>PR</TestCadence><TestCapability>Architecture.ResourceBoundary</TestCapability><TestRisk>P0</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Architecture</TestOwner><TestRuleId>EDGE-RESOURCE-BOUNDARY-001</TestRuleId><TestRequired>true</TestRequired>
+    <TestKind>Unit</TestKind><TestRuntime>Pure</TestRuntime><TestRuntimeDependencies>FakeHttp</TestRuntimeDependencies><TestRunnerMode>Parallel</TestRunnerMode><TestCapability>Architecture.ResourceBoundary</TestCapability><TestRisk>P0</TestRisk><TestConcern>Reliability</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Architecture</TestOwner><TestRuleId>EDGE-RESOURCE-BOUNDARY-001</TestRuleId>
   </PropertyGroup>
 </Project>

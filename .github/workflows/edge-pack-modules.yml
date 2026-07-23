@@ -1,18 +1,14 @@
-name: edge-runtime-package
+name: edge-runtime-artifact-build
 
 on:
-  push:
-    tags:
-      - 'edge-v*'
-      - 'v*'
   workflow_dispatch:
     inputs:
       version:
-        description: Edge client release version
+        description: Offline Edge artifact version; this workflow never publishes production
         required: true
         default: 1.0.0
       release_notes:
-        description: Edge client release notes shown in Cloud and Launcher
+        description: Notes embedded in the offline artifact; production publishing uses Deploy-Changed
         required: true
 
 env:
@@ -37,45 +33,37 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Validate Edge test inventory
+      - name: Select deployment red lines and affected deployment contracts
         shell: pwsh
-        run: ./scripts/tests/Get-EdgeTestInventory.ps1 -OutputPath artifacts/test-inventory.actual.json
+        run: |
+          ./scripts/tests/Select-EdgeCiTests.ps1 `
+            -Mode Deployment `
+            -ChangedFiles @('scripts/PublishEdgeRuntime.ps1') `
+            -OutputPath artifacts/ci-selection.json `
+            -GitHubOutputPath ''
+
+      - name: Restore selected validation projects
+        shell: pwsh
+        run: |
+          $selection = Get-Content artifacts/ci-selection.json -Raw | ConvertFrom-Json
+          $restoreProjects = @(
+            'src/Edge/IIoT.Edge.Shell/IIoT.Edge.Shell.csproj'
+            @($selection.selectedDotNetProjects.path)
+          ) | Sort-Object -Unique
+          foreach ($projectPath in $restoreProjects) {
+            & dotnet restore $projectPath -p:RestoreDisableParallel=true --disable-build-servers -noAutoResponse
+            if ($LASTEXITCODE -ne 0) {
+              throw "Restore failed for selected release validation project: $projectPath"
+            }
+          }
 
       - name: Validate Edge architecture project graph
         shell: pwsh
         run: ./scripts/tests/Test-EdgeArchitectureProjectGraph.ps1 -RepositoryRoot . -SolutionPath IIoT.EdgeClient.slnx -Configuration Release
 
-      - name: Validate Edge compatibility inventory
-        shell: pwsh
-        run: ./scripts/tests/Test-EdgeCompatibilityInventory.ps1 -RepositoryRoot .
-
-      - name: Validate Edge compatibility negative fixtures
-        shell: pwsh
-        run: ./scripts/tests/Test-EdgeCompatibilityInventoryFixtures.ps1 -RepositoryRoot .
-
-      - name: Validate Edge duplication ratchet
-        shell: pwsh
-        run: ./scripts/tests/Test-EdgeDuplicationBaseline.ps1 -RepositoryRoot .
-
-      - name: Validate Edge source quality policy
-        shell: pwsh
-        run: ./scripts/tests/Test-EdgeSourceQualityPolicy.ps1 -RepositoryRoot .
-
-      - name: Validate Edge retired feature evidence
-        shell: pwsh
-        run: ./scripts/tests/Test-EdgeRetiredFeatureEvidence.ps1 -RepositoryRoot .
-
-      - name: Validate Edge retired feature evidence negative fixtures
-        shell: pwsh
-        run: ./scripts/tests/Test-EdgeRetiredFeatureEvidenceFixtures.ps1 -RepositoryRoot .
-
       - name: Validate Edge analyzer build fixtures
         shell: pwsh
         run: ./scripts/tests/Test-EdgeArchitectureAnalyzerFixtures.ps1 -RepositoryRoot . -Configuration Release
-
-      - name: Restore edge solution
-        shell: pwsh
-        run: dotnet restore IIoT.EdgeClient.slnx -p:RestoreDisableParallel=true --disable-build-servers -noAutoResponse
 
       - name: Resolve release metadata
         shell: pwsh
@@ -102,28 +90,16 @@ jobs:
           "EDGE_RELEASE_CHANNEL=$channel" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "Resolved Edge release: version=$version channel=$channel"
 
-      - name: Build Edge solution and test assemblies
+      - name: Run selected release validation and record current discovery
         shell: pwsh
-        run: dotnet build IIoT.EdgeClient.slnx -c Release --no-restore -m:1 -p:BuildInParallel=false --disable-build-servers --nologo -noAutoResponse
-
-      - name: Reconcile Edge discovered test inventory
-        shell: pwsh
-        run: ./scripts/tests/Get-EdgeDiscoveredTestInventory.ps1 -RepositoryRoot . -Configuration Release -OutputPath artifacts/discovered-test-inventory.actual.json
-
-      - name: Run all required Edge test runners
-        shell: pwsh
-        run: ./scripts/tests/Invoke-EdgeRequiredTests.ps1 -ResultsDirectory artifacts/test-results -Configuration Release
-
-      - name: Confirm Edge required test results
-        shell: pwsh
-        run: ./scripts/tests/Confirm-EdgeRequiredTestResults.ps1 -ResultsDirectory artifacts/test-results -SummaryPath artifacts/test-results/summary.json
+        run: ./scripts/tests/Invoke-EdgeCiSelectedTests.ps1 -SelectionPath artifacts/ci-selection.json -ResultsDirectory artifacts/ci-test-results -Configuration Release
 
       - name: Scan vulnerable NuGet packages
         shell: pwsh
         run: ./scripts/TestEdgePackageVulnerabilities.ps1
 
   package-runtime:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     needs: validate-runtime
     steps:
@@ -224,286 +200,3 @@ jobs:
         with:
           name: edge-velopack-releases
           path: publish/edge-velopack/**
-
-  publish-edge-updates:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
-    runs-on:
-      - self-hosted
-      - iiot-linux-prod
-    needs: package-runtime
-    steps:
-      - name: Resolve release metadata
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          version="$EDGE_RELEASE_VERSION"
-          channel="$EDGE_RELEASE_CHANNEL"
-          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
-            tag="${GITHUB_REF_NAME:-}"
-            case "$tag" in
-              edge-v*) version="${tag#edge-v}" ;;
-              v*) version="${tag#v}" ;;
-              *) version="$tag" ;;
-            esac
-            channel="stable"
-          fi
-
-          if [ "$channel" != "stable" ]; then
-            echo "Production Edge releases must use stable channel." >&2
-            exit 64
-          fi
-
-          {
-            echo "EDGE_RELEASE_VERSION=$version"
-            echo "EDGE_RELEASE_CHANNEL=$channel"
-          } >> "$GITHUB_ENV"
-          echo "Resolved Edge release: version=$version channel=$channel"
-
-      - name: Download installer artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: edge-installer-artifact
-          path: publish-download/installer
-
-      - name: Download Velopack releases
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: edge-velopack-releases
-          path: publish-download/velopack
-
-      - name: Normalize installer artifact manifest after download
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          python3 - <<'PY'
-          import hashlib
-          import json
-          import os
-          from pathlib import Path
-
-          installer_root = Path("publish-download/installer").resolve()
-          manifest_path = installer_root / "installer-artifact.json"
-
-          def sha256_file(path: Path) -> str:
-              digest = hashlib.sha256()
-              with path.open("rb") as stream:
-                  for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                      digest.update(chunk)
-              return digest.hexdigest()
-
-          def directory_files(path: Path):
-              return sorted(
-                  (file for file in path.rglob("*") if file.is_file()),
-                  key=lambda file: file.relative_to(path).as_posix(),
-              )
-
-          def sha256_directory(path: Path) -> str:
-              digest = hashlib.sha256()
-              for file in directory_files(path):
-                  relative = file.relative_to(path).as_posix()
-                  digest.update(relative.encode("utf-8"))
-                  digest.update(b"\0")
-                  with file.open("rb") as stream:
-                      for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                          digest.update(chunk)
-                  digest.update(b"\n")
-              return digest.hexdigest()
-
-          def directory_size(path: Path) -> int:
-              return sum(file.stat().st_size for file in directory_files(path))
-
-          with manifest_path.open("r", encoding="utf-8-sig") as stream:
-              manifest = json.load(stream)
-
-          installer_stub = installer_root / manifest["installerStubFile"]
-          manifest["installerStubSha256"] = sha256_file(installer_stub)
-          manifest["installerStubSize"] = installer_stub.stat().st_size
-
-          host_directory = installer_root / manifest["hostDirectory"]
-          manifest["hostDirectorySha256"] = sha256_directory(host_directory)
-          manifest["hostDirectorySize"] = directory_size(host_directory)
-
-          plugins_root = installer_root / manifest["pluginsRoot"]
-          for module in manifest.get("modules", []):
-              plugin_directory = plugins_root / module["pluginDirectory"]
-              module["pluginSha256"] = sha256_directory(plugin_directory)
-              module["pluginSize"] = directory_size(plugin_directory)
-
-          velopack_setup = manifest.get("velopackSetupFile")
-          if velopack_setup:
-              setup_path = installer_root / velopack_setup
-              manifest["velopackSetupSha256"] = sha256_file(setup_path)
-              manifest["velopackSetupSize"] = setup_path.stat().st_size
-
-          with manifest_path.open("w", encoding="utf-8") as stream:
-              json.dump(manifest, stream, ensure_ascii=False, indent=2)
-              stream.write("\n")
-
-          print("Normalized installer artifact manifest after artifact download")
-          print(f"  hostDirectorySize: {manifest['hostDirectorySize']}")
-          print(f"  hostDirectorySha256: {manifest['hostDirectorySha256']}")
-          PY
-
-      - name: Login to Cloud release API
-        id: cloud-login
-        shell: bash
-        env:
-          EDGE_CLOUD_API_BASE_URL: ${{ vars.EDGE_CLOUD_API_BASE_URL }}
-          EDGE_CLOUD_RELEASE_EMPLOYEE_NO: ${{ secrets.IIOT_CLOUD_RELEASE_EMPLOYEE_NO }}
-          EDGE_CLOUD_RELEASE_PASSWORD: ${{ secrets.IIOT_CLOUD_RELEASE_PASSWORD }}
-        run: |
-          set -euo pipefail
-
-          api_base="${EDGE_CLOUD_API_BASE_URL:-http://10.98.90.154:81/api/v1}"
-          if [ -z "${EDGE_CLOUD_RELEASE_EMPLOYEE_NO:-}" ] || [ -z "${EDGE_CLOUD_RELEASE_PASSWORD:-}" ]; then
-            echo "IIOT_CLOUD_RELEASE_EMPLOYEE_NO and IIOT_CLOUD_RELEASE_PASSWORD secrets are required to publish Edge release through Cloud API." >&2
-            exit 64
-          fi
-
-          response_json="$(mktemp)"
-          request_json="$(mktemp)"
-          trap 'rm -f "$response_json" "$request_json"' EXIT
-
-          python3 - "$EDGE_CLOUD_RELEASE_EMPLOYEE_NO" "$EDGE_CLOUD_RELEASE_PASSWORD" > "$request_json" <<'PY'
-          import json
-          import sys
-
-          print(json.dumps({
-              "employeeNo": sys.argv[1],
-              "password": sys.argv[2],
-          }, separators=(",", ":")))
-          PY
-
-          curl \
-            --fail \
-            --show-error \
-            --silent \
-            --request POST \
-            --header "Content-Type: application/json" \
-            --data-binary "@$request_json" \
-            --output "$response_json" \
-            "${api_base%/}/human/identity/login"
-
-          token="$(python3 - "$response_json" <<'PY'
-          import json
-          import sys
-
-          with open(sys.argv[1], encoding="utf-8-sig") as f:
-              raw = f.read().strip()
-
-          token = raw
-          try:
-              payload = json.loads(raw)
-          except json.JSONDecodeError:
-              payload = None
-
-          if isinstance(payload, str):
-              token = payload.strip()
-          elif isinstance(payload, dict):
-              value = payload.get("accessToken") or payload.get("token")
-              token = value.strip() if isinstance(value, str) else ""
-
-          if not token:
-              raise SystemExit("Cloud login response did not contain an access token.")
-
-          print(token)
-          PY
-          )"
-          echo "::add-mask::$token"
-          printf 'token=%s\n' "$token" >> "$GITHUB_OUTPUT"
-
-      - name: Publish to Cloud release API
-        shell: bash
-        env:
-          EDGE_CLOUD_API_BASE_URL: ${{ vars.EDGE_CLOUD_API_BASE_URL }}
-          EDGE_CLOUD_TOKEN: ${{ steps.cloud-login.outputs.token }}
-        run: |
-          set -euo pipefail
-
-          if [ "$(id -u)" = "0" ]; then
-            echo "self-hosted runner must not run as root." >&2
-            exit 1
-          fi
-
-          api_base="${EDGE_CLOUD_API_BASE_URL:-http://10.98.90.154:81/api/v1}"
-          if [ -z "${EDGE_CLOUD_TOKEN:-}" ]; then
-            echo "Cloud release API login did not produce a token." >&2
-            exit 64
-          fi
-
-          if [ "$EDGE_RELEASE_CHANNEL" != "stable" ]; then
-            echo "Production Edge releases must use stable channel." >&2
-            exit 64
-          fi
-
-          installer_source="$GITHUB_WORKSPACE/publish-download/installer"
-          velopack_source="$GITHUB_WORKSPACE/publish-download/velopack"
-
-          test -f "$installer_source/installer-artifact.json"
-          test -f "$installer_source/IIoT.Edge.Setup.exe"
-          test -d "$installer_source/launcher"
-          test -d "$installer_source/host"
-          test -d "$installer_source/plugins"
-          test -f "$velopack_source/releases.$EDGE_RELEASE_CHANNEL.json"
-          test -f "$velopack_source/assets.$EDGE_RELEASE_CHANNEL.json"
-
-          tmp_root="$(mktemp -d)"
-          trap 'rm -rf "$tmp_root"' EXIT
-
-          bundle_root="$tmp_root/bundle"
-          mkdir -p "$bundle_root/installer" "$bundle_root/velopack"
-          cp -a "$installer_source"/. "$bundle_root/installer"/
-          cp -a "$velopack_source"/. "$bundle_root/velopack"/
-
-          bundle_zip="$tmp_root/edge-release-bundle-$EDGE_RELEASE_CHANNEL-$EDGE_RELEASE_VERSION.zip"
-          python3 - "$bundle_root" "$bundle_zip" <<'PY'
-          import shutil
-          import sys
-
-          root = sys.argv[1]
-          bundle = sys.argv[2]
-          shutil.make_archive(bundle[:-4], "zip", root)
-          PY
-
-          response_json="$tmp_root/edge-release-upload-response.json"
-          rate_bytes_per_second=$((100 * 1024 * 1024 / 8))
-          curl \
-            --fail \
-            --show-error \
-            --silent \
-            --request POST \
-            --header "Authorization: Bearer $EDGE_CLOUD_TOKEN" \
-            --header "Content-Type: application/zip" \
-            --limit-rate "$rate_bytes_per_second" \
-            --data-binary "@$bundle_zip" \
-            --output "$response_json" \
-            "${api_base%/}/human/client-releases/edge-release-bundles"
-
-          python3 - "$response_json" "$api_base" <<'PY'
-          import json
-          import subprocess
-          import sys
-          from urllib.parse import urljoin
-
-          response_path = sys.argv[1]
-          api_base = sys.argv[2].rstrip("/")
-          for suffix in ("/api/v1", "/api"):
-              if api_base.lower().endswith(suffix):
-                  api_base = api_base[:-len(suffix)]
-                  break
-
-          with open(response_path, encoding="utf-8-sig") as f:
-              data = json.load(f)
-
-          for url in data.get("verificationUrls", []):
-              absolute = url if str(url).lower().startswith("http") else urljoin(api_base + "/", str(url).lstrip("/"))
-              subprocess.run(["curl", "--fail", "--silent", "--show-error", "--head", absolute], check=True)
-
-          print("Published Edge release through Cloud API")
-          print(f"  channel: {data.get('channel')}")
-          print(f"  version: {data.get('version')}")
-          print(f"  components: {', '.join(data.get('components') or [])}")
-          print(f"  cleanupSucceeded: {data.get('cleanupSucceeded')}")
-          PY

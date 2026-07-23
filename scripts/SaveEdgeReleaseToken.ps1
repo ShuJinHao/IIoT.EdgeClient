@@ -31,9 +31,8 @@ Save-EdgeReleaseCloudSession `
     -AccessTokenExpiresAt $session.AccessTokenExpiresAt `
     -RefreshTokenExpiresAt $session.RefreshTokenExpiresAt
 
-$token = Resolve-EdgeReleaseCloudToken -CloudApiBaseUrl $CloudApiBaseUrl
-Test-EdgeReleaseCloudToken -CloudApiBaseUrl $CloudApiBaseUrl -CloudToken $token
+Test-EdgeReleaseCloudToken -CloudApiBaseUrl $CloudApiBaseUrl -CloudToken $session.AccessToken
 
-Write-Host 'Edge release Cloud token saved to macOS Keychain.'
+Write-Warning 'Human session credentials were saved for manual recovery only. Standard deployment does not read them.'
 Write-Host "Access token expires at: $($session.AccessTokenExpiresAt)"
 Write-Host "Refresh token expires at: $($session.RefreshTokenExpiresAt)"

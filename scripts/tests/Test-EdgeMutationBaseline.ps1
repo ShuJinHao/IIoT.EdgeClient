@@ -181,8 +181,19 @@ $actual = [ordered]@{
 
 if ($Update) {
     [void](New-Item (Split-Path $BaselinePath -Parent) -ItemType Directory -Force)
-    $actual | ConvertTo-Json -Depth 12 | Set-Content $BaselinePath -Encoding utf8
-    Write-Host "Edge mutation baseline updated (report-only): mutants=$($actual.totalMutants), killed=$($actual.detected), survived=$($actual.survived), noCoverage=$($actual.noCoverage), score=$($actual.mutationScore)."
+    [ordered]@{
+        schemaVersion = 2
+        ruleId = 'TEST-GOV-007'
+        mode = 'report-only'
+        testRunner = 'mtp'
+        tool = 'dotnet-stryker/4.16.0'
+        targetProject = $expectedTarget
+        testProject = $expectedTestProject
+        mutate = $expectedMutate
+        requiredSemanticTests = $requiredSemanticTests
+        minimumMutationScore = $mutationScore
+    } | ConvertTo-Json -Depth 12 | Set-Content $BaselinePath -Encoding utf8
+    Write-Host "Edge mutation policy updated: minimumScore=$mutationScore scope=$expectedTarget."
     return
 }
 
@@ -190,7 +201,7 @@ if (-not (Test-Path $BaselinePath -PathType Leaf)) {
     throw "TEST-GOV-007 mutation baseline does not exist: $BaselinePath"
 }
 $baseline = Get-Content $BaselinePath -Raw | ConvertFrom-Json -Depth 32
-if ($baseline.schemaVersion -ne 1 -or $baseline.ruleId -ne 'TEST-GOV-007' -or
+if ($baseline.schemaVersion -ne 2 -or $baseline.ruleId -ne 'TEST-GOV-007' -or
     $baseline.mode -ne 'report-only' -or $baseline.tool -ne 'dotnet-stryker/4.16.0' -or
     $baseline.testRunner -ne 'mtp' -or
     $baseline.targetProject -ne $expectedTarget -or $baseline.testProject -ne $expectedTestProject -or
@@ -198,50 +209,12 @@ if ($baseline.schemaVersion -ne 1 -or $baseline.ruleId -ne 'TEST-GOV-007' -or
     (@($baseline.requiredSemanticTests) -join '|') -ne ($requiredSemanticTests -join '|')) {
     throw 'TEST-GOV-007 mutation baseline target/tool/semantic ledger drifted.'
 }
-if ($actual.totalMutants -ne [int]$baseline.totalMutants) {
-    throw "TEST-GOV-007 mutation target changed: baseline mutants=$($baseline.totalMutants), actual=$($actual.totalMutants). Review and update the report-only baseline explicitly."
+$minimumMutationScore = [double]$baseline.minimumMutationScore
+if ($minimumMutationScore -lt 0.0 -or $minimumMutationScore -gt 1.0) {
+    throw "TEST-GOV-007 minimumMutationScore is outside [0,1]: $minimumMutationScore."
 }
-if ($actual.initialTestCount -ne [int]$baseline.initialTestCount -or
-    $actual.createdMutants -ne [int]$baseline.createdMutants -or
-    $actual.evaluatedMutants -ne [int]$baseline.evaluatedMutants) {
-    throw "TEST-GOV-007 mutation execution ledger changed: tests $($baseline.initialTestCount)->$($actual.initialTestCount), created $($baseline.createdMutants)->$($actual.createdMutants), evaluated $($baseline.evaluatedMutants)->$($actual.evaluatedMutants)."
-}
-
-$baselineStatusCounts = [ordered]@{
-    detected = [int]$baseline.detected
-    survived = [int]$baseline.survived
-    noCoverage = [int]$baseline.noCoverage
-    ignored = [int]$baseline.ignored
-    timeout = [int]$baseline.timeout
-    compileErrors = [int]$baseline.compileErrors
-}
-$baselineTotal = [int](($baselineStatusCounts.Values | Measure-Object -Sum).Sum)
-$baselineEvaluated = $baselineStatusCounts.detected + $baselineStatusCounts.survived + $baselineStatusCounts.timeout
-$baselineScoreDenominator = $baselineStatusCounts.detected + $baselineStatusCounts.survived + $baselineStatusCounts.noCoverage + $baselineStatusCounts.timeout
-$baselineComputedScore = if ($baselineScoreDenominator -eq 0) {
-    0.0
-} else {
-    [Math]::Round(
-        ($baselineStatusCounts.detected + $baselineStatusCounts.timeout) / $baselineScoreDenominator,
-        6)
-}
-if ($baselineTotal -ne [int]$baseline.totalMutants -or
-    $baselineEvaluated -ne [int]$baseline.evaluatedMutants -or
-    [Math]::Abs($baselineComputedScore - [double]$baseline.mutationScore) -gt 0.0000005) {
-    throw "TEST-GOV-007 mutation baseline result ledger is inconsistent: total=$baselineTotal/$($baseline.totalMutants), evaluated=$baselineEvaluated/$($baseline.evaluatedMutants), score=$baselineComputedScore/$($baseline.mutationScore)."
+if ([double]$actual.mutationScore -lt $minimumMutationScore) {
+    throw "TEST-GOV-007 mutation score is below the production quality policy: minimum=$minimumMutationScore actual=$($actual.mutationScore)."
 }
 
-$resultDrift = [Collections.Generic.List[string]]::new()
-foreach ($property in @('detected', 'survived', 'noCoverage', 'ignored', 'timeout', 'compileErrors')) {
-    if ([int]$actual[$property] -ne [int]$baseline.$property) {
-        $resultDrift.Add("$property $($baseline.$property)->$($actual[$property])")
-    }
-}
-if ([Math]::Abs([double]$actual.mutationScore - [double]$baseline.mutationScore) -gt 0.0000005) {
-    $resultDrift.Add("mutationScore $($baseline.mutationScore)->$($actual.mutationScore)")
-}
-if ($resultDrift.Count -gt 0) {
-    throw "TEST-GOV-007 mutation result ledger changed: $($resultDrift -join ', '). Review the real report and update the current baseline explicitly."
-}
-
-Write-Host "Edge mutation report-only gate passed: tests=$($actual.initialTestCount), created=$($actual.createdMutants), reportMutants=$($actual.totalMutants), evaluated=$($actual.evaluatedMutants), killed=$($actual.detected), survived=$($actual.survived), noCoverage=$($actual.noCoverage), timeout=$($actual.timeout), score=$($actual.mutationScore), emptyRun=0, targetDrift=0."
+Write-Host "Edge mutation quality gate passed: currentTests=$($actual.initialTestCount), currentMutants=$($actual.totalMutants), evaluated=$($actual.evaluatedMutants), score=$($actual.mutationScore), minimum=$minimumMutationScore, emptyRun=0."

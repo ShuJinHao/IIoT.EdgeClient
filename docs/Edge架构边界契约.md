@@ -2,7 +2,7 @@
 
 本文档是 `IIoT.EdgeClient` 的长期架构边界与测试归口契约。它以当前源码、MSBuild 评估图、EF model、真实写入路径、插件装载/打包路径和测试资产为依据，为 `EDGE-ARCH-001` 提供权威输入；Analyzer 不得按目录名、接口名或 EF navigation 自行猜测业务边界。
 
-当前项目与测试真值由 `scripts/tests/edge-test-inventory.json` 和 `scripts/tests/required-test-counts.json` 登记，并由真实 solution 枚举、`dotnet test --list-tests` 与 TRX 对账。合法演进统一复核当前任务授权、完整 diff、before/after inventory、Release build、发现/执行数量和 0 Skip；已确认功能退役时直接删除其源码和专属测试，不保留兼容工程或 dummy case。
+当前测试分类和选择以项目 metadata、`Select-EdgeCiTests.ps1` 的源码依赖/owner 映射以及本次 TRX discovery 为准。inventory 只能描述当前提交实际存在的项目和测试，不保存历史 case 下限，也不作为业务测试增删审批。已确认功能退役时直接删除其源码和专属测试，不保留兼容工程或 dummy case。
 
 ## 1. 状态语义
 
@@ -14,9 +14,9 @@
 
 ## 2. 当前项目图与角色
 
-物理拆分前冻结基线登记 61 个项目与 32 个 required runner。2026-07-22 本地三仓源码候选已完成 V1–V5：Host 当前为 50 个 solution project / 26 个 required runner / 1 个中性 fixture，SDK 为 6 / 2，Private Plugins 为 6 / 4；三仓 owner runner均已分别执行，Host inventory/discovery/TRX/coverage 已机械对账。该本地结论不包含 Phase 9/10、Windows 远端/实机、formal/ledger、发布或部署。生产项目仍不得直接或传递引用 Tests/Testing/TestKit；`Host.Bootstrap -> Presentation.VisualTestData` 仅在 Debug 生效，Release 图不得包含该边。
+Edge 的 Host、SDK 与 Private Plugins 物理 owner 和依赖方向由当前项目图与正式包证明，不由历史项目数或 runner 数冻结。生产项目不得直接或传递引用 Tests/Testing/TestKit；`Host.Bootstrap -> Presentation.VisualTestData` 仅在 Debug 生效，Release 图不得包含该边。
 
-拆仓前 `EdgePluginContractLedgerTests` 的两个 Architecture Fact 绑定旧单仓 Homogenization 源路径与 Phase 0 canonical ledger/formal 输入，只属于冻结证据 worktree。新 Host required runner 不得复制旧 ledger、重写 generator 到跨仓源码、接入冻结 worktree或生成第二套 ledger；这两个 Fact 必须随旧单仓输入物理退役，并由 V1–V4 的 nupkg/bundle/manifest/digest 组合证据接替当前三仓边界证明。发现数变化必须在滚动复盘中精确解释并重新生成 Host owner 的 discovery/counts/TRX 真值。
+拆仓前 `EdgePluginContractLedgerTests` 与旧单仓 ledger/formal 输入只属于历史证据，不得复制、重写或接入当前 Host。当前三仓边界只由项目图、正式 nupkg、插件 bundle、manifest/digest 和受影响 owner tests 证明；业务测试数量变化不要求单独复盘。
 
 角色不是仅按目录推断，当前登记如下：
 
@@ -34,9 +34,9 @@
 | Plugin SDK | Contracts + Module.Sdk，只提供通用 contract/基础能力，不承载具体工序 |
 | Concrete plugin | 独立 `IIoT.Edge.Plugins.Private` 仓的 `IIoT.Edge.Module.Homogenization`；Host 无源码副本 |
 | Analyzer | 独立 `IIoT.Edge.Sdk` 仓的 `IIoT.Edge.Module.Analyzers` 包；作为生产构建 Analyzer 引用 |
-| Test | Host、SDK、插件各自拥有本仓测试；V5 已按 26 / 2 / 4 个 owner runner分别执行，禁止恢复单仓混合 owner |
+| Test | Host、SDK、插件各自拥有本仓测试；按当前 owner metadata 动态发现，禁止恢复单仓混合 owner |
 | Test fixture | `src/Testing/IIoT.Edge.TestPlugin`；只用于测试构建与 staging，禁止成为生产发布输入 |
-| TestSupport | Host 只保留通用 `IIoT.Edge.Testing.*` 与中性 fixture companion；`Testing.Homogenization` 已归私有插件仓并通过其四个 owner runner |
+| TestSupport | Host 只保留通用 `IIoT.Edge.Testing.*` 与中性 fixture companion；具体工序测试支撑归私有插件仓 |
 
 ### 2.1 允许的直接依赖方向
 
@@ -216,19 +216,13 @@ EF navigation、`DbSet` 和 cascade 只表达 ORM 关系，不自动证明 DDD o
 
 AnalyzerTests 必须是 Pure/Architecture 测试，不得启动 Shell、SQLite、PLC、MES、Cloud、容器或 UI。project graph/MSBuild 负例使用隔离临时 fixture，并断言 `dotnet build` 以指定 Rule ID 失败。
 
-当前实现有 23 个默认 error compiler diagnostics：`WSARCH003/004`、`DDD001/004/007`、`DATA001/002/005/006`、`PLUG001/002/003/004/005`、`EDGEOUT001/002`、`EDGECOMP001`、`EDGECLOUDCFG001`、`EDGEPLCOWN001`、`EDGEASYNC001/002`、`EDGEPRES001/002`；`WSARCH001` 由同次 build 的 project-graph gate 执行。Analyzer 源码、`EdgeArchitectureDiagnostics.Create`、release docs、`SupportedDiagnostics` 对账与当前 160 条 AnalyzerTests 由 SDK 仓独占；Host 只消费中央 `Directory.Packages.props` 精确 pin 的 `IIoT.Edge.Module.Analyzers` 包，当前版本为 `2.0.2`，项目图从中央声明读取期望版本并与实际解析包根精确相等。Host 机器门禁必须从已解析包内的 `AnalyzerReleases.Shipped.md`、`AnalyzerReleases.Unshipped.md` 与 Analyzer DLL读取并校验恰好 23 个唯一 `IIoT.Architecture/Error` ID，禁止保留第二份源码真值或由诊断家族 Regex 猜测。根 `Directory.Build.targets` 必须向每个生产项目注入唯一的 `PrivateAssets=all`、`GeneratePathProperty=true`、包含 `analyzers` asset 的 PackageReference，测试与显式插件 fixture 排除；任何 Analyzer 源码 `ProjectReference` 必须 `WSARCH006` fail-closed。隔离 build fixture 当前 7 个正例、43 个反例，另有 2 项 CLI/图路径 bypass check；fixture 必须锁定包 metadata、解析后包根和 Shell project-graph 参数。Shell 与隔离 fixture 的 project-graph `Exec` 传给子进程的仓根和 solution 都必须求值为 canonical 绝对路径，目录参数不得带尾随分隔符，避免 Windows 反斜杠转义闭合引号；Shell 固定主仓路径不得改成可由 CLI 覆盖的属性而形成图路径旁路，fixture root 必须在规范化后精确去尾且继续只对显式 fixture role 生效。Task 到 outbound/DataPipeline sink 的 invocation graph 必须穿透 helper/interface/override/delegate；委托参数按调用点/路径传播，且 simple/compound assignment 必须同时捕获 local/field/property/parameter，批准的外部 method/constructor delegate 参数仍跟踪实际 callback，未知来源统一 fail-closed。只有仓外不可达且全部 source incoming delegate 参数完整绑定的普通非虚 helper 可跳过独立未知根；public、constructor、interface、override、virtual 及其他外部可达入口始终独立 fail-closed。source lambda/local function 使用 tree+span 身份，metadata symbol 使用程序集+限定身份，不能因同名匿名函数或不同调用点碰撞。Application、ModuleSdk、SharedKernel 外部边界除精确 allowlist 外对 `Task`、`void`、同步值和 custom awaitable 统一 fail-closed，无法解析的非 Task delegate 也不例外；`catch` 后重抛、恒 false filter 或非通用异常捕获不能伪装为已处理。Analyzer 必须对 generated code 执行 `Analyze | ReportDiagnostics`，所有 descriptor 必须 `NotConfigurable`。project graph 必须以 `-Force` 扫描根/嵌套隐藏 `.editorconfig`/`.globalconfig`、evaluated Analyzer config items，以及仓内 `.csproj/.props/.targets/.proj` 的 raw/inactive/imported/target-time PropertyGroup；`RunAnalyzers=false`、`RunAnalyzersDuringBuild=false`、架构 ID 的 `NoWarn`/`WarningsNotAsErrors`、任何 IIoT.Architecture ID/category severity 和多 ID `#pragma` 都必须以 `WSARCH006` fail-closed。系统 `SuppressMessageAttribute` 使用 Roslyn semantic model 精确识别；对含候选的项目把每个 `#if/#elif` 条件替换为独立扫描符号，在有界穷举内覆盖 active、inactive、`false` 和矛盾结构分支，超过上限直接失败。跨项目 const 导致 constructor symbol 不完整时必须由 exact attribute type 识别，并对 unresolved 参数 fail-closed；裸名、Attribute 后缀、全限定名、local/global alias 均不得绕过，同名 fake type/namespace alias 及不可满足 fake 分支不得误报。`bin/obj` 排除必须相对当前 `RepositoryRoot`，不得因 fixture 物理位于上层 `obj` 而漏扫。其余 Rule ID 仍是后续实施范围，不得把本次语义门禁扩张解读为生产 pack allowlist 已完成。
+当前默认 error compiler diagnostics 由 SDK 仓 `EdgeArchitectureDiagnostics.Create`、release docs 与 `SupportedDiagnostics` 共同定义；AnalyzerTests 和隔离 fixture 按当前提交实际发现，不冻结历史 case 数。Host 只消费中央 `Directory.Packages.props` 精确 pin 的 `IIoT.Edge.Module.Analyzers` 包，项目图从中央声明读取期望版本并与实际解析包根精确相等。Host 机器门禁必须从已解析包内的 `AnalyzerReleases.Shipped.md`、`AnalyzerReleases.Unshipped.md` 与 Analyzer DLL读取并校验唯一 `IIoT.Architecture/Error` ID 集合，禁止保留第二份源码真值或由诊断家族 Regex 猜测。根 `Directory.Build.targets` 必须向每个生产项目注入唯一的 `PrivateAssets=all`、`GeneratePathProperty=true`、包含 `analyzers` asset 的 PackageReference，测试与显式插件 fixture 排除；任何 Analyzer 源码 `ProjectReference` 必须 `WSARCH006` fail-closed。隔离 build fixture 必须锁定包 metadata、解析后包根和 Shell project-graph 参数，并以当前正反例 discovery 验证。Shell 与隔离 fixture 的 project-graph `Exec` 传给子进程的仓根和 solution 都必须求值为 canonical 绝对路径，目录参数不得带尾随分隔符，避免 Windows 反斜杠转义闭合引号；Shell 固定主仓路径不得改成可由 CLI 覆盖的属性而形成图路径旁路，fixture root 必须在规范化后精确去尾且继续只对显式 fixture role 生效。Task 到 outbound/DataPipeline sink 的 invocation graph 必须穿透 helper/interface/override/delegate；委托参数按调用点/路径传播，且 simple/compound assignment 必须同时捕获 local/field/property/parameter，批准的外部 method/constructor delegate 参数仍跟踪实际 callback，未知来源统一 fail-closed。只有仓外不可达且全部 source incoming delegate 参数完整绑定的普通非虚 helper 可跳过独立未知根；public、constructor、interface、override、virtual 及其他外部可达入口始终独立 fail-closed。source lambda/local function 使用 tree+span 身份，metadata symbol 使用程序集+限定身份，不能因同名匿名函数或不同调用点碰撞。Application、ModuleSdk、SharedKernel 外部边界除精确 allowlist 外对 `Task`、`void`、同步值和 custom awaitable 统一 fail-closed，无法解析的非 Task delegate 也不例外；`catch` 后重抛、恒 false filter 或非通用异常捕获不能伪装为已处理。Analyzer 必须对 generated code 执行 `Analyze | ReportDiagnostics`，所有 descriptor 必须 `NotConfigurable`。project graph 必须以 `-Force` 扫描根/嵌套隐藏 `.editorconfig`/`.globalconfig`、evaluated Analyzer config items，以及仓内 `.csproj/.props/.targets/.proj` 的 raw/inactive/imported/target-time PropertyGroup；`RunAnalyzers=false`、`RunAnalyzersDuringBuild=false`、架构 ID 的 `NoWarn`/`WarningsNotAsErrors`、任何 IIoT.Architecture ID/category severity 和多 ID `#pragma` 都必须以 `WSARCH006` fail-closed。系统 `SuppressMessageAttribute` 使用 Roslyn semantic model 精确识别；对含候选的项目把每个 `#if/#elif` 条件替换为独立扫描符号，在有界穷举内覆盖 active、inactive、`false` 和矛盾结构分支，超过上限直接失败。跨项目 const 导致 constructor symbol 不完整时必须由 exact attribute type 识别，并对 unresolved 参数 fail-closed；裸名、Attribute 后缀、全限定名、local/global alias 均不得绕过，同名 fake type/namespace alias 及不可满足 fake 分支不得误报。`bin/obj` 排除必须相对当前 `RepositoryRoot`，不得因 fixture 物理位于上层 `obj` 而漏扫。其余 Rule ID 仍是后续实施范围，不得把本次语义门禁扩张解读为生产 pack allowlist 已完成。
 
 ## 8. Edge 当前测试分类与物理归口
 
-`Regression` 只是 cross-cutting `RegressionId`，不是 TestKind 或物理项目。拆仓前冻结 inventory 为 61 个 solution project、32 个 required runner、1 个中性 fixture、1334 个 Release case；其中两个 canonical-ledger Architecture Fact 只绑定冻结 Phase 0 证据拓扑，不能复制到产品 Host。2026-07-22 V5 当前 owner 真值如下；Unit 只允许 `Pure + Parallel`，其他 Pure runner 也受控并行，Filesystem、SQLite、Avalonia 和 Windows runner 必须物理命名且串行。
+`Regression` 只是 cross-cutting `RegressionId`，不是 TestKind 或物理项目。测试只使用 `Architecture`、`Security`、`Business`、`DeploymentContract`、`Quality`、`CrossProject` 六类；Host、SDK 与 Private Plugins 分别拥有自己的项目和测试。Unit/Pure 可以按资源安全并行，Filesystem、SQLite、Avalonia 和 Windows runner 必须按当前 runtime metadata 隔离。
 
-| Owner | 项目 / required runner | 当前机器真值 |
-|---|---:|---|
-| Host | 50 / 26 | `edge-test-inventory.json`、`discovered-test-inventory.json`、`required-test-counts.json` 与 26 份 TRX/coverage report 对齐；Host discovery 为 1069，failed=0、skipped=0 |
-| SDK | 6 / 2 | AnalyzerTests 与 UI.Shared.Tests 分别由 SDK 仓执行，均 failed=0、skipped=0 |
-| Private Plugins | 6 / 4 | Homogenization Conformance、ConformanceFilesystem、Workflow、WorkflowFilesystem 由插件仓执行，均 failed=0、skipped=0 |
-
-Host 每个 runner 的当前精确发现数只以 `scripts/tests/required-test-counts.json` 为机器真值，不再在本文复制第二份易漂移表。`IIoT.Edge.Testing.Core`、`Testing.Modules` 和 `Testing.Protocols` 只承载 Host 通用测试能力；`Testing.Homogenization` 只归 Private Plugins；`IIoT.Edge.Module.TestPlugin.Companion` 只承载中性 fixture 自有类型，均不包含 case。`IIoT.Edge.TestPlugin` 是 `IsPackable=false` 的唯一中性 fixture，其项目图只消费 SDK 包与 plugin-owned companion。旧 NonUI、Shell、Module Contract、Launcher、Installer、Update 大桶已迁空并物理删除；具体插件源码质量 Fact 也随源码归插件现有 runner，禁止在 Host 保留旧路径副本。
+`IIoT.Edge.Testing.Core`、`Testing.Modules` 和 `Testing.Protocols` 只承载 Host 通用测试能力；具体工序 TestSupport 只归 Private Plugins；`IIoT.Edge.Module.TestPlugin.Companion` 只承载中性 fixture 自有类型。`IIoT.Edge.TestPlugin` 必须保持 `IsPackable=false`，项目图只消费 SDK 包与 plugin-owned companion。具体插件源码质量 Fact 随源码归插件现有测试，禁止在 Host 保留旧路径副本。
 
 ## 9. 已落地的高风险语义
 
@@ -243,20 +237,20 @@ Host 每个 runner 的当前精确发现数只以 `scripts/tests/required-test-c
 
 ## 10. 清单、质量与兼容对账
 
-- `edge-test-inventory.json`、`discovered-test-inventory.json` 和 `required-test-counts.json` 是 Host 当前机器清单；普通 CI 只验证，不自动改写。SDK 与 Private Plugins 使用各自 solution、owner runner 和 pack 输入，不把结果折回 Host 清单。
+- 项目 metadata 与本次 selector 输出是当前分类和 owner 真值；`current-discovery.json` 只作为本次执行 artifact 记录当前提交实际发现结果，不提交全仓 roster 或历史数量下限。SDK 与 Private Plugins 使用各自 solution、owner tests 和 pack 输入，不把结果折回 Host 清单。
 - 拆仓前 `EDGE-SPLIT-LEDGER-001` 的 generator、schema、formal/authority 工具和两个 Architecture Fact 只属于冻结 Phase 0 worktree。产品 Host 活动树必须物理删除这些入口，不改写为跨仓源码扫描器，不重新生成 canonical ledger，也不把历史数量当作当前三仓证据。
 - 当前三仓边界由独立项目图、SDK nupkg、Private Plugin bundle、Host artifact、manifest/digest、Cloud catalog/download byte evidence和各仓 owner tests 共同证明；唯一跨仓运行时兼容入口是 SDK 仓 `eng/Verify-EdgeSdkCompatibility.ps1`。
-- compatibility inventory 必须对 alias/adapter/wrapper/compat/legacy/shadow/obsolete/fallback/双写/影子候选逐项提供真实 consumer 证据与有期迁移窗口。每个 `MigrationWindow` symbol 绑定唯一 window ID、replacement/deletion/latest removal 与 required coverage test；缺绑定、零 consumer、过期、未分类或新增 consumer均 fail-closed。
+- compatibility inventory 必须对 alias/adapter/wrapper/compat/legacy/shadow/obsolete/fallback/双写/影子生产候选逐项提供真实 consumer 证据与有期迁移窗口。每个 `MigrationWindow` symbol 绑定唯一 window ID、replacement/deletion/latest removal；缺绑定、零 consumer、过期、未分类或新增 consumer均 fail-closed。Quality 只治理生产兼容路径，不登记或要求具体 Business test 文件、方法或 committed discovery roster。
 - regression ledger 只治理已退役产品事实，不得接管当前三仓兼容证明。退役证据必须绑定冻结 source commit/tree、唯一旧声明、受控 token/path、非空 reason 与 current discovery 零回流；活动源码、项目、配置、CI 和发布输入不得恢复退役功能。
-- duplication 分 production/test-support/tests 的 exact/near ratchet；物理三仓后 Host coverage 只负责 Host owner 源码并保留高风险阈值。迁入 SDK 的源码不得借跨仓 PDB/source fallback 伪装为 Host coverage。
+- duplication ratchet 只治理 production exact/near；Business tests 与 test-support 不进入历史 duplication baseline。显式 Full coverage 只报告当前 Host owner 源码，迁入 SDK 的源码不得借跨仓 PDB/source fallback 伪装为 Host coverage。
 - RuntimeLayoutSync 等含 Windows/Unix 分支的发布工具必须由 Deployment runner 覆盖两套平台决策；Host runtime/installer/Velopack 只能生成空插件根，不得扫描、构建或复制 `src/Modules`。
-- coverage、duplication、mutation、compatibility baseline 只负责与本次真实结果对账，不能自行放宽历史阈值。项目/case 变化先复核授权和完整 diff，再显式更新 inventory，并记录 before/after 原因。
+- coverage、duplication、mutation、compatibility 都属于用户显式 `Quality`/`Full`/`CrossProject` 模式，不进入普通开发、push 或部署。coverage 只在显式 Full 收集；Quality 的 production duplication、mutation 最低阈值和 compatibility 不得保存 Business runner/case 历史数量。
 
 ## 11. CI 退出条件
 
-三仓 Windows required CI 必须在 25 分钟 hard timeout 内聚合 Host 26、SDK 2、Private Plugins 4 个 owner runner，并完成 Release build、Analyzer/project graph、正反 build fixture、source-quality、各仓 discovery/执行、Host TRX/coverage、compatibility、duplication与基线单调校验；不得退化回单仓源码 checkout或跨仓 ProjectReference。mutation 使用独立 report job，并先执行伪分数/状态漂移 behavior fixture，不伪装成编译错误。故意执行非法 native build 的 PowerShell fixture在完成全部断言后必须显式清零 `$LASTEXITCODE`，不得把预期失败残留为 job 失败。Windows 远端 job 与 Windows 实机 Installer/Velopack/DPI 验收在取得对应证据前不得写成已验证。
+默认 push/PR 只运行 Architecture、Security 与 selector 选出的受影响 Business/DeploymentContract，并按当次 discovery/TRX 要求 0 failed、0 skipped。三仓完整 owner tests、coverage、duplication、mutation、compatibility 和 Windows 实机验收只在用户明确授权 `Quality`、`CrossProject` 或现场验收时运行；不得自动聚合，也不得用 Host 单仓结果冒充三仓对齐。
 
-宿主、SDK 与私有插件的 Phase 6–8 本地物理拆分及 V1–V5 已于 2026-07-22 在三个独立本地 Git 仓收口；冻结 Phase 0 formal/ledger 候选不接入产品 Host。Phase 9–10、新远端、推送与生产部署已获用户授权并进入本批执行，但完整兼容门、最终 push、`stable`、Windows 下载和实机结果在命令真正结束前均保持 `PENDING-VALIDATION`。`deploy/Deploy-Changed.ps1` 仍是唯一生产 CD 入口。
+`deploy/Deploy-Changed.ps1` 是唯一生产增量入口；是否 push、发布 `stable`、运行三仓兼容门或 Windows 实机验收以用户当前轮授权和本次真实 invocation 为准，历史阶段状态不得自动继承。
 
 ## 12. 非声明范围
 

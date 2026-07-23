@@ -643,7 +643,7 @@ foreach ($project in $projects) {
         $packageName = $package.EvaluatedInclude.Trim()
         if ($packageName.Equals('IIoT.Edge.Module.Analyzers', [StringComparison]::OrdinalIgnoreCase)) {
             $definingPath = [IO.Path]::GetFullPath($package.GetMetadataValue('DefiningProjectFullPath'))
-            $expectedTargetsPath = [IO.Path]::GetFullPath((Join-Path $RepositoryRoot 'Directory.Build.targets'))
+            $expectedTargetsPath = [IO.Path]::GetFullPath((Join-Path $catalogRepositoryRoot 'Directory.Build.targets'))
             $includeAssets = [regex]::Replace(
                 $package.GetMetadataValue('IncludeAssets'),
                 '\s+',
@@ -1094,8 +1094,8 @@ foreach ($project in $projects) {
 
     if ($project.Role -eq 'Test') {
         $metadataNames = @(
-            'TestKind', 'TestRuntime', 'TestRuntimeDependencies', 'TestRunnerMode', 'TestCadence',
-            'TestCapability', 'TestRisk', 'TestConcern', 'TestProfile', 'TestOwner', 'TestRuleId', 'TestRequired')
+            'TestKind', 'TestRuntime', 'TestRuntimeDependencies', 'TestRunnerMode',
+            'TestCapability', 'TestRisk', 'TestConcern', 'TestProfile', 'TestOwner', 'TestRuleId')
         foreach ($metadataName in $metadataNames) {
             $metadataNodes = @($project.Xml.SelectNodes("/Project/PropertyGroup/$metadataName"))
             if ($metadataNodes.Count -ne 1) {
@@ -1112,11 +1112,9 @@ foreach ($project in $projects) {
         $runtimeDependencies = @($runtimeDependenciesText.Split(';', [StringSplitOptions]::RemoveEmptyEntries) |
             ForEach-Object { $_.Trim() })
         $runnerMode = Get-ProjectProperty -Project ($project.Xml) -Name 'TestRunnerMode'
-        $testCadence = Get-ProjectProperty -Project ($project.Xml) -Name 'TestCadence'
         $testRisk = Get-ProjectProperty -Project ($project.Xml) -Name 'TestRisk'
         $testConcern = Get-ProjectProperty -Project ($project.Xml) -Name 'TestConcern'
         $testProfile = Get-ProjectProperty -Project ($project.Xml) -Name 'TestProfile'
-        $testRequired = Get-ProjectProperty -Project ($project.Xml) -Name 'TestRequired'
         $allowedTestKinds = @('Aggregate', 'Application', 'Architecture', 'Conformance', 'Contract', 'Deployment', 'Integration', 'Persistence', 'UI', 'Unit', 'Workflow')
         $allowedRuntimes = @('Pure', 'Filesystem', 'Network', 'Avalonia', 'SQLite', 'Windows')
         $allowedRuntimeDependencies = @(
@@ -1124,11 +1122,10 @@ foreach ($project in $projects) {
             'IsolatedDatabase', 'Loopback', 'MSBuild', 'PluginLoad', 'PowerShell', 'ProcessEnvironment',
             'Reflection', 'Release', 'Roslyn', 'SharedOutputDirectory')
         if ($testKind -notin $allowedTestKinds -or $testRuntime -notin $allowedRuntimes -or
-            $runnerMode -notin @('Parallel', 'Serial') -or $testCadence -notin @('PR', 'Nightly', 'Release', 'Manual') -or
+            $runnerMode -notin @('Parallel', 'Serial') -or
             $testRisk -notin @('P0', 'P1', 'P2') -or
             $testConcern -notin @('Security', 'Reliability', 'Compatibility', 'Accessibility', 'Performance') -or
-            $testProfile -notin @('Default', 'Simulation', 'GoldenDataset', 'LiveExternal') -or
-            $testRequired -notin @('true', 'false')) {
+            $testProfile -notin @('Default', 'Simulation', 'GoldenDataset', 'LiveExternal')) {
             Add-Finding 'WSTEST001' "$($project.RelativePath) has unsupported test taxonomy metadata."
         }
         if ($runtimeDependencies.Count -ne (@($runtimeDependencies | Sort-Object -Unique)).Count -or

@@ -304,7 +304,8 @@ internal static class TestOnlyDebugOutput
     Set-Content -Encoding UTF8 -LiteralPath (Join-Path $sourceTestsDirectory 'TestOnlyDebugOutput.cs') -Value $testOnlyDebugSource
     Set-Content -Encoding UTF8 -LiteralPath (Join-Path $sourceTestingDirectory 'TestOnlyDebugOutput.cs') -Value $testOnlyDebugSource
 
-    $testOwnerResult = Invoke-PreflightProcess -ScriptPath $preflightFixture.LinkedPreflight -Arguments $linkedArguments
+    $securityScanArguments = $linkedArguments + @('-RunSourceSecurityScan')
+    $testOwnerResult = Invoke-PreflightProcess -ScriptPath $preflightFixture.LinkedPreflight -Arguments $securityScanArguments
     Assert-PreflightResult -Result $testOwnerResult -ExpectedExitCode 0 `
         -RequiredText @('Deployment preflight passed.') -Scenario 'three test-owned negative fixture paths'
 
@@ -366,7 +367,10 @@ internal static class TestOnlyDebugOutput
                     $preflightFileNames.Contains('TestEdgeDeploymentPreFlight.ps1')) `
                 -Message 'Case-sensitive fixture did not preserve exact self/owner paths and their case variants simultaneously.'
 
-            $caseVariantArguments = $basePreflightArguments + @('-WorkspaceRoot', $preflightFixture.WorkspaceRoot)
+            $caseVariantArguments = $basePreflightArguments + @(
+                '-WorkspaceRoot', $preflightFixture.WorkspaceRoot,
+                '-RunSourceSecurityScan'
+            )
             $caseVariantResult = Invoke-PreflightProcess -ScriptPath $caseVariantPreflight -Arguments $caseVariantArguments
             Assert-PreflightResult -Result $caseVariantResult -ExpectedExitCode 1 `
                 -RequiredText @(
@@ -394,7 +398,7 @@ internal static class TestOnlyDebugOutput
     New-Item -ItemType Directory -Force -Path $productionScriptDirectory | Out-Null
     $productionScriptPath = Join-Path $productionScriptDirectory 'TestOnlyPasswordHash.ps1'
     Copy-Item -LiteralPath $testOnlyScriptPath -Destination $productionScriptPath
-    $productionResult = Invoke-PreflightProcess -ScriptPath $preflightFixture.LinkedPreflight -Arguments $linkedArguments
+    $productionResult = Invoke-PreflightProcess -ScriptPath $preflightFixture.LinkedPreflight -Arguments $securityScanArguments
     Assert-PreflightResult -Result $productionResult -ExpectedExitCode 1 `
         -RequiredText @('EDGE-DEPLOY-SECURITY-001', 'SHA256 password hash generation script content', 'scripts/production/TestOnlyPasswordHash.ps1') `
         -Scenario 'same-byte production security violation'

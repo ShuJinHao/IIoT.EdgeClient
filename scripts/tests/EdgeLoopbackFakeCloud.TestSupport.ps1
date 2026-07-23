@@ -97,6 +97,9 @@ function Start-EdgeLoopbackFakeCloud {
         [Parameter(Mandatory = $true)][string]$PortFile,
         [Parameter(Mandatory = $true)][string]$RequestLog,
         [string]$PluginVersion,
+        [string]$PluginSha256,
+        [long]$PluginPackageSize = 0,
+        [string]$HostSourceCommit,
         [ValidateRange(1, 60)][int]$ReadyTimeoutSeconds = 30
     )
 
@@ -112,6 +115,15 @@ function Start-EdgeLoopbackFakeCloud {
     $arguments = @('-u', $serverScript, '--port-file', $PortFile, '--request-log', $RequestLog)
     if (-not [string]::IsNullOrWhiteSpace($PluginVersion)) {
         $arguments += @('--plugin-version', $PluginVersion)
+    }
+    if (-not [string]::IsNullOrWhiteSpace($PluginSha256)) {
+        $arguments += @('--plugin-sha256', $PluginSha256)
+    }
+    if ($PluginPackageSize -gt 0) {
+        $arguments += @('--plugin-package-size', [string]$PluginPackageSize)
+    }
+    if (-not [string]::IsNullOrWhiteSpace($HostSourceCommit)) {
+        $arguments += @('--host-source-commit', $HostSourceCommit)
     }
 
     $process = $null

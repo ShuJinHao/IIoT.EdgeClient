@@ -23,10 +23,16 @@ param(
 
     [string]$ReleaseNotesPath = '',
 
+    [Parameter(Mandatory = $true)]
+    [ValidatePattern('^[0-9A-Fa-f]{40}$')]
+    [string]$ExpectedSha,
+
     [ValidateRange(1, 1000)]
     [int]$UploadRateLimitMbps = 1000,
 
     [string]$ResumeReleaseRoot = $env:IIOT_EDGE_RESUME_RELEASE_ROOT,
+
+    [switch]$ReconcileExistingRelease,
 
     [ValidateRange(1, 300)]
     [int]$ConnectTimeoutSeconds = 10,
@@ -184,7 +190,7 @@ function Invoke-CloudJsonGet {
     }
 
     if ([string]::IsNullOrWhiteSpace($script:CloudToken)) {
-        throw 'CloudToken is required. Pass -CloudToken, set $env:IIOT_CLOUD_RELEASE_TOKEN, set $env:IIOT_EDGE_RELEASE_API_KEY, or run scripts/SaveEdgeReleaseApiKey.ps1.'
+        throw 'CloudToken is required. Use -CloudToken only for controlled recovery, or store the Edge Release API key in macOS Keychain with scripts/SaveEdgeReleaseApiKey.ps1.'
     }
 
     $apiRoot = $CloudApiBaseUrl.TrimEnd('/')
@@ -331,7 +337,7 @@ function Invoke-PluginPackageUpload {
 }
 
 $dispatchInvocationId = Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgePlugin
-$gitFacts = Assert-EdgeReleaseGitState -RepoRoot $pluginRepoRoot
+$gitFacts = Assert-EdgeReleaseGitState -RepoRoot $pluginRepoRoot -ExpectedSha $ExpectedSha
 $deploymentLock = Enter-EdgeDeploymentLock -RepoRoot $repoRoot -InvocationId $dispatchInvocationId -Target EdgePlugin
 $locationPushed = $false
 $attemptReleaseRoot = ''
@@ -371,6 +377,11 @@ try {
             throw "Resume release root is missing edge-deployment-attempt.json: $releaseRoot"
         }
         $savedState = Get-Content -Raw -Encoding UTF8 -LiteralPath $statePath | ConvertFrom-Json
+        Assert-EdgeResumeAttemptIdentity `
+            -State $savedState `
+            -ExpectedTarget EdgePlugin `
+            -ExpectedInvocationId $dispatchInvocationId `
+            -ExpectedSha $ExpectedSha
         $savedFacts = $savedState.facts
         $savedSourceCommit = if ($null -ne $savedFacts -and $savedFacts.PSObject.Properties['sourceCommit']) {
             [string]$savedFacts.sourceCommit
@@ -385,26 +396,14 @@ try {
         }
         else { '' }
 
-        if ([string]::IsNullOrWhiteSpace($savedSourceCommit) -or [string]::IsNullOrWhiteSpace($savedVersion)) {
-            $resumePackageRoot = Join-Path $releaseRoot 'package'
-            $hasCompletePreservedPackage = $null -ne (Get-PreservedPluginMetadataPath -PackageRoot $resumePackageRoot)
-            $isLegacyEmptyPackFailure =
-                [string]$savedState.target -eq 'EdgePlugin' -and
-                [string]$savedState.stage -eq 'building-package' -and
-                [string]$savedState.status -eq 'failed' -and
-                -not $hasCompletePreservedPackage
-            if (-not $isLegacyEmptyPackFailure) {
-                throw 'Resume attempt is missing sourceCommit/version facts and is not an empty legacy building-package failure.'
-            }
-            Write-Host "Resuming legacy empty plugin pack failure from current clean pushed HEAD: module=$ModuleId version=$declaredVersion sourceCommit=$($gitFacts.Head)"
+        if ([string]::IsNullOrWhiteSpace($savedVersion)) {
+            throw 'Resume attempt is missing its immutable plugin version.'
         }
-        else {
-            if ($savedSourceCommit -ne [string]$gitFacts.Head) {
-                throw "Resume artifact sourceCommit '$savedSourceCommit' does not match pushed HEAD '$($gitFacts.Head)'."
-            }
-            if ($savedVersion -ne $declaredVersion) {
-                throw "Resume artifact version '$savedVersion' does not match current plugin manifest '$declaredVersion'."
-            }
+        if ($savedSourceCommit -ne [string]$gitFacts.Head) {
+            throw "Resume artifact sourceCommit '$savedSourceCommit' does not match pushed HEAD '$($gitFacts.Head)'."
+        }
+        if ($savedVersion -ne $declaredVersion) {
+            throw "Resume artifact version '$savedVersion' does not match current plugin manifest '$declaredVersion'."
         }
         if (-not [string]::IsNullOrWhiteSpace($savedModuleId) -and
             -not [string]::Equals($savedModuleId, $ModuleId, [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -412,14 +411,34 @@ try {
         }
     }
     else {
-        if ($null -ne $existingRelease) {
+        if ($null -ne $existingRelease -and -not $ReconcileExistingRelease) {
             throw "Plugin version already exists in Cloud catalog: $ModuleId/$Channel/$declaredVersion/$RuntimeIdentifier. No package build was started."
         }
-        $releaseRoot = Join-Path $resolvedOutputRoot "$Channel/$ModuleId/$([Guid]::NewGuid().ToString('N'))"
+        $releaseRoot = if ($null -ne $existingRelease) {
+            Join-Path $resolvedOutputRoot "$Channel/$ModuleId/reconcile-$dispatchInvocationId"
+        }
+        else {
+            Join-Path $resolvedOutputRoot "$Channel/$ModuleId/$([Guid]::NewGuid().ToString('N'))"
+        }
     }
 
     $attemptReleaseRoot = $releaseRoot
-    if ($isResume -and $null -ne $existingRelease) {
+    if ($isResume -and $null -ne $existingRelease -and -not $ReconcileExistingRelease) {
+        $reconcilePackageRoot = Join-Path $releaseRoot 'package'
+        $reconcileMetadataPath = Get-PreservedPluginMetadataPath -PackageRoot $reconcilePackageRoot
+        if ($null -eq $reconcileMetadataPath) {
+            throw 'Existing plugin release cannot be reconciled because the preserved candidate package metadata is missing.'
+        }
+        $reconcileMetadata = Get-Content -Raw -Encoding UTF8 -LiteralPath $reconcileMetadataPath.FullName | ConvertFrom-Json
+        $reconcilePackagePath = Join-Path $reconcilePackageRoot ([string]$reconcileMetadata.packageFileName)
+        Test-PreservedPluginPackage -Metadata $reconcileMetadata -PackagePath $reconcilePackagePath
+        if (-not [string]::Equals(
+                [string]$existingRelease.sha256,
+                [string]$reconcileMetadata.sha256,
+                [System.StringComparison]::OrdinalIgnoreCase) -or
+            [int64]$existingRelease.packageSize -ne [int64]$reconcileMetadata.packageSize) {
+            throw "Existing plugin release does not match the preserved frozen-candidate package: module='$ModuleId' version='$declaredVersion'."
+        }
         $downloadUrl = [string]$existingRelease.downloadUrl
         if (-not [string]::IsNullOrWhiteSpace($downloadUrl)) {
             if (-not $downloadUrl.StartsWith('http', [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -438,6 +457,7 @@ try {
     New-Item -Path $packageOutputRoot -ItemType Directory -Force | Out-Null
     $metadataPath = Get-PreservedPluginMetadataPath -PackageRoot $packageOutputRoot
     if ($null -eq $metadataPath) {
+        $gitFacts = Assert-EdgeReleaseGitState -RepoRoot $pluginRepoRoot -ExpectedSha $ExpectedSha
         $pluginPackageScratchRoot = Join-Path $pluginRepoRoot "artifacts/deploy-pack/$dispatchInvocationId"
         $attemptStage = 'building-package'
         Write-EdgeDeploymentAttemptState -ReleaseRoot $releaseRoot -Target EdgePlugin -InvocationId $dispatchInvocationId `
@@ -476,12 +496,46 @@ try {
         Test-PreservedPluginPackage -Metadata $metadata -PackagePath $packagePath
     }
 
+    if ($ReconcileExistingRelease -and $null -ne $existingRelease) {
+        $attemptStage = 'reconciling-existing-release'
+        if (-not [string]::Equals(
+                [string]$existingRelease.sha256,
+                [string]$metadata.sha256,
+                [System.StringComparison]::OrdinalIgnoreCase) -or
+            [int64]$existingRelease.packageSize -ne [int64]$metadata.packageSize) {
+            throw "Existing plugin release does not match the rebuilt frozen-candidate package: module='$ModuleId' version='$declaredVersion'."
+        }
+        $downloadUrl = [string]$existingRelease.downloadUrl
+        if ([string]::IsNullOrWhiteSpace($downloadUrl)) {
+            throw "Existing plugin release has no download URL: module='$ModuleId' version='$declaredVersion'."
+        }
+        if (-not $downloadUrl.StartsWith('http', [System.StringComparison]::OrdinalIgnoreCase)) {
+            $downloadUrl = "$(Resolve-DownloadBaseUrl)/$($downloadUrl.TrimStart('/'))"
+        }
+        Test-EdgeCurlUrl `
+            -Uri $downloadUrl `
+            -ConnectTimeoutSeconds $ConnectTimeoutSeconds `
+            -RequestTimeoutSeconds 60
+        Write-EdgeDeploymentAttemptState -ReleaseRoot $releaseRoot -Target EdgePlugin -InvocationId $dispatchInvocationId `
+            -Stage 'reconciled-existing-release' -Status succeeded `
+            -Facts @{
+                moduleId = $ModuleId
+                version = $declaredVersion
+                sourceCommit = $gitFacts.Head
+                alreadyPublished = $true
+                rebuiltAndCompared = $true
+            } | Out-Null
+        Write-Host "Edge plugin from-zero reconciliation succeeded: module=$ModuleId version=$declaredVersion rebuiltAndCompared=true"
+        return
+    }
+
     $wrapperZip = Join-Path $releaseRoot "edge-plugin-release-$ModuleId-$($metadata.version)-$RuntimeIdentifier.zip"
     if (-not $isResume -or -not (Test-Path -LiteralPath $wrapperZip -PathType Leaf)) {
         New-PluginReleaseWrapper -Metadata $metadata -PackagePath $packagePath -ReleaseNotesText $releaseNotesText -OutputZip $wrapperZip | Out-Null
     }
 
     $attemptStage = 'uploading'
+    $gitFacts = Assert-EdgeReleaseGitState -RepoRoot $pluginRepoRoot -ExpectedSha $ExpectedSha
     Write-EdgeDeploymentAttemptState -ReleaseRoot $releaseRoot -Target EdgePlugin -InvocationId $dispatchInvocationId `
         -Stage $attemptStage -Status running `
         -Facts @{ moduleId = $ModuleId; version = $declaredVersion; sourceCommit = $gitFacts.Head; wrapper = $wrapperZip } | Out-Null
