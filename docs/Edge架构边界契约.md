@@ -151,7 +151,7 @@ EF navigation、`DbSet` 和 cascade 只表达 ORM 关系，不自动证明 DDD o
 
 ### 5.4 插件包动态边界
 
-当前宿主加载边界允许 `entry + plugin-owned assembly/resources/config + 声明的非宿主依赖`，并把 `IIoT.Edge.Module.Contracts`、`IIoT.Edge.Module.Sdk`、`IIoT.Edge.UI.Shared` 作为 Host 提供的共享程序集。中性正例继续使用 `IIoT.Edge.Module.TestPlugin.Companion`；中性 fixture 本身只消费正式 SDK 包与 plugin-owned companion，两个 Host staging owner 的实际 artifact 均不含 Application、Domain 或 SharedKernel。预检以 PE metadata 精确拒绝 Application、Domain、SharedKernel、Host、Infrastructure、Presentation、Shell/Launcher/Installer/RuntimeLayoutSync，不得回退到默认 ALC、测试输出根或源项目 `bin`。插件仓唯一 `eng/PackEdgePlugin.ps1` 已由 V3/V4 以静态 allowlist 生成包并证明排除 SDK/Host DLL；Phase 9/10 发布组合产品候选已接入，完整三仓兼容门与生产发布结果仍待本批执行记录。
+当前宿主加载边界允许 `entry + plugin-owned assembly/resources/config + 声明的非宿主依赖 + activation`，并把 `IIoT.Edge.Module.Contracts`、`IIoT.Edge.Module.Sdk`、`IIoT.Edge.UI.Shared` 作为 Host 提供的共享程序集。activation 只能通过 schema v1 manifest 显式映射插件自有 launcher/machine 配置；不得包含 Cloud 身份、Host 二进制或越界路径。Launcher 对每个外部插件独立校验和组合，单插件 activation 失败只能 warning + 跳过并保留通用 Default，不能成为进程级启动失败。中性正例继续使用 `IIoT.Edge.Module.TestPlugin.Companion`；中性 fixture 本身只消费正式 SDK 包与 plugin-owned companion，两个 Host staging owner 的实际 artifact 均不含 Application、Domain 或 SharedKernel。预检以 PE metadata 精确拒绝 Application、Domain、SharedKernel、Host、Infrastructure、Presentation、Shell/Launcher/Installer/RuntimeLayoutSync，不得回退到默认 ALC、测试输出根或源项目 `bin`。
 
 ## 6. 稳定 Rule ID 与启用状态
 

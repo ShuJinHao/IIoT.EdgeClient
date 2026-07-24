@@ -143,6 +143,9 @@ $selectionScopeBytes = [Text.UTF8Encoding]::new($false).GetBytes(
 $selectionScopeSha256 = [Convert]::ToHexString(
     [Security.Cryptography.SHA256]::HashData($selectionScopeBytes)).ToLowerInvariant()
 $inventoryPath = Join-Path $resolvedResults 'current-discovery.json'
+$discoveredTotal = [int](($results |
+        ForEach-Object { [int]$_['discovered'] } |
+        Measure-Object -Sum).Sum)
 [ordered]@{
     schemaVersion = 2
     generatedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
@@ -155,8 +158,8 @@ $inventoryPath = Join-Path $resolvedResults 'current-discovery.json'
         sha256 = $selectionScopeSha256
     }
     selectedProjects = $results.Count
-    discovered = [int](($results | Measure-Object discovered -Sum).Sum)
+    discovered = $discoveredTotal
     projects = $results
 } | ConvertTo-Json -Depth 8 | Set-Content $inventoryPath -Encoding utf8
 
-Write-Host "EDGE_CI_TESTS_OK projects=$($results.Count) discovered=$(($results | Measure-Object discovered -Sum).Sum) output=$inventoryPath"
+Write-Host "EDGE_CI_TESTS_OK projects=$($results.Count) discovered=$discoveredTotal output=$inventoryPath"

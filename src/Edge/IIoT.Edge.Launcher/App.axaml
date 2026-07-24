@@ -2,9 +2,25 @@
     x:Class="IIoT.Edge.Launcher.App"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:edge="clr-namespace:IIoT.Edge.UI.Shared.Avalonia.Controls;assembly=IIoT.Edge.UI.Shared"
     RequestedThemeVariant="Light">
     <Application.Styles>
         <FluentTheme />
         <StyleInclude Source="avares://IIoT.Edge.UI.Shared/Avalonia/Styles/EdgeTheme.axaml" />
+        <Style Selector="edge|EdgeActionButton.launcher-brand-action">
+            <Setter Property="Background" Value="{DynamicResource Edge.Brush.Accent.Primary}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Accent.Primary}" />
+            <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.OnAccent}" />
+        </Style>
+        <Style Selector="edge|EdgeActionButton.launcher-brand-action:pointerover">
+            <Setter Property="Background" Value="{DynamicResource Edge.Brush.Accent.Primary}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Accent.Primary}" />
+            <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.OnAccent}" />
+        </Style>
+        <Style Selector="edge|EdgeActionButton.launcher-brand-action:pressed">
+            <Setter Property="Background" Value="{DynamicResource Edge.Brush.Accent.Primary}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Edge.Brush.Accent.Primary}" />
+            <Setter Property="Foreground" Value="{DynamicResource Edge.Brush.Text.OnAccent}" />
+        </Style>
     </Application.Styles>
 </Application>

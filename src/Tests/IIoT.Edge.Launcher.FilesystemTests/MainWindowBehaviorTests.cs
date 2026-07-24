@@ -63,6 +63,24 @@ public sealed class MainWindowBehaviorTests
     }
 
     [Fact]
+    public void MainWindow_ProfileLaunchButton_ShouldUseLauncherLocalBrandAccentTokens()
+    {
+        var appAxaml = File.ReadAllText(ResolveLauncherAxamlPath("App.axaml"));
+        var windowAxaml = File.ReadAllText(ResolveLauncherAxamlPath("MainWindow.axaml"));
+
+        Assert.Contains("Classes=\"launcher-brand-action\"", windowAxaml, StringComparison.Ordinal);
+        Assert.Contains(
+            "Value=\"{DynamicResource Edge.Brush.Accent.Primary}\"",
+            appAxaml,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Value=\"{DynamicResource Edge.Brush.Text.OnAccent}\"",
+            appAxaml,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("#", appAxaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void VersionHistoryWindow_ShouldUseSharedProgressBar()
     {
         var axaml = File.ReadAllText(ResolveLauncherAxamlPath("VersionHistoryWindow.axaml"));

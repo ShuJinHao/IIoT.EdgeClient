@@ -30,8 +30,17 @@ public static class LauncherDependencyInjection
         services.AddSingleton<ILauncherAccountCatalog>(
             provider => ActivatorUtilities.CreateInstance<LauncherAccountCatalog>(provider));
         services.AddSingleton<ILocalLauncherAuthService, LocalLauncherAuthService>();
+        services.AddSingleton<ILauncherPluginActivationSource>(
+            _ => new LauncherPluginActivationSource(baseDirectory));
+        services.AddSingleton<ILauncherPluginActivationReconciler>(
+            provider => new LauncherPluginActivationReconciler(
+                baseDirectory,
+                provider.GetRequiredService<ILauncherPluginActivationSource>()));
         services.AddSingleton<ILauncherProfileCatalog>(
-            provider => ActivatorUtilities.CreateInstance<LauncherProfileCatalog>(provider, baseDirectory));
+            provider => new LauncherProfileCatalog(
+                baseDirectory,
+                activationSource: provider.GetRequiredService<ILauncherPluginActivationSource>(),
+                activationReconciler: provider.GetRequiredService<ILauncherPluginActivationReconciler>()));
         services.AddSingleton<ILauncherUpdateTargetFactory, LauncherUpdateTargetFactory>();
         services.AddSingleton<ILauncherProfileVisibilityService>(
             provider => new LauncherProfileVisibilityService(

@@ -1,5 +1,6 @@
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.SharedKernel.Configuration;
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 
@@ -14,14 +15,22 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
 
     private readonly string _baseDirectory;
     private readonly string _catalogPath;
+    private readonly ILauncherPluginActivationSource _activationSource;
+    private readonly ILauncherPluginActivationReconciler? _activationReconciler;
 
-    public LauncherProfileCatalog(string baseDirectory, string catalogFileName = "launcher.profiles.json")
+    public LauncherProfileCatalog(
+        string baseDirectory,
+        string catalogFileName = "launcher.profiles.json",
+        ILauncherPluginActivationSource? activationSource = null,
+        ILauncherPluginActivationReconciler? activationReconciler = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
         ArgumentException.ThrowIfNullOrWhiteSpace(catalogFileName);
 
         _baseDirectory = baseDirectory;
         _catalogPath = Path.Combine(baseDirectory, catalogFileName);
+        _activationSource = activationSource ?? new LauncherPluginActivationSource(baseDirectory);
+        _activationReconciler = activationReconciler;
     }
 
     public IReadOnlyList<LauncherProfileDefinition> LoadProfiles()
@@ -31,16 +40,65 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
             throw new FileNotFoundException($"未找到启动器工序清单：'{_catalogPath}'。", _catalogPath);
         }
 
-        var json = File.ReadAllText(_catalogPath);
-        var entries = JsonSerializer.Deserialize<List<LauncherProfileFileEntry>>(json, JsonOptions())
-            ?? [];
+        var entries = ReadEntries(_catalogPath);
         if (entries.Count == 0)
         {
             throw new InvalidOperationException("启动器工序清单为空。");
         }
 
-        return entries.Select(Map).ToArray();
+        var profiles = entries.Select(Map).ToList();
+        var profileIds = profiles
+            .Select(static profile => profile.ProfileId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var activation in _activationSource.LoadActivations())
+        {
+            if (_activationReconciler is not null && !_activationReconciler.IsReady(activation))
+            {
+                continue;
+            }
+
+            try
+            {
+                var contributedEntries = ReadEntries(activation.LauncherProfilePath);
+                if (contributedEntries.Count != 1
+                    || !string.Equals(
+                        contributedEntries[0].ProfileId?.Trim(),
+                        activation.ProfileId,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException("activation launcher profile 身份不一致。");
+                }
+
+                var profile = Map(contributedEntries[0]);
+                if (!profileIds.Add(profile.ProfileId))
+                {
+                    throw new InvalidOperationException($"Launcher ProfileId 重复：{profile.ProfileId}。");
+                }
+
+                profiles.Add(profile);
+            }
+            catch (Exception ex) when (ex is IOException
+                                           or UnauthorizedAccessException
+                                           or JsonException
+                                           or InvalidOperationException
+                                           or ArgumentException)
+            {
+                Trace.TraceWarning(
+                    "忽略无效 Launcher profile activation：{0}/{1} ({2})",
+                    activation.ModuleId,
+                    activation.ProfileId,
+                    ex.GetType().Name);
+            }
+        }
+
+        return profiles;
     }
+
+    private static List<LauncherProfileFileEntry> ReadEntries(string path)
+        => JsonSerializer.Deserialize<List<LauncherProfileFileEntry>>(
+               File.ReadAllText(path),
+               JsonOptions())
+           ?? [];
 
     private LauncherProfileDefinition Map(LauncherProfileFileEntry entry)
     {

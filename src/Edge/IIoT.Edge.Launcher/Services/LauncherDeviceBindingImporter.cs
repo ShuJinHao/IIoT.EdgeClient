@@ -55,18 +55,25 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
             var bindings = ParseBindings(bindingPath, out var baseUrl);
             if (bindings.Count == 0)
             {
-                // 空/无效绑定也清理掉，避免每次启动重复解析失败的文件。
-                FinalizeBindingFile(bindingPath, bindings, baseUrl);
                 return;
             }
 
             var profiles = _profileCatalog.LoadProfiles();
+            var applied = new List<DeviceBinding>();
+            var unresolved = new List<DeviceBinding>();
             foreach (var binding in bindings)
             {
-                ApplyOneBinding(profiles, binding, baseUrl);
+                if (TryApplyOneBinding(profiles, binding, baseUrl))
+                {
+                    applied.Add(binding);
+                }
+                else
+                {
+                    unresolved.Add(binding);
+                }
             }
 
-            FinalizeBindingFile(bindingPath, bindings, baseUrl);
+            FinalizeAppliedBindings(bindingPath, applied, unresolved, baseUrl);
         }
         catch (Exception)
         {
@@ -82,23 +89,39 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
         return File.Exists(dataPath) ? dataPath : null;
     }
 
-    private void ApplyOneBinding(
+    private bool TryApplyOneBinding(
         IReadOnlyList<LauncherProfileDefinition> profiles,
         DeviceBinding binding,
         string? baseUrl)
     {
-        // moduleId -> profile：匹配“机器配置 Modules.Enabled 含该 module”的 profile（与规则一致）。
-        var target = profiles.FirstOrDefault(profile =>
-            _moduleConfiguration.ReadEnabledModules(_targetFactory.Create(profile))
-                .Any(moduleId => string.Equals(moduleId, binding.ModuleId, StringComparison.OrdinalIgnoreCase)));
-
-        if (target is null)
+        try
         {
-            // 没有匹配 profile：跳过（非阻断），可能是该插件尚未安装。
-            return;
-        }
+            // moduleId -> profile：匹配“机器配置 Modules.Enabled 含该 module”的 profile（与规则一致）。
+            var target = profiles.FirstOrDefault(profile =>
+                _moduleConfiguration.ReadEnabledModules(_targetFactory.Create(profile))
+                    .Any(moduleId => string.Equals(moduleId, binding.ModuleId, StringComparison.OrdinalIgnoreCase)));
 
-        WriteCloudApiIdentity(_targetFactory.Create(target), binding.ClientCode, binding.BootstrapSecret, baseUrl);
+            if (target is null)
+            {
+                // 没有匹配 profile：保留待处理绑定，等待对应插件安装。
+                return false;
+            }
+
+            WriteCloudApiIdentity(
+                _targetFactory.Create(target),
+                binding.ClientCode,
+                binding.BootstrapSecret,
+                baseUrl);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException
+                                       or UnauthorizedAccessException
+                                       or JsonException
+                                       or InvalidOperationException
+                                       or ArgumentException)
+        {
+            return false;
+        }
     }
 
     private static void WriteCloudApiIdentity(
@@ -225,49 +248,91 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
         return result;
     }
 
-    // 导入完成后：写一份脱敏摘要（不含启动密钥），再删除含明文密钥的原始绑定文件，
-    // 避免磁盘上多留一份明文密钥（机器配置里已有必需的密钥，无需再保留第二份）。
-    private void FinalizeBindingFile(
+    // 只消费已经成功写入机器配置的绑定：摘要永不包含启动密钥；未匹配插件的原始绑定
+    // 保留在 pending 文件中，供插件安装后的下一次启动继续处理。
+    private void FinalizeAppliedBindings(
         string bindingPath,
-        IReadOnlyList<DeviceBinding> bindings,
+        IReadOnlyList<DeviceBinding> applied,
+        IReadOnlyList<DeviceBinding> unresolved,
         string? baseUrl)
     {
+        if (applied.Count == 0)
+        {
+            return;
+        }
+
         try
         {
-            if (bindings.Count > 0)
+            var launcherDirectory = EdgeClientProgramDataPaths.ResolveLauncherDirectory(_baseDirectory);
+            Directory.CreateDirectory(launcherDirectory);
+
+            var summary = new JsonObject
             {
-                var launcherDirectory = EdgeClientProgramDataPaths.ResolveLauncherDirectory(_baseDirectory);
-                Directory.CreateDirectory(launcherDirectory);
+                ["appliedAtUtc"] = DateTime.UtcNow.ToString("O"),
+                ["baseUrl"] = baseUrl,
+                ["bindings"] = new JsonArray(
+                    applied.Select(binding => (JsonNode?)new JsonObject
+                    {
+                        ["moduleId"] = binding.ModuleId,
+                        ["clientCode"] = binding.ClientCode,
+                    }).ToArray()),
+            };
 
-                var summary = new JsonObject
-                {
-                    ["appliedAtUtc"] = DateTime.UtcNow.ToString("O"),
-                    ["baseUrl"] = baseUrl,
-                    ["bindings"] = new JsonArray(
-                        bindings.Select(binding => (JsonNode?)new JsonObject
-                        {
-                            ["moduleId"] = binding.ModuleId,
-                            ["clientCode"] = binding.ClientCode,
-                            // 脱敏：不写 BootstrapSecret
-                        }).ToArray()),
-                };
+            var summaryPath = Path.Combine(
+                launcherDirectory,
+                $"iiot-binding.applied.{DateTime.UtcNow:yyyyMMddHHmmssfff}.json");
+            File.WriteAllText(
+                summaryPath,
+                summary.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
-                var summaryPath = Path.Combine(
-                    launcherDirectory,
-                    $"iiot-binding.applied.{DateTime.UtcNow:yyyyMMddHHmmss}.json");
-                File.WriteAllText(
-                    summaryPath,
-                    summary.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
-                    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            if (unresolved.Count == 0)
+            {
+                File.Delete(bindingPath);
+                return;
             }
 
-            File.Delete(bindingPath);
+            var pending = new JsonObject
+            {
+                ["schemaVersion"] = 1,
+                ["baseUrl"] = baseUrl,
+                ["bindings"] = new JsonArray(
+                    unresolved.Select(binding => (JsonNode?)new JsonObject
+                    {
+                        ["moduleId"] = binding.ModuleId,
+                        ["clientCode"] = binding.ClientCode,
+                        ["bootstrapSecret"] = binding.BootstrapSecret,
+                    }).ToArray()),
+            };
+            WritePendingBindingsAtomically(bindingPath, pending);
         }
         catch (IOException)
         {
         }
         catch (UnauthorizedAccessException)
         {
+        }
+    }
+
+    private static void WritePendingBindingsAtomically(string bindingPath, JsonObject pending)
+    {
+        var directory = Path.GetDirectoryName(bindingPath)
+            ?? throw new InvalidOperationException("绑定文件缺少目录。");
+        var temporaryPath = Path.Combine(directory, $".{BindingFileName}.{Guid.NewGuid():N}.tmp");
+        try
+        {
+            File.WriteAllText(
+                temporaryPath,
+                pending.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            File.Move(temporaryPath, bindingPath, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath))
+            {
+                File.Delete(temporaryPath);
+            }
         }
     }
 

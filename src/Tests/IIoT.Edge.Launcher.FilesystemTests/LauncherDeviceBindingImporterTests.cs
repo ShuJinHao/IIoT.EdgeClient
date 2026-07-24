@@ -173,6 +173,124 @@ public sealed class LauncherDeviceBindingImporterTests
     }
 
     [Fact]
+    public void ApplyPendingBindings_WhenOnlyOnePluginIsInstalled_ShouldKeepUnresolvedBindingPending()
+    {
+        var tempDirectory = CreateTempDirectory();
+        var dataRoot = Path.Combine(tempDirectory, "program-data");
+        try
+        {
+            var currentDirectory = Path.Combine(tempDirectory, "install", "current");
+            var hostDirectory = Path.Combine(currentDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
+            WriteText(
+                Path.Combine(hostDirectory, "appsettings.machine.LineA.json"),
+                """
+                {
+                  "CloudApi": { "ClientCode": "", "BootstrapSecret": "" },
+                  "Modules": { "Enabled": [ "AP" ] }
+                }
+                """);
+
+            WithDataRoot(dataRoot, () =>
+            {
+                var launcherDirectory = EdgeClientProgramDataPaths.ResolveLauncherDirectory(currentDirectory);
+                var pendingPath = Path.Combine(launcherDirectory, LauncherDeviceBindingImporter.BindingFileName);
+                WriteText(
+                    pendingPath,
+                    """
+                    {
+                      "schemaVersion": 1,
+                      "baseUrl": "http://cloud.local:81",
+                      "bindings": [
+                        {
+                          "moduleId": "AP",
+                          "clientCode": "DEV-AP",
+                          "bootstrapSecret": "SECRET-AP"
+                        },
+                        {
+                          "moduleId": "CP",
+                          "clientCode": "DEV-CP",
+                          "bootstrapSecret": "SECRET-CP"
+                        }
+                      ]
+                    }
+                    """);
+
+                var importer = new LauncherDeviceBindingImporter(
+                    currentDirectory,
+                    new FakeProfileCatalog(Profile(hostDirectory)),
+                    new FileEdgeProfileModuleConfigurationStore(),
+                    new LauncherUpdateTargetFactory());
+
+                importer.ApplyPendingBindings();
+
+                var pending = File.ReadAllText(pendingPath);
+                Assert.DoesNotContain("DEV-AP", pending, StringComparison.Ordinal);
+                Assert.DoesNotContain("SECRET-AP", pending, StringComparison.Ordinal);
+                Assert.Contains("DEV-CP", pending, StringComparison.Ordinal);
+                Assert.Contains("SECRET-CP", pending, StringComparison.Ordinal);
+
+                var appliedPath = Assert.Single(
+                    Directory.GetFiles(launcherDirectory, "iiot-binding.applied.*.json"));
+                var applied = File.ReadAllText(appliedPath);
+                Assert.Contains("DEV-AP", applied, StringComparison.Ordinal);
+                Assert.DoesNotContain("SECRET-AP", applied, StringComparison.Ordinal);
+                Assert.DoesNotContain("DEV-CP", applied, StringComparison.Ordinal);
+            });
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void ApplyPendingBindings_WhenNoPluginMatches_ShouldLeavePendingFileUntouched()
+    {
+        var tempDirectory = CreateTempDirectory();
+        var dataRoot = Path.Combine(tempDirectory, "program-data");
+        try
+        {
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
+            WithDataRoot(dataRoot, () =>
+            {
+                var launcherDirectory = EdgeClientProgramDataPaths.ResolveLauncherDirectory(hostDirectory);
+                var pendingPath = Path.Combine(launcherDirectory, LauncherDeviceBindingImporter.BindingFileName);
+                const string pendingJson =
+                    """
+                    {
+                      "schemaVersion": 1,
+                      "bindings": [
+                        {
+                          "moduleId": "CP",
+                          "clientCode": "DEV-CP",
+                          "bootstrapSecret": "SECRET-CP"
+                        }
+                      ]
+                    }
+                    """;
+                WriteText(pendingPath, pendingJson);
+
+                var importer = new LauncherDeviceBindingImporter(
+                    hostDirectory,
+                    new FakeProfileCatalog(),
+                    new FileEdgeProfileModuleConfigurationStore(),
+                    new LauncherUpdateTargetFactory());
+
+                importer.ApplyPendingBindings();
+
+                Assert.Equal(pendingJson, File.ReadAllText(pendingPath));
+                Assert.Empty(Directory.GetFiles(launcherDirectory, "iiot-binding.applied.*.json"));
+            });
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
     public void ApplyPendingBindings_ShouldNotThrowOnCorruptBindingFile()
     {
         var tempDirectory = CreateTempDirectory();

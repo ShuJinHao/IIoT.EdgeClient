@@ -630,6 +630,7 @@
                                                 Grid.Row="2"
                                                 ColumnDefinitions="*">
                                                 <edge:EdgeActionButton
+                                                    Classes="launcher-brand-action"
                                                     Click="LaunchProfileButton_Click"
                                                     HorizontalContentAlignment="Center"
                                                     HorizontalAlignment="Stretch"

@@ -47,6 +47,8 @@ public partial class App : Avalonia.Application
                 .EnsureCatalogExists();
             _serviceProvider.GetRequiredService<IEdgeUpdateConfigInitializer>()
                 .EnsureConfigExists();
+            _serviceProvider.GetRequiredService<ILauncherPluginActivationReconciler>()
+                .Reconcile();
             _serviceProvider.GetRequiredService<ILauncherDeviceBindingImporter>()
                 .ApplyPendingBindings();
 
