@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$InstallerPath,
 
-    [string]$ExpectedModuleId = 'Homogenization',
+    [string]$ExpectedModuleId = 'CP',
 
     [string]$ExpectedUpdateSource,
 

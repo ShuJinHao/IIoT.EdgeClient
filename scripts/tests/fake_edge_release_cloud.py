@@ -73,7 +73,7 @@ class Handler(BaseHTTPRequestHandler):
                         },
                         "plugins": [
                             {
-                                "moduleId": "Homogenization",
+                                "moduleId": "CP",
                                 "versions": [
                                     {
                                         "version": self.server.plugin_version,
@@ -153,8 +153,8 @@ class Handler(BaseHTTPRequestHandler):
             self._write_json(
                 200,
                 {
-                    "moduleId": "Homogenization",
-                    "displayName": "Fake Homogenization",
+                    "moduleId": "CP",
+                    "displayName": "Fake CP",
                     "channel": "stable",
                     "version": self.server.plugin_version,
                     "targetRuntime": "win-x64",

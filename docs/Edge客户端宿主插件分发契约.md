@@ -47,9 +47,9 @@ install-root/
 
 ```json
 {
-  "ProfileId": "HomogenizationLine",
-  "DisplayName": "匀浆",
-  "MachineProfile": "HomogenizationLine",
+  "ProfileId": "ExampleProcessLine",
+  "DisplayName": "示例工序",
+  "MachineProfile": "ExampleProcessLine",
   "ExecutablePath": "../host/IIoT.Edge.Shell"
 }
 ```
@@ -64,8 +64,8 @@ install-root/
   "pluginsRoot": "plugins",
   "modules": [
     {
-      "moduleId": "Homogenization",
-      "pluginDirectory": "Homogenization"
+      "moduleId": "ExampleProcess",
+      "pluginDirectory": "ExampleProcess"
     }
   ]
 }
@@ -129,8 +129,8 @@ install-root/
 ```json
 {
   "componentKind": "Plugin",
-  "moduleId": "Homogenization",
-  "displayName": "匀浆",
+  "moduleId": "ExampleProcess",
+  "displayName": "示例工序",
   "description": "",
   "iconKind": "Cog",
   "accentColor": "#0F766E",
@@ -142,7 +142,7 @@ install-root/
       "maxHostVersion": "1.0.99",
       "targetRuntime": "win-x64",
       "targetFramework": "net10.0",
-      "downloadUrl": "https://example.com/edge-updates/plugins/Homogenization/1.0.0/package.zip",
+      "downloadUrl": "https://example.com/edge-updates/plugins/ExampleProcess/1.0.0/package.zip",
       "sha256": "",
       "packageSize": 0,
       "dependencies": [],
@@ -221,7 +221,7 @@ plugins/<ModuleId>/
 - `hostApiVersion`：硬契约，必须精确匹配。只有宿主和插件之间的运行 API/ABI 契约变化才递增。
 - `minHostVersion` / `maxHostVersion`：运行兼容窗口，用于约束宿主功能版本或 bugfix 范围。
 
-禁止用 `maxHostVersion=99.0.0` 假装已经验证未来所有宿主版本。开发阶段可以暂时保留宽松范围，但发布 catalog 时必须显式标注该范围是测试范围，不得作为生产兼容证明。
+禁止用 `maxHostVersion=99.0.0` 假装已经验证未来所有宿主版本。预发布验证环境可以暂时保留宽松范围，但进入生产 catalog 前必须收敛到已验证范围，不得把测试范围作为生产兼容证明。
 
 宿主回滚到旧 API 后，不兼容插件必须被拒载，并在 Launcher 或诊断页显示“因宿主版本不兼容已禁用”，不能静默丢失。
 
@@ -233,18 +233,18 @@ plugins/<ModuleId>/
 {
   "deviceId": "00000000-0000-0000-0000-000000000000",
   "clientCode": "EDGE-0001",
-  "machineProfile": "HomogenizationLine",
+  "machineProfile": "ExampleProcessLine",
   "channel": "stable",
   "hostVersion": "0.1.0",
   "hostApiVersion": "1.0.0",
   "installedPlugins": [
     {
-      "moduleId": "Homogenization",
+      "moduleId": "ExampleProcess",
       "version": "1.0.0",
       "hostApiVersion": "1.0.0"
     }
   ],
-  "enabledPlugins": ["Homogenization"],
+  "enabledPlugins": ["ExampleProcess"],
   "reportedAtUtc": "2026-06-08T00:00:00Z"
 }
 ```
@@ -477,19 +477,19 @@ Phase 3 客户端实际上报：
 {
   "deviceId": "00000000-0000-0000-0000-000000000000",
   "clientCode": "EDGE-0001",
-  "machineProfile": "HomogenizationLine",
+  "machineProfile": "ExampleProcessLine",
   "channel": "stable",
   "hostVersion": "0.1.0",
   "hostApiVersion": "1.0.0",
   "installedPlugins": [
     {
-      "moduleId": "Homogenization",
-      "processType": "Homogenization",
+      "moduleId": "ExampleProcess",
+      "processType": "example",
       "version": "1.0.0",
       "hostApiVersion": "1.0.0"
     }
   ],
-  "enabledPlugins": ["Homogenization"],
+  "enabledPlugins": ["ExampleProcess"],
   "reportedAtUtc": "2026-06-08T00:00:00Z"
 }
 ```

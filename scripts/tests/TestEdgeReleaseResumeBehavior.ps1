@@ -128,11 +128,11 @@ try {
     Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('remote', 'add', 'source', $resolvedPluginSourceRepoRoot)
     Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('fetch', '-q', 'source', 'HEAD')
     Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('checkout', '-q', '-B', 'main', 'FETCH_HEAD')
-    $pluginManifestPath = Join-Path $pluginCloneRoot 'src/IIoT.Edge.Module.Homogenization/plugin.json'
+    $pluginManifestPath = Join-Path $pluginCloneRoot 'src/IIoT.Edge.Module.CP/plugin.json'
     $pluginManifestJson = Get-Content -Raw -Encoding UTF8 -LiteralPath $pluginManifestPath
     $pluginManifest = $pluginManifestJson | ConvertFrom-Json
     $pluginVersion = [string]$pluginManifest.version
-    if ([string]::IsNullOrWhiteSpace($pluginVersion)) { throw 'Homogenization plugin manifest version is required.' }
+    if ([string]::IsNullOrWhiteSpace($pluginVersion)) { throw 'CP plugin manifest version is required.' }
     $pluginPackageMemory = [IO.MemoryStream]::new()
     $pluginPackageArchive = [IO.Compression.ZipArchive]::new(
         $pluginPackageMemory,
@@ -266,15 +266,15 @@ $packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagePath).Hash
     $pluginReleaseRoot = Join-Path $testRoot 'plugin-release'
     $pluginPackageRoot = Join-Path $pluginReleaseRoot 'package'
     New-Item -ItemType Directory -Force -Path $pluginPackageRoot | Out-Null
-    $pluginFileName = "IIoT.EdgePlugin.Homogenization-$pluginVersion-win-x64.zip"
+    $pluginFileName = "IIoT.EdgePlugin.CP-$pluginVersion-win-x64.zip"
     [IO.File]::WriteAllBytes(
         (Join-Path $pluginPackageRoot $pluginFileName),
         $pluginPackageBytes)
     @{
         packageSchemaVersion = 2
-        moduleId = 'Homogenization'
-        processType = 'Homogenization'
-        displayName = 'Homogenization'
+        moduleId = 'CP'
+        processType = 'CP'
+        displayName = '正极模切'
         version = $pluginVersion
         hostApiVersion = '2.0.0'
         minHostVersion = '2.0.0'
@@ -289,7 +289,7 @@ $packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagePath).Hash
         publisher = 'IIoT'
         sourceCommit = $pluginHead
     } | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $pluginPackageRoot "$pluginFileName.json")
-    'preserved plugin wrapper' | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $pluginReleaseRoot "edge-plugin-release-Homogenization-$pluginVersion-win-x64.zip")
+    'preserved plugin wrapper' | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $pluginReleaseRoot "edge-plugin-release-CP-$pluginVersion-win-x64.zip")
     $pluginInvocation = [Guid]::NewGuid().ToString('D')
     @{
         schemaVersion = 1
@@ -297,7 +297,7 @@ $packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagePath).Hash
         invocationId = $pluginInvocation
         stage = 'uploading'
         status = 'failed'
-        facts = @{ moduleId = 'Homogenization'; version = $pluginVersion; sourceCommit = $pluginHead }
+        facts = @{ moduleId = 'CP'; version = $pluginVersion; sourceCommit = $pluginHead }
     } | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $pluginReleaseRoot 'edge-deployment-attempt.json')
 
     Set-Dispatch -Target EdgeHost -InvocationId $hostInvocation
@@ -309,7 +309,7 @@ $packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagePath).Hash
 
     Set-Dispatch -Target EdgePlugin -InvocationId $pluginInvocation
     & (Join-Path $cloneRoot 'scripts/PublishEdgePluginRelease.ps1') `
-        -ModuleId Homogenization -PluginRepositoryRoot $pluginCloneRoot `
+        -ModuleId CP -PluginRepositoryRoot $pluginCloneRoot `
         -CloudApiBaseUrl "$baseUrl/api/v1" -ReleaseNotes 'fake plugin release notes' `
         -CloudToken 'fake-token' -ExpectedSha $pluginHead `
         -ResumeReleaseRoot $pluginReleaseRoot -SkipPackageValidation
@@ -325,7 +325,7 @@ $packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagePath).Hash
         -ResumeReleaseRoot $hostReleaseRoot -SkipVelopackValidation -SkipInstallerValidation
     Set-Dispatch -Target EdgePlugin -InvocationId $pluginInvocation
     & (Join-Path $cloneRoot 'scripts/PublishEdgePluginRelease.ps1') `
-        -ModuleId Homogenization -PluginRepositoryRoot $pluginCloneRoot `
+        -ModuleId CP -PluginRepositoryRoot $pluginCloneRoot `
         -CloudApiBaseUrl "$baseUrl/existing/api/v1" -ReleaseNotes 'fake plugin release notes' `
         -CloudToken 'fake-token' -ExpectedSha $pluginHead `
         -ResumeReleaseRoot $pluginReleaseRoot -SkipPackageValidation
@@ -336,11 +336,11 @@ $packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagePath).Hash
     Set-Dispatch -Target EdgePlugin
     $reconcileInvocation = $env:IIOT_EDGE_WORKSPACE_INVOCATION_ID
     & (Join-Path $cloneRoot 'scripts/PublishEdgePluginRelease.ps1') `
-        -ModuleId Homogenization -PluginRepositoryRoot $pluginCloneRoot `
+        -ModuleId CP -PluginRepositoryRoot $pluginCloneRoot `
         -CloudApiBaseUrl "$baseUrl/existing/api/v1" -ReleaseNotes 'from-zero reconciliation' `
         -CloudToken 'fake-token' -ExpectedSha $pluginHead `
         -OutputRoot $reconcileOutputRoot -ReconcileExistingRelease -SkipPackageValidation
-    $reconcileReleaseRoot = Join-Path $reconcileOutputRoot "stable/Homogenization/reconcile-$reconcileInvocation"
+    $reconcileReleaseRoot = Join-Path $reconcileOutputRoot "stable/CP/reconcile-$reconcileInvocation"
     Assert-State -ReleaseRoot $reconcileReleaseRoot -Status succeeded
     $reconcileState = Get-Content -Raw -Encoding UTF8 -LiteralPath (
         Join-Path $reconcileReleaseRoot 'edge-deployment-attempt.json') | ConvertFrom-Json
@@ -367,7 +367,7 @@ $packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagePath).Hash
     Set-Dispatch -Target EdgePlugin
     Assert-ThrowsContaining -Action {
         & (Join-Path $cloneRoot 'scripts/PublishEdgePluginRelease.ps1') `
-            -ModuleId Homogenization -PluginRepositoryRoot $pluginCloneRoot `
+            -ModuleId CP -PluginRepositoryRoot $pluginCloneRoot `
             -CloudApiBaseUrl "$baseUrl/existing/api/v1" -ReleaseNotes 'new attempt' `
             -CloudToken 'fake-token' -ExpectedSha $pluginHead
     } -Needles @('already exists', 'No package build was started')
@@ -397,7 +397,7 @@ $packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagePath).Hash
     Set-Dispatch -Target EdgePlugin -InvocationId $pluginInvocation
     Assert-ThrowsContaining -Action {
         & (Join-Path $cloneRoot 'scripts/PublishEdgePluginRelease.ps1') `
-            -ModuleId Homogenization -PluginRepositoryRoot $pluginCloneRoot `
+            -ModuleId CP -PluginRepositoryRoot $pluginCloneRoot `
             -CloudApiBaseUrl "$baseUrl/catalog-error/api/v1" -ReleaseNotes 'fake plugin release notes' `
             -CloudToken 'fake-token' -ExpectedSha $pluginHead `
             -ResumeReleaseRoot $pluginReleaseRoot -SkipPackageValidation

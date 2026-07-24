@@ -374,19 +374,9 @@ function Test-IsAllowedTestEdge {
         'Deployment' { return $Target.Role -in @('Host', 'Tool', 'SharedKernel', 'TestSupport') }
         'UI' { return $Target.Role -in @('Application', 'Host', 'Infrastructure', 'Presentation', 'VisualTestData', 'UiShared', 'SharedKernel', 'TestSupport') }
         'Conformance' {
-            if ($Target.Role -eq 'ConcretePlugin') {
-                return $Source.Name -in @(
-                    'IIoT.Edge.Module.Homogenization.ConformanceTests',
-                    'IIoT.Edge.Module.Homogenization.ConformanceFilesystemTests')
-            }
             return $Target.Role -in @('Application', 'Host', 'Infrastructure', 'ModuleSdk', 'TestFixture', 'TestSupport', 'SharedKernel', 'UiShared')
         }
         'Workflow' {
-            if ($Target.Role -eq 'ConcretePlugin') {
-                return $Source.Name -in @(
-                    'IIoT.Edge.Module.Homogenization.WorkflowTests',
-                    'IIoT.Edge.Module.Homogenization.WorkflowFilesystemTests')
-            }
             return $Target.Role -in @('Application', 'Host', 'Infrastructure', 'ModuleSdk', 'SharedKernel', 'TestSupport')
         }
         'Persistence' { return $Target.Role -in @('Application', 'Host', 'Infrastructure', 'SharedKernel', 'TestSupport') }
@@ -1268,8 +1258,6 @@ $persistenceFreePureRunnerNames = @(
     'IIoT.Edge.Domain.Tests',
     'IIoT.Edge.Installer.UnitTests',
     'IIoT.Edge.Mes.ContractTests',
-    'IIoT.Edge.Module.Homogenization.ConformanceTests',
-    'IIoT.Edge.Module.Homogenization.WorkflowTests',
     'IIoT.Edge.Plc.ContractTests',
     'IIoT.Edge.Runtime.WorkflowTests')
 foreach ($pureTest in @($pureTests | Where-Object { $_.Name -in $persistenceFreePureRunnerNames })) {

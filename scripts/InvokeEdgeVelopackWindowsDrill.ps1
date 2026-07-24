@@ -23,7 +23,7 @@ param(
 
     [string]$PackId = 'IIoT.EdgeClient',
 
-    [string]$MachineProfile = 'HomogenizationLine'
+    [string]$MachineProfile = 'DieCuttingCathodeLine'
 )
 
 $ErrorActionPreference = 'Stop'
