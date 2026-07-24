@@ -22,13 +22,6 @@ $architectureCatalog = & (Join-Path $PSScriptRoot 'Get-EdgeArchitectureDiagnosti
     -RepositoryRoot $RepositoryRoot `
     -AnalyzerPackageRoot $AnalyzerPackageRoot
 $architectureIdPattern = [string]$architectureCatalog.GateIdPattern
-$mainSolutionPath = Join-Path $RepositoryRoot 'IIoT.EdgeClient.slnx'
-$expectedMainProjectCount = @(
-    Select-Xml -Path $mainSolutionPath -XPath '//Project'
-).Count
-$fixtureGraphProjectCount = @(
-    Select-Xml -Path (Join-Path $fixtureSourceRoot 'graph-valid/EdgeArchitecture.Valid.slnx.fixture') -XPath '/Solution/Project'
-).Count
 $script:fixtureNameFilter = [System.Collections.Generic.HashSet[string]]::new(
     [StringComparer]::OrdinalIgnoreCase)
 foreach ($fixtureName in $FixtureNames) {
@@ -162,25 +155,9 @@ function Assert-ArchitectureGateTextIsPinned {
         throw 'EDGE-ARCH-FIXTURE-001 Analyzer package wiring must be mandatory for production roles, private to consumers, path-addressable, and free of the retired source-project edge.'
     }
 
-    $shellTarget = $targets.SelectSingleNode("/Project/Target[@Name='ValidateEdgeArchitectureProjectGraph']")
-    $shellExec = if ($null -eq $shellTarget) {
-        $null
-    } else {
-        $shellTarget.SelectSingleNode('Exec')
-    }
-    if ($null -eq $shellExec) {
-        throw 'EDGE-ARCH-FIXTURE-001 pinned Shell project-graph target is missing.'
-    }
-    $shellCommand = ([System.Xml.XmlElement]$shellExec).GetAttribute('Command')
-    $expectedRepositoryArgument = '-RepositoryRoot "$([System.IO.Path]::GetFullPath(''$(MSBuildThisFileDirectory).''))"'
-    $expectedSolutionArgument = '-SolutionPath "$([System.IO.Path]::GetFullPath(''$(MSBuildThisFileDirectory)IIoT.EdgeClient.slnx''))"'
-    $expectedAnalyzerArgument = '-AnalyzerPackageRoot "$(PkgIIoT_Edge_Module_Analyzers)"'
-    if (-not $shellCommand.Contains($expectedRepositoryArgument, [StringComparison]::Ordinal) -or
-        -not $shellCommand.Contains($expectedSolutionArgument, [StringComparison]::Ordinal) -or
-        -not $shellCommand.Contains($expectedAnalyzerArgument, [StringComparison]::Ordinal) -or
-        $shellCommand.Contains('$(EdgeArchitectureGraphRepositoryRoot)', [StringComparison]::Ordinal) -or
-        $shellCommand.Contains('$(EdgeArchitectureGraphSolutionPath)', [StringComparison]::Ordinal)) {
-        throw 'EDGE-ARCH-FIXTURE-001 Shell project-graph inputs must pin canonical repository paths and the resolved Analyzer package root.'
+    if ($null -ne $targets.SelectSingleNode(
+            "/Project/Target[@Name='ValidateEdgeArchitectureProjectGraph']")) {
+        throw 'EDGE-ARCH-FIXTURE-001 ordinary Shell builds must not hide a repository-wide project-graph test.'
     }
 
     $fixtureTarget = $targets.SelectSingleNode("/Project/Target[@Name='ValidateEdgeArchitectureProjectGraphFixture']")
@@ -203,43 +180,14 @@ function Assert-ArchitectureGateTextIsPinned {
         throw 'EDGE-ARCH-FIXTURE-001 isolated fixture graph paths must be canonicalized without a Windows trailing-separator quote escape.'
     }
 
-    Write-Host 'Edge architecture gate text passed: Analyzer package is mandatory and Shell graph inputs are pinned.'
-}
-
-function Assert-ShellGraphCliOverrideCannotBypass {
-    $shellProject = Join-Path $RepositoryRoot 'src/Edge/IIoT.Edge.Shell/IIoT.Edge.Shell.csproj'
-    $benignRoot = Join-Path $workingRoot 'graph-valid'
-    $benignSolution = Join-Path $benignRoot 'EdgeArchitecture.Valid.slnx'
-    $arguments = @(
-        'msbuild',
-        $shellProject,
-        '-target:ValidateEdgeArchitectureProjectGraph',
-        '-property:Configuration=Release',
-        "-property:EdgeArchitectureGraphRepositoryRoot=$benignRoot",
-        "-property:EdgeArchitectureGraphSolutionPath=$benignSolution",
-        '-nologo',
-        '-noAutoResponse'
-    )
-    $output = @(& dotnet @arguments 2>&1 | ForEach-Object { $_.ToString() })
-    $exitCode = $LASTEXITCODE
-    $outputText = $output -join "`n"
-    $mainCountPattern = "\bprojects=$expectedMainProjectCount(?:,|\b)"
-    $fixtureCountPattern = "\bprojects=$fixtureGraphProjectCount(?:,|\b)"
-    if ($exitCode -ne 0 -or
-        $outputText -notmatch $mainCountPattern -or
-        $outputText -match $fixtureCountPattern) {
-        throw "EDGE-ARCH-FIXTURE-001 Shell graph CLI override bypass check failed with exit code ${exitCode}:`n$outputText"
-    }
-
-    Write-Host "Edge architecture Shell graph bypass check passed: CLI override still validated the $expectedMainProjectCount-project main solution."
+    Write-Host 'Edge architecture gate text passed: Analyzer package is mandatory, repository graph validation stays explicit, and fixture graph inputs are pinned.'
 }
 
 Initialize-FixtureWorkspace
 $bypassCheckCount = 0
 if ($script:fixtureNameFilter.Count -eq 0) {
     Assert-ArchitectureGateTextIsPinned
-    Assert-ShellGraphCliOverrideCannotBypass
-    $bypassCheckCount = 2
+    $bypassCheckCount = 1
 }
 
 Invoke-FixtureBuild -Name 'analyzer-valid' `
