@@ -164,6 +164,39 @@ try {
         throw 'Business source selection included DeploymentContract without a deployment change.'
     }
 
+    $utf8Fixture = New-DynamicBusinessFixture `
+        -Parent $temporaryRoot `
+        -Name 'utf8-git-paths'
+    Set-FixtureFile -FixtureRoot $utf8Fixture.Root `
+        -Path 'src/Core/Widget/中文 文件.cs' `
+        -Content 'internal sealed class Utf8PathFixture { }'
+    Set-FixtureFile -FixtureRoot $utf8Fixture.Root `
+        -Path 'docs/生产 发布说明.md' `
+        -Content '# UTF-8 path fixture'
+    [void](Invoke-FixtureGit -FixtureRoot $utf8Fixture.Root -Arguments @('add', '.'))
+    [void](Invoke-FixtureGit -FixtureRoot $utf8Fixture.Root -Arguments @('commit', '-qm', 'utf8 paths'))
+    $utf8Output = Join-Path $temporaryRoot 'utf8-paths.json'
+    & $selector `
+        -RepositoryRoot $utf8Fixture.Root `
+        -BaseRef $utf8Fixture.Baseline `
+        -HeadRef HEAD `
+        -OutputPath $utf8Output `
+        -GitHubOutputPath ''
+    $utf8Selection = Get-Content $utf8Output -Raw | ConvertFrom-Json
+    $utf8ChangedFiles = @($utf8Selection.changedFiles)
+    $utf8BusinessNames = @($utf8Selection.selectedDotNetProjects |
+        Where-Object { @($_.categories) -contains 'Business' } |
+        Select-Object -ExpandProperty projectName)
+    if ($utf8ChangedFiles -notcontains 'src/Core/Widget/中文 文件.cs' -or
+        $utf8ChangedFiles -notcontains 'docs/生产 发布说明.md' -or
+        $utf8BusinessNames -notcontains 'Widget.Retiring.Tests' -or
+        @($utf8Selection.unclassifiedFiles).Count -ne 0 -or
+        @($utf8ChangedFiles | Where-Object {
+                $_ -match '^"' -or $_ -match '\\[0-7]{3}'
+            }).Count -ne 0) {
+        throw "Git UTF-8 path selection did not preserve exact repository paths: $($utf8ChangedFiles -join ', ')"
+    }
+
     $docsOutput = Join-Path $temporaryRoot 'docs.json'
     & $selector `
         -RepositoryRoot $root `
@@ -367,8 +400,20 @@ try {
 }
 
 $workflowText = Get-Content (Join-Path $root '.github/workflows/edge-smoke-build.yml') -Raw
+$selectorText = Get-Content $selector -Raw
+if ($selectorText -notmatch "'core\.quotepath=false'" -or
+    $selectorText -notmatch 'StandardOutputEncoding\s*=\s*\$utf8' -or
+    $selectorText -notmatch "'-z'" -or
+    $selectorText -notmatch 'Split\(\[char\]0') {
+    throw 'Edge selector Git path protocol is not fixed to unquoted UTF-8 NUL-delimited output.'
+}
 if ($workflowText -notmatch '\$selectorInputs\.Count\s+-gt\s+0[\s\S]*?Test-EdgeCiTestSelection\.ps1') {
     throw 'Edge default CI does not gate selector behavior tests on affected selector inputs.'
+}
+if ($workflowText -notmatch 'git\s+-c\s+core\.quotepath=false\s+diff\s+--name-only' -or
+    $workflowText -notmatch '\[Console\]::OutputEncoding\s*=\s*\$utf8' -or
+    $workflowText -notmatch '\$OutputEncoding\s*=\s*\$utf8') {
+    throw 'Edge default CI does not force unquoted Git paths and UTF-8 PowerShell decoding.'
 }
 if ($workflowText -match "\`$env:CI_MODE\s+-ne\s+'default'" -or
     ($workflowText.Split('Test-EdgeCiTestSelection.ps1', [StringSplitOptions]::None).Length - 1) -ne 2) {
@@ -386,4 +431,4 @@ if ($offlineWorkflowText.Contains('Test-EdgeCiTestSelection.ps1', [StringCompari
     throw 'The explicit offline artifact workflow must not rerun selector behavior tests.'
 }
 
-Write-Host 'EDGE_CI_SELECTION_BEHAVIOR_OK positive=1 docs=1 quality=1 deployment=1 cross=1 negative=1 businessTopology=1 deploymentBusinessTopology=1 retiredBusiness=1 baselineUnknown=1 workflowGate=1 fullCoverageOnly=1'
+Write-Host 'EDGE_CI_SELECTION_BEHAVIOR_OK positive=1 utf8GitPaths=1 docs=1 quality=1 deployment=1 cross=1 negative=1 businessTopology=1 deploymentBusinessTopology=1 retiredBusiness=1 baselineUnknown=1 workflowGate=1 fullCoverageOnly=1'

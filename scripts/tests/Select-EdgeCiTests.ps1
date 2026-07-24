@@ -37,6 +37,61 @@ function Get-RepositoryRelativePath {
     return [IO.Path]::GetRelativePath($Root, [IO.Path]::GetFullPath($Path)).Replace('\', '/')
 }
 
+function Invoke-GitUtf8 {
+    param(
+        [Parameter(Mandatory)][string]$Root,
+        [Parameter(Mandatory)][string[]]$Arguments,
+        [Parameter(Mandatory)][string]$FailureMessage,
+        [switch]$NullDelimited
+    )
+
+    $utf8 = [Text.UTF8Encoding]::new($false)
+    $startInfo = [Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = 'git'
+    $startInfo.WorkingDirectory = $Root
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.StandardOutputEncoding = $utf8
+    $startInfo.StandardErrorEncoding = $utf8
+    foreach ($argument in @('-c', 'core.quotepath=false') + $Arguments) {
+        [void]$startInfo.ArgumentList.Add($argument)
+    }
+
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    try {
+        if (-not $process.Start()) {
+            throw "$FailureMessage Git did not start."
+        }
+        $standardOutput = $process.StandardOutput.ReadToEndAsync()
+        $standardError = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        $output = $standardOutput.GetAwaiter().GetResult()
+        $errorOutput = $standardError.GetAwaiter().GetResult()
+        $exitCode = $process.ExitCode
+    } finally {
+        $process.Dispose()
+    }
+
+    if ($exitCode -ne 0) {
+        $detail = $errorOutput.Trim()
+        if ([string]::IsNullOrWhiteSpace($detail)) {
+            $detail = $output.Trim()
+        }
+        throw "$FailureMessage`n$detail"
+    }
+    if ([string]::IsNullOrEmpty($output)) {
+        return @()
+    }
+    if ($NullDelimited) {
+        return @($output.Split([char]0, [StringSplitOptions]::RemoveEmptyEntries))
+    }
+    return @([regex]::Split($output, '\r?\n') |
+        Where-Object { -not [string]::IsNullOrEmpty($_) })
+}
+
 function Get-DirectProjectProperty {
     param(
         [Parameter(Mandatory)][xml]$Project,
@@ -152,23 +207,20 @@ function Get-BaselineState {
         [Parameter(Mandatory)][string]$Revision
     )
 
-    $revisionProbe = @(& git -C $Root cat-file -e "${Revision}^{commit}" 2>&1)
-    if ($LASTEXITCODE -ne 0) {
-        throw "Unable to read Edge CI baseline revision '$Revision':`n$($revisionProbe -join [Environment]::NewLine)"
-    }
-
-    $treeOutput = @(& git -C $Root ls-tree -r --name-only $Revision -- src 2>&1)
-    if ($LASTEXITCODE -ne 0) {
-        throw "Unable to enumerate Edge CI baseline tree '$Revision':`n$($treeOutput -join [Environment]::NewLine)"
-    }
+    [void](Invoke-GitUtf8 -Root $Root `
+        -Arguments @('cat-file', '-e', "${Revision}^{commit}") `
+        -FailureMessage "Unable to read Edge CI baseline revision '$Revision':")
+    $treeOutput = @(Invoke-GitUtf8 -Root $Root `
+        -Arguments @('ls-tree', '-r', '-z', '--name-only', $Revision, '--', 'src') `
+        -FailureMessage "Unable to enumerate Edge CI baseline tree '$Revision':" `
+        -NullDelimited)
 
     $projects = [Collections.Generic.List[object]]::new()
     foreach ($path in @($treeOutput | Where-Object { ([string]$_).EndsWith('.csproj', [StringComparison]::Ordinal) })) {
         $projectPath = ConvertTo-RepositoryPath ([string]$path)
-        $projectContent = @(& git -C $Root show "${Revision}:$projectPath" 2>&1)
-        if ($LASTEXITCODE -ne 0) {
-            throw "Unable to read baseline project '$projectPath' from '$Revision':`n$($projectContent -join [Environment]::NewLine)"
-        }
+        $projectContent = @(Invoke-GitUtf8 -Root $Root `
+            -Arguments @('show', "${Revision}:$projectPath") `
+            -FailureMessage "Unable to read baseline project '$projectPath' from '$Revision':")
         try {
             [xml]$projectXml = ($projectContent -join [Environment]::NewLine)
         } catch {
@@ -190,10 +242,9 @@ function Get-BaselineState {
         $project.References = @(Get-ProjectReferences -Root $Root -Project $project)
     }
 
-    $solutionContent = @(& git -C $Root show "${Revision}:IIoT.EdgeClient.slnx" 2>&1)
-    if ($LASTEXITCODE -ne 0) {
-        throw "Unable to read baseline Edge solution from '$Revision':`n$($solutionContent -join [Environment]::NewLine)"
-    }
+    $solutionContent = @(Invoke-GitUtf8 -Root $Root `
+        -Arguments @('show', "${Revision}:IIoT.EdgeClient.slnx") `
+        -FailureMessage "Unable to read baseline Edge solution from '$Revision':")
     try {
         [xml]$solutionXml = ($solutionContent -join [Environment]::NewLine)
     } catch {
@@ -324,11 +375,16 @@ if (-not $PSBoundParameters.ContainsKey('ChangedFiles')) {
         if ([string]::IsNullOrWhiteSpace($BaseRef) -or $BaseRef -match '^0+$') {
             throw 'Default CI selection requires a non-zero BaseRef. Use workflow_dispatch mode Full for an initial branch history.'
         }
-        $diffOutput = @(& git -C $root diff --no-renames --name-only --diff-filter=ACMRTUXBD "$BaseRef...$HeadRef" 2>&1)
-        if ($LASTEXITCODE -ne 0) {
-            throw "Unable to calculate changed files for $BaseRef...${HeadRef}:`n$($diffOutput -join [Environment]::NewLine)"
-        }
-        $ChangedFiles = @($diffOutput)
+        $ChangedFiles = @(Invoke-GitUtf8 -Root $root `
+            -Arguments @(
+                'diff',
+                '--no-renames',
+                '--name-only',
+                '-z',
+                '--diff-filter=ACMRTUXBD',
+                "$BaseRef...$HeadRef") `
+            -FailureMessage "Unable to calculate changed files for $BaseRef...${HeadRef}:" `
+            -NullDelimited)
     }
 }
 $changed = @($ChangedFiles |
