@@ -138,6 +138,8 @@ Windows 实际部署阶段实机验收：
 
 Windows 实机验收只在本次确实进入 Windows 发布或现场部署阶段时执行；macOS 开发阶段通过、GitHub Windows runner 构建通过或安装包静态检查通过，都不能替代该步骤。未执行时在本次验收结果中明确标为 `NOT-RUN`，不得写成全平台验收完成，也不因此强制新增滚动复盘。
 
+存在插件 activation 时，Windows 实机验收还必须逐一验证安装包实际包含的工序：插件贡献的 Launcher profile 必须与 Host 基础 profile 解析到同一份 `current/host/IIoT.Edge.Shell.exe`，对应外部 machine profile 必须可读，实际启动后进程使用正确 `Shell__MachineProfile` 并保持运行。只验证 Launcher 进程、两张卡片可见、插件 ZIP 存在或机器配置写盘都不能证明工序可启动。
+
 ## 3. Defender 策略
 
 安装器不得默认添加 Defender 排除项。外网客户环境优先走 Authenticode 签名；企业内网如经运维审批需要临时排除项，只能手动运行：

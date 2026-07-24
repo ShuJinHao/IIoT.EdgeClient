@@ -47,6 +47,58 @@ public sealed class LauncherPluginActivationTests
     }
 
     [Fact]
+    public void CatalogAndReconciler_WithVelopackCurrentLayout_ShouldUsePackagedHostForEveryActivation()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var installRoot = Path.Combine(tempDirectory, "install");
+            var launcherDirectory = Path.Combine(installRoot, "current");
+            var hostDirectory = Path.Combine(launcherDirectory, "host");
+            var shellExecutable = Path.Combine(hostDirectory, "IIoT.Edge.Shell.exe");
+            Directory.CreateDirectory(hostDirectory);
+            File.WriteAllBytes(shellExecutable, []);
+            WriteBaseCatalog(launcherDirectory, "host/IIoT.Edge.Shell");
+            WriteActivation(launcherDirectory, "AP", "DieCuttingAnodeLine", "负极模切");
+            WriteActivation(launcherDirectory, "CP", "DieCuttingCathodeLine", "正极模切");
+
+            var source = new LauncherPluginActivationSource(launcherDirectory);
+            var reconciler = new LauncherPluginActivationReconciler(launcherDirectory, source);
+            reconciler.Reconcile();
+            var profiles = new LauncherProfileCatalog(
+                    launcherDirectory,
+                    activationSource: source,
+                    activationReconciler: reconciler)
+                .LoadProfiles();
+
+            Assert.Equal(3, profiles.Count);
+            Assert.All(
+                profiles,
+                profile => Assert.Equal(
+                    Path.Combine(hostDirectory, "IIoT.Edge.Shell"),
+                    profile.ExecutablePath));
+            foreach (var profileId in new[] { "DieCuttingAnodeLine", "DieCuttingCathodeLine" })
+            {
+                var profile = Assert.Single(profiles, item => item.ProfileId == profileId);
+                var launchTarget = ShellLaunchTargetResolver.Resolve(
+                    profile.ExecutablePath,
+                    isWindows: true,
+                    File.Exists);
+                Assert.Equal(shellExecutable, launchTarget.FileName);
+                Assert.Equal(hostDirectory, launchTarget.WorkingDirectory);
+            }
+
+            AssertMachineConfig(hostDirectory, "DieCuttingAnodeLine", "AP");
+            AssertMachineConfig(hostDirectory, "DieCuttingCathodeLine", "CP");
+            Assert.False(Directory.Exists(Path.Combine(installRoot, "host")));
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
     public void Catalog_WhenOneActivationContainsCloudIdentity_ShouldSkipOnlyInvalidContribution()
     {
         var tempDirectory = CreateTempDirectory();
@@ -221,16 +273,18 @@ public sealed class LauncherPluginActivationTests
                 .GetString());
     }
 
-    private static void WriteBaseCatalog(string launcherDirectory)
+    private static void WriteBaseCatalog(
+        string launcherDirectory,
+        string executablePath = "../host/IIoT.Edge.Shell")
         => WriteText(
             Path.Combine(launcherDirectory, "launcher.profiles.json"),
-            """
+            $$"""
             [
               {
                 "ProfileId": "Default",
                 "DisplayName": "Edge Host",
                 "MachineProfile": "Default",
-                "ExecutablePath": "../host/IIoT.Edge.Shell"
+                "ExecutablePath": "{{executablePath}}"
               }
             ]
             """);

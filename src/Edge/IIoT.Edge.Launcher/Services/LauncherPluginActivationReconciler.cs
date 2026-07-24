@@ -18,6 +18,7 @@ public sealed class LauncherPluginActivationReconciler(
     ILauncherPluginActivationSource activationSource) : ILauncherPluginActivationReconciler
 {
     private readonly HashSet<string> _readyActivations = new(StringComparer.OrdinalIgnoreCase);
+    private readonly LauncherHostRuntimeResolver _hostRuntimeResolver = new(baseDirectory);
 
     public void Reconcile()
     {
@@ -52,7 +53,7 @@ public sealed class LauncherPluginActivationReconciler(
         LauncherPluginActivationSource.ValidateActivationFiles(activation);
         var template = ReadObject(activation.MachineConfigPath);
 
-        var hostDirectory = Path.GetFullPath(Path.Combine(baseDirectory, "..", "host"));
+        var hostDirectory = _hostRuntimeResolver.Resolve().HostDirectory;
         var targetPath = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(
             activation.ProfileId,
             hostDirectory);

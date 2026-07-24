@@ -17,6 +17,7 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
     private readonly string _catalogPath;
     private readonly ILauncherPluginActivationSource _activationSource;
     private readonly ILauncherPluginActivationReconciler? _activationReconciler;
+    private readonly LauncherHostRuntimeResolver _hostRuntimeResolver;
 
     public LauncherProfileCatalog(
         string baseDirectory,
@@ -31,6 +32,7 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
         _catalogPath = Path.Combine(baseDirectory, catalogFileName);
         _activationSource = activationSource ?? new LauncherPluginActivationSource(baseDirectory);
         _activationReconciler = activationReconciler;
+        _hostRuntimeResolver = new LauncherHostRuntimeResolver(baseDirectory, catalogFileName);
     }
 
     public IReadOnlyList<LauncherProfileDefinition> LoadProfiles()
@@ -46,7 +48,8 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
             throw new InvalidOperationException("启动器工序清单为空。");
         }
 
-        var profiles = entries.Select(Map).ToList();
+        var profiles = entries.Select(entry => Map(entry)).ToList();
+        var hostRuntime = _hostRuntimeResolver.Resolve();
         var profileIds = profiles
             .Select(static profile => profile.ProfileId)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -69,7 +72,9 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
                     throw new InvalidOperationException("activation launcher profile 身份不一致。");
                 }
 
-                var profile = Map(contributedEntries[0]);
+                var profile = Map(
+                    contributedEntries[0],
+                    executablePathOverride: hostRuntime.ExecutablePath);
                 if (!profileIds.Add(profile.ProfileId))
                 {
                     throw new InvalidOperationException($"Launcher ProfileId 重复：{profile.ProfileId}。");
@@ -100,7 +105,9 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
                JsonOptions())
            ?? [];
 
-    private LauncherProfileDefinition Map(LauncherProfileFileEntry entry)
+    private LauncherProfileDefinition Map(
+        LauncherProfileFileEntry entry,
+        string? executablePathOverride = null)
     {
         if (string.IsNullOrWhiteSpace(entry.ProfileId))
         {
@@ -117,9 +124,11 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
             throw new InvalidOperationException($"启动器工序 '{entry.ProfileId}' 缺少 MachineProfile。");
         }
 
-        var executablePath = string.IsNullOrWhiteSpace(entry.ExecutablePath)
-            ? ResolvePath(DefaultExecutablePath)
-            : ResolvePath(entry.ExecutablePath);
+        var executablePath = string.IsNullOrWhiteSpace(executablePathOverride)
+            ? string.IsNullOrWhiteSpace(entry.ExecutablePath)
+                ? ResolvePath(DefaultExecutablePath)
+                : ResolvePath(entry.ExecutablePath)
+            : executablePathOverride;
         var imagePath = string.IsNullOrWhiteSpace(entry.ImagePath)
             ? null
             : ResolvePath(entry.ImagePath);
