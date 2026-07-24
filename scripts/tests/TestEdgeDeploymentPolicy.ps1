@@ -102,6 +102,10 @@ Assert-PreflightVersionContract
 
 Require-Text 'scripts/LocalPublishAndDeploy.ps1' 'Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgeHost' 'Edge host publication must require the workspace dispatch gate.'
 Require-Text 'scripts/LocalPublishAndDeploy.ps1' "Formal stable Edge host releases only support Cloud Human HTTP publication" 'Edge host publication must remain a Mac-build-to-Cloud-HTTP workflow.'
+Require-Text 'scripts/LocalPublishAndDeploy.ps1' "Invoke-EdgeScript 'PublishEdgeRuntime\.ps1'[\s\S]*?'-SelfContained'" 'Production Edge runtime publication must carry the Windows .NET runtime.'
+Require-Text 'scripts/LocalPublishAndDeploy.ps1' "Invoke-EdgeScript 'PackEdgeClientVelopack\.ps1'[\s\S]*?'-SelfContained'" 'Production Velopack publication must carry the Windows .NET runtime.'
+Require-Text 'scripts/TestEdgeClientInstallerArtifact.ps1' "coreclr\.dll[\s\S]*?hostfxr\.dll[\s\S]*?hostpolicy\.dll[\s\S]*?System\.Private\.CoreLib\.dll" 'Installer validation must reject framework-dependent Launcher/Host payloads.'
+Require-Text 'scripts/TestEdgeVelopackPackage.ps1' "coreclr\.dll[\s\S]*?hostfxr\.dll[\s\S]*?hostpolicy\.dll[\s\S]*?System\.Private\.CoreLib\.dll" 'Velopack validation must reject framework-dependent packages.'
 Require-Text 'scripts/PublishEdgePluginRelease.ps1' 'Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgePlugin' 'Edge plugin publication must remain independent from the host release.'
 Require-Text 'scripts/PublishEdgePluginRelease.ps1' '\[string\]\$PluginRepositoryRoot' 'Edge plugin publication must require the independent Private Plugins repository root.'
 Require-Text 'scripts/PublishEdgePluginRelease.ps1' 'eng/PackEdgePlugin\.ps1' 'Edge plugin publication must call the Private Plugins unique pack implementation.'

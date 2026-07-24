@@ -97,8 +97,8 @@ macOS 开发阶段运行态验收：
 ```powershell
 dotnet test src/Tests/IIoT.Edge.Installer.UnitTests/IIoT.Edge.Installer.UnitTests.csproj -c Release --no-build --no-restore --nologo
 dotnet test src/Tests/IIoT.Edge.Installer.UiTests/IIoT.Edge.Installer.UiTests.csproj -c Release --no-build --no-restore --nologo
-./scripts/TestEdgeRuntimePublish.ps1 -Configuration Release
-./scripts/PackEdgeClientVelopack.ps1 -Version 1.0.0 -Channel stable -OutputRoot publish/edge-velopack -CleanOutput -SkipVeloAppCheck:$true
+./scripts/TestEdgeRuntimePublish.ps1 -Configuration Release -RuntimeIdentifier win-x64 -SelfContained
+./scripts/PackEdgeClientVelopack.ps1 -Version 1.0.0 -Channel stable -RuntimeIdentifier win-x64 -SelfContained -OutputRoot publish/edge-velopack -CleanOutput -SkipVeloAppCheck:$true
 ./scripts/TestEdgeVelopackPackage.ps1 -OutputRoot publish/edge-velopack -Channel stable -Version 1.0.0
 ./scripts/TestEdgeClientInstallerArtifact.ps1 -ArtifactRoot publish/edge-installer-artifacts/stable/1.0.0 -ExpectedChannel stable -ExpectedVersion 1.0.0
 ./scripts/TestEdgePackageVulnerabilities.ps1
@@ -115,6 +115,7 @@ CI 发布验收：
 - CI 允许对 `PackEdgeClientVelopack.ps1` 使用 `-SkipVeloAppCheck:$true`，原因是 Launcher 通过 `EdgeUpdateVelopackStartup.Run()` 包装 `VelopackApp.Build().Run()`，Velopack CLI 静态扫描无法识别该包装；真实包仍必须通过 `TestEdgeVelopackPackage.ps1`。
 - `edge-installer-artifact` 必须通过 `TestEdgeClientInstallerArtifact.ps1`，并包含 `installer-artifact.json`、安装器 exe、宿主、Launcher 和 Velopack setup；不得包含具体工序插件。
 - `edge-velopack-releases` 必须通过 `TestEdgeVelopackPackage.ps1`，并包含 `releases.stable.json`、`assets.stable.json`、full nupkg、setup exe 和 portable zip。
+- 正式 `win-x64` 的 installer payload 与 Velopack full nupkg 必须同时携带 Launcher/Host 的 `coreclr.dll`、`hostfxr.dll`、`hostpolicy.dll` 和 `System.Private.CoreLib.dll`；缺少任一文件即判定为 framework-dependent 错包，禁止上传和发布，不能以现场在线安装 .NET 作为通过条件。
 - 正式发布后的 `verificationUrls` HEAD、服务器目录和 Cloud catalog 验证只由根级部署 receipt 负责；Actions artifact 成功不得冒充生产发布成功。
 - 发布失败后优先从根入口复用已生成 artifact 或恢复失败阶段；不得未经定位反复全量 CI。Cloud 返回 `400 hash/size` 不一致时，先对比 artifact 文件列表、manifest 和 Cloud 校验算法，再决定是否修改脚本。
 - 独立插件发布后必须能在 `${EDGE_UPDATES_DIR}/plugins/stable/<ModuleId>/<version>/` 找到插件 zip，且 Cloud catalog 中对应插件 release 的 `downloadUrl` 可 HEAD 成功。

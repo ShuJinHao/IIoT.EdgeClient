@@ -140,11 +140,11 @@ jobs:
 
       - name: Run runtime publish smoke test
         shell: pwsh
-        run: ./scripts/TestEdgeRuntimePublish.ps1 -Configuration Release
+        run: ./scripts/TestEdgeRuntimePublish.ps1 -Configuration Release -RuntimeIdentifier win-x64 -SelfContained
 
       - name: Publish runtime directory
         shell: pwsh
-        run: ./scripts/PublishEdgeRuntime.ps1 -Configuration Release -OutputRoot publish/edge-runtime -CleanOutput
+        run: ./scripts/PublishEdgeRuntime.ps1 -Configuration Release -RuntimeIdentifier win-x64 -SelfContained -OutputRoot publish/edge-runtime -CleanOutput
 
       - name: Resolve release notes
         shell: pwsh
@@ -169,7 +169,7 @@ jobs:
 
       - name: Pack Velopack releases
         shell: pwsh
-        run: ./scripts/PackEdgeClientVelopack.ps1 -Version $env:EDGE_RELEASE_VERSION -Channel $env:EDGE_RELEASE_CHANNEL -OutputRoot publish/edge-velopack -ReleaseNotes $env:EDGE_RELEASE_NOTES_PATH -CleanOutput -SkipVeloAppCheck:$true
+        run: ./scripts/PackEdgeClientVelopack.ps1 -Version $env:EDGE_RELEASE_VERSION -Channel $env:EDGE_RELEASE_CHANNEL -RuntimeIdentifier win-x64 -SelfContained -OutputRoot publish/edge-velopack -ReleaseNotes $env:EDGE_RELEASE_NOTES_PATH -CleanOutput -SkipVeloAppCheck:$true
 
       - name: Validate Velopack releases
         shell: pwsh

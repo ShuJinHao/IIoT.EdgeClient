@@ -27,6 +27,24 @@ function Assert-PathExists {
     }
 }
 
+function Assert-SelfContainedRuntimeDirectory {
+    param(
+        [Parameter(Mandatory = $true)][string]$Directory,
+        [Parameter(Mandatory = $true)][string]$Component
+    )
+
+    foreach ($requiredRuntimeFile in @(
+        'coreclr.dll',
+        'hostfxr.dll',
+        'hostpolicy.dll',
+        'System.Private.CoreLib.dll'
+    )) {
+        $runtimeFilePath = Join-Path $Directory $requiredRuntimeFile
+        Assert-PathExists -PathValue $runtimeFilePath `
+            -Message "$Component must be self-contained; required .NET runtime file was not found: $runtimeFilePath"
+    }
+}
+
 function Get-TestSha256 {
     param([Parameter(Mandatory = $true)][string]$PathValue)
     return (Get-FileHash -Algorithm SHA256 -Path $PathValue).Hash.ToLowerInvariant()
@@ -287,6 +305,7 @@ if ([string]::IsNullOrWhiteSpace($launcherDirectory)) {
 $launcherPath = Join-Path $resolvedArtifactRoot $launcherDirectory
 Assert-PathExists -PathValue $launcherPath -Message "Launcher directory was not found: $launcherPath"
 Assert-PathExists -PathValue (Join-Path $launcherPath 'IIoT.Edge.Launcher.dll') -Message "Launcher runtime file was not found."
+Assert-SelfContainedRuntimeDirectory -Directory $launcherPath -Component 'Launcher installer payload'
 
 $hostDirectory = [string]$manifest.hostDirectory
 if ([string]::IsNullOrWhiteSpace($hostDirectory)) {
@@ -302,6 +321,7 @@ $hostPath = Join-Path $resolvedArtifactRoot $hostDirectory
 $pluginsPath = Join-Path $resolvedArtifactRoot $pluginsRoot
 Assert-PathExists -PathValue $hostPath -Message "Host directory was not found: $hostPath"
 Assert-PathExists -PathValue (Join-Path $hostPath 'IIoT.Edge.Shell.dll') -Message "Host shell file was not found."
+Assert-SelfContainedRuntimeDirectory -Directory $hostPath -Component 'Host installer payload'
 Assert-PathExists -PathValue $pluginsPath -Message "Plugins root was not found: $pluginsPath"
 if (Test-Path (Join-Path $hostPath 'Modules')) {
     throw "Host directory must not contain legacy Modules directory: $hostPath"

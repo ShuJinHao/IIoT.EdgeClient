@@ -486,6 +486,7 @@ try {
             '-RuntimeIdentifier', $RuntimeIdentifier,
             '-Version', $Version,
             '-OutputRoot', $runtimeRoot,
+            '-SelfContained',
             '-CleanOutput'
         )
         Invoke-EdgeScript 'PackEdgeClientVelopack.ps1' -Arguments @(
@@ -495,6 +496,7 @@ try {
             '-RuntimeIdentifier', $RuntimeIdentifier,
             '-OutputRoot', $velopackRoot,
             '-ReleaseNotes', $releaseNotesFile,
+            '-SelfContained',
             '-CleanOutput',
             '-SkipVeloAppCheck', $SkipVeloAppCheck
         )

@@ -302,7 +302,7 @@ windows-latest
 
 该 workflow 不得包含 self-hosted runner、Cloud 人员账号密码、短期 JWT、服务器目录写入或 `publish-edge-updates`。离线 artifact 不是生产发布证据；生产只能由工作区根 `Deploy-Changed.ps1` 在 Mac 本机重建受影响 Windows 产物，并经 Cloud Human API 完成落盘、DB、审计、保留策略和下载链验证。
 
-离线 artifact 版本由 `workflow_dispatch` 显式输入，但不产生生产版本。HTTP 本机宿主快发未传 `-Version` 时读取 Cloud Human catalog 最新 stable 版本并自动递增 patch，传入 `-Version` 时严格使用传入值。`PublishEdgeRuntime.ps1 -Version` 会同步设置 Launcher/Shell runtime 的 `AssemblyVersion`、`FileVersion` 和 `InformationalVersion`，Velopack 包验收以该版本为准。不要把 runtime 程序集版本固定回 `1.0.0.0` 后再发布 Velopack 包。
+离线 artifact 版本由 `workflow_dispatch` 显式输入，但不产生生产版本。HTTP 本机宿主快发未传 `-Version` 时读取 Cloud Human catalog 最新 stable 版本并自动递增 patch，传入 `-Version` 时严格使用传入值。`PublishEdgeRuntime.ps1 -Version` 会同步设置 Launcher/Shell runtime 的 `AssemblyVersion`、`FileVersion` 和 `InformationalVersion`，Velopack 包验收以该版本为准。不要把 runtime 程序集版本固定回 `1.0.0.0` 后再发布 Velopack 包。正式 `win-x64` runtime、installer payload 和 Velopack full package 必须统一使用 self-contained 发布并携带 Launcher/Host 的 .NET runtime 文件；Cloud 下载包不得要求现场机另装 .NET。
 
 发布目录固定为：
 

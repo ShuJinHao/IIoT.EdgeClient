@@ -66,6 +66,29 @@ function Assert-ZipEntryExists {
     return $entry
 }
 
+function Assert-SelfContainedRuntimeEntries {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.IO.Compression.ZipArchive]$Archive,
+
+        [Parameter(Mandatory = $true)]
+        [string]$LauncherRoot,
+
+        [Parameter(Mandatory = $true)]
+        [string]$HostRoot
+    )
+
+    foreach ($requiredRuntimeFile in @(
+        'coreclr.dll',
+        'hostfxr.dll',
+        'hostpolicy.dll',
+        'System.Private.CoreLib.dll'
+    )) {
+        Assert-ZipEntryExists -Archive $Archive -EntryName "$LauncherRoot/$requiredRuntimeFile" | Out-Null
+        Assert-ZipEntryExists -Archive $Archive -EntryName "$HostRoot/$requiredRuntimeFile" | Out-Null
+    }
+}
+
 function Read-ZipEntryText {
     param(
         [Parameter(Mandatory = $true)]
@@ -192,6 +215,10 @@ try {
     Assert-ZipEntryExists -Archive $archive -EntryName 'lib/app/IIoT.Edge.Launcher.exe' | Out-Null
     $launcherAssemblyEntry = Assert-ZipEntryExists -Archive $archive -EntryName 'lib/app/IIoT.Edge.Launcher.dll'
     Assert-ZipEntryExists -Archive $archive -EntryName "lib/app/$ExpectedHostDirectory/IIoT.Edge.Shell.exe" | Out-Null
+    Assert-SelfContainedRuntimeEntries `
+        -Archive $archive `
+        -LauncherRoot 'lib/app' `
+        -HostRoot "lib/app/$ExpectedHostDirectory"
     $packagedPluginEntries = @($archive.Entries | Where-Object {
         $_.FullName.StartsWith("lib/app/$ExpectedPluginsRoot/", [System.StringComparison]::OrdinalIgnoreCase)
     })
@@ -310,6 +337,17 @@ finally {
     if (Test-Path $tempDirectory) {
         Remove-Item -Path $tempDirectory -Recurse -Force
     }
+}
+
+$portableArchive = [System.IO.Compression.ZipFile]::OpenRead($portablePath)
+try {
+    Assert-SelfContainedRuntimeEntries `
+        -Archive $portableArchive `
+        -LauncherRoot 'current' `
+        -HostRoot "current/$ExpectedHostDirectory"
+}
+finally {
+    $portableArchive.Dispose()
 }
 
 Write-Host "Velopack package smoke test passed: $resolvedOutputRoot"
