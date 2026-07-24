@@ -2,7 +2,7 @@
 
 > 读取边界：只有本次实际发布 Host、Installer、Velopack 或具体插件时，才读取对应验收小节；Windows 实机、历史候选和其它产物章节不默认读取。
 
-本文档是 EdgeClient 安装、更新和 Windows 分发安全策略的唯一客户端侧验收入口。上传部署总口径见 `../../docs/上传部署总览.md`；云端生成安装包的字段写入规则由 CloudPlatform 单独验收，本文件只约束 EdgeClient 本仓库能验证的内容。工作区日常唯一对外入口是根目录 `deploy/Deploy-Changed.ps1`；`deploy/Invoke-WorkspaceDeploy.ps1` 只作为宿主/插件内部执行器和显式恢复入口。本文件保留项目级验收细节。
+本文档是 EdgeClient 安装、更新和 Windows 分发安全策略的唯一客户端侧验收入口。上传部署总口径见 `../../docs/上传部署总览.md`。标准入口依次是根目录 `deploy/Validate-Candidate.ps1`、`deploy/Prepare-Release.ps1`、`deploy/Deploy-Changed.ps1 -PreparedReleaseId <id>`；紧急生产入口是 `deploy/Deploy-ProductionNow.ps1 -Target Edge`。本文件保留项目级验收细节。
 
 > 本文只定义验收契约，不代表任何一次发布已经完成。真实 Cloud `stable` 上传、catalog/DB/静态 HEAD、Windows 下载与实机结果以对应部署 receipt/checkpoint 为准。
 
@@ -14,14 +14,15 @@ EdgeClient 不发布 Docker 镜像，不推 Harbor，也不从 GitHub hosted run
 
 - `push main` / PR：只跑 Architecture/Security 与 selector 选出的受影响 Business/DeploymentContract，不生成安装包和 Velopack 发布包；全量、coverage、mutation、duplication 不自动运行。
 - 显式 `workflow_dispatch`：只在 hosted Windows runner 构建并上传离线 Actions artifacts，到此停止；不连接 Cloud、不写生产、不构成发布证据。
-- 日常增量发布：操作者或 AI 从工作区根运行 `deploy/Deploy-Changed.ps1 -Targets Edge`；入口只接受三仓 clean、已提交的 `main`，可 push 现有 HEAD但不创建提交或修改文件，复用同 SHA 证据并按依赖闭包决定 Host/Module。
-- 本机宿主内部执行：统一入口调度 `Invoke-WorkspaceDeploy.ps1 -Target EdgeHost` 与 `LocalPublishAndDeploy.ps1 -Transport http`，本机编译、打包、生成 installer artifact 后通过 Cloud Human API 上传 release bundle；Host bundle 不含具体工序插件。生产 `stable` 不允许走 `rsync/scp`。
-- 本机插件内部执行：只改工序插件时统一入口调度 `Invoke-WorkspaceDeploy.ps1 -Target EdgePlugin -ModuleId <真实ModuleId>`；Host 传输脚本调用 Private Plugins 仓唯一 pack，只上传独立插件 zip并登记插件 release，不生成宿主版本，source commit 归因到插件仓 HEAD。
+- 标准候选验证：`Validate-Candidate.ps1` 在开发阶段运行受影响验证并生成 exact-SHA 绿色证据。
+- 标准产物准备：`Prepare-Release.ps1` 调度 `LocalPublishAndDeploy.ps1 -PrepareOnly` 与 `PublishEdgePluginRelease.ps1 -PrepareOnly`，本机编译/pack 并封存 Host/AP/CP 真实字节，不写生产。
+- 标准正式投放：`Deploy-Changed.ps1 -PreparedReleaseId <id>` 只上传预制包并验证 catalog/hash/download，不运行测试、编译或 pack。
+- 紧急生产：`Deploy-ProductionNow.ps1 -Target Edge` 不运行测试/CI/绿色门禁；先封存三仓工作区，只 pack 一次，失败归档本轮新版本，永不取得绿色资格。
 - 本机快发和正式发布上传前，发布凭据必须从 macOS Keychain canonical Edge Release API key 换短期发布 JWT；Human refresh token、旧 session、Markdown 和旧 env 不得作为标准 fallback。
 - 生产更新内容必须由根入口显式传 `-EdgeReleaseNotes` 或 `-EdgeReleaseNotesPath`；离线 artifact workflow 的 `release_notes` 只进入离线产物。
-- 本机正式发布必须由工作区统一入口生成内部调度标记；项目实现脚本拒绝直接执行。EdgeHost/EdgePlugin 共用本地互斥锁，且三仓构建前必须确认各自工作树 clean、位于 `main`、HEAD 已推送到 upstream。
-- 三端从零部署只走 `deploy/Deploy-FromZero.ps1`；它在 Cloud 清空后按同一 invocation 前缀吊销失败尝试遗留的 active 派生 Release API key，再签发替代 key并覆盖写回 Keychain，但不得自动创建设备、注册 `ClientCode` 或轮换设备 bootstrap secret。导回的历史 release 不得删除；宿主必须发布新的 patch，已存在的同版本插件必须重建后按 hash/size 对账并验证真实下载，禁止覆盖历史字节。
-- catalog、HTTP 上传和静态 HEAD 验证必须执行连接、总时限与低速停滞门禁，并把受限长度的 `4xx/5xx` 正文写入错误摘要。失败产物和 `edge-deployment-attempt.json` 必须保留，后续通过统一入口 `-ResumeReleaseRoot` 只做校验、重传或已发布对账；不得反复从头全量构建或跳过 release notes、DB 登记、审计和保留策略。
+- 本机正式发布必须由工作区统一入口生成内部调度标记；EdgeHost/EdgePlugin 共用协调锁。标准流程要求三仓 clean/main/pushed；ProductionNow 允许脏工作区但必须先封存不可变快照。
+- 三端从零部署只走 `deploy/Deploy-FromZero.ps1 -PreparedReleaseId <id>`；Host/AP/CP 在 Cloud 清空前已完成 pack，清空后只吊销/重签派生 Release API key、上传和验收，不得重建。不得自动创建设备、注册 `ClientCode` 或轮换设备 bootstrap secret。
+- catalog、HTTP 上传和静态 HEAD 验证必须执行连接、总时限与低速停滞门禁，并把受限长度的 `4xx/5xx` 正文写入错误摘要。失败产物和 `edge-deployment-attempt.json` 必须保留；标准流程只允许用同一 `PreparedReleaseId` 重传或对账，ProductionNow失败只允许归档，不得反复全量构建或跳过release notes、DB登记、审计和保留策略。
 - 生产服务器只允许 `stable` 渠道，不保留 `ci`、`dev`、`test` 或其他测试渠道目录。
 
 可选 GitHub 离线 artifact 链路固定为：
@@ -53,12 +54,12 @@ ${EDGE_UPDATES_DIR}/
     IIoT.EdgePlugin.<ModuleId>-<version>-<runtime>.zip
 ```
 
-工作区标准入口会调度本机快发实现脚本；操作者和 AI 只执行根入口：
+工作区标准投放只消费 Prepare 输出；操作者和 AI 只执行根入口：
 
 ```powershell
 pwsh ./deploy/Deploy-Changed.ps1 `
   -Targets Edge `
-  -EdgeReleaseNotesPath ./release-notes.md
+  -PreparedReleaseId <prepared-release-id>
 ```
 
 未传 `-Version` 时，HTTP 发布会读取 Cloud Human catalog 最新 stable 版本并自动递增 patch；需要固定版本时才显式传 `-Version`。本机快发的完整操作入口见 `docs/客户端部署.md`。

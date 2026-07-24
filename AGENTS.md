@@ -20,6 +20,7 @@
 ## 任务与部署
 
 - 沟通/审计只读且不运行测试；业务开发只运行 Architecture、Security 和 owner 选出的受影响 Business。启动/UI 改动另做真实启动或可视验收；重型质量与三端对齐只在用户明确授权时运行，影响无法归属时停止。
-- 普通部署只走工作区 `deploy/Deploy-Changed.ps1`：三仓必须 clean、已提交的 `main`，可 push 现有 HEAD，不创建提交、不编辑文件；只发布受影响 Host 或真实插件，Edge 部署不是远程安装 Windows，也不走 Harbor。
-- 三端从零部署只走工作区 `deploy/Deploy-FromZero.ps1`；Cloud 清空后可重新签发发布 API key 并写回 Keychain，但不创建设备、不注册 `ClientCode`、不轮换设备 bootstrap secret。
+- Edge 候选验证、产物准备、普通投放分别走工作区 `deploy/Validate-Candidate.ps1`、`deploy/Prepare-Release.ps1`、`deploy/Deploy-Changed.ps1 -PreparedReleaseId <id>`。测试和 Host/AP/CP pack 只能发生在 Validate/Prepare；正式 Deploy 只上传预制包，不创建提交、不编辑文件、不再运行测试或构建。
+- 用户明确说“赶生产”“立刻上线”或“紧急生产”时走工作区 `deploy/Deploy-ProductionNow.ps1 -Target Edge`：不运行测试或 CI，先封存 Host/SDK/Private Plugins 当前字节，再只打包一次；发布失败归档本轮新版本，结果不得标记为绿色。
+- 三端从零部署只走工作区 `deploy/Deploy-FromZero.ps1 -PreparedReleaseId <id>`；Cloud 清空前必须已准备 Host/AP/CP 全部包，清空后只上传和验收；可重新签发发布 API key并写回 Keychain，但不创建设备、不注册 `ClientCode`、不轮换设备 bootstrap secret。
 - 只有形成长期规则、修复历史回归、处理生产事故或改变部署机制时，才更新项目复盘。

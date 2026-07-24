@@ -47,7 +47,11 @@ param(
 
     [switch]$SkipVelopackValidation,
 
-    [switch]$SkipInstallerValidation
+    [switch]$SkipInstallerValidation,
+
+    [switch]$PrepareOnly,
+
+    [string]$PreparedResultPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -533,6 +537,39 @@ try {
     }
     if (-not $isResume -or -not (Test-Path -LiteralPath $bundleZip -PathType Leaf)) {
         New-EdgeHttpReleaseBundle -InstallerArtifactRoot $installerArtifactRoot -VelopackRoot $velopackRoot -OutputZip $bundleZip | Out-Null
+    }
+
+    if ($PrepareOnly) {
+        if ([string]::IsNullOrWhiteSpace($PreparedResultPath)) {
+            throw 'PrepareOnly requires PreparedResultPath.'
+        }
+        $preparedResult = [System.IO.Path]::GetFullPath($PreparedResultPath)
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $preparedResult) | Out-Null
+        $manifestPath = Join-Path $installerArtifactRoot 'installer-artifact.json'
+        $manifestHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $manifestPath).Hash.ToLowerInvariant()
+        $bundle = Get-Item -LiteralPath $bundleZip
+        [ordered]@{
+            schemaVersion = 1
+            kind = 'iiot-edge-host-prepared-result'
+            component = 'Host'
+            version = $Version
+            sourceCommit = $sourceCommit
+            releaseRoot = $releaseRoot
+            bundlePath = $bundle.FullName
+            bundleSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $bundle.FullName).Hash.ToLowerInvariant()
+            bundleSize = [long]$bundle.Length
+            installerManifestPath = $manifestPath
+            installerManifestSha256 = $manifestHash
+            targetRuntime = $RuntimeIdentifier
+            selfContained = $true
+            completedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
+        } | ConvertTo-Json -Depth 8 |
+            Set-Content -LiteralPath $preparedResult -Encoding utf8NoBOM
+        Write-EdgeDeploymentAttemptState -ReleaseRoot $releaseRoot -Target EdgeHost -InvocationId $dispatchInvocationId `
+            -Stage 'prepared' -Status succeeded `
+            -Facts @{ version = $Version; sourceCommit = $sourceCommit; bundle = $bundleZip; uploaded = $false } | Out-Null
+        Write-Host "Edge host prepared without production upload: version=$Version result=$preparedResult"
+        return
     }
 
     $attemptStage = 'uploading'

@@ -46,7 +46,11 @@ param(
     [ValidateRange(1, 104857600)]
     [int]$LowSpeedLimitBytesPerSecond = 1024,
 
-    [switch]$SkipPackageValidation
+    [switch]$SkipPackageValidation,
+
+    [switch]$PrepareOnly,
+
+    [string]$PreparedResultPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -532,6 +536,46 @@ try {
     $wrapperZip = Join-Path $releaseRoot "edge-plugin-release-$ModuleId-$($metadata.version)-$RuntimeIdentifier.zip"
     if (-not $isResume -or -not (Test-Path -LiteralPath $wrapperZip -PathType Leaf)) {
         New-PluginReleaseWrapper -Metadata $metadata -PackagePath $packagePath -ReleaseNotesText $releaseNotesText -OutputZip $wrapperZip | Out-Null
+    }
+
+    if ($PrepareOnly) {
+        if ([string]::IsNullOrWhiteSpace($PreparedResultPath)) {
+            throw 'PrepareOnly requires PreparedResultPath.'
+        }
+        $preparedResult = [System.IO.Path]::GetFullPath($PreparedResultPath)
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $preparedResult) | Out-Null
+        $wrapper = Get-Item -LiteralPath $wrapperZip
+        [ordered]@{
+            schemaVersion = 1
+            kind = 'iiot-edge-plugin-prepared-result'
+            component = $ModuleId
+            version = [string]$metadata.version
+            sourceCommit = [string]$gitFacts.Head
+            releaseRoot = $releaseRoot
+            wrapperPath = $wrapper.FullName
+            wrapperSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $wrapper.FullName).Hash.ToLowerInvariant()
+            wrapperSize = [long]$wrapper.Length
+            packagePath = $packagePath
+            packageSha256 = ([string]$metadata.sha256).ToLowerInvariant()
+            packageSize = [long]$metadata.packageSize
+            targetRuntime = $RuntimeIdentifier
+            hostApiVersion = [string]$metadata.hostApiVersion
+            minHostVersion = [string]$metadata.minHostVersion
+            maxHostVersion = [string]$metadata.maxHostVersion
+            completedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
+        } | ConvertTo-Json -Depth 8 |
+            Set-Content -LiteralPath $preparedResult -Encoding utf8NoBOM
+        Write-EdgeDeploymentAttemptState -ReleaseRoot $releaseRoot -Target EdgePlugin -InvocationId $dispatchInvocationId `
+            -Stage 'prepared' -Status succeeded `
+            -Facts @{
+                moduleId = $ModuleId
+                version = $declaredVersion
+                sourceCommit = $gitFacts.Head
+                wrapper = $wrapperZip
+                uploaded = $false
+            } | Out-Null
+        Write-Host "Edge plugin prepared without production upload: module=$ModuleId version=$declaredVersion result=$preparedResult"
+        return
     }
 
     $attemptStage = 'uploading'
