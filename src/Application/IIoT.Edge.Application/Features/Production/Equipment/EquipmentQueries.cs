@@ -1,6 +1,8 @@
-﻿using IIoT.Edge.Module.Contracts.Context;
-using IIoT.Edge.Module.Contracts.Plc;
+﻿using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Module.Contracts.Production;
 using IIoT.Edge.Module.Contracts.Recipe;
+using IIoT.Edge.Module.Contracts.Time;
+using IIoT.Edge.Module.Contracts.UI;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using MediatR;
 
@@ -119,34 +121,47 @@ public class GetRecipeSnapshotHandler(IRecipeService recipeService)
     }
 }
 
-public class GetCapacitySnapshotHandler(IProductionContextStore contextStore)
+public class GetCapacitySnapshotHandler(
+    IEnumerable<IModuleProductionRecordSummarySource> summarySources,
+    IProductionTimeProvider productionTime,
+    IDeviceSelectionContext deviceSelectionContext)
     : IRequestHandler<GetCapacitySnapshotQuery, CapacitySnapshot>
 {
-    public Task<CapacitySnapshot> Handle(
+    public async Task<CapacitySnapshot> Handle(
         GetCapacitySnapshotQuery request,
         CancellationToken cancellationToken)
     {
-        var ok = 0;
-        var ng = 0;
-        var recentHourOk = 0;
-        var recentHourNg = 0;
-        var currentBatch = "--";
-        var recentHourSlots = ResolveRecentHourSlots(DateTime.Now);
+        var utcNow = EnsureUtc(productionTime.UtcNow);
+        var businessNow = productionTime.ToBusinessTime(utcNow);
+        var businessDayStart = DateTime.SpecifyKind(businessNow.Date, DateTimeKind.Unspecified);
+        var rangeStartUtc = EnsureUtc(productionTime.ToUtc(businessDayStart));
+        var rangeEndUtc = EnsureUtc(productionTime.ToUtc(businessDayStart.AddDays(1)));
+        var recentWindowStartUtc = utcNow.AddHours(-1);
+        var query = new ProductionRecordSummaryQuery(
+            rangeStartUtc,
+            rangeEndUtc,
+            recentWindowStartUtc,
+            deviceSelectionContext.SelectedDeviceKey);
+        var summaries = new List<ModuleProductionRecordSummary>();
 
-        foreach (var context in contextStore.GetAll())
+        foreach (var source in summarySources.OrderBy(
+                     static source => source.ModuleId,
+                     StringComparer.OrdinalIgnoreCase))
         {
-            ok += context.TodayCapacity.OkAll;
-            ng += context.TodayCapacity.NgAll;
-            foreach (var bucket in context.TodayCapacity.HalfHourly.Where(bucket => recentHourSlots.Contains(bucket.SlotIndex)))
-            {
-                recentHourOk += bucket.OkCount;
-                recentHourNg += bucket.NgCount;
-            }
+            summaries.Add(await source.QueryAsync(query, cancellationToken).ConfigureAwait(false));
+        }
 
-            if (context.DeviceBag.TryGetValue("CurrentBatch", out var batchValue) &&
-                batchValue is string batch)
+        var ok = summaries.Sum(static summary => summary.TodayOk);
+        var ng = summaries.Sum(static summary => summary.TodayNg);
+        var recentHourOk = summaries.Sum(static summary => summary.RecentOk);
+        var recentHourNg = summaries.Sum(static summary => summary.RecentNg);
+        var currentBatch = "--";
+        foreach (var summary in summaries)
+        {
+            if (!string.IsNullOrWhiteSpace(summary.CurrentBatch))
             {
-                currentBatch = batch;
+                currentBatch = summary.CurrentBatch;
+                break;
             }
         }
 
@@ -154,26 +169,16 @@ public class GetCapacitySnapshotHandler(IProductionContextStore contextStore)
         var yield = total > 0 ? $"{ok * 100.0 / total:F1}%" : "0.0%";
         var recentHourTotal = recentHourOk + recentHourNg;
 
-        return Task.FromResult(new CapacitySnapshot(
-            total,
-            ok,
-            ng,
+        return new CapacitySnapshot(
+            ToDisplayCount(total),
+            ToDisplayCount(ok),
+            ToDisplayCount(ng),
             yield,
             currentBatch,
-            recentHourTotal,
-            recentHourOk,
-            recentHourNg,
-            BuildRecentHourLabel(DateTime.Now)));
-    }
-
-    private static HashSet<int> ResolveRecentHourSlots(DateTime now)
-    {
-        var currentSlot = now.Hour * 2 + (now.Minute >= 30 ? 1 : 0);
-        return
-        [
-            currentSlot,
-            (currentSlot + 47) % 48
-        ];
+            ToDisplayCount(recentHourTotal),
+            ToDisplayCount(recentHourOk),
+            ToDisplayCount(recentHourNg),
+            BuildRecentHourLabel(businessNow));
     }
 
     private static string BuildRecentHourLabel(DateTime now)
@@ -181,4 +186,15 @@ public class GetCapacitySnapshotHandler(IProductionContextStore contextStore)
         var start = now.AddHours(-1);
         return $"{start:HH:mm}-{now:HH:mm}";
     }
+
+    private static int ToDisplayCount(long value)
+        => (int)Math.Clamp(value, 0L, int.MaxValue);
+
+    private static DateTime EnsureUtc(DateTime value)
+        => value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
 }

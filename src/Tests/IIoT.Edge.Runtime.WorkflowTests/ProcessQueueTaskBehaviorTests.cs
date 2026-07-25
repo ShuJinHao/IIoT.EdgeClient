@@ -813,6 +813,41 @@ public sealed class ProcessQueueTaskBehaviorTests
     }
 
     [Fact]
+    public async Task EnqueueAccepted_ShouldNotNotifyProductionViewUntilMainQueueConsumesRecord()
+    {
+        var pipeline = new FakeDataPipelineService();
+        var uiConsumer = new FakeCellDataConsumer(
+            name: "UI",
+            order: 50,
+            retryChannel: null,
+            result: true,
+            failureMode: ConsumerFailureMode.BestEffort);
+        var enqueueResult = await pipeline.EnqueueAsync(
+            CreateRecord(),
+            TestContext.Current.CancellationToken);
+        var task = new TestableProcessQueueTask(
+            new FakeLogService(),
+            pipeline,
+            [uiConsumer],
+            new FakeFailedRecordStore(),
+            new FakeFailedRecordStore(),
+            new FakeCloudFallbackBufferStore(),
+            new FakeMesFallbackBufferStore(),
+            new FakeCloudDeadLetterStore(),
+            new FakeMesDeadLetterStore(),
+            new FakeCriticalPersistenceFallbackWriter());
+
+        Assert.True(enqueueResult.IsDurablyAccepted);
+        Assert.Equal(1, pipeline.PendingCount);
+        Assert.Equal(0, uiConsumer.ProcessCallCount);
+
+        await task.ExecuteOnceAsync();
+
+        Assert.Equal(0, pipeline.PendingCount);
+        Assert.Equal(1, uiConsumer.ProcessCallCount);
+    }
+
+    [Fact]
     public async Task BestEffortFailure_ShouldNotBlockLaterDurableConsumer()
     {
         var logger = new FakeLogService();

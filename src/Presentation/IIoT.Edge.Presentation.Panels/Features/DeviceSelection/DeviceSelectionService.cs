@@ -1,12 +1,10 @@
+using IIoT.Edge.Module.Contracts.UI;
+
 namespace IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 
-public interface IDeviceSelectionService
+public interface IDeviceSelectionService : IDeviceSelectionContext
 {
-    const string AllFilterKey = "__all__";
-
-    string SelectedDeviceKey { get; }
-
-    event EventHandler? SelectionChanged;
+    new const string AllFilterKey = IDeviceSelectionContext.AllFilterKey;
 
     void SelectDevice(string deviceKey);
 }
@@ -16,6 +14,11 @@ public sealed class DeviceSelectionService : IDeviceSelectionService
     private string _selectedDeviceKey = IDeviceSelectionService.AllFilterKey;
 
     public string SelectedDeviceKey => _selectedDeviceKey;
+
+    public bool IsAllSelected => string.Equals(
+        _selectedDeviceKey,
+        IDeviceSelectionContext.AllFilterKey,
+        StringComparison.OrdinalIgnoreCase);
 
     public event EventHandler? SelectionChanged;
 
