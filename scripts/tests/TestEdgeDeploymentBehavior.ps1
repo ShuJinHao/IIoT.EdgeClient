@@ -413,6 +413,7 @@ internal static class TestOnlyDebugOutput
     Set-Content -Encoding UTF8 -LiteralPath (Join-Path $gitRepo 'tracked.txt') -Value 'baseline'
     Invoke-Git -WorkingDirectory $gitRepo -Arguments @('add', 'tracked.txt')
     Invoke-Git -WorkingDirectory $gitRepo -Arguments @('commit', '-q', '-m', 'baseline')
+    Invoke-Git -WorkingDirectory $gitRepo -Arguments @('branch', '-M', 'main')
     & git init --bare -q $bareRemote
     if ($LASTEXITCODE -ne 0) { throw 'Could not initialize fake bare remote.' }
     Invoke-Git -WorkingDirectory $gitRepo -Arguments @('remote', 'add', 'origin', $bareRemote)
@@ -427,6 +428,23 @@ internal static class TestOnlyDebugOutput
     Invoke-Git -WorkingDirectory $gitRepo -Arguments @('commit', '-q', '-m', 'unpushed')
     Assert-ThrowsContaining -Action { Assert-EdgeReleaseGitState -RepoRoot $gitRepo | Out-Null } -Needles @('pushed')
     Invoke-Git -WorkingDirectory $gitRepo -Arguments @('push', '-q', 'origin', 'HEAD:main')
+    $exactSha = (Invoke-EdgeGitCapture -RepoRoot $gitRepo -Arguments @('rev-parse', 'HEAD')).Text
+    Invoke-Git -WorkingDirectory $gitRepo -Arguments @('checkout', '-q', '--detach', $exactSha)
+    Assert-ThrowsContaining -Action {
+        Assert-EdgeReleaseGitState -RepoRoot $gitRepo -ExpectedSha $exactSha | Out-Null
+    } -Needles @('remain on main', "branch='HEAD'")
+    Assert-Passes -Action {
+        $detachedFacts = Assert-EdgeReleaseGitState `
+            -RepoRoot $gitRepo `
+            -ExpectedSha $exactSha `
+            -AllowDetachedExactSha
+        Assert-True `
+            -Condition ($detachedFacts.Branch -ceq 'HEAD' -and
+                $detachedFacts.Upstream -ceq 'origin/main' -and
+                $detachedFacts.UpstreamHead -ceq $exactSha) `
+            -Message 'Explicit immutable snapshot validation did not preserve exact main/upstream identity.'
+    }
+    Invoke-Git -WorkingDirectory $gitRepo -Arguments @('checkout', '-q', 'main')
 
     $firstInvocation = [Guid]::NewGuid().ToString('D')
     $lock = Enter-EdgeDeploymentLock -RepoRoot $gitRepo -InvocationId $firstInvocation -Target EdgeHost

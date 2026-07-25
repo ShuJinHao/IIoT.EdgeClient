@@ -51,6 +51,8 @@ param(
 
     [switch]$PrepareOnly,
 
+    [switch]$PreparedSourceSnapshot,
+
     [string]$PreparedResultPath = ''
 )
 
@@ -353,7 +355,10 @@ function Write-EdgePublishSummary {
 }
 
 $dispatchInvocationId = Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgeHost
-$gitFacts = Assert-EdgeReleaseGitState -RepoRoot $repoRoot -ExpectedSha $ExpectedSha
+$gitFacts = Assert-EdgeReleaseGitState `
+    -RepoRoot $repoRoot `
+    -ExpectedSha $ExpectedSha `
+    -AllowDetachedExactSha:$PreparedSourceSnapshot
 $deploymentLock = Enter-EdgeDeploymentLock -RepoRoot $repoRoot -InvocationId $dispatchInvocationId -Target EdgeHost
 $locationPushed = $false
 $attemptReleaseRoot = ''
@@ -467,7 +472,10 @@ try {
     $bundleZip = Join-Path $releaseRoot "edge-release-bundle-$Channel-$Version.zip"
 
     if (-not $isResume) {
-        $gitFacts = Assert-EdgeReleaseGitState -RepoRoot $repoRoot -ExpectedSha $ExpectedSha
+        $gitFacts = Assert-EdgeReleaseGitState `
+            -RepoRoot $repoRoot `
+            -ExpectedSha $ExpectedSha `
+            -AllowDetachedExactSha:$PreparedSourceSnapshot
         $sourceCommit = [string]$gitFacts.Head
         Write-Host "Publishing Edge local release: version=$Version channel=$Channel runtime=$RuntimeIdentifier"
         if (-not [string]::IsNullOrWhiteSpace($previousVersion)) {
@@ -573,7 +581,10 @@ try {
     }
 
     $attemptStage = 'uploading'
-    $gitFacts = Assert-EdgeReleaseGitState -RepoRoot $repoRoot -ExpectedSha $ExpectedSha
+    $gitFacts = Assert-EdgeReleaseGitState `
+        -RepoRoot $repoRoot `
+        -ExpectedSha $ExpectedSha `
+        -AllowDetachedExactSha:$PreparedSourceSnapshot
     $sourceCommit = [string]$gitFacts.Head
     Write-EdgeDeploymentAttemptState -ReleaseRoot $releaseRoot -Target EdgeHost -InvocationId $dispatchInvocationId `
         -Stage $attemptStage -Status running -Facts @{ version = $Version; sourceCommit = $sourceCommit; bundle = $bundleZip } | Out-Null

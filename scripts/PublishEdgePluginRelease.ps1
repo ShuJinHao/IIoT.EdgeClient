@@ -50,6 +50,8 @@ param(
 
     [switch]$PrepareOnly,
 
+    [switch]$PreparedSourceSnapshot,
+
     [string]$PreparedResultPath = ''
 )
 
@@ -341,7 +343,10 @@ function Invoke-PluginPackageUpload {
 }
 
 $dispatchInvocationId = Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgePlugin
-$gitFacts = Assert-EdgeReleaseGitState -RepoRoot $pluginRepoRoot -ExpectedSha $ExpectedSha
+$gitFacts = Assert-EdgeReleaseGitState `
+    -RepoRoot $pluginRepoRoot `
+    -ExpectedSha $ExpectedSha `
+    -AllowDetachedExactSha:$PreparedSourceSnapshot
 $deploymentLock = Enter-EdgeDeploymentLock -RepoRoot $repoRoot -InvocationId $dispatchInvocationId -Target EdgePlugin
 $locationPushed = $false
 $attemptReleaseRoot = ''
@@ -461,7 +466,10 @@ try {
     New-Item -Path $packageOutputRoot -ItemType Directory -Force | Out-Null
     $metadataPath = Get-PreservedPluginMetadataPath -PackageRoot $packageOutputRoot
     if ($null -eq $metadataPath) {
-        $gitFacts = Assert-EdgeReleaseGitState -RepoRoot $pluginRepoRoot -ExpectedSha $ExpectedSha
+        $gitFacts = Assert-EdgeReleaseGitState `
+            -RepoRoot $pluginRepoRoot `
+            -ExpectedSha $ExpectedSha `
+            -AllowDetachedExactSha:$PreparedSourceSnapshot
         $pluginPackageScratchRoot = Join-Path $pluginRepoRoot "artifacts/deploy-pack/$dispatchInvocationId"
         $attemptStage = 'building-package'
         Write-EdgeDeploymentAttemptState -ReleaseRoot $releaseRoot -Target EdgePlugin -InvocationId $dispatchInvocationId `
@@ -579,7 +587,10 @@ try {
     }
 
     $attemptStage = 'uploading'
-    $gitFacts = Assert-EdgeReleaseGitState -RepoRoot $pluginRepoRoot -ExpectedSha $ExpectedSha
+    $gitFacts = Assert-EdgeReleaseGitState `
+        -RepoRoot $pluginRepoRoot `
+        -ExpectedSha $ExpectedSha `
+        -AllowDetachedExactSha:$PreparedSourceSnapshot
     Write-EdgeDeploymentAttemptState -ReleaseRoot $releaseRoot -Target EdgePlugin -InvocationId $dispatchInvocationId `
         -Stage $attemptStage -Status running `
         -Facts @{ moduleId = $ModuleId; version = $declaredVersion; sourceCommit = $gitFacts.Head; wrapper = $wrapperZip } | Out-Null

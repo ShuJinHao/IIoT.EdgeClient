@@ -43,7 +43,8 @@ function Assert-EdgeReleaseGitState {
     param(
         [Parameter(Mandatory = $true)][string]$RepoRoot,
         [ValidatePattern('^$|^[0-9A-Fa-f]{40}$')]
-        [string]$ExpectedSha = ''
+        [string]$ExpectedSha = '',
+        [switch]$AllowDetachedExactSha
     )
 
     $status = Invoke-EdgeGitCapture -RepoRoot $RepoRoot -Arguments @('status', '--porcelain=v1')
@@ -53,16 +54,32 @@ function Assert-EdgeReleaseGitState {
 
     $head = (Invoke-EdgeGitCapture -RepoRoot $RepoRoot -Arguments @('rev-parse', 'HEAD')).Text
     $branch = (Invoke-EdgeGitCapture -RepoRoot $RepoRoot -Arguments @('rev-parse', '--abbrev-ref', 'HEAD')).Text
+    $isDetached = [string]::Equals($branch, 'HEAD', [System.StringComparison]::Ordinal)
     if (-not [string]::IsNullOrWhiteSpace($ExpectedSha)) {
         if (-not [string]::Equals($head, $ExpectedSha, [System.StringComparison]::OrdinalIgnoreCase)) {
             throw "Formal Edge release candidate changed after the deployment plan was frozen: expected='$ExpectedSha' actual='$head'."
         }
-        if (-not [string]::Equals($branch, 'main', [System.StringComparison]::Ordinal)) {
+        if (-not [string]::Equals($branch, 'main', [System.StringComparison]::Ordinal) -and
+            -not ($AllowDetachedExactSha -and $isDetached)) {
             throw "Formal Edge release candidate must remain on main: expectedSha='$ExpectedSha' branch='$branch'."
+        }
+        if ($isDetached) {
+            $mainHead = (Invoke-EdgeGitCapture `
+                -RepoRoot $RepoRoot `
+                -Arguments @('rev-parse', '--verify', 'main^{commit}')).Text
+            if (-not [string]::Equals(
+                    $mainHead,
+                    $ExpectedSha,
+                    [System.StringComparison]::OrdinalIgnoreCase)) {
+                throw "Formal Edge immutable source snapshot does not match local main: expected='$ExpectedSha' actual='$mainHead'."
+            }
         }
     }
 
-    $upstreamResult = Invoke-EdgeGitCapture -RepoRoot $RepoRoot -Arguments @('rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}') -AllowFailure
+    $upstreamSelector = if ($isDetached) { 'main@{upstream}' } else { '@{upstream}' }
+    $upstreamResult = Invoke-EdgeGitCapture -RepoRoot $RepoRoot -Arguments @(
+        'rev-parse', '--abbrev-ref', '--symbolic-full-name', $upstreamSelector
+    ) -AllowFailure
     if ($upstreamResult.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($upstreamResult.Text)) {
         throw "Formal Edge release requires HEAD '$head' to have a configured pushed upstream."
     }
