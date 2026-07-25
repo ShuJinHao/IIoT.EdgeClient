@@ -9,6 +9,52 @@ namespace IIoT.Edge.Launcher.FilesystemTests;
 public sealed class ShellLaunchServiceTests
 {
     [Fact]
+    public void NamedMutexProbe_WhenNamedMutexExistsButIsNotOwned_ShouldReturnFalse()
+    {
+        var instanceId = $"launcher-probe-unowned-{Guid.NewGuid():N}";
+        var mutexName = EdgeClientInstanceMutexName.Create(instanceId);
+        using var mutex = new Mutex(initiallyOwned: false, mutexName);
+        var probe = new NamedMutexShellInstanceProbe();
+
+        Assert.False(probe.IsInstanceRunning(instanceId));
+    }
+
+    [Fact]
+    public void NamedMutexProbe_WhenNamedMutexIsOwnedByAnotherThread_ShouldReturnTrue()
+    {
+        var instanceId = $"launcher-probe-owned-{Guid.NewGuid():N}";
+        var mutexName = EdgeClientInstanceMutexName.Create(instanceId);
+        using var ownerReady = new ManualResetEventSlim();
+        using var releaseOwner = new ManualResetEventSlim();
+        var owner = new Thread(() =>
+        {
+            using var mutex = new Mutex(initiallyOwned: true, mutexName);
+            ownerReady.Set();
+            releaseOwner.Wait();
+            mutex.ReleaseMutex();
+        })
+        {
+            IsBackground = true
+        };
+        owner.Start();
+        Assert.True(ownerReady.Wait(
+            TimeSpan.FromSeconds(5),
+            TestContext.Current.CancellationToken));
+
+        try
+        {
+            var probe = new NamedMutexShellInstanceProbe();
+
+            Assert.True(probe.IsInstanceRunning(instanceId));
+        }
+        finally
+        {
+            releaseOwner.Set();
+            Assert.True(owner.Join(TimeSpan.FromSeconds(5)));
+        }
+    }
+
+    [Fact]
     public void GetExecutableCandidates_WhenWindowsProfileUsesExtensionlessShellName_ShouldPreferExeThenConfiguredThenDll()
     {
         var configuredPath = Path.Combine("runtime", "IIoT.Edge.Shell");

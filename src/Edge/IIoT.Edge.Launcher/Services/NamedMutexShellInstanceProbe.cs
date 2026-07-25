@@ -15,8 +15,24 @@ public sealed class NamedMutexShellInstanceProbe : IShellInstanceProbe
         var mutexName = EdgeClientInstanceMutexName.Create(instanceId);
         try
         {
-            using var _ = Mutex.OpenExisting(mutexName);
-            return true;
+            using var mutex = Mutex.OpenExisting(mutexName);
+            try
+            {
+                if (!mutex.WaitOne(0))
+                {
+                    return true;
+                }
+
+                mutex.ReleaseMutex();
+                return false;
+            }
+            catch (AbandonedMutexException)
+            {
+                // WaitOne grants ownership when the previous process abandoned the mutex.
+                // Release that ownership and treat the stale name as not running.
+                mutex.ReleaseMutex();
+                return false;
+            }
         }
         catch (WaitHandleCannotBeOpenedException)
         {
