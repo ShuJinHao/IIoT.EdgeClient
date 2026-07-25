@@ -396,7 +396,8 @@ try {
             -State $savedState `
             -ExpectedTarget EdgeHost `
             -ExpectedInvocationId $dispatchInvocationId `
-            -ExpectedSha $ExpectedSha
+            -ExpectedSha $ExpectedSha `
+            -AllowPreparedHandoff:$PreparedSourceSnapshot
 
         $manifestFile = Get-ChildItem -LiteralPath $releaseRoot -Recurse -File -Filter 'installer-artifact.json' | Select-Object -First 1
         if ($null -eq $manifestFile) {

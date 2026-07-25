@@ -390,7 +390,8 @@ try {
             -State $savedState `
             -ExpectedTarget EdgePlugin `
             -ExpectedInvocationId $dispatchInvocationId `
-            -ExpectedSha $ExpectedSha
+            -ExpectedSha $ExpectedSha `
+            -AllowPreparedHandoff:$PreparedSourceSnapshot
         $savedFacts = $savedState.facts
         $savedSourceCommit = if ($null -ne $savedFacts -and $savedFacts.PSObject.Properties['sourceCommit']) {
             [string]$savedFacts.sourceCommit

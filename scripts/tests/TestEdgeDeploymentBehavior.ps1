@@ -446,6 +446,63 @@ internal static class TestOnlyDebugOutput
     }
     Invoke-Git -WorkingDirectory $gitRepo -Arguments @('checkout', '-q', 'main')
 
+    $preparedSha = 'a' * 40
+    $preparedState = [PSCustomObject]@{
+        schemaVersion = 1
+        target = 'EdgeHost'
+        invocationId = 'prepare-fixture-edge'
+        stage = 'prepared'
+        status = 'succeeded'
+        facts = [PSCustomObject]@{
+            sourceCommit = $preparedSha
+            uploaded = $false
+        }
+    }
+    Assert-ThrowsContaining -Action {
+        Assert-EdgeResumeAttemptIdentity `
+            -State $preparedState `
+            -ExpectedTarget EdgeHost `
+            -ExpectedInvocationId 'deploy-fixture-edge-host' `
+            -ExpectedSha $preparedSha
+    } -Needles @('invocation does not match')
+    Assert-Passes -Action {
+        Assert-EdgeResumeAttemptIdentity `
+            -State $preparedState `
+            -ExpectedTarget EdgeHost `
+            -ExpectedInvocationId 'deploy-fixture-edge-host' `
+            -ExpectedSha $preparedSha `
+            -AllowPreparedHandoff
+    }
+    $preparedState.facts.uploaded = $true
+    Assert-ThrowsContaining -Action {
+        Assert-EdgeResumeAttemptIdentity `
+            -State $preparedState `
+            -ExpectedTarget EdgeHost `
+            -ExpectedInvocationId 'deploy-fixture-edge-host' `
+            -ExpectedSha $preparedSha `
+            -AllowPreparedHandoff
+    } -Needles @('invocation does not match')
+    $preparedState.facts.uploaded = $false
+    $preparedState.status = 'failed'
+    Assert-ThrowsContaining -Action {
+        Assert-EdgeResumeAttemptIdentity `
+            -State $preparedState `
+            -ExpectedTarget EdgeHost `
+            -ExpectedInvocationId 'deploy-fixture-edge-host' `
+            -ExpectedSha $preparedSha `
+            -AllowPreparedHandoff
+    } -Needles @('invocation does not match')
+    $preparedState.status = 'succeeded'
+    $preparedState.facts.sourceCommit = 'b' * 40
+    Assert-ThrowsContaining -Action {
+        Assert-EdgeResumeAttemptIdentity `
+            -State $preparedState `
+            -ExpectedTarget EdgeHost `
+            -ExpectedInvocationId 'deploy-fixture-edge-host' `
+            -ExpectedSha $preparedSha `
+            -AllowPreparedHandoff
+    } -Needles @('sourceCommit does not match', $preparedSha)
+
     $firstInvocation = [Guid]::NewGuid().ToString('D')
     $lock = Enter-EdgeDeploymentLock -RepoRoot $gitRepo -InvocationId $firstInvocation -Target EdgeHost
     Assert-ThrowsContaining -Action {

@@ -119,17 +119,38 @@ function Assert-EdgeResumeAttemptIdentity {
         [Parameter(Mandatory = $true)][string]$ExpectedInvocationId,
         [Parameter(Mandatory = $true)]
         [ValidatePattern('^[0-9A-Fa-f]{40}$')]
-        [string]$ExpectedSha
+        [string]$ExpectedSha,
+        [switch]$AllowPreparedHandoff
     )
 
     if ([int]$State.schemaVersion -ne 1 -or
         -not [string]::Equals([string]$State.target, $ExpectedTarget, [System.StringComparison]::Ordinal)) {
         throw "Resume attempt does not match the current Edge target: expected='$ExpectedTarget'."
     }
-    if (-not [string]::Equals(
+    $invocationMatches = [string]::Equals(
             [string]$State.invocationId,
             $ExpectedInvocationId,
-            [System.StringComparison]::Ordinal)) {
+            [System.StringComparison]::Ordinal)
+    if (-not $invocationMatches) {
+        $uploadedProperty = if (
+            $null -ne $State.facts -and
+            $null -ne $State.facts.PSObject.Properties['uploaded']) {
+            $State.facts.PSObject.Properties['uploaded']
+        }
+        else {
+            $null
+        }
+        $isPreparedHandoff = $AllowPreparedHandoff -and
+            [string]::Equals([string]$State.stage, 'prepared', [System.StringComparison]::Ordinal) -and
+            [string]::Equals([string]$State.status, 'succeeded', [System.StringComparison]::Ordinal) -and
+            $null -ne $uploadedProperty -and
+            $uploadedProperty.Value -is [bool] -and
+            -not [bool]$uploadedProperty.Value
+        if ($isPreparedHandoff) {
+            $invocationMatches = $true
+        }
+    }
+    if (-not $invocationMatches) {
         throw "Resume attempt invocation does not match the current release invocation: expected='$ExpectedInvocationId' actual='$($State.invocationId)'."
     }
 

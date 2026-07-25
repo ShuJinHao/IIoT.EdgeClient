@@ -10,6 +10,8 @@
 
 标准上传从 prepared release 绑定的 exact-SHA detached 快照执行；仅当工作区控制面显式标记该快照时允许分支名为 `HEAD`，同时仍核对本地 `main`、`origin/main` 与候选 SHA 完全一致。该修复只消除正式 Deploy 对合法预制快照的误拒，不放宽未推送、漂移或任意 detached checkout 的发布权限。
 
+Prepare 生成的成功且从未上传的 attempt 状态允许向新的 Deploy invocation 单向交接；交接仍要求显式 prepared snapshot、`prepared/succeeded/uploaded=false` 和 source SHA 完全匹配，失败上传的恢复 invocation 规则不变。
+
 ## AP/CP 2.0.5
 
 AP 与 CP 产品版本和 Host 兼容窗口提升为不可变 `2.0.5`，`hostApiVersion` 保持 `2.0.0`。两个插件继续携带各自的 activation launcher/machine profile；插件业务源码、PLC 点位、双弹夹状态机、MES/Cloud 字段和设备播种不变。
