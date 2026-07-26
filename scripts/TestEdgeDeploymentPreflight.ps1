@@ -479,10 +479,8 @@ function Test-ClientSecurityRedLines {
         -Includes @('*.ps1')
     foreach ($docPath in @(
         'docs/客户端部署.md',
-        'docs/Edge安装更新验收.md',
         'docs/Edge客户端宿主插件分发契约.md',
-        'docs/客户端规则.md',
-        'docs/客户端架构治理清单.md'
+        'docs/客户端规则.md'
     )) {
         $resolved = Resolve-RepoPath $docPath
         if (Test-Path -LiteralPath $resolved -PathType Leaf) {
@@ -633,7 +631,6 @@ function Test-CommonDeploymentInputs {
     Assert-FileExists (Resolve-WorkspacePath 'docs/上传部署总览.md') 'Deployment overview'
     Assert-FileExists (Resolve-WorkspacePath 'deploy/Invoke-WorkspaceDeploy.ps1') 'Workspace deployment entrypoint'
     Assert-FileExists (Resolve-RepoPath 'docs/客户端部署.md') 'EdgeClient deployment guide'
-    Assert-FileExists (Resolve-RepoPath 'docs/Edge安装更新验收.md') 'Edge installer/update acceptance guide'
     Resolve-ReleaseNotes
     if ($RunSourceSecurityScan) {
         Test-ClientSecurityRedLines

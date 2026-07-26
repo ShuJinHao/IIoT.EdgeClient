@@ -7,8 +7,8 @@
 - 进入 Edge 实际修改后，只读取 `docs/客户端规则.md` 中与本批模块直接相关的章节、相关源码和受影响测试。
 - 修改项目图、聚合/Persistence owner、插件 seam、Analyzer 或测试物理归口时，才读 `docs/Edge架构边界契约.md` 的相关章节。
 - 修改 PLC/IO/设备选择/状态展示时，才读 `docs/PLC选择与状态展示控制.md`；修改对应 Avalonia 页面时再读 UI 专题规范。
-- 部署、发布、更新或安装链才读取 `docs/客户端部署.md`、`docs/Edge安装更新验收.md` 和工作区部署总览的对应章节。
-- 项目复盘、历史记录、旧计划和证据只在回归、冻结链路冲突、失败原因不明、同类故障追溯或用户明确要求时按关键词读取命中邻域。
+- 部署、发布、更新或安装链才读取 `docs/客户端部署.md` 和工作区部署总览的对应章节。
+- 历史事实只从 Git、发布目录和部署记录追溯；不得新建滚动复盘、历史核心类文档、日期式治理快照或日期式 release 文档。真实事故统一写入工作区 `docs/事故/生产事故.md` 或 `docs/事故/部署事故.md`。
 
 ## 项目硬边界
 
@@ -23,4 +23,4 @@
 - Edge 候选验证、产物准备、普通投放分别走工作区 `deploy/Validate-Candidate.ps1`、`deploy/Prepare-Release.ps1`、`deploy/Deploy-Changed.ps1 -PreparedReleaseId <id>`。测试和 Host/AP/CP pack 只能发生在 Validate/Prepare；正式 Deploy 只上传预制包，不创建提交、不编辑文件、不再运行测试或构建。
 - 用户明确说“赶生产”“立刻上线”或“紧急生产”时走工作区 `deploy/Deploy-ProductionNow.ps1 -Target Edge`：不运行测试或 CI，先封存 Host/SDK/Private Plugins 当前字节，再只打包一次；发布失败归档本轮新版本，结果不得标记为绿色。
 - 三端从零部署只走工作区 `deploy/Deploy-FromZero.ps1 -PreparedReleaseId <id>`；Cloud 清空前必须已准备 Host/AP/CP 全部包，清空后只上传和验收；可重新签发发布 API key并写回 Keychain，但不创建设备、不注册 `ClientCode`、不轮换设备 bootstrap secret。
-- 只有形成长期规则、修复历史回归、处理生产事故或改变部署机制时，才更新项目复盘。
+- 长期规则直接进入本文件、`docs/客户端规则.md` 或对应专题契约；事故只进入工作区事故文档，普通提交和版本变化只由 Git、发布目录与部署记录保存。

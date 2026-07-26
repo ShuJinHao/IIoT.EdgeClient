@@ -1,4 +1,3 @@
-using IIoT.Edge.Module.Contracts.Device;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Modules;
 
@@ -7,22 +6,17 @@ namespace IIoT.Edge.Infrastructure.Integration;
 public abstract class ProcessUploaderConsumerBase<TUploader, TResult>
     where TUploader : IProcessUploader<TResult>
 {
-    private readonly IDeviceService _deviceService;
     private readonly Dictionary<string, TUploader> _uploaders;
 
     protected ProcessUploaderConsumerBase(
-        IDeviceService deviceService,
         IEnumerable<TUploader> uploaders,
         ILogService logger)
     {
-        _deviceService = deviceService;
         Logger = logger;
         _uploaders = uploaders.ToDictionary(x => x.ProcessType, StringComparer.OrdinalIgnoreCase);
     }
 
     protected ILogService Logger { get; }
-
-    protected DeviceSession? CurrentDevice => _deviceService.CurrentDevice;
 
     protected bool TryResolveUploader(
         string targetName,

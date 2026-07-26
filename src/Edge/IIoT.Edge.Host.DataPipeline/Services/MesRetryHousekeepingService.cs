@@ -19,7 +19,8 @@ internal sealed class MesRetryHousekeepingService
             "MES补传",
             "MES 心跳已恢复，弃置记录已重置为可补传。",
             MesRetryRuntimeState.Idle,
-            MesRetryRuntimeState.Backoff)
+            MesRetryRuntimeState.Backoff,
+            abandonedRetention: null)
     {
     }
 }

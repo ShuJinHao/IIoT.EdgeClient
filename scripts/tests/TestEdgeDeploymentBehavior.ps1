@@ -195,7 +195,6 @@ function New-PreflightWorkspaceFixture {
         Set-Content -Encoding UTF8 -LiteralPath (Join-Path $canonicalRepository "scripts/$requiredScript") -Value '# isolated required host marker'
     }
     Set-Content -Encoding UTF8 -LiteralPath (Join-Path $canonicalRepository 'docs/客户端部署.md') -Value '# isolated Edge deployment guide'
-    Set-Content -Encoding UTF8 -LiteralPath (Join-Path $canonicalRepository 'docs/Edge安装更新验收.md') -Value '# isolated Edge installer acceptance guide'
     Set-Content -Encoding UTF8 -LiteralPath (Join-Path $canonicalRepository 'src/Edge/IIoT.Edge.Shell/appsettings.fixture.json') -Value '{}'
 
     Invoke-Git -WorkingDirectory $canonicalRepository -Arguments @('init', '-q')

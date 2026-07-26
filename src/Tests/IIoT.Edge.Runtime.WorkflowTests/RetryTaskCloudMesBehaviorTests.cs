@@ -59,7 +59,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
     }
 
     [Fact]
-    public async Task MesRetry_WhenAbandonedRecordsExpired_ShouldCleanupDaily()
+    public async Task MesRetry_WhenAbandonedRecordsExpired_ShouldRetainWithoutCleanup()
     {
         var logger = new FakeLogService();
         var retryStore = new FakeFailedRecordStore();
@@ -89,8 +89,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
 
         await task.ExecuteOnceAsync();
 
-        Assert.Equal(1, retryStore.DeleteExpiredAbandonedCallCount);
-        Assert.Empty(retryStore.PendingRecords);
+        Assert.Equal(0, retryStore.DeleteExpiredAbandonedCallCount);
+        Assert.Single(retryStore.PendingRecords);
     }
 
     [Fact]

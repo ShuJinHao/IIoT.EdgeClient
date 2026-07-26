@@ -8,8 +8,6 @@ namespace IIoT.Edge.Host.DataPipeline.Services;
 internal abstract class RetryHousekeepingServiceBase<TRuntimeState>
     where TRuntimeState : struct, Enum
 {
-    private static readonly TimeSpan AbandonedRetention = TimeSpan.FromDays(30);
-
     private readonly ILogService _logger;
     private readonly IRetryRecordStore _retryStore;
     private readonly IRetryDiagnosticsStore<TRuntimeState> _diagnosticsStore;
@@ -17,6 +15,7 @@ internal abstract class RetryHousekeepingServiceBase<TRuntimeState>
     private readonly string _recoverMessage;
     private readonly TRuntimeState _idleState;
     private readonly TRuntimeState _backoffState;
+    private readonly TimeSpan? _abandonedRetention;
     private DateOnly? _lastAbandonedCleanupDateUtc;
 
     protected RetryHousekeepingServiceBase(
@@ -26,7 +25,8 @@ internal abstract class RetryHousekeepingServiceBase<TRuntimeState>
         string logPrefix,
         string recoverMessage,
         TRuntimeState idleState,
-        TRuntimeState backoffState)
+        TRuntimeState backoffState,
+        TimeSpan? abandonedRetention)
     {
         _logger = logger;
         _retryStore = retryStore;
@@ -35,6 +35,7 @@ internal abstract class RetryHousekeepingServiceBase<TRuntimeState>
         _recoverMessage = recoverMessage;
         _idleState = idleState;
         _backoffState = backoffState;
+        _abandonedRetention = abandonedRetention;
     }
 
     public async Task RecoverAbandonedRecordsAsync()
@@ -52,6 +53,11 @@ internal abstract class RetryHousekeepingServiceBase<TRuntimeState>
 
     public async Task CleanupExpiredAbandonedRecordsAsync()
     {
+        if (_abandonedRetention is null)
+        {
+            return;
+        }
+
         var todayUtc = DateOnly.FromDateTime(DateTime.UtcNow);
         if (_lastAbandonedCleanupDateUtc == todayUtc)
         {
@@ -63,7 +69,7 @@ internal abstract class RetryHousekeepingServiceBase<TRuntimeState>
         try
         {
             var deleted = await _retryStore
-                .DeleteExpiredAbandonedAsync(DateTime.UtcNow.Subtract(AbandonedRetention))
+                .DeleteExpiredAbandonedAsync(DateTime.UtcNow.Subtract(_abandonedRetention.Value))
                 .ConfigureAwait(false);
 
             if (deleted > 0)

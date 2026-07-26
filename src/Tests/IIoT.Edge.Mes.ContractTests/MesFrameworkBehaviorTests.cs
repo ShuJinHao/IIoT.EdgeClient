@@ -1,8 +1,6 @@
-using IIoT.Edge.Module.Contracts.Cloud;
 using IIoT.Edge.Module.Contracts.Mes;
 using IIoT.Edge.Module.Contracts.Shared;
 ﻿using IIoT.Edge.Module.Contracts.Config;
-using IIoT.Edge.Module.Contracts.Device;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Infrastructure.Integration.Http;
@@ -19,36 +17,13 @@ namespace IIoT.Edge.Mes.ContractTests;
 public sealed class MesFrameworkBehaviorTests
 {
     [Fact]
-    public async Task MesConsumer_WhenNoUploaderIsRegistered_ShouldSkipRecord()
+    public async Task MesConsumer_WhenNoUploaderIsRegistered_ShouldRecordFailureForRetry()
     {
+        var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
         var consumer = new MesConsumer(
-            CreateOnlineDeviceService(),
             CreateReadyMesGate(),
             uploaders: [],
             new FakeProcessIntegrationRegistry([]),
-            new FakeMesUploadDiagnosticsStore(),
-            new FakeLogService());
-
-        var success = await consumer.ProcessAsync(
-            CreateRecord(TestProcessCellData.ProcessTypeKey),
-            TestContext.Current.CancellationToken);
-
-        Assert.True(success);
-    }
-
-    [Fact]
-    public async Task MesConsumer_WhenCloudGateIsBlocked_ShouldIgnoreCloudGateAndUpload()
-    {
-        var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
-        var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
-        var deviceService = CreateOnlineDeviceService();
-        deviceService.MarkUploadGateBlocked(EdgeUploadBlockReason.UploadTokenRejected, DateTimeOffset.UtcNow);
-
-        var consumer = new MesConsumer(
-            deviceService,
-            CreateReadyMesGate(),
-            [uploader],
-            CreateMesRegistry(),
             diagnosticsStore,
             new FakeLogService());
 
@@ -56,12 +31,11 @@ public sealed class MesFrameworkBehaviorTests
             CreateRecord(TestProcessCellData.ProcessTypeKey),
             TestContext.Current.CancellationToken);
 
-        Assert.True(success);
-        Assert.Equal(1, uploader.UploadCallCount);
+        Assert.False(success);
         var diagnostics = diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey);
         Assert.NotNull(diagnostics);
-        Assert.Equal("Success", diagnostics!.LastResult);
-        Assert.Null(diagnostics.LastFailureReason);
+        Assert.Equal("Failed", diagnostics!.LastResult);
+        Assert.Equal("uploader_not_registered", diagnostics.LastFailureReason);
     }
 
     [Fact]
@@ -70,7 +44,6 @@ public sealed class MesFrameworkBehaviorTests
         var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
         var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
         var consumer = new MesConsumer(
-            CreateOnlineDeviceService(),
             CreateReadyMesGate(),
             [uploader],
             CreateMesRegistry(),
@@ -91,14 +64,11 @@ public sealed class MesFrameworkBehaviorTests
     }
 
     [Fact]
-    public async Task MesConsumer_WhenRecordCarriesPlcContext_ShouldUploadWithRecordDeviceName()
+    public async Task MesConsumer_WhenRecordCarriesPlcContext_ShouldNotCopyCloudIdentity()
     {
         var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
         var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
-        var deviceService = CreateOnlineDeviceService();
-        var currentDevice = deviceService.CurrentDevice!;
         var consumer = new MesConsumer(
-            deviceService,
             CreateReadyMesGate(),
             [uploader],
             CreateMesRegistry(),
@@ -123,9 +93,8 @@ public sealed class MesFrameworkBehaviorTests
         Assert.Equal(1, uploader.UploadCallCount);
         var uploadContext = Assert.IsType<ProcessUploadContext>(uploader.LastUploadContext);
         Assert.Equal("PLC-RECORD-01", uploadContext.Device.DeviceName);
-        Assert.Equal(currentDevice.DeviceId, uploadContext.Device.DeviceId);
-        Assert.Equal(currentDevice.ClientCode, uploadContext.Device.ClientCode);
-        Assert.NotEqual(currentDevice.DeviceName, uploadContext.Device.DeviceName);
+        Assert.Equal(Guid.Empty, uploadContext.Device.DeviceId);
+        Assert.Equal(string.Empty, uploadContext.Device.ClientCode);
     }
 
     [Fact]
@@ -134,7 +103,6 @@ public sealed class MesFrameworkBehaviorTests
         var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
         var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
         var consumer = new MesConsumer(
-            CreateOnlineDeviceService(),
             CreateReadyMesGate(),
             [uploader],
             CreateMesRegistry(),
@@ -171,7 +139,6 @@ public sealed class MesFrameworkBehaviorTests
         var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
         var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
         var consumer = new MesConsumer(
-            CreateOnlineDeviceService(),
             CreateReadyMesGate(),
             [uploader],
             CreateMesRegistry(),
@@ -194,13 +161,12 @@ public sealed class MesFrameworkBehaviorTests
     }
 
     [Fact]
-    public async Task MesConsumer_WhenUploaderReturnsDisabled_ShouldTreatAsSuccessWithoutRetry()
+    public async Task MesConsumer_WhenUploaderReturnsDisabled_ShouldRecordBlockedForRetry()
     {
         var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
         uploader.EnqueueResult(MesCallResult.Disabled("可选 MES 场景实时数据未配置，已跳过。"));
         var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
         var consumer = new MesConsumer(
-            CreateOnlineDeviceService(),
             CreateReadyMesGate(),
             [uploader],
             CreateMesRegistry(),
@@ -211,12 +177,14 @@ public sealed class MesFrameworkBehaviorTests
             CreateRecord(TestProcessCellData.ProcessTypeKey),
             TestContext.Current.CancellationToken);
 
-        Assert.True(success);
+        Assert.False(success);
         Assert.Equal(1, uploader.UploadCallCount);
         var diagnostics = diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey);
         Assert.NotNull(diagnostics);
-        Assert.Equal("Success", diagnostics!.LastResult);
+        Assert.Equal("Blocked", diagnostics!.LastResult);
         Assert.Null(diagnostics.LastFailureReason);
+        Assert.Equal("mes_uploader_disabled", diagnostics.LastBlockedReason);
+        Assert.NotNull(diagnostics.LastBlockedAt);
     }
 
     [Fact]
@@ -226,7 +194,6 @@ public sealed class MesFrameworkBehaviorTests
         uploader.EnqueueResult(MesCallResult.InvalidContext("必选 MES 场景出料未配置路径。"));
         var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
         var consumer = new MesConsumer(
-            CreateOnlineDeviceService(),
             CreateReadyMesGate(),
             [uploader],
             CreateMesRegistry(),
@@ -250,7 +217,6 @@ public sealed class MesFrameworkBehaviorTests
     {
         var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
         var consumer = new MesConsumer(
-            CreateOnlineDeviceService(),
             CreateReadyMesGate(),
             uploaders: [],
             CreateMesRegistry(),
@@ -269,7 +235,7 @@ public sealed class MesFrameworkBehaviorTests
     }
 
     [Fact]
-    public async Task MesConsumer_WhenMesUploadDisabled_ShouldReturnTrueWithoutCallingUploader()
+    public async Task MesConsumer_WhenMesUploadDisabled_ShouldRecordBlockedForRetryWithoutCallingUploader()
     {
         var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
         var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
@@ -281,7 +247,6 @@ public sealed class MesFrameworkBehaviorTests
             }
         };
         var consumer = new MesConsumer(
-            CreateOnlineDeviceService(),
             CreateReadyMesGate(runtimeConfig),
             [uploader],
             CreateMesRegistry(),
@@ -292,9 +257,14 @@ public sealed class MesFrameworkBehaviorTests
             CreateRecord(TestProcessCellData.ProcessTypeKey),
             TestContext.Current.CancellationToken);
 
-        Assert.True(success);
+        Assert.False(success);
         Assert.Equal(0, uploader.UploadCallCount);
-        Assert.Null(diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey));
+        var diagnostics = diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey);
+        Assert.NotNull(diagnostics);
+        Assert.Equal("Blocked", diagnostics!.LastResult);
+        Assert.Null(diagnostics.LastFailureReason);
+        Assert.Equal("mes_upload_disabled", diagnostics.LastBlockedReason);
+        Assert.NotNull(diagnostics.LastBlockedAt);
     }
 
     [Fact]
@@ -306,7 +276,6 @@ public sealed class MesFrameworkBehaviorTests
         heartbeatStore.MarkNotReady(ExternalSystemKind.Mes, "mes_heartbeat_timeout");
 
         var consumer = new MesConsumer(
-            CreateOnlineDeviceService(),
             CreateMesGate(heartbeatStore: heartbeatStore),
             [uploader],
             CreateMesRegistry(),
@@ -328,12 +297,11 @@ public sealed class MesFrameworkBehaviorTests
     }
 
     [Fact]
-    public async Task MesConsumer_WhenDeviceIsUnidentified_ShouldRecordBlockedWithoutCallingUploader()
+    public async Task MesConsumer_WhenCloudDeviceSessionIsMissing_ShouldStillUpload()
     {
         var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
         var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
         var consumer = new MesConsumer(
-            new FakeDeviceService(),
             CreateReadyMesGate(),
             [uploader],
             CreateMesRegistry(),
@@ -354,14 +322,17 @@ public sealed class MesFrameworkBehaviorTests
 
         var success = await consumer.ProcessAsync(record, TestContext.Current.CancellationToken);
 
-        Assert.False(success);
-        Assert.Equal(0, uploader.UploadCallCount);
+        Assert.True(success);
+        Assert.Equal(1, uploader.UploadCallCount);
+        var uploadContext = Assert.IsType<ProcessUploadContext>(uploader.LastUploadContext);
+        Assert.Equal("PLC-MES-BLOCKED", uploadContext.Device.DeviceName);
+        Assert.Equal(Guid.Empty, uploadContext.Device.DeviceId);
+        Assert.Equal(string.Empty, uploadContext.Device.ClientCode);
         var diagnostics = diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey);
         Assert.NotNull(diagnostics);
-        Assert.Equal("Blocked", diagnostics!.LastResult);
+        Assert.Equal("Success", diagnostics!.LastResult);
         Assert.Null(diagnostics.LastFailureReason);
-        Assert.Equal("尚未识别当前设备。", diagnostics.LastBlockedReason);
-        Assert.NotNull(diagnostics.LastBlockedAt);
+        Assert.Null(diagnostics.LastBlockedReason);
         Assert.Equal("PLC-MES-BLOCKED", diagnostics.DeviceName);
         Assert.Equal("TestPlugin", diagnostics.ModuleId);
         Assert.Equal("TestPlugin.Realtime", diagnostics.TaskKey);
@@ -377,7 +348,6 @@ public sealed class MesFrameworkBehaviorTests
         heartbeatStore.MarkReady(ExternalSystemKind.Mes);
 
         var consumer = new MesConsumer(
-            CreateOnlineDeviceService(),
             CreateMesGate(heartbeatStore: heartbeatStore),
             [uploader],
             CreateMesRegistry(),
@@ -589,19 +559,6 @@ public sealed class MesFrameworkBehaviorTests
 
         Assert.False(snapshot.IsReady);
         Assert.Equal("mes_heartbeat_timeout", snapshot.ReasonCode);
-    }
-
-    private static FakeDeviceService CreateOnlineDeviceService()
-    {
-        var deviceService = new FakeDeviceService();
-        deviceService.SetOnline(new DeviceSession
-        {
-            DeviceId = Guid.NewGuid(),
-            DeviceName = "PLC-MES",
-            ClientCode = "CLIENT-MES",
-            ProcessId = Guid.NewGuid()
-        });
-        return deviceService;
     }
 
     private static MesUploadGate CreateReadyMesGate(FakeLocalSystemRuntimeConfigService? runtimeConfig = null)

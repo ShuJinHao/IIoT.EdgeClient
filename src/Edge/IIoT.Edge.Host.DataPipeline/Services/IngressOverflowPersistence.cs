@@ -57,7 +57,7 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
                 continue;
             }
 
-            if (IsChannelDisabled(consumer.RetryChannel))
+            if (ShouldSkipDisabledChannel(consumer.RetryChannel))
             {
                 _logger.Warn(
                     $"[数据管道] 队列溢出时跳过已屏蔽外部通道 {consumer.Name}，工序={record.CellData.ProcessType}。");
@@ -106,11 +106,12 @@ internal sealed class IngressOverflowPersistence : IIngressOverflowPersistence
             .ConfigureAwait(false);
     }
 
-    private bool IsChannelDisabled(DataPipelineRetryChannel channel)
+    private bool ShouldSkipDisabledChannel(DataPipelineRetryChannel channel)
         => channel switch
         {
             DataPipelineRetryChannel.Cloud => !_runtimeConfig.Current.SystemCloudEnabled,
-            DataPipelineRetryChannel.Mes => !_runtimeConfig.Current.MesUploadEnabled,
+            // UploadTargets 已冻结 MES 出口责任。运行时开关变化只能暂停补传，不能丢弃已产生的目标记录。
+            DataPipelineRetryChannel.Mes => false,
             _ => false
         };
 

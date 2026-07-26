@@ -767,6 +767,52 @@ public sealed class ProcessQueueTaskBehaviorTests
         Assert.Empty(fallbackStore.Records);
     }
 
+    [Fact]
+    public async Task MesTarget_WhenDurableMesConsumerReturnsFalse_ShouldPersistOnlyMesRetryRecord()
+    {
+        var logger = new FakeLogService();
+        var pipeline = new FakeDataPipelineService();
+        var cloudRetryStore = new FakeFailedRecordStore();
+        var mesRetryStore = new FakeFailedRecordStore();
+        var cloudFallbackStore = new FakeCloudFallbackBufferStore();
+        var mesFallbackStore = new FakeMesFallbackBufferStore();
+        var cloudDeadLetterStore = new FakeCloudDeadLetterStore();
+        var mesDeadLetterStore = new FakeMesDeadLetterStore();
+        var criticalWriter = new FakeCriticalPersistenceFallbackWriter();
+        var record = CreateRecord();
+        record.CellData.UploadTargets = DataPipelineUploadTargets.Mes;
+        await pipeline.EnqueueAsync(record, TestContext.Current.CancellationToken);
+
+        var mesConsumer = new FakeCellDataConsumer(
+            name: "MES",
+            order: 20,
+            retryChannel: "MES",
+            result: false,
+            failureMode: ConsumerFailureMode.Durable);
+
+        var task = new TestableProcessQueueTask(
+            logger,
+            pipeline,
+            [mesConsumer],
+            cloudRetryStore,
+            mesRetryStore,
+            cloudFallbackStore,
+            mesFallbackStore,
+            cloudDeadLetterStore,
+            mesDeadLetterStore,
+            criticalWriter);
+
+        await task.ExecuteOnceAsync();
+
+        Assert.Empty(cloudRetryStore.PendingRecords);
+        var retry = Assert.Single(mesRetryStore.PendingRecords);
+        Assert.Equal("MES", retry.Channel);
+        Assert.Equal("MES", retry.FailedTarget);
+        AssertStoredContext(retry);
+        Assert.Empty(cloudFallbackStore.Records);
+        Assert.Empty(mesFallbackStore.Records);
+    }
+
     [Theory]
     [InlineData("开始处理", true, 0)]
     [InlineData("已完成本地处理", true, 0)]
