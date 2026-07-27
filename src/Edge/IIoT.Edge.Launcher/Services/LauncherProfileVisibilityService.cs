@@ -21,7 +21,6 @@ public sealed record LauncherProfileSelection(
 
 public sealed class LauncherProfileVisibilityService(
     string baseDirectory,
-    IEdgeInstalledPluginCatalog installedPluginCatalog,
     IEdgeProfileModuleConfigurationStore moduleConfiguration,
     ILauncherUpdateTargetFactory targetFactory) : ILauncherProfileVisibilityService
 {
@@ -43,12 +42,7 @@ public sealed class LauncherProfileVisibilityService(
         var selectedModuleIds = ReadEnabledPluginModuleIds();
         if (selectedModuleIds.Count == 0)
         {
-            selectedModuleIds = ReadInstalledPluginModuleIds(profiles);
-        }
-
-        if (selectedModuleIds.Count == 0)
-        {
-            return BuildSelection(profiles);
+            return BuildSelection(SelectMaintenanceProfiles(profiles));
         }
 
         var visibleProfiles = profiles
@@ -57,7 +51,7 @@ public sealed class LauncherProfileVisibilityService(
 
         return visibleProfiles.Length > 0
             ? BuildSelection(visibleProfiles, selectedModuleIds)
-            : BuildSelection(profiles);
+            : BuildSelection(SelectMaintenanceProfiles(profiles));
     }
 
     private HashSet<string> ReadEnabledPluginModuleIds()
@@ -109,34 +103,6 @@ public sealed class LauncherProfileVisibilityService(
         {
             return [];
         }
-    }
-
-    private HashSet<string> ReadInstalledPluginModuleIds(
-        IReadOnlyList<LauncherProfileDefinition> profiles)
-    {
-        var moduleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var profile in profiles)
-        {
-            try
-            {
-                var target = targetFactory.Create(profile);
-                foreach (var plugin in installedPluginCatalog.LoadInstalledPlugins(target))
-                {
-                    moduleIds.Add(plugin.ModuleId);
-                }
-            }
-            catch (IOException)
-            {
-            }
-            catch (UnauthorizedAccessException)
-            {
-            }
-            catch (InvalidOperationException)
-            {
-            }
-        }
-
-        return moduleIds;
     }
 
     private bool ProfileUsesAnySelectedModule(
@@ -209,6 +175,12 @@ public sealed class LauncherProfileVisibilityService(
             return [];
         }
     }
+
+    private IReadOnlyList<LauncherProfileDefinition> SelectMaintenanceProfiles(
+        IReadOnlyList<LauncherProfileDefinition> profiles)
+        => profiles
+            .Where(profile => ReadProfileModuleIds(profile).Count == 0)
+            .ToArray();
 
     private static string? ReadString(JsonElement element, string propertyName)
         => TryGetProperty(element, propertyName, out var value) && value.ValueKind == JsonValueKind.String

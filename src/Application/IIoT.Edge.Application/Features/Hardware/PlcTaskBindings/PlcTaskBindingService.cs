@@ -5,12 +5,10 @@ using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.SharedKernel.Repository;
-using Microsoft.Extensions.Configuration;
 
 namespace IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 
 public sealed class PlcTaskBindingService(
-    IConfiguration configuration,
     IStationRuntimeRegistry runtimeRegistry,
     IReadRepository<NetworkDeviceEntity> networkDevices,
     IReadRepository<IoMappingEntity> ioMappings,
@@ -18,8 +16,6 @@ public sealed class PlcTaskBindingService(
     IEdgeUnitOfWorkFactory unitOfWorkFactory,
     ILogService logger) : IPlcTaskBindingService
 {
-    private const string DefaultEnableAllTasksKey = "PlcTaskBinding:DefaultEnableAllTasks";
-
     public async Task<IReadOnlyList<PlcTaskBindingDeviceDto>> GetModuleDeviceBindingsAsync(
         string moduleId,
         CancellationToken cancellationToken = default)
@@ -113,12 +109,17 @@ public sealed class PlcTaskBindingService(
         var normalizedStates = taskStates
             .Where(x => candidateByKey.ContainsKey(x.Key))
             .ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
+        var savedRows = await bindings.GetListAsync(
+            x => x.NetworkDeviceId == networkDeviceId,
+            cancellationToken).ConfigureAwait(false);
+        var savedByKey = savedRows.ToDictionary(static row => row.TaskKey, StringComparer.OrdinalIgnoreCase);
         var signalBindings = await LoadSignalBindingsAsync(networkDeviceId, cancellationToken).ConfigureAwait(false);
         var resolvedStates = candidates.ToDictionary(
             static candidate => candidate.Key,
             candidate => normalizedStates.TryGetValue(candidate.Key, out var submittedEnabled)
                 ? submittedEnabled
-                : EvaluateTaskAvailability(candidate, device.DeviceModel, signalBindings).CanRun && ResolveDefaultEnabled(candidate),
+                : savedByKey.TryGetValue(candidate.Key, out var saved)
+                    && saved.Enabled,
             StringComparer.OrdinalIgnoreCase);
         var invalidEnabledTasks = candidates
             .Select(candidate => new CandidateAvailability(
@@ -244,16 +245,16 @@ public sealed class PlcTaskBindingService(
             availability.IsSupportedByCurrentPlc);
     }
 
-    private bool ResolveEnabled(
+    private static bool ResolveEnabled(
         TaskCandidate candidate,
         IReadOnlyDictionary<string, PlcTaskBindingEntity> rowByKey,
         IReadOnlyCollection<ModuleIoSnapshot> signalBindings,
         string? deviceModel)
         => rowByKey.TryGetValue(candidate.Key, out var row)
-            ? row.Enabled
-            : ResolveDefaultEnabled(candidate) && EvaluateTaskAvailability(candidate, deviceModel, signalBindings).CanRun;
+            && row.Enabled
+            && EvaluateTaskAvailability(candidate, deviceModel, signalBindings).CanRun;
 
-    private TaskAvailability EvaluateTaskAvailability(
+    private static TaskAvailability EvaluateTaskAvailability(
         TaskCandidate candidate,
         string? deviceModel,
         IReadOnlyCollection<ModuleIoSnapshot> signalBindings)
@@ -332,22 +333,6 @@ public sealed class PlcTaskBindingService(
 
     private static string NormalizeDeviceModel(string? deviceModel)
         => string.IsNullOrWhiteSpace(deviceModel) ? "未配置" : deviceModel.Trim();
-
-    private bool ResolveDefaultEnabled(TaskCandidate candidate)
-    {
-        if (candidate.DefaultEnabled)
-        {
-            return true;
-        }
-
-        var configured = configuration.GetValue<bool?>(DefaultEnableAllTasksKey);
-        if (configured.HasValue)
-        {
-            return configured.Value;
-        }
-
-        return false;
-    }
 
     private sealed record TaskAvailability(
         bool CanRun,

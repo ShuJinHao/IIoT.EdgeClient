@@ -17,14 +17,13 @@ using IIoT.Edge.SharedKernel.Domain;
 using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.SharedKernel.Specification;
-using Microsoft.Extensions.Configuration;
 
 namespace IIoT.Edge.Runtime.WorkflowTests;
 
 public sealed class PlcTaskBindingBehaviorTests
 {
     [Fact]
-    public async Task GetEnabledTaskKeys_WhenDefaultEnabled_ShouldEnableMissingRows()
+    public async Task GetEnabledTaskKeys_WhenGlobalDefaultEnabled_ShouldStillDisableMissingRows()
     {
         var service = CreateService(defaultEnableAllTasks: true);
 
@@ -34,7 +33,7 @@ public sealed class PlcTaskBindingBehaviorTests
             AllTestMappings,
             cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal(["Task.A", "Task.B"], enabledKeys.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase));
+        Assert.Empty(enabledKeys);
     }
 
     [Fact]
@@ -52,7 +51,7 @@ public sealed class PlcTaskBindingBehaviorTests
     }
 
     [Fact]
-    public async Task GetEnabledTaskKeys_WhenCandidateDefaultEnabled_ShouldEnableRunnableMissingRow()
+    public async Task GetEnabledTaskKeys_WhenCandidateDefaultEnabled_ShouldStillDisableMissingRow()
     {
         var service = CreateService(defaultEnableAllTasks: null);
         var candidates = new[]
@@ -70,7 +69,7 @@ public sealed class PlcTaskBindingBehaviorTests
             AllTestMappings,
             cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal(["Task.Default"], enabledKeys);
+        Assert.Empty(enabledKeys);
     }
 
     [Fact]
@@ -119,11 +118,10 @@ public sealed class PlcTaskBindingBehaviorTests
     }
 
     [Theory]
-    [InlineData(false, 0)]
-    [InlineData(true, 2)]
-    public async Task GetEnabledTaskKeys_WhenConfiguredDefaultExists_ShouldUseConfiguredValue(
-        bool configuredDefault,
-        int expectedEnabledCount)
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GetEnabledTaskKeys_WhenConfiguredDefaultExists_ShouldIgnoreConfiguredValue(
+        bool configuredDefault)
     {
         var service = CreateService(defaultEnableAllTasks: configuredDefault);
 
@@ -133,7 +131,7 @@ public sealed class PlcTaskBindingBehaviorTests
             AllTestMappings,
             cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal(expectedEnabledCount, enabledKeys.Count);
+        Assert.Empty(enabledKeys);
     }
 
     [Fact]
@@ -141,6 +139,7 @@ public sealed class PlcTaskBindingBehaviorTests
     {
         var harness = CreateService(defaultEnableAllTasks: true);
         harness.Bindings.Add(PlcTaskBindingEntity.Create(1, "Task.A", enabled: false, DateTimeOffset.UtcNow));
+        harness.Bindings.Add(PlcTaskBindingEntity.Create(1, "Task.B", enabled: true, DateTimeOffset.UtcNow));
 
         var enabledKeys = await harness.Service.GetEnabledTaskKeysAsync(
             1,
@@ -152,9 +151,11 @@ public sealed class PlcTaskBindingBehaviorTests
     }
 
     [Fact]
-    public async Task GetEnabledTaskKeys_WhenDefaultEnabled_ShouldOnlyEnableRunnableTasks()
+    public async Task GetEnabledTaskKeys_WhenSavedEnabled_ShouldOnlyEnableRunnableTasks()
     {
         var service = CreateService(defaultEnableAllTasks: true);
+        service.Bindings.Add(PlcTaskBindingEntity.Create(1, "Task.A", enabled: true, DateTimeOffset.UtcNow));
+        service.Bindings.Add(PlcTaskBindingEntity.Create(1, "Task.B", enabled: true, DateTimeOffset.UtcNow));
         var mappings = AllTestMappings
             .Where(static mapping => !string.Equals(mapping.SignalKey, "Signal.Business", StringComparison.OrdinalIgnoreCase))
             .ToArray();
@@ -738,15 +739,7 @@ public sealed class PlcTaskBindingBehaviorTests
         bool? defaultEnableAllTasks,
         bool seedIoMappings = true)
     {
-        var settings = new Dictionary<string, string?>();
-        if (defaultEnableAllTasks.HasValue)
-        {
-            settings["PlcTaskBinding:DefaultEnableAllTasks"] = defaultEnableAllTasks.Value.ToString();
-        }
-
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(settings)
-            .Build();
+        _ = defaultEnableAllTasks;
         var runtimeRegistry = new FakeStationRuntimeRegistry(new FakeStationRuntimeFactory());
         var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
         var ioMappings = new InMemoryRepository<IoMappingEntity>();
@@ -758,7 +751,6 @@ public sealed class PlcTaskBindingBehaviorTests
         }
 
         var service = new PlcTaskBindingService(
-            configuration,
             runtimeRegistry,
             networkDevices,
             ioMappings,

@@ -25,9 +25,11 @@ public sealed class ModuleDevelopmentSeedWriter : IModuleDevelopmentSeedWriter
         await using var unitOfWork = await _unitOfWorkFactory.BeginAsync(cancellationToken).ConfigureAwait(false);
         var devices = unitOfWork.Repository<NetworkDeviceEntity>();
         var mappings = unitOfWork.Repository<IoMappingEntity>();
+        var taskBindings = unitOfWork.Repository<PlcTaskBindingEntity>();
 
         var resetDeviceCount = 0;
         var resetMappingCount = 0;
+        var resetTaskBindingCount = 0;
         if (request.ResetBeforeImport)
         {
             var existingDevices = await devices.GetListAsync(_ => true, cancellationToken).ConfigureAwait(false);
@@ -37,6 +39,16 @@ public sealed class ModuleDevelopmentSeedWriter : IModuleDevelopmentSeedWriter
                 : await mappings.GetListAsync(
                     mapping => deviceIds.Contains(mapping.NetworkDeviceId),
                     cancellationToken).ConfigureAwait(false);
+            var existingTaskBindings = deviceIds.Count == 0
+                ? []
+                : await taskBindings.GetListAsync(
+                    binding => deviceIds.Contains(binding.NetworkDeviceId),
+                    cancellationToken).ConfigureAwait(false);
+
+            foreach (var binding in existingTaskBindings)
+            {
+                taskBindings.Delete(binding);
+            }
 
             foreach (var mapping in existingMappings)
             {
@@ -50,7 +62,8 @@ public sealed class ModuleDevelopmentSeedWriter : IModuleDevelopmentSeedWriter
 
             resetDeviceCount = existingDevices.Count;
             resetMappingCount = existingMappings.Count;
-            if (resetDeviceCount > 0 || resetMappingCount > 0)
+            resetTaskBindingCount = existingTaskBindings.Count;
+            if (resetDeviceCount > 0 || resetMappingCount > 0 || resetTaskBindingCount > 0)
             {
                 // 仍处于同一事务；先物化删除，避免同 PlcCode 重建时撞唯一约束。
                 await unitOfWork.FlushAsync(cancellationToken).ConfigureAwait(false);
@@ -59,11 +72,10 @@ public sealed class ModuleDevelopmentSeedWriter : IModuleDevelopmentSeedWriter
 
         var importedDeviceCount = 0;
         var importedMappingCount = 0;
+        var importedTaskBindingCount = 0;
         foreach (var seed in request.Devices)
         {
-            var device = await devices.GetAsync(
-                candidate => candidate.DeviceName == seed.DeviceName,
-                cancellationToken: cancellationToken).ConfigureAwait(false);
+            var device = await FindExistingDeviceAsync(devices, seed, cancellationToken).ConfigureAwait(false);
             if (device is null)
             {
                 device = CreateDevice(seed);
@@ -76,13 +88,16 @@ public sealed class ModuleDevelopmentSeedWriter : IModuleDevelopmentSeedWriter
             var existingMappings = await mappings.GetListAsync(
                 mapping => mapping.NetworkDeviceId == device.Id,
                 cancellationToken).ConfigureAwait(false);
-            if (existingMappings.Count > 0)
-            {
-                continue;
-            }
-
+            var existingMappingKeys = existingMappings
+                .Select(static mapping => BuildMappingIdentity(mapping.SignalKey, mapping.Direction))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var templates = seed.IoMappings
                 .Where(static template => !string.IsNullOrWhiteSpace(template.PlcAddress))
+                .Where(template => !existingMappingKeys.Contains(
+                    BuildMappingIdentity(template.SignalKey, template.Direction)))
+                .DistinctBy(
+                    template => BuildMappingIdentity(template.SignalKey, template.Direction),
+                    StringComparer.OrdinalIgnoreCase)
                 .OrderBy(static template => template.SortOrder)
                 .ThenBy(static template => template.Direction, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(static template => template.SignalKey, StringComparer.OrdinalIgnoreCase)
@@ -93,6 +108,29 @@ public sealed class ModuleDevelopmentSeedWriter : IModuleDevelopmentSeedWriter
             }
 
             importedMappingCount += templates.Length;
+
+            var existingBindings = await taskBindings.GetListAsync(
+                binding => binding.NetworkDeviceId == device.Id,
+                cancellationToken).ConfigureAwait(false);
+            var existingTaskKeys = existingBindings
+                .Select(static binding => binding.TaskKey)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var missingTaskBindings = seed.TaskBindings
+                .Where(static binding => !string.IsNullOrWhiteSpace(binding.TaskKey))
+                .Where(binding => !existingTaskKeys.Contains(binding.TaskKey.Trim()))
+                .DistinctBy(static binding => binding.TaskKey.Trim(), StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var updatedAt = DateTimeOffset.UtcNow;
+            foreach (var binding in missingTaskBindings)
+            {
+                taskBindings.Add(PlcTaskBindingEntity.Create(
+                    device.Id,
+                    binding.TaskKey,
+                    binding.Enabled,
+                    updatedAt));
+            }
+
+            importedTaskBindingCount += missingTaskBindings.Length;
         }
 
         // 本请求唯一 durable commit；FlushAsync 只在同一事务中物化删除/identity。
@@ -101,8 +139,37 @@ public sealed class ModuleDevelopmentSeedWriter : IModuleDevelopmentSeedWriter
             importedDeviceCount,
             importedMappingCount,
             resetDeviceCount,
-            resetMappingCount);
+            resetMappingCount)
+        {
+            ImportedTaskBindingCount = importedTaskBindingCount,
+            ResetTaskBindingCount = resetTaskBindingCount
+        };
     }
+
+    private static async Task<NetworkDeviceEntity?> FindExistingDeviceAsync(
+        IRepository<NetworkDeviceEntity> devices,
+        ModuleDevelopmentDeviceSeed seed,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(seed.PlcCode))
+        {
+            var plcCode = seed.PlcCode.Trim();
+            var byPlcCode = await devices.GetAsync(
+                candidate => candidate.PlcCode == plcCode,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (byPlcCode is not null)
+            {
+                return byPlcCode;
+            }
+        }
+
+        return await devices.GetAsync(
+            candidate => candidate.DeviceName == seed.DeviceName,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private static string BuildMappingIdentity(string signalKey, string direction)
+        => $"{signalKey.Trim()}\u001f{direction.Trim()}";
 
     private static NetworkDeviceEntity CreateDevice(ModuleDevelopmentDeviceSeed seed)
     {

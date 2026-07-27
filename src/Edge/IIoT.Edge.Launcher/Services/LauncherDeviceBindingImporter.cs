@@ -12,7 +12,8 @@ namespace IIoT.Edge.Launcher.Services;
 /// 把云端为每个插件分配的设备唯一码（ClientCode）写入对应 profile 的外部机器配置，
 /// 实现“下载即配置、现场零操作”。导入完成后归档绑定文件，避免下次启动重复导入；
 /// 若用户重装并重新放入新的绑定文件，则会按新文件再次写入（唯一码可复用）。
-/// 启动红线：本流程全程非阻断——缺文件、JSON 损坏、无匹配 profile 都只跳过，绝不抛 fatal。
+    /// 启动红线：缺文件、JSON 损坏、无匹配 profile 等可恢复输入问题只保留 pending；
+    /// 程序错误不得被无限 catch 后伪装成导入成功。
 /// </summary>
 public interface ILauncherDeviceBindingImporter
 {
@@ -43,7 +44,6 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
 
     public void ApplyPendingBindings()
     {
-        // 启动红线：导入失败绝不阻断启动，这里兜底吞掉任何异常（包含意外的程序错误）。
         try
         {
             var bindingPath = ResolvePendingBindingPath();
@@ -75,9 +75,9 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
 
             FinalizeAppliedBindings(bindingPath, applied, unresolved, baseUrl);
         }
-        catch (Exception)
+        catch (Exception ex) when (IsRecoverable(ex))
         {
-            // 非阻断：首启绑定导入失败不得影响客户端启动（客户端规则·启动红线）。
+            // 非阻断：可恢复的绑定文件或文件系统问题保留原 pending，等待修复后重试。
         }
     }
 
@@ -96,6 +96,12 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
     {
         try
         {
+            if (string.IsNullOrWhiteSpace(binding.BootstrapSecret)
+                || !TryNormalizeHttpBaseUrl(baseUrl, out var normalizedBaseUrl))
+            {
+                return false;
+            }
+
             // moduleId -> profile：匹配“机器配置 Modules.Enabled 含该 module”的 profile（与规则一致）。
             var target = profiles.FirstOrDefault(profile =>
                 _moduleConfiguration.ReadEnabledModules(_targetFactory.Create(profile))
@@ -111,7 +117,7 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
                 _targetFactory.Create(target),
                 binding.ClientCode,
                 binding.BootstrapSecret,
-                baseUrl);
+                normalizedBaseUrl);
             return true;
         }
         catch (Exception ex) when (ex is IOException
@@ -127,20 +133,19 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
     private static void WriteCloudApiIdentity(
         EdgeUpdateTarget target,
         string clientCode,
-        string? bootstrapSecret,
-        string? baseUrl)
+        string bootstrapSecret,
+        string baseUrl)
     {
-        var targetPath = EnsureExternalMachineProfile(target);
-
-        JsonObject root;
-        try
-        {
-            root = JsonNode.Parse(File.ReadAllText(targetPath))?.AsObject() ?? new JsonObject();
-        }
-        catch (JsonException)
-        {
-            root = new JsonObject();
-        }
+        var targetPath = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(
+            target.MachineProfile,
+            target.HostDirectory);
+        var sourcePath = File.Exists(targetPath)
+            ? targetPath
+            : Path.Combine(target.HostDirectory, $"appsettings.machine.{target.MachineProfile}.json");
+        var root = File.Exists(sourcePath)
+            ? JsonNode.Parse(File.ReadAllText(sourcePath))?.AsObject()
+              ?? throw new JsonException("机器配置根节点不能为空。")
+            : new JsonObject();
 
         if (root["CloudApi"] is not JsonObject cloudApi)
         {
@@ -148,16 +153,11 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
             root["CloudApi"] = cloudApi;
         }
 
-        // 写设备寻址码 + 启动密钥（由云端在下载时轮换生成，客户端不自行生成）+ 可选云端地址。
+        // 只有 Cloud 下载包同时提供完整地址、设备寻址码和轮换后的启动密钥时才启用。
+        cloudApi["Enabled"] = true;
         cloudApi["ClientCode"] = clientCode;
-        if (!string.IsNullOrWhiteSpace(bootstrapSecret))
-        {
-            cloudApi["BootstrapSecret"] = bootstrapSecret;
-        }
-        if (!string.IsNullOrWhiteSpace(baseUrl))
-        {
-            cloudApi["BaseUrl"] = baseUrl.Trim();
-        }
+        cloudApi["BootstrapSecret"] = bootstrapSecret;
+        cloudApi["BaseUrl"] = baseUrl;
 
         var directory = Path.GetDirectoryName(targetPath);
         if (!string.IsNullOrWhiteSpace(directory))
@@ -165,38 +165,7 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
             Directory.CreateDirectory(directory);
         }
 
-        File.WriteAllText(
-            targetPath,
-            root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
-            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-    }
-
-    // 与 Infrastructure.Update 的外部机器配置约定保持一致：外部不存在则从打包配置拷贝。
-    private static string EnsureExternalMachineProfile(EdgeUpdateTarget target)
-    {
-        var targetPath = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(target.MachineProfile, target.HostDirectory);
-        if (File.Exists(targetPath))
-        {
-            return targetPath;
-        }
-
-        var packagedPath = Path.Combine(target.HostDirectory, $"appsettings.machine.{target.MachineProfile}.json");
-        var directory = Path.GetDirectoryName(targetPath);
-        if (!string.IsNullOrWhiteSpace(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        if (File.Exists(packagedPath))
-        {
-            File.Copy(packagedPath, targetPath, overwrite: false);
-        }
-        else
-        {
-            File.WriteAllText(targetPath, "{}", new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-        }
-
-        return targetPath;
+        WriteJsonAtomically(targetPath, root);
     }
 
     private static List<DeviceBinding> ParseBindings(string bindingPath, out string? baseUrl)
@@ -315,17 +284,23 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
     }
 
     private static void WritePendingBindingsAtomically(string bindingPath, JsonObject pending)
+        => WriteJsonAtomically(bindingPath, pending);
+
+    private static void WriteJsonAtomically(string targetPath, JsonObject payload)
     {
-        var directory = Path.GetDirectoryName(bindingPath)
-            ?? throw new InvalidOperationException("绑定文件缺少目录。");
-        var temporaryPath = Path.Combine(directory, $".{BindingFileName}.{Guid.NewGuid():N}.tmp");
+        var directory = Path.GetDirectoryName(targetPath)
+            ?? throw new InvalidOperationException("目标文件缺少目录。");
+        Directory.CreateDirectory(directory);
+        var temporaryPath = Path.Combine(
+            directory,
+            $".{Path.GetFileName(targetPath)}.{Guid.NewGuid():N}.tmp");
         try
         {
             File.WriteAllText(
                 temporaryPath,
-                pending.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
+                payload.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
                 new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-            File.Move(temporaryPath, bindingPath, overwrite: true);
+            File.Move(temporaryPath, targetPath, overwrite: true);
         }
         finally
         {
@@ -335,6 +310,28 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
             }
         }
     }
+
+    private static bool TryNormalizeHttpBaseUrl(string? rawValue, out string normalized)
+    {
+        normalized = string.Empty;
+        if (string.IsNullOrWhiteSpace(rawValue)
+            || !Uri.TryCreate(rawValue.Trim(), UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+            || string.IsNullOrWhiteSpace(uri.Host))
+        {
+            return false;
+        }
+
+        normalized = uri.GetLeftPart(UriPartial.Authority);
+        return true;
+    }
+
+    private static bool IsRecoverable(Exception exception)
+        => exception is IOException
+            or UnauthorizedAccessException
+            or JsonException
+            or InvalidOperationException
+            or ArgumentException;
 
     private static string? ReadString(JsonElement element, string propertyName)
         => element.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String

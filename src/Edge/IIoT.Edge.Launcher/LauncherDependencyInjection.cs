@@ -45,7 +45,6 @@ public static class LauncherDependencyInjection
         services.AddSingleton<ILauncherProfileVisibilityService>(
             provider => new LauncherProfileVisibilityService(
                 baseDirectory,
-                provider.GetRequiredService<IEdgeInstalledPluginCatalog>(),
                 provider.GetRequiredService<IEdgeProfileModuleConfigurationStore>(),
                 provider.GetRequiredService<ILauncherUpdateTargetFactory>()));
         services.AddSingleton<ILauncherDeviceBindingImporter>(

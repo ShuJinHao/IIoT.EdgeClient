@@ -356,7 +356,7 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
 
     public string TaskTypeText => IsHeartbeatLike ? "心跳类" : "业务任务";
 
-    public string SourceText => HasSavedBinding ? "已保存" : "默认值";
+    public string SourceText => HasSavedBinding ? "已保存" : "绑定缺失（安全关闭）";
 
     public string RequiredSignalsText { get; }
 

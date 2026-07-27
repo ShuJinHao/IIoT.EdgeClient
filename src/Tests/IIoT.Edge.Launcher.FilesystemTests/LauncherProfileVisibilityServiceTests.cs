@@ -33,7 +33,6 @@ public sealed class LauncherProfileVisibilityServiceTests
             var profiles = CreateProcessProfiles(currentDirectory);
             var service = new LauncherProfileVisibilityService(
                 currentDirectory,
-                new StubInstalledPluginCatalog(),
                 CreateModuleConfiguration(),
                 new LauncherUpdateTargetFactory());
 
@@ -56,7 +55,7 @@ public sealed class LauncherProfileVisibilityServiceTests
     }
 
     [Fact]
-    public void SelectVisibleProfiles_ShouldFallbackToInstalledPluginsWhenManifestIsMissing()
+    public void SelectVisibleProfiles_ShouldFailClosedToMaintenanceProfileWhenManifestIsMissing()
     {
         var tempDirectory = CreateTempDirectory();
         try
@@ -66,15 +65,12 @@ public sealed class LauncherProfileVisibilityServiceTests
             var profiles = CreateProcessProfiles(currentDirectory);
             var service = new LauncherProfileVisibilityService(
                 currentDirectory,
-                new StubInstalledPluginCatalog("TestPluginAlpha", "TestPluginBeta"),
                 CreateModuleConfiguration(),
                 new LauncherUpdateTargetFactory());
 
             var visible = service.SelectVisibleProfiles(profiles);
 
-            Assert.Equal(
-                ["TestPluginAlphaLine", "TestPluginBetaLine"],
-                visible.Select(static profile => profile.ProfileId).OrderBy(static x => x).ToArray());
+            Assert.Equal(["Default"], visible.Select(static profile => profile.ProfileId).ToArray());
         }
         finally
         {
@@ -83,7 +79,7 @@ public sealed class LauncherProfileVisibilityServiceTests
     }
 
     [Fact]
-    public void SelectVisibleProfiles_WhenNoPluginSignalExists_ShouldReturnAllProfiles()
+    public void SelectVisibleProfiles_WhenNoPluginSignalExists_ShouldReturnMaintenanceProfileOnly()
     {
         var tempDirectory = CreateTempDirectory();
         try
@@ -93,13 +89,12 @@ public sealed class LauncherProfileVisibilityServiceTests
             var profiles = CreateProcessProfiles(currentDirectory);
             var service = new LauncherProfileVisibilityService(
                 currentDirectory,
-                new StubInstalledPluginCatalog(),
                 CreateModuleConfiguration(),
                 new LauncherUpdateTargetFactory());
 
             var visible = service.SelectVisibleProfiles(profiles);
 
-            Assert.Equal(3, visible.Count);
+            Assert.Equal(["Default"], visible.Select(static profile => profile.ProfileId).ToArray());
         }
         finally
         {
@@ -112,6 +107,7 @@ public sealed class LauncherProfileVisibilityServiceTests
         var hostExecutable = Path.Combine(currentDirectory, "host", "IIoT.Edge.Shell");
         return
         [
+            Profile("Default", "维护模式", hostExecutable),
             Profile("TestPluginLine", "测试插件", hostExecutable),
             Profile("TestPluginAlphaLine", "测试插件甲", hostExecutable),
             Profile("TestPluginBetaLine", "测试插件乙", hostExecutable)
@@ -135,6 +131,7 @@ public sealed class LauncherProfileVisibilityServiceTests
     private static IEdgeProfileModuleConfigurationStore CreateModuleConfiguration()
         => new StubModuleConfigurationStore(new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
         {
+            ["Default"] = [],
             ["TestPluginLine"] = ["TestPlugin"],
             ["TestPluginAlphaLine"] = ["TestPluginAlpha"],
             ["TestPluginBetaLine"] = ["TestPluginBeta"]
@@ -170,24 +167,6 @@ public sealed class LauncherProfileVisibilityServiceTests
         catch
         {
         }
-    }
-
-    private sealed class StubInstalledPluginCatalog(params string[] moduleIds) : IEdgeInstalledPluginCatalog
-    {
-        public IReadOnlyList<EdgeInstalledPlugin> LoadInstalledPlugins(EdgeUpdateTarget target)
-            => moduleIds
-                .Select(static moduleId => new EdgeInstalledPlugin(
-                    moduleId,
-                    moduleId,
-                    moduleId,
-                    "1.0.0",
-                    "1.0.0",
-                    "1.0.0",
-                    "99.0.0",
-                    [],
-                    Path.Combine("plugins", moduleId, "plugin.json"),
-                    Path.Combine("plugins", moduleId)))
-                .ToArray();
     }
 
     private sealed class StubModuleConfigurationStore(

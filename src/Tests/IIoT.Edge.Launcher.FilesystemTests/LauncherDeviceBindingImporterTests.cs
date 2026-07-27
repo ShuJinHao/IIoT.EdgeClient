@@ -58,6 +58,8 @@ public sealed class LauncherDeviceBindingImporterTests
 
                 var externalConfig = File.ReadAllText(
                     EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("LineA", hostDirectory));
+                Assert.Contains("\"Enabled\": true", externalConfig, StringComparison.Ordinal);
+                Assert.Contains("\"BaseUrl\": \"http://cloud.local:81\"", externalConfig, StringComparison.Ordinal);
                 Assert.Contains("\"ClientCode\": \"DEV-AAAAAAAAAA\"", externalConfig, StringComparison.Ordinal);
                 Assert.Contains("\"BootstrapSecret\": \"SEC-HOMOG-001\"", externalConfig, StringComparison.Ordinal);
                 Assert.False(File.Exists(pendingPath));
@@ -315,6 +317,124 @@ public sealed class LauncherDeviceBindingImporterTests
                 var exception = Record.Exception(() => importer.ApplyPendingBindings());
 
                 Assert.Null(exception);
+            });
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Theory]
+    [InlineData("", "SECRET-CP")]
+    [InlineData("http://cloud.local", "")]
+    [InlineData("file:///tmp/cloud", "SECRET-CP")]
+    public void ApplyPendingBindings_WhenCloudBindingIsIncomplete_ShouldKeepPendingAndCloudDisabled(
+        string baseUrl,
+        string bootstrapSecret)
+    {
+        var tempDirectory = CreateTempDirectory();
+        var dataRoot = Path.Combine(tempDirectory, "program-data");
+        try
+        {
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
+            WriteText(
+                Path.Combine(hostDirectory, "appsettings.machine.LineA.json"),
+                """
+                {
+                  "CloudApi": { "Enabled": false, "ClientCode": "", "BootstrapSecret": "" },
+                  "Modules": { "Enabled": [ "CP" ] }
+                }
+                """);
+
+            WithDataRoot(dataRoot, () =>
+            {
+                var launcherDirectory = EdgeClientProgramDataPaths.ResolveLauncherDirectory(hostDirectory);
+                var pendingPath = Path.Combine(launcherDirectory, LauncherDeviceBindingImporter.BindingFileName);
+                WriteText(
+                    pendingPath,
+                    $$"""
+                    {
+                      "schemaVersion": 1,
+                      "baseUrl": "{{baseUrl}}",
+                      "bindings": [
+                        {
+                          "moduleId": "CP",
+                          "clientCode": "DEV-CP",
+                          "bootstrapSecret": "{{bootstrapSecret}}"
+                        }
+                      ]
+                    }
+                    """);
+
+                var importer = new LauncherDeviceBindingImporter(
+                    hostDirectory,
+                    new FakeProfileCatalog(Profile(hostDirectory)),
+                    new FileEdgeProfileModuleConfigurationStore(),
+                    new LauncherUpdateTargetFactory());
+
+                importer.ApplyPendingBindings();
+
+                Assert.True(File.Exists(pendingPath));
+                Assert.False(File.Exists(
+                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("LineA", hostDirectory)));
+                Assert.Empty(Directory.GetFiles(launcherDirectory, "iiot-binding.applied.*.json"));
+            });
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void ApplyPendingBindings_WhenExternalMachineConfigIsCorrupt_ShouldPreserveItAndPendingBinding()
+    {
+        var tempDirectory = CreateTempDirectory();
+        var dataRoot = Path.Combine(tempDirectory, "program-data");
+        try
+        {
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
+            WriteText(
+                Path.Combine(hostDirectory, "appsettings.machine.LineA.json"),
+                """{ "Modules": { "Enabled": [ "CP" ] } }""");
+
+            WithDataRoot(dataRoot, () =>
+            {
+                var externalPath = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("LineA", hostDirectory);
+                const string corruptConfig = "{ existing site config is corrupt";
+                WriteText(externalPath, corruptConfig);
+                var launcherDirectory = EdgeClientProgramDataPaths.ResolveLauncherDirectory(hostDirectory);
+                var pendingPath = Path.Combine(launcherDirectory, LauncherDeviceBindingImporter.BindingFileName);
+                WriteText(
+                    pendingPath,
+                    """
+                    {
+                      "schemaVersion": 1,
+                      "baseUrl": "http://cloud.local",
+                      "bindings": [
+                        {
+                          "moduleId": "CP",
+                          "clientCode": "DEV-CP",
+                          "bootstrapSecret": "SECRET-CP"
+                        }
+                      ]
+                    }
+                    """);
+
+                var importer = new LauncherDeviceBindingImporter(
+                    hostDirectory,
+                    new FakeProfileCatalog(Profile(hostDirectory)),
+                    new FileEdgeProfileModuleConfigurationStore(),
+                    new LauncherUpdateTargetFactory());
+
+                importer.ApplyPendingBindings();
+
+                Assert.Equal(corruptConfig, File.ReadAllText(externalPath));
+                Assert.True(File.Exists(pendingPath));
+                Assert.Empty(Directory.GetFiles(launcherDirectory, "iiot-binding.applied.*.json"));
             });
         }
         finally

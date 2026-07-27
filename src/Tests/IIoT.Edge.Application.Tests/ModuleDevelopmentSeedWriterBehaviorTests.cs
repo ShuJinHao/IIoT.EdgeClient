@@ -16,7 +16,8 @@ public sealed class ModuleDevelopmentSeedWriterBehaviorTests
     {
         var devices = new InMemoryRepository<NetworkDeviceEntity>();
         var mappings = new InMemoryRepository<IoMappingEntity>();
-        var unitOfWorkFactory = new TestEdgeUnitOfWorkFactory(devices, mappings);
+        var bindings = new InMemoryRepository<PlcTaskBindingEntity>();
+        var unitOfWorkFactory = new TestEdgeUnitOfWorkFactory(devices, mappings, bindings);
         var writer = new ModuleDevelopmentSeedWriter(unitOfWorkFactory);
         var request = CreateRequest(resetBeforeImport: false);
 
@@ -28,12 +29,27 @@ public sealed class ModuleDevelopmentSeedWriterBehaviorTests
         Assert.Equal("PLC-TEST-01", device.PlcCode);
         Assert.Equal("Mc", device.DeviceModel);
         Assert.Null(device.ProtocolFrame);
+        Assert.False(device.IsEnabled);
         Assert.Equal(2, mappings.Items.Count);
         Assert.Contains(mappings.Items, static mapping =>
             mapping.SignalKey == "TestModule.SignalA"
             && mapping.PlcAddress == "D100"
             && mapping.SortOrder == 1);
-        Assert.Equal(new ModuleDevelopmentSeedResult(1, 2, 0, 0), first);
+        Assert.Collection(
+            bindings.Items.OrderBy(static binding => binding.TaskKey),
+            static binding =>
+            {
+                Assert.Equal("TestModule.MG1", binding.TaskKey);
+                Assert.True(binding.Enabled);
+            },
+            static binding =>
+            {
+                Assert.Equal("TestModule.MG2", binding.TaskKey);
+                Assert.True(binding.Enabled);
+            });
+        Assert.Equal(
+            new ModuleDevelopmentSeedResult(1, 2, 0, 0) { ImportedTaskBindingCount = 2 },
+            first);
         Assert.Equal(new ModuleDevelopmentSeedResult(0, 0, 0, 0), second);
         Assert.Equal(2, unitOfWorkFactory.BeginCount);
         Assert.Equal(2, unitOfWorkFactory.CommitCount);
@@ -44,7 +60,8 @@ public sealed class ModuleDevelopmentSeedWriterBehaviorTests
     {
         var devices = new InMemoryRepository<NetworkDeviceEntity>();
         var mappings = new InMemoryRepository<IoMappingEntity>();
-        var writer = new ModuleDevelopmentSeedWriter(new TestEdgeUnitOfWorkFactory(devices, mappings));
+        var bindings = new InMemoryRepository<PlcTaskBindingEntity>();
+        var writer = new ModuleDevelopmentSeedWriter(new TestEdgeUnitOfWorkFactory(devices, mappings, bindings));
         var template = Assert.Single(CreateRequest(resetBeforeImport: false).Devices);
         var request = new ModuleDevelopmentSeedRequest(
             "CP",
@@ -65,11 +82,13 @@ public sealed class ModuleDevelopmentSeedWriterBehaviorTests
         Assert.Equal("P2-CP01", device.PlcCode);
         Assert.Equal("Mc", device.DeviceModel);
         Assert.Equal("E4", device.ProtocolFrame);
-        Assert.Equal(new ModuleDevelopmentSeedResult(1, 2, 0, 0), result);
+        Assert.Equal(
+            new ModuleDevelopmentSeedResult(1, 2, 0, 0) { ImportedTaskBindingCount = 2 },
+            result);
     }
 
     [Fact]
-    public async Task ApplyAsync_WhenDeviceAlreadyHasMappings_ShouldPreserveOperatorValues()
+    public async Task ApplyAsync_WhenDeviceHasPartialConfiguration_ShouldOnlyBackfillMissingRows()
     {
         var existingDevice = CreateDevice("PLC-Test-01", "D999", plcCode: "SITE-PLC-01");
         existingDevice.UpdateProtocolFrame("E3");
@@ -82,18 +101,53 @@ public sealed class ModuleDevelopmentSeedWriterBehaviorTests
             "Read",
             "单点读数据",
             "现场自定义").WithId(7);
+        var existingBinding = PlcTaskBindingEntity.Create(
+            existingDevice.Id,
+            "TestModule.MG1",
+            enabled: false,
+            DateTimeOffset.UtcNow.AddDays(-1)).WithId(8);
         var devices = new InMemoryRepository<NetworkDeviceEntity>(existingDevice);
         var mappings = new InMemoryRepository<IoMappingEntity>(existingMapping);
-        var writer = new ModuleDevelopmentSeedWriter(new TestEdgeUnitOfWorkFactory(devices, mappings));
+        var bindings = new InMemoryRepository<PlcTaskBindingEntity>(existingBinding);
+        var writer = new ModuleDevelopmentSeedWriter(new TestEdgeUnitOfWorkFactory(devices, mappings, bindings));
 
         var result = await writer.ApplyAsync(
             CreateRequest(resetBeforeImport: false),
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(new ModuleDevelopmentSeedResult(0, 0, 0, 0), result);
-        Assert.Equal("D999", Assert.Single(mappings.Items).PlcAddress);
+        Assert.Equal(
+            new ModuleDevelopmentSeedResult(0, 1, 0, 0) { ImportedTaskBindingCount = 1 },
+            result);
+        Assert.Equal(2, mappings.Items.Count);
+        Assert.Equal(
+            "D999",
+            Assert.Single(mappings.Items, static mapping => mapping.SignalKey == "TestModule.SignalA").PlcAddress);
+        Assert.Contains(
+            mappings.Items,
+            static mapping => mapping.SignalKey == "TestModule.SignalB" && mapping.PlcAddress == "D200");
         Assert.Equal("SITE-PLC-01", Assert.Single(devices.Items).PlcCode);
         Assert.Equal("E3", Assert.Single(devices.Items).ProtocolFrame);
+        Assert.False(Assert.Single(bindings.Items, static binding => binding.TaskKey == "TestModule.MG1").Enabled);
+        Assert.True(Assert.Single(bindings.Items, static binding => binding.TaskKey == "TestModule.MG2").Enabled);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_WhenPlcCodeMatchesRenamedDevice_ShouldNotCreateDuplicate()
+    {
+        var existingDevice = CreateDevice("现场已改名", "D999", plcCode: "PLC-TEST-01");
+        var devices = new InMemoryRepository<NetworkDeviceEntity>(existingDevice);
+        var mappings = new InMemoryRepository<IoMappingEntity>();
+        var bindings = new InMemoryRepository<PlcTaskBindingEntity>();
+        var writer = new ModuleDevelopmentSeedWriter(new TestEdgeUnitOfWorkFactory(devices, mappings, bindings));
+
+        var result = await writer.ApplyAsync(
+            CreateRequest(resetBeforeImport: false),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            new ModuleDevelopmentSeedResult(0, 2, 0, 0) { ImportedTaskBindingCount = 2 },
+            result);
+        Assert.Equal("现场已改名", Assert.Single(devices.Items).DeviceName);
     }
 
     [Fact]
@@ -105,16 +159,27 @@ public sealed class ModuleDevelopmentSeedWriterBehaviorTests
         var mappings = new InMemoryRepository<IoMappingEntity>(
             IoMappingEntity.Create(firstDevice.Id, "Old.A", "D10", 1, "Int16", "Read").WithId(10),
             IoMappingEntity.Create(secondDevice.Id, "Old.B", "D20", 1, "Int16", "Read").WithId(11));
-        var writer = new ModuleDevelopmentSeedWriter(new TestEdgeUnitOfWorkFactory(devices, mappings));
+        var bindings = new InMemoryRepository<PlcTaskBindingEntity>(
+            PlcTaskBindingEntity.Create(firstDevice.Id, "Old.TaskA", true, DateTimeOffset.UtcNow).WithId(12),
+            PlcTaskBindingEntity.Create(secondDevice.Id, "Old.TaskB", true, DateTimeOffset.UtcNow).WithId(13));
+        var writer = new ModuleDevelopmentSeedWriter(new TestEdgeUnitOfWorkFactory(devices, mappings, bindings));
 
         var result = await writer.ApplyAsync(
             CreateRequest(resetBeforeImport: true),
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(new ModuleDevelopmentSeedResult(1, 2, 2, 2), result);
+        Assert.Equal(
+            new ModuleDevelopmentSeedResult(1, 2, 2, 2)
+            {
+                ImportedTaskBindingCount = 2,
+                ResetTaskBindingCount = 2
+            },
+            result);
         Assert.Equal("PLC-Test-01", Assert.Single(devices.Items).DeviceName);
         Assert.DoesNotContain(mappings.Items, static mapping => mapping.SignalKey.StartsWith("Old.", StringComparison.Ordinal));
         Assert.Equal(2, mappings.Items.Count);
+        Assert.DoesNotContain(bindings.Items, static binding => binding.TaskKey.StartsWith("Old.", StringComparison.Ordinal));
+        Assert.Equal(2, bindings.Items.Count);
     }
 
     private static ModuleDevelopmentSeedRequest CreateRequest(bool resetBeforeImport)
@@ -128,7 +193,7 @@ public sealed class ModuleDevelopmentSeedWriterBehaviorTests
                     "127.0.0.1",
                     6000,
                     3000,
-                    true,
+                    false,
                     "测试模块 PLC",
                     [
                         new ModuleIoTemplateEntry(
@@ -156,6 +221,14 @@ public sealed class ModuleDevelopmentSeedWriterBehaviorTests
                             3,
                             "未配置地址")
                     ])
+                {
+                    PlcCode = "PLC-TEST-01",
+                    TaskBindings =
+                    [
+                        new ModuleDevelopmentTaskBindingSeed("TestModule.MG1", Enabled: true),
+                        new ModuleDevelopmentTaskBindingSeed("TestModule.MG2", Enabled: true)
+                    ]
+                }
             ]);
 
     private static NetworkDeviceEntity CreateDevice(
