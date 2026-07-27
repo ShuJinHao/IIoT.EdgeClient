@@ -617,17 +617,19 @@ public sealed class PlcIoScanTaskBehaviorTests
     }
 
     [Fact]
-    public async Task PlcDataReadScanTask_WhenLaterReadBlockFails_ShouldKeepPlcConnectedAndClearFailedSignals()
+    public async Task PlcDataReadScanTask_WhenLaterReadBlockFails_ShouldPreserveLastCompleteSnapshotAndMarkRetrying()
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
         plcService.ReadOutcomes.Enqueue(new ushort[] { 1 });
         plcService.ReadOutcomes.Enqueue(new TimeoutException("read-data second block timeout"));
-        plcService.ReadOutcomes.Enqueue(new TimeoutException("read-data signal timeout"));
         await plcService.ConnectAsync(TestContext.Current.CancellationToken);
 
         var dataStore = new PlcDataStore();
         dataStore.Register(17, readSize: 0, writeSize: 0);
+        var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(17));
+        buffer.UpdateReadSignal("Read-D300", [(ushort)9]);
+        buffer.UpdateReadSignal("Read-D320", [(ushort)8]);
         var statusStore = new PlcConnectionStatusStore();
         statusStore.MarkConnected(17, "PLC-DATA-SPLIT-FAIL", 15);
         var logger = new FakeLogService();
@@ -649,20 +651,53 @@ public sealed class PlcIoScanTaskBehaviorTests
 
         var snapshot = statusStore.GetSnapshot(17);
         Assert.NotNull(snapshot);
-        Assert.True(snapshot!.IsConnected);
-        Assert.Equal(PlcConnectionState.Connected, snapshot.ConnectionState);
+        Assert.False(snapshot!.IsConnected);
+        Assert.Equal(PlcConnectionState.Retrying, snapshot.ConnectionState);
         Assert.Equal(0, plcService.DisconnectCallCount);
-        Assert.Equal(["D300", "D320", "D320"], plcService.ReadRequests.Select(static x => x.Address));
+        Assert.Equal(["D300", "D320"], plcService.ReadRequests.Select(static x => x.Address));
 
-        var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(17));
         Assert.True(buffer.TryGetReadWords("Read-D300", out var successfulWords));
-        Assert.Equal((ushort)1, Assert.Single(successfulWords));
+        Assert.Equal((ushort)9, Assert.Single(successfulWords));
         Assert.True(buffer.TryGetReadWords("Read-D320", out var failedWords));
-        Assert.Equal((ushort)0, Assert.Single(failedWords));
+        Assert.Equal((ushort)8, Assert.Single(failedWords));
         Assert.Contains(
             logger.Entries,
             entry => entry.Message.Contains("地址=D320", StringComparison.Ordinal)
-                     && entry.Message.Contains("Read-D320@D320", StringComparison.Ordinal));
+                     && entry.Message.Contains("Read-D320@D320", StringComparison.Ordinal)
+                     && entry.Message.Contains("保留上一份完整快照", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PlcDataReadScanTask_WhenFirstBlockFails_ShouldNotReadRemainingBlocksOrRetrySameAddress()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+        plcService.ReadOutcomes.Enqueue(new TimeoutException("first block timeout"));
+        await plcService.ConnectAsync(TestContext.Current.CancellationToken);
+
+        var dataStore = new PlcDataStore();
+        dataStore.Register(22, readSize: 0, writeSize: 0);
+        var statusStore = new PlcConnectionStatusStore();
+        statusStore.MarkConnected(22, "PLC-DATA-FIRST-FAIL", 10);
+
+        var dataReadScan = new PlcDataReadScanTask(
+            plcService,
+            dataStore,
+            CreateDevice(22, "PLC-DATA-FIRST-FAIL"),
+            [
+                CreateIoMapping(22, "Read", "D300", 1, category: IoMappingOptionCatalog.CategorySingleRead, sortOrder: 1),
+                CreateIoMapping(22, "Read", "D320", 1, category: IoMappingOptionCatalog.CategoryContinuousRead, sortOrder: 2)
+            ],
+            new FakeLogService(),
+            SignalBlockPlanner,
+            statusStore,
+            runtimePolicy: new PlcIoRuntimePolicy(MaxSignalBlockWordCount: 10));
+
+        await dataReadScan.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
+
+        var request = Assert.Single(plcService.ReadRequests);
+        Assert.Equal("D300", request.Address);
+        Assert.False(statusStore.GetSnapshot(22)?.IsConnected);
     }
 
     [Fact]

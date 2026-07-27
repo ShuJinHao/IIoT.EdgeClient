@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.Loader;
 using System.Xml.Linq;
 using IIoT.Edge.Presentation.Navigation.Features.Shell;
 using IIoT.Edge.Presentation.Shell.Localization;
@@ -84,6 +85,27 @@ public sealed class LocalizationBehaviorTests
             "en-US",
             "Panels_Title_SystemLog",
             "System Log");
+    }
+
+    [Fact]
+    public void AppLanguageService_ShouldLoadCompiledLanguageDictionaryFromCollectiblePluginContext()
+    {
+        var assemblyPath = typeof(AppLanguageService).Assembly.Location;
+        var loadContext = new SharedDependencyLoadContext();
+        try
+        {
+            var pluginAssembly = loadContext.LoadFromAssemblyPath(assemblyPath);
+
+            var dictionary = AppLanguageService.TryLoadLanguageDictionary(pluginAssembly, "zh-CN");
+
+            Assert.NotNull(dictionary);
+            Assert.True(dictionary!.TryGetResource("Shell_Footer_Executing", null, out var value));
+            Assert.Equal("正在执行", value);
+        }
+        finally
+        {
+            loadContext.Unload();
+        }
     }
 
     [Fact]
@@ -232,6 +254,14 @@ public sealed class LocalizationBehaviorTests
 
         public string Format(string key, string fallback, params object[] args)
             => string.Format(CultureInfo.CurrentCulture, fallback, args);
+    }
+
+    private sealed class SharedDependencyLoadContext()
+        : AssemblyLoadContext("IIoT.Edge.Module.LocalizationFixture", isCollectible: true)
+    {
+        protected override Assembly? Load(AssemblyName assemblyName)
+            => Default.Assemblies.FirstOrDefault(candidate =>
+                AssemblyName.ReferenceMatchesDefinition(candidate.GetName(), assemblyName));
     }
 
 }

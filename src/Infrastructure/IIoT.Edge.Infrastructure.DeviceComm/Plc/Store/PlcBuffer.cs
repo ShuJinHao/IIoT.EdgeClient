@@ -8,6 +8,7 @@ public class PlcBuffer : IPlcBufferTransport
 {
     private ushort[] _readBuffer;
     private readonly ushort[] _writeBuffer;
+    private readonly object _readSync = new();
     private readonly object _writeSync = new();
     private readonly object _bindingSync = new();
     private ushort[] _writeSnapshot;
@@ -16,7 +17,8 @@ public class PlcBuffer : IPlcBufferTransport
         new Dictionary<string, PlcBufferSignalBinding>(StringComparer.OrdinalIgnoreCase);
     private IReadOnlyDictionary<string, PlcBufferSignalBinding> _writeBindings =
         new Dictionary<string, PlcBufferSignalBinding>(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, ushort[]> _readSignals = new(StringComparer.OrdinalIgnoreCase);
+    private IReadOnlyDictionary<string, ushort[]> _readSignals =
+        new Dictionary<string, ushort[]>(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, ushort[]> _writeSignals = new(StringComparer.OrdinalIgnoreCase);
 
     public PlcBuffer(
@@ -40,7 +42,8 @@ public class PlcBuffer : IPlcBufferTransport
 
     public bool TryGetReadWords(string signalKey, out ushort[] values)
     {
-        if (_readSignals.TryGetValue(signalKey, out var cached))
+        var snapshot = Volatile.Read(ref _readSignals);
+        if (snapshot.TryGetValue(signalKey, out var cached))
         {
             values = (ushort[])cached.Clone();
             return true;
@@ -162,38 +165,82 @@ public class PlcBuffer : IPlcBufferTransport
 
     public void UpdateReadBuffer(ushort[] data)
     {
-        var next = new ushort[_readBuffer.Length];
-        Array.Copy(data, next, Math.Min(data.Length, next.Length));
-        Interlocked.Exchange(ref _readBuffer, next);
-
-        foreach (var binding in _readBindings.Values)
+        PlcBufferSignalBinding[] affected;
+        lock (_readSync)
         {
-            _readSignals[binding.SignalKey] = ReadWords(next, binding.Offset, binding.AddressCount);
+            var next = new ushort[Volatile.Read(ref _readBuffer).Length];
+            Array.Copy(data, next, Math.Min(data.Length, next.Length));
+
+            affected = _readBindings.Values.ToArray();
+            var nextSignals = CopyReadSignals();
+            foreach (var binding in affected)
+            {
+                nextSignals[binding.SignalKey] = ReadWords(next, binding.Offset, binding.AddressCount);
+            }
+
+            Interlocked.Exchange(ref _readBuffer, next);
+            Volatile.Write(ref _readSignals, nextSignals);
+        }
+
+        foreach (var binding in affected)
+        {
             NotifyChanged(binding.SignalKey, "Read");
         }
     }
 
     public void UpdateReadSignal(string signalKey, IReadOnlyList<ushort> data)
     {
-        var words = NormalizeWords(data);
-        _readSignals[signalKey] = words;
+        lock (_readSync)
+        {
+            var words = NormalizeWords(data);
+            var nextSignals = CopyReadSignals();
+            nextSignals[signalKey] = words;
 
-        if (TryGetBinding(_readBindings, signalKey, out var binding))
+            if (TryGetBinding(_readBindings, signalKey, out var binding))
+            {
+                var next = (ushort[])Volatile.Read(ref _readBuffer).Clone();
+                ApplyWords(next, binding, words);
+                Interlocked.Exchange(ref _readBuffer, next);
+            }
+
+            Volatile.Write(ref _readSignals, nextSignals);
+        }
+
+        NotifyChanged(signalKey, "Read");
+    }
+
+    internal void UpdateReadSignals(IReadOnlyDictionary<string, ushort[]> signalValues)
+    {
+        ArgumentNullException.ThrowIfNull(signalValues);
+        if (signalValues.Count == 0)
+        {
+            return;
+        }
+
+        string[] affected;
+        lock (_readSync)
         {
             var next = (ushort[])Volatile.Read(ref _readBuffer).Clone();
-            for (var index = 0; index < Math.Min(words.Length, binding.AddressCount); index++)
+            var nextSignals = CopyReadSignals();
+            affected = signalValues.Keys.ToArray();
+            foreach (var (signalKey, data) in signalValues)
             {
-                var bufferIndex = binding.Offset + index;
-                if (bufferIndex >= 0 && bufferIndex < next.Length)
+                var words = NormalizeWords(data);
+                nextSignals[signalKey] = words;
+                if (TryGetBinding(_readBindings, signalKey, out var binding))
                 {
-                    next[bufferIndex] = words[index];
+                    ApplyWords(next, binding, words);
                 }
             }
 
             Interlocked.Exchange(ref _readBuffer, next);
+            Volatile.Write(ref _readSignals, nextSignals);
         }
 
-        NotifyChanged(signalKey, "Read");
+        foreach (var signalKey in affected)
+        {
+            NotifyChanged(signalKey, "Read");
+        }
     }
 
     public ushort[] GetWriteBuffer()
@@ -262,6 +309,28 @@ public class PlcBuffer : IPlcBufferTransport
 
         return words;
     }
+
+    private static void ApplyWords(
+        ushort[] buffer,
+        PlcBufferSignalBinding binding,
+        IReadOnlyList<ushort> words)
+    {
+        for (var index = 0; index < Math.Min(words.Count, binding.AddressCount); index++)
+        {
+            var bufferIndex = binding.Offset + index;
+            if (bufferIndex >= 0 && bufferIndex < buffer.Length)
+            {
+                buffer[bufferIndex] = words[index];
+            }
+        }
+    }
+
+    private Dictionary<string, ushort[]> CopyReadSignals()
+        => Volatile.Read(ref _readSignals)
+            .ToDictionary(
+                static pair => pair.Key,
+                static pair => pair.Value,
+                StringComparer.OrdinalIgnoreCase);
 
     private static bool TryGetBinding(
         IReadOnlyDictionary<string, PlcBufferSignalBinding> bindings,

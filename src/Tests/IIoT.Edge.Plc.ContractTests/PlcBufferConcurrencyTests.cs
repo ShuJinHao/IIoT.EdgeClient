@@ -49,6 +49,36 @@ public sealed class PlcBufferConcurrencyTests
     }
 
     [Fact]
+    public void UpdateReadSignals_ShouldPublishCompleteBatchBeforeNotifications()
+    {
+        var buffer = new PlcBuffer(
+            readSize: 2,
+            writeSize: 0,
+            [
+                new("Signal.A", "Read", 0, 1),
+                new("Signal.B", "Read", 1, 1)
+            ]);
+        var observed = new List<(ushort A, ushort B)>();
+        buffer.SignalValuesChanged += (_, _) =>
+        {
+            Assert.True(buffer.TryGetReadWords("Signal.A", out var a));
+            Assert.True(buffer.TryGetReadWords("Signal.B", out var b));
+            observed.Add((Assert.Single(a), Assert.Single(b)));
+        };
+
+        buffer.UpdateReadSignals(new Dictionary<string, ushort[]>
+        {
+            ["Signal.A"] = [(ushort)11],
+            ["Signal.B"] = [(ushort)22]
+        });
+
+        Assert.Equal(2, observed.Count);
+        Assert.All(observed, snapshot => Assert.Equal(((ushort)11, (ushort)22), snapshot));
+        Assert.Equal((ushort)11, buffer.GetReadValue(0));
+        Assert.Equal((ushort)22, buffer.GetReadValue(1));
+    }
+
+    [Fact]
     public void PlcDataStore_RegisterWithDifferentSize_ShouldReplaceBuffer()
     {
         var store = new PlcDataStore();
