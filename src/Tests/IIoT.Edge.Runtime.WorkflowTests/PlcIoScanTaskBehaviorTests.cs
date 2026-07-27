@@ -144,14 +144,11 @@ public sealed class PlcIoScanTaskBehaviorTests
     }
 
     [Fact]
-    public async Task PlcIoScanTask_WhenReadTimesOut_ShouldDisconnectAndReconnectBeforeRecovering()
+    public async Task PlcIoScanTask_WhenReadTimesOut_ShouldPublishFailureQualityWithoutDisconnecting()
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
-        plcService.ConnectOutcomes.Enqueue(true);
         plcService.ReadOutcomes.Enqueue(new TimeoutException("read timeout"));
-        plcService.ReadOutcomes.Enqueue(new ushort[] { 7 });
-        plcService.ReadOutcomes.Enqueue(new ushort[] { 7 });
         plcService.ReadOutcomes.Enqueue(new ushort[] { 7 });
 
         var dataStore = new PlcDataStore();
@@ -169,32 +166,106 @@ public sealed class PlcIoScanTaskBehaviorTests
 
         var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(1));
         await interaction.ConnectAsync(TestContext.Current.CancellationToken);
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken));
-        Assert.Equal(1, plcService.DisconnectCallCount);
-        Assert.False(plcService.IsConnected);
-        Assert.False(statusStore.GetSnapshot(1)?.IsConnected);
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
-        await interaction.ConnectAsync(TestContext.Current.CancellationToken);
-        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
-        Assert.False(statusStore.GetSnapshot(1)?.IsConnected);
-        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(0, plcService.DisconnectCallCount);
+        Assert.True(plcService.IsConnected);
         Assert.True(statusStore.GetSnapshot(1)?.IsConnected);
+        Assert.False(buffer.TryGetReadWords("Read-D100", out var failedWords));
+        Assert.Equal((ushort)0, Assert.Single(failedWords));
+        Assert.True(buffer.TryGetReadSignalState("Read-D100", out var failedState));
+        Assert.False(failedState.ReadSucceeded);
+        Assert.NotNull(failedState.FailedAtUtc);
+
         await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
-        Assert.True(plcService.ConnectAsyncCallCount >= 2);
-        Assert.True(plcService.ReadAsyncCallCount >= 4);
+        Assert.Equal(1, plcService.ConnectAsyncCallCount);
+        Assert.Equal(2, plcService.ReadAsyncCallCount);
         Assert.True(buffer.TryGetReadWords("Read-D100", out var readWords));
         Assert.Equal((ushort)7, Assert.Single(readWords));
         Assert.True(statusStore.GetSnapshot(1)?.IsConnected);
     }
 
     [Fact]
-    public async Task PlcIoScanTask_WhenTransportConnects_ShouldRemainOfflineUntilProtocolReadSucceeds()
+    public async Task PlcIoScanTask_WhenReadTimeoutClosesService_ShouldReconnectWithoutFalseDisconnectedProjection()
+    {
+        var plcService = new ScriptedPlcService
+        {
+            DropConnectionOnReadFailure = true
+        };
+        plcService.ConnectOutcomes.Enqueue(true);
+        plcService.ConnectOutcomes.Enqueue(true);
+        plcService.ReadOutcomes.Enqueue(new TimeoutException("read timeout"));
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 7 });
+
+        var dataStore = new PlcDataStore();
+        dataStore.Register(24, readSize: 1, writeSize: 0);
+        var statusStore = new PlcConnectionStatusStore();
+        var interaction = new PlcIoScanTask(
+            plcService,
+            dataStore,
+            CreateDevice(24, "PLC-TIMEOUT-REOPEN"),
+            [CreateIoMapping(24, "Read", "D100", 1)],
+            new FakeLogService(),
+            SignalBlockPlanner,
+            statusStore);
+
+        await interaction.ConnectAsync(TestContext.Current.CancellationToken);
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(plcService.IsConnected);
+        var afterTimeout = statusStore.GetSnapshot(24);
+        Assert.NotNull(afterTimeout);
+        Assert.True(afterTimeout!.IsConnected);
+        Assert.Equal(PlcConnectionState.Connected, afterTimeout.ConnectionState);
+
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, plcService.ConnectAsyncCallCount);
+        var afterReconnect = statusStore.GetSnapshot(24);
+        Assert.NotNull(afterReconnect);
+        Assert.True(afterReconnect!.IsConnected);
+        Assert.Equal(PlcConnectionState.Connected, afterReconnect.ConnectionState);
+    }
+
+    [Fact]
+    public async Task PlcIoScanTask_WhenSocketCloses_ShouldMarkDisconnectedAndResetTransport()
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
-        plcService.ReadOutcomes.Enqueue(new ushort[] { 9 });
+        plcService.ReadOutcomes.Enqueue(
+            new System.Net.Sockets.SocketException(
+                (int)System.Net.Sockets.SocketError.ConnectionReset));
+
+        var dataStore = new PlcDataStore();
+        dataStore.Register(23, readSize: 1, writeSize: 0);
+        var statusStore = new PlcConnectionStatusStore();
+        var interaction = new PlcIoScanTask(
+            plcService,
+            dataStore,
+            CreateDevice(23, "PLC-TRANSPORT"),
+            [CreateIoMapping(23, "Read", "D100", 1)],
+            new FakeLogService(),
+            SignalBlockPlanner,
+            statusStore);
+
+        await interaction.ConnectAsync(TestContext.Current.CancellationToken);
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, plcService.DisconnectCallCount);
+        Assert.False(plcService.IsConnected);
+        var snapshot = statusStore.GetSnapshot(23);
+        Assert.NotNull(snapshot);
+        Assert.False(snapshot!.IsConnected);
+        Assert.Equal(PlcConnectionState.Retrying, snapshot.ConnectionState);
+        Assert.Contains("Transport", snapshot.LastError, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task PlcIoScanTask_WhenTransportConnects_ShouldMarkConnectedImmediately()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
         plcService.ReadOutcomes.Enqueue(new ushort[] { 9 });
 
         var dataStore = new PlcDataStore();
@@ -214,29 +285,21 @@ public sealed class PlcIoScanTaskBehaviorTests
 
         var snapshotAfterConnect = statusStore.GetSnapshot(15);
         Assert.NotNull(snapshotAfterConnect);
-        Assert.False(snapshotAfterConnect!.IsConnected);
-        Assert.Equal(PlcConnectionState.Connecting, snapshotAfterConnect.ConnectionState);
-        Assert.Null(snapshotAfterConnect.LatencyMs);
+        Assert.True(snapshotAfterConnect!.IsConnected);
+        Assert.Equal(PlcConnectionState.Connected, snapshotAfterConnect.ConnectionState);
+        Assert.NotNull(snapshotAfterConnect.LatencyMs);
 
         await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
         var snapshotAfterRead = statusStore.GetSnapshot(15);
         Assert.NotNull(snapshotAfterRead);
-        Assert.False(snapshotAfterRead!.IsConnected);
-        Assert.Equal(PlcConnectionState.Connecting, snapshotAfterRead.ConnectionState);
-        Assert.Null(snapshotAfterRead.LatencyMs);
-
-        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
-
-        var snapshotAfterSecondRead = statusStore.GetSnapshot(15);
-        Assert.NotNull(snapshotAfterSecondRead);
-        Assert.True(snapshotAfterSecondRead!.IsConnected);
-        Assert.Equal(PlcConnectionState.Connected, snapshotAfterSecondRead.ConnectionState);
-        Assert.NotNull(snapshotAfterSecondRead.LatencyMs);
+        Assert.True(snapshotAfterRead!.IsConnected);
+        Assert.Equal(PlcConnectionState.Connected, snapshotAfterRead.ConnectionState);
+        Assert.NotNull(snapshotAfterRead.LastReadAtUtc);
     }
 
     [Fact]
-    public async Task PlcIoScanTask_WhenLaterReadBlockFails_ShouldDisconnectAndClearLatency()
+    public async Task PlcIoScanTask_WhenLaterReadBlockFails_ShouldIsolateFailedBlock()
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
@@ -261,34 +324,37 @@ public sealed class PlcIoScanTaskBehaviorTests
             statusStore,
             runtimePolicy: new PlcIoRuntimePolicy(MaxSignalBlockWordCount: 10));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken));
+        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
         var snapshot = statusStore.GetSnapshot(16);
         Assert.NotNull(snapshot);
-        Assert.False(snapshot!.IsConnected);
-        Assert.Equal(PlcConnectionState.Retrying, snapshot.ConnectionState);
-        Assert.Null(snapshot.LatencyMs);
-        Assert.Contains("second block timeout", snapshot.LastError, StringComparison.Ordinal);
+        Assert.True(snapshot!.IsConnected);
+        Assert.Equal(PlcConnectionState.Connected, snapshot.ConnectionState);
+        Assert.Equal(0, plcService.DisconnectCallCount);
+
+        var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(16));
+        Assert.True(buffer.TryGetReadWords("Read-D700", out var successfulWords));
+        Assert.Equal((ushort)1, Assert.Single(successfulWords));
+        Assert.False(buffer.TryGetReadWords("Read-D720", out var failedWords));
+        Assert.Equal((ushort)0, Assert.Single(failedWords));
     }
 
     [Fact]
-    public async Task PlcIoScanTask_WhenWriteTimesOut_ShouldDisconnectAndReconnectBeforeRecovering()
+    public async Task PlcIoScanTask_WhenWriteTimesOut_ShouldKeepIntentAndRetryWithoutDisconnecting()
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
-        plcService.ConnectOutcomes.Enqueue(true);
-        plcService.ReadOutcomes.Enqueue(new ushort[] { 1 });
-        plcService.ReadOutcomes.Enqueue(new ushort[] { 1 });
-        plcService.ReadOutcomes.Enqueue(new ushort[] { 1 });
-        plcService.ReadOutcomes.Enqueue(new ushort[] { 1 });
         plcService.ReadOutcomes.Enqueue(new ushort[] { 1 });
         plcService.ReadOutcomes.Enqueue(new ushort[] { 1 });
         plcService.WriteOutcomes.Enqueue(new TimeoutException("write timeout"));
         plcService.WriteOutcomes.Enqueue(null);
 
         var dataStore = new PlcDataStore();
-        dataStore.Register(2, readSize: 0, writeSize: 1);
+        dataStore.Register(
+            2,
+            readSize: 0,
+            writeSize: 1,
+            [new PlcBufferSignalBinding("Write-D200", "Write", 0, 1)]);
         var statusStore = new PlcConnectionStatusStore();
 
         var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(2));
@@ -308,25 +374,22 @@ public sealed class PlcIoScanTaskBehaviorTests
 
         await interaction.ConnectAsync(TestContext.Current.CancellationToken);
         await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
-        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken));
-        Assert.Equal(1, plcService.DisconnectCallCount);
-        Assert.False(plcService.IsConnected);
-        Assert.False(statusStore.GetSnapshot(2)?.IsConnected);
+        Assert.Equal(0, plcService.DisconnectCallCount);
+        Assert.True(plcService.IsConnected);
+        Assert.True(statusStore.GetSnapshot(2)?.IsConnected);
+        Assert.Equal((ushort)9, Assert.Single(buffer.GetWriteBuffer()));
 
-        await interaction.ConnectAsync(TestContext.Current.CancellationToken);
-        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
-        await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
         await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
-        Assert.True(plcService.ConnectAsyncCallCount >= 2);
-        Assert.True(plcService.WriteAsyncCallCount >= 2);
+        Assert.Equal(1, plcService.ConnectAsyncCallCount);
+        Assert.Equal(2, plcService.WriteAsyncCallCount);
+        Assert.All(plcService.WriteRequests, request =>
+            Assert.Equal((ushort)9, Assert.Single(request.Data)));
         Assert.True(statusStore.GetSnapshot(2)?.IsConnected);
     }
 
     [Fact]
-    public async Task PlcIoScanTask_WhenWriteMappingHasNoReadProbe_ShouldNotWrite()
+    public async Task PlcIoScanTask_WhenWriteMappingHasNoReadProbe_ShouldWriteAfterTcpConnects()
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
@@ -348,12 +411,13 @@ public sealed class PlcIoScanTaskBehaviorTests
 
         await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
-        Assert.Empty(plcService.WriteRequests);
+        var request = Assert.Single(plcService.WriteRequests);
+        Assert.Equal("D200", request.Address);
+        Assert.Equal((ushort)9, Assert.Single(request.Data));
         var snapshot = statusStore.GetSnapshot(18);
         Assert.NotNull(snapshot);
-        Assert.False(snapshot!.IsConnected);
-        Assert.Equal(PlcConnectionState.Faulted, snapshot.ConnectionState);
-        Assert.Contains("协议校验", snapshot.LastError, StringComparison.Ordinal);
+        Assert.True(snapshot!.IsConnected);
+        Assert.Equal(PlcConnectionState.Connected, snapshot.ConnectionState);
     }
 
     [Fact]
@@ -617,7 +681,7 @@ public sealed class PlcIoScanTaskBehaviorTests
     }
 
     [Fact]
-    public async Task PlcDataReadScanTask_WhenLaterReadBlockFails_ShouldPreserveLastCompleteSnapshotAndMarkRetrying()
+    public async Task PlcDataReadScanTask_WhenLaterReadBlockFails_ShouldPublishMixedQualityBatch()
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
@@ -651,28 +715,36 @@ public sealed class PlcIoScanTaskBehaviorTests
 
         var snapshot = statusStore.GetSnapshot(17);
         Assert.NotNull(snapshot);
-        Assert.False(snapshot!.IsConnected);
-        Assert.Equal(PlcConnectionState.Retrying, snapshot.ConnectionState);
+        Assert.True(snapshot!.IsConnected);
+        Assert.Equal(PlcConnectionState.Connected, snapshot.ConnectionState);
         Assert.Equal(0, plcService.DisconnectCallCount);
         Assert.Equal(["D300", "D320"], plcService.ReadRequests.Select(static x => x.Address));
 
         Assert.True(buffer.TryGetReadWords("Read-D300", out var successfulWords));
-        Assert.Equal((ushort)9, Assert.Single(successfulWords));
-        Assert.True(buffer.TryGetReadWords("Read-D320", out var failedWords));
-        Assert.Equal((ushort)8, Assert.Single(failedWords));
+        Assert.Equal((ushort)1, Assert.Single(successfulWords));
+        Assert.False(buffer.TryGetReadWords("Read-D320", out var failedWords));
+        Assert.Equal((ushort)0, Assert.Single(failedWords));
+        Assert.True(buffer.TryGetReadSignalState("Read-D300", out var successfulState));
+        Assert.True(buffer.TryGetReadSignalState("Read-D320", out var failedState));
+        Assert.True(successfulState.ReadSucceeded);
+        Assert.False(failedState.ReadSucceeded);
+        Assert.Equal(successfulState.BatchId, failedState.BatchId);
+        Assert.Equal((ushort)8, Assert.Single(failedState.LastSucceededWords));
+        Assert.NotNull(failedState.FailedAtUtc);
         Assert.Contains(
             logger.Entries,
             entry => entry.Message.Contains("地址=D320", StringComparison.Ordinal)
                      && entry.Message.Contains("Read-D320@D320", StringComparison.Ordinal)
-                     && entry.Message.Contains("保留上一份完整快照", StringComparison.Ordinal));
+                     && entry.Message.Contains("默认值与失败质量", StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task PlcDataReadScanTask_WhenFirstBlockFails_ShouldNotReadRemainingBlocksOrRetrySameAddress()
+    public async Task PlcDataReadScanTask_WhenFirstBlockFails_ShouldContinueUnrelatedBlockWithoutSingleSignalRetry()
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
         plcService.ReadOutcomes.Enqueue(new TimeoutException("first block timeout"));
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 5 });
         await plcService.ConnectAsync(TestContext.Current.CancellationToken);
 
         var dataStore = new PlcDataStore();
@@ -695,9 +767,15 @@ public sealed class PlcIoScanTaskBehaviorTests
 
         await dataReadScan.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
-        var request = Assert.Single(plcService.ReadRequests);
-        Assert.Equal("D300", request.Address);
-        Assert.False(statusStore.GetSnapshot(22)?.IsConnected);
+        Assert.Equal(["D300", "D320"], plcService.ReadRequests.Select(static request => request.Address));
+        Assert.Equal(1, plcService.ReadRequests.Count(static request => request.Address == "D300"));
+        Assert.True(statusStore.GetSnapshot(22)?.IsConnected);
+
+        var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(22));
+        Assert.False(buffer.TryGetReadWords("Read-D300", out var failedWords));
+        Assert.Equal((ushort)0, Assert.Single(failedWords));
+        Assert.True(buffer.TryGetReadWords("Read-D320", out var successfulWords));
+        Assert.Equal((ushort)5, Assert.Single(successfulWords));
     }
 
     [Fact]
@@ -724,12 +802,11 @@ public sealed class PlcIoScanTaskBehaviorTests
     }
 
     [Fact]
-    public async Task PlcDataReadScanTask_WhenPureReadOnlyAndStatusNotStable_ShouldReadAndPromoteConnection()
+    public async Task PlcDataReadScanTask_WhenStatusNotConnected_ShouldRecordReadWithoutPromotingConnection()
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
         plcService.ReadOutcomes.Enqueue(new ushort[] { 11 });
-        plcService.ReadOutcomes.Enqueue(new ushort[] { 12 });
         await plcService.ConnectAsync(TestContext.Current.CancellationToken);
 
         var dataStore = new PlcDataStore();
@@ -757,24 +834,17 @@ public sealed class PlcIoScanTaskBehaviorTests
         Assert.NotNull(firstSnapshot.LastAttemptAtUtc);
         Assert.NotNull(firstSnapshot.LastReadAtUtc);
 
-        await dataReadScan.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
-
-        Assert.Equal(2, plcService.ReadAsyncCallCount);
-        var secondSnapshot = statusStore.GetSnapshot(19);
-        Assert.NotNull(secondSnapshot);
-        Assert.True(secondSnapshot!.IsConnected);
-        Assert.Equal(PlcConnectionState.Connected, secondSnapshot.ConnectionState);
-        Assert.NotNull(secondSnapshot.LastConnectedAtUtc);
-        Assert.NotNull(secondSnapshot.LastReadAtUtc);
-        Assert.NotNull(secondSnapshot.StateChangedAtUtc);
-        Assert.NotNull(secondSnapshot.LatencyMs);
+        Assert.Equal(1, plcService.ReadAsyncCallCount);
+        Assert.False(firstSnapshot.IsConnected);
+        Assert.Equal(PlcConnectionState.Connecting, firstSnapshot.ConnectionState);
     }
 
     [Fact]
-    public async Task PlcDataReadScanTask_WhenInteractionMappingExistsAndStatusNotStable_ShouldKeepStableOnlineGate()
+    public async Task PlcDataReadScanTask_WhenInteractionMappingExists_ShouldNotUseProtocolReadAsConnectionGate()
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 11 });
         await plcService.ConnectAsync(TestContext.Current.CancellationToken);
 
         var dataStore = new PlcDataStore();
@@ -797,7 +867,11 @@ public sealed class PlcIoScanTaskBehaviorTests
         await dataReadScan.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
         Assert.True(plcService.IsConnected);
-        Assert.Equal(0, plcService.ReadAsyncCallCount);
+        Assert.Equal(1, plcService.ReadAsyncCallCount);
+        var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(20));
+        Assert.True(buffer.TryGetReadWords("Read-D300", out var words));
+        Assert.Equal((ushort)11, Assert.Single(words));
+        Assert.False(statusStore.GetSnapshot(20)?.IsConnected);
     }
 
     [Fact]
@@ -834,19 +908,25 @@ public sealed class PlcIoScanTaskBehaviorTests
     public async Task PlcIoScanTask_StartAsync_WhenProtocolCancelsWithoutRuntimeCancellation_ShouldEnterErrorPath()
     {
         var plcService = new ScriptedPlcService();
+        plcService.ReadOutcomes.Enqueue(
+            new OperationCanceledException("protocol canceled independently"));
         await plcService.ConnectAsync(TestContext.Current.CancellationToken);
         var dataStore = new PlcDataStore();
         dataStore.Register(21, readSize: 1, writeSize: 0);
         var logger = new FakeLogService();
-        var interaction = new IndependentlyCancelingIoScanTask(
+        var interaction = new PlcIoScanTask(
             plcService,
             dataStore,
-            logger);
+            CreateDevice(21, "PLC-INDEPENDENT-CANCEL"),
+            [CreateIoMapping(21, "Read", "D300", 1)],
+            logger,
+            SignalBlockPlanner);
         using var cts = new CancellationTokenSource();
 
         var runTask = interaction.StartAsync(cts.Token);
         await WaitUntilAsync(() => logger.Entries.Any(entry =>
-            entry.Message.Contains("PLC 信号交互循环异常", StringComparison.Ordinal)));
+            entry.Message.Contains("PLC 读取 block 失败", StringComparison.Ordinal)
+            && entry.Message.Contains("protocol canceled independently", StringComparison.Ordinal)));
 
         Assert.False(cts.IsCancellationRequested);
         Assert.False(runTask.IsCompleted);
@@ -1048,6 +1128,7 @@ public sealed class PlcIoScanTaskBehaviorTests
         public Queue<object?> WriteOutcomes { get; } = new();
         public List<(string Address, ushort Length)> ReadRequests { get; } = [];
         public List<(string Address, ushort[] Data)> WriteRequests { get; } = [];
+        public bool DropConnectionOnReadFailure { get; init; }
 
         public override bool IsConnected { get; protected set; }
         public PlcEndpoint? Endpoint { get; private set; }
@@ -1101,6 +1182,11 @@ public sealed class PlcIoScanTaskBehaviorTests
                 var outcome = ReadOutcomes.Dequeue();
                 if (outcome is Exception ex)
                 {
+                    if (DropConnectionOnReadFailure)
+                    {
+                        IsConnected = false;
+                    }
+
                     throw ex;
                 }
 

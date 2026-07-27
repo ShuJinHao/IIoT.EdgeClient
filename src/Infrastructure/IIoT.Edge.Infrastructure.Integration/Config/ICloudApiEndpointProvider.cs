@@ -12,6 +12,7 @@ public interface ICloudApiEndpointProvider : ICloudApiPathProvider
     string GetBootstrapRefreshPath();
     string GetIdentityDeviceLoginPath();
     string GetHumanIdentityRefreshPath();
+    string GetHumanSessionValidationPath();
     string GetDeviceLogPath();
     string GetEdgeHostPlcRuntimeStatesPath();
     string BuildRecipeByDevicePath(Guid deviceId);

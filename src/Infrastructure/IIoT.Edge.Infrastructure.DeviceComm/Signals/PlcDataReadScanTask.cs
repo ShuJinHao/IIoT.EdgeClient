@@ -18,7 +18,6 @@ namespace IIoT.Edge.Infrastructure.DeviceComm.Signals;
 public sealed class PlcDataReadScanTask : IPlcTask
 {
     private const int DisconnectLogIntervalSeconds = 30;
-    private const int ConnectionFailureThreshold = 3;
 
     private readonly IPlcService _plcService;
     private readonly IPlcDataStore _dataStore;
@@ -27,7 +26,6 @@ public sealed class PlcDataReadScanTask : IPlcTask
     private readonly PlcConnectionStatusStore? _statusStore;
     private readonly Func<CancellationToken, Task<int>> _dataReadLoopIntervalResolver;
     private readonly IReadOnlyList<PlcSignalBlock> _readBlocks;
-    private readonly bool _canPromoteConnectionFromReadData;
     private int _retryCount;
     private DateTime _lastDisconnectLogTime = DateTime.MinValue;
 
@@ -65,11 +63,6 @@ public sealed class PlcDataReadScanTask : IPlcTask
                 mapping.SortOrder))
             .ToArray();
 
-        var hasInteractionMapping = scanMappings.Any(static mapping =>
-            IoMappingOptionCatalog.IsInteractionCategory(mapping.Category));
-        var hasWriteMapping = scanMappings.Any(static mapping => mapping.IsWrite);
-        _canPromoteConnectionFromReadData = !hasInteractionMapping && !hasWriteMapping;
-
         var readMappings = scanMappings
             .Where(static mapping => mapping.IsRead && IoMappingOptionCatalog.IsReadDataCategory(mapping.Category))
             .OrderBy(static mapping => mapping.SortOrder)
@@ -90,10 +83,7 @@ public sealed class PlcDataReadScanTask : IPlcTask
     public async Task ExecuteOneCycleAsync(CancellationToken ct)
     {
         if (_readBlocks.Count == 0
-            || !_plcService.IsConnected
-            || (_statusStore is not null
-                && !_canPromoteConnectionFromReadData
-                && !_statusStore.IsStableOnline(_device.Id)))
+            || !_plcService.IsConnected)
         {
             return;
         }
@@ -108,7 +98,7 @@ public sealed class PlcDataReadScanTask : IPlcTask
         var hasSuccessfulRead = await ReadPlcToBufferAsync(buffer, ct).ConfigureAwait(false);
         stopwatch.Stop();
 
-        if (hasSuccessfulRead && _canPromoteConnectionFromReadData)
+        if (hasSuccessfulRead)
         {
             _statusStore?.MarkProtocolSuccess(
                 _device.Id,
@@ -153,10 +143,25 @@ public sealed class PlcDataReadScanTask : IPlcTask
         IPlcBufferTransport buffer,
         CancellationToken cancellationToken)
     {
-        var stagedValues = new Dictionary<string, ushort[]>(StringComparer.OrdinalIgnoreCase);
+        var batchId = Guid.NewGuid();
+        var attemptedAtUtc = DateTimeOffset.UtcNow;
+        var stagedUpdates = new Dictionary<string, PlcReadSignalUpdate>(StringComparer.OrdinalIgnoreCase);
+        var hasSuccessfulRead = false;
+        string? remainingFailureReason = null;
 
         foreach (var block in _readBlocks)
         {
+            if (remainingFailureReason is not null || !_plcService.IsConnected)
+            {
+                StageFailedBlock(
+                    stagedUpdates,
+                    block,
+                    batchId,
+                    attemptedAtUtc,
+                    remainingFailureReason ?? "PLC transport 当前不可用，未发起本 block 读取。");
+                continue;
+            }
+
             try
             {
                 var data = await _plcService
@@ -171,9 +176,15 @@ public sealed class PlcDataReadScanTask : IPlcTask
 
                 foreach (var item in block.Items)
                 {
-                    stagedValues[item.Mapping.SignalKey] =
-                        SliceWords(words, item.Offset, item.Mapping.AddressCount);
+                    stagedUpdates[item.Mapping.SignalKey] = new PlcReadSignalUpdate(
+                        SliceWords(words, item.Offset, item.Mapping.AddressCount),
+                        ReadSucceeded: true,
+                        batchId,
+                        attemptedAtUtc,
+                        FailureReason: null);
                 }
+
+                hasSuccessfulRead = true;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -185,38 +196,78 @@ public sealed class PlcDataReadScanTask : IPlcTask
             }
             catch (Exception ex)
             {
-                await HandleFailedCycleAsync(block, ex).ConfigureAwait(false);
-                return false;
+                var failureReason = FormatException(ex);
+                StageFailedBlock(
+                    stagedUpdates,
+                    block,
+                    batchId,
+                    attemptedAtUtc,
+                    failureReason);
+
+                var isTransportFailure = PlcOperationFailureClassifier.IsTransportFailure(ex);
+                LogBlockFailure(block, ex, isTransportFailure);
+                if (isTransportFailure)
+                {
+                    remainingFailureReason =
+                        $"前序 block 已发生明确 transport 故障：{failureReason}";
+                    await HandleTransportFailureAsync(block, ex).ConfigureAwait(false);
+                }
+                else if (!_plcService.IsConnected)
+                {
+                    remainingFailureReason =
+                        $"前序 block 失败后 PLC service 暂不可用：{failureReason}";
+                }
             }
         }
 
-        CommitCompleteSnapshot(buffer, stagedValues);
-        _retryCount = 0;
-        return true;
+        CommitReadBatch(buffer, stagedUpdates);
+        if (hasSuccessfulRead)
+        {
+            _retryCount = 0;
+        }
+
+        return hasSuccessfulRead;
     }
 
-    private async Task HandleFailedCycleAsync(PlcSignalBlock block, Exception exception)
+    private void LogBlockFailure(
+        PlcSignalBlock block,
+        Exception exception,
+        bool isTransportFailure)
     {
-        _retryCount++;
         var message =
-            $"PLC 只读数据周期失败，地址={block.StartAddress}，长度={block.WordCount}，信号={FormatBlockSignals(block)}，原因={FormatException(exception)}；本周期不发布，保留上一份完整快照。";
-        _statusStore?.MarkDisconnected(_device.Id, _device.DeviceName, message);
+            $"PLC 只读 block 失败，地址={block.StartAddress}，长度={block.WordCount}，信号={FormatBlockSignals(block)}，失败类型={(isTransportFailure ? "Transport" : "Request")}，原因={FormatException(exception)}；受影响信号已发布默认值与失败质量，未执行单信号重读。";
 
         if (ShouldLogDisconnect())
         {
             _logger.Error($"[PLC-{_device.DeviceName}][采集] {message}");
         }
+    }
 
-        if (!_plcService.IsConnected || _retryCount < ConnectionFailureThreshold)
+    private async Task HandleTransportFailureAsync(
+        PlcSignalBlock block,
+        Exception exception)
+    {
+        var message =
+            $"PLC transport 故障，操作=Read，地址={block.StartAddress}，长度={block.WordCount}，原因={FormatException(exception)}。";
+        _statusStore?.MarkDisconnected(_device.Id, _device.DeviceName, message);
+
+        if (!_plcService.IsConnected)
         {
             return;
         }
 
-        await _plcService.DisconnectAsync(CancellationToken.None).ConfigureAwait(false);
-        if (ShouldLogDisconnect())
+        try
+        {
+            await _plcService.DisconnectAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (PlcServiceQuarantinedException)
+        {
+            throw;
+        }
+        catch (Exception disconnectException)
         {
             _logger.Error(
-                $"[PLC-{_device.DeviceName}][采集] PLC 只读数据连续 {_retryCount} 轮失败，连接已重置，等待现有运行时重连。");
+                $"[PLC-{_device.DeviceName}][采集] transport 故障后的连接释放失败：{FormatException(disconnectException)}");
         }
     }
 
@@ -270,19 +321,37 @@ public sealed class PlcDataReadScanTask : IPlcTask
         return result;
     }
 
-    private static void CommitCompleteSnapshot(
+    private static void StageFailedBlock(
+        IDictionary<string, PlcReadSignalUpdate> stagedUpdates,
+        PlcSignalBlock block,
+        Guid batchId,
+        DateTimeOffset attemptedAtUtc,
+        string failureReason)
+    {
+        foreach (var item in block.Items)
+        {
+            stagedUpdates[item.Mapping.SignalKey] = new PlcReadSignalUpdate(
+                new ushort[Math.Max(1, item.Mapping.AddressCount)],
+                ReadSucceeded: false,
+                batchId,
+                attemptedAtUtc,
+                failureReason);
+        }
+    }
+
+    private static void CommitReadBatch(
         IPlcBufferTransport buffer,
-        IReadOnlyDictionary<string, ushort[]> stagedValues)
+        IReadOnlyDictionary<string, PlcReadSignalUpdate> stagedUpdates)
     {
         if (buffer is PlcBuffer plcBuffer)
         {
-            plcBuffer.UpdateReadSignals(stagedValues);
+            plcBuffer.PublishReadBatch(stagedUpdates);
             return;
         }
 
-        foreach (var (signalKey, words) in stagedValues)
+        foreach (var (signalKey, update) in stagedUpdates)
         {
-            buffer.UpdateReadSignal(signalKey, words);
+            buffer.UpdateReadSignal(signalKey, update.CurrentWords);
         }
     }
 

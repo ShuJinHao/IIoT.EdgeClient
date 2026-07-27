@@ -71,11 +71,17 @@
                 x:Name="NetworkDeviceDialog"
                 Classes="inline-dialog hardware-form-dialog"
                 HorizontalAlignment="Center"
+                MaxHeight="680"
                 VerticalAlignment="Center"
                 CloseCommand="{Binding CancelNetworkDeviceDialogCommand}"
                 CloseTopLevelOnClose="False"
                 Title="{Binding NetworkDeviceDialogTitle}">
-                <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="{DynamicResource Edge.Size.Spacing12}">
+                <edge:EdgeScrollHost
+                    x:Name="NetworkDeviceDialogScrollHost"
+                    MaxHeight="480"
+                    Variant="Panel"
+                    VerticalScrollBarVisibility="Auto">
+                    <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="{DynamicResource Edge.Size.Spacing12}">
                     <edge:EdgeCard Elevation="Flat" PaddingMode="Compact" Surface="Wash">
                         <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="{DynamicResource Edge.Size.Spacing6}">
                             <TextBlock
@@ -174,7 +180,8 @@
                             </edge:EdgeFieldRow>
                         </Grid>
                     </edge:EdgeCard>
-                </Grid>
+                    </Grid>
+                </edge:EdgeScrollHost>
 
                 <edge:EdgeDialogChrome.FooterContent>
                     <StackPanel Classes="edge-dialog-actions">

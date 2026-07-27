@@ -1,13 +1,12 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
-using System.Text;
 using IIoT.Edge.Module.Contracts.Auth;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Infrastructure.Integration.Http;
 using IIoT.Edge.SharedKernel.Security;
-using Microsoft.IdentityModel.Tokens;
 
 namespace IIoT.Edge.Infrastructure.Integration.Auth;
 
@@ -19,7 +18,6 @@ public class AuthService : IAuthService
     private readonly ICloudApiEndpointProvider _endpointProvider;
     private readonly LocalAdminConfig _localAdminConfig;
     private readonly ILocalAdminCredentialStore _localAdminCredentialStore;
-    private readonly CloudJwtValidationConfig _jwtValidationConfig;
     private readonly TimeProvider _timeProvider;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private UserSession? _currentUser;
@@ -35,14 +33,12 @@ public class AuthService : IAuthService
         ICloudApiEndpointProvider endpointProvider,
         LocalAdminConfig localAdminConfig,
         ILocalAdminCredentialStore localAdminCredentialStore,
-        CloudJwtValidationConfig jwtValidationConfig,
         TimeProvider? timeProvider = null)
     {
         _httpClientFactory = httpClientFactory;
         _endpointProvider = endpointProvider;
         _localAdminConfig = localAdminConfig;
         _localAdminCredentialStore = localAdminCredentialStore;
-        _jwtValidationConfig = jwtValidationConfig;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
@@ -149,7 +145,11 @@ public class AuthService : IAuthService
                 deviceId
             }).ConfigureAwait(false);
 
-            var session = await TryReadSessionAsync(response).ConfigureAwait(false);
+            var session = await TryReadSessionAsync(
+                    httpClient,
+                    response,
+                    CancellationToken.None)
+                .ConfigureAwait(false);
             if (session is null)
             {
                 return AuthResult.Fail(response.IsSuccessStatusCode
@@ -317,8 +317,9 @@ public class AuthService : IAuthService
                 _endpointProvider.BuildUrl(_endpointProvider.GetHumanIdentityRefreshPath()));
             request.Headers.TryAddWithoutValidation(CloudAuthHeaders.RefreshToken, _currentUser.RefreshToken);
 
-            using var response = await CreateHttpClient().SendAsync(request, ct).ConfigureAwait(false);
-            var refreshedSession = await TryReadSessionAsync(response).ConfigureAwait(false);
+            var httpClient = CreateHttpClient();
+            using var response = await httpClient.SendAsync(request, ct).ConfigureAwait(false);
+            var refreshedSession = await TryReadSessionAsync(httpClient, response, ct).ConfigureAwait(false);
             if (refreshedSession is null)
             {
                 SetSession(null);
@@ -339,7 +340,10 @@ public class AuthService : IAuthService
         }
     }
 
-    private async Task<UserSession?> TryReadSessionAsync(HttpResponseMessage response)
+    private async Task<UserSession?> TryReadSessionAsync(
+        HttpClient httpClient,
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
     {
         if (!response.IsSuccessStatusCode)
         {
@@ -352,10 +356,29 @@ public class AuthService : IAuthService
             return null;
         }
 
+        if (!await IsAccessTokenAcceptedByCloudAsync(httpClient, token, cancellationToken).ConfigureAwait(false))
+        {
+            return null;
+        }
+
         return ParseJwtToken(
             token,
             CloudAuthHeaders.ReadRefreshToken(response),
             CloudAuthHeaders.ReadRefreshTokenExpiresAtUtc(response));
+    }
+
+    private async Task<bool> IsAccessTokenAcceptedByCloudAsync(
+        HttpClient httpClient,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            _endpointProvider.BuildUrl(_endpointProvider.GetHumanSessionValidationPath()));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        return response.IsSuccessStatusCode;
     }
 
     private static async Task<string> BuildAuthFailureMessageAsync(HttpResponseMessage response)
@@ -399,13 +422,22 @@ public class AuthService : IAuthService
     {
         try
         {
-            var principal = ValidateJwtToken(token);
-            if (principal is null)
+            var handler = new JwtSecurityTokenHandler
+            {
+                MapInboundClaims = false
+            };
+            if (!handler.CanReadToken(token))
             {
                 return null;
             }
 
-            var claims = principal.Claims.ToArray();
+            var jwtToken = handler.ReadJwtToken(token);
+            var claims = jwtToken.Claims.ToArray();
+            var expiresAtUtc = TryGetExpiresAtUtc(claims);
+            if (!expiresAtUtc.HasValue || expiresAtUtc.Value <= _timeProvider.GetUtcNow())
+            {
+                return null;
+            }
 
             var displayName = claims
                 .FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.UniqueName)
@@ -433,7 +465,7 @@ public class AuthService : IAuthService
                 EmployeeNo = employeeNo,
                 IsLocalAdmin = false,
                 Permissions = permissions,
-                ExpiresAtUtc = TryGetExpiresAtUtc(claims),
+                ExpiresAtUtc = expiresAtUtc,
                 AccessToken = token,
                 RefreshToken = refreshToken,
                 RefreshTokenExpiresAtUtc = refreshTokenExpiresAtUtc
@@ -443,39 +475,6 @@ public class AuthService : IAuthService
         {
             return null;
         }
-    }
-
-    private ClaimsPrincipal? ValidateJwtToken(string token)
-    {
-        var signingKey = _jwtValidationConfig.JwtSigningKey?.Trim();
-        var issuer = _jwtValidationConfig.JwtIssuer?.Trim();
-        var audience = _jwtValidationConfig.JwtAudience?.Trim();
-        if (string.IsNullOrWhiteSpace(signingKey)
-            || string.IsNullOrWhiteSpace(issuer)
-            || string.IsNullOrWhiteSpace(audience))
-        {
-            return null;
-        }
-
-        var handler = new JwtSecurityTokenHandler
-        {
-            MapInboundClaims = false
-        };
-        var validationParameters = new TokenValidationParameters
-        {
-            RequireSignedTokens = true,
-            RequireExpirationTime = true,
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
-            ValidateIssuer = true,
-            ValidIssuer = issuer,
-            ValidateAudience = true,
-            ValidAudience = audience,
-            ValidateLifetime = true,
-            ClockSkew = TimeSpan.FromSeconds(30)
-        };
-
-        return handler.ValidateToken(token, validationParameters, out _);
     }
 
     private static DateTimeOffset? TryGetExpiresAtUtc(IEnumerable<Claim> claims)

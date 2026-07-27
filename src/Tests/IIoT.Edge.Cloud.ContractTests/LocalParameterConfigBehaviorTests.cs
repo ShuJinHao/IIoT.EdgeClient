@@ -371,7 +371,11 @@ public sealed class LocalParameterConfigBehaviorTests
             repository,
             new TestEdgeUnitOfWorkFactory(repository),
             new TestEdgeCacheService(),
-            projection);
+            projection,
+            new StubCloudApiConfigSnapshotProvider(
+                CreateCloudApiConfigSnapshot(
+                    clientCode: string.Empty,
+                    bootstrapSecret: string.Empty)));
 
         var result = await migration.MigrateAsync(TestContext.Current.CancellationToken);
 
@@ -395,13 +399,119 @@ public sealed class LocalParameterConfigBehaviorTests
             repository,
             new TestEdgeUnitOfWorkFactory(repository),
             new TestEdgeCacheService(),
-            projection);
+            projection,
+            new StubCloudApiConfigSnapshotProvider(
+                CreateCloudApiConfigSnapshot(
+                    clientCode: string.Empty,
+                    bootstrapSecret: string.Empty)));
 
         var result = await migration.MigrateAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result);
         Assert.Equal([false], projection.Values);
         Assert.Equal(2, repository.Items.Count);
+    }
+
+    [Fact]
+    public async Task CloudSystemSwitchMigration_WhenCompleteLauncherBindingEnablesProfile_ShouldEnablePersistedSwitch()
+    {
+        var repository = new InMemoryRepository<SystemConfigEntity>(
+            CreateSystemConfig(1, CloudApiConfigParamSchema.Enabled, "false"),
+            CreateSystemConfig(2, CloudSystemSwitchMigration.MigrationMarkerKey, "true"));
+        var projection = new RecordingCloudProfileSwitchProjectionWriter();
+        var migration = new CloudSystemSwitchMigration(
+            repository,
+            new TestEdgeUnitOfWorkFactory(repository),
+            new TestEdgeCacheService(),
+            projection,
+            new StubCloudApiConfigSnapshotProvider(
+                CreateCloudApiConfigSnapshot(
+                    enabled: true,
+                    baseUrl: "http://cloud.local:8080",
+                    clientCode: "DEV-CP",
+                    bootstrapSecret: "BOOTSTRAP-CP")));
+
+        var result = await migration.MigrateAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(result);
+        Assert.Equal([true], projection.Values);
+        Assert.Equal(
+            "true",
+            repository.Items.Single(config => config.Key == CloudApiConfigParamSchema.Enabled).Value,
+            ignoreCase: true);
+        Assert.Single(repository.Items, config => config.Key == CloudSystemSwitchMigration.MigrationMarkerKey);
+    }
+
+    [Fact]
+    public async Task CloudSystemSwitchMigration_WhenHistoricalProjectionDisabledCompleteBinding_ShouldRepairOnlyOnce()
+    {
+        var repository = new InMemoryRepository<SystemConfigEntity>(
+            CreateSystemConfig(1, CloudApiConfigParamSchema.Enabled, "false"),
+            CreateSystemConfig(2, CloudSystemSwitchMigration.MigrationMarkerKey, "true"));
+        var projection = new RecordingCloudProfileSwitchProjectionWriter();
+        var boundButDisabledProfile = new StubCloudApiConfigSnapshotProvider(
+            CreateCloudApiConfigSnapshot(
+                enabled: false,
+                baseUrl: "http://cloud.local:8080",
+                clientCode: "DEV-CP",
+                bootstrapSecret: "BOOTSTRAP-CP"));
+        var migration = new CloudSystemSwitchMigration(
+            repository,
+            new TestEdgeUnitOfWorkFactory(repository),
+            new TestEdgeCacheService(),
+            projection,
+            boundButDisabledProfile);
+
+        var firstResult = await migration.MigrateAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(firstResult);
+        Assert.Equal([true], projection.Values);
+        Assert.Equal(
+            "true",
+            repository.Items.Single(config => config.Key == CloudApiConfigParamSchema.Enabled).Value,
+            ignoreCase: true);
+        Assert.Single(repository.Items, config => config.Key == CloudSystemSwitchMigration.BindingRepairMarkerKey);
+
+        repository.Items.Single(config => config.Key == CloudApiConfigParamSchema.Enabled)
+            .UpdateValue("false");
+        projection.Values.Clear();
+
+        var secondResult = await migration.MigrateAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(secondResult);
+        Assert.Equal([false], projection.Values);
+        Assert.Equal(
+            "false",
+            repository.Items.Single(config => config.Key == CloudApiConfigParamSchema.Enabled).Value,
+            ignoreCase: true);
+    }
+
+    [Fact]
+    public async Task CloudSystemSwitchMigration_OnFreshBoundInstall_ShouldSeedEnabledSwitch()
+    {
+        var repository = new InMemoryRepository<SystemConfigEntity>();
+        var projection = new RecordingCloudProfileSwitchProjectionWriter();
+        var migration = new CloudSystemSwitchMigration(
+            repository,
+            new TestEdgeUnitOfWorkFactory(repository),
+            new TestEdgeCacheService(),
+            projection,
+            new StubCloudApiConfigSnapshotProvider(
+                CreateCloudApiConfigSnapshot(
+                    enabled: true,
+                    baseUrl: "http://cloud.local:8080",
+                    clientCode: "DEV-CP",
+                    bootstrapSecret: "BOOTSTRAP-CP")));
+
+        var result = await migration.MigrateAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(result);
+        Assert.Equal([true], projection.Values);
+        Assert.Equal(
+            "true",
+            repository.Items.Single(config => config.Key == CloudApiConfigParamSchema.Enabled).Value,
+            ignoreCase: true);
+        Assert.Single(repository.Items, config => config.Key == CloudSystemSwitchMigration.MigrationMarkerKey);
     }
 
     [Fact]
@@ -623,25 +733,34 @@ public sealed class LocalParameterConfigBehaviorTests
                 .Handle(command, cancellationToken);
     }
 
-    private sealed class StubCloudApiConfigSnapshotProvider : ICloudApiConfigSnapshotProvider
+    private static CloudApiConfigSnapshot CreateCloudApiConfigSnapshot(
+        bool enabled = false,
+        string baseUrl = "https://config-cloud.test",
+        string clientCode = "CONFIG-CLIENT",
+        string bootstrapSecret = "secret")
+        => new(
+            baseUrl,
+            clientCode,
+            bootstrapSecret,
+            "/config/device-instance",
+            "/config/bootstrap-refresh",
+            "/config/login",
+            "/config/human-refresh",
+            "/config/logs",
+            "/config/pass-stations/{typeKey}/batch",
+            "/config/capacity-hourly",
+            "/config/capacity-summary",
+            "/config/capacity-range",
+            "/config/recipes/{deviceId}",
+            "/config/client-releases/device/{deviceId}/catalog",
+            "/config/client-version-reports",
+            enabled);
+
+    private sealed class StubCloudApiConfigSnapshotProvider(
+        CloudApiConfigSnapshot? snapshot = null) : ICloudApiConfigSnapshotProvider
     {
         public CloudApiConfigSnapshot GetCurrent()
-            => new(
-                "https://config-cloud.test",
-                "CONFIG-CLIENT",
-                "secret",
-                "/config/device-instance",
-                "/config/bootstrap-refresh",
-                "/config/login",
-                "/config/human-refresh",
-                "/config/logs",
-                "/config/pass-stations/{typeKey}/batch",
-                "/config/capacity-hourly",
-                "/config/capacity-summary",
-                "/config/capacity-range",
-                "/config/recipes/{deviceId}",
-                "/config/client-releases/device/{deviceId}/catalog",
-                "/config/client-version-reports");
+            => snapshot ?? CreateCloudApiConfigSnapshot();
     }
 
     private enum TestMesParams
