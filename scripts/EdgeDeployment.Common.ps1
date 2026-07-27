@@ -55,6 +55,31 @@ function Assert-EdgeReleaseGitState {
     $head = (Invoke-EdgeGitCapture -RepoRoot $RepoRoot -Arguments @('rev-parse', 'HEAD')).Text
     $branch = (Invoke-EdgeGitCapture -RepoRoot $RepoRoot -Arguments @('rev-parse', '--abbrev-ref', 'HEAD')).Text
     $isDetached = [string]::Equals($branch, 'HEAD', [System.StringComparison]::Ordinal)
+    $isProductionNowSnapshot = $false
+    if ($AllowDetachedExactSha -and
+        $isDetached -and
+        $env:IIOT_DEPLOY_CONTROL_SNAPSHOT -eq '1' -and
+        -not [string]::IsNullOrWhiteSpace($env:IIOT_DEPLOY_WORKSPACE_ROOT)) {
+        $workspaceRoot = [IO.Path]::GetFullPath($env:IIOT_DEPLOY_WORKSPACE_ROOT)
+        $snapshotRoot = [IO.Path]::GetFullPath(
+            (Join-Path $workspaceRoot 'artifacts/deploy/production-now'))
+        $repositoryRoot = [IO.Path]::GetFullPath($RepoRoot)
+        $relativeRepository = [IO.Path]::GetRelativePath(
+            $snapshotRoot,
+            $repositoryRoot).Replace('\', '/')
+        $segments = @($relativeRepository.Split(
+            '/',
+            [StringSplitOptions]::RemoveEmptyEntries))
+        $isProductionNowSnapshot = (
+            $segments.Count -eq 4 -and
+            $segments[0] -match '^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$' -and
+            $segments[1] -ceq 'source' -and
+            $segments[2] -ceq 'edge-workspace' -and
+            $segments[3] -cin @(
+                'IIoT.EdgeClient',
+                'IIoT.Edge.Plugins.Private'
+            ))
+    }
     if (-not [string]::IsNullOrWhiteSpace($ExpectedSha)) {
         if (-not [string]::Equals($head, $ExpectedSha, [System.StringComparison]::OrdinalIgnoreCase)) {
             throw "Formal Edge release candidate changed after the deployment plan was frozen: expected='$ExpectedSha' actual='$head'."
@@ -63,7 +88,7 @@ function Assert-EdgeReleaseGitState {
             -not ($AllowDetachedExactSha -and $isDetached)) {
             throw "Formal Edge release candidate must remain on main: expectedSha='$ExpectedSha' branch='$branch'."
         }
-        if ($isDetached) {
+        if ($isDetached -and -not $isProductionNowSnapshot) {
             $mainHead = (Invoke-EdgeGitCapture `
                 -RepoRoot $RepoRoot `
                 -Arguments @('rev-parse', '--verify', 'main^{commit}')).Text
@@ -73,6 +98,15 @@ function Assert-EdgeReleaseGitState {
                     [System.StringComparison]::OrdinalIgnoreCase)) {
                 throw "Formal Edge immutable source snapshot does not match local main: expected='$ExpectedSha' actual='$mainHead'."
             }
+        }
+    }
+
+    if ($isProductionNowSnapshot) {
+        return [PSCustomObject]@{
+            Head = $head
+            Branch = $branch
+            Upstream = 'production-now-snapshot'
+            UpstreamHead = $head
         }
     }
 

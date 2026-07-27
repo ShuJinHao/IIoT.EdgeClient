@@ -796,7 +796,17 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
     }
 
     private void OnSourcePropertyChanged(object? sender, PropertyChangedEventArgs e)
-        => OnPropertyChanged(string.Empty);
+    {
+        if (AvaloniaDispatcher.UIThread.CheckAccess())
+        {
+            OnPropertyChanged(string.Empty);
+            return;
+        }
+
+        AvaloniaDispatcher.UIThread.Post(
+            () => OnPropertyChanged(string.Empty),
+            DispatcherPriority.Background);
+    }
 
     protected override void OnLanguageChanged()
     {

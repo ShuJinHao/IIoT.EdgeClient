@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using Avalonia.Threading;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Modularity;
 using IIoT.Edge.UI.Shared.Mvvm;
@@ -38,7 +39,7 @@ public sealed class OverviewWorkspaceViewModel : BaseNotifyPropertyChanged
         });
         Select(Tabs[0]);
 
-        _languageService.LanguageChanged += (_, _) => RefreshLanguage();
+        _languageService.LanguageChanged += (_, _) => RunOnUiThread(RefreshLanguage);
     }
 
     public ObservableCollection<OverviewTabItemViewModel> Tabs { get; }
@@ -112,6 +113,17 @@ public sealed class OverviewWorkspaceViewModel : BaseNotifyPropertyChanged
         OnPropertyChanged(nameof(MissingCapacityTitle));
         OnPropertyChanged(nameof(MissingCapacityDescription));
         OnPropertyChanged(nameof(SelectedTab));
+    }
+
+    private static void RunOnUiThread(Action action)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        Dispatcher.UIThread.Post(action);
     }
 
     private string? ResolvePluginRoute(string suffix)

@@ -72,22 +72,6 @@ public static class DependencyInjection
                 runtimePaths.RuntimeDataRoot,
                 "security",
                 "local-admin.json")));
-        services.AddSingleton(new CloudJwtValidationConfig
-        {
-            JwtSigningKey =
-                Environment.GetEnvironmentVariable("CloudApi__Auth__JwtSigningKey")?.Trim()
-                ?? configuration["CloudApi:Auth:JwtSigningKey"]?.Trim()
-                ?? string.Empty,
-            JwtIssuer =
-                Environment.GetEnvironmentVariable("CloudApi__Auth__JwtIssuer")?.Trim()
-                ?? configuration["CloudApi:Auth:JwtIssuer"]?.Trim()
-                ?? string.Empty,
-            JwtAudience =
-                Environment.GetEnvironmentVariable("CloudApi__Auth__JwtAudience")?.Trim()
-                ?? configuration["CloudApi:Auth:JwtAudience"]?.Trim()
-                ?? string.Empty
-        });
-
         services.AddTransient<CloudExecutionPolicyHandler>();
 
         services.AddHttpClient(AuthService.HttpClientName, client => client.Timeout = timeout)

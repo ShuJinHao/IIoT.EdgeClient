@@ -350,4 +350,13 @@ finally {
     $portableArchive.Dispose()
 }
 
+& (Join-Path $PSScriptRoot 'TestEdgeDependencyClosure.ps1') `
+    -SourcePath $fullPackagePath `
+    -LayoutRoot 'lib/app' `
+    -RequireReferenceComparison
+& (Join-Path $PSScriptRoot 'TestEdgeDependencyClosure.ps1') `
+    -SourcePath $portablePath `
+    -LayoutRoot 'current' `
+    -RequireReferenceComparison
+
 Write-Host "Velopack package smoke test passed: $resolvedOutputRoot"

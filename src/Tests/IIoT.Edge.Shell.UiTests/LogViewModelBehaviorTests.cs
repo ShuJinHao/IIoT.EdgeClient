@@ -1,4 +1,7 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.Presentation.Panels.Features.SysLog;
@@ -8,7 +11,7 @@ namespace IIoT.Edge.Shell.UiTests;
 
 public sealed class LogViewModelBehaviorTests
 {
-    [Fact]
+    [AvaloniaFact]
     public void Entries_WhenMultiplePlcsFailSameSignal_ShouldShowSummaryByDefault()
     {
         var store = new TestSystemLogDisplayStore();
@@ -28,7 +31,7 @@ public sealed class LogViewModelBehaviorTests
         Assert.Contains("MES 上传已暂停", summary.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Entries_WhenDeviceFilterSelected_ShouldShowSelectedDeviceRawEntries()
     {
         var store = new TestSystemLogDisplayStore();
@@ -50,7 +53,7 @@ public sealed class LogViewModelBehaviorTests
         Assert.DoesNotContain("[PLC-A02]", entry.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void SelectedDeviceFilter_WhenChangedInsideLogPage_ShouldNotPublishSharedSelection()
     {
         var store = new TestSystemLogDisplayStore();
@@ -71,7 +74,7 @@ public sealed class LogViewModelBehaviorTests
         Assert.Equal("PLC-A01", viewModel.SelectedDeviceFilter?.Key);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Entries_WhenSharedSelectionHasNoCurrentLogRows_ShouldKeepSelectedDeviceFilter()
     {
         var store = new TestSystemLogDisplayStore();
@@ -89,6 +92,55 @@ public sealed class LogViewModelBehaviorTests
         Assert.True(viewModel.IsLogEmpty);
     }
 
+    [AvaloniaFact]
+    public async Task LogDisplayService_WhenPublishedConcurrently_ShouldBatchOnUiThreadAndKeepLatestTwoHundred()
+    {
+        var source = new ConcurrentLogService();
+        var display = new LogDisplayService(source);
+        var resetCount = 0;
+        var collectionNotificationsStayedOnUiThread = true;
+        display.Entries.CollectionChanged += (_, args) =>
+        {
+            collectionNotificationsStayedOnUiThread &= Dispatcher.UIThread.CheckAccess();
+            if (args.Action == NotifyCollectionChangedAction.Reset)
+            {
+                resetCount++;
+            }
+        };
+
+        var publishers = Enumerable.Range(0, 4)
+            .Select(worker => Task.Run(
+                () =>
+                {
+                    for (var index = 0; index < 75; index++)
+                    {
+                        source.Publish($"worker={worker};index={index}");
+                    }
+                },
+                TestContext.Current.CancellationToken))
+            .ToArray();
+        await Task.WhenAll(publishers);
+
+        Assert.Empty(display.Entries);
+        await WaitUntilAsync(() => display.Entries.Count == 200);
+
+        Assert.True(collectionNotificationsStayedOnUiThread);
+        Assert.Equal(200, display.Entries.Count);
+        Assert.Equal(1, resetCount);
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(
+            timeout.Token,
+            TestContext.Current.CancellationToken);
+        while (!condition())
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(25), linked.Token);
+        }
+    }
+
     private static LogEntry CreateEntry(string level, string message, int second)
         => new()
         {
@@ -102,5 +154,28 @@ public sealed class LogViewModelBehaviorTests
         public ObservableCollection<LogEntry> Entries { get; } = [];
 
         public void Clear() => Entries.Clear();
+    }
+
+    private sealed class ConcurrentLogService : ILogService
+    {
+        public event Action<LogEntry>? EntryAdded;
+
+        public void Debug(string message) => Publish(message);
+
+        public void Info(string message) => Publish(message);
+
+        public void Warn(string message) => Publish(message);
+
+        public void Error(string message) => Publish(message);
+
+        public void Fatal(string message) => Publish(message);
+
+        public void Publish(string message)
+            => EntryAdded?.Invoke(new LogEntry
+            {
+                Time = DateTime.UtcNow,
+                Level = "Info",
+                Message = message
+            });
     }
 }

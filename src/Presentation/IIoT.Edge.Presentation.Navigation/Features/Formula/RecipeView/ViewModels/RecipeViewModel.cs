@@ -210,13 +210,16 @@ public class RecipeViewModel : LocalizedCrudPageViewModelBase
 
     private async Task UpdateAdminStateAsync()
     {
-        IsLocalAdmin = await _crudService.GetIsLocalAdminAsync();
+        var isLocalAdmin = await _crudService
+            .GetIsLocalAdminAsync()
+            .ConfigureAwait(false);
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => IsLocalAdmin = isLocalAdmin);
     }
 
     private void RefreshUI()
-    {
-        _ = RefreshUIAsync();
-    }
+        => DispatchToUi(() => ObserveEventTask(
+            RefreshUIAsync,
+            GetText("Navigation_Recipe_LoadFailed", "加载配方失败。")));
 
     private void EnsureSubscriptions()
     {
@@ -243,39 +246,60 @@ public class RecipeViewModel : LocalizedCrudPageViewModelBase
     }
 
     private void OnRecipeChangedUpdateAdminState()
+        => DispatchToUi(() => ObserveEventTask(
+            UpdateAdminStateAsync,
+            GetText("Navigation_Recipe_AdminStateFailed", "刷新管理员状态失败。")));
+
+    private void ObserveEventTask(Func<Task> execute, string errorMessage)
+        => _ = ObserveEventTaskAsync(execute, errorMessage);
+
+    private async Task ObserveEventTaskAsync(Func<Task> execute, string errorMessage)
     {
-        _ = UpdateAdminStateAsync();
+        try
+        {
+            await execute().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(
+                () => SetError($"{errorMessage}: {ex.Message}"));
+        }
     }
 
     private async Task RefreshUIAsync()
     {
-        var snapshot = await _crudService.GetSnapshotAsync();
+        var snapshot = await _crudService
+            .GetSnapshotAsync()
+            .ConfigureAwait(false);
 
-        if (snapshot is null)
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
         {
-            RecipeName = GetText("Navigation_Recipe_NotLoaded", "未加载");
-            RecipeVersion = "";
-            ProcessName = "";
-            UpdatedAt = "";
-            Params.Clear();
-            return;
-        }
-
-        RecipeName = snapshot.RecipeName;
-        RecipeVersion = snapshot.RecipeVersion;
-        ProcessName = snapshot.ProcessName;
-        UpdatedAt = snapshot.UpdatedAt;
-        IsCloudSource = snapshot.IsCloudSource;
-
-        ReplaceItems(
-            Params,
-            snapshot.Params.Select(param => new RecipeParamVm
+            if (snapshot is null)
             {
-                Name = param.Name,
-                Min = param.Min,
-                Max = param.Max,
-                Unit = param.Unit
-            }));
+                RecipeName = GetText("Navigation_Recipe_NotLoaded", "未加载");
+                RecipeVersion = "";
+                ProcessName = "";
+                UpdatedAt = "";
+                Params.Clear();
+                return;
+            }
+
+            RecipeName = snapshot.RecipeName;
+            RecipeVersion = snapshot.RecipeVersion;
+            ProcessName = snapshot.ProcessName;
+            UpdatedAt = snapshot.UpdatedAt;
+            IsCloudSource = snapshot.IsCloudSource;
+
+            ReplaceItems(
+                Params,
+                snapshot.Params.Select(param => new RecipeParamVm
+                {
+                    Name = param.Name,
+                    Min = param.Min,
+                    Max = param.Max,
+                    Unit = param.Unit
+                }));
+        });
     }
 
     protected override void RefreshLocalization()

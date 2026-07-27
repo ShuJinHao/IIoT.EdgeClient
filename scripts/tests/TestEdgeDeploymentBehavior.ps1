@@ -445,6 +445,58 @@ internal static class TestOnlyDebugOutput
     }
     Invoke-Git -WorkingDirectory $gitRepo -Arguments @('checkout', '-q', 'main')
 
+    $productionNowWorkspace = Join-Path $gitFixtureRoot 'production-now-workspace'
+    $productionNowRepository = Join-Path $productionNowWorkspace (
+        'artifacts/deploy/production-now/deploy-fixture/source/edge-workspace/IIoT.EdgeClient')
+    New-Item -ItemType Directory -Force -Path (
+        Split-Path -Parent $productionNowRepository) | Out-Null
+    & git clone -q --branch main $bareRemote $productionNowRepository
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Could not clone the ProductionNow source fixture.'
+    }
+    Invoke-Git -WorkingDirectory $productionNowRepository -Arguments @(
+        'checkout', '-q', '--detach', 'origin/main')
+    Invoke-Git -WorkingDirectory $productionNowRepository -Arguments @(
+        'config', 'user.name', 'Edge Deploy Test')
+    Invoke-Git -WorkingDirectory $productionNowRepository -Arguments @(
+        'config', 'user.email', 'edge-deploy-test@example.invalid')
+    Set-Content -Encoding UTF8 -LiteralPath (
+        Join-Path $productionNowRepository 'tracked.txt') -Value 'production-now snapshot'
+    Invoke-Git -WorkingDirectory $productionNowRepository -Arguments @(
+        'add', 'tracked.txt')
+    Invoke-Git -WorkingDirectory $productionNowRepository -Arguments @(
+        'commit', '-q', '-m', 'production-now snapshot')
+    $productionNowSha = (Invoke-EdgeGitCapture `
+        -RepoRoot $productionNowRepository `
+        -Arguments @('rev-parse', 'HEAD')).Text
+    Assert-ThrowsContaining -Action {
+        Assert-EdgeReleaseGitState `
+            -RepoRoot $productionNowRepository `
+            -ExpectedSha $productionNowSha `
+            -AllowDetachedExactSha | Out-Null
+    } -Needles @('does not match local main')
+    $savedDeployWorkspace = $env:IIOT_DEPLOY_WORKSPACE_ROOT
+    $savedControlSnapshot = $env:IIOT_DEPLOY_CONTROL_SNAPSHOT
+    try {
+        $env:IIOT_DEPLOY_WORKSPACE_ROOT = $productionNowWorkspace
+        $env:IIOT_DEPLOY_CONTROL_SNAPSHOT = '1'
+        Assert-Passes -Action {
+            $snapshotFacts = Assert-EdgeReleaseGitState `
+                -RepoRoot $productionNowRepository `
+                -ExpectedSha $productionNowSha `
+                -AllowDetachedExactSha
+            Assert-True `
+                -Condition ($snapshotFacts.Branch -ceq 'HEAD' -and
+                    $snapshotFacts.Upstream -ceq 'production-now-snapshot' -and
+                    $snapshotFacts.UpstreamHead -ceq $productionNowSha) `
+                -Message 'Authorized ProductionNow snapshot did not preserve its exact frozen source identity.'
+        }
+    }
+    finally {
+        $env:IIOT_DEPLOY_WORKSPACE_ROOT = $savedDeployWorkspace
+        $env:IIOT_DEPLOY_CONTROL_SNAPSHOT = $savedControlSnapshot
+    }
+
     $preparedSha = 'a' * 40
     $preparedState = [PSCustomObject]@{
         schemaVersion = 1

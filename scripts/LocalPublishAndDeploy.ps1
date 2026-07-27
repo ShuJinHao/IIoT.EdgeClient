@@ -547,6 +547,11 @@ try {
     if (-not $isResume -or -not (Test-Path -LiteralPath $bundleZip -PathType Leaf)) {
         New-EdgeHttpReleaseBundle -InstallerArtifactRoot $installerArtifactRoot -VelopackRoot $velopackRoot -OutputZip $bundleZip | Out-Null
     }
+    Invoke-EdgeScript 'TestEdgeDependencyClosure.ps1' -Arguments @(
+        '-SourcePath', $bundleZip,
+        '-LayoutRoot', 'installer',
+        '-RequireReferenceComparison'
+    )
 
     if ($PrepareOnly) {
         if ([string]::IsNullOrWhiteSpace($PreparedResultPath)) {

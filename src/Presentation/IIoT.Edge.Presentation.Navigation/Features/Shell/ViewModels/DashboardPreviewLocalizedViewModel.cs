@@ -1,3 +1,4 @@
+using Avalonia.Threading;
 using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
@@ -87,5 +88,13 @@ internal abstract class DashboardPreviewLocalizedViewModel : BaseNotifyPropertyC
     ];
 
     private void OnLanguageChangedCore(object? sender, EventArgs e)
-        => OnLanguageChanged();
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            OnLanguageChanged();
+            return;
+        }
+
+        Dispatcher.UIThread.Post(OnLanguageChanged);
+    }
 }

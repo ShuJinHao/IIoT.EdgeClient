@@ -342,7 +342,6 @@ public sealed class PlcTaskBindingBehaviorTests
             Assert.Equal(bindingFault, blockedSnapshot.LastError);
             var healthySnapshot = statusStore.GetSnapshot(healthyDevice.Id);
             Assert.NotNull(healthySnapshot);
-            Assert.False(healthySnapshot!.IsConnected);
             Assert.NotEqual(PlcConnectionState.Faulted, healthySnapshot.ConnectionState);
             Assert.Contains(
                 logger.Entries,

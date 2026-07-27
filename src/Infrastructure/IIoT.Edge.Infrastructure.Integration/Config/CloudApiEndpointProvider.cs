@@ -77,6 +77,11 @@ public class CloudApiEndpointProvider : ICloudApiEndpointProvider
             FirstLocalConfigString(CloudApiConfigParamSchema.HumanIdentityRefreshPath) ?? _cloudApiOptions.CurrentValue.Paths.HumanIdentityRefresh,
             "CloudApi:Paths:HumanIdentityRefresh");
 
+    public string GetHumanSessionValidationPath()
+        => RequirePath(
+            _cloudApiOptions.CurrentValue.Paths.HumanSessionValidation,
+            "CloudApi:Paths:HumanSessionValidation");
+
     public string GetDeviceLogPath()
         => RequirePath(
             FirstLocalConfigString(CloudApiConfigParamSchema.DeviceLogPath) ?? _cloudApiOptions.CurrentValue.Paths.DeviceLog,

@@ -3,7 +3,7 @@ using MediatR;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Production.CapacityView;
 
-public class CapacityViewUpdatedHandler(CapacityViewModel viewModel)
+public sealed class CapacityViewUpdatedHandler(CapacityViewModel viewModel)
     : INotificationHandler<CapacityUpdatedNotification>
 {
     public Task Handle(CapacityUpdatedNotification notification, CancellationToken cancellationToken)

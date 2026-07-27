@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using Avalonia.Threading;
 using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.UI.Shared.Localization;
@@ -165,7 +166,7 @@ public sealed class LauncherHostUpdatePanelViewModel : BaseNotifyPropertyChanged
     }
 
     private void OnLanguageChanged(object? sender, EventArgs e)
-        => RefreshLocalizedState();
+        => RunOnUiThread(RefreshLocalizedState);
 
     private void RefreshLocalizedState()
         => StatusMessage = LauncherText.Format(_languageService, _statusKey, _statusArgs);
@@ -186,6 +187,17 @@ public sealed class LauncherHostUpdatePanelViewModel : BaseNotifyPropertyChanged
 
         _hasUpdateAvailable = value;
         OnPropertyChanged(nameof(CanApplyUpdate));
+    }
+
+    private static void RunOnUiThread(Action action)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        Dispatcher.UIThread.Post(action);
     }
 
     private void ApplyUpdateCheckResult(EdgeHostUpdateCheckResult result)

@@ -151,19 +151,29 @@ public sealed class MainWindowViewModel : BaseNotifyPropertyChanged, IShellAuthC
         => _authService.Logout();
 
     private void OnAuthStateChanged(UserSession? session)
-    {
-        OnPropertyChanged(nameof(OperatorName));
-        OnPropertyChanged(nameof(OperatorCode));
-        OnPropertyChanged(nameof(CurrentUser));
-        OnPropertyChanged(nameof(IsAuthenticated));
-    }
+        => RunOnUiThread(() =>
+        {
+            OnPropertyChanged(nameof(OperatorName));
+            OnPropertyChanged(nameof(OperatorCode));
+            OnPropertyChanged(nameof(CurrentUser));
+            OnPropertyChanged(nameof(IsAuthenticated));
+        });
 
     private void OnDeviceIdentified(DeviceSession? session)
-        => OnPropertyChanged(nameof(HasCloudDeviceIdentity));
+        => RunOnUiThread(() => OnPropertyChanged(nameof(HasCloudDeviceIdentity)));
 
     private void OnLanguageChanged(object? sender, EventArgs e)
+        => RunOnUiThread(RefreshLanguageProperties);
+
+    private static void RunOnUiThread(Action action)
     {
-        RefreshLanguageProperties();
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        Dispatcher.UIThread.Post(action);
     }
 
     private void OnClockTick(object? sender, EventArgs e)

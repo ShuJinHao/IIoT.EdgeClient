@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Threading;
 using IIoT.Edge.Module.Contracts.Cloud;
 using IIoT.Edge.Module.Contracts.Device;
 using IIoT.Edge.Application.Features.Production.CapacityView;
@@ -31,6 +32,7 @@ public class CapacityViewModel : NavigationViewModelBase
     private int _periodNg;
     private string _periodYield = "0%";
     private string _avgDaily = "0";
+    private bool _uiInitialized;
 
     public ObservableCollection<CapacityQueryModeOption> QueryModes { get; } = [];
     public ObservableCollection<DailyCapacitySnapshot> DailyRecords { get; } = [];
@@ -185,9 +187,6 @@ public class CapacityViewModel : NavigationViewModelBase
         _deviceSelectionService = deviceSelectionService;
 
         QueryCommand = new AsyncCommand(() => RunViewTaskAsync(QueryHistoryAsync, GetText("Navigation_Capacity_QueryFailed", "产能查询失败。")));
-        RefreshQueryModes();
-        RefreshChartSeries();
-        SetSelectedQueryMode(_selectedQueryMode, true);
 
         _capacityQueryFacade.UploadGateChanged += OnUploadGateChanged;
         _deviceSelectionService.SelectionChanged += OnDeviceSelectionChanged;
@@ -195,6 +194,7 @@ public class CapacityViewModel : NavigationViewModelBase
 
     public override async Task OnActivatedAsync()
     {
+        EnsureUiInitialized();
         IsOnline = _capacityQueryFacade.IsOnline;
         await RunViewTaskAsync(LoadCurrentDataAsync, GetText("Navigation_Capacity_LoadFailed", "加载产能数据失败。"));
     }
@@ -202,47 +202,61 @@ public class CapacityViewModel : NavigationViewModelBase
     public void OnCapacityUpdated() => ScheduleLoadCurrentData();
 
     private void OnUploadGateChanged(EdgeUploadGateSnapshot snapshot)
-        => RunOnUiThread(() =>
+        => DispatchToUi(() =>
         {
+            EnsureUiInitialized();
             IsOnline = snapshot.State == EdgeUploadGateState.Ready;
             RunViewTaskInBackground(LoadCurrentDataAsync, GetText("Navigation_Capacity_LoadFailed", "加载产能数据失败。"));
         });
 
     private void ScheduleLoadCurrentData()
-        => RunOnUiThread(() => RunViewTaskInBackground(LoadCurrentDataAsync, GetText("Navigation_Capacity_LoadFailed", "加载产能数据失败。")));
+        => DispatchToUi(() =>
+        {
+            EnsureUiInitialized();
+            RunViewTaskInBackground(LoadCurrentDataAsync, GetText("Navigation_Capacity_LoadFailed", "加载产能数据失败。"));
+        });
 
     private async Task LoadCurrentDataAsync()
     {
         if (!CanQueryCloud)
         {
-            ClearFeedback();
-            SetDailyRecords(Array.Empty<DailyCapacitySnapshot>());
-            ClearSummary();
-            RefreshChart();
+            await Dispatcher.UIThread.InvokeAsync(ApplyOfflineState);
             return;
         }
 
-        var result = await _capacityQueryFacade.LoadTodayAsync(ResolveSelectedDeviceName());
-        ApplyResult(result);
+        var selectedDeviceName = ResolveSelectedDeviceName();
+        var result = await _capacityQueryFacade
+            .LoadTodayAsync(selectedDeviceName)
+            .ConfigureAwait(false);
+        await Dispatcher.UIThread.InvokeAsync(() => ApplyResult(result));
     }
 
     private async Task QueryHistoryAsync()
     {
         if (!CanQueryCloud)
         {
-            SetStatus(GetText("Navigation_Capacity_OfflineHint", "设备上传授权尚未就绪，暂时无法查询云端产能。"));
-            ClearSummary();
-            SetDailyRecords(Array.Empty<DailyCapacitySnapshot>());
-            RefreshChart();
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                EnsureUiInitialized();
+                SetStatus(GetText("Navigation_Capacity_OfflineHint", "设备上传授权尚未就绪，暂时无法查询云端产能。"));
+                ClearSummary();
+                SetDailyRecords(Array.Empty<DailyCapacitySnapshot>());
+                RefreshChart();
+            });
             return;
         }
 
-        var result = await _capacityQueryFacade.QueryHistoryAsync(
-            SelectedQueryMode,
-            QueryDate,
-            ResolveSelectedDeviceName());
+        var selectedQueryMode = SelectedQueryMode;
+        var queryDate = QueryDate;
+        var selectedDeviceName = ResolveSelectedDeviceName();
+        var result = await _capacityQueryFacade
+            .QueryHistoryAsync(
+                selectedQueryMode,
+                queryDate,
+                selectedDeviceName)
+            .ConfigureAwait(false);
 
-        ApplyResult(result);
+        await Dispatcher.UIThread.InvokeAsync(() => ApplyResult(result));
     }
 
     private string ResolveSelectedDeviceName()
@@ -258,6 +272,7 @@ public class CapacityViewModel : NavigationViewModelBase
 
     private void ApplyResult(CapacityViewResult result)
     {
+        EnsureUiInitialized();
         SetDailyRecords(
             result.State == CapacityQueryState.Success
                 ? result.Rows
@@ -338,6 +353,11 @@ public class CapacityViewModel : NavigationViewModelBase
     protected override void RefreshLocalization()
     {
         base.RefreshLocalization();
+        if (!_uiInitialized)
+        {
+            return;
+        }
+
         RefreshQueryModes();
         RefreshChartSeries();
         SetSelectedQueryMode(_selectedQueryMode, true);
@@ -345,6 +365,7 @@ public class CapacityViewModel : NavigationViewModelBase
 
     private void RefreshChartSeries()
     {
+        EnsureUiThreadAccess();
         ChartSeries.Clear();
         ChartSeries.Add(new EdgeChartSeries
         {
@@ -431,15 +452,35 @@ public class CapacityViewModel : NavigationViewModelBase
         OnPropertyChanged(nameof(SelectedQueryModeOption));
     }
 
-    private static void RunOnUiThread(Action action)
+    private void EnsureUiInitialized()
     {
-        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        EnsureUiThreadAccess();
+        if (_uiInitialized)
         {
-            action();
             return;
         }
 
-        Avalonia.Threading.Dispatcher.UIThread.Post(action);
+        RefreshQueryModes();
+        RefreshChartSeries();
+        SetSelectedQueryMode(_selectedQueryMode, true);
+        _uiInitialized = true;
+    }
+
+    private void ApplyOfflineState()
+    {
+        EnsureUiInitialized();
+        ClearFeedback();
+        SetDailyRecords(Array.Empty<DailyCapacitySnapshot>());
+        ClearSummary();
+        RefreshChart();
+    }
+
+    private static void EnsureUiThreadAccess()
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            throw new InvalidOperationException("产能图表状态只能在 Avalonia UI 线程创建或更新。");
+        }
     }
 }
 

@@ -39,6 +39,7 @@ public sealed class CloudApiEndpointProviderBehaviorTests
         Assert.Equal("https://config-cloud.test/api/ping", provider.BuildUrl("/api/ping"));
         Assert.Equal("CONFIG-CLIENT", provider.GetClientCode());
         Assert.Equal("/config/pass-stations/testplugin/batch", provider.GetPassStationBatchPath("TestPlugin"));
+        Assert.Equal("/config/human-session", provider.GetHumanSessionValidationPath());
         Assert.Equal("/config/plc-runtime-states", provider.GetEdgeHostPlcRuntimeStatesPath());
     }
 
@@ -54,6 +55,7 @@ public sealed class CloudApiEndpointProviderBehaviorTests
                 BootstrapRefresh = "/config/bootstrap-refresh",
                 IdentityDeviceLogin = "/config/login",
                 HumanIdentityRefresh = "/config/human-refresh",
+                HumanSessionValidation = "/config/human-session",
                 DeviceLog = "/config/logs",
                 PassStationBatchTemplate = "/config/pass-stations/{typeKey}/batch",
                 CapacityHourly = "/config/capacity-hourly",

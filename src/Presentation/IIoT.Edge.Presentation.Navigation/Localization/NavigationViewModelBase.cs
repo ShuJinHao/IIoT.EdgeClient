@@ -1,3 +1,4 @@
+using Avalonia.Threading;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.PluginSystem;
 
@@ -23,7 +24,7 @@ public abstract class NavigationViewModelBase : PresentationViewModelBase
         _viewId = viewId;
         _titleResourceKey = titleResourceKey;
         _titleFallback = titleFallback;
-        _languageService.LanguageChanged += (_, _) => RefreshLocalization();
+        _languageService.LanguageChanged += (_, _) => DispatchToUi(RefreshLocalization);
     }
 
     public override string ViewId => _viewId;
@@ -38,4 +39,15 @@ public abstract class NavigationViewModelBase : PresentationViewModelBase
 
     protected virtual void RefreshLocalization()
         => OnPropertyChanged(nameof(ViewTitle));
+
+    protected static void DispatchToUi(Action action)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        Dispatcher.UIThread.Post(action);
+    }
 }

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Windows.Input;
+using Avalonia.Threading;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.UI.Shared.Localization;
@@ -87,23 +88,36 @@ public class LogViewModel : PresentationViewModelBase
     }
 
     private void OnLanguageChanged(object? sender, EventArgs e)
-    {
-        var selectedKey = SelectedDeviceFilter?.Key ?? AllFilterKey;
-        RebuildDeviceFilters(selectedKey);
-    }
+        => RunOnUiThread(() =>
+        {
+            var selectedKey = SelectedDeviceFilter?.Key ?? AllFilterKey;
+            RebuildDeviceFilters(selectedKey);
+        });
 
     private void OnSharedDeviceSelectionChanged(object? sender, EventArgs e)
-    {
-        var selectedKey = _deviceSelectionService.SelectedDeviceKey;
-        var option = DeviceFilters.FirstOrDefault(filter =>
-            string.Equals(filter.Key, selectedKey, StringComparison.OrdinalIgnoreCase));
-        if (option is null)
+        => RunOnUiThread(() =>
         {
-            option = new LogDeviceFilterOption(selectedKey, selectedKey);
-            DeviceFilters.Add(option);
+            var selectedKey = _deviceSelectionService.SelectedDeviceKey;
+            var option = DeviceFilters.FirstOrDefault(filter =>
+                string.Equals(filter.Key, selectedKey, StringComparison.OrdinalIgnoreCase));
+            if (option is null)
+            {
+                option = new LogDeviceFilterOption(selectedKey, selectedKey);
+                DeviceFilters.Add(option);
+            }
+
+            SelectedDeviceFilter = option;
+        });
+
+    private static void RunOnUiThread(Action action)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            action();
+            return;
         }
 
-        SelectedDeviceFilter = option;
+        Dispatcher.UIThread.Post(action);
     }
 
     private void RebuildDeviceFilters(string? preferredKey = null)

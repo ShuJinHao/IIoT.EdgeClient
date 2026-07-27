@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using Avalonia.Threading;
 using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.Launcher.Services;
@@ -591,18 +592,30 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
     }
 
     private void OnLanguageChanged(object? sender, EventArgs e)
-    {
-        RefreshLocalizedState();
-        OnPropertyChanged(nameof(PlatformMetaText));
-        OnPropertyChanged(nameof(MaintainerText));
-        OnPropertyChanged(nameof(ArchitectureText));
-        OnPropertyChanged(nameof(LanguageToggleText));
-        foreach (var card in _allProfileCards)
+        => RunOnUiThread(() =>
         {
-            card.RefreshLocalizedState();
+            RefreshLocalizedState();
+            OnPropertyChanged(nameof(PlatformMetaText));
+            OnPropertyChanged(nameof(MaintainerText));
+            OnPropertyChanged(nameof(ArchitectureText));
+            OnPropertyChanged(nameof(LanguageToggleText));
+            foreach (var card in _allProfileCards)
+            {
+                card.RefreshLocalizedState();
+            }
+
+            RebuildUpdateRows();
+        });
+
+    private static void RunOnUiThread(Action action)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            action();
+            return;
         }
 
-        RebuildUpdateRows();
+        Dispatcher.UIThread.Post(action);
     }
 
     private void RefreshLocalizedState()

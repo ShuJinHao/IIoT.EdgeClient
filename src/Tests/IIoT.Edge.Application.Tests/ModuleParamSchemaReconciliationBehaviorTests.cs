@@ -98,6 +98,41 @@ public sealed class ModuleParamSchemaReconciliationBehaviorTests
         Assert.Equal("CUSTOM-UC", configs.Single(x => x.Key == customUpperComputerNoKey).Value);
     }
 
+    [Fact]
+    public async Task ReconcileAsync_WhenPluginExplicitlyDeclaresBlankLegacyDefault_ShouldRepairBlankAndPreserveCustomValue()
+    {
+        var registry = CreateTestModuleRegistry(
+        [
+            new ModuleParamDefaultOverride(
+                ModuleParamCategory.Mes,
+                nameof(TestMesParam.服务地址),
+                "http://mes-current.example.test:8080",
+                [string.Empty])
+        ]);
+        var mesKey = ModuleParamKeys.StorageKey("TestModule", ModuleParamCategory.Mes, nameof(TestMesParam.服务地址));
+        var customUpperComputerNoKey = ModuleParamKeys.StorageKey("TestModule", ModuleParamCategory.Mes, nameof(TestMesParam.UpperComputerNo));
+        var configService = new MutableLocalParameterConfigService(
+        [
+            new LocalSystemConfigSnapshot(1, mesKey, string.Empty, null, 1),
+            new LocalSystemConfigSnapshot(2, customUpperComputerNoKey, "CUSTOM-UC", null, 2)
+        ]);
+        var source = new ModuleParamSchemaSource(
+            registry,
+            ModuleParamCategory.Mes,
+            ModuleParamSchemaIds.Mes);
+        var store = new ModuleParamConfigValueStore(
+            configService,
+            ModuleParamCategory.Mes,
+            ModuleParamSchemaIds.Mes);
+        var reconciler = new ConfigSchemaReconciler([source], [store]);
+
+        await reconciler.ReconcileAsync(TestContext.Current.CancellationToken);
+
+        var configs = await configService.GetSystemConfigsAsync(TestContext.Current.CancellationToken);
+        Assert.Equal("http://mes-current.example.test:8080", configs.Single(x => x.Key == mesKey).Value);
+        Assert.Equal("CUSTOM-UC", configs.Single(x => x.Key == customUpperComputerNoKey).Value);
+    }
+
     private static ModuleParamRegistry CreateTestModuleRegistry(
         IReadOnlyCollection<ModuleParamDefaultOverride>? defaultOverrides = null)
     {

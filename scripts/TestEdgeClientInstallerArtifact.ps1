@@ -350,4 +350,9 @@ foreach ($directory in @($launcherPath, $hostPath, $pluginsPath)) {
     Assert-CloudIdentityTemplatesAreEmpty -Directory $directory
 }
 
+& (Join-Path $PSScriptRoot 'TestEdgeDependencyClosure.ps1') `
+    -SourcePath $resolvedArtifactRoot `
+    -LayoutRoot '.' `
+    -RequireReferenceComparison
+
 Write-Host "Edge installer artifact smoke test passed: $resolvedArtifactRoot"

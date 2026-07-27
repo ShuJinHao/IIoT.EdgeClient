@@ -1,4 +1,7 @@
 using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Avalonia.Headless.XUnit;
 using IIoT.Edge.Module.Contracts.Cloud;
 using IIoT.Edge.Application.Features.Production.CapacityView;
@@ -11,7 +14,7 @@ namespace IIoT.Edge.Shell.UiTests;
 
 public sealed class CapacityViewModelBehaviorTests
 {
-    [Fact]
+    [AvaloniaFact]
     public async Task OnActivatedAsync_WhenSelectionIsAll_ShouldQueryAggregateCapacity()
     {
         var facade = new FakeCapacityQueryFacade { IsOnline = true };
@@ -23,7 +26,7 @@ public sealed class CapacityViewModelBehaviorTests
         Assert.Equal(1, facade.LoadTodayCallCount);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task OnActivatedAsync_WhenDeviceIsSelected_ShouldQuerySelectedDeviceCapacity()
     {
         var facade = new FakeCapacityQueryFacade { IsOnline = true };
@@ -37,7 +40,7 @@ public sealed class CapacityViewModelBehaviorTests
         Assert.Equal(1, facade.LoadTodayCallCount);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task OnActivatedAsync_WhenResultIsEmpty_ShouldShowRealEmptyStateWithoutError()
     {
         var facade = new FakeCapacityQueryFacade
@@ -54,7 +57,7 @@ public sealed class CapacityViewModelBehaviorTests
         Assert.Equal(0, viewModel.PeriodTotal);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task OnActivatedAsync_WhenServiceBecomesUnavailable_ShouldClearOldDataAndShowSafeError()
     {
         var facade = new FakeCapacityQueryFacade
@@ -76,7 +79,7 @@ public sealed class CapacityViewModelBehaviorTests
         Assert.DoesNotContain("raw_response_body", viewModel.ErrorMessage, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task OnActivatedAsync_WhenPayloadIsInvalid_ShouldShowContractErrorWithoutReasonDetails()
     {
         var facade = new FakeCapacityQueryFacade
@@ -94,7 +97,7 @@ public sealed class CapacityViewModelBehaviorTests
         Assert.DoesNotContain("sensitive_payload_fragment", viewModel.ErrorMessage, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task OnActivatedAsync_WhenQueryRecovers_ShouldClearOldErrorAndApplyRealSummary()
     {
         var facade = new FakeCapacityQueryFacade
@@ -117,7 +120,7 @@ public sealed class CapacityViewModelBehaviorTests
         Assert.Equal("90.00%", viewModel.PeriodYield);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task OnActivatedAsync_WhenGateIsOffline_ShouldNotCallFacadeOrSetFailureState()
     {
         var facade = new FakeCapacityQueryFacade
@@ -182,6 +185,82 @@ public sealed class CapacityViewModelBehaviorTests
         }
     }
 
+    [AvaloniaFact]
+    public async Task BackgroundCapacityNotification_BeforePageCreation_ShouldInitializeAndRenderChartOnUiThread()
+    {
+        var facade = new FakeCapacityQueryFacade
+        {
+            IsOnline = true,
+            LoadTodayResult = CreateSuccessResult()
+        };
+        var selectionService = new DeviceSelectionService();
+        var viewModel = await Task.Run(
+            () => CreateViewModel(facade, selectionService),
+            TestContext.Current.CancellationToken);
+        var collectionNotificationsStayedOnUiThread = true;
+        viewModel.ChartSeries.CollectionChanged += (_, _) =>
+            collectionNotificationsStayedOnUiThread &= Dispatcher.UIThread.CheckAccess();
+        viewModel.ChartPoints.CollectionChanged += (_, _) =>
+            collectionNotificationsStayedOnUiThread &= Dispatcher.UIThread.CheckAccess();
+
+        global::Avalonia.Application.Current!.Resources["Edge.Brush.Chart.Accent"] = Brushes.DodgerBlue;
+        global::Avalonia.Application.Current.Resources["Edge.Brush.Status.Running"] = Brushes.ForestGreen;
+        global::Avalonia.Application.Current.Resources["Edge.Brush.Status.Warning"] = Brushes.Goldenrod;
+        global::Avalonia.Application.Current.Resources["Edge.Brush.Chart.Secondary"] = Brushes.MediumPurple;
+
+        await Task.Run(
+            () => facade.PublishUploadGate(new EdgeUploadGateSnapshot
+            {
+                State = EdgeUploadGateState.Ready,
+                Reason = EdgeUploadBlockReason.None
+            }),
+            TestContext.Current.CancellationToken);
+
+        await WaitUntilAsync(
+            () => viewModel.ChartPoints.Count == 1 && viewModel.ChartSeries.Count == 4);
+
+        var view = new CapacityViewPage(viewModel);
+        var window = new Window
+        {
+            Width = 1200,
+            Height = 760,
+            Content = view
+        };
+
+        try
+        {
+            window.Show();
+            var chart = Assert.Single(view.GetVisualDescendants().OfType<EdgeBarLineChart>());
+            for (var attempt = 0; attempt < 5; attempt++)
+            {
+                window.Measure(new Avalonia.Size(1200, 760));
+                window.Arrange(new Avalonia.Rect(0, 0, 1200, 760));
+                chart.InvalidateVisual();
+                await Dispatcher.UIThread.InvokeAsync(static () => { });
+            }
+
+            Assert.True(collectionNotificationsStayedOnUiThread);
+            Assert.All(viewModel.ChartSeries, series => Assert.NotNull(series.Brush));
+            Assert.Single(viewModel.ChartPoints);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(
+            timeout.Token,
+            TestContext.Current.CancellationToken);
+        while (!condition())
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(25), linked.Token);
+        }
+    }
+
     private static CapacityViewModel CreateViewModel(
         ICapacityQueryFacade facade,
         IDeviceSelectionService selectionService)
@@ -210,11 +289,7 @@ public sealed class CapacityViewModelBehaviorTests
 
     private sealed class FakeCapacityQueryFacade : ICapacityQueryFacade
     {
-        public event Action<EdgeUploadGateSnapshot>? UploadGateChanged
-        {
-            add { }
-            remove { }
-        }
+        public event Action<EdgeUploadGateSnapshot>? UploadGateChanged;
 
         public bool IsOnline { get; init; }
 
@@ -241,5 +316,8 @@ public sealed class CapacityViewModelBehaviorTests
             string plcName,
             CancellationToken cancellationToken = default)
             => Task.FromResult(LoadTodayResult);
+
+        public void PublishUploadGate(EdgeUploadGateSnapshot snapshot)
+            => UploadGateChanged?.Invoke(snapshot);
     }
 }

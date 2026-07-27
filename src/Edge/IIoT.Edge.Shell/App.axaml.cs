@@ -40,6 +40,7 @@ public partial class App : global::Avalonia.Application
     private readonly SingleInstanceMutexHandle _instanceLock = new();
     private int _fatalDialogShown;
     private int _shutdownStarted;
+    private int _mainWindowReady;
     private bool _shutdownCompleted;
 
     public override void Initialize()
@@ -111,6 +112,7 @@ public partial class App : global::Avalonia.Application
             mainWindow.Closing += OnMainWindowClosing;
             desktop.MainWindow = mainWindow;
             mainWindow.Show();
+            Volatile.Write(ref _mainWindowReady, 1);
         }
         catch (Exception ex)
         {
@@ -298,7 +300,18 @@ public partial class App : global::Avalonia.Application
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        HandleFatalException("UI 线程未处理异常", e.Exception, requestShutdown: true);
+        var disposition = ShellDispatcherExceptionPolicy.Resolve(
+            Volatile.Read(ref _mainWindowReady) == 1);
+        if (disposition == ShellDispatcherExceptionDisposition.RecoverRuntime)
+        {
+            TryWriteCrashLog(
+                "Shell 运行期 UI 未处理异常，已保留主窗口和后台服务。",
+                e.Exception);
+            e.Handled = true;
+            return;
+        }
+
+        HandleFatalException("Shell 启动期 UI 未处理异常", e.Exception, requestShutdown: true);
         e.Handled = true;
     }
 

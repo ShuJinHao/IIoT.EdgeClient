@@ -8,6 +8,7 @@ public sealed class ModuleParamSchemaSource(
     string schemaId) : IConfigSchemaSource
 {
     private const string DescriptionMetadataKey = "Description";
+    private const string LegacyDefaultIncludesEmptyMetadataKey = "LegacyDefaultIncludesEmpty";
     private const string LegacyDefaultValuesMetadataKey = "LegacyDefaultValues";
     private const string SortOrderMetadataKey = "SortOrder";
 
@@ -34,8 +35,18 @@ public sealed class ModuleParamSchemaSource(
             : 0;
 
     public static IReadOnlyCollection<string> GetLegacyDefaultValues(ConfigSchemaItem item)
-        => TryGetMetadata(item, LegacyDefaultValuesMetadataKey)
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    {
+        var values = TryGetMetadata(item, LegacyDefaultValuesMetadataKey)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+        if (bool.TryParse(TryGetMetadata(item, LegacyDefaultIncludesEmptyMetadataKey), out var includesEmpty)
+            && includesEmpty)
+        {
+            values.Add(string.Empty);
+        }
+
+        return values;
+    }
 
     private static Dictionary<string, string> BuildMetadata(ModuleParamDescriptor descriptor)
     {
@@ -47,7 +58,13 @@ public sealed class ModuleParamSchemaSource(
 
         if (descriptor.LegacyDefaultValues is { Count: > 0 })
         {
-            metadata[LegacyDefaultValuesMetadataKey] = string.Join('\n', descriptor.LegacyDefaultValues);
+            metadata[LegacyDefaultValuesMetadataKey] = string.Join(
+                '\n',
+                descriptor.LegacyDefaultValues.Where(static value => !string.IsNullOrEmpty(value)));
+            if (descriptor.LegacyDefaultValues.Contains(string.Empty, StringComparer.Ordinal))
+            {
+                metadata[LegacyDefaultIncludesEmptyMetadataKey] = bool.TrueString;
+            }
         }
 
         return metadata;

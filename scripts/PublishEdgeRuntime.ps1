@@ -120,6 +120,9 @@ try {
     New-Item -Path $dataRoot -ItemType Directory -Force | Out-Null
 
     Test-EdgeLauncherProfilesMatchManifest -Manifest $manifest -Profiles $launcherProfileCatalog.Profiles -LauncherRuntimeRoot $launcherRuntimeRoot -CheckExecutablePath
+    & (Join-Path $PSScriptRoot 'TestEdgeDependencyClosure.ps1') `
+        -SourcePath $resolvedOutputRoot `
+        -LayoutRoot '.'
 
     Write-Host "Published runtime layout root: $resolvedOutputRoot"
 }

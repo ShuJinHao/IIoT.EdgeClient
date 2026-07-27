@@ -1,11 +1,11 @@
 using System.Globalization;
 using System.IO;
+using System.Reflection;
 using System.Text.Json;
 using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml.Styling;
-using Avalonia.Platform;
 using Avalonia.Styling;
 using IIoT.Edge.SharedKernel.Configuration;
 using IIoT.Edge.UI.Shared.Localization;
@@ -27,6 +27,7 @@ public sealed class AppLanguageService : IAppLanguageService
     };
 
     private readonly string _storagePath;
+    private readonly List<IResourceProvider> _loadedLanguageDictionaries = [];
     private CultureInfo _current;
 
     public AppLanguageService()
@@ -107,7 +108,7 @@ public sealed class AppLanguageService : IAppLanguageService
         LanguageChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private static void ReplaceLanguageDictionaries(string cultureName)
+    private void ReplaceLanguageDictionaries(string cultureName)
     {
         var application = global::Avalonia.Application.Current;
         if (application is null)
@@ -131,19 +132,38 @@ public sealed class AppLanguageService : IAppLanguageService
             resources.MergedDictionaries.Remove(dictionary);
         }
 
-        foreach (var assemblyName in GetResourceAssemblyNames())
+        foreach (var dictionary in _loadedLanguageDictionaries)
         {
-            var dictionary = TryCreateLanguageDictionary(assemblyName, cultureName);
+            resources.MergedDictionaries.Remove(dictionary);
+        }
+        _loadedLanguageDictionaries.Clear();
+
+        foreach (var assembly in GetResourceAssemblies())
+        {
+            var dictionary = TryLoadLanguageDictionary(assembly, cultureName);
             if (dictionary is not null)
             {
                 resources.MergedDictionaries.Add(dictionary);
+                _loadedLanguageDictionaries.Add(dictionary);
+                continue;
+            }
+
+            var assemblyName = assembly.GetName().Name;
+            if (assemblyName is not null && RequiredResourceAssemblyNames.Contains(assemblyName))
+            {
+                throw new InvalidOperationException(
+                    $"缺少必需的界面语言资源：{assemblyName}/{cultureName}。");
             }
         }
     }
 
-    private static IEnumerable<string> GetResourceAssemblyNames()
+    private static IEnumerable<Assembly> GetResourceAssemblies()
     {
         var yielded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(static assembly => !assembly.IsDynamic)
+            .ToArray();
+
         foreach (var assemblyName in new[]
         {
             "IIoT.Edge.Shell",
@@ -154,38 +174,66 @@ public sealed class AppLanguageService : IAppLanguageService
         {
             if (yielded.Add(assemblyName))
             {
-                yield return assemblyName;
+                yield return loadedAssemblies.FirstOrDefault(assembly =>
+                           string.Equals(assembly.GetName().Name, assemblyName, StringComparison.OrdinalIgnoreCase))
+                       ?? Assembly.Load(new AssemblyName(assemblyName));
             }
         }
 
-        foreach (var assemblyName in AppDomain.CurrentDomain.GetAssemblies()
-            .Where(assembly => !assembly.IsDynamic)
-            .Select(assembly => assembly.GetName().Name)
-            .Where(name => !string.IsNullOrWhiteSpace(name)
-                && name.StartsWith("IIoT.Edge.Module.", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase))
+        foreach (var assembly in loadedAssemblies
+            .Where(assembly =>
+            {
+                var name = assembly.GetName().Name;
+                return !string.IsNullOrWhiteSpace(name)
+                       && name.StartsWith("IIoT.Edge.Module.", StringComparison.OrdinalIgnoreCase);
+            })
+            .OrderBy(assembly => assembly.GetName().Name, StringComparer.OrdinalIgnoreCase))
         {
+            var assemblyName = assembly.GetName().Name;
             if (assemblyName is not null && yielded.Add(assemblyName))
             {
-                yield return assemblyName;
+                yield return assembly;
             }
         }
     }
 
-    private static ResourceInclude? TryCreateLanguageDictionary(string assemblyName, string cultureName)
+    internal static IResourceProvider? TryLoadLanguageDictionary(Assembly assembly, string cultureName)
     {
+        ArgumentNullException.ThrowIfNull(assembly);
+        ArgumentException.ThrowIfNullOrWhiteSpace(cultureName);
+
+        var assemblyName = assembly.GetName().Name
+            ?? throw new InvalidOperationException("界面资源程序集缺少有效名称。");
+        var source = new Uri($"avares://{assemblyName}/Resources/Languages/{cultureName}.axaml");
+
         try
         {
-            var source = new Uri($"avares://{assemblyName}/Resources/Languages/{cultureName}.axaml");
-            if (!RequiredResourceAssemblyNames.Contains(assemblyName) && !AssetLoader.Exists(source))
+            var loaderType = assembly.GetType("CompiledAvaloniaXaml.!XamlLoader", throwOnError: false);
+            var tryLoad = loaderType?.GetMethod(
+                "TryLoad",
+                BindingFlags.Public | BindingFlags.Static,
+                binder: null,
+                types: [typeof(string)],
+                modifiers: null);
+            if (tryLoad is null)
             {
                 return null;
             }
 
-            return new ResourceInclude(source)
+            var loaded = tryLoad.Invoke(null, [source.ToString()]);
+            return loaded switch
             {
-                Source = source
+                null => null,
+                IResourceProvider resourceProvider => resourceProvider,
+                _ => throw new InvalidOperationException(
+                    $"界面语言资源返回了不受支持的类型：{loaded.GetType().FullName}。")
             };
+        }
+        catch (TargetInvocationException ex)
+        {
+            throw new InvalidOperationException(
+                $"无法加载界面语言资源：{assemblyName}/{cultureName}。",
+                ex.InnerException ?? ex);
         }
         catch (Exception ex)
         {

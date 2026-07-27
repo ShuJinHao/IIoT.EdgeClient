@@ -234,6 +234,8 @@
     <sys:String x:Key="Navigation_Recipe_CloudSource">Cloud Recipe</sys:String>
     <sys:String x:Key="Navigation_Recipe_LocalSource">Local Recipe</sys:String>
     <sys:String x:Key="Navigation_Recipe_NotLoaded">Not Loaded</sys:String>
+    <sys:String x:Key="Navigation_Recipe_LoadFailed">Failed to load the recipe.</sys:String>
+    <sys:String x:Key="Navigation_Recipe_AdminStateFailed">Failed to refresh the administrator state.</sys:String>
     <sys:String x:Key="Navigation_Recipe_SyncFailed">Recipe sync failed. Check the network connection.</sys:String>
     <sys:String x:Key="Navigation_Recipe_SyncSuccess">Cloud recipe synchronized.</sys:String>
     <sys:String x:Key="Navigation_Recipe_LocalSaveSuccess">Local recipe parameter saved.</sys:String>

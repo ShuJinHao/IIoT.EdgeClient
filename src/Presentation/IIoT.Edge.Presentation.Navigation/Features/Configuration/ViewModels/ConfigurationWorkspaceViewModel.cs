@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using Avalonia.Threading;
 using IIoT.Edge.Module.Contracts.Auth;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Modularity;
@@ -194,27 +195,40 @@ public sealed class ConfigurationWorkspaceViewModel : BaseNotifyPropertyChanged,
     }
 
     private void HandlePermissionStateChanged()
-    {
-        foreach (var tab in Tabs)
+        => RunOnUiThread(() =>
         {
-            tab.RefreshPermission();
-        }
+            foreach (var tab in Tabs)
+            {
+                tab.RefreshPermission();
+            }
 
-        OnSelectionStateChanged();
-    }
+            OnSelectionStateChanged();
+        });
 
     private void HandleLanguageChanged(object? sender, EventArgs e)
-    {
-        foreach (var tab in Tabs)
+        => RunOnUiThread(() =>
         {
-            tab.RefreshLanguage();
+            foreach (var tab in Tabs)
+            {
+                tab.RefreshLanguage();
+            }
+
+            OnPropertyChanged(nameof(EmptyTitle));
+            OnPropertyChanged(nameof(EmptyMessage));
+            OnPropertyChanged(nameof(NoPermissionTitle));
+            OnPropertyChanged(nameof(NoPermissionMessage));
+            OnPropertyChanged(nameof(SelectedTab));
+        });
+
+    private static void RunOnUiThread(Action action)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            action();
+            return;
         }
 
-        OnPropertyChanged(nameof(EmptyTitle));
-        OnPropertyChanged(nameof(EmptyMessage));
-        OnPropertyChanged(nameof(NoPermissionTitle));
-        OnPropertyChanged(nameof(NoPermissionMessage));
-        OnPropertyChanged(nameof(SelectedTab));
+        Dispatcher.UIThread.Post(action);
     }
 
     private void OnSelectionStateChanged()

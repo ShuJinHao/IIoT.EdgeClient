@@ -213,10 +213,6 @@ public class EquipmentViewModel : PresentationViewModelBase
         return Task.CompletedTask;
     }
 
-    public void OnCapacityUpdated()
-    {
-    }
-
     private async Task LoadPanelAsync()
     {
         await RefreshHardwareAsync();
@@ -306,14 +302,24 @@ public class EquipmentViewModel : PresentationViewModelBase
     }
 
     private void RefreshRecipe()
-    {
-        RunViewTaskInBackground(RefreshRecipeAsync, "刷新配方信息失败");
-    }
+        => RunOnUiThread(() => RunViewTaskInBackground(RefreshRecipeAsync, "刷新配方信息失败"));
 
     private void OnLanguageChanged(object? sender, EventArgs e)
+        => RunOnUiThread(() =>
+        {
+            RefreshAllDeviceOptionLanguage();
+            OnPropertyChanged(nameof(CurrentProcessDisplayName));
+        });
+
+    private static void RunOnUiThread(Action action)
     {
-        RefreshAllDeviceOptionLanguage();
-        OnPropertyChanged(nameof(CurrentProcessDisplayName));
+        if (AvaloniaDispatcher.UIThread.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        AvaloniaDispatcher.UIThread.Post(action);
     }
 
     private void RefreshAllDeviceOptionLanguage()

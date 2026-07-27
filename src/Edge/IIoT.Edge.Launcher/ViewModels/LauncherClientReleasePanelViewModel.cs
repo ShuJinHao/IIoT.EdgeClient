@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Runtime.CompilerServices;
+using Avalonia.Threading;
 using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.Launcher.Services;
@@ -328,20 +329,32 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
     }
 
     private void OnLanguageChanged(object? sender, EventArgs e)
-    {
-        RefreshLocalizedState();
-        foreach (var component in Components)
+        => RunOnUiThread(() =>
         {
-            component.RefreshTexts(
-                ResolveComponentKindText(component.ComponentKind),
-                LauncherText.Get(_languageService, "Launcher_VersionManagement_ButtonExpand"),
-                LauncherText.Get(_languageService, "Launcher_VersionManagement_ButtonCollapse"));
-            foreach (var option in component.Versions)
+            RefreshLocalizedState();
+            foreach (var component in Components)
             {
-                option.StatusText = ResolveVersionStatusText(option.Status);
-                option.ActionText = ResolveVersionActionText(option.Status, option.CurrentVersion, option.Version);
+                component.RefreshTexts(
+                    ResolveComponentKindText(component.ComponentKind),
+                    LauncherText.Get(_languageService, "Launcher_VersionManagement_ButtonExpand"),
+                    LauncherText.Get(_languageService, "Launcher_VersionManagement_ButtonCollapse"));
+                foreach (var option in component.Versions)
+                {
+                    option.StatusText = ResolveVersionStatusText(option.Status);
+                    option.ActionText = ResolveVersionActionText(option.Status, option.CurrentVersion, option.Version);
+                }
             }
+        });
+
+    private static void RunOnUiThread(Action action)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            action();
+            return;
         }
+
+        Dispatcher.UIThread.Post(action);
     }
 
     private void RefreshLocalizedState()

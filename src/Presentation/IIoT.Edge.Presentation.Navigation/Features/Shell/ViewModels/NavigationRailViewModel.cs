@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Windows.Input;
+using Avalonia.Threading;
 using IIoT.Edge.UI.Shared.Localization;
 using IIoT.Edge.UI.Shared.Mvvm;
 
@@ -25,7 +26,7 @@ public sealed class NavigationRailViewModel : BaseNotifyPropertyChanged
             }
         });
         SwitchLanguageCommand = new BaseCommand(_ => SwitchLanguage());
-        _languageService.LanguageChanged += (_, _) => RefreshLanguage();
+        _languageService.LanguageChanged += (_, _) => RunOnUiThread(RefreshLanguage);
     }
 
     public ObservableCollection<NavigationItemViewModel> Items { get; }
@@ -90,6 +91,17 @@ public sealed class NavigationRailViewModel : BaseNotifyPropertyChanged
             : CultureInfo.GetCultureInfo("zh-CN");
 
         _languageService.Change(targetCulture);
+    }
+
+    private static void RunOnUiThread(Action action)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        Dispatcher.UIThread.Post(action);
     }
 
     private static ObservableCollection<NavigationItemViewModel> CreateItems(IAppLanguageService languageService)
