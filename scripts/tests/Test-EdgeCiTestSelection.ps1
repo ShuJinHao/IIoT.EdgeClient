@@ -426,9 +426,13 @@ if ($workflowText -notmatch "\`$env:CI_MODE\s+-eq\s+'full'[\s\S]*?\`$parameters\
     $workflowText -match "\`$env:CI_MODE\s+-in\s+@\('quality',\s*'full'\)") {
     throw 'Edge CI coverage must remain exclusive to explicitly selected Full mode.'
 }
+if ($workflowText -notmatch [regex]::Escape(
+        'src/Testing/IIoT.Edge.Module.TestPlugin.Companion/IIoT.Edge.Module.TestPlugin.Companion.csproj')) {
+    throw 'Edge default CI does not restore the plugin-owned companion required by conformance tests.'
+}
 $offlineWorkflowText = Get-Content (Join-Path $root '.github/workflows/edge-pack-modules.yml') -Raw
 if ($offlineWorkflowText.Contains('Test-EdgeCiTestSelection.ps1', [StringComparison]::Ordinal)) {
     throw 'The explicit offline artifact workflow must not rerun selector behavior tests.'
 }
 
-Write-Host 'EDGE_CI_SELECTION_BEHAVIOR_OK positive=1 utf8GitPaths=1 docs=1 quality=1 deployment=1 cross=1 negative=1 businessTopology=1 deploymentBusinessTopology=1 retiredBusiness=1 baselineUnknown=1 workflowGate=1 fullCoverageOnly=1'
+Write-Host 'EDGE_CI_SELECTION_BEHAVIOR_OK positive=1 utf8GitPaths=1 docs=1 quality=1 deployment=1 cross=1 negative=1 businessTopology=1 deploymentBusinessTopology=1 retiredBusiness=1 baselineUnknown=1 workflowGate=1 fullCoverageOnly=1 companionRestore=1'
