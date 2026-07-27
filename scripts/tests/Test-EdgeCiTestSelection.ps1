@@ -211,6 +211,58 @@ try {
         throw 'Documentation-only changes selected a non-red-line category.'
     }
 
+    $sdkPackageSetManifest = Get-Content `
+        (Join-Path $root 'eng/local-package-feed/sdk-package-set.json') `
+        -Raw | ConvertFrom-Json
+    $sdkPackageSetFiles = @(
+        'Directory.Packages.props',
+        'eng/local-package-feed/README.md',
+        'eng/local-package-feed/sdk-package-set.json'
+        @($sdkPackageSetManifest.packages | ForEach-Object {
+                "eng/local-package-feed/$($_.fileName)"
+            })
+    )
+    $sdkPackageSetOutput = Join-Path $temporaryRoot 'sdk-package-set.json'
+    & $selector `
+        -RepositoryRoot $root `
+        -ChangedFiles $sdkPackageSetFiles `
+        -OutputPath $sdkPackageSetOutput `
+        -GitHubOutputPath ''
+    $sdkPackageSet = Get-Content $sdkPackageSetOutput -Raw | ConvertFrom-Json
+    $sdkPackageSetCategories = @($sdkPackageSet.selectedCategories)
+    if (@($sdkPackageSet.unclassifiedFiles).Count -ne 0 -or
+        @($sdkPackageSet.requiredExplicitModes) -contains 'Full' -or
+        -not [bool]$sdkPackageSet.deploymentAffected -or
+        @('Architecture', 'Security', 'Business', 'DeploymentContract' |
+            Where-Object { $sdkPackageSetCategories -notcontains $_ }).Count -ne 0 -or
+        @($sdkPackageSetCategories | Where-Object {
+                $_ -in @('Quality', 'CrossProject')
+            }).Count -ne 0) {
+        throw 'Governed SDK package-set inputs were not attributed to only the automatic release lanes.'
+    }
+
+    $unknownSdkPackage = 'eng/local-package-feed/IIoT.Edge.Module.Unknown.9.9.9.nupkg'
+    $unknownSdkPackageOutput = Join-Path $temporaryRoot 'unknown-sdk-package.json'
+    $unknownSdkPackageFailed = $false
+    try {
+        & $selector `
+            -RepositoryRoot $root `
+            -ChangedFiles @($unknownSdkPackage) `
+            -OutputPath $unknownSdkPackageOutput `
+            -GitHubOutputPath ''
+    } catch {
+        $unknownSdkPackageFailed = $_.Exception.Message -match 'cannot safely attribute' -and
+            $_.Exception.Message -match [regex]::Escape($unknownSdkPackage)
+    }
+    if (-not $unknownSdkPackageFailed) {
+        throw 'An SDK package absent from the governed package-set manifest did not fail closed.'
+    }
+    $unknownSdkPackageSelection = Get-Content $unknownSdkPackageOutput -Raw | ConvertFrom-Json
+    if (@($unknownSdkPackageSelection.unclassifiedFiles) -notcontains $unknownSdkPackage -or
+        @($unknownSdkPackageSelection.requiredExplicitModes) -notcontains 'Full') {
+        throw 'Unknown SDK package rejection is absent from selector evidence.'
+    }
+
     $manualOutput = Join-Path $temporaryRoot 'manual.json'
     & $selector `
         -RepositoryRoot $root `
@@ -435,4 +487,4 @@ if ($offlineWorkflowText.Contains('Test-EdgeCiTestSelection.ps1', [StringCompari
     throw 'The explicit offline artifact workflow must not rerun selector behavior tests.'
 }
 
-Write-Host 'EDGE_CI_SELECTION_BEHAVIOR_OK positive=1 utf8GitPaths=1 docs=1 quality=1 deployment=1 cross=1 negative=1 businessTopology=1 deploymentBusinessTopology=1 retiredBusiness=1 baselineUnknown=1 workflowGate=1 fullCoverageOnly=1 companionRestore=1'
+Write-Host 'EDGE_CI_SELECTION_BEHAVIOR_OK positive=1 utf8GitPaths=1 docs=1 sdkPackageSet=1 unknownSdkPackage=1 quality=1 deployment=1 cross=1 negative=1 businessTopology=1 deploymentBusinessTopology=1 retiredBusiness=1 baselineUnknown=1 workflowGate=1 fullCoverageOnly=1 companionRestore=1'

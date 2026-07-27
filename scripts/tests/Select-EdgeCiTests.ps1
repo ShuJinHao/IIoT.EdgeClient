@@ -92,6 +92,160 @@ function Invoke-GitUtf8 {
         Where-Object { -not [string]::IsNullOrEmpty($_) })
 }
 
+function ConvertFrom-SdkPackageSetManifest {
+    param(
+        [Parameter(Mandatory)][string]$Content,
+        [Parameter(Mandatory)][string]$Label
+    )
+
+    try {
+        $manifest = $Content | ConvertFrom-Json
+    } catch {
+        throw "$Label is not valid JSON: $($_.Exception.Message)"
+    }
+
+    $requiredProperties = @(
+        'schemaVersion',
+        'sdkRepository',
+        'sdkSourceCommit',
+        'version',
+        'packages'
+    )
+    foreach ($property in $requiredProperties) {
+        if ($manifest.PSObject.Properties.Name -notcontains $property) {
+            throw "$Label is missing required property '$property'."
+        }
+    }
+    if ([int]$manifest.schemaVersion -ne 1 -or
+        [string]$manifest.sdkRepository -cne 'ShuJinHao/IIoT.Edge.Sdk' -or
+        [string]$manifest.sdkSourceCommit -notmatch '^[0-9a-f]{40}$' -or
+        [string]$manifest.version -notmatch '^\d+\.\d+\.\d+$') {
+        throw "$Label has an invalid SDK package-set identity."
+    }
+
+    $expectedIds = @(
+        'IIoT.Edge.Module.Analyzers',
+        'IIoT.Edge.Module.Contracts',
+        'IIoT.Edge.Module.Sdk',
+        'IIoT.Edge.UI.Shared'
+    )
+    $entries = @($manifest.packages)
+    if ($entries.Count -ne $expectedIds.Count) {
+        throw "$Label must list exactly the four governed SDK packages."
+    }
+
+    $validatedEntries = [Collections.Generic.List[object]]::new()
+    foreach ($id in $expectedIds) {
+        $matches = @($entries | Where-Object {
+                $_.PSObject.Properties.Name -contains 'id' -and
+                [string]$_.id -ceq $id
+            })
+        if ($matches.Count -ne 1) {
+            throw "$Label must contain exactly one entry for '$id'."
+        }
+        $entry = $matches[0]
+        foreach ($property in @('fileName', 'sha256', 'size')) {
+            if ($entry.PSObject.Properties.Name -notcontains $property) {
+                throw "$Label package '$id' is missing required property '$property'."
+            }
+        }
+
+        $expectedFileName = "$id.$($manifest.version).nupkg"
+        if ([string]$entry.fileName -cne $expectedFileName -or
+            [string]$entry.sha256 -notmatch '^[0-9a-f]{64}$' -or
+            [int64]$entry.size -le 0) {
+            throw "$Label package '$id' has an invalid governed filename or digest."
+        }
+        $validatedEntries.Add([pscustomobject]@{
+                Id = $id
+                FileName = $expectedFileName
+                Sha256 = [string]$entry.sha256
+                Size = [int64]$entry.size
+            })
+    }
+
+    return [pscustomobject]@{
+        Version = [string]$manifest.version
+        Entries = @($validatedEntries)
+    }
+}
+
+function Get-ControlledSdkPackageSetPaths {
+    param(
+        [Parameter(Mandatory)][string]$Root,
+        [string]$BaselineRevision
+    )
+
+    $manifestRepositoryPath = 'eng/local-package-feed/sdk-package-set.json'
+    $manifestPath = Join-Path $Root $manifestRepositoryPath
+    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+        throw "Governed SDK package-set manifest was not found: $manifestRepositoryPath"
+    }
+    $current = ConvertFrom-SdkPackageSetManifest `
+        -Content (Get-Content -LiteralPath $manifestPath -Raw -Encoding utf8) `
+        -Label 'Current SDK package-set manifest'
+
+    [xml]$centralPackages = Get-Content `
+        -LiteralPath (Join-Path $Root 'Directory.Packages.props') `
+        -Raw `
+        -Encoding utf8
+    foreach ($entry in $current.Entries) {
+        $matches = @($centralPackages.SelectNodes(
+                "/*[local-name()='Project']/*[local-name()='ItemGroup']/*[local-name()='PackageVersion' and @Include='$($entry.Id)']"))
+        if ($matches.Count -ne 1 -or
+            [string]$matches[0].Version -cne $current.Version) {
+            throw "Directory.Packages.props does not pin '$($entry.Id)' to governed SDK version '$($current.Version)'."
+        }
+
+        $packagePath = Join-Path $Root "eng/local-package-feed/$($entry.FileName)"
+        if (-not (Test-Path -LiteralPath $packagePath -PathType Leaf)) {
+            throw "Governed SDK package is missing: eng/local-package-feed/$($entry.FileName)"
+        }
+        $package = Get-Item -LiteralPath $packagePath
+        $actualSha256 = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($package.Length -ne $entry.Size -or $actualSha256 -cne $entry.Sha256) {
+            throw "Governed SDK package bytes do not match the manifest: eng/local-package-feed/$($entry.FileName)"
+        }
+    }
+
+    $allowed = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($fixedPath in @(
+            'Directory.Packages.props',
+            'eng/local-package-feed/README.md',
+            $manifestRepositoryPath
+        )) {
+        [void]$allowed.Add($fixedPath)
+    }
+    foreach ($entry in $current.Entries) {
+        [void]$allowed.Add("eng/local-package-feed/$($entry.FileName)")
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($BaselineRevision) -and
+        $BaselineRevision -notmatch '^0+$') {
+        [void](Invoke-GitUtf8 -Root $Root `
+            -Arguments @('cat-file', '-e', "${BaselineRevision}^{commit}") `
+            -FailureMessage "Unable to read SDK package-set baseline revision '$BaselineRevision':")
+        $baselineContent = @()
+        try {
+            $baselineContent = @(Invoke-GitUtf8 -Root $Root `
+                -Arguments @('show', "${BaselineRevision}:$manifestRepositoryPath") `
+                -FailureMessage "Unable to read baseline SDK package-set manifest:")
+        } catch {
+            $baselineContent = @()
+        }
+        if ($baselineContent.Count -gt 0) {
+            $baseline = ConvertFrom-SdkPackageSetManifest `
+                -Content ($baselineContent -join [Environment]::NewLine) `
+                -Label "Baseline SDK package-set manifest at '$BaselineRevision'"
+            foreach ($entry in $baseline.Entries) {
+                [void]$allowed.Add("eng/local-package-feed/$($entry.FileName)")
+            }
+        }
+    }
+
+    return $allowed
+}
+
 function Get-DirectProjectProperty {
     param(
         [Parameter(Mandatory)][xml]$Project,
@@ -359,6 +513,31 @@ function Add-BaselineBusinessImpact {
     return $true
 }
 
+function Add-AutomaticReleaseLaneImpact {
+    param(
+        [Parameter(Mandatory)][hashtable]$Selected,
+        [Parameter(Mandatory)][object[]]$TestProjects,
+        [Parameter(Mandatory)][string]$Mode,
+        [Parameter(Mandatory)][string]$Reason,
+        [Parameter(Mandatory)][AllowEmptyCollection()][Collections.Generic.List[string]]$DeferredFiles
+    )
+
+    foreach ($project in @($TestProjects | Where-Object {
+                $_.Category -in @(
+                    'Architecture',
+                    'Security',
+                    'Business',
+                    'DeploymentContract')
+            })) {
+        if ($Mode -eq 'Deployment' -and $project.Category -ceq 'Business') {
+            $DeferredFiles.Add("Business:${Reason}:$($project.Path)")
+            continue
+        }
+        Add-SelectedProject -Selected $Selected -Project $project `
+            -Category $project.Category -Reason $Reason
+    }
+}
+
 $root = (Resolve-Path $RepositoryRoot).Path.TrimEnd(
     [IO.Path]::DirectorySeparatorChar,
     [IO.Path]::AltDirectorySeparatorChar)
@@ -490,6 +669,7 @@ if ($Mode -eq 'Quality') {
         $baselineState = Get-BaselineState -Root $root -Revision $BaseRef
     }
 
+    $controlledSdkPackageSetPaths = $null
     foreach ($file in $changed) {
         if ($file -match '^(?:docs/|AGENTS\.md$|README(?:\.[^/]+)?$|LICENSE(?:\.[^/]+)?$)') {
             continue
@@ -497,7 +677,29 @@ if ($Mode -eq 'Quality') {
         if ($file -match '^(?:\.github/workflows/|scripts/tests/)') {
             continue
         }
-        if ($file -match '^(?:global\.json$|Directory\.(?:Build|Packages)\.(?:props|targets)$|eng/local-package-feed/)') {
+        if ($file -ceq 'Directory.Packages.props' -or
+            $file.StartsWith('eng/local-package-feed/', [StringComparison]::Ordinal)) {
+            if ($null -eq $controlledSdkPackageSetPaths) {
+                $controlledSdkPackageSetPaths = Get-ControlledSdkPackageSetPaths `
+                    -Root $root `
+                    -BaselineRevision $BaseRef
+            }
+            if (-not $controlledSdkPackageSetPaths.Contains($file)) {
+                $unclassified.Add($file)
+                [void]$requiredExplicitMode.Add('Full')
+                continue
+            }
+
+            $deploymentAffected = $true
+            Add-AutomaticReleaseLaneImpact `
+                -Selected $selected `
+                -TestProjects $testProjects `
+                -Mode $Mode `
+                -Reason "affected-sdk-package-set:$file" `
+                -DeferredFiles $deferredFiles
+            continue
+        }
+        if ($file -match '^(?:global\.json$|Directory\.Build\.(?:props|targets)$|Directory\.Packages\.targets$)') {
             $unclassified.Add($file)
             [void]$requiredExplicitMode.Add('Full')
             continue
