@@ -76,7 +76,24 @@ function Resolve-PhysicalPath {
     }
 
     $rootItem = Get-Item -LiteralPath $pathRoot -Force -ErrorAction Stop
-    $rootLinkTarget = $rootItem.ResolveLinkTarget($true)
+    $rootLinkTarget = $null
+    try {
+        $rootLinkTarget = $rootItem.ResolveLinkTarget($true)
+    }
+    catch {
+        $rootResolutionException = $_.Exception
+        while ($null -ne $rootResolutionException.InnerException) {
+            $rootResolutionException = $rootResolutionException.InnerException
+        }
+
+        # Windows .NET 可能在普通盘符根上误抛 DirectoryNotFoundException；
+        # 仅当根明确不是链接时接受该平台异常，链接或其它错误仍保持 fail-closed。
+        if (-not $IsWindows -or
+            $null -ne $rootItem.LinkType -or
+            $rootResolutionException -isnot [System.IO.DirectoryNotFoundException]) {
+            throw
+        }
+    }
     $currentPath = if ($null -ne $rootLinkTarget) {
         $rootLinkTarget.FullName
     }

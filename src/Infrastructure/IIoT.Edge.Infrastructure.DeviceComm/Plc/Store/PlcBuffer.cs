@@ -4,7 +4,7 @@ using System.Threading;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 
-public class PlcBuffer : IPlcBufferTransport
+public class PlcBuffer : IPlcBufferTransport, IPlcReadSnapshotProvider, IPlcReadBatchPublisher
 {
     private ushort[] _readBuffer;
     private readonly ushort[] _writeBuffer;
@@ -19,7 +19,11 @@ public class PlcBuffer : IPlcBufferTransport
         new Dictionary<string, PlcBufferSignalBinding>(StringComparer.OrdinalIgnoreCase);
     private IReadOnlyDictionary<string, PlcReadSignalState> _readSignalStates =
         new Dictionary<string, PlcReadSignalState>(StringComparer.OrdinalIgnoreCase);
+    // 手动 IO 读取只覆盖页面/诊断值；业务快照仍仅由整轮扫描发布。
+    private IReadOnlyDictionary<string, ushort[]> _manualReadOverrides =
+        new Dictionary<string, ushort[]>(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, ushort[]> _writeSignals = new(StringComparer.OrdinalIgnoreCase);
+    private long _readGeneration;
 
     public PlcBuffer(
         int readSize,
@@ -42,6 +46,13 @@ public class PlcBuffer : IPlcBufferTransport
 
     public bool TryGetReadWords(string signalKey, out ushort[] values)
     {
+        var manualSnapshot = Volatile.Read(ref _manualReadOverrides);
+        if (manualSnapshot.TryGetValue(signalKey, out var manualWords))
+        {
+            values = (ushort[])manualWords.Clone();
+            return true;
+        }
+
         var snapshot = Volatile.Read(ref _readSignalStates);
         if (snapshot.TryGetValue(signalKey, out var state))
         {
@@ -57,6 +68,80 @@ public class PlcBuffer : IPlcBufferTransport
 
         values = [];
         return false;
+    }
+
+    public bool TryCaptureReadSnapshot(
+        IReadOnlyCollection<string> requiredSignalKeys,
+        out PlcReadBatchSnapshot? snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(requiredSignalKeys);
+        snapshot = null;
+        if (requiredSignalKeys.Count == 0)
+        {
+            return false;
+        }
+
+        var normalizedKeys = new List<string>(requiredSignalKeys.Count);
+        var uniqueKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var signalKey in requiredSignalKeys)
+        {
+            if (string.IsNullOrWhiteSpace(signalKey))
+            {
+                return false;
+            }
+
+            var normalizedKey = signalKey.Trim();
+            if (!uniqueKeys.Add(normalizedKey))
+            {
+                return false;
+            }
+
+            normalizedKeys.Add(normalizedKey);
+        }
+
+        var stateSnapshot = Volatile.Read(ref _readSignalStates);
+        var signalSnapshots = new List<PlcReadSignalSnapshot>(normalizedKeys.Count);
+        long? generation = null;
+        Guid? batchId = null;
+        DateTimeOffset? capturedAtUtc = null;
+        foreach (var signalKey in normalizedKeys)
+        {
+            if (!stateSnapshot.TryGetValue(signalKey, out var state)
+                || state.Generation <= 0
+                || state.BatchId == Guid.Empty)
+            {
+                return false;
+            }
+
+            var stateCapturedAtUtc = state.AttemptedAtUtc.ToUniversalTime();
+            if (generation is not null
+                && (state.Generation != generation.Value
+                    || state.BatchId != batchId
+                    || stateCapturedAtUtc != capturedAtUtc))
+            {
+                return false;
+            }
+
+            generation ??= state.Generation;
+            batchId ??= state.BatchId;
+            capturedAtUtc ??= stateCapturedAtUtc;
+            signalSnapshots.Add(
+                new PlcReadSignalSnapshot(
+                    signalKey,
+                    state.Generation,
+                    state.BatchId,
+                    stateCapturedAtUtc,
+                    state.CurrentWords,
+                    state.ReadSucceeded,
+                    state.FailureReason));
+        }
+
+        snapshot = new PlcReadBatchSnapshot(
+            generation!.Value,
+            batchId!.Value,
+            capturedAtUtc!.Value,
+            signalSnapshots);
+        return true;
     }
 
     public bool TryGetWriteWords(string signalKey, out ushort[] values)
@@ -174,12 +259,14 @@ public class PlcBuffer : IPlcBufferTransport
             affected = _readBindings.Values.ToArray();
             var batchId = Guid.NewGuid();
             var attemptedAtUtc = DateTimeOffset.UtcNow;
+            var generation = NextReadGeneration();
             var nextStates = CopyReadSignalStates();
             foreach (var binding in affected)
             {
                 var words = ReadWords(next, binding.Offset, binding.AddressCount);
                 nextStates[binding.SignalKey] = CreateNextReadState(
                     nextStates.GetValueOrDefault(binding.SignalKey),
+                    generation,
                     new PlcReadSignalUpdate(
                         words,
                         ReadSucceeded: true,
@@ -190,6 +277,9 @@ public class PlcBuffer : IPlcBufferTransport
 
             Interlocked.Exchange(ref _readBuffer, next);
             Volatile.Write(ref _readSignalStates, nextStates);
+            Volatile.Write(
+                ref _manualReadOverrides,
+                new Dictionary<string, ushort[]>(StringComparer.OrdinalIgnoreCase));
         }
 
         foreach (var binding in affected)
@@ -200,16 +290,24 @@ public class PlcBuffer : IPlcBufferTransport
 
     public void UpdateReadSignal(string signalKey, IReadOnlyList<ushort> data)
     {
-        PublishReadBatch(
-            new Dictionary<string, PlcReadSignalUpdate>(StringComparer.OrdinalIgnoreCase)
+        ArgumentException.ThrowIfNullOrWhiteSpace(signalKey);
+        ArgumentNullException.ThrowIfNull(data);
+        var words = NormalizeWords(data);
+        lock (_readSync)
+        {
+            var next = (ushort[])Volatile.Read(ref _readBuffer).Clone();
+            if (TryGetBinding(_readBindings, signalKey, out var binding))
             {
-                [signalKey] = new(
-                    NormalizeWords(data),
-                    ReadSucceeded: true,
-                    Guid.NewGuid(),
-                    DateTimeOffset.UtcNow,
-                    FailureReason: null)
-            });
+                ApplyWords(next, binding, words);
+            }
+
+            var nextOverrides = CopyManualReadOverrides();
+            nextOverrides[signalKey] = (ushort[])words.Clone();
+            Interlocked.Exchange(ref _readBuffer, next);
+            Volatile.Write(ref _manualReadOverrides, nextOverrides);
+        }
+
+        NotifyChanged(signalKey, "Read");
     }
 
     internal void UpdateReadSignals(IReadOnlyDictionary<string, ushort[]> signalValues)
@@ -234,6 +332,10 @@ public class PlcBuffer : IPlcBufferTransport
                 StringComparer.OrdinalIgnoreCase));
     }
 
+    void IPlcReadBatchPublisher.PublishReadBatch(
+        IReadOnlyDictionary<string, PlcReadSignalUpdate> signalUpdates)
+        => PublishReadBatch(signalUpdates);
+
     internal void PublishReadBatch(IReadOnlyDictionary<string, PlcReadSignalUpdate> signalUpdates)
     {
         ArgumentNullException.ThrowIfNull(signalUpdates);
@@ -242,27 +344,36 @@ public class PlcBuffer : IPlcBufferTransport
             return;
         }
 
+        var capturedUpdates = CaptureAndValidateReadBatch(signalUpdates);
         string[] affected;
         lock (_readSync)
         {
             var next = (ushort[])Volatile.Read(ref _readBuffer).Clone();
             var nextStates = CopyReadSignalStates();
-            affected = signalUpdates.Keys.ToArray();
-            foreach (var (signalKey, update) in signalUpdates)
+            var nextManualOverrides = CopyManualReadOverrides();
+            var generation = NextReadGeneration();
+            affected = capturedUpdates.Select(static pair => pair.Key).ToArray();
+            foreach (var (signalKey, update) in capturedUpdates)
             {
-                var words = NormalizeWords(update.CurrentWords);
+                var words = update.ReadSucceeded
+                    ? NormalizeWords(update.CurrentWords)
+                    : CreateFailedWords(signalKey, update.CurrentWords.Length);
                 var normalizedUpdate = update with { CurrentWords = words };
                 nextStates[signalKey] = CreateNextReadState(
                     nextStates.GetValueOrDefault(signalKey),
+                    generation,
                     normalizedUpdate);
                 if (TryGetBinding(_readBindings, signalKey, out var binding))
                 {
                     ApplyWords(next, binding, words);
                 }
+
+                nextManualOverrides.Remove(signalKey);
             }
 
             Interlocked.Exchange(ref _readBuffer, next);
             Volatile.Write(ref _readSignalStates, nextStates);
+            Volatile.Write(ref _manualReadOverrides, nextManualOverrides);
         }
 
         foreach (var signalKey in affected)
@@ -304,17 +415,42 @@ public class PlcBuffer : IPlcBufferTransport
 
     public void SetSignalBindings(IReadOnlyCollection<PlcBufferSignalBinding> bindings)
     {
+        ArgumentNullException.ThrowIfNull(bindings);
+        string[] invalidatedReadSignalKeys;
+        var readBindings = bindings
+            .Where(static binding => string.Equals(binding.Direction, "Read", StringComparison.OrdinalIgnoreCase))
+            .GroupBy(static binding => binding.SignalKey, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.OrdinalIgnoreCase);
+        var writeBindings = bindings
+            .Where(static binding => string.Equals(binding.Direction, "Write", StringComparison.OrdinalIgnoreCase))
+            .GroupBy(static binding => binding.SignalKey, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.OrdinalIgnoreCase);
+
         lock (_bindingSync)
         {
-            _readBindings = bindings
-                .Where(static binding => string.Equals(binding.Direction, "Read", StringComparison.OrdinalIgnoreCase))
-                .GroupBy(static binding => binding.SignalKey, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.OrdinalIgnoreCase);
+            lock (_readSync)
+            {
+                invalidatedReadSignalKeys = _readBindings.Keys
+                    .Concat(readBindings.Keys)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                _readBindings = readBindings;
+                _writeBindings = writeBindings;
+                Interlocked.Exchange(
+                    ref _readBuffer,
+                    new ushort[Volatile.Read(ref _readBuffer).Length]);
+                Volatile.Write(
+                    ref _readSignalStates,
+                    new Dictionary<string, PlcReadSignalState>(StringComparer.OrdinalIgnoreCase));
+                Volatile.Write(
+                    ref _manualReadOverrides,
+                    new Dictionary<string, ushort[]>(StringComparer.OrdinalIgnoreCase));
+            }
+        }
 
-            _writeBindings = bindings
-                .Where(static binding => string.Equals(binding.Direction, "Write", StringComparison.OrdinalIgnoreCase))
-                .GroupBy(static binding => binding.SignalKey, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.OrdinalIgnoreCase);
+        foreach (var signalKey in invalidatedReadSignalKeys)
+        {
+            NotifyChanged(signalKey, "Read");
         }
     }
 
@@ -374,8 +510,16 @@ public class PlcBuffer : IPlcBufferTransport
                 static pair => pair.Value,
                 StringComparer.OrdinalIgnoreCase);
 
+    private Dictionary<string, ushort[]> CopyManualReadOverrides()
+        => Volatile.Read(ref _manualReadOverrides)
+            .ToDictionary(
+                static pair => pair.Key,
+                static pair => pair.Value,
+                StringComparer.OrdinalIgnoreCase);
+
     private static PlcReadSignalState CreateNextReadState(
         PlcReadSignalState? previous,
+        long generation,
         PlcReadSignalUpdate update)
     {
         var currentWords = (ushort[])update.CurrentWords.Clone();
@@ -384,6 +528,7 @@ public class PlcBuffer : IPlcBufferTransport
             return new PlcReadSignalState(
                 currentWords,
                 ReadSucceeded: true,
+                generation,
                 update.BatchId,
                 update.AttemptedAtUtc,
                 LastSucceededAtUtc: update.AttemptedAtUtc,
@@ -395,6 +540,7 @@ public class PlcBuffer : IPlcBufferTransport
         return new PlcReadSignalState(
             currentWords,
             ReadSucceeded: false,
+            generation,
             update.BatchId,
             update.AttemptedAtUtc,
             LastSucceededAtUtc: previous?.LastSucceededAtUtc,
@@ -403,6 +549,62 @@ public class PlcBuffer : IPlcBufferTransport
                 : (ushort[])previous.LastSucceededWords.Clone(),
             FailedAtUtc: update.AttemptedAtUtc,
             FailureReason: update.FailureReason);
+    }
+
+    private long NextReadGeneration()
+    {
+        _readGeneration = checked(_readGeneration + 1);
+        return _readGeneration;
+    }
+
+    private ushort[] CreateFailedWords(string signalKey, int updateWordCount)
+    {
+        var wordCount = TryGetBinding(_readBindings, signalKey, out var binding)
+            ? binding.AddressCount
+            : updateWordCount;
+        return new ushort[Math.Max(1, wordCount)];
+    }
+
+    private static IReadOnlyList<KeyValuePair<string, PlcReadSignalUpdate>> CaptureAndValidateReadBatch(
+        IReadOnlyDictionary<string, PlcReadSignalUpdate> signalUpdates)
+    {
+        var captured = new List<KeyValuePair<string, PlcReadSignalUpdate>>(signalUpdates.Count);
+        Guid? batchId = null;
+        DateTimeOffset? attemptedAtUtc = null;
+        foreach (var (signalKey, update) in signalUpdates)
+        {
+            if (string.IsNullOrWhiteSpace(signalKey)
+                || update is null
+                || update.CurrentWords is null
+                || update.BatchId == Guid.Empty)
+            {
+                throw new ArgumentException(
+                    "PLC 整批发布包含无效的信号或批次元数据。",
+                    nameof(signalUpdates));
+            }
+
+            var normalizedAttemptedAtUtc = update.AttemptedAtUtc.ToUniversalTime();
+            batchId ??= update.BatchId;
+            attemptedAtUtc ??= normalizedAttemptedAtUtc;
+            if (update.BatchId != batchId.Value
+                || normalizedAttemptedAtUtc != attemptedAtUtc.Value)
+            {
+                throw new ArgumentException(
+                    "PLC 整批发布的全部信号必须具有同一 BatchId 和采集时间。",
+                    nameof(signalUpdates));
+            }
+
+            captured.Add(
+                KeyValuePair.Create(
+                    signalKey,
+                    update with
+                    {
+                        CurrentWords = NormalizeWords(update.CurrentWords),
+                        AttemptedAtUtc = normalizedAttemptedAtUtc
+                    }));
+        }
+
+        return captured;
     }
 
     private static bool TryGetBinding(
@@ -425,6 +627,7 @@ internal sealed record PlcReadSignalUpdate(
 internal sealed record PlcReadSignalState(
     ushort[] CurrentWords,
     bool ReadSucceeded,
+    long Generation,
     Guid BatchId,
     DateTimeOffset AttemptedAtUtc,
     DateTimeOffset? LastSucceededAtUtc,

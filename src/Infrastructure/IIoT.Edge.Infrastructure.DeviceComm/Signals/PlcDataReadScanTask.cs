@@ -343,16 +343,13 @@ public sealed class PlcDataReadScanTask : IPlcTask
         IPlcBufferTransport buffer,
         IReadOnlyDictionary<string, PlcReadSignalUpdate> stagedUpdates)
     {
-        if (buffer is PlcBuffer plcBuffer)
+        if (buffer is not IPlcReadBatchPublisher publisher)
         {
-            plcBuffer.PublishReadBatch(stagedUpdates);
-            return;
+            throw new InvalidOperationException(
+                "PLC buffer 不具备强制整批发布能力，拒绝逐信号降级提交读取结果。");
         }
 
-        foreach (var (signalKey, update) in stagedUpdates)
-        {
-            buffer.UpdateReadSignal(signalKey, update.CurrentWords);
-        }
+        publisher.PublishReadBatch(stagedUpdates);
     }
 
     private static string FormatBlockSignals(PlcSignalBlock block)
