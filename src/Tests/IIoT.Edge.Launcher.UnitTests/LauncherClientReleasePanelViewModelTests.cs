@@ -193,42 +193,25 @@ public sealed class LauncherClientReleasePanelViewModelTests
     [Fact]
     public async Task ApplyVersionAsync_WhenAnotherLauncherOwnsGate_ShouldNotStartSecondInstall()
     {
-        var root = Path.Combine(
-            Path.GetTempPath(),
-            "edge-launcher-update-gate-unit-tests",
-            Guid.NewGuid().ToString("N"));
-        try
-        {
-            var firstLauncherGate = new FileLauncherUpdateOperationGate(
-                Path.Combine(root, "launcher"));
-            var secondLauncherGate = new FileLauncherUpdateOperationGate(
-                Path.Combine(root, "launcher"));
-            var service = new RecordingReleaseService(CreateReleaseCatalog());
-            var panel = CreatePanel(
-                service,
-                updateOperationGate: secondLauncherGate);
-            await panel.CheckAsync(Profile());
-            var newer = panel.Components
-                .Single(component => component.ModuleId == ModuleId)
-                .Versions.Single(option => option.Version == "1.1.0");
+        var sharedGate = new TrackingUpdateOperationGate();
+        using var firstLauncherLease = sharedGate.TryAcquire();
+        Assert.NotNull(firstLauncherLease);
+        var service = new RecordingReleaseService(CreateReleaseCatalog());
+        var panel = CreatePanel(
+            service,
+            updateOperationGate: sharedGate);
+        await panel.CheckAsync(Profile());
+        var newer = panel.Components
+            .Single(component => component.ModuleId == ModuleId)
+            .Versions.Single(option => option.Version == "1.1.0");
 
-            using var firstLease = firstLauncherGate.TryAcquire();
-            Assert.NotNull(firstLease);
-            await panel.ApplyVersionAsync(newer);
+        await panel.ApplyVersionAsync(newer);
 
-            Assert.Null(service.AppliedPluginModuleId);
-            Assert.Contains(
-                "Launcher_ClientRelease_StatusBusy",
-                panel.StatusMessage,
-                StringComparison.Ordinal);
-        }
-        finally
-        {
-            if (Directory.Exists(root))
-            {
-                Directory.Delete(root, recursive: true);
-            }
-        }
+        Assert.Null(service.AppliedPluginModuleId);
+        Assert.Contains(
+            "Launcher_ClientRelease_StatusBusy",
+            panel.StatusMessage,
+            StringComparison.Ordinal);
     }
 
     [Theory]
@@ -237,47 +220,33 @@ public sealed class LauncherClientReleasePanelViewModelTests
     public async Task ApplyVersionAsync_WhenInstallThrows_ShouldReleaseGate(
         bool cancellation)
     {
-        var root = Path.Combine(
-            Path.GetTempPath(),
-            "edge-launcher-update-gate-unit-tests",
-            Guid.NewGuid().ToString("N"));
-        try
-        {
-            var service = new ThrowingApplyReleaseService(
-                CreateReleaseCatalog(),
-                cancellation);
-            var panel = CreatePanel(
-                service,
-                updateOperationGate: new FileLauncherUpdateOperationGate(
-                    Path.Combine(root, "launcher")));
-            await panel.CheckAsync(Profile());
-            var newer = panel.Components
-                .Single(component => component.ModuleId == ModuleId)
-                .Versions.Single(option => option.Version == "1.1.0");
+        var gate = new TrackingUpdateOperationGate();
+        var service = new ThrowingApplyReleaseService(
+            CreateReleaseCatalog(),
+            cancellation);
+        var panel = CreatePanel(
+            service,
+            updateOperationGate: gate);
+        await panel.CheckAsync(Profile());
+        var newer = panel.Components
+            .Single(component => component.ModuleId == ModuleId)
+            .Versions.Single(option => option.Version == "1.1.0");
 
-            if (cancellation)
-            {
-                await panel.ApplyVersionAsync(newer);
-            }
-            else
-            {
-                await Assert.ThrowsAsync<InvalidOperationException>(
-                    () => panel.ApplyVersionAsync(newer));
-            }
-
-            using var nextLease = new FileLauncherUpdateOperationGate(
-                    Path.Combine(root, "launcher"))
-                .TryAcquire();
-            Assert.NotNull(nextLease);
-            Assert.Equal(1, service.ApplyCallCount);
-        }
-        finally
+        if (cancellation)
         {
-            if (Directory.Exists(root))
-            {
-                Directory.Delete(root, recursive: true);
-            }
+            await panel.ApplyVersionAsync(newer);
         }
+        else
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => panel.ApplyVersionAsync(newer));
+        }
+
+        Assert.False(gate.IsHeld);
+        Assert.Equal(1, gate.ReleaseCount);
+        using var nextLease = gate.TryAcquire();
+        Assert.NotNull(nextLease);
+        Assert.Equal(1, service.ApplyCallCount);
     }
 
     [Fact]
@@ -428,6 +397,41 @@ public sealed class LauncherClientReleasePanelViewModelTests
 
         public void Launch(LauncherProfileDefinition profile)
         {
+        }
+    }
+
+    private sealed class TrackingUpdateOperationGate : ILauncherUpdateOperationGate
+    {
+        public bool IsHeld { get; private set; }
+
+        public int ReleaseCount { get; private set; }
+
+        public IDisposable? TryAcquire()
+        {
+            if (IsHeld)
+            {
+                return null;
+            }
+
+            IsHeld = true;
+            return new Lease(this);
+        }
+
+        private sealed class Lease(TrackingUpdateOperationGate owner) : IDisposable
+        {
+            private bool _disposed;
+
+            public void Dispose()
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                _disposed = true;
+                owner.IsHeld = false;
+                owner.ReleaseCount++;
+            }
         }
     }
 
