@@ -128,7 +128,9 @@ public sealed class LogViewModelBehaviorTests
         await Task.WhenAll(publishers);
 
         Assert.Empty(display.Entries);
-        await batchCompleted.Task.WaitAsync(TestContext.Current.CancellationToken);
+        await batchCompleted.Task.WaitAsync(
+            TimeSpan.FromSeconds(5),
+            TestContext.Current.CancellationToken);
 
         Assert.True(collectionNotificationsStayedOnUiThread);
         Assert.Equal(200, display.Entries.Count);

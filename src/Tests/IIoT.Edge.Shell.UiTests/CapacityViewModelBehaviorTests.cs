@@ -270,7 +270,9 @@ public sealed class CapacityViewModelBehaviorTests
                 completion.TrySetResult(true);
             }
 
-            await completion.Task.WaitAsync(TestContext.Current.CancellationToken);
+            await completion.Task.WaitAsync(
+                TimeSpan.FromSeconds(5),
+                TestContext.Current.CancellationToken);
         }
         finally
         {

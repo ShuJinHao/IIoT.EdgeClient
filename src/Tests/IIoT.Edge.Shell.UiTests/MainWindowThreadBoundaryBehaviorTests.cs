@@ -152,7 +152,9 @@ public sealed class MainWindowThreadBoundaryBehaviorTests
                 return;
             }
 
-            await completion.Task.WaitAsync(TestContext.Current.CancellationToken);
+            await completion.Task.WaitAsync(
+                TimeSpan.FromSeconds(5),
+                TestContext.Current.CancellationToken);
         }
         finally
         {
