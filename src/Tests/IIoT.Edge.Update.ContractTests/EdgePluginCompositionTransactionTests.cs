@@ -16,6 +16,7 @@ public sealed class EdgePluginCompositionTransactionTests
     [Theory]
     [InlineData(EdgePluginTransactionStage.InstallRecordWritten)]
     [InlineData(EdgePluginTransactionStage.PackagePrepared)]
+    [InlineData(EdgePluginTransactionStage.ActivationProfileStaged)]
     [InlineData(EdgePluginTransactionStage.DirectoryMovedBeforeJournal)]
     [InlineData(EdgePluginTransactionStage.DirectoryReplaced)]
     [InlineData(EdgePluginTransactionStage.ProfileWritten)]
@@ -169,6 +170,7 @@ public sealed class EdgePluginCompositionTransactionTests
         Assert.False(recovery.Blocked);
         fixture.AssertNewPlugin("TestPlugin");
         fixture.AssertProfileContainsModules(["Existing", "TestPlugin"]);
+        fixture.AssertActivationDefaultsApplied("TestPlugin");
         fixture.AssertUnrelatedStateUnchanged();
         Assert.False(File.Exists(fixture.JournalPath));
     }
@@ -202,6 +204,8 @@ public sealed class EdgePluginCompositionTransactionTests
             Path.Combine(fixture.PluginsRoot, ".transactions")));
         var journal = File.ReadAllText(fixture.JournalPath);
         Assert.Contains("\"state\": \"rollbackFailed\"", journal, StringComparison.Ordinal);
+        Assert.Contains("\"stagedPath\":", journal, StringComparison.Ordinal);
+        Assert.Contains("\"targetSha256\":", journal, StringComparison.Ordinal);
         Assert.DoesNotContain("secret", journal, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -268,6 +272,7 @@ public sealed class EdgePluginCompositionTransactionTests
         Assert.True(result.Success, result.ErrorMessage);
         fixture.AssertNewPlugin("TestPlugin");
         fixture.AssertProfileContainsModules(["Existing", "TestPlugin"]);
+        fixture.AssertActivationDefaultsApplied("TestPlugin");
         fixture.AssertCustomProfileValuesUnchanged();
         fixture.AssertUnrelatedStateUnchanged();
         Assert.False(File.Exists(fixture.JournalPath));
@@ -648,6 +653,29 @@ public sealed class EdgePluginCompositionTransactionTests
             Assert.True(root.GetProperty("Custom").GetProperty("Keep").GetBoolean());
         }
 
+        public void AssertActivationDefaultsApplied(string moduleId)
+        {
+            using var document = JsonDocument.Parse(
+                File.ReadAllText(ProfilePath));
+            var root = document.RootElement;
+            Assert.Equal(
+                Target.MachineProfile,
+                root.GetProperty("InstanceId").GetString());
+            Assert.Equal(
+                Target.MachineProfile,
+                root
+                    .GetProperty("Shell")
+                    .GetProperty("MachineProfile")
+                    .GetString());
+            Assert.Equal(
+                $"required-{NewVersion}",
+                root
+                    .GetProperty("Modules")
+                    .GetProperty(moduleId)
+                    .GetProperty("RequiredSetting")
+                    .GetString());
+        }
+
         public void AssertUnrelatedStateUnchanged()
         {
             Assert.Equal(_originalSqlite, File.ReadAllBytes(SqlitePath));
@@ -689,6 +717,52 @@ public sealed class EdgePluginCompositionTransactionTests
                 archive,
                 $"IIoT.Edge.{moduleId}.dll",
                 "test-binary");
+            WriteEntry(
+                archive,
+                "activation/manifest.json",
+                $$"""
+                {
+                  "schemaVersion": 1,
+                  "moduleId": "{{moduleId}}",
+                  "profiles": [
+                    {
+                      "profileId": "LineA",
+                      "launcherProfile": "launcher/launcher.profiles.{{moduleId}}.json",
+                      "machineConfig": "machine/appsettings.machine.LineA.json"
+                    }
+                  ]
+                }
+                """);
+            WriteEntry(
+                archive,
+                $"activation/launcher/launcher.profiles.{moduleId}.json",
+                """
+                [
+                  {
+                    "profileId": "LineA",
+                    "displayName": "Line A",
+                    "machineProfile": "LineA",
+                    "executablePath": "../host/IIoT.Edge.Shell"
+                  }
+                ]
+                """);
+            WriteEntry(
+                archive,
+                "activation/machine/appsettings.machine.LineA.json",
+                $$"""
+                {
+                  "InstanceId": "LineA",
+                  "Shell": {
+                    "MachineProfile": "LineA"
+                  },
+                  "Modules": {
+                    "Enabled": [ "{{moduleId}}" ],
+                    "{{moduleId}}": {
+                      "RequiredSetting": "required-{{NewVersion}}"
+                    }
+                  }
+                }
+                """);
         }
 
         private static void WriteEntry(

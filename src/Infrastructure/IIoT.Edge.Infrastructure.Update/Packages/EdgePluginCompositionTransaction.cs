@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using IIoT.Edge.Application.Features.Updates;
 using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.SharedKernel.Configuration;
@@ -13,6 +14,7 @@ public enum EdgePluginTransactionStage
 {
     InstallRecordWritten,
     PackagePrepared,
+    ActivationProfileStaged,
     DirectoryMovedBeforeJournal,
     DirectoryReplaced,
     ProfileWritten,
@@ -162,6 +164,11 @@ public sealed class EdgePluginCompositionTransaction
             }
 
             SnapshotProfiles(journal, pluginsRoot);
+            StageProfiles(
+                journal,
+                pluginsRoot,
+                targets,
+                prepared);
             WriteJournal(journal);
             journalPersisted = true;
 
@@ -200,13 +207,7 @@ public sealed class EdgePluginCompositionTransaction
                         item.MachineProfile,
                         target.Target.MachineProfile,
                         StringComparison.OrdinalIgnoreCase));
-                if (target.ModuleIds.Count > 0)
-                {
-                    _profileStore.EnableModules(target.Target, target.ModuleIds);
-                }
-
-                profileEntry.TargetSha256 = ComputeFileSha256(
-                    ResolveProfilePath(profileEntry.ConfigPath));
+                CommitStagedProfile(profileEntry, pluginsRoot);
                 WriteJournal(journal);
                 _faultInjector?.Invoke(EdgePluginTransactionStage.ProfileWritten);
             }
@@ -492,6 +493,11 @@ public sealed class EdgePluginCompositionTransaction
                         "backups",
                         "profiles",
                         $"{profileSegment}.json"),
+                    StagedPath = Path.Combine(
+                        transactionRelativePath,
+                        "staging",
+                        "profiles",
+                        $"{profileSegment}.json"),
                     OriginalExists = File.Exists(configPath),
                     OriginalSha256 = ComputeFileSha256(configPath)
                 };
@@ -536,6 +542,164 @@ public sealed class EdgePluginCompositionTransaction
                 Path.GetDirectoryName(backupPath)
                 ?? throw new InvalidOperationException("profile 备份缺少目录。"));
             File.Copy(sourcePath, backupPath, overwrite: false);
+        }
+    }
+
+    private void StageProfiles(
+        UpdateTransactionJournal journal,
+        string pluginsRoot,
+        IReadOnlyList<EdgePluginCompositionTarget> targets,
+        IReadOnlyList<PreparedEdgePluginPackage> prepared)
+    {
+        var targetsByProfile = targets
+            .DistinctBy(
+                static item => item.Target.MachineProfile,
+                StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                static item => item.Target.MachineProfile,
+                StringComparer.OrdinalIgnoreCase);
+        foreach (var profile in journal.Profiles)
+        {
+            var target = targetsByProfile[profile.MachineProfile];
+            var targetPath = ResolveProfilePath(profile.ConfigPath);
+            var stagedPath = ResolveRelativePath(
+                pluginsRoot,
+                profile.StagedPath);
+            var root = ReadProfileSeed(target.Target, targetPath);
+            foreach (var package in prepared)
+            {
+                if (!target.ModuleIds.Contains(
+                        package.ModuleId,
+                        StringComparer.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                foreach (var activation in package.ActivationProfiles.Where(
+                             item => string.Equals(
+                                 item.ProfileId,
+                                 profile.MachineProfile,
+                                 StringComparison.OrdinalIgnoreCase)))
+                {
+                    var templatePath = ResolveRelativePath(
+                        package.ExtractDirectory,
+                        activation.MachineConfigPath);
+                    MergeMissing(root, ReadJsonObject(templatePath));
+                }
+            }
+
+            EnsureModulesEnabled(
+                root,
+                _profileStore
+                    .ReadEnabledModules(target.Target)
+                    .Concat(target.ModuleIds));
+            WriteJsonObject(stagedPath, root);
+            profile.TargetSha256 = ComputeFileSha256(stagedPath)
+                ?? throw new InvalidOperationException(
+                    $"profile 暂存文件缺失：{profile.MachineProfile}。");
+            _faultInjector?.Invoke(
+                EdgePluginTransactionStage.ActivationProfileStaged);
+        }
+    }
+
+    private static JsonObject ReadProfileSeed(
+        EdgeUpdateTarget target,
+        string externalPath)
+    {
+        if (File.Exists(externalPath))
+        {
+            return ReadJsonObject(externalPath);
+        }
+
+        var packagedPath = Path.Combine(
+            target.HostDirectory,
+            $"appsettings.machine.{target.MachineProfile}.json");
+        return File.Exists(packagedPath)
+            ? ReadJsonObject(packagedPath)
+            : new JsonObject();
+    }
+
+    private static JsonObject ReadJsonObject(string path)
+        => JsonNode.Parse(File.ReadAllText(path)) as JsonObject
+           ?? throw new InvalidOperationException(
+               $"profile JSON 根节点必须是对象：{path}");
+
+    private static void MergeMissing(
+        JsonObject target,
+        JsonObject template)
+    {
+        foreach (var property in template)
+        {
+            if (!target.TryGetPropertyValue(property.Key, out var current)
+                || current is null)
+            {
+                target[property.Key] = property.Value?.DeepClone();
+                continue;
+            }
+
+            if (current is JsonObject currentObject
+                && property.Value is JsonObject templateObject)
+            {
+                MergeMissing(currentObject, templateObject);
+            }
+        }
+    }
+
+    private static void EnsureModulesEnabled(
+        JsonObject root,
+        IEnumerable<string> moduleIds)
+    {
+        if (root["Modules"] is not JsonObject modules)
+        {
+            modules = new JsonObject();
+            root["Modules"] = modules;
+        }
+
+        modules["Enabled"] = new JsonArray(
+            moduleIds
+                .Where(static moduleId => !string.IsNullOrWhiteSpace(moduleId))
+                .Select(static moduleId => moduleId.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(static moduleId => moduleId, StringComparer.OrdinalIgnoreCase)
+                .Select(static moduleId => JsonValue.Create(moduleId))
+                .Cast<JsonNode?>()
+                .ToArray());
+    }
+
+    private static void WriteJsonObject(
+        string path,
+        JsonObject root)
+    {
+        Directory.CreateDirectory(
+            Path.GetDirectoryName(path)
+            ?? throw new InvalidOperationException(
+                "profile 暂存路径缺少目录。"));
+        File.WriteAllText(
+            path,
+            root.ToJsonString(new JsonSerializerOptions
+            {
+                WriteIndented = true
+            }),
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+    }
+
+    private void CommitStagedProfile(
+        ProfileJournalEntry profile,
+        string pluginsRoot)
+    {
+        var stagedPath = ResolveRelativePath(
+            pluginsRoot,
+            profile.StagedPath);
+        var targetPath = ResolveProfilePath(profile.ConfigPath);
+        RestoreFileAtomically(stagedPath, targetPath);
+        var actualSha256 = ComputeFileSha256(targetPath);
+        if (!string.Equals(
+                actualSha256,
+                profile.TargetSha256,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"profile 提交校验失败：{profile.MachineProfile}。");
         }
     }
 
@@ -749,7 +913,9 @@ public sealed class EdgePluginCompositionTransaction
                 || journal.Profiles.Any(static profile =>
                     string.IsNullOrWhiteSpace(profile.MachineProfile)
                     || string.IsNullOrWhiteSpace(profile.ConfigPath)
-                    || string.IsNullOrWhiteSpace(profile.BackupPath)))
+                    || string.IsNullOrWhiteSpace(profile.BackupPath)
+                    || string.IsNullOrWhiteSpace(profile.StagedPath)
+                    || string.IsNullOrWhiteSpace(profile.TargetSha256)))
             {
                 error = "更新事务日志结构无效。";
                 return null;
@@ -1115,6 +1281,8 @@ public sealed class EdgePluginCompositionTransaction
         public string ConfigPath { get; set; } = string.Empty;
 
         public string BackupPath { get; set; } = string.Empty;
+
+        public string StagedPath { get; set; } = string.Empty;
 
         public bool OriginalExists { get; set; }
 

@@ -143,14 +143,17 @@ public sealed class EdgePluginPackageInstaller : IEdgePluginPackageInstaller
             release,
             hostVersion,
             hostApiVersion);
-        ValidateActivationIfPresent(extractDirectory, release.ModuleId);
+        var activationProfiles = ValidateActivationIfPresent(
+            extractDirectory,
+            release.ModuleId);
         WriteInstallRecord(extractDirectory, release, manifest, actualSha256);
         return new PreparedEdgePluginPackage(
             release.ModuleId,
             release.PackageVersion,
             actualSha256,
             stagingRoot,
-            extractDirectory);
+            extractDirectory,
+            activationProfiles);
     }
 
     private async Task DownloadPackageAsync(
@@ -329,14 +332,15 @@ public sealed class EdgePluginPackageInstaller : IEdgePluginPackageInstaller
         return manifest;
     }
 
-    private static void ValidateActivationIfPresent(
+    private static IReadOnlyList<PreparedEdgePluginActivationProfile>
+        ValidateActivationIfPresent(
         string extractDirectory,
         string moduleId)
     {
         var activationRoot = Path.Combine(extractDirectory, "activation");
         if (!Directory.Exists(activationRoot))
         {
-            return;
+            return [];
         }
 
         var manifestPath = Path.Combine(activationRoot, "manifest.json");
@@ -363,6 +367,8 @@ public sealed class EdgePluginPackageInstaller : IEdgePluginPackageInstaller
         }
 
         var profileIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var activationProfiles =
+            new List<PreparedEdgePluginActivationProfile>();
         foreach (var profile in profiles.EnumerateArray())
         {
             var profileId = ReadRequiredString(profile, "profileId");
@@ -392,7 +398,15 @@ public sealed class EdgePluginPackageInstaller : IEdgePluginPackageInstaller
                 machineConfigPath,
                 moduleId,
                 profileId);
+            activationProfiles.Add(
+                new PreparedEdgePluginActivationProfile(
+                    profileId,
+                    Path.GetRelativePath(
+                        extractDirectory,
+                        machineConfigPath)));
         }
+
+        return activationProfiles;
     }
 
     private static void ValidateActivationProfile(
@@ -643,7 +657,12 @@ internal sealed record PreparedEdgePluginPackage(
     string Version,
     string PackageSha256,
     string StagingRoot,
-    string ExtractDirectory);
+    string ExtractDirectory,
+    IReadOnlyList<PreparedEdgePluginActivationProfile> ActivationProfiles);
+
+internal sealed record PreparedEdgePluginActivationProfile(
+    string ProfileId,
+    string MachineConfigPath);
 
 public sealed record EdgePluginPackageInstallLimits(
     long MaxPackageBytes,
