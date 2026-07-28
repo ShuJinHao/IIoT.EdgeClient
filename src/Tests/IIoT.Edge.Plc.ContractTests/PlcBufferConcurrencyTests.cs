@@ -316,4 +316,56 @@ public sealed class PlcBufferConcurrencyTests
         Assert.NotNull(replaced);
         Assert.NotSame(original, replaced);
     }
+
+    [Fact]
+    public void PlcDataStore_RegisterWithSameSize_ShouldInvalidatePreviousRuntimeSnapshot()
+    {
+        var store = new PlcDataStore();
+        store.Register(
+            2,
+            readSize: 2,
+            writeSize: 0,
+            [
+                new("Signal.A", "Read", 0, 1),
+                new("Signal.B", "Read", 1, 1)
+            ]);
+        var buffer = Assert.IsType<PlcBuffer>(store.GetBuffer(2));
+        buffer.UpdateReadSignals(new Dictionary<string, ushort[]>
+        {
+            ["Signal.A"] = [(ushort)11],
+            ["Signal.B"] = [(ushort)22]
+        });
+        Assert.True(buffer.TryCaptureReadSnapshot(["Signal.A", "Signal.B"], out var previous));
+        Assert.NotNull(previous);
+
+        store.Register(
+            2,
+            readSize: 2,
+            writeSize: 0,
+            [
+                new("Signal.A", "Read", 1, 1),
+                new("Signal.B", "Read", 0, 1)
+            ]);
+
+        var rebound = Assert.IsType<PlcBuffer>(store.GetBuffer(2));
+        Assert.Same(buffer, rebound);
+        Assert.False(rebound.TryCaptureReadSnapshot(["Signal.A", "Signal.B"], out _));
+        Assert.False(rebound.TryGetReadSignalState("Signal.A", out _));
+        Assert.False(rebound.TryGetReadWords("Signal.A", out var unavailableWords));
+        Assert.Equal((ushort)0, Assert.Single(unavailableWords));
+        Assert.Equal((ushort)0, rebound.GetReadValue(0));
+        Assert.Equal((ushort)0, rebound.GetReadValue(1));
+
+        rebound.UpdateReadSignals(new Dictionary<string, ushort[]>
+        {
+            ["Signal.A"] = [(ushort)33],
+            ["Signal.B"] = [(ushort)44]
+        });
+
+        Assert.True(rebound.TryCaptureReadSnapshot(["Signal.A", "Signal.B"], out var current));
+        Assert.NotNull(current);
+        Assert.True(current!.Generation > previous!.Generation);
+        Assert.Equal((ushort)33, Assert.Single(current.Signals["Signal.A"].Words));
+        Assert.Equal((ushort)44, Assert.Single(current.Signals["Signal.B"].Words));
+    }
 }

@@ -390,17 +390,29 @@ public class PlcBuffer : IPlcBufferTransport, IPlcReadSnapshotProvider, IPlcRead
 
     public void SetSignalBindings(IReadOnlyCollection<PlcBufferSignalBinding> bindings)
     {
+        ArgumentNullException.ThrowIfNull(bindings);
+        var readBindings = bindings
+            .Where(static binding => string.Equals(binding.Direction, "Read", StringComparison.OrdinalIgnoreCase))
+            .GroupBy(static binding => binding.SignalKey, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.OrdinalIgnoreCase);
+        var writeBindings = bindings
+            .Where(static binding => string.Equals(binding.Direction, "Write", StringComparison.OrdinalIgnoreCase))
+            .GroupBy(static binding => binding.SignalKey, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.OrdinalIgnoreCase);
+
         lock (_bindingSync)
         {
-            _readBindings = bindings
-                .Where(static binding => string.Equals(binding.Direction, "Read", StringComparison.OrdinalIgnoreCase))
-                .GroupBy(static binding => binding.SignalKey, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.OrdinalIgnoreCase);
-
-            _writeBindings = bindings
-                .Where(static binding => string.Equals(binding.Direction, "Write", StringComparison.OrdinalIgnoreCase))
-                .GroupBy(static binding => binding.SignalKey, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.OrdinalIgnoreCase);
+            lock (_readSync)
+            {
+                _readBindings = readBindings;
+                _writeBindings = writeBindings;
+                Interlocked.Exchange(
+                    ref _readBuffer,
+                    new ushort[Volatile.Read(ref _readBuffer).Length]);
+                Volatile.Write(
+                    ref _readSignalStates,
+                    new Dictionary<string, PlcReadSignalState>(StringComparer.OrdinalIgnoreCase));
+            }
         }
     }
 
