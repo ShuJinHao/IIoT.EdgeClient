@@ -416,6 +416,7 @@ public class PlcBuffer : IPlcBufferTransport, IPlcReadSnapshotProvider, IPlcRead
     public void SetSignalBindings(IReadOnlyCollection<PlcBufferSignalBinding> bindings)
     {
         ArgumentNullException.ThrowIfNull(bindings);
+        string[] invalidatedReadSignalKeys;
         var readBindings = bindings
             .Where(static binding => string.Equals(binding.Direction, "Read", StringComparison.OrdinalIgnoreCase))
             .GroupBy(static binding => binding.SignalKey, StringComparer.OrdinalIgnoreCase)
@@ -429,6 +430,10 @@ public class PlcBuffer : IPlcBufferTransport, IPlcReadSnapshotProvider, IPlcRead
         {
             lock (_readSync)
             {
+                invalidatedReadSignalKeys = _readBindings.Keys
+                    .Concat(readBindings.Keys)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
                 _readBindings = readBindings;
                 _writeBindings = writeBindings;
                 Interlocked.Exchange(
@@ -441,6 +446,11 @@ public class PlcBuffer : IPlcBufferTransport, IPlcReadSnapshotProvider, IPlcRead
                     ref _manualReadOverrides,
                     new Dictionary<string, ushort[]>(StringComparer.OrdinalIgnoreCase));
             }
+        }
+
+        foreach (var signalKey in invalidatedReadSignalKeys)
+        {
+            NotifyChanged(signalKey, "Read");
         }
     }
 

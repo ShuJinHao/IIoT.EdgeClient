@@ -361,6 +361,19 @@ public sealed class PlcBufferConcurrencyTests
         });
         Assert.True(buffer.TryCaptureReadSnapshot(["Signal.A", "Signal.B"], out var previous));
         Assert.NotNull(previous);
+        var invalidatedSignals = new List<string>();
+        EventHandler<PlcSignalBufferChangedEventArgs> invalidationHandler = (sender, args) =>
+        {
+            _ = sender;
+            if (!string.Equals(args.Direction, "Read", StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            Assert.False(buffer.TryCaptureReadSnapshot(["Signal.A", "Signal.B"], out _));
+            invalidatedSignals.Add(args.SignalKey);
+        };
+        buffer.SignalValuesChanged += invalidationHandler;
 
         store.Register(
             2,
@@ -370,6 +383,7 @@ public sealed class PlcBufferConcurrencyTests
                 new("Signal.A", "Read", 1, 1),
                 new("Signal.B", "Read", 0, 1)
             ]);
+        buffer.SignalValuesChanged -= invalidationHandler;
 
         var rebound = Assert.IsType<PlcBuffer>(store.GetBuffer(2));
         Assert.Same(buffer, rebound);
@@ -379,6 +393,9 @@ public sealed class PlcBufferConcurrencyTests
         Assert.Equal((ushort)0, Assert.Single(unavailableWords));
         Assert.Equal((ushort)0, rebound.GetReadValue(0));
         Assert.Equal((ushort)0, rebound.GetReadValue(1));
+        Assert.Equal(
+            ["Signal.A", "Signal.B"],
+            invalidatedSignals.OrderBy(static key => key, StringComparer.Ordinal).ToArray());
 
         rebound.UpdateReadSignals(new Dictionary<string, ushort[]>
         {
