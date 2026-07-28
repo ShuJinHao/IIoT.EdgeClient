@@ -74,7 +74,10 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
 
                 var profile = Map(
                     contributedEntries[0],
-                    executablePathOverride: hostRuntime.ExecutablePath);
+                    executablePathOverride: hostRuntime.ExecutablePath) with
+                {
+                    ExpectedModuleIds = [activation.ModuleId]
+                };
                 if (!profileIds.Add(profile.ProfileId))
                 {
                     throw new InvalidOperationException($"Launcher ProfileId 重复：{profile.ProfileId}。");

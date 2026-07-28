@@ -34,8 +34,14 @@ public sealed class LauncherPluginActivationTests
                     .LoadProfiles();
 
                 Assert.Equal(3, profiles.Count);
-                Assert.Contains(profiles, profile => profile.ProfileId == "DieCuttingAnodeLine");
-                Assert.Contains(profiles, profile => profile.ProfileId == "DieCuttingCathodeLine");
+                var apProfile = Assert.Single(
+                    profiles,
+                    profile => profile.ProfileId == "DieCuttingAnodeLine");
+                var cpProfile = Assert.Single(
+                    profiles,
+                    profile => profile.ProfileId == "DieCuttingCathodeLine");
+                Assert.Equal(["AP"], apProfile.ExpectedModuleIds);
+                Assert.Equal(["CP"], cpProfile.ExpectedModuleIds);
                 AssertMachineConfig(hostDirectory, "DieCuttingAnodeLine", "AP");
                 AssertMachineConfig(hostDirectory, "DieCuttingCathodeLine", "CP");
             });

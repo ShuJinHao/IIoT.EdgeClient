@@ -67,7 +67,8 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         IEdgeReleaseService? clientReleaseService = null,
         IEdgeUpdateConfigurationProvider? updateConfigurationProvider = null,
         ILauncherUpdateTargetFactory? targetFactory = null,
-        ILauncherProfileVisibilityService? profileVisibilityService = null)
+        ILauncherProfileVisibilityService? profileVisibilityService = null,
+        ILauncherUpdateOperationGate? updateOperationGate = null)
     {
         _profileCatalog = profileCatalog ?? throw new ArgumentNullException(nameof(profileCatalog));
         _updateConfigurationProvider = updateConfigurationProvider;
@@ -81,12 +82,14 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         HostUpdatePanel = new LauncherHostUpdatePanelViewModel(
             _updateService,
             _launchService,
-            languageService);
+            languageService,
+            updateOperationGate);
         ClientReleasePanel = new LauncherClientReleasePanelViewModel(
             _clientReleaseService,
             _targetFactory,
             _launchService,
-            languageService);
+            languageService,
+            updateOperationGate);
         HostUpdatePanel.PropertyChanged += OnHostUpdatePanelChanged;
         ClientReleasePanel.PropertyChanged += OnClientReleasePanelChanged;
         if (_languageService is not null)
@@ -391,14 +394,14 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         }
     }
 
-    public Task LaunchAsync(LauncherProfileDefinition profile)
+    public async Task LaunchAsync(LauncherProfileDefinition profile)
     {
         ArgumentNullException.ThrowIfNull(profile);
 
         ErrorMessage = string.Empty;
         try
         {
-            _launchService.Launch(profile);
+            await _launchService.LaunchAsync(profile).ConfigureAwait(true);
             SetStatus(
                 "Launcher_Status_LaunchSucceededFormat",
                 profile.DisplayName,
@@ -412,8 +415,6 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
                 "Launcher_Status_LaunchFailedFormat",
                 profile.DisplayName);
         }
-
-        return Task.CompletedTask;
     }
 
     public async Task LaunchProfileCardAsync(LauncherProfileCardViewModel card)
@@ -735,8 +736,12 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         var currentVersion = string.IsNullOrWhiteSpace(component.CurrentVersion)
             ? Text("Launcher_ClientRelease_Plugin_NotInstalled")
             : component.CurrentVersion;
-        var targetVersion = option?.Version ?? currentVersion;
-        var canUpdate = option is not null
+        var unavailableText = Text("Launcher_UpdateCenter_Unavailable");
+        var targetVersion = component.IsCatalogAvailable
+            ? option?.Version ?? currentVersion
+            : unavailableText;
+        var canUpdate = component.IsCatalogAvailable
+                        && option is not null
                         && option.CanApply
                         && option.Status is EdgeVersionStatus.NotInstalled or EdgeVersionStatus.Newer;
         var status = option?.Status ?? EdgeVersionStatus.Current;
@@ -753,9 +758,11 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
             packageSizeText,
             releaseNotesText,
             canUpdate,
-            ResolveUpdateRowStatusKind(status),
-            ResolveUpdateRowStatusText(status),
-            canUpdate && option is not null
+            component.IsCatalogAvailable ? ResolveUpdateRowStatusKind(status) : "Default",
+            component.IsCatalogAvailable ? ResolveUpdateRowStatusText(status) : unavailableText,
+            !component.IsCatalogAvailable
+                ? unavailableText
+                : canUpdate && option is not null
                 ? option.ActionText
                 : ResolveUpdateRowActionText(status),
             status,

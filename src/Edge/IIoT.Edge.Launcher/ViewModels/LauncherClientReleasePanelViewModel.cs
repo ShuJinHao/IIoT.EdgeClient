@@ -15,6 +15,7 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
     private readonly ILauncherUpdateTargetFactory _targetFactory;
     private readonly IShellLaunchService _launchService;
     private readonly IAppLanguageService? _languageService;
+    private readonly ILauncherUpdateOperationGate _updateOperationGate;
     private readonly Dictionary<string, LauncherProfileDefinition> _profileByModuleId = new(StringComparer.OrdinalIgnoreCase);
     private LauncherProfileDefinition? _activeProfile;
     private LauncherProfileDefinition? _hostUpdateProfile;
@@ -32,12 +33,14 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
         IEdgeReleaseService clientReleaseService,
         ILauncherUpdateTargetFactory targetFactory,
         IShellLaunchService launchService,
-        IAppLanguageService? languageService = null)
+        IAppLanguageService? languageService = null,
+        ILauncherUpdateOperationGate? updateOperationGate = null)
     {
         _clientReleaseService = clientReleaseService ?? throw new ArgumentNullException(nameof(clientReleaseService));
         _targetFactory = targetFactory ?? throw new ArgumentNullException(nameof(targetFactory));
         _launchService = launchService ?? throw new ArgumentNullException(nameof(launchService));
         _languageService = languageService;
+        _updateOperationGate = updateOperationGate ?? NoopLauncherUpdateOperationGate.Instance;
         if (_languageService is not null)
         {
             _languageService.LanguageChanged += OnLanguageChanged;
@@ -162,15 +165,6 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
             return;
         }
 
-        if (_launchService.HasAnyRunningShellProcess())
-        {
-            IsProgressVisible = false;
-            Progress = 0;
-            SetStatus("Launcher_ClientRelease_StatusShellRunning");
-            DetailText = LauncherText.Get(_languageService, "Launcher_ClientRelease_ShellRunningDetail");
-            return;
-        }
-
         if (option.RequiresConfirmation)
         {
             var confirmed = await ConfirmVersionChangeAsync(new LauncherVersionChangeConfirmationRequest(
@@ -186,6 +180,25 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
                 SetStatus("Launcher_ClientRelease_StatusCanceled");
                 return;
             }
+        }
+
+        using var updateLease = _updateOperationGate.TryAcquireUpdate();
+        if (updateLease is null)
+        {
+            IsProgressVisible = false;
+            Progress = 0;
+            SetStatus("Launcher_ClientRelease_StatusBusy");
+            DetailText = LauncherText.Get(_languageService, "Launcher_ClientRelease_BusyDetail");
+            return;
+        }
+
+        if (_launchService.HasAnyRunningShellProcess())
+        {
+            IsProgressVisible = false;
+            Progress = 0;
+            SetStatus("Launcher_ClientRelease_StatusShellRunning");
+            DetailText = LauncherText.Get(_languageService, "Launcher_ClientRelease_ShellRunningDetail");
+            return;
         }
 
         IsProgressVisible = true;
@@ -410,7 +423,8 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
                 plan.CurrentVersion ?? LauncherText.Get(_languageService, "Launcher_ClientRelease_Plugin_NotInstalled"),
                 ResolveComponentKindText(plan.ComponentKind),
                 LauncherText.Get(_languageService, "Launcher_VersionManagement_ButtonExpand"),
-                versions));
+                versions,
+                IsCatalogAvailable(plan, results)));
         }
         OnPropertyChanged(nameof(Components));
 
@@ -463,6 +477,11 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
                 if (plan.ComponentKind == EdgeComponentKind.Host)
                 {
                     hostPlans.Add(plan);
+                    continue;
+                }
+
+                if (!ProfileOwnsModule(item, plan.ModuleId))
+                {
                     continue;
                 }
 
@@ -578,6 +597,51 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
                    [],
                    "未选择工序。");
     }
+
+    private static bool IsCatalogAvailable(
+        EdgeComponentVersionPlan plan,
+        IReadOnlyList<ProfileReleaseCheckResult> results)
+    {
+        if (plan.ComponentKind == EdgeComponentKind.Host)
+        {
+            return results.Count > 0
+                   && results.All(static item =>
+                       item.Result.State == EdgeReleaseCatalogState.Succeeded);
+        }
+
+        var owningResults = results
+            .Where(item => ProfileOwnsModule(item, plan.ModuleId))
+            .ToArray();
+        return owningResults.Length > 0
+               && owningResults.All(item =>
+                   item.Result.State == EdgeReleaseCatalogState.Succeeded
+                   && ResultContainsPlugin(item.Result, plan.ModuleId));
+    }
+
+    private static bool ProfileOwnsModule(
+        ProfileReleaseCheckResult item,
+        string moduleId)
+    {
+        if (item.Profile.ExpectedModuleIds.Contains(
+                moduleId,
+                StringComparer.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return item.Result.State == EdgeReleaseCatalogState.Succeeded
+               && ResultContainsPlugin(item.Result, moduleId);
+    }
+
+    private static bool ResultContainsPlugin(
+        EdgeReleaseCatalogResult result,
+        string moduleId)
+        => result.Components.Any(component =>
+            component.ComponentKind == EdgeComponentKind.Plugin
+            && string.Equals(
+                component.ModuleId,
+                moduleId,
+                StringComparison.OrdinalIgnoreCase));
 
     private LauncherVersionOptionItem BuildVersionOption(EdgeComponentVersionPlan plan, EdgeVersionOption option)
     {

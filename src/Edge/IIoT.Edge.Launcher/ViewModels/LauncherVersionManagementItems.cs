@@ -23,7 +23,8 @@ public sealed class LauncherVersionComponentItem : BaseNotifyPropertyChanged
         string currentVersion,
         string componentKindText,
         string expandActionText,
-        IReadOnlyList<LauncherVersionOptionItem> versions)
+        IReadOnlyList<LauncherVersionOptionItem> versions,
+        bool isCatalogAvailable = true)
     {
         ComponentKind = componentKind;
         ModuleId = moduleId;
@@ -32,6 +33,7 @@ public sealed class LauncherVersionComponentItem : BaseNotifyPropertyChanged
         ComponentKindText = componentKindText;
         _expandActionText = expandActionText;
         Versions = versions;
+        IsCatalogAvailable = isCatalogAvailable;
     }
 
     public EdgeComponentKind ComponentKind { get; }
@@ -45,6 +47,8 @@ public sealed class LauncherVersionComponentItem : BaseNotifyPropertyChanged
     public string ComponentKindText { get; private set; }
 
     public IReadOnlyList<LauncherVersionOptionItem> Versions { get; }
+
+    public bool IsCatalogAvailable { get; }
 
     public bool IsExpanded
     {

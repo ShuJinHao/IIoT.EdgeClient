@@ -60,6 +60,7 @@
     <sys:String x:Key="Launcher_UpdateCenter_ColumnComponent">Component / process</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_ColumnType">Type</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_ColumnCurrentVersion">Local version</sys:String>
+    <sys:String x:Key="Launcher_UpdateCenter_Unavailable">Unable to check</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_ColumnLatestVersion">Latest version</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_ColumnPublishedAt">Published</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_ColumnSize">Size</sys:String>
@@ -190,6 +191,8 @@
     <sys:String x:Key="Launcher_Update_StatusInitial">Updates have not been checked.</sys:String>
     <sys:String x:Key="Launcher_Update_StatusChecking">Checking for updates...</sys:String>
     <sys:String x:Key="Launcher_Update_StatusNotConfigured">Update source is not configured.</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusBusy">Another update is already in progress.</sys:String>
+    <sys:String x:Key="Launcher_Update_BusyDetail">Wait for the active update to finish, then try again.</sys:String>
     <sys:String x:Key="Launcher_Update_StatusNotInstalled">This is not an installed build, so auto-update is unavailable.</sys:String>
     <sys:String x:Key="Launcher_Update_StatusNoUpdate">Already on latest version: {0}</sys:String>
     <sys:String x:Key="Launcher_Update_StatusAvailable">New version available: {0}</sys:String>
@@ -207,6 +210,8 @@
     <sys:String x:Key="Launcher_ClientRelease_StatusNotConfigured">Device not registered. Please contact your administrator.</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusBootstrapFailed">Cloud bootstrap failed, so plugin catalog cannot be read.</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusCatalogFailed">Failed to fetch cloud version information.</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_StatusBusy">Another update is already in progress.</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_BusyDetail">Wait for the active update to finish, then try again.</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusInstalling">Installing or updating plugin: {0}</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusApplyingVersion">Applying {0} version {1}.</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusHostApplyStarted">Host version {0} started applying. Launcher will restart through the update flow.</sys:String>

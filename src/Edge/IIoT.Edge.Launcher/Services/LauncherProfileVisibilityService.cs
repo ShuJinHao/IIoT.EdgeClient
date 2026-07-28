@@ -136,9 +136,22 @@ public sealed class LauncherProfileVisibilityService(
     {
         var enabledModuleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var moduleProfileIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var resolvedProfiles = new List<LauncherProfileDefinition>(profiles.Count);
         foreach (var profile in profiles)
         {
-            foreach (var moduleId in ReadProfileModuleIds(profile))
+            var profileModuleIds = ReadProfileModuleIds(profile)
+                .Concat(profile.ExpectedModuleIds)
+                .Where(static moduleId => !string.IsNullOrWhiteSpace(moduleId))
+                .Select(static moduleId => moduleId.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(static moduleId => moduleId, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            resolvedProfiles.Add(profile with
+            {
+                ExpectedModuleIds = profileModuleIds
+            });
+
+            foreach (var moduleId in profileModuleIds)
             {
                 if (selectedModuleIds is not null && !selectedModuleIds.Contains(moduleId))
                 {
@@ -151,7 +164,7 @@ public sealed class LauncherProfileVisibilityService(
         }
 
         return new LauncherProfileSelection(
-            profiles,
+            resolvedProfiles,
             enabledModuleIds.OrderBy(static moduleId => moduleId, StringComparer.OrdinalIgnoreCase).ToArray(),
             moduleProfileIds);
     }

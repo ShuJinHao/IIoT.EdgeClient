@@ -7,6 +7,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Markup.Xaml.Styling;
 using Avalonia.Styling;
+using IIoT.Edge.Application.Features.Updates;
 using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.SharedKernel.Configuration;
@@ -47,10 +48,7 @@ public partial class App : Avalonia.Application
                 .EnsureCatalogExists();
             _serviceProvider.GetRequiredService<IEdgeUpdateConfigInitializer>()
                 .EnsureConfigExists();
-            _serviceProvider.GetRequiredService<ILauncherPluginActivationReconciler>()
-                .Reconcile();
-            _serviceProvider.GetRequiredService<ILauncherDeviceBindingImporter>()
-                .ApplyPendingBindings();
+            _ = TryCompleteUpdateStartup(_serviceProvider);
 
             var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
             desktop.MainWindow = mainWindow;
@@ -64,6 +62,33 @@ public partial class App : Avalonia.Application
                 desktop,
                 CreateSafeStartupErrorMessage(ex));
         }
+    }
+
+    internal static bool TryCompleteUpdateStartup(IServiceProvider services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        using var recoveryLease = services
+            .GetRequiredService<ILauncherUpdateOperationGate>()
+            .TryAcquireUpdate();
+        if (recoveryLease is null)
+        {
+            return false;
+        }
+
+        var recovery = services
+            .GetRequiredService<IEdgeUpdateTransactionRecovery>()
+            .RecoverPendingTransaction();
+        if (!recovery.Success || recovery.Blocked)
+        {
+            return false;
+        }
+
+        services.GetRequiredService<ILauncherPluginActivationReconciler>()
+            .Reconcile();
+        services.GetRequiredService<ILauncherDeviceBindingImporter>()
+            .ApplyPendingBindings();
+        return true;
     }
 
     private void DisposeServices()

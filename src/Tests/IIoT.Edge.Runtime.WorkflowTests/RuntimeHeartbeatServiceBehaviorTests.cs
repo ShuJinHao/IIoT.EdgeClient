@@ -38,6 +38,40 @@ public sealed class RuntimeHeartbeatServiceBehaviorTests
             || entry.Message.Contains("运行心跳", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task StartAsync_WhenCloudBusinessSwitchIsDisabled_ShouldMakeZeroCloudRequests()
+    {
+        var logger = new FakeLogService();
+        var loopStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        logger.EntryAdded += entry =>
+        {
+            if (entry.Message.Contains("循环已启动", StringComparison.Ordinal))
+            {
+                loopStarted.TrySetResult();
+            }
+        };
+        var sessionClient = new CountingDeviceSessionClient();
+        var reporter = new CountingRuntimeHeartbeatReporter();
+        var service = new EdgeRuntimeHeartbeatService(
+            new FixedUpdateConfigurationProvider(),
+            sessionClient,
+            reporter,
+            new FixedRuntimeConfigService(systemCloudEnabled: false),
+            logger);
+
+        await service.StartAsync(
+            new EdgeUpdateTarget("LineA", AppContext.BaseDirectory, string.Empty),
+            TestContext.Current.CancellationToken);
+        await loopStarted.Task.WaitAsync(
+            TimeSpan.FromSeconds(2),
+            TestContext.Current.CancellationToken);
+        await service.StopAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, sessionClient.BootstrapCallCount);
+        Assert.Equal(0, reporter.ReportCallCount);
+    }
+
     private sealed class FixedUpdateConfigurationProvider : IEdgeUpdateConfigurationProvider
     {
         public EdgeUpdateConfigurationResult Resolve(EdgeUpdateTarget target)
@@ -73,11 +107,46 @@ public sealed class RuntimeHeartbeatServiceBehaviorTests
             => Task.FromResult(EdgeRuntimeHeartbeatReportResult.Succeeded());
     }
 
-    private sealed class FixedRuntimeConfigService : ILocalSystemRuntimeConfigService
+    private sealed class CountingDeviceSessionClient : IEdgeUpdateDeviceSessionClient
+    {
+        public int BootstrapCallCount { get; private set; }
+
+        public Task<EdgeUpdateOperationResult<EdgeUpdateDeviceSession>> BootstrapAsync(
+            EdgeUpdateCloudApiOptions options,
+            CancellationToken cancellationToken = default)
+        {
+            BootstrapCallCount++;
+            return Task.FromResult(
+                EdgeUpdateOperationResult<EdgeUpdateDeviceSession>.Succeeded(
+                    new EdgeUpdateDeviceSession(
+                        Guid.NewGuid(),
+                        "LineA",
+                        options.ClientCode,
+                        "token")));
+        }
+    }
+
+    private sealed class CountingRuntimeHeartbeatReporter : IEdgeRuntimeHeartbeatReporter
+    {
+        public int ReportCallCount { get; private set; }
+
+        public Task<EdgeRuntimeHeartbeatReportResult> ReportAsync(
+            EdgeUpdateCloudApiOptions options,
+            EdgeUpdateDeviceSession session,
+            EdgeRuntimeHeartbeatReport report,
+            CancellationToken cancellationToken = default)
+        {
+            ReportCallCount++;
+            return Task.FromResult(EdgeRuntimeHeartbeatReportResult.Succeeded());
+        }
+    }
+
+    private sealed class FixedRuntimeConfigService(
+        bool systemCloudEnabled = true) : ILocalSystemRuntimeConfigService
     {
         public SystemRuntimeConfigSnapshot Current { get; } = SystemRuntimeConfigSnapshot.Default with
         {
-            SystemCloudEnabled = true,
+            SystemCloudEnabled = systemCloudEnabled,
             RuntimeHeartbeatInterval = TimeSpan.FromSeconds(10)
         };
 

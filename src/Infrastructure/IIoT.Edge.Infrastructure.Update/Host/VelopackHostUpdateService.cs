@@ -1,5 +1,5 @@
-using System.Text.Json;
 using IIoT.Edge.Module.Contracts.Updates;
+using IIoT.Edge.Infrastructure.Update.Configuration;
 using IIoT.Edge.SharedKernel.Configuration;
 using Velopack;
 using Velopack.Exceptions;
@@ -9,8 +9,6 @@ namespace IIoT.Edge.Infrastructure.Update.Host;
 
 public sealed class VelopackHostUpdateService : IEdgeHostUpdateService
 {
-    public const string UpdateSourceEnvironmentVariable = "IIOT_EDGE_UPDATE_URL";
-
     private readonly Func<string?> _sourceProvider;
     private readonly Func<string, UpdateManager> _managerFactory;
     private UpdateInfo? _lastUpdate;
@@ -213,45 +211,14 @@ public sealed class VelopackHostUpdateService : IEdgeHostUpdateService
 
     private static string? ResolveUpdateSource(string baseDirectory)
     {
-        var fromEnvironment = Environment.GetEnvironmentVariable(UpdateSourceEnvironmentVariable);
-        if (!string.IsNullOrWhiteSpace(fromEnvironment))
-        {
-            return fromEnvironment.Trim();
-        }
-
         var configPath = EdgeClientProgramDataPaths.ResolveLauncherUpdateConfigPath(baseDirectory);
-        if (!File.Exists(configPath))
-        {
-            return null;
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(File.ReadAllText(configPath));
-            var root = document.RootElement;
-            return ReadString(root, "Source")
-                ?? ReadString(root, "source")
-                ?? ReadString(root, "UpdateSource")
-                ?? ReadString(root, "Url");
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-        catch (IOException)
-        {
-            return null;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return null;
-        }
-    }
-
-    private static string? ReadString(JsonElement element, string propertyName)
-        => element.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String
-            ? value.GetString()?.Trim()
+        return LauncherUpdateConfigurationFile.TryReadCurrent(
+            configPath,
+            out var configuration,
+            out _)
+            ? configuration?.Source
             : null;
+    }
 
     private void ClearCachedUpdate()
     {

@@ -30,12 +30,9 @@ public static class DependencyInjection
         services.TryAddSingleton<IEdgeReleaseService, EdgeReleaseService>();
         services.AddSingleton(updateConfigPaths);
         services.AddSingleton<IEdgeUpdateConfigInitializer, FileEdgeUpdateConfigInitializer>();
-        services.AddSingleton<IEdgeProfileCloudSwitchReader>(
-            _ => new FileProfileCloudSwitchReader(baseDirectory));
         services.AddSingleton<IEdgeUpdateConfigurationProvider>(
-            provider => new FileEdgeUpdateConfigurationProvider(
-                baseDirectory,
-                provider.GetRequiredService<IEdgeProfileCloudSwitchReader>()));
+            _ => new FileEdgeUpdateConfigurationProvider(baseDirectory));
+        services.AddSingleton<IEdgeReleaseSourceValidator, FileEdgeReleaseSourceValidator>();
         services.TryAddSingleton(_ => new HttpClient(new SocketsHttpHandler
         {
             PooledConnectionLifetime = TimeSpan.FromMinutes(5)
@@ -52,7 +49,18 @@ public static class DependencyInjection
         services.AddSingleton<IEdgeRuntimeHeartbeatReporter, HttpEdgeRuntimeHeartbeatReporter>();
         services.AddSingleton<IEdgeInstalledPluginCatalog, FileInstalledPluginCatalog>();
         services.AddSingleton<IEdgeProfileModuleConfigurationStore, FileEdgeProfileModuleConfigurationStore>();
-        services.AddSingleton<IEdgePluginPackageInstaller, EdgePluginPackageInstaller>();
+        services.AddSingleton<EdgePluginPackageInstaller>();
+        services.AddSingleton<IEdgePluginPackageInstaller>(
+            provider => provider.GetRequiredService<EdgePluginPackageInstaller>());
+        services.AddSingleton<EdgePluginCompositionTransaction>(
+            provider => new EdgePluginCompositionTransaction(
+                baseDirectory,
+                provider.GetRequiredService<EdgePluginPackageInstaller>(),
+                provider.GetRequiredService<IEdgeProfileModuleConfigurationStore>()));
+        services.AddSingleton<IEdgePluginCompositionTransaction>(
+            provider => provider.GetRequiredService<EdgePluginCompositionTransaction>());
+        services.AddSingleton<IEdgeUpdateTransactionRecovery>(
+            provider => provider.GetRequiredService<EdgePluginCompositionTransaction>());
         services.AddSingleton<IEdgeHostUpdateService>(_ => new VelopackHostUpdateService(baseDirectory));
 
         return services;

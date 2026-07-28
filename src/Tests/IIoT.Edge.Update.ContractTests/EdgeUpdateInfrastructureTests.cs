@@ -29,16 +29,11 @@ public sealed class EdgeUpdateInfrastructureTests
                 """
                 {
                   "CloudApi": {
-                    "BaseUrl": "https://cloud.example.test",
-                    "TimeoutSecs": 7,
-                      "Paths": {
-                        "DeviceInstance": "/api/v1/bootstrap/device-instance",
-                        "ClientReleaseCatalogTemplate": "/api/v1/edge/client-releases/device/{deviceId}/catalog",
-                        "ClientVersionReport": "/api/v1/edge/client-releases/version-reports",
-                        "RuntimeHeartbeat": "/api/v1/edge/runtime-heartbeats"
-                      }
-                    }
+                    "BaseUrl": "https://packaged-configuration-must-not-win.example.test",
+                    "ClientCode": "PACKAGED",
+                    "BootstrapSecret": "packaged-secret"
                   }
+                }
                 """);
 
             WithDataRoot(dataRoot, () =>
@@ -48,8 +43,16 @@ public sealed class EdgeUpdateInfrastructureTests
                     """
                     {
                       "CloudApi": {
+                        "BaseUrl": "https://cloud.example.test",
+                        "TimeoutSecs": 7,
                         "ClientCode": "EDGE-001",
-                        "BootstrapSecret": "secret"
+                        "BootstrapSecret": "secret",
+                        "Paths": {
+                          "DeviceInstance": "/api/v1/bootstrap/device-instance",
+                          "ClientReleaseCatalogTemplate": "/api/v1/edge/client-releases/device/{deviceId}/catalog",
+                          "ClientVersionReport": "/api/v1/edge/client-releases/version-reports",
+                          "RuntimeHeartbeat": "/api/v1/edge/runtime-heartbeats"
+                        }
                       }
                     }
                     """);
@@ -57,24 +60,39 @@ public sealed class EdgeUpdateInfrastructureTests
                     EdgeClientProgramDataPaths.ResolveLauncherUpdateConfigPath(hostDirectory),
                     """
                     {
-                      "Channel": "beta",
-                      "TargetRuntime": "win-arm64"
+                      "source": "https://updates.example.test/stable/",
+                      "channel": "beta",
+                      "targetRuntime": "win-arm64"
                     }
                     """);
 
-                var provider = new FileEdgeUpdateConfigurationProvider(hostDirectory, EnabledCloudSwitchReader.Instance);
-                var target = Target(hostDirectory);
+                WithEnvironmentVariables(
+                    new Dictionary<string, string?>
+                    {
+                        ["CloudApi__BaseUrl"] = "https://environment-must-not-win.example.test",
+                        ["CloudApi__ClientCode"] = "ENVIRONMENT",
+                        ["CloudApi__BootstrapSecret"] = "environment-secret",
+                        ["IIOT_EDGE_UPDATE_URL"] = "https://environment-updates-must-not-win.example.test",
+                        ["IIOT_EDGE_RELEASE_CHANNEL"] = "environment-channel",
+                        ["IIOT_EDGE_TARGET_RUNTIME"] = "environment-runtime"
+                    },
+                    () =>
+                    {
+                        var provider = new FileEdgeUpdateConfigurationProvider(hostDirectory);
+                        var target = Target(hostDirectory);
 
-                var result = provider.Resolve(target);
-                var releaseOptions = provider.ResolveReleaseOptions();
+                        var result = provider.Resolve(target);
+                        var releaseOptions = provider.ResolveReleaseOptions();
 
-                Assert.True(result.Success);
-                Assert.Equal("EDGE-001", result.Options!.ClientCode);
-                Assert.Equal("secret", result.Options.BootstrapSecret);
-                Assert.Equal("/api/v1/edge/client-releases/version-reports", result.Options.ClientVersionReportPath);
-                Assert.Equal("/api/v1/edge/runtime-heartbeats", result.Options.RuntimeHeartbeatPath);
-                Assert.Equal("beta", releaseOptions.Channel);
-                Assert.Equal("win-arm64", releaseOptions.TargetRuntime);
+                        Assert.True(result.Success);
+                        Assert.Equal("EDGE-001", result.Options!.ClientCode);
+                        Assert.Equal("secret", result.Options.BootstrapSecret);
+                        Assert.Equal("https://cloud.example.test", result.Options.BaseUrl);
+                        Assert.Equal("/api/v1/edge/client-releases/version-reports", result.Options.ClientVersionReportPath);
+                        Assert.Equal("/api/v1/edge/runtime-heartbeats", result.Options.RuntimeHeartbeatPath);
+                        Assert.Equal("beta", releaseOptions.Channel);
+                        Assert.Equal("win-arm64", releaseOptions.TargetRuntime);
+                    });
             });
         }
         finally
@@ -98,6 +116,7 @@ public sealed class EdgeUpdateInfrastructureTests
                 {
                   "CloudApi": {
                     "BaseUrl": "https://cloud.example.test",
+                    "BootstrapSecret": "packaged-secret-must-not-win",
                     "Paths": {
                       "DeviceInstance": "/api/v1/bootstrap/device-instance",
                       "ClientReleaseCatalogTemplate": "/api/v1/edge/client-releases/device/{deviceId}/catalog",
@@ -114,12 +133,19 @@ public sealed class EdgeUpdateInfrastructureTests
                     """
                     {
                       "CloudApi": {
-                        "ClientCode": "DEV-AAAAAAAAAA"
+                        "BaseUrl": "https://cloud.example.test",
+                        "ClientCode": "DEV-AAAAAAAAAA",
+                        "Paths": {
+                          "DeviceInstance": "/api/v1/bootstrap/device-instance",
+                          "ClientReleaseCatalogTemplate": "/api/v1/edge/client-releases/device/{deviceId}/catalog",
+                          "ClientVersionReport": "/api/v1/edge/client-releases/version-reports",
+                          "RuntimeHeartbeat": "/api/v1/edge/runtime-heartbeats"
+                        }
                       }
                     }
                     """);
 
-                var provider = new FileEdgeUpdateConfigurationProvider(hostDirectory, EnabledCloudSwitchReader.Instance);
+                var provider = new FileEdgeUpdateConfigurationProvider(hostDirectory);
 
                 var result = provider.Resolve(Target(hostDirectory));
 
@@ -134,16 +160,159 @@ public sealed class EdgeUpdateInfrastructureTests
     }
 
     [Fact]
-    public void ConfigurationProvider_WhenProfileCloudSwitchIsDisabled_ShouldFailBeforeCloudConfiguration()
+    public void ConfigurationProvider_WhenProfileCloudSwitchIsDisabled_ShouldStillResolveReleaseControlConfiguration()
     {
-        var provider = new FileEdgeUpdateConfigurationProvider(
-            Path.GetTempPath(),
-            new FixedCloudSwitchReader(false));
+        var tempDirectory = CreateTempDirectory();
+        var dataRoot = Path.Combine(tempDirectory, "program-data");
+        try
+        {
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
+            WithDataRoot(dataRoot, () =>
+            {
+                WriteText(
+                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(
+                        "LineA",
+                        hostDirectory),
+                    """
+                    {
+                      "CloudApi": {
+                        "BaseUrl": "https://cloud.example.test",
+                        "ClientCode": "EDGE-001",
+                        "BootstrapSecret": "secret",
+                        "Paths": {
+                          "DeviceInstance": "/api/v1/bootstrap/device-instance",
+                          "ClientReleaseCatalogTemplate": "/api/v1/edge/client-releases/device/{deviceId}/catalog",
+                          "ClientVersionReport": "/api/v1/edge/client-releases/version-reports",
+                          "RuntimeHeartbeat": "/api/v1/edge/runtime-heartbeats"
+                        }
+                      }
+                    }
+                    """);
+                WriteText(
+                    EdgeClientProgramDataPaths.ResolveProfileCloudSwitchProjectionPath(
+                        "LineA",
+                        hostDirectory),
+                    """{"version":1,"enabled":false}""");
 
-        var result = provider.Resolve(Target(Path.GetTempPath()));
+                var provider = new FileEdgeUpdateConfigurationProvider(hostDirectory);
+                var result = provider.Resolve(Target(hostDirectory));
 
-        Assert.False(result.Success);
-        Assert.Contains("Cloud 通信已关闭", result.ErrorMessage ?? string.Empty, StringComparison.Ordinal);
+                Assert.True(result.Success, result.ErrorMessage);
+                Assert.Equal("EDGE-001", result.Options!.ClientCode);
+            });
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task CheckReleaseCatalogAsync_WhenCloudBusinessSwitchIsDisabled_ShouldStillBootstrapCatalogAndReportVersion()
+    {
+        var tempDirectory = CreateTempDirectory();
+        var dataRoot = Path.Combine(tempDirectory, "program-data");
+        try
+        {
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
+            await WithDataRootAsync(dataRoot, async () =>
+            {
+                WriteText(
+                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(
+                        "LineA",
+                        hostDirectory),
+                    """
+                    {
+                      "CloudApi": {
+                        "BaseUrl": "https://cloud.example.test",
+                        "ClientCode": "EDGE-001",
+                        "BootstrapSecret": "secret",
+                        "Paths": {
+                          "DeviceInstance": "/api/v1/bootstrap/device-instance",
+                          "ClientReleaseCatalogTemplate": "/api/v1/edge/client-releases/device/{deviceId}/catalog",
+                          "ClientVersionReport": "/api/v1/edge/client-releases/version-reports",
+                          "RuntimeHeartbeat": "/api/v1/edge/runtime-heartbeats"
+                        }
+                      },
+                      "Modules": {
+                        "Enabled": [ "AP" ]
+                      }
+                    }
+                    """);
+                WriteText(
+                    EdgeClientProgramDataPaths.ResolveProfileCloudSwitchProjectionPath(
+                        "LineA",
+                        hostDirectory),
+                    """{"version":1,"enabled":false}""");
+                var updateConfigPath =
+                    EdgeClientProgramDataPaths.ResolveLauncherUpdateConfigPath(
+                        hostDirectory);
+                WriteText(
+                    updateConfigPath,
+                    """
+                    {
+                      "source": "https://updates.example.test/stable/",
+                      "channel": "stable",
+                      "targetRuntime": "win-x64"
+                    }
+                    """);
+                var catalog = CatalogWithHostVersions(
+                    [HostRelease("2.0.10", EdgeClientHostRuntime.HostApiVersion)],
+                    PluginComponent(
+                        "AP",
+                        Release(
+                            "AP",
+                            "2.0.11",
+                            EdgeClientHostRuntime.HostApiVersion))) with
+                {
+                    HostUpdateSource = "https://updates.example.test/stable/"
+                };
+                var sessionClient = new RecordingDeviceSessionClient();
+                var catalogClient = new RecordingCatalogClient(catalog);
+                var reporter = new RecordingVersionReporter();
+                var service = new EdgeReleaseService(
+                    new FileEdgeUpdateConfigurationProvider(hostDirectory),
+                    sessionClient,
+                    catalogClient,
+                    reporter,
+                    new FixedInstalledPluginCatalog(
+                        [InstalledPlugin("AP", "2.0.10", "1.0.0", "99.0.0")]),
+                    new FileEdgeProfileModuleConfigurationStore(),
+                    new NoopPluginPackageInstaller(),
+                    new NoopHostUpdateService(),
+                    new EdgeVersionCompatibilityPolicy(),
+                    new FileEdgeReleaseSourceValidator(
+                        new EdgeUpdateConfigPaths(
+                            updateConfigPath,
+                            Path.Combine(
+                                hostDirectory,
+                                FileEdgeUpdateConfigInitializer.SampleConfigFileName))));
+
+                var result = await service.CheckReleaseCatalogAsync(
+                    Target(hostDirectory),
+                    TestContext.Current.CancellationToken);
+
+                Assert.Equal(EdgeReleaseCatalogState.Succeeded, result.State);
+                Assert.Equal(1, sessionClient.BootstrapCallCount);
+                Assert.Equal(1, catalogClient.CatalogCallCount);
+                Assert.Equal(1, reporter.ReportCallCount);
+                var ap = Assert.Single(
+                    result.Components,
+                    component => component.ModuleId == "AP");
+                Assert.Equal("2.0.10", ap.CurrentVersion);
+                Assert.Contains(
+                    ap.Versions,
+                    version => version.Version == "2.0.11"
+                               && version.Status == EdgeVersionStatus.Newer
+                               && version.CanApply);
+            });
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
     }
 
     [Fact]
@@ -296,6 +465,52 @@ public sealed class EdgeUpdateInfrastructureTests
     }
 
     [Fact]
+    public async Task PluginPackageInstaller_ShouldRejectActivationThatCarriesCloudIdentityBeforeFormalMutation()
+    {
+        var tempDirectory = CreateTempDirectory();
+        var dataRoot = Path.Combine(tempDirectory, "program-data");
+        try
+        {
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
+            var packagePath = Path.Combine(
+                tempDirectory,
+                "IIoT.EdgePlugin.TestPlugin-1.2.0-win-x64.zip");
+            CreatePluginPackageWithInvalidActivation(
+                packagePath,
+                "TestPlugin",
+                "1.2.0");
+            var release = ReleaseWithPackage(packagePath);
+            var installer = new EdgePluginPackageInstaller(
+                new EdgeVersionCompatibilityPolicy());
+
+            await WithDataRootAsync(dataRoot, async () =>
+            {
+                var result = await installer.InstallAsync(
+                    Target(hostDirectory),
+                    release,
+                    CloudOptions(),
+                    "1.0.0",
+                    EdgeClientHostRuntime.HostApiVersion);
+
+                Assert.False(result.Success);
+                Assert.Contains(
+                    "不得携带 Cloud 身份",
+                    result.ErrorMessage ?? string.Empty,
+                    StringComparison.Ordinal);
+                Assert.False(Directory.Exists(Path.Combine(
+                    EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(
+                        hostDirectory),
+                    "TestPlugin")));
+            });
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
     public async Task PluginPackageInstaller_ShouldRejectPackageWhenFileCountExceedsLimit()
     {
         var tempDirectory = CreateTempDirectory();
@@ -332,7 +547,7 @@ public sealed class EdgeUpdateInfrastructureTests
     }
 
     [Fact]
-    public void UpdateConfigInitializer_TrySyncUpdateSource_ShouldNormalizeCamelCaseKey()
+    public void UpdateConfigInitializer_ShouldAtomicallyMigrateLegacyKeysAndRejectCatalogRewrite()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), $"iiot-update-test-{Guid.NewGuid():N}");
         try
@@ -341,22 +556,348 @@ public sealed class EdgeUpdateInfrastructureTests
             var configPath = Path.Combine(tempDirectory, "launcher.update.json");
             var samplePath = Path.Combine(tempDirectory, "launcher.update.sample.json");
             File.WriteAllText(configPath,
-                """{"source": "https://cloud.example.test/edge-updates/velopack/stable/", "channel": "stable"}""");
+                """
+                {
+                  "Source": "https://cloud.example.test/edge-updates/velopack/stable/",
+                  "Channel": "stable",
+                  "TargetRuntime": "win-x64",
+                  "preserve": "value"
+                }
+                """);
 
             var initializer = new FileEdgeUpdateConfigInitializer(new EdgeUpdateConfigPaths(configPath, samplePath));
+            initializer.EnsureConfigExists();
+            var migrated = File.ReadAllText(configPath);
 
             var changed = initializer.TrySyncUpdateSource(
-                "https://cloud.example.test/edge-updates/velopack/stable/");
+                "https://catalog-must-not-rewrite.example.test/");
 
-            Assert.True(changed);
+            Assert.False(changed);
             var content = File.ReadAllText(configPath);
-            Assert.Contains("\"Source\"", content, StringComparison.Ordinal);
-            Assert.DoesNotContain("\"source\"", content, StringComparison.Ordinal);
+            Assert.Equal(migrated, content);
+            Assert.Contains("\"source\"", content, StringComparison.Ordinal);
+            Assert.Contains("\"channel\"", content, StringComparison.Ordinal);
+            Assert.Contains("\"targetRuntime\"", content, StringComparison.Ordinal);
+            Assert.Contains("\"preserve\"", content, StringComparison.Ordinal);
+            Assert.DoesNotContain("\"Source\"", content, StringComparison.Ordinal);
+            Assert.DoesNotContain("\"Channel\"", content, StringComparison.Ordinal);
+            Assert.DoesNotContain("\"TargetRuntime\"", content, StringComparison.Ordinal);
+            Assert.Single(Directory.EnumerateFiles(tempDirectory));
         }
         finally
         {
             DeleteDirectory(tempDirectory);
         }
+    }
+
+    [Fact]
+    public void UpdateConfigInitializer_WhenJsonRootIsNotObject_ShouldKeepFileAndReturnWithoutThrowing()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var configPath = Path.Combine(
+                tempDirectory,
+                "launcher.update.json");
+            var samplePath = Path.Combine(
+                tempDirectory,
+                "launcher.update.sample.json");
+            File.WriteAllText(configPath, "[]");
+            File.WriteAllText(
+                samplePath,
+                """
+                {
+                  "source": "https://updates.example.test/stable/",
+                  "channel": "stable",
+                  "targetRuntime": "win-x64"
+                }
+                """);
+            var original = File.ReadAllBytes(configPath);
+            var initializer = new FileEdgeUpdateConfigInitializer(
+                new EdgeUpdateConfigPaths(configPath, samplePath));
+
+            var exception = Record.Exception(initializer.EnsureConfigExists);
+
+            Assert.Null(exception);
+            Assert.Equal(original, File.ReadAllBytes(configPath));
+            var validator = new FileEdgeReleaseSourceValidator(
+                new EdgeUpdateConfigPaths(configPath, samplePath));
+            Assert.Contains(
+                "根节点必须是对象",
+                validator.ValidateConfiguredSource() ?? string.Empty,
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void ReleaseSourceValidator_ShouldRejectCatalogMismatchWithoutChangingFormalConfig()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var configPath = Path.Combine(tempDirectory, "launcher.update.json");
+            WriteText(
+                configPath,
+                """
+                {
+                  "source": "https://updates.example.test/stable/",
+                  "channel": "stable",
+                  "targetRuntime": "win-x64"
+                }
+                """);
+            var original = File.ReadAllBytes(configPath);
+            var validator = new FileEdgeReleaseSourceValidator(
+                new EdgeUpdateConfigPaths(
+                    configPath,
+                    Path.Combine(tempDirectory, "launcher.update.sample.json")));
+
+            var matching = validator.ValidateCatalogSource(
+                "https://updates.example.test/stable");
+            var matchingHostCase = validator.ValidateCatalogSource(
+                "https://UPDATES.EXAMPLE.TEST/stable");
+            var pathCaseMismatch = validator.ValidateCatalogSource(
+                "https://updates.example.test/Stable");
+            var mismatch = validator.ValidateCatalogSource(
+                "https://other-updates.example.test/stable/");
+
+            Assert.Null(matching);
+            Assert.Null(matchingHostCase);
+            Assert.Contains(
+                "不一致",
+                pathCaseMismatch ?? string.Empty,
+                StringComparison.Ordinal);
+            Assert.Contains(
+                "不一致",
+                mismatch ?? string.Empty,
+                StringComparison.Ordinal);
+            Assert.Equal(original, File.ReadAllBytes(configPath));
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void ReleaseSourceValidator_WhenFileUriDecodesToInvalidPath_ShouldReturnUnavailable()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var configPath = Path.Combine(
+                tempDirectory,
+                "launcher.update.json");
+            WriteText(
+                configPath,
+                """
+                {
+                  "source": "file:///updates/catalog%00invalid",
+                  "channel": "stable",
+                  "targetRuntime": "win-x64"
+                }
+                """);
+            var validator = new FileEdgeReleaseSourceValidator(
+                new EdgeUpdateConfigPaths(
+                    configPath,
+                    Path.Combine(
+                        tempDirectory,
+                        "launcher.update.sample.json")));
+
+            var exception = Record.Exception(
+                () => validator.ValidateConfiguredSource());
+            var result = validator.ValidateConfiguredSource();
+
+            Assert.Null(exception);
+            Assert.Contains(
+                "更新源无效",
+                result ?? string.Empty,
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task CheckReleaseCatalogAsync_WhenLauncherUpdateConfigIsMissing_ShouldFailBeforeNetwork()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var service = new EdgeReleaseService(
+                new SuccessfulCloudConfigurationProvider(),
+                new NotCalledDeviceSessionClient(),
+                new NotCalledCatalogClient(),
+                new NoopVersionReporter(),
+                new FixedInstalledPluginCatalog(
+                    [InstalledPlugin("TestPlugin", "2.0.10", "1.0.0", "99.0.0")]),
+                new FixedProfileModuleConfigurationStore(["TestPlugin"]),
+                new NoopPluginPackageInstaller(),
+                new NoopHostUpdateService(),
+                new EdgeVersionCompatibilityPolicy(),
+                new FileEdgeReleaseSourceValidator(
+                    new EdgeUpdateConfigPaths(
+                        Path.Combine(tempDirectory, "launcher.update.json"),
+                        Path.Combine(tempDirectory, "launcher.update.sample.json"))));
+
+            var result = await service.CheckReleaseCatalogAsync(
+                Target(tempDirectory),
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(EdgeReleaseCatalogState.CatalogUnavailable, result.State);
+            Assert.Contains(
+                "配置不存在",
+                result.ErrorMessage ?? string.Empty,
+                StringComparison.Ordinal);
+            Assert.Equal(
+                "2.0.10",
+                Assert.Single(
+                    result.Components,
+                    static component => component.ModuleId == "TestPlugin").CurrentVersion);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task CheckReleaseCatalogAsync_WhenCatalogSourceDiffers_ShouldRejectCatalogWithoutRewritingConfig()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var configPath = Path.Combine(tempDirectory, "launcher.update.json");
+            WriteText(
+                configPath,
+                """
+                {
+                  "source": "https://updates.example.test/stable/",
+                  "channel": "stable",
+                  "targetRuntime": "win-x64"
+                }
+                """);
+            var original = File.ReadAllBytes(configPath);
+            var catalog = Catalog(
+                PluginComponent(
+                    "TestPlugin",
+                    Release(
+                        "TestPlugin",
+                        "2.0.11",
+                        EdgeClientHostRuntime.HostApiVersion))) with
+            {
+                HostUpdateSource = "https://other-updates.example.test/stable/"
+            };
+            var service = new EdgeReleaseService(
+                new SuccessfulCloudConfigurationProvider(),
+                new SuccessfulDeviceSessionClient(),
+                new FixedCatalogClient(catalog),
+                new NoopVersionReporter(),
+                new FixedInstalledPluginCatalog(
+                    [InstalledPlugin("TestPlugin", "2.0.10", "1.0.0", "99.0.0")]),
+                new FixedProfileModuleConfigurationStore(["TestPlugin"]),
+                new NoopPluginPackageInstaller(),
+                new NoopHostUpdateService(),
+                new EdgeVersionCompatibilityPolicy(),
+                new FileEdgeReleaseSourceValidator(
+                    new EdgeUpdateConfigPaths(
+                        configPath,
+                        Path.Combine(tempDirectory, "launcher.update.sample.json"))));
+
+            var result = await service.CheckReleaseCatalogAsync(
+                Target(tempDirectory),
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(EdgeReleaseCatalogState.CatalogUnavailable, result.State);
+            Assert.Contains("不一致", result.ErrorMessage ?? string.Empty, StringComparison.Ordinal);
+            Assert.Equal(original, File.ReadAllBytes(configPath));
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Theory]
+    [InlineData("catalog missing")]
+    [InlineData("Cloud 请求失败: HTTP 401")]
+    [InlineData("Cloud 请求超时")]
+    [InlineData("Cloud 请求失败: HTTP 500")]
+    [InlineData("invalid JSON")]
+    public async Task CheckReleaseCatalogAsync_WhenCatalogCannotBeRead_ShouldKeepLocalFactsAndReturnUnavailable(
+        string catalogFailure)
+    {
+        var installed = InstalledPlugin(
+            "TestPlugin",
+            "2.0.10",
+            "1.0.0",
+            "99.0.0");
+        var service = new EdgeReleaseService(
+            new SuccessfulCloudConfigurationProvider(),
+            new SuccessfulDeviceSessionClient(),
+            new FailedCatalogClient(catalogFailure),
+            new NoopVersionReporter(),
+            new FixedInstalledPluginCatalog([installed]),
+            new FixedProfileModuleConfigurationStore(["TestPlugin"]),
+            new NoopPluginPackageInstaller(),
+            new NoopHostUpdateService(),
+            new EdgeVersionCompatibilityPolicy());
+
+        var result = await service.CheckReleaseCatalogAsync(
+            Target(Path.GetTempPath()),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(EdgeReleaseCatalogState.CatalogUnavailable, result.State);
+        var plugin = Assert.Single(
+            result.Components,
+            component => component.ComponentKind == EdgeComponentKind.Plugin);
+        Assert.Equal("2.0.10", plugin.CurrentVersion);
+        Assert.Empty(plugin.Versions);
+        Assert.Contains(catalogFailure, result.ErrorMessage ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CheckReleaseCatalogAsync_WhenCatalogContainsInvalidVersion_ShouldKeepLocalFactsAndReturnUnavailable()
+    {
+        var installed = InstalledPlugin(
+            "TestPlugin",
+            "2.0.10",
+            "1.0.0",
+            "99.0.0");
+        var invalidCatalog = Catalog(
+            PluginComponent(
+                "TestPlugin",
+                Release(
+                    "TestPlugin",
+                    "not-a-version",
+                    EdgeClientHostRuntime.HostApiVersion)));
+        var service = new EdgeReleaseService(
+            new SuccessfulCloudConfigurationProvider(),
+            new SuccessfulDeviceSessionClient(),
+            new FixedCatalogClient(invalidCatalog),
+            new NoopVersionReporter(),
+            new FixedInstalledPluginCatalog([installed]),
+            new FixedProfileModuleConfigurationStore(["TestPlugin"]),
+            new NoopPluginPackageInstaller(),
+            new NoopHostUpdateService(),
+            new EdgeVersionCompatibilityPolicy());
+
+        var result = await service.CheckReleaseCatalogAsync(
+            Target(Path.GetTempPath()),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(EdgeReleaseCatalogState.CatalogUnavailable, result.State);
+        var plugin = Assert.Single(
+            result.Components,
+            component => component.ComponentKind == EdgeComponentKind.Plugin);
+        Assert.Equal("2.0.10", plugin.CurrentVersion);
+        Assert.Empty(plugin.Versions);
+        Assert.Contains("非法插件版本", result.ErrorMessage ?? string.Empty, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -564,7 +1105,6 @@ public sealed class EdgeUpdateInfrastructureTests
                 new FixedProfileModuleConfigurationStore(["TestPlugin"]),
                 packageInstaller,
                 hostUpdateService,
-                new NoopUpdateConfigInitializer(),
                 new EdgeVersionCompatibilityPolicy());
             var firstTarget = Target(tempDirectory);
             var secondTarget = firstTarget with { MachineProfile = "LineB" };
@@ -591,6 +1131,347 @@ public sealed class EdgeUpdateInfrastructureTests
     }
 
     [Fact]
+    public async Task ApplyVersionCompositionAsync_WhenCatalogsOwnDifferentRelativePackages_ShouldKeepEachReleaseSource()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            const string targetVersion = "99.0.0";
+            var hostRelease = HostRelease(
+                targetVersion,
+                EdgeClientHostRuntime.HostApiVersion);
+            var firstCatalog = CatalogWithHostVersions(
+                [hostRelease],
+                PluginComponent(
+                    "FirstPlugin",
+                    Release(
+                        "FirstPlugin",
+                        targetVersion,
+                        EdgeClientHostRuntime.HostApiVersion,
+                        targetVersion,
+                        targetVersion) with
+                    {
+                        DownloadUrl = "packages/first.zip"
+                    }));
+            var secondCatalog = CatalogWithHostVersions(
+                [hostRelease],
+                PluginComponent(
+                    "SecondPlugin",
+                    Release(
+                        "SecondPlugin",
+                        targetVersion,
+                        EdgeClientHostRuntime.HostApiVersion,
+                        targetVersion,
+                        targetVersion) with
+                    {
+                        DownloadUrl = "packages/second.zip"
+                    }));
+            var firstOptions = CloudOptions(
+                "https://line-a.example.test",
+                "EDGE-A");
+            var secondOptions = CloudOptions(
+                "https://line-b.example.test",
+                "EDGE-B");
+            var transaction = new RecordingCompositionTransaction();
+            var hostUpdateService = new RecordingHostUpdateService();
+            var service = new EdgeReleaseService(
+                new ProfileCloudConfigurationProvider(
+                    new Dictionary<string, EdgeUpdateCloudApiOptions>(
+                        StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["LineA"] = firstOptions,
+                        ["LineB"] = secondOptions
+                    }),
+                new SuccessfulDeviceSessionClient(),
+                new ProfileCatalogClient(
+                    new Dictionary<string, EdgeReleaseCatalog>(
+                        StringComparer.OrdinalIgnoreCase)
+                    {
+                        [firstOptions.BaseUrl] = firstCatalog,
+                        [secondOptions.BaseUrl] = secondCatalog
+                    }),
+                new NoopVersionReporter(),
+                new FixedInstalledPluginCatalog([]),
+                new ProfileModuleConfigurationStore(
+                    new Dictionary<string, IReadOnlyList<string>>(
+                        StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["LineA"] = ["FirstPlugin"],
+                        ["LineB"] = ["SecondPlugin"]
+                    }),
+                new NoopPluginPackageInstaller(),
+                hostUpdateService,
+                new EdgeVersionCompatibilityPolicy(),
+                releaseSourceValidator: null,
+                compositionTransaction: transaction);
+            var firstTarget = Target(tempDirectory);
+            var secondTarget = firstTarget with { MachineProfile = "LineB" };
+
+            var result = await service.ApplyVersionCompositionAsync(
+                [firstTarget, secondTarget],
+                new EdgeVersionSelection(
+                    targetVersion,
+                    new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["FirstPlugin"] = targetVersion,
+                        ["SecondPlugin"] = targetVersion
+                    }),
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.True(result.Success, result.ErrorMessage);
+            Assert.Equal(1, transaction.InstallCallCount);
+            var firstSource = Assert.Single(
+                transaction.Releases,
+                item => item.Release.ModuleId == "FirstPlugin");
+            Assert.Equal("packages/first.zip", firstSource.Release.DownloadUrl);
+            Assert.Equal(firstOptions.BaseUrl, firstSource.CloudOptions.BaseUrl);
+            var secondSource = Assert.Single(
+                transaction.Releases,
+                item => item.Release.ModuleId == "SecondPlugin");
+            Assert.Equal("packages/second.zip", secondSource.Release.DownloadUrl);
+            Assert.Equal(secondOptions.BaseUrl, secondSource.CloudOptions.BaseUrl);
+            Assert.Equal(1, hostUpdateService.ApplyCallCount);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task ApplyVersionCompositionAsync_WhenEnabledProfileDoesNotAdvertiseSelectedPlugin_ShouldRejectCrossProfileSource()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            const string targetVersion = "99.0.0";
+            var hostRelease = HostRelease(
+                targetVersion,
+                EdgeClientHostRuntime.HostApiVersion);
+            var firstCatalog = CatalogWithHostVersions(
+                [hostRelease],
+                PluginComponent(
+                    "TestPlugin",
+                    Release(
+                        "TestPlugin",
+                        "1.0.0",
+                        EdgeClientHostRuntime.HostApiVersion,
+                        "1.0.0",
+                        targetVersion)));
+            var secondCatalog = CatalogWithHostVersions(
+                [hostRelease],
+                PluginComponent(
+                    "TestPlugin",
+                    Release(
+                        "TestPlugin",
+                        targetVersion,
+                        EdgeClientHostRuntime.HostApiVersion,
+                        targetVersion,
+                        targetVersion) with
+                    {
+                        DownloadUrl = "packages/test-plugin.zip"
+                    }));
+            var firstOptions = CloudOptions(
+                "https://line-a.example.test",
+                "EDGE-A");
+            var secondOptions = CloudOptions(
+                "https://line-b.example.test",
+                "EDGE-B");
+            var transaction = new RecordingCompositionTransaction();
+            var hostUpdateService = new RecordingHostUpdateService();
+            var service = new EdgeReleaseService(
+                new ProfileCloudConfigurationProvider(
+                    new Dictionary<string, EdgeUpdateCloudApiOptions>(
+                        StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["LineA"] = firstOptions,
+                        ["LineB"] = secondOptions
+                    }),
+                new SuccessfulDeviceSessionClient(),
+                new ProfileCatalogClient(
+                    new Dictionary<string, EdgeReleaseCatalog>(
+                        StringComparer.OrdinalIgnoreCase)
+                    {
+                        [firstOptions.BaseUrl] = firstCatalog,
+                        [secondOptions.BaseUrl] = secondCatalog
+                    }),
+                new NoopVersionReporter(),
+                new FixedInstalledPluginCatalog(
+                    [InstalledPlugin("TestPlugin", "1.0.0", "1.0.0", targetVersion)]),
+                new ProfileModuleConfigurationStore(
+                    new Dictionary<string, IReadOnlyList<string>>(
+                        StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["LineA"] = ["TestPlugin"],
+                        ["LineB"] = []
+                    }),
+                new NoopPluginPackageInstaller(),
+                hostUpdateService,
+                new EdgeVersionCompatibilityPolicy(),
+                releaseSourceValidator: null,
+                compositionTransaction: transaction);
+            var firstTarget = Target(tempDirectory);
+            var secondTarget = firstTarget with { MachineProfile = "LineB" };
+
+            var result = await service.ApplyVersionCompositionAsync(
+                [firstTarget, secondTarget],
+                new EdgeVersionSelection(
+                    targetVersion,
+                    new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["TestPlugin"] = targetVersion
+                    }),
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.False(result.Success);
+            Assert.Contains(
+                "拒绝跨用其他工序的下载源",
+                result.ErrorMessage ?? string.Empty,
+                StringComparison.Ordinal);
+            Assert.Equal(0, transaction.InstallCallCount);
+            Assert.Equal(0, hostUpdateService.ApplyCallCount);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task ApplyPluginVersionAsync_WhenPluginHasDependency_ShouldSubmitOneAtomicTransaction()
+    {
+        var dependency = Release(
+            "Dependency",
+            "2.0.11",
+            EdgeClientHostRuntime.HostApiVersion);
+        var plugin = Release(
+            "TestPlugin",
+            "2.0.11",
+            EdgeClientHostRuntime.HostApiVersion) with
+        {
+            Dependencies = ["Dependency"]
+        };
+        var catalog = Catalog(
+            PluginComponent("Dependency", dependency),
+            PluginComponent("TestPlugin", plugin));
+        var transaction = new RecordingCompositionTransaction();
+        var service = new EdgeReleaseService(
+            new SuccessfulCloudConfigurationProvider(),
+            new SuccessfulDeviceSessionClient(),
+            new FixedCatalogClient(catalog),
+            new NoopVersionReporter(),
+            new FixedInstalledPluginCatalog([]),
+            new FixedProfileModuleConfigurationStore(["TestPlugin"]),
+            new NoopPluginPackageInstaller(),
+            new NoopHostUpdateService(),
+            new EdgeVersionCompatibilityPolicy(),
+            releaseSourceValidator: null,
+            compositionTransaction: transaction);
+
+        var result = await service.ApplyPluginVersionAsync(
+            Target(Path.GetTempPath()),
+            "TestPlugin",
+            "2.0.11",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.ErrorMessage);
+        Assert.Equal(1, transaction.InstallCallCount);
+        Assert.Equal(
+            ["Dependency", "TestPlugin"],
+            transaction.Releases.Select(static release => release.Release.ModuleId));
+        Assert.Null(transaction.PendingHostVersion);
+    }
+
+    [Fact]
+    public async Task ApplyVersionCompositionAsync_WhenHostHandoffFails_ShouldRollbackPendingPluginTransaction()
+    {
+        const string targetVersion = "99.0.0";
+        var catalog = CatalogWithHostVersions(
+            [HostRelease(targetVersion, EdgeClientHostRuntime.HostApiVersion)],
+            PluginComponent(
+                "TestPlugin",
+                Release(
+                    "TestPlugin",
+                    targetVersion,
+                    EdgeClientHostRuntime.HostApiVersion,
+                    targetVersion,
+                    targetVersion)));
+        var transaction = new RecordingCompositionTransaction();
+        var service = new EdgeReleaseService(
+            new SuccessfulCloudConfigurationProvider(),
+            new SuccessfulDeviceSessionClient(),
+            new FixedCatalogClient(catalog),
+            new NoopVersionReporter(),
+            new FixedInstalledPluginCatalog([]),
+            new FixedProfileModuleConfigurationStore(["TestPlugin"]),
+            new NoopPluginPackageInstaller(),
+            new FailingHostUpdateService(),
+            new EdgeVersionCompatibilityPolicy(),
+            releaseSourceValidator: null,
+            compositionTransaction: transaction);
+
+        var result = await service.ApplyVersionCompositionAsync(
+            Target(Path.GetTempPath()),
+            new EdgeVersionSelection(
+                targetVersion,
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["TestPlugin"] = targetVersion
+                }),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(1, transaction.InstallCallCount);
+        Assert.Equal(targetVersion, transaction.PendingHostVersion);
+        Assert.Equal(1, transaction.RollbackCallCount);
+    }
+
+    [Fact]
+    public async Task ApplyVersionCompositionAsync_WhenHostHandoffIsCanceledAndRollbackFails_ShouldReturnFailure()
+    {
+        const string targetVersion = "99.0.0";
+        var catalog = CatalogWithHostVersions(
+            [HostRelease(targetVersion, EdgeClientHostRuntime.HostApiVersion)],
+            PluginComponent(
+                "TestPlugin",
+                Release(
+                    "TestPlugin",
+                    targetVersion,
+                    EdgeClientHostRuntime.HostApiVersion,
+                    targetVersion,
+                    targetVersion)));
+        var transaction = new RecordingCompositionTransaction(
+            EdgePluginInstallResult.Failed("rollback evidence retained"));
+        using var cancellation = new CancellationTokenSource();
+        var service = new EdgeReleaseService(
+            new SuccessfulCloudConfigurationProvider(),
+            new SuccessfulDeviceSessionClient(),
+            new FixedCatalogClient(catalog),
+            new NoopVersionReporter(),
+            new FixedInstalledPluginCatalog([]),
+            new FixedProfileModuleConfigurationStore(["TestPlugin"]),
+            new NoopPluginPackageInstaller(),
+            new CancelingHostUpdateService(cancellation),
+            new EdgeVersionCompatibilityPolicy(),
+            releaseSourceValidator: null,
+            compositionTransaction: transaction);
+
+        var result = await service.ApplyVersionCompositionAsync(
+            Target(Path.GetTempPath()),
+            new EdgeVersionSelection(
+                targetVersion,
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["TestPlugin"] = targetVersion
+                }),
+            cancellationToken: cancellation.Token);
+
+        Assert.False(result.Success);
+        Assert.Contains("回滚失败", result.ErrorMessage ?? string.Empty, StringComparison.Ordinal);
+        Assert.Equal(1, transaction.RollbackCallCount);
+    }
+
+    [Fact]
     public async Task CheckReleaseCatalogAsync_ShouldFilterCatalogToCurrentProfileEnabledModules()
     {
         var tempDirectory = CreateTempDirectory();
@@ -608,7 +1489,6 @@ public sealed class EdgeUpdateInfrastructureTests
                 new FixedProfileModuleConfigurationStore(["TestPlugin"]),
                 new NoopPluginPackageInstaller(),
                 new NoopHostUpdateService(),
-                new NoopUpdateConfigInitializer(),
                 new EdgeVersionCompatibilityPolicy());
 
             var result = await service.CheckReleaseCatalogAsync(
@@ -647,7 +1527,6 @@ public sealed class EdgeUpdateInfrastructureTests
                 new FixedProfileModuleConfigurationStore(["TestPlugin"]),
                 installer,
                 new NoopHostUpdateService(),
-                new NoopUpdateConfigInitializer(),
                 new EdgeVersionCompatibilityPolicy());
 
             var result = await service.ApplyPluginVersionAsync(
@@ -706,7 +1585,6 @@ public sealed class EdgeUpdateInfrastructureTests
                     new EmptyProfileModuleConfigurationStore(),
                     new NoopPluginPackageInstaller(),
                     new NoopHostUpdateService(),
-                    new NoopUpdateConfigInitializer(),
                     new EdgeVersionCompatibilityPolicy());
 
                 var result = await service.CheckReleaseCatalogAsync(Target(hostDirectory));
@@ -757,10 +1635,15 @@ public sealed class EdgeUpdateInfrastructureTests
         => new("LineA", hostDirectory, Path.Combine(hostDirectory, "IIoT.Edge.Shell"));
 
     private static EdgeUpdateCloudApiOptions CloudOptions()
+        => CloudOptions("https://cloud.example.test", "EDGE-001");
+
+    private static EdgeUpdateCloudApiOptions CloudOptions(
+        string baseUrl,
+        string clientCode)
         => new(
-            "https://cloud.example.test",
+            baseUrl,
             5,
-            "EDGE-001",
+            clientCode,
             "secret",
             "/api/v1/bootstrap/device-instance",
             "/api/v1/edge/client-releases/device/{deviceId}/catalog",
@@ -923,6 +1806,80 @@ public sealed class EdgeUpdateInfrastructureTests
         }
     }
 
+    private static void CreatePluginPackageWithInvalidActivation(
+        string path,
+        string moduleId,
+        string version)
+    {
+        using var archive = ZipFile.Open(path, ZipArchiveMode.Create);
+        WriteEntry(
+            archive,
+            "plugin.json",
+            $$"""
+            {
+              "moduleId": "{{moduleId}}",
+              "displayName": "测试插件",
+              "version": "{{version}}",
+              "hostApiVersion": "{{EdgeClientHostRuntime.HostApiVersion}}",
+              "minHostVersion": "1.0.0",
+              "maxHostVersion": "99.0.0",
+              "entryAssembly": "IIoT.Edge.TestPlugin.dll",
+              "entryType": "IIoT.Edge.TestPlugin.DependencyInjection",
+              "supportedProcessType": "{{moduleId}}",
+              "dependencies": []
+            }
+            """);
+        WriteEntry(archive, "IIoT.Edge.TestPlugin.dll", "dummy");
+        WriteEntry(
+            archive,
+            "activation/manifest.json",
+            $$"""
+            {
+              "schemaVersion": 1,
+              "moduleId": "{{moduleId}}",
+              "profiles": [
+                {
+                  "profileId": "{{moduleId}}",
+                  "launcherProfile": "launcher.profile.json",
+                  "machineConfig": "appsettings.machine.json"
+                }
+              ]
+            }
+            """);
+        WriteEntry(
+            archive,
+            "activation/launcher.profile.json",
+            $$"""
+            [
+              {
+                "profileId": "{{moduleId}}",
+                "displayName": "{{moduleId}}",
+                "machineProfile": "{{moduleId}}",
+                "executablePath": "../host/IIoT.Edge.Shell"
+              }
+            ]
+            """);
+        WriteEntry(
+            archive,
+            "activation/appsettings.machine.json",
+            $$"""
+            {
+              "InstanceId": "{{moduleId}}",
+              "Shell": {
+                "MachineProfile": "{{moduleId}}"
+              },
+              "CloudApi": {
+                "ClientCode": "must-not-ship",
+                "BootstrapSecret": "must-not-ship"
+              },
+              "Modules": {
+                "Enabled": [ "{{moduleId}}" ],
+                "{{moduleId}}": {}
+              }
+            }
+            """);
+    }
+
     private static void WriteEntry(ZipArchive archive, string entryName, string content)
     {
         var entry = archive.CreateEntry(entryName);
@@ -955,6 +1912,32 @@ public sealed class EdgeUpdateInfrastructureTests
         finally
         {
             Environment.SetEnvironmentVariable(EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable, previous);
+        }
+    }
+
+    private static void WithEnvironmentVariables(
+        IReadOnlyDictionary<string, string?> values,
+        Action action)
+    {
+        var previous = values.Keys.ToDictionary(
+            static key => key,
+            Environment.GetEnvironmentVariable,
+            StringComparer.Ordinal);
+        foreach (var pair in values)
+        {
+            Environment.SetEnvironmentVariable(pair.Key, pair.Value);
+        }
+
+        try
+        {
+            action();
+        }
+        finally
+        {
+            foreach (var pair in previous)
+            {
+                Environment.SetEnvironmentVariable(pair.Key, pair.Value);
+            }
         }
     }
 
@@ -1011,6 +1994,20 @@ public sealed class EdgeUpdateInfrastructureTests
             => new("stable", "win-x64");
     }
 
+    private sealed class ProfileCloudConfigurationProvider(
+        IReadOnlyDictionary<string, EdgeUpdateCloudApiOptions> optionsByProfile)
+        : IEdgeUpdateConfigurationProvider
+    {
+        public EdgeUpdateConfigurationResult Resolve(EdgeUpdateTarget target)
+            => optionsByProfile.TryGetValue(target.MachineProfile, out var options)
+                ? EdgeUpdateConfigurationResult.Succeeded(options)
+                : EdgeUpdateConfigurationResult.Failed(
+                    $"Missing profile configuration: {target.MachineProfile}");
+
+        public EdgeReleaseOptions ResolveReleaseOptions()
+            => new("stable", "win-x64");
+    }
+
     private sealed class SuccessfulDeviceSessionClient : IEdgeUpdateDeviceSessionClient
     {
         public Task<EdgeUpdateOperationResult<EdgeUpdateDeviceSession>> BootstrapAsync(
@@ -1018,6 +2015,25 @@ public sealed class EdgeUpdateInfrastructureTests
             CancellationToken cancellationToken = default)
             => Task.FromResult(EdgeUpdateOperationResult<EdgeUpdateDeviceSession>.Succeeded(
                 new EdgeUpdateDeviceSession(Guid.NewGuid(), "测试设备", options.ClientCode, "token")));
+    }
+
+    private sealed class RecordingDeviceSessionClient : IEdgeUpdateDeviceSessionClient
+    {
+        public int BootstrapCallCount { get; private set; }
+
+        public Task<EdgeUpdateOperationResult<EdgeUpdateDeviceSession>> BootstrapAsync(
+            EdgeUpdateCloudApiOptions options,
+            CancellationToken cancellationToken = default)
+        {
+            BootstrapCallCount++;
+            return Task.FromResult(
+                EdgeUpdateOperationResult<EdgeUpdateDeviceSession>.Succeeded(
+                    new EdgeUpdateDeviceSession(
+                        Guid.NewGuid(),
+                        "测试设备",
+                        options.ClientCode,
+                        "token")));
+        }
     }
 
     private sealed class FixedCatalogClient(EdgeReleaseCatalog catalog) : IEdgeUpdateCatalogClient
@@ -1028,6 +2044,50 @@ public sealed class EdgeUpdateInfrastructureTests
             EdgeReleaseOptions releaseOptions,
             CancellationToken cancellationToken = default)
             => Task.FromResult(EdgeUpdateOperationResult<EdgeReleaseCatalog>.Succeeded(catalog));
+    }
+
+    private sealed class ProfileCatalogClient(
+        IReadOnlyDictionary<string, EdgeReleaseCatalog> catalogsByBaseUrl)
+        : IEdgeUpdateCatalogClient
+    {
+        public Task<EdgeUpdateOperationResult<EdgeReleaseCatalog>> GetCatalogAsync(
+            EdgeUpdateCloudApiOptions options,
+            EdgeUpdateDeviceSession session,
+            EdgeReleaseOptions releaseOptions,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(
+                catalogsByBaseUrl.TryGetValue(options.BaseUrl, out var catalog)
+                    ? EdgeUpdateOperationResult<EdgeReleaseCatalog>.Succeeded(catalog)
+                    : EdgeUpdateOperationResult<EdgeReleaseCatalog>.Failed(
+                        $"Missing catalog: {options.BaseUrl}"));
+    }
+
+    private sealed class RecordingCatalogClient(EdgeReleaseCatalog catalog)
+        : IEdgeUpdateCatalogClient
+    {
+        public int CatalogCallCount { get; private set; }
+
+        public Task<EdgeUpdateOperationResult<EdgeReleaseCatalog>> GetCatalogAsync(
+            EdgeUpdateCloudApiOptions options,
+            EdgeUpdateDeviceSession session,
+            EdgeReleaseOptions releaseOptions,
+            CancellationToken cancellationToken = default)
+        {
+            CatalogCallCount++;
+            return Task.FromResult(
+                EdgeUpdateOperationResult<EdgeReleaseCatalog>.Succeeded(catalog));
+        }
+    }
+
+    private sealed class FailedCatalogClient(string error) : IEdgeUpdateCatalogClient
+    {
+        public Task<EdgeUpdateOperationResult<EdgeReleaseCatalog>> GetCatalogAsync(
+            EdgeUpdateCloudApiOptions options,
+            EdgeUpdateDeviceSession session,
+            EdgeReleaseOptions releaseOptions,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(
+                EdgeUpdateOperationResult<EdgeReleaseCatalog>.Failed(error));
     }
 
     private sealed class NotCalledDeviceSessionClient : IEdgeUpdateDeviceSessionClient
@@ -1063,6 +2123,26 @@ public sealed class EdgeUpdateInfrastructureTests
             => Task.FromResult(EdgeVersionReportResult.Succeeded());
     }
 
+    private sealed class RecordingVersionReporter : IEdgeVersionReporter
+    {
+        public int ReportCallCount { get; private set; }
+
+        public Task<EdgeVersionReportResult> ReportVersionAsync(
+            EdgeUpdateCloudApiOptions options,
+            EdgeUpdateDeviceSession session,
+            EdgeReleaseOptions releaseOptions,
+            EdgeUpdateTarget target,
+            string hostVersion,
+            string hostApiVersion,
+            IReadOnlyList<EdgeInstalledPlugin> installedPlugins,
+            IReadOnlyList<string> enabledPlugins,
+            CancellationToken cancellationToken = default)
+        {
+            ReportCallCount++;
+            return Task.FromResult(EdgeVersionReportResult.Succeeded());
+        }
+    }
+
     private sealed class EmptyProfileModuleConfigurationStore : IEdgeProfileModuleConfigurationStore
     {
         public IReadOnlyList<string> ReadEnabledModules(EdgeUpdateTarget target)
@@ -1073,11 +2153,34 @@ public sealed class EdgeUpdateInfrastructureTests
         }
     }
 
+    private sealed class FixedInstalledPluginCatalog(
+        IReadOnlyList<EdgeInstalledPlugin> installedPlugins)
+        : IEdgeInstalledPluginCatalog
+    {
+        public IReadOnlyList<EdgeInstalledPlugin> LoadInstalledPlugins(
+            EdgeUpdateTarget target)
+            => installedPlugins;
+    }
+
     private sealed class FixedProfileModuleConfigurationStore(IReadOnlyList<string> enabledModules)
         : IEdgeProfileModuleConfigurationStore
     {
         public IReadOnlyList<string> ReadEnabledModules(EdgeUpdateTarget target)
             => enabledModules;
+
+        public void EnableModules(EdgeUpdateTarget target, IReadOnlyList<string> moduleIds)
+        {
+        }
+    }
+
+    private sealed class ProfileModuleConfigurationStore(
+        IReadOnlyDictionary<string, IReadOnlyList<string>> modulesByProfile)
+        : IEdgeProfileModuleConfigurationStore
+    {
+        public IReadOnlyList<string> ReadEnabledModules(EdgeUpdateTarget target)
+            => modulesByProfile.TryGetValue(target.MachineProfile, out var modules)
+                ? modules
+                : [];
 
         public void EnableModules(EdgeUpdateTarget target, IReadOnlyList<string> moduleIds)
         {
@@ -1127,6 +2230,44 @@ public sealed class EdgeUpdateInfrastructureTests
         }
     }
 
+    private sealed class RecordingCompositionTransaction(
+        EdgePluginInstallResult? rollbackResult = null)
+        : IEdgePluginCompositionTransaction
+    {
+        public int InstallCallCount { get; private set; }
+
+        public int RollbackCallCount { get; private set; }
+
+        public IReadOnlyList<EdgePluginCompositionRelease> Releases { get; private set; } = [];
+
+        public string? PendingHostVersion { get; private set; }
+
+        public Task<EdgePluginInstallResult> InstallAsync(
+            IReadOnlyList<EdgePluginCompositionTarget> targets,
+            IReadOnlyList<EdgePluginCompositionRelease> releases,
+            string compatibilityHostVersion,
+            string compatibilityHostApiVersion,
+            string? pendingHostVersion,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            InstallCallCount++;
+            Releases = releases;
+            PendingHostVersion = pendingHostVersion;
+            return Task.FromResult(
+                EdgePluginInstallResult.Succeeded(
+                    releases
+                        .Select(static release => release.Release.ModuleId)
+                        .ToArray()));
+        }
+
+        public EdgePluginInstallResult RollbackPendingHostHandoff()
+        {
+            RollbackCallCount++;
+            return rollbackResult ?? EdgePluginInstallResult.Succeeded([]);
+        }
+    }
+
     private sealed class NoopHostUpdateService : IEdgeHostUpdateService
     {
         public Task<EdgeHostUpdateCheckResult> CheckForUpdatesAsync(CancellationToken cancellationToken = default)
@@ -1169,13 +2310,52 @@ public sealed class EdgeUpdateInfrastructureTests
         }
     }
 
-    private sealed class NoopUpdateConfigInitializer : IEdgeUpdateConfigInitializer
+    private sealed class FailingHostUpdateService : IEdgeHostUpdateService
     {
-        public void EnsureConfigExists()
+        public Task<EdgeHostUpdateCheckResult> CheckForUpdatesAsync(
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(
+                new EdgeHostUpdateCheckResult(
+                    EdgeHostUpdateCheckState.UpdateAvailable));
+
+        public Task<EdgeHostUpdateApplyResult> DownloadAndApplyUpdateAsync(
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(
+                new EdgeHostUpdateApplyResult(false, "handoff failed"));
+
+        public Task<EdgeHostUpdateApplyResult> ApplyVersionAsync(
+            EdgeHostVersionRelease release,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(
+                new EdgeHostUpdateApplyResult(false, "handoff failed"));
+    }
+
+    private sealed class CancelingHostUpdateService(
+        CancellationTokenSource cancellation) : IEdgeHostUpdateService
+    {
+        public Task<EdgeHostUpdateCheckResult> CheckForUpdatesAsync(
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(
+                new EdgeHostUpdateCheckResult(
+                    EdgeHostUpdateCheckState.UpdateAvailable));
+
+        public Task<EdgeHostUpdateApplyResult> DownloadAndApplyUpdateAsync(
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
         {
+            cancellation.Cancel();
+            return Task.FromCanceled<EdgeHostUpdateApplyResult>(cancellation.Token);
         }
 
-        public bool TrySyncUpdateSource(string updateSource)
-            => false;
+        public Task<EdgeHostUpdateApplyResult> ApplyVersionAsync(
+            EdgeHostVersionRelease release,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            cancellation.Cancel();
+            return Task.FromCanceled<EdgeHostUpdateApplyResult>(cancellation.Token);
+        }
     }
 }

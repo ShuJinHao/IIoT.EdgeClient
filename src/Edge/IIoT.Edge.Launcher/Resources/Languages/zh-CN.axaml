@@ -60,6 +60,7 @@
     <sys:String x:Key="Launcher_UpdateCenter_ColumnComponent">组件/工序</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_ColumnType">类型</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_ColumnCurrentVersion">本机版本</sys:String>
+    <sys:String x:Key="Launcher_UpdateCenter_Unavailable">无法检查</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_ColumnLatestVersion">最新版本</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_ColumnPublishedAt">发布时间</sys:String>
     <sys:String x:Key="Launcher_UpdateCenter_ColumnSize">大小</sys:String>
@@ -190,6 +191,8 @@
     <sys:String x:Key="Launcher_Update_StatusInitial">未检查更新。</sys:String>
     <sys:String x:Key="Launcher_Update_StatusChecking">正在检查更新...</sys:String>
     <sys:String x:Key="Launcher_Update_StatusNotConfigured">未配置更新源。</sys:String>
+    <sys:String x:Key="Launcher_Update_StatusBusy">另一项更新正在进行。</sys:String>
+    <sys:String x:Key="Launcher_Update_BusyDetail">请等待当前更新完成后再试。</sys:String>
     <sys:String x:Key="Launcher_Update_StatusNotInstalled">当前不是安装版，无法使用自动更新。</sys:String>
     <sys:String x:Key="Launcher_Update_StatusNoUpdate">当前已是最新版本：{0}</sys:String>
     <sys:String x:Key="Launcher_Update_StatusAvailable">发现新版本：{0}</sys:String>
@@ -207,6 +210,8 @@
     <sys:String x:Key="Launcher_ClientRelease_StatusNotConfigured">设备未注册，请联系管理员。</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusBootstrapFailed">Cloud bootstrap 失败，无法读取插件 catalog。</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusCatalogFailed">云端版本信息获取失败。</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_StatusBusy">另一项更新正在进行。</sys:String>
+    <sys:String x:Key="Launcher_ClientRelease_BusyDetail">请等待当前更新完成后再试。</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusInstalling">正在安装或更新插件：{0}</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusApplyingVersion">正在应用 {0} 的版本 {1}。</sys:String>
     <sys:String x:Key="Launcher_ClientRelease_StatusHostApplyStarted">宿主版本 {0} 已开始应用，Launcher 将按更新流程重启。</sys:String>

@@ -1,5 +1,5 @@
 {
-  "Source": "",
-  "Channel": "stable",
-  "TargetRuntime": "win-x64"
+  "source": "",
+  "channel": "stable",
+  "targetRuntime": "win-x64"
 }

@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
     <IsPackable>false</IsPackable><IsTestProject>true</IsTestProject>
-    <TestKind>UI</TestKind><TestRuntime>Avalonia</TestRuntime><TestRuntimeDependencies>Headless</TestRuntimeDependencies><TestRunnerMode>Serial</TestRunnerMode><TestCapability>Launcher.UI</TestCapability><TestRisk>P2</TestRisk><TestConcern>Accessibility</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Launcher</TestOwner><TestRuleId>EDGE-UI-001</TestRuleId>
+    <TestKind>UI</TestKind><TestRuntime>Avalonia</TestRuntime><TestRuntimeDependencies>Headless;Loopback</TestRuntimeDependencies><TestRunnerMode>Serial</TestRunnerMode><TestCapability>Launcher.UI</TestCapability><TestRisk>P2</TestRisk><TestConcern>Accessibility</TestConcern><TestProfile>Simulation</TestProfile><TestOwner>Edge.Launcher</TestOwner><TestRuleId>EDGE-UI-001</TestRuleId>
   </PropertyGroup>
   <ItemGroup><PackageReference Include="Avalonia.Headless.XUnit" /><PackageReference Include="Avalonia.Themes.Fluent" /></ItemGroup>
   <ItemGroup><ProjectReference Include="..\..\Edge\IIoT.Edge.Launcher\IIoT.Edge.Launcher.csproj" /></ItemGroup>

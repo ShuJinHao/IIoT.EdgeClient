@@ -88,6 +88,7 @@ jobs:
           $selection = Get-Content artifacts/ci-selection.json -Raw | ConvertFrom-Json
           $restoreProjects = @(
             'src/Edge/IIoT.Edge.Shell/IIoT.Edge.Shell.csproj'
+            'src/Tools/IIoT.Edge.RuntimeLayoutSync/IIoT.Edge.RuntimeLayoutSync.csproj'
             'src/Testing/IIoT.Edge.Module.TestPlugin.Companion/IIoT.Edge.Module.TestPlugin.Companion.csproj'
             @($selection.selectedDotNetProjects.path)
           ) | Sort-Object -Unique

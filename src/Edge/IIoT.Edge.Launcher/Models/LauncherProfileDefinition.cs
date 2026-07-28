@@ -10,6 +10,8 @@ public sealed record LauncherProfileDefinition(
     string IconKind,
     string AccentColor)
 {
+    public IReadOnlyList<string> ExpectedModuleIds { get; init; } = [];
+
     public string PluginDisplayPath { get; init; } = string.Empty;
 
     public string DataDisplayPath { get; init; } = string.Empty;

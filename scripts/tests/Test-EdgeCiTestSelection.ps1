@@ -9,6 +9,25 @@ $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path $RepositoryRoot).Path
 $selector = Join-Path $root 'scripts/tests/Select-EdgeCiTests.ps1'
 $allowedCategories = @('Architecture', 'Security', 'Business', 'DeploymentContract', 'Quality', 'CrossProject')
+$smokeWorkflow = Get-Content `
+    (Join-Path $root '.github/workflows/edge-smoke-build.yml') `
+    -Raw
+$restoreStepStart = $smokeWorkflow.IndexOf(
+    '- name: Restore selected test projects',
+    [StringComparison]::Ordinal)
+$restoreStepEnd = $smokeWorkflow.IndexOf(
+    '- name: Validate architecture and security policies',
+    [StringComparison]::Ordinal)
+if ($restoreStepStart -lt 0 -or
+    $restoreStepEnd -le $restoreStepStart -or
+    -not $smokeWorkflow.Substring(
+        $restoreStepStart,
+        $restoreStepEnd - $restoreStepStart).Contains(
+        'src/Tools/IIoT.Edge.RuntimeLayoutSync/IIoT.Edge.RuntimeLayoutSync.csproj',
+        [StringComparison]::Ordinal)) {
+    throw 'Smoke-build restore must include the Launcher runtime-layout tool before --no-restore tests.'
+}
+
 function Assert-ValidCategories([object]$Selection) {
     $invalid = @($Selection.selectedDotNetProjects.categories | Where-Object {
             $_ -notin $allowedCategories
