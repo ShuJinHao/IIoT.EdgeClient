@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Features.Updates;
 using IIoT.Edge.Launcher.Models;
 using System.Diagnostics;
 
@@ -10,17 +11,23 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
     private readonly IProcessStarter _processStarter;
     private readonly IShellInstanceIdResolver _instanceIdResolver;
     private readonly IShellInstanceProbe _instanceProbe;
+    private readonly ILauncherUpdateOperationGate _updateOperationGate;
+    private readonly IEdgeUpdateTransactionRecovery? _updateTransactionRecovery;
     private readonly object _syncRoot = new();
     private readonly List<TrackedShellProcess> _startedProcesses = [];
 
     public ShellLaunchService(
         IProcessStarter processStarter,
         IShellInstanceIdResolver instanceIdResolver,
-        IShellInstanceProbe instanceProbe)
+        IShellInstanceProbe instanceProbe,
+        ILauncherUpdateOperationGate? updateOperationGate = null,
+        IEdgeUpdateTransactionRecovery? updateTransactionRecovery = null)
     {
         _processStarter = processStarter ?? throw new ArgumentNullException(nameof(processStarter));
         _instanceIdResolver = instanceIdResolver ?? throw new ArgumentNullException(nameof(instanceIdResolver));
         _instanceProbe = instanceProbe ?? throw new ArgumentNullException(nameof(instanceProbe));
+        _updateOperationGate = updateOperationGate ?? NoopLauncherUpdateOperationGate.Instance;
+        _updateTransactionRecovery = updateTransactionRecovery;
     }
 
     public bool HasAnyRunningShellProcess()
@@ -42,6 +49,18 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
     public void Launch(LauncherProfileDefinition profile)
     {
         ArgumentNullException.ThrowIfNull(profile);
+
+        using var launchLease = _updateOperationGate.TryAcquire();
+        if (launchLease is null)
+        {
+            throw new InvalidOperationException("更新正在进行，暂时不能启动客户端。");
+        }
+
+        if (_updateTransactionRecovery?.IsProfileBlocked(profile.MachineProfile) == true)
+        {
+            throw new InvalidOperationException(
+                $"更新事务恢复失败，工序 {profile.DisplayName} 暂时不能启动；请保留诊断证据并人工恢复。");
+        }
 
         var launchTarget = ShellLaunchTargetResolver.Resolve(profile.ExecutablePath);
         var startInfo = new ProcessStartInfo(launchTarget.FileName)

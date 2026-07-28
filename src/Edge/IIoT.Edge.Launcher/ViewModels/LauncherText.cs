@@ -53,6 +53,7 @@ internal static class LauncherText
         "Launcher_ClientRelease_Plugin_NotInstalled" => "-",
         "Launcher_VersionManagement_ComponentHost" => "宿主",
         "Launcher_VersionManagement_ComponentPlugin" => "插件",
+        "Launcher_UpdateCenter_Unavailable" => "无法检查",
         "Launcher_UpdateCenter_ButtonViewHistory" => "查看 {0}",
         "Launcher_UpdateCenter_NoHistory" => "-",
         _ => key

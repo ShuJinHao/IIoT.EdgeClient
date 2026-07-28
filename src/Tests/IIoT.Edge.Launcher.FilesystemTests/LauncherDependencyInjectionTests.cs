@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Features.Updates;
 using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.Infrastructure.Update.Configuration;
 using IIoT.Edge.Infrastructure.Update.Host;
@@ -45,8 +46,12 @@ public sealed class LauncherDependencyInjectionTests
             Assert.NotNull(provider.GetRequiredService<IEdgeInstalledPluginCatalog>());
             Assert.NotNull(provider.GetRequiredService<IEdgeProfileModuleConfigurationStore>());
             Assert.NotNull(provider.GetRequiredService<IEdgePluginPackageInstaller>());
+            Assert.NotNull(provider.GetRequiredService<IEdgePluginCompositionTransaction>());
+            Assert.NotNull(provider.GetRequiredService<IEdgeUpdateTransactionRecovery>());
             Assert.NotNull(provider.GetRequiredService<IEdgeReleaseService>());
             Assert.NotNull(provider.GetRequiredService<IEdgeHostUpdateService>());
+            Assert.IsType<FileLauncherUpdateOperationGate>(
+                provider.GetRequiredService<ILauncherUpdateOperationGate>());
         }
         finally
         {
@@ -374,7 +379,9 @@ public sealed class LauncherDependencyInjectionTests
             Directory.CreateDirectory(tempDirectory);
             var configPath = Path.Combine(tempDirectory, "protected-data", "launcher.update.json");
             var samplePath = Path.Combine(tempDirectory, FileEdgeUpdateConfigInitializer.SampleConfigFileName);
-            File.WriteAllText(samplePath, """{"Source": ""}""");
+            File.WriteAllText(
+                samplePath,
+                """{"source":"","channel":"stable","targetRuntime":"win-x64"}""");
 
             var initializer = new FileEdgeUpdateConfigInitializer(
                 new EdgeUpdateConfigPaths(configPath, samplePath));
@@ -394,7 +401,7 @@ public sealed class LauncherDependencyInjectionTests
     }
 
     [Fact]
-    public void LauncherUpdateConfigInitializer_WhenConfigExists_ShouldNotOverwriteExistingConfig()
+    public void LauncherUpdateConfigInitializer_WhenLegacyConfigExists_ShouldPreserveValuesAndNormalizeKeys()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), $"iiot-launcher-test-{Guid.NewGuid():N}");
 
@@ -404,22 +411,142 @@ public sealed class LauncherDependencyInjectionTests
             var configPath = Path.Combine(tempDirectory, "protected-data", "launcher.update.json");
             var samplePath = Path.Combine(tempDirectory, FileEdgeUpdateConfigInitializer.SampleConfigFileName);
             Directory.CreateDirectory(Path.GetDirectoryName(configPath)!);
-            File.WriteAllText(configPath, """{"Source": "http://existing.example/updates"}""");
-            File.WriteAllText(samplePath, """{"Source": ""}""");
-            var originalConfig = File.ReadAllText(configPath);
+            File.WriteAllText(
+                configPath,
+                """{"Source":"http://existing.example/updates","Channel":"beta","TargetRuntime":"win-arm64","custom":"keep"}""");
+            File.WriteAllText(
+                samplePath,
+                """{"source":"","channel":"stable","targetRuntime":"win-x64"}""");
 
             var initializer = new FileEdgeUpdateConfigInitializer(
                 new EdgeUpdateConfigPaths(configPath, samplePath));
 
             initializer.EnsureConfigExists();
 
-            Assert.Equal(originalConfig, File.ReadAllText(configPath));
+            var migrated = File.ReadAllText(configPath);
+            Assert.Contains("\"source\": \"http://existing.example/updates\"", migrated, StringComparison.Ordinal);
+            Assert.Contains("\"channel\": \"beta\"", migrated, StringComparison.Ordinal);
+            Assert.Contains("\"targetRuntime\": \"win-arm64\"", migrated, StringComparison.Ordinal);
+            Assert.Contains("\"custom\": \"keep\"", migrated, StringComparison.Ordinal);
+            Assert.DoesNotContain("\"Source\"", migrated, StringComparison.Ordinal);
+            Assert.DoesNotContain("\"Channel\"", migrated, StringComparison.Ordinal);
+            Assert.DoesNotContain("\"TargetRuntime\"", migrated, StringComparison.Ordinal);
         }
         finally
         {
             if (Directory.Exists(tempDirectory))
             {
                 Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void LauncherUpdateConfigInitializer_WhenCurrentKeyIsEmpty_ShouldMigrateNonEmptyLegacyValue()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), $"iiot-launcher-test-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateDirectory(tempDirectory);
+            var configPath = Path.Combine(tempDirectory, "protected-data", "launcher.update.json");
+            var samplePath = Path.Combine(tempDirectory, FileEdgeUpdateConfigInitializer.SampleConfigFileName);
+            Directory.CreateDirectory(Path.GetDirectoryName(configPath)!);
+            File.WriteAllText(
+                configPath,
+                """{"source":"","Source":"http://existing.example/updates","channel":"stable","targetRuntime":"win-x64"}""");
+            File.WriteAllText(
+                samplePath,
+                """{"source":"","channel":"stable","targetRuntime":"win-x64"}""");
+
+            var initializer = new FileEdgeUpdateConfigInitializer(
+                new EdgeUpdateConfigPaths(configPath, samplePath));
+
+            initializer.EnsureConfigExists();
+
+            var migrated = File.ReadAllText(configPath);
+            Assert.Contains("\"source\": \"http://existing.example/updates\"", migrated, StringComparison.Ordinal);
+            Assert.DoesNotContain("\"Source\"", migrated, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void StartupRecovery_ShouldHoldSharedUpdateGateAndReleaseItAfterRecovery()
+    {
+        var baseDirectory = Path.Combine(
+            Path.GetTempPath(),
+            $"iiot-launcher-recovery-test-{Guid.NewGuid():N}");
+
+        try
+        {
+            var gate = new FileLauncherUpdateOperationGate(baseDirectory);
+            var recovery = new GateObservingRecovery(
+                new FileLauncherUpdateOperationGate(baseDirectory));
+            var startupActions = new GateObservingStartupActions(
+                new FileLauncherUpdateOperationGate(baseDirectory));
+            var services = new ServiceCollection()
+                .AddSingleton<ILauncherUpdateOperationGate>(gate)
+                .AddSingleton<IEdgeUpdateTransactionRecovery>(recovery)
+                .AddSingleton<ILauncherPluginActivationReconciler>(startupActions)
+                .AddSingleton<ILauncherDeviceBindingImporter>(startupActions);
+            using var provider = services.BuildServiceProvider();
+
+            var ready = App.TryCompleteUpdateStartup(provider);
+
+            Assert.True(ready);
+            Assert.True(recovery.WasCalled);
+            Assert.True(recovery.ObservedGateHeld);
+            Assert.True(startupActions.ReconcileCalled);
+            Assert.True(startupActions.BindingImportCalled);
+            Assert.True(startupActions.ObservedGateHeld);
+            using var leaseAfterRecovery = gate.TryAcquire();
+            Assert.NotNull(leaseAfterRecovery);
+        }
+        finally
+        {
+            if (Directory.Exists(baseDirectory))
+            {
+                Directory.Delete(baseDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void StartupRecovery_WhenAnotherOperationHoldsGate_ShouldSkipRecovery()
+    {
+        var baseDirectory = Path.Combine(
+            Path.GetTempPath(),
+            $"iiot-launcher-recovery-test-{Guid.NewGuid():N}");
+
+        try
+        {
+            var gateOwner = new FileLauncherUpdateOperationGate(baseDirectory);
+            using var heldLease = gateOwner.TryAcquire();
+            Assert.NotNull(heldLease);
+            var recovery = new GateObservingRecovery(gateOwner);
+            var services = new ServiceCollection()
+                .AddSingleton<ILauncherUpdateOperationGate>(
+                    new FileLauncherUpdateOperationGate(baseDirectory))
+                .AddSingleton<IEdgeUpdateTransactionRecovery>(recovery);
+            using var provider = services.BuildServiceProvider();
+
+            var ready = App.TryCompleteUpdateStartup(provider);
+
+            Assert.False(ready);
+            Assert.False(recovery.WasCalled);
+        }
+        finally
+        {
+            if (Directory.Exists(baseDirectory))
+            {
+                Directory.Delete(baseDirectory, recursive: true);
             }
         }
     }
@@ -477,5 +604,58 @@ public sealed class LauncherDependencyInjectionTests
         var localDirectory = VelopackHostUpdateService.TryResolveLocalDirectory("https://updates.example/edge/");
 
         Assert.Null(localDirectory);
+    }
+
+    private sealed class GateObservingRecovery(
+        ILauncherUpdateOperationGate observingGate) : IEdgeUpdateTransactionRecovery
+    {
+        public bool WasCalled { get; private set; }
+
+        public bool ObservedGateHeld { get; private set; }
+
+        public EdgeUpdateTransactionRecoveryResult RecoverPendingTransaction()
+        {
+            WasCalled = true;
+            using var competingLease = observingGate.TryAcquire();
+            ObservedGateHeld = competingLease is null;
+            return new EdgeUpdateTransactionRecoveryResult(
+                Success: true,
+                Recovered: false,
+                Blocked: false);
+        }
+
+        public bool IsProfileBlocked(string machineProfile) => false;
+    }
+
+    private sealed class GateObservingStartupActions(
+        ILauncherUpdateOperationGate observingGate)
+        : ILauncherPluginActivationReconciler,
+          ILauncherDeviceBindingImporter
+    {
+        public bool ReconcileCalled { get; private set; }
+
+        public bool BindingImportCalled { get; private set; }
+
+        public bool ObservedGateHeld { get; private set; } = true;
+
+        public void Reconcile()
+        {
+            ReconcileCalled = true;
+            ObserveGate();
+        }
+
+        public bool IsReady(LauncherPluginActivation activation) => true;
+
+        public void ApplyPendingBindings()
+        {
+            BindingImportCalled = true;
+            ObserveGate();
+        }
+
+        private void ObserveGate()
+        {
+            using var competingLease = observingGate.TryAcquire();
+            ObservedGateHeld &= competingLease is null;
+        }
     }
 }

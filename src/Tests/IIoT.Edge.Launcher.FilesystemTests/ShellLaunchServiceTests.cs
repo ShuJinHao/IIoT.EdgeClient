@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Features.Updates;
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.SharedKernel.Configuration;
@@ -8,6 +9,105 @@ namespace IIoT.Edge.Launcher.FilesystemTests;
 
 public sealed class ShellLaunchServiceTests
 {
+    [Fact]
+    public void FileUpdateGate_WhenFirstLauncherHoldsLease_ShouldRejectSecondAndReleaseOnDispose()
+    {
+        var baseDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "edge-launcher-update-gate-tests",
+            Guid.NewGuid().ToString("N"),
+            "launcher");
+        try
+        {
+            var firstLauncher = new FileLauncherUpdateOperationGate(baseDirectory);
+            var secondLauncher = new FileLauncherUpdateOperationGate(baseDirectory);
+
+            using (var firstLease = firstLauncher.TryAcquire())
+            {
+                Assert.NotNull(firstLease);
+                Assert.Null(secondLauncher.TryAcquire());
+            }
+
+            using var secondLease = secondLauncher.TryAcquire();
+            Assert.NotNull(secondLease);
+        }
+        finally
+        {
+            var root = Directory.GetParent(baseDirectory)?.FullName;
+            if (!string.IsNullOrWhiteSpace(root) && Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void Launch_WhenUpdateLeaseIsHeld_ShouldRejectBeforeStartingProcess()
+    {
+        var baseDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "edge-launcher-update-gate-tests",
+            Guid.NewGuid().ToString("N"),
+            "launcher");
+        try
+        {
+            var updateGate = new FileLauncherUpdateOperationGate(baseDirectory);
+            using var updateLease = updateGate.TryAcquire();
+            Assert.NotNull(updateLease);
+            var starter = new SpyProcessStarter();
+            var service = CreateService(
+                starter,
+                updateOperationGate: new FileLauncherUpdateOperationGate(baseDirectory));
+            var profile = new LauncherProfileDefinition(
+                "LineA",
+                "AP",
+                "AP profile",
+                null,
+                "LineA",
+                Path.Combine(baseDirectory, "IIoT.Edge.Shell"),
+                "ChartBar",
+                "#2563EB");
+
+            var exception = Assert.Throws<InvalidOperationException>(
+                () => service.Launch(profile));
+
+            Assert.Contains("更新正在进行", exception.Message, StringComparison.Ordinal);
+            Assert.Null(starter.StartInfo);
+        }
+        finally
+        {
+            var root = Directory.GetParent(baseDirectory)?.FullName;
+            if (!string.IsNullOrWhiteSpace(root) && Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void Launch_WhenProfileIsBlockedByFailedRecovery_ShouldRejectBeforeStartingProcess()
+    {
+        var starter = new SpyProcessStarter();
+        var service = CreateService(
+            starter,
+            updateTransactionRecovery: new BlockedUpdateTransactionRecovery("LineA"));
+        var profile = new LauncherProfileDefinition(
+            "LineA",
+            "AP",
+            "AP profile",
+            null,
+            "LineA",
+            Path.Combine(Path.GetTempPath(), "IIoT.Edge.Shell"),
+            "ChartBar",
+            "#2563EB");
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => service.Launch(profile));
+
+        Assert.Contains("事务恢复失败", exception.Message, StringComparison.Ordinal);
+        Assert.Null(starter.StartInfo);
+    }
+
     [Fact]
     public void NamedMutexProbe_WhenNamedMutexExistsButIsNotOwned_ShouldReturnFalse()
     {
@@ -414,11 +514,15 @@ public sealed class ShellLaunchServiceTests
     private static ShellLaunchService CreateService(
         IProcessStarter processStarter,
         IShellInstanceIdResolver? instanceIdResolver = null,
-        IShellInstanceProbe? instanceProbe = null)
+        IShellInstanceProbe? instanceProbe = null,
+        ILauncherUpdateOperationGate? updateOperationGate = null,
+        IEdgeUpdateTransactionRecovery? updateTransactionRecovery = null)
         => new(
             processStarter,
             instanceIdResolver ?? new FakeShellInstanceIdResolver(),
-            instanceProbe ?? new FakeShellInstanceProbe());
+            instanceProbe ?? new FakeShellInstanceProbe(),
+            updateOperationGate,
+            updateTransactionRecovery);
 
     private sealed class SpyProcessStarter : IProcessStarter
     {
@@ -450,5 +554,18 @@ public sealed class ShellLaunchServiceTests
         private readonly HashSet<string> _runningInstanceIds = new(runningInstanceIds, StringComparer.OrdinalIgnoreCase);
 
         public bool IsInstanceRunning(string instanceId) => _runningInstanceIds.Contains(instanceId);
+    }
+
+    private sealed class BlockedUpdateTransactionRecovery(string blockedProfile)
+        : IEdgeUpdateTransactionRecovery
+    {
+        public EdgeUpdateTransactionRecoveryResult RecoverPendingTransaction()
+            => new(false, false, true, "blocked");
+
+        public bool IsProfileBlocked(string machineProfile)
+            => string.Equals(
+                blockedProfile,
+                machineProfile,
+                StringComparison.OrdinalIgnoreCase);
     }
 }

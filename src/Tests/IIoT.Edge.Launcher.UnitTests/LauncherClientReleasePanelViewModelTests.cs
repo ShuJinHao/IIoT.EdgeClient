@@ -191,6 +191,96 @@ public sealed class LauncherClientReleasePanelViewModelTests
     }
 
     [Fact]
+    public async Task ApplyVersionAsync_WhenAnotherLauncherOwnsGate_ShouldNotStartSecondInstall()
+    {
+        var root = Path.Combine(
+            Path.GetTempPath(),
+            "edge-launcher-update-gate-unit-tests",
+            Guid.NewGuid().ToString("N"));
+        try
+        {
+            var firstLauncherGate = new FileLauncherUpdateOperationGate(
+                Path.Combine(root, "launcher"));
+            var secondLauncherGate = new FileLauncherUpdateOperationGate(
+                Path.Combine(root, "launcher"));
+            var service = new RecordingReleaseService(CreateReleaseCatalog());
+            var panel = CreatePanel(
+                service,
+                updateOperationGate: secondLauncherGate);
+            await panel.CheckAsync(Profile());
+            var newer = panel.Components
+                .Single(component => component.ModuleId == ModuleId)
+                .Versions.Single(option => option.Version == "1.1.0");
+
+            using var firstLease = firstLauncherGate.TryAcquire();
+            Assert.NotNull(firstLease);
+            await panel.ApplyVersionAsync(newer);
+
+            Assert.Null(service.AppliedPluginModuleId);
+            Assert.Contains(
+                "Launcher_ClientRelease_StatusBusy",
+                panel.StatusMessage,
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ApplyVersionAsync_WhenInstallThrows_ShouldReleaseGate(
+        bool cancellation)
+    {
+        var root = Path.Combine(
+            Path.GetTempPath(),
+            "edge-launcher-update-gate-unit-tests",
+            Guid.NewGuid().ToString("N"));
+        try
+        {
+            var service = new ThrowingApplyReleaseService(
+                CreateReleaseCatalog(),
+                cancellation);
+            var panel = CreatePanel(
+                service,
+                updateOperationGate: new FileLauncherUpdateOperationGate(
+                    Path.Combine(root, "launcher")));
+            await panel.CheckAsync(Profile());
+            var newer = panel.Components
+                .Single(component => component.ModuleId == ModuleId)
+                .Versions.Single(option => option.Version == "1.1.0");
+
+            if (cancellation)
+            {
+                await panel.ApplyVersionAsync(newer);
+            }
+            else
+            {
+                await Assert.ThrowsAsync<InvalidOperationException>(
+                    () => panel.ApplyVersionAsync(newer));
+            }
+
+            using var nextLease = new FileLauncherUpdateOperationGate(
+                    Path.Combine(root, "launcher"))
+                .TryAcquire();
+            Assert.NotNull(nextLease);
+            Assert.Equal(1, service.ApplyCallCount);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task LanguageChanged_ShouldRefreshVersionOptionTexts()
     {
         var languageService = new TestLanguageService();
@@ -213,12 +303,14 @@ public sealed class LauncherClientReleasePanelViewModelTests
     private static LauncherClientReleasePanelViewModel CreatePanel(
         IEdgeReleaseService releaseService,
         IShellLaunchService? shellLaunchService = null,
-        IAppLanguageService? languageService = null)
+        IAppLanguageService? languageService = null,
+        ILauncherUpdateOperationGate? updateOperationGate = null)
         => new(
             releaseService,
             new LauncherUpdateTargetFactory(),
             shellLaunchService ?? new StubShellLaunchService(),
-            languageService);
+            languageService,
+            updateOperationGate);
 
     private static LauncherProfileDefinition Profile(string profileId = "testplugin")
         => new(profileId, "测试插件", "测试工序", null, profileId, "IIoT.Edge.Shell", "Shell", "#000000");
@@ -403,6 +495,59 @@ public sealed class LauncherClientReleasePanelViewModelTests
             progress?.Report(100);
             return Task.FromResult(EdgePluginInstallResult.Succeeded(selection.PluginVersions.Keys.ToArray()));
         }
+
+        public Task<EdgeVersionReportResult> ReportCurrentVersionsAsync(
+            EdgeUpdateTarget target,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(EdgeVersionReportResult.Succeeded());
+    }
+
+    private sealed class ThrowingApplyReleaseService(
+        EdgeReleaseCatalogResult checkResult,
+        bool cancellation) : IEdgeReleaseService
+    {
+        public int ApplyCallCount { get; private set; }
+
+        public Task<EdgeReleaseCatalogResult> CheckReleaseCatalogAsync(
+            EdgeUpdateTarget target,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(checkResult);
+
+        public Task<EdgePluginInstallResult> ApplyPluginVersionAsync(
+            EdgeUpdateTarget target,
+            string moduleId,
+            string version,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            ApplyCallCount++;
+            return cancellation
+                ? Task.FromException<EdgePluginInstallResult>(
+                    new OperationCanceledException())
+                : Task.FromException<EdgePluginInstallResult>(
+                    new InvalidOperationException("simulated install failure"));
+        }
+
+        public Task<EdgeHostUpdateApplyResult> ApplyHostVersionAsync(
+            EdgeUpdateTarget target,
+            string version,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<EdgePluginInstallResult> ApplyVersionCompositionAsync(
+            EdgeUpdateTarget target,
+            EdgeVersionSelection selection,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<EdgePluginInstallResult> ApplyVersionCompositionAsync(
+            IReadOnlyList<EdgeUpdateTarget> targets,
+            EdgeVersionSelection selection,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
 
         public Task<EdgeVersionReportResult> ReportCurrentVersionsAsync(
             EdgeUpdateTarget target,

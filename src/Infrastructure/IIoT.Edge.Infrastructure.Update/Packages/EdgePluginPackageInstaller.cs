@@ -62,36 +62,26 @@ public sealed class EdgePluginPackageInstaller : IEdgePluginPackageInstaller
             pluginsRoot,
             EdgeClientProgramDataPaths.SanitizePathSegment(release.ModuleId));
         var stagingRoot = Path.Combine(pluginsRoot, ".staging", Guid.NewGuid().ToString("N"));
-        var packagePath = Path.Combine(stagingRoot, "package.zip");
-        var extractDirectory = Path.Combine(stagingRoot, "extract");
+        var backupDirectory = Path.Combine(
+            pluginsRoot,
+            ".previous",
+            $"{EdgeClientProgramDataPaths.SanitizePathSegment(release.ModuleId)}-{Guid.NewGuid():N}");
 
         try
         {
-            Directory.CreateDirectory(stagingRoot);
-            progress?.Report(1);
-            await DownloadPackageAsync(
-                release.DownloadUrl,
-                cloudOptions.BaseUrl,
-                packagePath,
-                _limits,
+            var prepared = await PrepareAsync(
+                stagingRoot,
+                release,
+                cloudOptions,
+                hostVersion,
+                hostApiVersion,
                 progress,
                 cancellationToken).ConfigureAwait(false);
-            cancellationToken.ThrowIfCancellationRequested();
-            ValidatePackageFileSize(packagePath, _limits);
-
-            var actualSha256 = await ComputeSha256Async(packagePath, cancellationToken).ConfigureAwait(false);
-            if (!string.Equals(actualSha256, release.Sha256, StringComparison.OrdinalIgnoreCase))
-            {
-                return EdgePluginInstallResult.Failed(
-                    $"插件包 SHA256 不匹配: {release.ModuleId} {release.PackageVersion}");
-            }
-
-            progress?.Report(70);
-            ValidateZipEntries(packagePath, extractDirectory, _limits);
-            ZipFile.ExtractToDirectory(packagePath, extractDirectory);
-            var manifest = ValidateExtractedPackage(extractDirectory, release, hostVersion, hostApiVersion);
-            ReplacePluginDirectory(moduleDirectory, extractDirectory);
-            WriteInstallRecord(moduleDirectory, release, manifest, actualSha256);
+            CommitPreparedDirectory(
+                moduleDirectory,
+                prepared.ExtractDirectory,
+                backupDirectory);
+            TryDeleteDirectory(backupDirectory);
             progress?.Report(100);
 
             return EdgePluginInstallResult.Succeeded([release.ModuleId]);
@@ -108,6 +98,59 @@ public sealed class EdgePluginPackageInstaller : IEdgePluginPackageInstaller
         {
             TryDeleteDirectory(stagingRoot);
         }
+    }
+
+    internal async Task<PreparedEdgePluginPackage> PrepareAsync(
+        string stagingRoot,
+        EdgePluginVersionRelease release,
+        EdgeUpdateCloudApiOptions cloudOptions,
+        string hostVersion,
+        string hostApiVersion,
+        IProgress<int>? progress,
+        CancellationToken cancellationToken)
+    {
+        if (!_compatibilityPolicy.IsReleaseCompatible(release, hostVersion, hostApiVersion, out var issue))
+        {
+            throw new InvalidOperationException(issue);
+        }
+
+        var packagePath = Path.Combine(stagingRoot, "package.zip");
+        var extractDirectory = Path.Combine(stagingRoot, "extract");
+        Directory.CreateDirectory(stagingRoot);
+        progress?.Report(1);
+        await DownloadPackageAsync(
+            release.DownloadUrl,
+            cloudOptions.BaseUrl,
+            packagePath,
+            _limits,
+            progress,
+            cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        ValidatePackageFileSize(packagePath, _limits);
+
+        var actualSha256 = await ComputeSha256Async(packagePath, cancellationToken).ConfigureAwait(false);
+        if (!string.Equals(actualSha256, release.Sha256, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"插件包 SHA256 不匹配: {release.ModuleId} {release.PackageVersion}");
+        }
+
+        progress?.Report(70);
+        ValidateZipEntries(packagePath, extractDirectory, _limits);
+        ZipFile.ExtractToDirectory(packagePath, extractDirectory);
+        var manifest = ValidateExtractedPackage(
+            extractDirectory,
+            release,
+            hostVersion,
+            hostApiVersion);
+        ValidateActivationIfPresent(extractDirectory, release.ModuleId);
+        WriteInstallRecord(extractDirectory, release, manifest, actualSha256);
+        return new PreparedEdgePluginPackage(
+            release.ModuleId,
+            release.PackageVersion,
+            actualSha256,
+            stagingRoot,
+            extractDirectory);
     }
 
     private async Task DownloadPackageAsync(
@@ -286,6 +329,210 @@ public sealed class EdgePluginPackageInstaller : IEdgePluginPackageInstaller
         return manifest;
     }
 
+    private static void ValidateActivationIfPresent(
+        string extractDirectory,
+        string moduleId)
+    {
+        var activationRoot = Path.Combine(extractDirectory, "activation");
+        if (!Directory.Exists(activationRoot))
+        {
+            return;
+        }
+
+        var manifestPath = Path.Combine(activationRoot, "manifest.json");
+        if (!File.Exists(manifestPath))
+        {
+            throw new InvalidOperationException("插件 activation 目录缺少 manifest.json。");
+        }
+
+        using var document = JsonDocument.Parse(File.ReadAllText(manifestPath));
+        var root = document.RootElement;
+        if (!TryGetProperty(root, "schemaVersion", out var schemaVersion)
+            || !schemaVersion.TryGetInt32(out var parsedSchemaVersion)
+            || parsedSchemaVersion != 1
+            || !TryGetProperty(root, "moduleId", out var activationModuleId)
+            || activationModuleId.ValueKind != JsonValueKind.String
+            || !string.Equals(
+                activationModuleId.GetString(),
+                moduleId,
+                StringComparison.OrdinalIgnoreCase)
+            || !TryGetProperty(root, "profiles", out var profiles)
+            || profiles.ValueKind != JsonValueKind.Array)
+        {
+            throw new InvalidOperationException("插件 activation manifest 无效。");
+        }
+
+        var profileIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var profile in profiles.EnumerateArray())
+        {
+            var profileId = ReadRequiredString(profile, "profileId");
+            if (!profileIds.Add(profileId))
+            {
+                throw new InvalidOperationException(
+                    $"插件 activation profileId 重复: {profileId}。");
+            }
+
+            var launcherProfile = ReadRequiredString(profile, "launcherProfile");
+            var machineConfig = ReadRequiredString(profile, "machineConfig");
+            var launcherProfilePath = ResolveSafePackagePath(
+                activationRoot,
+                launcherProfile,
+                $"activation launcherProfile 路径非法: {launcherProfile}");
+            var machineConfigPath = ResolveSafePackagePath(
+                activationRoot,
+                machineConfig,
+                $"activation machineConfig 路径非法: {machineConfig}");
+            if (!File.Exists(launcherProfilePath) || !File.Exists(machineConfigPath))
+            {
+                throw new InvalidOperationException("插件 activation 引用文件不存在。");
+            }
+
+            ValidateActivationProfile(
+                launcherProfilePath,
+                machineConfigPath,
+                moduleId,
+                profileId);
+        }
+    }
+
+    private static void ValidateActivationProfile(
+        string launcherProfilePath,
+        string machineConfigPath,
+        string moduleId,
+        string profileId)
+    {
+        using (var launcherDocument = JsonDocument.Parse(
+                   File.ReadAllText(launcherProfilePath)))
+        {
+            if (launcherDocument.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                throw new InvalidOperationException(
+                    "插件 activation launcher profile 必须是数组。");
+            }
+
+            var entries = launcherDocument.RootElement.EnumerateArray().ToArray();
+            if (entries.Length != 1
+                || !string.Equals(
+                    ReadRequiredString(entries[0], "profileId"),
+                    profileId,
+                    StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(
+                    ReadRequiredString(entries[0], "machineProfile"),
+                    profileId,
+                    StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(
+                    ReadRequiredString(entries[0], "executablePath")
+                        .Replace('\\', '/'),
+                    "../host/IIoT.Edge.Shell",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "插件 activation launcher profile 身份或宿主入口无效。");
+            }
+        }
+
+        using var machineDocument = JsonDocument.Parse(
+            File.ReadAllText(machineConfigPath));
+        var root = machineDocument.RootElement;
+        if (root.ValueKind != JsonValueKind.Object
+            || !string.Equals(
+                ReadRequiredString(root, "instanceId"),
+                profileId,
+                StringComparison.OrdinalIgnoreCase)
+            || !TryGetProperty(root, "shell", out var shell)
+            || !string.Equals(
+                ReadRequiredString(shell, "machineProfile"),
+                profileId,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "插件 activation machine config 身份无效。");
+        }
+
+        if (!TryGetProperty(root, "modules", out var modules)
+            || !TryGetProperty(modules, "enabled", out var enabled)
+            || enabled.ValueKind != JsonValueKind.Array
+            || !TryGetProperty(modules, moduleId, out var moduleConfiguration)
+            || moduleConfiguration.ValueKind != JsonValueKind.Object)
+        {
+            throw new InvalidOperationException(
+                "插件 activation machine config 缺少所属模块配置。");
+        }
+
+        var enabledModules = enabled
+            .EnumerateArray()
+            .Where(static value => value.ValueKind == JsonValueKind.String)
+            .Select(static value => value.GetString()?.Trim())
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .ToArray();
+        if (enabledModules.Length != 1
+            || !string.Equals(
+                enabledModules[0],
+                moduleId,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "插件 activation machine config 只能启用所属模块。");
+        }
+
+        if (TryGetProperty(root, "cloudApi", out var cloudApi)
+            && (HasNonEmptyOrInvalidString(cloudApi, "clientCode")
+                || HasNonEmptyOrInvalidString(cloudApi, "bootstrapSecret")))
+        {
+            throw new InvalidOperationException(
+                "插件 activation machine config 不得携带 Cloud 身份。");
+        }
+    }
+
+    private static bool HasNonEmptyOrInvalidString(
+        JsonElement element,
+        string propertyName)
+    {
+        if (!TryGetProperty(element, propertyName, out var value))
+        {
+            return false;
+        }
+
+        return value.ValueKind != JsonValueKind.String
+               || !string.IsNullOrWhiteSpace(value.GetString());
+    }
+
+    private static string ReadRequiredString(JsonElement element, string propertyName)
+    {
+        if (!TryGetProperty(element, propertyName, out var value)
+            || value.ValueKind != JsonValueKind.String
+            || string.IsNullOrWhiteSpace(value.GetString()))
+        {
+            throw new InvalidOperationException($"插件 activation 缺少 {propertyName}。");
+        }
+
+        return value.GetString()!.Trim();
+    }
+
+    private static bool TryGetProperty(
+        JsonElement element,
+        string propertyName,
+        out JsonElement value)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in element.EnumerateObject())
+            {
+                if (string.Equals(
+                        property.Name,
+                        propertyName,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    value = property.Value;
+                    return true;
+                }
+            }
+        }
+
+        value = default;
+        return false;
+    }
+
     private static string ResolveSafePackagePath(string rootDirectory, string relativePath, string errorMessage)
     {
         if (string.IsNullOrWhiteSpace(relativePath))
@@ -311,11 +558,13 @@ public sealed class EdgePluginPackageInstaller : IEdgePluginPackageInstaller
         return fullPath;
     }
 
-    private static void ReplacePluginDirectory(string moduleDirectory, string extractDirectory)
+    internal static void CommitPreparedDirectory(
+        string moduleDirectory,
+        string extractDirectory,
+        string backupDirectory)
     {
         var parentDirectory = Path.GetDirectoryName(moduleDirectory)
             ?? throw new InvalidOperationException($"插件目录无效: {moduleDirectory}");
-        var backupDirectory = Path.Combine(parentDirectory, ".previous", $"{Path.GetFileName(moduleDirectory)}-{Guid.NewGuid():N}");
         Directory.CreateDirectory(parentDirectory);
 
         var existingMoved = false;
@@ -339,8 +588,6 @@ public sealed class EdgePluginPackageInstaller : IEdgePluginPackageInstaller
 
             throw;
         }
-
-        TryDeleteDirectory(backupDirectory);
     }
 
     private static void WriteInstallRecord(
@@ -373,7 +620,7 @@ public sealed class EdgePluginPackageInstaller : IEdgePluginPackageInstaller
             new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
     }
 
-    private static void TryDeleteDirectory(string path)
+    internal static void TryDeleteDirectory(string path)
     {
         try
         {
@@ -390,6 +637,13 @@ public sealed class EdgePluginPackageInstaller : IEdgePluginPackageInstaller
         }
     }
 }
+
+internal sealed record PreparedEdgePluginPackage(
+    string ModuleId,
+    string Version,
+    string PackageSha256,
+    string StagingRoot,
+    string ExtractDirectory);
 
 public sealed record EdgePluginPackageInstallLimits(
     long MaxPackageBytes,

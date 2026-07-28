@@ -12,6 +12,7 @@ public sealed class LauncherHostUpdatePanelViewModel : BaseNotifyPropertyChanged
     private readonly IEdgeHostUpdateService _updateService;
     private readonly IShellLaunchService _launchService;
     private readonly IAppLanguageService? _languageService;
+    private readonly ILauncherUpdateOperationGate _updateOperationGate;
     private string _statusKey = "Launcher_Update_StatusInitial";
     private object[] _statusArgs = [];
     private string _statusMessage = string.Empty;
@@ -29,11 +30,13 @@ public sealed class LauncherHostUpdatePanelViewModel : BaseNotifyPropertyChanged
     public LauncherHostUpdatePanelViewModel(
         IEdgeHostUpdateService updateService,
         IShellLaunchService launchService,
-        IAppLanguageService? languageService = null)
+        IAppLanguageService? languageService = null,
+        ILauncherUpdateOperationGate? updateOperationGate = null)
     {
         _updateService = updateService ?? throw new ArgumentNullException(nameof(updateService));
         _launchService = launchService ?? throw new ArgumentNullException(nameof(launchService));
         _languageService = languageService;
+        _updateOperationGate = updateOperationGate ?? NoopLauncherUpdateOperationGate.Instance;
         if (_languageService is not null)
         {
             _languageService.LanguageChanged += OnLanguageChanged;
@@ -109,6 +112,16 @@ public sealed class LauncherHostUpdatePanelViewModel : BaseNotifyPropertyChanged
 
     public async Task ApplyUpdateAsync()
     {
+        using var updateLease = _updateOperationGate.TryAcquire();
+        if (updateLease is null)
+        {
+            IsProgressVisible = false;
+            Progress = 0;
+            SetStatus("Launcher_Update_StatusBusy");
+            DetailText = LauncherText.Get(_languageService, "Launcher_Update_BusyDetail");
+            return;
+        }
+
         if (_launchService.HasAnyRunningShellProcess())
         {
             IsProgressVisible = false;
@@ -236,6 +249,12 @@ public sealed class LauncherHostUpdatePanelViewModel : BaseNotifyPropertyChanged
 
     public LauncherClientPluginItem CreateHostRow()
     {
+        var isCheckAvailable = _lastState is EdgeHostUpdateCheckState.NoUpdate
+            or EdgeHostUpdateCheckState.UpdateAvailable
+            or EdgeHostUpdateCheckState.PendingRestart;
+        var unavailableText = LauncherText.Get(
+            _languageService,
+            "Launcher_UpdateCenter_Unavailable");
         var (statusKind, statusKey) = _lastState switch
         {
             EdgeHostUpdateCheckState.UpdateAvailable or EdgeHostUpdateCheckState.PendingRestart
@@ -249,14 +268,22 @@ public sealed class LauncherHostUpdatePanelViewModel : BaseNotifyPropertyChanged
             HostRowModuleId,
             LauncherText.Get(_languageService, "Launcher_UpdateCenter_HostTitle"),
             _currentVersion,
-            _targetVersion,
+            isCheckAvailable ? _targetVersion : unavailableText,
             string.Empty,
             string.Empty,
             CanApplyUpdate,
             statusKind,
-            LauncherText.Get(_languageService, statusKey),
-            LauncherText.Get(_languageService, "Launcher_UpdateCenter_ButtonHostUpdate"),
-            _hasUpdateAvailable ? EdgeVersionStatus.Newer : EdgeVersionStatus.Current,
+            isCheckAvailable
+                ? LauncherText.Get(_languageService, statusKey)
+                : unavailableText,
+            !isCheckAvailable
+                ? unavailableText
+                : _hasUpdateAvailable
+                    ? LauncherText.Get(_languageService, "Launcher_UpdateCenter_ButtonHostUpdate")
+                    : LauncherText.Get(_languageService, "Launcher_ProfileCard_StatusLatest"),
+            _hasUpdateAvailable
+                ? EdgeVersionStatus.Newer
+                : EdgeVersionStatus.Current,
             componentKindText: LauncherText.Get(_languageService, "Launcher_VersionManagement_ComponentHost"),
             emptyHistoryText: LauncherText.Get(_languageService, "Launcher_UpdateCenter_NoHistory"));
     }

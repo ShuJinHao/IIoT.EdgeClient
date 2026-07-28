@@ -6,41 +6,24 @@ namespace IIoT.Edge.Infrastructure.Update.Configuration;
 
 public sealed class FileEdgeUpdateConfigurationProvider : IEdgeUpdateConfigurationProvider
 {
-    public const string ReleaseChannelEnvironmentVariable = "IIOT_EDGE_RELEASE_CHANNEL";
-    public const string TargetRuntimeEnvironmentVariable = "IIOT_EDGE_TARGET_RUNTIME";
-
     private const string DefaultChannel = "stable";
     private const string DefaultTargetRuntime = "win-x64";
     private readonly string _baseDirectory;
-    private readonly IEdgeProfileCloudSwitchReader _cloudSwitchReader;
 
-    public FileEdgeUpdateConfigurationProvider(
-        string baseDirectory,
-        IEdgeProfileCloudSwitchReader? cloudSwitchReader = null)
+    public FileEdgeUpdateConfigurationProvider(string baseDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
         _baseDirectory = baseDirectory;
-        _cloudSwitchReader = cloudSwitchReader ?? new FileProfileCloudSwitchReader(baseDirectory);
     }
 
     public EdgeUpdateConfigurationResult Resolve(EdgeUpdateTarget target)
     {
         ArgumentNullException.ThrowIfNull(target);
 
-        if (!_cloudSwitchReader.IsEnabled(target))
-        {
-            return EdgeUpdateConfigurationResult.Failed(
-                "当前 machine profile 的 Cloud 通信已关闭。");
-        }
-
         var mutable = new MutableCloudApiOptions();
-        ApplyConfigurationFile(mutable, Path.Combine(target.HostDirectory, "appsettings.json"));
-        ApplyConfigurationFile(mutable, Path.Combine(target.HostDirectory, $"appsettings.{GetEnvironmentName()}.json"));
-        ApplyConfigurationFile(mutable, Path.Combine(target.HostDirectory, $"appsettings.machine.{target.MachineProfile}.json"));
         ApplyConfigurationFile(
             mutable,
             EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(target.MachineProfile, target.HostDirectory));
-        ApplyEnvironment(mutable);
 
         var missing = mutable.GetMissingKeys().ToArray();
         if (missing.Length > 0)
@@ -62,39 +45,22 @@ public sealed class FileEdgeUpdateConfigurationProvider : IEdgeUpdateConfigurati
 
     public EdgeReleaseOptions ResolveReleaseOptions()
     {
-        var channel = Environment.GetEnvironmentVariable(ReleaseChannelEnvironmentVariable)?.Trim();
-        var targetRuntime = Environment.GetEnvironmentVariable(TargetRuntimeEnvironmentVariable)?.Trim();
         var configPath = EdgeClientProgramDataPaths.ResolveLauncherUpdateConfigPath(_baseDirectory);
-
-        if (File.Exists(configPath))
+        if (LauncherUpdateConfigurationFile.TryReadCurrent(
+                configPath,
+                out var configuration,
+                out _)
+            && configuration is not null)
         {
-            try
-            {
-                using var document = JsonDocument.Parse(File.ReadAllText(configPath));
-                var root = document.RootElement;
-                channel = FirstNotWhiteSpace(channel, ReadString(root, "Channel") ?? ReadString(root, "channel"));
-                targetRuntime = FirstNotWhiteSpace(targetRuntime, ReadString(root, "TargetRuntime") ?? ReadString(root, "targetRuntime"));
-            }
-            catch (JsonException)
-            {
-            }
-            catch (IOException)
-            {
-            }
-            catch (UnauthorizedAccessException)
-            {
-            }
+            return new EdgeReleaseOptions(
+                configuration.Channel,
+                configuration.TargetRuntime);
         }
 
         return new EdgeReleaseOptions(
-            FirstNotWhiteSpace(channel, DefaultChannel)!,
-            FirstNotWhiteSpace(targetRuntime, DefaultTargetRuntime)!);
+            DefaultChannel,
+            DefaultTargetRuntime);
     }
-
-    private static string GetEnvironmentName()
-        => Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
-            ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
-            ?? "Production";
 
     private static void ApplyConfigurationFile(MutableCloudApiOptions target, string path)
     {
@@ -144,33 +110,6 @@ public sealed class FileEdgeUpdateConfigurationProvider : IEdgeUpdateConfigurati
         }
         catch (UnauthorizedAccessException)
         {
-        }
-    }
-
-    private static void ApplyEnvironment(MutableCloudApiOptions target)
-    {
-        target.BaseUrl = FirstNotWhiteSpace(Environment.GetEnvironmentVariable("CloudApi__BaseUrl"), target.BaseUrl);
-        target.ClientCode = FirstNotWhiteSpace(Environment.GetEnvironmentVariable("CloudApi__ClientCode"), target.ClientCode);
-        target.BootstrapSecret = FirstNotWhiteSpace(
-            Environment.GetEnvironmentVariable("CloudApi__BootstrapSecret"),
-            target.BootstrapSecret);
-        target.DeviceInstancePath = FirstNotWhiteSpace(
-            Environment.GetEnvironmentVariable("CloudApi__Paths__DeviceInstance"),
-            target.DeviceInstancePath);
-        target.ClientReleaseCatalogTemplate = FirstNotWhiteSpace(
-            Environment.GetEnvironmentVariable("CloudApi__Paths__ClientReleaseCatalogTemplate"),
-            target.ClientReleaseCatalogTemplate);
-        target.ClientVersionReportPath = FirstNotWhiteSpace(
-            Environment.GetEnvironmentVariable("CloudApi__Paths__ClientVersionReport"),
-            target.ClientVersionReportPath);
-        target.RuntimeHeartbeatPath = FirstNotWhiteSpace(
-            Environment.GetEnvironmentVariable("CloudApi__Paths__RuntimeHeartbeat"),
-            target.RuntimeHeartbeatPath);
-
-        if (int.TryParse(Environment.GetEnvironmentVariable("CloudApi__TimeoutSecs"), out var timeout)
-            && timeout > 0)
-        {
-            target.TimeoutSeconds = timeout;
         }
     }
 

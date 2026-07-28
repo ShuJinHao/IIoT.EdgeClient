@@ -312,6 +312,10 @@ public sealed class LauncherMainViewModelTests
         Assert.Contains("Launcher_Update_StatusNotConfigured", viewModel.HostUpdatePanel.StatusMessage);
         Assert.True(viewModel.HostUpdatePanel.CanCheckUpdates);
         Assert.False(viewModel.HostUpdatePanel.CanApplyUpdate);
+        var row = viewModel.HostUpdatePanel.CreateHostRow();
+        Assert.Equal("无法检查", row.TargetVersion);
+        Assert.Equal("无法检查", row.StatusText);
+        Assert.Equal("无法检查", row.ActionText);
     }
 
     [Fact]
@@ -483,6 +487,68 @@ public sealed class LauncherMainViewModelTests
         Assert.Null(legacyPlugin.VersionOption);
         Assert.True(legacyPlugin.HasVersionHistory);
         Assert.True(legacyPlugin.HasNoInstallOrUpdate);
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenCatalogUnavailable_ShouldShowUnableToCheckInsteadOfLatest()
+    {
+        var profile = Profile("AP", "负极模切");
+        var releaseService = new RecordingUpdateClientReleaseService(
+            CreateUnavailableReleaseCheck("AP", "负极模切"));
+        var viewModel = new LauncherMainViewModel(
+            new StubLauncherProfileCatalog([profile]),
+            new StubLocalAccountAuthService(
+                LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
+            new StubShellLaunchService(),
+            clientReleaseService: releaseService);
+
+        await viewModel.LoginAsync("operator", "secret");
+        await releaseService.WaitForCheckAsync();
+        await WaitUntilAsync(() => viewModel.UpdateRows.Any(row => row.ModuleId == "AP"));
+
+        var plugin = Assert.Single(viewModel.UpdateRows, row => row.ModuleId == "AP");
+        Assert.Equal("2.0.10", plugin.CurrentVersion);
+        Assert.Equal("无法检查", plugin.TargetVersion);
+        Assert.Equal("无法检查", plugin.StatusText);
+        Assert.Equal("无法检查", plugin.ActionText);
+        Assert.False(plugin.CanInstallOrUpdate);
+        Assert.DoesNotContain("已最新", plugin.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenApAndCp211AreAvailable_ShouldExposeRealVersionsSizesNotesAndActions()
+    {
+        var profile = Profile("AP", "负极模切");
+        var releaseService = new RecordingUpdateClientReleaseService(
+            CreateApCp211ReleaseCheck());
+        var viewModel = new LauncherMainViewModel(
+            new StubLauncherProfileCatalog([profile]),
+            new StubLocalAccountAuthService(
+                LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
+            new StubShellLaunchService(),
+            clientReleaseService: releaseService);
+
+        await viewModel.LoginAsync("operator", "secret");
+        await releaseService.WaitForCheckAsync();
+        await WaitUntilAsync(() => viewModel.UpdateRows.Count == 3);
+
+        var host = Assert.Single(viewModel.UpdateRows, row => row.ModuleId == "Host");
+        Assert.Equal("2.0.10", host.CurrentVersion);
+        Assert.Equal("2.0.10", host.TargetVersion);
+        Assert.Equal(EdgeVersionStatus.Current, host.State);
+        Assert.False(host.CanInstallOrUpdate);
+        foreach (var moduleId in new[] { "AP", "CP" })
+        {
+            var plugin = Assert.Single(
+                viewModel.UpdateRows,
+                row => row.ModuleId == moduleId);
+            Assert.Equal("2.0.10", plugin.CurrentVersion);
+            Assert.Equal("2.0.11", plugin.TargetVersion);
+            Assert.Equal("2.0 KB", plugin.PackageSizeDisplayText);
+            Assert.Contains("2.0.11", plugin.ReleaseNotesText, StringComparison.Ordinal);
+            Assert.True(plugin.CanInstallOrUpdate);
+            Assert.NotNull(plugin.VersionOption);
+        }
     }
 
     [Fact]
@@ -736,6 +802,83 @@ public sealed class LauncherMainViewModelTests
                         PluginRelease: CreatePluginRelease("IIoT.Edge.TestPluginLegacy", "测试插件旧版", "2.0.0", 1024)))
             ]);
 
+    private static EdgeReleaseCatalogResult CreateUnavailableReleaseCheck(
+        string moduleId,
+        string displayName)
+        => new(
+            EdgeReleaseCatalogState.CatalogUnavailable,
+            "stable",
+            "win-x64",
+            "2.0.10",
+            "2.0.0",
+            [
+                new EdgeComponentVersionPlan(
+                    EdgeComponentKind.Host,
+                    "Host",
+                    "Edge Host",
+                    "2.0.10",
+                    []),
+                new EdgeComponentVersionPlan(
+                    EdgeComponentKind.Plugin,
+                    moduleId,
+                    displayName,
+                    "2.0.10",
+                    [])
+            ],
+            "Cloud catalog 请求失败");
+
+    private static EdgeReleaseCatalogResult CreateApCp211ReleaseCheck()
+        => new(
+            EdgeReleaseCatalogState.Succeeded,
+            "stable",
+            "win-x64",
+            "2.0.10",
+            "2.0.0",
+            [
+                new EdgeComponentVersionPlan(
+                    EdgeComponentKind.Host,
+                    "Host",
+                    "Edge Host",
+                    "2.0.10",
+                    [
+                        new EdgeVersionOption(
+                            "2.0.10",
+                            EdgeVersionStatus.Current,
+                            false,
+                            null,
+                            HostRelease: new EdgeHostVersionRelease(
+                                CreateHostEntry("2.0.10")))
+                    ]),
+                CreatePluginPlan(
+                    "AP",
+                    "负极模切",
+                    "2.0.10",
+                    new EdgeVersionOption(
+                        "2.0.11",
+                        EdgeVersionStatus.Newer,
+                        true,
+                        null,
+                        PluginRelease: CreatePluginRelease(
+                            "AP",
+                            "负极模切",
+                            "2.0.11",
+                            2048))),
+                CreatePluginPlan(
+                    "CP",
+                    "正极模切",
+                    "2.0.10",
+                    new EdgeVersionOption(
+                        "2.0.11",
+                        EdgeVersionStatus.Newer,
+                        true,
+                        null,
+                        PluginRelease: CreatePluginRelease(
+                            "CP",
+                            "正极模切",
+                            "2.0.11",
+                            2048)))
+            ]);
+
     private static EdgeReleaseCatalogResult CreateReleaseCheckForModule(string moduleId, string displayName)
         => new(
             EdgeReleaseCatalogState.Succeeded,
@@ -786,6 +929,24 @@ public sealed class LauncherMainViewModelTests
                         CatalogPublishedAtUtc,
                         CatalogPublishedAtUtc)))
             ]);
+
+    private static EdgeHostVersionEntry CreateHostEntry(string version)
+        => new(
+            Guid.NewGuid(),
+            "stable",
+            version,
+            "2.0.0",
+            "win-x64",
+            "net10.0",
+            $"https://example.invalid/host-{version}.nupkg",
+            "sha256",
+            1024,
+            $"Host release {version}",
+            "Published",
+            null,
+            null,
+            CatalogPublishedAtUtc,
+            CatalogPublishedAtUtc);
 
     private static EdgeComponentVersionPlan CreatePluginPlan(
         string moduleId,

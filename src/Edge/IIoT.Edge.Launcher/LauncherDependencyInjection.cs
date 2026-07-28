@@ -56,6 +56,8 @@ public static class LauncherDependencyInjection
         services.AddSingleton<IProcessStarter, ProcessStarter>();
         services.AddSingleton<IShellInstanceIdResolver, ShellInstanceIdResolver>();
         services.AddSingleton<IShellInstanceProbe, NamedMutexShellInstanceProbe>();
+        services.AddSingleton<ILauncherUpdateOperationGate>(
+            _ => new FileLauncherUpdateOperationGate(baseDirectory));
         services.AddSingleton<IShellLaunchService, ShellLaunchService>();
         services.AddSingleton<LauncherMainViewModel>();
         services.AddSingleton<MainWindow>();
