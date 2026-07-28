@@ -129,13 +129,16 @@ public sealed class EdgePluginCompositionTransactionTests
     }
 
     [Theory]
-    [InlineData(".transactions.")]
-    [InlineData("AP.")]
-    [InlineData("AP ")]
+    [InlineData(".transactions.", ".transactions")]
+    [InlineData("AP.", "AP")]
+    [InlineData("AP ", "AP")]
     public async Task InstallAsync_WhenModulePathUsesWin32TrailingAlias_ShouldRejectBeforeCreatingTransaction(
-        string moduleId)
+        string moduleId,
+        string existingModuleId)
     {
-        using var fixture = TransactionFixture.Create([moduleId]);
+        using var fixture = TransactionFixture.Create(
+            [moduleId],
+            [existingModuleId]);
         var transaction = fixture.CreateTransaction();
 
         var result = await transaction.InstallAsync(
@@ -151,7 +154,7 @@ public sealed class EdgePluginCompositionTransactionTests
             "Windows 尾随句点或空格别名",
             result.ErrorMessage ?? string.Empty,
             StringComparison.Ordinal);
-        fixture.AssertOldCombination([moduleId]);
+        fixture.AssertOldCombination([existingModuleId]);
         Assert.False(File.Exists(fixture.JournalPath));
         var transactionStorage = Path.Combine(
             fixture.PluginsRoot,
@@ -166,7 +169,9 @@ public sealed class EdgePluginCompositionTransactionTests
     public async Task InstallAsync_WhenModuleIdIsNotCanonicalPathSegment_ShouldRejectBeforeCreatingTransaction()
     {
         const string moduleId = "AP CP";
-        using var fixture = TransactionFixture.Create([moduleId]);
+        using var fixture = TransactionFixture.Create(
+            [moduleId],
+            ["AP_CP"]);
         var transaction = fixture.CreateTransaction();
 
         var result = await transaction.InstallAsync(
@@ -182,7 +187,7 @@ public sealed class EdgePluginCompositionTransactionTests
             "规范的 Windows 路径段",
             result.ErrorMessage ?? string.Empty,
             StringComparison.Ordinal);
-        fixture.AssertOldCombination([moduleId]);
+        fixture.AssertOldCombination(["AP_CP"]);
         Assert.False(File.Exists(fixture.JournalPath));
         Assert.False(Directory.Exists(
             Path.Combine(fixture.PluginsRoot, ".transactions")));
@@ -598,7 +603,9 @@ public sealed class EdgePluginCompositionTransactionTests
 
         public EdgeUpdateCloudApiOptions CloudOptions { get; }
 
-        public static TransactionFixture Create(IReadOnlyList<string> moduleIds)
+        public static TransactionFixture Create(
+            IReadOnlyList<string> moduleIds,
+            IReadOnlyList<string>? existingModuleIds = null)
         {
             var root = Path.Combine(
                 Path.GetTempPath(),
@@ -621,7 +628,7 @@ public sealed class EdgePluginCompositionTransactionTests
                 StringComparer.OrdinalIgnoreCase);
             var oldPluginMarkers = new Dictionary<string, byte[]>(
                 StringComparer.OrdinalIgnoreCase);
-            foreach (var moduleId in moduleIds)
+            foreach (var moduleId in existingModuleIds ?? moduleIds)
             {
                 var moduleDirectory = Path.Combine(pluginsRoot, moduleId);
                 Directory.CreateDirectory(moduleDirectory);
@@ -633,7 +640,10 @@ public sealed class EdgePluginCompositionTransactionTests
                     Path.Combine(moduleDirectory, "old.marker"),
                     marker);
                 oldPluginMarkers[moduleId] = marker;
+            }
 
+            foreach (var moduleId in moduleIds)
+            {
                 var packagePath = Path.Combine(
                     root,
                     $"{moduleId}-{NewVersion}.zip");
