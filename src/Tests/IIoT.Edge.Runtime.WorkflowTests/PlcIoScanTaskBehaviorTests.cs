@@ -187,6 +187,56 @@ public sealed class PlcIoScanTaskBehaviorTests
     }
 
     [Fact]
+    public async Task PlcDataReadScanTask_WhenBufferLacksBatchPublisher_ShouldFailClosed()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+        await plcService.ConnectAsync(TestContext.Current.CancellationToken);
+        var legacyBuffer = new LegacyTransportBuffer();
+        var dataReadScan = new PlcDataReadScanTask(
+            plcService,
+            new FixedBufferDataStore(legacyBuffer),
+            CreateDevice(25, "PLC-DATA-NO-BATCH"),
+            [
+                CreateIoMapping(
+                    25,
+                    "Read",
+                    "D100",
+                    1,
+                    IoMappingOptionCatalog.CategorySingleRead)
+            ],
+            new FakeLogService(),
+            SignalBlockPlanner);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => dataReadScan.ExecuteOneCycleAsync(TestContext.Current.CancellationToken));
+
+        Assert.Contains("拒绝逐信号降级", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, legacyBuffer.UpdateReadSignalCallCount);
+    }
+
+    [Fact]
+    public async Task PlcIoScanTask_WhenBufferLacksBatchPublisher_ShouldFailClosed()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+        var legacyBuffer = new LegacyTransportBuffer();
+        var interaction = new PlcIoScanTask(
+            plcService,
+            new FixedBufferDataStore(legacyBuffer),
+            CreateDevice(26, "PLC-IO-NO-BATCH"),
+            [CreateIoMapping(26, "Read", "D100", 1)],
+            new FakeLogService(),
+            SignalBlockPlanner);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken));
+
+        Assert.Contains("拒绝逐信号降级", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, legacyBuffer.UpdateReadSignalCallCount);
+    }
+
+    [Fact]
     public async Task PlcIoScanTask_WhenReadTimeoutClosesService_ShouldReconnectWithoutFalseDisconnectedProjection()
     {
         var plcService = new ScriptedPlcService
@@ -1065,6 +1115,79 @@ public sealed class PlcIoScanTaskBehaviorTests
             var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             await completion.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
             return [];
+        }
+    }
+
+    private sealed class FixedBufferDataStore(IPlcBufferTransport buffer) : IPlcDataStore
+    {
+        public void Register(int networkDeviceId, int readSize, int writeSize)
+        {
+        }
+
+        public void Register(
+            int networkDeviceId,
+            int readSize,
+            int writeSize,
+            IReadOnlyCollection<PlcBufferSignalBinding> signalBindings)
+        {
+        }
+
+        public IPlcBufferTransport? GetBuffer(int networkDeviceId)
+            => buffer;
+
+        public bool HasDevice(int networkDeviceId)
+            => true;
+    }
+
+    private sealed class LegacyTransportBuffer : IPlcBufferTransport
+    {
+        public int UpdateReadSignalCallCount { get; private set; }
+
+        public event EventHandler<PlcSignalBufferChangedEventArgs>? SignalValuesChanged
+        {
+            add
+            {
+            }
+            remove
+            {
+            }
+        }
+
+        public ushort GetReadValue(int index)
+            => 0;
+
+        public bool TryGetReadWords(string signalKey, out ushort[] values)
+        {
+            values = [];
+            return false;
+        }
+
+        public bool TryGetWriteWords(string signalKey, out ushort[] values)
+        {
+            values = [];
+            return false;
+        }
+
+        public void SetWriteValue(int index, ushort value)
+        {
+        }
+
+        public void SetWriteValue(string signalKey, int offset, ushort value)
+        {
+        }
+
+        public void UpdateReadBuffer(ushort[] data)
+        {
+        }
+
+        public void UpdateReadSignal(string signalKey, IReadOnlyList<ushort> data)
+            => UpdateReadSignalCallCount++;
+
+        public ushort[] GetWriteBuffer()
+            => [];
+
+        public void SetSignalBindings(IReadOnlyCollection<PlcBufferSignalBinding> bindings)
+        {
         }
     }
 

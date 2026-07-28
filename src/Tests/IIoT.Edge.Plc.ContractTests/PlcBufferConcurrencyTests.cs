@@ -1,4 +1,5 @@
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
+using IIoT.Edge.Module.Contracts.Plc.Store;
 
 namespace IIoT.Edge.Plc.ContractTests;
 
@@ -106,7 +107,7 @@ public sealed class PlcBufferConcurrencyTests
                     attemptedAtUtc,
                     FailureReason: null),
                 ["Signal.B"] = new(
-                    [(ushort)0],
+                    [(ushort)999],
                     ReadSucceeded: false,
                     batchId,
                     attemptedAtUtc,
@@ -129,6 +130,163 @@ public sealed class PlcBufferConcurrencyTests
         Assert.NotNull(failedState.LastSucceededAtUtc);
         Assert.Equal(attemptedAtUtc, failedState.FailedAtUtc);
         Assert.Equal("read timeout", failedState.FailureReason);
+
+        Assert.True(
+            buffer.TryCaptureReadSnapshot(
+                ["Signal.A", "Signal.B"],
+                out var businessSnapshot));
+        Assert.NotNull(businessSnapshot);
+        Assert.Equal(batchId, businessSnapshot!.BatchId);
+        Assert.True(businessSnapshot.TryGetSignal("Signal.A", out var successfulSignal));
+        Assert.True(businessSnapshot.TryGetSignal("Signal.B", out var failedSignal));
+        Assert.True(successfulSignal.ReadSucceeded);
+        Assert.False(failedSignal.ReadSucceeded);
+        Assert.Equal((ushort)0, Assert.Single(failedSignal.Words));
+        Assert.Equal("read timeout", failedSignal.FailureReason);
+        Assert.Null(typeof(PlcReadSignalSnapshot).GetProperty("LastSucceededWords"));
+    }
+
+    [Fact]
+    public void TryCaptureReadSnapshot_ShouldRequireCompleteSingleGeneration()
+    {
+        var buffer = new PlcBuffer(
+            readSize: 3,
+            writeSize: 0,
+            [
+                new("Signal.A", "Read", 0, 1),
+                new("Signal.B", "Read", 1, 1),
+                new("Signal.C", "Read", 2, 1)
+            ]);
+        buffer.UpdateReadSignals(new Dictionary<string, ushort[]>
+        {
+            ["Signal.A"] = [(ushort)11],
+            ["Signal.B"] = [(ushort)22]
+        });
+
+        Assert.True(
+            buffer.TryCaptureReadSnapshot(
+                ["Signal.A", "Signal.B"],
+                out var firstSnapshot));
+        Assert.NotNull(firstSnapshot);
+        Assert.All(
+            firstSnapshot!.Signals.Values,
+            signal =>
+            {
+                Assert.Equal(firstSnapshot.Generation, signal.Generation);
+                Assert.Equal(firstSnapshot.BatchId, signal.BatchId);
+                Assert.Equal(firstSnapshot.CapturedAtUtc, signal.CapturedAtUtc);
+            });
+        Assert.False(buffer.TryCaptureReadSnapshot(["Signal.A", "Signal.C"], out _));
+        Assert.False(buffer.TryCaptureReadSnapshot(["Signal.A", "signal.a"], out _));
+
+        buffer.UpdateReadSignal("Signal.A", [(ushort)33]);
+
+        Assert.False(buffer.TryCaptureReadSnapshot(["Signal.A", "Signal.B"], out _));
+        Assert.True(buffer.TryCaptureReadSnapshot(["Signal.A"], out var nextSnapshot));
+        Assert.NotNull(nextSnapshot);
+        Assert.True(nextSnapshot!.Generation > firstSnapshot.Generation);
+        Assert.Equal((ushort)11, Assert.Single(firstSnapshot.Signals["Signal.A"].Words));
+        Assert.Equal((ushort)33, Assert.Single(nextSnapshot.Signals["Signal.A"].Words));
+    }
+
+    [Fact]
+    public async Task TryCaptureReadSnapshot_DuringConcurrentPublishing_ShouldNeverMixGenerations()
+    {
+        var buffer = new PlcBuffer(
+            readSize: 2,
+            writeSize: 0,
+            [
+                new("Signal.A", "Read", 0, 1),
+                new("Signal.B", "Read", 1, 1)
+            ]);
+        buffer.UpdateReadSignals(new Dictionary<string, ushort[]>
+        {
+            ["Signal.A"] = [(ushort)0],
+            ["Signal.B"] = [ushort.MaxValue]
+        });
+
+        var writer = Task.Run(
+            () =>
+            {
+                for (var index = 1; index <= 1000; index++)
+                {
+                    var value = (ushort)index;
+                    buffer.UpdateReadSignals(new Dictionary<string, ushort[]>
+                    {
+                        ["Signal.A"] = [value],
+                        ["Signal.B"] = [(ushort)(ushort.MaxValue - value)]
+                    });
+                }
+            },
+            TestContext.Current.CancellationToken);
+
+        var reader = Task.Run(
+            async () =>
+            {
+                for (var index = 0; index < 2000 || !writer.IsCompleted; index++)
+                {
+                    Assert.True(
+                        buffer.TryCaptureReadSnapshot(
+                            ["Signal.A", "Signal.B"],
+                            out var snapshot));
+                    Assert.NotNull(snapshot);
+                    var signalA = snapshot!.Signals["Signal.A"];
+                    var signalB = snapshot.Signals["Signal.B"];
+                    Assert.Equal(snapshot.Generation, signalA.Generation);
+                    Assert.Equal(snapshot.Generation, signalB.Generation);
+                    Assert.Equal(
+                        (int)ushort.MaxValue,
+                        Assert.Single(signalA.Words) + Assert.Single(signalB.Words));
+                    await Task.Yield();
+                }
+            },
+            TestContext.Current.CancellationToken);
+
+        await Task.WhenAll(writer, reader);
+    }
+
+    [Fact]
+    public void PublishReadBatch_WhenMetadataIsMixed_ShouldRejectEntireBatch()
+    {
+        var buffer = new PlcBuffer(
+            readSize: 2,
+            writeSize: 0,
+            [
+                new("Signal.A", "Read", 0, 1),
+                new("Signal.B", "Read", 1, 1)
+            ]);
+        buffer.UpdateReadSignals(new Dictionary<string, ushort[]>
+        {
+            ["Signal.A"] = [(ushort)11],
+            ["Signal.B"] = [(ushort)22]
+        });
+        Assert.True(buffer.TryCaptureReadSnapshot(["Signal.A", "Signal.B"], out var before));
+
+        var attemptedAtUtc = DateTimeOffset.UtcNow;
+        Assert.Throws<ArgumentException>(
+            () => buffer.PublishReadBatch(
+                new Dictionary<string, PlcReadSignalUpdate>
+                {
+                    ["Signal.A"] = new(
+                        [(ushort)33],
+                        ReadSucceeded: true,
+                        Guid.NewGuid(),
+                        attemptedAtUtc,
+                        FailureReason: null),
+                    ["Signal.B"] = new(
+                        [(ushort)44],
+                        ReadSucceeded: true,
+                        Guid.NewGuid(),
+                        attemptedAtUtc,
+                        FailureReason: null)
+                }));
+
+        Assert.True(buffer.TryCaptureReadSnapshot(["Signal.A", "Signal.B"], out var after));
+        Assert.NotNull(before);
+        Assert.NotNull(after);
+        Assert.Equal(before!.Generation, after!.Generation);
+        Assert.Equal((ushort)11, Assert.Single(after.Signals["Signal.A"].Words));
+        Assert.Equal((ushort)22, Assert.Single(after.Signals["Signal.B"].Words));
     }
 
     [Fact]
