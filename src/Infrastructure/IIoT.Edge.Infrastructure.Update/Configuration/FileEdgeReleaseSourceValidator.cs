@@ -78,10 +78,7 @@ public sealed class FileEdgeReleaseSourceValidator(
         {
             if (uri.IsFile)
             {
-                return new NormalizedReleaseSource(
-                    Path.GetFullPath(uri.LocalPath)
-                        .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-                    ReleaseSourceKind.LocalPath);
+                return NormalizeLocalPath(uri.LocalPath);
             }
 
             return new NormalizedReleaseSource(
@@ -89,11 +86,19 @@ public sealed class FileEdgeReleaseSourceValidator(
                 ReleaseSourceKind.AbsoluteUri);
         }
 
+        return NormalizeLocalPath(trimmed);
+    }
+
+    private static NormalizedReleaseSource? NormalizeLocalPath(
+        string candidate)
+    {
         try
         {
             return new NormalizedReleaseSource(
-                Path.GetFullPath(trimmed)
-                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                Path.GetFullPath(candidate)
+                    .TrimEnd(
+                        Path.DirectorySeparatorChar,
+                        Path.AltDirectorySeparatorChar),
                 ReleaseSourceKind.LocalPath);
         }
         catch (Exception ex) when (ex is ArgumentException

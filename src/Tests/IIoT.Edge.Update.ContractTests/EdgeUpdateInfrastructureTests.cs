@@ -683,6 +683,47 @@ public sealed class EdgeUpdateInfrastructureTests
     }
 
     [Fact]
+    public void ReleaseSourceValidator_WhenFileUriDecodesToInvalidPath_ShouldReturnUnavailable()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var configPath = Path.Combine(
+                tempDirectory,
+                "launcher.update.json");
+            WriteText(
+                configPath,
+                """
+                {
+                  "source": "file:///updates/catalog%00invalid",
+                  "channel": "stable",
+                  "targetRuntime": "win-x64"
+                }
+                """);
+            var validator = new FileEdgeReleaseSourceValidator(
+                new EdgeUpdateConfigPaths(
+                    configPath,
+                    Path.Combine(
+                        tempDirectory,
+                        "launcher.update.sample.json")));
+
+            var exception = Record.Exception(
+                () => validator.ValidateConfiguredSource());
+            var result = validator.ValidateConfiguredSource();
+
+            Assert.Null(exception);
+            Assert.Contains(
+                "更新源无效",
+                result ?? string.Empty,
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
     public async Task CheckReleaseCatalogAsync_WhenLauncherUpdateConfigIsMissing_ShouldFailBeforeNetwork()
     {
         var tempDirectory = CreateTempDirectory();
