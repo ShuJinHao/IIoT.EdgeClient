@@ -141,6 +141,11 @@ public sealed class HttpEdgeVersionReporter : IEdgeVersionReporter
             return EdgeVersionReportResult.Failed("设备 token 为空，无法上报版本。");
         }
 
+        if (string.IsNullOrWhiteSpace(options.ClientVersionReportPath))
+        {
+            return EdgeVersionReportResult.Failed("版本上报路径未配置。");
+        }
+
         try
         {
             var url = BuildUrl(options.BaseUrl, RequireRelativePath(options.ClientVersionReportPath));
@@ -207,6 +212,11 @@ public sealed class HttpEdgeRuntimeHeartbeatReporter : IEdgeRuntimeHeartbeatRepo
         if (string.IsNullOrWhiteSpace(session.AccessToken))
         {
             return EdgeRuntimeHeartbeatReportResult.Failed("设备 token 为空，无法上报运行心跳。");
+        }
+
+        if (string.IsNullOrWhiteSpace(options.RuntimeHeartbeatPath))
+        {
+            return EdgeRuntimeHeartbeatReportResult.Failed("运行心跳路径未配置。");
         }
 
         try

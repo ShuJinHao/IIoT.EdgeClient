@@ -33,13 +33,10 @@ public sealed class FileEdgeReleaseSourceValidator(
         var catalog = NormalizeSource(catalogSource);
         return configured is not null
                && catalog is not null
-               && configured.Kind == catalog.Kind
                && string.Equals(
-                   configured.Value,
-                   catalog.Value,
-                   configured.Kind == ReleaseSourceKind.LocalPath
-                       ? StringComparison.OrdinalIgnoreCase
-                       : StringComparison.Ordinal);
+                   configured,
+                   catalog,
+                   StringComparison.Ordinal);
     }
 
     private bool TryReadConfiguredSource(
@@ -66,7 +63,7 @@ public sealed class FileEdgeReleaseSourceValidator(
         return true;
     }
 
-    private static NormalizedReleaseSource? NormalizeSource(string source)
+    private static string? NormalizeSource(string source)
     {
         var trimmed = source.Trim();
         if (trimmed.Length == 0)
@@ -74,48 +71,13 @@ public sealed class FileEdgeReleaseSourceValidator(
             return null;
         }
 
-        if (Uri.TryCreate(trimmed, UriKind.Absolute, out var uri))
-        {
-            if (uri.IsFile)
-            {
-                return NormalizeLocalPath(uri.LocalPath);
-            }
-
-            return new NormalizedReleaseSource(
-                uri.AbsoluteUri.TrimEnd('/'),
-                ReleaseSourceKind.AbsoluteUri);
-        }
-
-        return NormalizeLocalPath(trimmed);
-    }
-
-    private static NormalizedReleaseSource? NormalizeLocalPath(
-        string candidate)
-    {
-        try
-        {
-            return new NormalizedReleaseSource(
-                Path.GetFullPath(candidate)
-                    .TrimEnd(
-                        Path.DirectorySeparatorChar,
-                        Path.AltDirectorySeparatorChar),
-                ReleaseSourceKind.LocalPath);
-        }
-        catch (Exception ex) when (ex is ArgumentException
-                                       or NotSupportedException
-                                       or PathTooLongException)
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp
+                && uri.Scheme != Uri.UriSchemeHttps))
         {
             return null;
         }
-    }
 
-    private sealed record NormalizedReleaseSource(
-        string Value,
-        ReleaseSourceKind Kind);
-
-    private enum ReleaseSourceKind
-    {
-        AbsoluteUri,
-        LocalPath
+        return uri.AbsoluteUri.TrimEnd('/');
     }
 }

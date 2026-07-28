@@ -10,7 +10,7 @@ using static IIoT.Edge.Infrastructure.Update.Cloud.EdgeUpdateCloudUrl;
 
 namespace IIoT.Edge.Infrastructure.Update.Packages;
 
-public sealed class EdgePluginPackageInstaller : IEdgePluginPackageInstaller
+public sealed class EdgePluginPackageInstaller
 {
     private readonly HttpClient _httpClient;
     private readonly IEdgeVersionCompatibilityPolicy _compatibilityPolicy;
@@ -37,67 +37,6 @@ public sealed class EdgePluginPackageInstaller : IEdgePluginPackageInstaller
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _compatibilityPolicy = compatibilityPolicy ?? throw new ArgumentNullException(nameof(compatibilityPolicy));
         _limits = limits ?? EdgePluginPackageInstallLimits.Default;
-    }
-
-    public async Task<EdgePluginInstallResult> InstallAsync(
-        EdgeUpdateTarget target,
-        EdgePluginVersionRelease release,
-        EdgeUpdateCloudApiOptions cloudOptions,
-        string hostVersion,
-        string hostApiVersion,
-        IProgress<int>? progress = null,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(target);
-        ArgumentNullException.ThrowIfNull(release);
-        ArgumentNullException.ThrowIfNull(cloudOptions);
-
-        if (!_compatibilityPolicy.IsReleaseCompatible(release, hostVersion, hostApiVersion, out var issue))
-        {
-            return EdgePluginInstallResult.Failed(issue!);
-        }
-
-        var pluginsRoot = EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(target.HostDirectory);
-        var moduleDirectory = Path.Combine(
-            pluginsRoot,
-            EdgeClientProgramDataPaths.SanitizePathSegment(release.ModuleId));
-        var stagingRoot = Path.Combine(pluginsRoot, ".staging", Guid.NewGuid().ToString("N"));
-        var backupDirectory = Path.Combine(
-            pluginsRoot,
-            ".previous",
-            $"{EdgeClientProgramDataPaths.SanitizePathSegment(release.ModuleId)}-{Guid.NewGuid():N}");
-
-        try
-        {
-            var prepared = await PrepareAsync(
-                stagingRoot,
-                release,
-                cloudOptions,
-                hostVersion,
-                hostApiVersion,
-                progress,
-                cancellationToken).ConfigureAwait(false);
-            CommitPreparedDirectory(
-                moduleDirectory,
-                prepared.ExtractDirectory,
-                backupDirectory);
-            TryDeleteDirectory(backupDirectory);
-            progress?.Report(100);
-
-            return EdgePluginInstallResult.Succeeded([release.ModuleId]);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            return EdgePluginInstallResult.Failed($"插件安装失败: {ex.Message}");
-        }
-        finally
-        {
-            TryDeleteDirectory(stagingRoot);
-        }
     }
 
     internal async Task<PreparedEdgePluginPackage> PrepareAsync(
@@ -165,15 +104,6 @@ public sealed class EdgePluginPackageInstaller : IEdgePluginPackageInstaller
         CancellationToken cancellationToken)
     {
         var source = ResolvePackageUri(packageUrl, baseUrl);
-        if (source.IsFile)
-        {
-            await using var sourceStream = File.OpenRead(source.LocalPath);
-            await using var targetStream = File.Create(packagePath);
-            await sourceStream.CopyToAsync(targetStream, cancellationToken).ConfigureAwait(false);
-            progress?.Report(60);
-            return;
-        }
-
         using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutSource.CancelAfter(limits.DownloadTimeout);
         using var response = await _httpClient
@@ -212,18 +142,39 @@ public sealed class EdgePluginPackageInstaller : IEdgePluginPackageInstaller
 
     private static Uri ResolvePackageUri(string packageUrl, string baseUrl)
     {
-        if (Uri.TryCreate(packageUrl, UriKind.Absolute, out var absolute))
+        var candidate = packageUrl?.Trim();
+        if (string.IsNullOrWhiteSpace(candidate))
         {
-            return absolute;
+            throw new InvalidOperationException("插件包地址为空。");
         }
 
-        if (File.Exists(packageUrl))
+        if (Uri.TryCreate(candidate, UriKind.Absolute, out var absolute))
         {
-            return new Uri(Path.GetFullPath(packageUrl));
+            return IsHttpSource(absolute)
+                ? absolute
+                : throw new InvalidOperationException(
+                    "插件包地址只允许绝对 HTTP/HTTPS URL 或 catalog 相对 URL。");
         }
 
-        return BuildUrl(baseUrl, packageUrl);
+        if (candidate.StartsWith("/", StringComparison.Ordinal)
+            || candidate.StartsWith("\\", StringComparison.Ordinal)
+            || candidate.Contains('\\')
+            || !Uri.TryCreate(candidate, UriKind.Relative, out _))
+        {
+            throw new InvalidOperationException(
+                "插件包地址只允许绝对 HTTP/HTTPS URL 或 catalog 相对 URL。");
+        }
+
+        var resolved = BuildUrl(baseUrl, candidate);
+        return IsHttpSource(resolved)
+            ? resolved
+            : throw new InvalidOperationException(
+                "插件包地址只允许绝对 HTTP/HTTPS URL 或 catalog 相对 URL。");
     }
+
+    private static bool IsHttpSource(Uri source)
+        => source.Scheme == Uri.UriSchemeHttp
+           || source.Scheme == Uri.UriSchemeHttps;
 
     private static async Task<string> ComputeSha256Async(string path, CancellationToken cancellationToken)
     {

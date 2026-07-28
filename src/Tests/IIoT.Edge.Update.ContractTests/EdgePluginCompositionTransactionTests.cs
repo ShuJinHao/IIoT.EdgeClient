@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
 using IIoT.Edge.Application.Features.Updates;
@@ -705,6 +706,7 @@ public sealed class EdgePluginCompositionTransactionTests
             => new(
                 LauncherDirectory,
                 new EdgePluginPackageInstaller(
+                    new HttpClient(new PackageHttpHandler(_packagePaths)),
                     new EdgeVersionCompatibilityPolicy()),
                 new FileEdgeProfileModuleConfigurationStore(),
                 faultInjector);
@@ -733,7 +735,7 @@ public sealed class EdgePluginCompositionTransactionTests
                     "99.0.0",
                     "win-x64",
                     "net10.0",
-                    packagePath,
+                    $"https://packages.example.test/{Uri.EscapeDataString(moduleId)}.zip",
                     ComputeSha256(packagePath),
                     new FileInfo(packagePath).Length,
                     null,
@@ -846,6 +848,31 @@ public sealed class EdgePluginCompositionTransactionTests
             if (Directory.Exists(Root))
             {
                 Directory.Delete(Root, recursive: true);
+            }
+        }
+
+        private sealed class PackageHttpHandler(
+            IReadOnlyDictionary<string, string> packagePaths)
+            : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(
+                HttpRequestMessage request,
+                CancellationToken cancellationToken)
+            {
+                var moduleId = Uri.UnescapeDataString(
+                    Path.GetFileNameWithoutExtension(
+                        request.RequestUri?.AbsolutePath
+                        ?? throw new InvalidOperationException("测试包请求缺少 URL。")));
+                if (!packagePaths.TryGetValue(moduleId, out var packagePath))
+                {
+                    return Task.FromResult(
+                        new HttpResponseMessage(HttpStatusCode.NotFound));
+                }
+
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(File.ReadAllBytes(packagePath))
+                });
             }
         }
 

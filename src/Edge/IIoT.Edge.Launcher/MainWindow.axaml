@@ -411,7 +411,7 @@
                                     Click="RefreshUpdateCenterButton_Click"
                                     Content="{DynamicResource Launcher_UpdateCenter_ButtonRefresh}"
                                     Icon="{StaticResource Edge.Icon.Refresh}"
-                                    IsEnabled="{Binding HostUpdatePanel.CanCheckUpdates}"
+                                    IsEnabled="{Binding ClientReleasePanel.CanCheckReleases}"
                                     Kind="Secondary"
                                     Size="Compact" />
                             </Grid>

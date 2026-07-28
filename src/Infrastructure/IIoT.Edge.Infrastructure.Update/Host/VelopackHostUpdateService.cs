@@ -3,7 +3,6 @@ using IIoT.Edge.Infrastructure.Update.Configuration;
 using IIoT.Edge.SharedKernel.Configuration;
 using Velopack;
 using Velopack.Exceptions;
-using Velopack.Sources;
 
 namespace IIoT.Edge.Infrastructure.Update.Host;
 
@@ -170,33 +169,20 @@ public sealed class VelopackHostUpdateService : IEdgeHostUpdateService
 
     internal static UpdateManager CreateUpdateManager(string source)
     {
+        if (!Uri.TryCreate(source.Trim(), UriKind.Absolute, out var sourceUri)
+            || (sourceUri.Scheme != Uri.UriSchemeHttp
+                && sourceUri.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new InvalidOperationException(
+                "Launcher Host 更新源只允许绝对 HTTP/HTTPS URL。");
+        }
+
         var options = new UpdateOptions
         {
             AllowVersionDowngrade = true
         };
 
-        var localDirectory = TryResolveLocalDirectory(source);
-        return localDirectory is null
-            ? new UpdateManager(source, options)
-            : new UpdateManager(new SimpleFileSource(localDirectory), options);
-    }
-
-    public static DirectoryInfo? TryResolveLocalDirectory(string source)
-    {
-        var trimmedSource = source.Trim();
-        if (string.IsNullOrWhiteSpace(trimmedSource))
-        {
-            return null;
-        }
-
-        if (Uri.TryCreate(trimmedSource, UriKind.Absolute, out var uri) && uri.IsFile)
-        {
-            var fileDirectory = new DirectoryInfo(uri.LocalPath);
-            return fileDirectory.Exists ? fileDirectory : null;
-        }
-
-        var directory = new DirectoryInfo(trimmedSource);
-        return directory.Exists ? directory : null;
+        return new UpdateManager(sourceUri.AbsoluteUri, options);
     }
 
     private static EdgeHostUpdateCheckResult CreateCheckResult(

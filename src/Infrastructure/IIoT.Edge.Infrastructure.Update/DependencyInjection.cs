@@ -50,8 +50,6 @@ public static class DependencyInjection
         services.AddSingleton<IEdgeInstalledPluginCatalog, FileInstalledPluginCatalog>();
         services.AddSingleton<IEdgeProfileModuleConfigurationStore, FileEdgeProfileModuleConfigurationStore>();
         services.AddSingleton<EdgePluginPackageInstaller>();
-        services.AddSingleton<IEdgePluginPackageInstaller>(
-            provider => provider.GetRequiredService<EdgePluginPackageInstaller>());
         services.AddSingleton<EdgePluginCompositionTransaction>(
             provider => new EdgePluginCompositionTransaction(
                 baseDirectory,

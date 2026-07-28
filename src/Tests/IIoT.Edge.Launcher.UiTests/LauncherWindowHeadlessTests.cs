@@ -319,7 +319,10 @@ public sealed class LauncherWindowHeadlessTests
             new StubLocalAccountAuthService(LauncherAuthenticationResult.Passed(
                 new LauncherAccountRecord("operator", "operator", "hash", true)),
                 accountCatalogStatus),
-            new StubShellLaunchService());
+            new StubShellLaunchService(),
+            new NotConfiguredReleaseService(),
+            new LauncherUpdateTargetFactory(),
+            new TestLauncherUpdateOperationGate());
 
     private sealed class StubLauncherProfileCatalog(IReadOnlyList<LauncherProfileDefinition> profiles)
         : ILauncherProfileCatalog
@@ -364,5 +367,69 @@ public sealed class LauncherWindowHeadlessTests
             LauncherProfileDefinition profile,
             CancellationToken cancellationToken = default)
             => Task.CompletedTask;
+    }
+
+    private sealed class NotConfiguredReleaseService : IEdgeReleaseService
+    {
+        public Task<EdgeReleaseCatalogResult> CheckReleaseCatalogAsync(
+            EdgeUpdateTarget target,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new EdgeReleaseCatalogResult(
+                EdgeReleaseCatalogState.NotConfigured,
+                "stable",
+                "win-x64",
+                string.Empty,
+                string.Empty,
+                [],
+                "not configured"));
+
+        public Task<EdgePluginInstallResult> ApplyPluginVersionAsync(
+            EdgeUpdateTarget target,
+            string moduleId,
+            string version,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(EdgePluginInstallResult.Failed("not configured"));
+
+        public Task<EdgeHostUpdateApplyResult> ApplyHostVersionAsync(
+            EdgeUpdateTarget target,
+            string version,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new EdgeHostUpdateApplyResult(false, "not configured"));
+
+        public Task<EdgePluginInstallResult> ApplyVersionCompositionAsync(
+            EdgeUpdateTarget target,
+            EdgeVersionSelection selection,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(EdgePluginInstallResult.Failed("not configured"));
+
+        public Task<EdgeVersionReportResult> ReportCurrentVersionsAsync(
+            EdgeUpdateTarget target,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(EdgeVersionReportResult.Failed("not configured"));
+    }
+
+    private sealed class TestLauncherUpdateOperationGate
+        : ILauncherUpdateOperationGate
+    {
+        public IDisposable TryAcquire() => Lease.Instance;
+
+        public IDisposable TryAcquireUpdate() => Lease.Instance;
+
+        public string CreateShellLaunchReadyPath()
+            => Path.Combine(
+                Path.GetTempPath(),
+                $"launcher-ui-{Guid.NewGuid():N}.json");
+
+        private sealed class Lease : IDisposable
+        {
+            public static Lease Instance { get; } = new();
+
+            public void Dispose()
+            {
+            }
+        }
     }
 }

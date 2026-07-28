@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Interactivity;
 using IIoT.Edge.Application.Features.Updates;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.Launcher.ViewModels;
@@ -76,6 +77,7 @@ public sealed class LauncherLoopbackUpdateUiTests
         var activeProfiles = viewModel.Profiles
             .Select(static profile => profile.Profile)
             .ToArray();
+        Assert.Equal(activeProfiles.Length, server.CatalogRequestCount);
         await viewModel.ClientReleasePanel.ReportProfilesSilentlyAsync(activeProfiles);
 
         var window = services.GetRequiredService<MainWindow>();
@@ -91,10 +93,36 @@ public sealed class LauncherLoopbackUpdateUiTests
             AssertSuccessRows(viewModel.UpdateRows, fixture.HostVersion);
 
             server.ReturnCatalogFailure = true;
-            await viewModel.ClientReleasePanel.CheckAsync(activeProfiles);
+            var failedRefreshCompleted = NewCompletion();
+            void ObserveFailedRefresh(object? _, PropertyChangedEventArgs args)
+            {
+                if (args.PropertyName == nameof(LauncherClientReleasePanelViewModel.IsBusy)
+                    && !viewModel.ClientReleasePanel.IsBusy
+                    && viewModel.ClientReleasePanel.Components.Count > 0)
+                {
+                    failedRefreshCompleted.TrySetResult();
+                }
+            }
+
+            viewModel.ClientReleasePanel.PropertyChanged += ObserveFailedRefresh;
+            try
+            {
+                var refreshButton = window.FindControl<Button>("RefreshUpdateCenterButton");
+                Assert.NotNull(refreshButton);
+                Assert.True(refreshButton.IsEnabled);
+                refreshButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await failedRefreshCompleted.Task.WaitAsync(
+                    TestContext.Current.CancellationToken);
+            }
+            finally
+            {
+                viewModel.ClientReleasePanel.PropertyChanged -= ObserveFailedRefresh;
+            }
+
             window.UpdateLayout();
 
             AssertUnavailableRows(viewModel.UpdateRows, "无法检查");
+            Assert.Equal(activeProfiles.Length * 2, server.CatalogRequestCount);
             services.GetRequiredService<IAppLanguageService>()
                 .Change(CultureInfo.GetCultureInfo("en-US"));
             window.UpdateLayout();

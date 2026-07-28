@@ -33,14 +33,14 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
         IEdgeReleaseService clientReleaseService,
         ILauncherUpdateTargetFactory targetFactory,
         IShellLaunchService launchService,
-        IAppLanguageService? languageService = null,
-        ILauncherUpdateOperationGate? updateOperationGate = null)
+        ILauncherUpdateOperationGate updateOperationGate,
+        IAppLanguageService? languageService = null)
     {
         _clientReleaseService = clientReleaseService ?? throw new ArgumentNullException(nameof(clientReleaseService));
         _targetFactory = targetFactory ?? throw new ArgumentNullException(nameof(targetFactory));
         _launchService = launchService ?? throw new ArgumentNullException(nameof(launchService));
         _languageService = languageService;
-        _updateOperationGate = updateOperationGate ?? NoopLauncherUpdateOperationGate.Instance;
+        _updateOperationGate = updateOperationGate ?? throw new ArgumentNullException(nameof(updateOperationGate));
         if (_languageService is not null)
         {
             _languageService.LanguageChanged += OnLanguageChanged;
@@ -105,8 +105,22 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
     }
 
     public async Task CheckAsync(IReadOnlyList<LauncherProfileDefinition> profiles)
+        => await CheckAsyncCore(
+                profiles,
+                allowDuringCurrentOperation: false)
+            .ConfigureAwait(true);
+
+    private async Task CheckAsyncCore(
+        IReadOnlyList<LauncherProfileDefinition> profiles,
+        bool allowDuringCurrentOperation)
     {
         ArgumentNullException.ThrowIfNull(profiles);
+        if (IsBusy && !allowDuringCurrentOperation)
+        {
+            return;
+        }
+
+        var wasBusy = IsBusy;
         if (profiles.Count == 0)
         {
             Reset();
@@ -146,7 +160,7 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
         }
         finally
         {
-            IsBusy = false;
+            IsBusy = wasBusy;
         }
     }
 
@@ -297,7 +311,10 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
         SetStatus(
             "Launcher_ClientRelease_StatusInstalled",
             string.Join(", ", result.InstalledModuleIds));
-        await CheckAsync(_activeProfiles).ConfigureAwait(true);
+        await CheckAsyncCore(
+                _activeProfiles,
+                allowDuringCurrentOperation: true)
+            .ConfigureAwait(true);
     }
 
     private async Task ApplyHostVersionAsync(LauncherVersionOptionItem option, IProgress<int> progress)
@@ -604,7 +621,8 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
     {
         if (plan.ComponentKind == EdgeComponentKind.Host)
         {
-            return results.Count > 0
+            return plan.Versions.Count > 0
+                   && results.Count > 0
                    && results.All(static item =>
                        item.Result.State == EdgeReleaseCatalogState.Succeeded);
         }
@@ -612,7 +630,8 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
         var owningResults = results
             .Where(item => ProfileOwnsModule(item, plan.ModuleId))
             .ToArray();
-        return owningResults.Length > 0
+        return plan.Versions.Count > 0
+               && owningResults.Length > 0
                && owningResults.All(item =>
                    item.Result.State == EdgeReleaseCatalogState.Succeeded
                    && ResultContainsPlugin(item.Result, plan.ModuleId));

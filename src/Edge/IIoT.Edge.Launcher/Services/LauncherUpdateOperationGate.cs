@@ -8,7 +8,7 @@ public interface ILauncherUpdateOperationGate
 
     IDisposable? TryAcquireUpdate();
 
-    string? CreateShellLaunchReadyPath();
+    string CreateShellLaunchReadyPath();
 }
 
 public sealed class FileLauncherUpdateOperationGate
@@ -98,27 +98,6 @@ public sealed class FileLauncherUpdateOperationGate
         {
             Interlocked.Exchange(ref _shellPresenceLease, null)?.Dispose();
             Interlocked.Exchange(ref _operationLease, null)?.Dispose();
-        }
-    }
-}
-
-internal sealed class NoopLauncherUpdateOperationGate
-    : ILauncherUpdateOperationGate
-{
-    public static NoopLauncherUpdateOperationGate Instance { get; } = new();
-
-    public IDisposable TryAcquire() => NoopLease.Instance;
-
-    public IDisposable TryAcquireUpdate() => NoopLease.Instance;
-
-    public string? CreateShellLaunchReadyPath() => null;
-
-    private sealed class NoopLease : IDisposable
-    {
-        public static NoopLease Instance { get; } = new();
-
-        public void Dispose()
-        {
         }
     }
 }

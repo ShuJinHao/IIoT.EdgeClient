@@ -10,6 +10,29 @@ namespace IIoT.Edge.Launcher.FilesystemTests;
 public sealed class ShellLaunchServiceTests
 {
     [Fact]
+    public void Constructor_WhenGateOrRecoveryIsMissing_ShouldFailClosed()
+    {
+        var starter = new SpyProcessStarter(signalReady: false);
+        var instanceIdResolver = new FakeShellInstanceIdResolver();
+        var instanceProbe = new FakeShellInstanceProbe();
+        var gate = new TestLauncherUpdateOperationGate();
+        var recovery = UnblockedUpdateTransactionRecovery.Instance;
+
+        Assert.Throws<ArgumentNullException>(() => new ShellLaunchService(
+            starter,
+            instanceIdResolver,
+            instanceProbe,
+            null!,
+            recovery));
+        Assert.Throws<ArgumentNullException>(() => new ShellLaunchService(
+            starter,
+            instanceIdResolver,
+            instanceProbe,
+            gate,
+            null!));
+    }
+
+    [Fact]
     public void FileUpdateGate_WhenFirstLauncherHoldsLease_ShouldRejectSecondAndReleaseOnDispose()
     {
         var baseDirectory = Path.Combine(
@@ -641,7 +664,7 @@ public sealed class ShellLaunchServiceTests
             new FakeShellInstanceIdResolver(),
             new FakeShellInstanceProbe(),
             gate,
-            updateTransactionRecovery: null,
+            updateTransactionRecovery: UnblockedUpdateTransactionRecovery.Instance,
             terminateProcess: _ => terminated = true);
         var profile = new LauncherProfileDefinition(
             "DieCuttingAnodeLine",
@@ -704,7 +727,7 @@ public sealed class ShellLaunchServiceTests
             new FakeShellInstanceIdResolver(),
             new FakeShellInstanceProbe(),
             gate,
-            updateTransactionRecovery: null,
+            updateTransactionRecovery: UnblockedUpdateTransactionRecovery.Instance,
             terminateProcess: _ => terminated = true);
         var profile = new LauncherProfileDefinition(
             "DieCuttingAnodeLine",
@@ -818,14 +841,14 @@ public sealed class ShellLaunchServiceTests
         Directory.CreateDirectory(Path.GetDirectoryName(executablePath)!);
         File.WriteAllText(executablePath, string.Empty);
         var gate = new FileLauncherUpdateOperationGate(baseDirectory);
-        var starter = new SpyProcessStarter();
+        var starter = new SpyProcessStarter(signalReady: false);
         var terminated = false;
         using var service = new ShellLaunchService(
             starter,
             new FakeShellInstanceIdResolver(),
             new FakeShellInstanceProbe(),
             gate,
-            updateTransactionRecovery: null,
+            updateTransactionRecovery: UnblockedUpdateTransactionRecovery.Instance,
             terminateProcess: _ => terminated = true);
         var profile = new LauncherProfileDefinition(
             "TestPluginLine",
@@ -879,7 +902,7 @@ public sealed class ShellLaunchServiceTests
         Directory.CreateDirectory(Path.GetDirectoryName(executablePath)!);
         File.WriteAllText(executablePath, string.Empty);
         var gate = new FileLauncherUpdateOperationGate(baseDirectory);
-        var starter = new SpyProcessStarter();
+        var starter = new SpyProcessStarter(signalReady: false);
         var deadline = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously);
         var terminated = false;
@@ -888,7 +911,7 @@ public sealed class ShellLaunchServiceTests
             new FakeShellInstanceIdResolver(),
             new FakeShellInstanceProbe(),
             gate,
-            updateTransactionRecovery: null,
+            updateTransactionRecovery: UnblockedUpdateTransactionRecovery.Instance,
             terminateProcess: _ => terminated = true,
             readinessDeadline: _ => deadline.Task);
         var profile = new LauncherProfileDefinition(
@@ -938,16 +961,33 @@ public sealed class ShellLaunchServiceTests
             processStarter,
             instanceIdResolver ?? new FakeShellInstanceIdResolver(),
             instanceProbe ?? new FakeShellInstanceProbe(),
-            updateOperationGate,
-            updateTransactionRecovery);
+            updateOperationGate ?? new TestLauncherUpdateOperationGate(),
+            updateTransactionRecovery ?? UnblockedUpdateTransactionRecovery.Instance);
 
-    private sealed class SpyProcessStarter : IProcessStarter
+    private sealed class SpyProcessStarter(bool signalReady = true) : IProcessStarter
     {
         public ProcessStartInfo? StartInfo { get; private set; }
 
         public Process? Start(ProcessStartInfo startInfo)
         {
             StartInfo = startInfo;
+            var readyPath = startInfo.EnvironmentVariables[
+                EdgeClientUpdateCoordination.ShellLaunchReadyEnvironmentVariable];
+            var machineProfile = startInfo.EnvironmentVariables["Shell__MachineProfile"];
+            if (signalReady
+                && !string.IsNullOrWhiteSpace(readyPath)
+                && !string.IsNullOrWhiteSpace(machineProfile))
+            {
+                Assert.True(EdgeClientUpdateCoordination.TryWriteShellLaunchOutcomeToPath(
+                    readyPath,
+                    new EdgeClientShellLaunchOutcome(
+                        EdgeClientUpdateCoordination.ShellLaunchOutcomeSchemaVersion,
+                        EdgeClientShellLaunchStatuses.Ready,
+                        machineProfile,
+                        [],
+                        null)));
+            }
+
             return Process.GetCurrentProcess();
         }
     }
@@ -1076,5 +1116,34 @@ public sealed class ShellLaunchServiceTests
                 blockedProfile,
                 machineProfile,
                 StringComparison.OrdinalIgnoreCase);
+    }
+
+    private sealed class UnblockedUpdateTransactionRecovery : IEdgeUpdateTransactionRecovery
+    {
+        public static UnblockedUpdateTransactionRecovery Instance { get; } = new();
+
+        public EdgeUpdateTransactionRecoveryResult RecoverPendingTransaction()
+            => new(false, false, false);
+
+        public bool IsProfileBlocked(string machineProfile) => false;
+    }
+
+    private sealed class TestLauncherUpdateOperationGate : ILauncherUpdateOperationGate
+    {
+        public IDisposable TryAcquire() => Lease.Instance;
+
+        public IDisposable TryAcquireUpdate() => Lease.Instance;
+
+        public string CreateShellLaunchReadyPath()
+            => EdgeClientUpdateCoordination.CreateShellLaunchReadyPath();
+
+        private sealed class Lease : IDisposable
+        {
+            public static Lease Instance { get; } = new();
+
+            public void Dispose()
+            {
+            }
+        }
     }
 }

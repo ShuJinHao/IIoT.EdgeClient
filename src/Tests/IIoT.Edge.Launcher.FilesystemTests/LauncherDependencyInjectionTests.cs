@@ -2,10 +2,12 @@ using IIoT.Edge.Application.Features.Updates;
 using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.Infrastructure.Update.Configuration;
 using IIoT.Edge.Infrastructure.Update.Host;
+using IIoT.Edge.Infrastructure.Update.Packages;
 using IIoT.Edge.Launcher;
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.Launcher.Services;
 using Microsoft.Extensions.DependencyInjection;
+using System.Reflection;
 using Xunit;
 
 namespace IIoT.Edge.Launcher.FilesystemTests;
@@ -45,7 +47,7 @@ public sealed class LauncherDependencyInjectionTests
             Assert.NotNull(provider.GetRequiredService<IEdgeUpdateConfigurationProvider>());
             Assert.NotNull(provider.GetRequiredService<IEdgeInstalledPluginCatalog>());
             Assert.NotNull(provider.GetRequiredService<IEdgeProfileModuleConfigurationStore>());
-            Assert.NotNull(provider.GetRequiredService<IEdgePluginPackageInstaller>());
+            Assert.NotNull(provider.GetRequiredService<EdgePluginPackageInstaller>());
             Assert.NotNull(provider.GetRequiredService<IEdgePluginCompositionTransaction>());
             Assert.NotNull(provider.GetRequiredService<IEdgeUpdateTransactionRecovery>());
             Assert.NotNull(provider.GetRequiredService<IEdgeReleaseService>());
@@ -551,60 +553,26 @@ public sealed class LauncherDependencyInjectionTests
         }
     }
 
-    [Fact]
-    public void LauncherUpdateService_WhenSourceIsLocalDirectory_ShouldResolveLocalDirectory()
+    [Theory]
+    [InlineData("/tmp/edge-updates")]
+    [InlineData("file:///tmp/edge-updates")]
+    [InlineData("ftp://updates.example/edge/")]
+    public void LauncherUpdateService_WhenSourceIsNotHttp_ShouldReject(string source)
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), $"iiot-launcher-test-{Guid.NewGuid():N}");
+        var exception = Assert.Throws<TargetInvocationException>(
+            () => InvokeCreateUpdateManager(source));
 
-        try
-        {
-            Directory.CreateDirectory(tempDirectory);
-
-            var localDirectory = VelopackHostUpdateService.TryResolveLocalDirectory(tempDirectory);
-
-            Assert.NotNull(localDirectory);
-            Assert.Equal(Path.GetFullPath(tempDirectory), localDirectory.FullName);
-        }
-        finally
-        {
-            if (Directory.Exists(tempDirectory))
-            {
-                Directory.Delete(tempDirectory, recursive: true);
-            }
-        }
+        var sourceException = Assert.IsType<InvalidOperationException>(
+            exception.InnerException);
+        Assert.Contains("HTTP/HTTPS", sourceException.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void LauncherUpdateService_WhenSourceIsFileUriDirectory_ShouldResolveLocalDirectory()
-    {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), $"iiot-launcher-test-{Guid.NewGuid():N}");
-
-        try
-        {
-            Directory.CreateDirectory(tempDirectory);
-            var sourceUri = new Uri(tempDirectory).AbsoluteUri;
-
-            var localDirectory = VelopackHostUpdateService.TryResolveLocalDirectory(sourceUri);
-
-            Assert.NotNull(localDirectory);
-            Assert.Equal(Path.GetFullPath(tempDirectory), localDirectory.FullName);
-        }
-        finally
-        {
-            if (Directory.Exists(tempDirectory))
-            {
-                Directory.Delete(tempDirectory, recursive: true);
-            }
-        }
-    }
-
-    [Fact]
-    public void LauncherUpdateService_WhenSourceIsWebUrl_ShouldNotResolveLocalDirectory()
-    {
-        var localDirectory = VelopackHostUpdateService.TryResolveLocalDirectory("https://updates.example/edge/");
-
-        Assert.Null(localDirectory);
-    }
+    private static object? InvokeCreateUpdateManager(string source)
+        => typeof(VelopackHostUpdateService)
+            .GetMethod(
+                "CreateUpdateManager",
+                BindingFlags.NonPublic | BindingFlags.Static)!
+            .Invoke(null, [source]);
 
     private sealed class GateObservingRecovery(
         ILauncherUpdateOperationGate observingGate) : IEdgeUpdateTransactionRecovery

@@ -2,12 +2,47 @@ using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.Launcher.ViewModels;
+using IIoT.Edge.UI.Shared.Localization;
 using Xunit;
 
 namespace IIoT.Edge.Launcher.UnitTests;
 
 public sealed class LauncherMainViewModelTests
 {
+    [Fact]
+    public void Constructor_WhenCriticalUpdateDependencyIsMissing_ShouldFailClosed()
+    {
+        var profiles = new StubLauncherProfileCatalog([Profile("shell", "Shell")]);
+        var auth = new StubLocalAccountAuthService(
+            LauncherAuthenticationResult.Passed(Account("operator", "operator")));
+        var launch = new StubShellLaunchService();
+        var release = new NotConfiguredClientReleaseService();
+        var targetFactory = new LauncherUpdateTargetFactory();
+        var gate = new TestLauncherUpdateOperationGate();
+
+        Assert.Throws<ArgumentNullException>(() => new LauncherMainViewModel(
+            profiles,
+            auth,
+            launch,
+            null!,
+            targetFactory,
+            gate));
+        Assert.Throws<ArgumentNullException>(() => new LauncherMainViewModel(
+            profiles,
+            auth,
+            launch,
+            release,
+            null!,
+            gate));
+        Assert.Throws<ArgumentNullException>(() => new LauncherMainViewModel(
+            profiles,
+            auth,
+            launch,
+            release,
+            targetFactory,
+            null!));
+    }
+
     [Fact]
     public async Task LoginAsync_WhenAuthenticationSucceeds_ShouldLoadProfilesAndSetState()
     {
@@ -16,7 +51,7 @@ public sealed class LauncherMainViewModelTests
             Profile("shell", "Shell"),
             Profile("simulator", "Simulator")
         };
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog(profiles),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
@@ -33,7 +68,7 @@ public sealed class LauncherMainViewModelTests
     [Fact]
     public void Constructor_WhenAccountCatalogIsMissing_ShouldRequireInitialSetup()
     {
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog([Profile("shell", "Shell")]),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Failed("not used"),
@@ -49,7 +84,7 @@ public sealed class LauncherMainViewModelTests
     [Fact]
     public void Constructor_WhenAccountCatalogIsCorrupt_ShouldBlockAutoOverwrite()
     {
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog([Profile("shell", "Shell")]),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Failed("not used"),
@@ -65,7 +100,7 @@ public sealed class LauncherMainViewModelTests
     [Fact]
     public async Task InitializeLocalAccountAsync_WhenSetupSucceeds_ShouldLoadProfilesAndSetState()
     {
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog(
             [
                 Profile("shell", "Shell"),
@@ -101,7 +136,7 @@ public sealed class LauncherMainViewModelTests
             Profile("hotair", "热风"),
             Profile("welding", "焊接")
         };
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog(profiles),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
@@ -126,7 +161,7 @@ public sealed class LauncherMainViewModelTests
             Profile("TestPluginAlphaLine", "测试插件甲"),
             Profile("TestPluginBetaLine", "测试插件乙")
         };
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog(profiles),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
@@ -153,7 +188,7 @@ public sealed class LauncherMainViewModelTests
         };
         var profileCatalog = new BlockingLauncherProfileCatalog(profiles);
         var cloudApiResolver = new ThreadRecordingUpdateConfigurationProvider("shell");
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             profileCatalog,
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
@@ -188,7 +223,7 @@ public sealed class LauncherMainViewModelTests
             Profile("injection", "注液"),
             Profile("hotair", "热风")
         };
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog(profiles),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
@@ -210,7 +245,7 @@ public sealed class LauncherMainViewModelTests
             Profile("simulator", "Simulator")
         };
         var releaseService = new RecordingClientReleaseService(expectedReportCount: 2);
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog(profiles),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
@@ -227,7 +262,7 @@ public sealed class LauncherMainViewModelTests
     [Fact]
     public async Task LoginAsync_WhenAuthenticationFails_ShouldExposeErrorMessage()
     {
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog(Array.Empty<LauncherProfileDefinition>()),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Failed("账号或密码不正确。")),
@@ -248,7 +283,7 @@ public sealed class LauncherMainViewModelTests
             Profile("shell", "Shell"),
             Profile("simulator", "Simulator")
         };
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog(profiles),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
@@ -265,7 +300,7 @@ public sealed class LauncherMainViewModelTests
     [Fact]
     public async Task ChangePasswordAsync_WhenAuthenticationSucceeds_ShouldClearError()
     {
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog(Array.Empty<LauncherProfileDefinition>()),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator")),
@@ -282,7 +317,7 @@ public sealed class LauncherMainViewModelTests
     [Fact]
     public async Task ChangePasswordAsync_WhenAuthenticationFails_ShouldExposeErrorMessage()
     {
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog(Array.Empty<LauncherProfileDefinition>()),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator")),
@@ -297,78 +332,11 @@ public sealed class LauncherMainViewModelTests
     }
 
     [Fact]
-    public async Task CheckForUpdatesAsync_WhenSourceIsMissing_ShouldExposeNotConfiguredState()
-    {
-        var viewModel = new LauncherMainViewModel(
-            new StubLauncherProfileCatalog(Array.Empty<LauncherProfileDefinition>()),
-            new StubLocalAccountAuthService(
-                LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
-            new StubShellLaunchService(),
-            new StubLauncherUpdateService(
-                new EdgeHostUpdateCheckResult(EdgeHostUpdateCheckState.NotConfigured)));
-
-        await viewModel.HostUpdatePanel.CheckForUpdatesAsync();
-
-        Assert.Contains("Launcher_Update_StatusNotConfigured", viewModel.HostUpdatePanel.StatusMessage);
-        Assert.True(viewModel.HostUpdatePanel.CanCheckUpdates);
-        Assert.False(viewModel.HostUpdatePanel.CanApplyUpdate);
-        var row = viewModel.HostUpdatePanel.CreateHostRow();
-        Assert.Equal("无法检查", row.TargetVersion);
-        Assert.Equal("无法检查", row.StatusText);
-        Assert.Equal("无法检查", row.ActionText);
-    }
-
-    [Fact]
-    public async Task CheckForUpdatesAsync_WhenUpdateExists_ShouldEnableApplyUpdate()
-    {
-        var viewModel = new LauncherMainViewModel(
-            new StubLauncherProfileCatalog(Array.Empty<LauncherProfileDefinition>()),
-            new StubLocalAccountAuthService(
-                LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
-            new StubShellLaunchService(),
-            new StubLauncherUpdateService(
-                new EdgeHostUpdateCheckResult(
-                    EdgeHostUpdateCheckState.UpdateAvailable,
-                    CurrentVersion: "0.0.1",
-                    TargetVersion: "0.0.2",
-                    ReleaseNotes: "update notes")));
-
-        await viewModel.HostUpdatePanel.CheckForUpdatesAsync();
-
-        Assert.Contains("0.0.2", viewModel.HostUpdatePanel.StatusMessage);
-        Assert.Equal("update notes", viewModel.HostUpdatePanel.DetailText);
-        Assert.True(viewModel.HostUpdatePanel.CanApplyUpdate);
-    }
-
-    [Fact]
-    public async Task ApplyUpdateAsync_WhenShellIsRunning_ShouldNotApplyUpdate()
-    {
-        var updateService = new StubLauncherUpdateService(
-            new EdgeHostUpdateCheckResult(
-                EdgeHostUpdateCheckState.UpdateAvailable,
-                CurrentVersion: "0.0.1",
-                TargetVersion: "0.0.2"));
-        var viewModel = new LauncherMainViewModel(
-            new StubLauncherProfileCatalog(Array.Empty<LauncherProfileDefinition>()),
-            new StubLocalAccountAuthService(
-                LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
-            new StubShellLaunchService(hasRunningShellProcess: true),
-            updateService);
-
-        await viewModel.HostUpdatePanel.CheckForUpdatesAsync();
-        await viewModel.HostUpdatePanel.ApplyUpdateAsync();
-
-        Assert.Contains("Launcher_Update_StatusShellRunning", viewModel.HostUpdatePanel.StatusMessage);
-        Assert.Equal(0, updateService.ApplyCallCount);
-        Assert.True(viewModel.HostUpdatePanel.CanApplyUpdate);
-    }
-
-    [Fact]
     public async Task LoginAsync_WhenVersionReportFails_ShouldStillAuthenticateAndLoadProfiles()
     {
         var profile = Profile("shell", "Shell");
         var releaseService = new ThrowingClientReleaseService();
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog([profile]),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
@@ -389,7 +357,7 @@ public sealed class LauncherMainViewModelTests
         var profile = Profile("shell", "Shell");
         var launchService = new StubShellLaunchService();
         var releaseService = new ThrowingClientReleaseService();
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog([profile]),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
@@ -409,7 +377,7 @@ public sealed class LauncherMainViewModelTests
         var profile = Profile("shell", "Shell");
         var launchService = new StubShellLaunchService();
         var releaseService = new RecordingClientReleaseService(expectedReportCount: 1);
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog([profile]),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
@@ -431,7 +399,7 @@ public sealed class LauncherMainViewModelTests
             TaskCreationOptions.RunContinuationsAsynchronously);
         var launchService = new StubShellLaunchService(
             launchTask: launchCompletion.Task);
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog([profile]),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
@@ -450,25 +418,20 @@ public sealed class LauncherMainViewModelTests
     public async Task LoginAsync_WhenUpdatesExist_ShouldOnlyPopulateUpdateCenterAndNotInstallOrApply()
     {
         var profile = Profile("shell", "Shell");
-        var updateService = new StubLauncherUpdateService(new EdgeHostUpdateCheckResult(
-            EdgeHostUpdateCheckState.UpdateAvailable,
-            CurrentVersion: "1.0.0",
-            TargetVersion: "1.1.0"));
         var releaseService = new RecordingUpdateClientReleaseService(
             CreateReleaseCheckWithPluginUpdate());
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog([profile]),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
             new StubShellLaunchService(),
-            updateService,
             clientReleaseService: releaseService);
 
         await viewModel.LoginAsync("operator", "secret");
         await releaseService.WaitForCheckAsync();
 
-        Assert.Equal(0, updateService.ApplyCallCount);
         Assert.Equal(0, releaseService.InstallCallCount);
+        Assert.Equal(1, releaseService.CheckCallCount);
         Assert.Single(viewModel.Profiles);
         Assert.NotNull(viewModel.SelectedUpdateProfile);
         Assert.Contains(viewModel.ClientReleasePanel.Components, component => component.ModuleId == "IIoT.Edge.TestPlugin");
@@ -481,7 +444,7 @@ public sealed class LauncherMainViewModelTests
         var profile = Profile("shell", "Shell");
         var releaseService = new RecordingUpdateClientReleaseService(
             CreateReleaseCheckWithMultiplePluginRows());
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog([profile]),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
@@ -521,7 +484,7 @@ public sealed class LauncherMainViewModelTests
         };
         var releaseService = new RecordingUpdateClientReleaseService(
             CreateUnavailableReleaseCheck("AP", "负极模切"));
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog([profile]),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
@@ -547,7 +510,7 @@ public sealed class LauncherMainViewModelTests
         var profile = Profile("AP", "负极模切");
         var releaseService = new RecordingUpdateClientReleaseService(
             CreateApCp211ReleaseCheck());
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog([profile]),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
@@ -591,7 +554,7 @@ public sealed class LauncherMainViewModelTests
                 ["TestPluginAlphaLine"] = CreateReleaseCheckForModule("TestPluginAlpha", "测试插件甲"),
                 ["TestPluginBetaLine"] = CreateReleaseCheckForModule("TestPluginBeta", "测试插件乙")
             });
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog(profiles),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
@@ -614,7 +577,7 @@ public sealed class LauncherMainViewModelTests
         var profile = Profile("shell", "Shell");
         var releaseService = new RecordingUpdateClientReleaseService(
             CreateReleaseCheckWithPluginUpdate());
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog([profile]),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
@@ -639,7 +602,7 @@ public sealed class LauncherMainViewModelTests
         var launchService = new StubShellLaunchService();
         var releaseService = new RecordingUpdateClientReleaseService(
             CreateReleaseCheckWithPluginUpdate());
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog([profile]),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
@@ -662,7 +625,7 @@ public sealed class LauncherMainViewModelTests
         var alphaProfile = Profile("TestPluginAlphaLine", "测试插件甲");
         var betaProfile = Profile("TestPluginBetaLine", "测试插件乙");
         var launchService = new StubShellLaunchService(runningMachineProfiles: ["TestPluginAlphaLine"]);
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog([alphaProfile, betaProfile]),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
@@ -680,7 +643,7 @@ public sealed class LauncherMainViewModelTests
     {
         var alphaProfile = Profile("TestPluginAlphaLine", "测试插件甲");
         var launchService = new StubShellLaunchService(runningMachineProfiles: ["TestPluginAlphaLine"]);
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog([alphaProfile]),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
@@ -697,7 +660,7 @@ public sealed class LauncherMainViewModelTests
     {
         var alphaProfile = Profile("TestPluginAlphaLine", "测试插件甲");
         var launchService = new StubShellLaunchService();
-        var viewModel = new LauncherMainViewModel(
+        var viewModel = CreateViewModel(
             new StubLauncherProfileCatalog([alphaProfile]),
             new StubLocalAccountAuthService(
                 LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
@@ -721,6 +684,27 @@ public sealed class LauncherMainViewModelTests
 
     private static LauncherProfileDefinition Profile(string profileId, string displayName) =>
         new(profileId, displayName, "中性测试插件", null, profileId, "IIoT.Edge.Shell", "Shell", "#000000");
+
+    private static LauncherMainViewModel CreateViewModel(
+        ILauncherProfileCatalog profileCatalog,
+        ILocalLauncherAuthService authService,
+        IShellLaunchService launchService,
+        IAppLanguageService? languageService = null,
+        IEdgeReleaseService? clientReleaseService = null,
+        IEdgeUpdateConfigurationProvider? updateConfigurationProvider = null,
+        ILauncherUpdateTargetFactory? targetFactory = null,
+        ILauncherProfileVisibilityService? profileVisibilityService = null,
+        ILauncherUpdateOperationGate? updateOperationGate = null)
+        => new(
+            profileCatalog,
+            authService,
+            launchService,
+            clientReleaseService ?? new NotConfiguredClientReleaseService(),
+            targetFactory ?? new LauncherUpdateTargetFactory(),
+            updateOperationGate ?? new TestLauncherUpdateOperationGate(),
+            languageService,
+            updateConfigurationProvider,
+            profileVisibilityService);
 
     private static EdgeReleaseCatalogResult CreateReleaseCheckWithPluginUpdate()
         => new(
@@ -1208,33 +1192,65 @@ public sealed class LauncherMainViewModelTests
         }
     }
 
-    private sealed class StubLauncherUpdateService(
-        EdgeHostUpdateCheckResult checkResult,
-        EdgeHostUpdateApplyResult? applyResult = null) : IEdgeHostUpdateService
+    private sealed class TestLauncherUpdateOperationGate : ILauncherUpdateOperationGate
     {
-        public int ApplyCallCount { get; private set; }
+        public IDisposable TryAcquire() => Lease.Instance;
 
-        public Task<EdgeHostUpdateCheckResult> CheckForUpdatesAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(checkResult);
+        public IDisposable TryAcquireUpdate() => Lease.Instance;
 
-        public Task<EdgeHostUpdateApplyResult> DownloadAndApplyUpdateAsync(
+        public string CreateShellLaunchReadyPath()
+            => Path.Combine(Path.GetTempPath(), $"launcher-main-{Guid.NewGuid():N}.json");
+
+        private sealed class Lease : IDisposable
+        {
+            public static Lease Instance { get; } = new();
+
+            public void Dispose()
+            {
+            }
+        }
+    }
+
+    private sealed class NotConfiguredClientReleaseService : IEdgeReleaseService
+    {
+        public Task<EdgeReleaseCatalogResult> CheckReleaseCatalogAsync(
+            EdgeUpdateTarget target,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new EdgeReleaseCatalogResult(
+                EdgeReleaseCatalogState.NotConfigured,
+                "stable",
+                "win-x64",
+                string.Empty,
+                string.Empty,
+                [],
+                "not configured"));
+
+        public Task<EdgePluginInstallResult> ApplyPluginVersionAsync(
+            EdgeUpdateTarget target,
+            string moduleId,
+            string version,
             IProgress<int>? progress = null,
             CancellationToken cancellationToken = default)
-        {
-            ApplyCallCount++;
-            progress?.Report(100);
-            return Task.FromResult(applyResult ?? new EdgeHostUpdateApplyResult(true));
-        }
+            => Task.FromResult(EdgePluginInstallResult.Failed("not configured"));
 
-        public Task<EdgeHostUpdateApplyResult> ApplyVersionAsync(
-            EdgeHostVersionRelease release,
+        public Task<EdgeHostUpdateApplyResult> ApplyHostVersionAsync(
+            EdgeUpdateTarget target,
+            string version,
             IProgress<int>? progress = null,
             CancellationToken cancellationToken = default)
-        {
-            ApplyCallCount++;
-            progress?.Report(100);
-            return Task.FromResult(applyResult ?? new EdgeHostUpdateApplyResult(true));
-        }
+            => Task.FromResult(new EdgeHostUpdateApplyResult(false, "not configured"));
+
+        public Task<EdgePluginInstallResult> ApplyVersionCompositionAsync(
+            EdgeUpdateTarget target,
+            EdgeVersionSelection selection,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(EdgePluginInstallResult.Failed("not configured"));
+
+        public Task<EdgeVersionReportResult> ReportCurrentVersionsAsync(
+            EdgeUpdateTarget target,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(EdgeVersionReportResult.Failed("not configured"));
     }
 
     private sealed class ThrowingClientReleaseService : IEdgeReleaseService
@@ -1363,6 +1379,8 @@ public sealed class LauncherMainViewModelTests
         private readonly TaskCompletionSource _checkCompleted = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly List<string> _installedModuleIds = [];
 
+        public int CheckCallCount { get; private set; }
+
         public int InstallCallCount { get; private set; }
 
         public IReadOnlyList<string> InstalledModuleIds => _installedModuleIds.ToArray();
@@ -1371,6 +1389,7 @@ public sealed class LauncherMainViewModelTests
             EdgeUpdateTarget target,
             CancellationToken cancellationToken = default)
         {
+            CheckCallCount++;
             _checkCompleted.TrySetResult();
             return Task.FromResult(checkResult);
         }
