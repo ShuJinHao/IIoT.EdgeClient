@@ -457,33 +457,49 @@ public sealed class EdgePluginCompositionTransaction
     private static string? ValidateModulePaths(
         IReadOnlyList<EdgePluginCompositionRelease> releases)
     {
-        var modulePaths = releases
-            .Select(static release =>
-                EdgeClientProgramDataPaths.SanitizePathSegment(
-                    release.Release.ModuleId))
-            .ToArray();
-        if (modulePaths.Any(static segment =>
-                !string.Equals(
-                    segment,
-                    segment.TrimEnd(' ', '.'),
-                    StringComparison.Ordinal)))
+        if (releases.Any(static release =>
+            {
+                var moduleId = release.Release.ModuleId;
+                return moduleId is not null
+                       && !string.Equals(
+                           moduleId,
+                           moduleId.TrimEnd(' ', '.'),
+                           StringComparison.Ordinal);
+            }))
         {
             return "插件 ModuleId 映射到 Windows 尾随句点或空格别名。";
         }
 
-        if (modulePaths.Any(static segment =>
+        var modulePaths = releases
+            .Select(static release => new
+            {
+                release.Release.ModuleId,
+                Segment = EdgeClientProgramDataPaths.SanitizePathSegment(
+                    release.Release.ModuleId)
+            })
+            .ToArray();
+        if (modulePaths.Any(static item =>
                 string.Equals(
-                    segment,
+                    item.Segment,
                     TransactionsDirectoryName,
                     StringComparison.OrdinalIgnoreCase)))
         {
             return "插件 ModuleId 映射到保留的事务目录。";
         }
 
-        return modulePaths
-            .GroupBy(static segment => segment, StringComparer.OrdinalIgnoreCase)
-            .Any(static group => group.Count() > 1)
-            ? "不同插件 ModuleId 映射到同一插件目录。"
+        if (modulePaths
+            .GroupBy(static item => item.Segment, StringComparer.OrdinalIgnoreCase)
+            .Any(static group => group.Count() > 1))
+        {
+            return "不同插件 ModuleId 映射到同一插件目录。";
+        }
+
+        return modulePaths.Any(static item =>
+            !string.Equals(
+                item.ModuleId,
+                item.Segment,
+                StringComparison.Ordinal))
+            ? "插件 ModuleId 必须是规范的 Windows 路径段。"
             : null;
     }
 

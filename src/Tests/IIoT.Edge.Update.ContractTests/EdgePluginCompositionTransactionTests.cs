@@ -131,6 +131,7 @@ public sealed class EdgePluginCompositionTransactionTests
     [Theory]
     [InlineData(".transactions.")]
     [InlineData("AP.")]
+    [InlineData("AP ")]
     public async Task InstallAsync_WhenModulePathUsesWin32TrailingAlias_ShouldRejectBeforeCreatingTransaction(
         string moduleId)
     {
@@ -159,6 +160,32 @@ public sealed class EdgePluginCompositionTransactionTests
         {
             Assert.Empty(Directory.EnumerateDirectories(transactionStorage));
         }
+    }
+
+    [Fact]
+    public async Task InstallAsync_WhenModuleIdIsNotCanonicalPathSegment_ShouldRejectBeforeCreatingTransaction()
+    {
+        const string moduleId = "AP CP";
+        using var fixture = TransactionFixture.Create([moduleId]);
+        var transaction = fixture.CreateTransaction();
+
+        var result = await transaction.InstallAsync(
+            [fixture.TargetForModules([moduleId])],
+            [fixture.Source(fixture.Release(moduleId))],
+            "1.0.0",
+            EdgeClientHostRuntime.HostApiVersion,
+            pendingHostVersion: null,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Contains(
+            "规范的 Windows 路径段",
+            result.ErrorMessage ?? string.Empty,
+            StringComparison.Ordinal);
+        fixture.AssertOldCombination([moduleId]);
+        Assert.False(File.Exists(fixture.JournalPath));
+        Assert.False(Directory.Exists(
+            Path.Combine(fixture.PluginsRoot, ".transactions")));
     }
 
     [Fact]
