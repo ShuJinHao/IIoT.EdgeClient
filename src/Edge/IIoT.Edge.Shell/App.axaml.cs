@@ -106,9 +106,6 @@ public partial class App : global::Avalonia.Application
                 return;
             }
 
-            _ = EdgeClientUpdateCoordination.TrySignalShellLaunchReady(
-                AppDomain.CurrentDomain.BaseDirectory);
-
             _serviceProvider = ConfigureServices(
                 configuration,
                 runtimePaths,
@@ -129,6 +126,8 @@ public partial class App : global::Avalonia.Application
             desktop.MainWindow = mainWindow;
             mainWindow.Show();
             Volatile.Write(ref _mainWindowReady, 1);
+            _ = EdgeClientUpdateCoordination.TrySignalShellLaunchReady(
+                AppDomain.CurrentDomain.BaseDirectory);
         }
         catch (Exception ex)
         {

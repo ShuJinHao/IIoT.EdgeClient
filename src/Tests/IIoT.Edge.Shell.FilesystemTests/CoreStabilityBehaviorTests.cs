@@ -243,6 +243,36 @@ public sealed class StartupExceptionAllowlistSourceGuardTests
         Assert.Contains("catch (ModulePluginLoadException ex)", directoryCatalogSource, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ShellLaunchReadySignal_ShouldFollowSuccessfulLifecycleAndShownMainWindow()
+    {
+        var repositoryRoot = FindRepositoryRoot();
+        var source = File.ReadAllText(Path.Combine(
+            repositoryRoot,
+            "src/Edge/IIoT.Edge.Shell/App.axaml.cs"));
+        const string lifecycleFailureGuard = "if (!startupResult.Success)";
+        const string showMainWindow = "mainWindow.Show();";
+        const string signalReady =
+            "EdgeClientUpdateCoordination.TrySignalShellLaunchReady(";
+
+        var failureGuardIndex = source.IndexOf(
+            lifecycleFailureGuard,
+            StringComparison.Ordinal);
+        var showIndex = source.IndexOf(
+            showMainWindow,
+            StringComparison.Ordinal);
+        var signalIndex = source.IndexOf(
+            signalReady,
+            StringComparison.Ordinal);
+
+        Assert.True(failureGuardIndex >= 0);
+        Assert.True(showIndex > failureGuardIndex);
+        Assert.True(signalIndex > showIndex);
+        Assert.Equal(
+            signalIndex,
+            source.LastIndexOf(signalReady, StringComparison.Ordinal));
+    }
+
     private static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

@@ -604,6 +604,67 @@ public sealed class ShellLaunchServiceTests
         }
     }
 
+    [Fact]
+    public void Launch_WhenChildNeverSignalsReady_ShouldFailAndReleaseLaunchGate()
+    {
+        var baseDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "edge-launcher-shell-handoff-tests",
+            Guid.NewGuid().ToString("N"),
+            "launcher");
+        var executablePath = Path.Combine(
+            baseDirectory,
+            "runtime",
+            OperatingSystem.IsWindows()
+                ? "IIoT.Edge.Shell.exe"
+                : "IIoT.Edge.Shell");
+        Directory.CreateDirectory(Path.GetDirectoryName(executablePath)!);
+        File.WriteAllText(executablePath, string.Empty);
+        var gate = new FileLauncherUpdateOperationGate(baseDirectory);
+        var starter = new SpyProcessStarter();
+        var terminated = false;
+        using var service = new ShellLaunchService(
+            starter,
+            new FakeShellInstanceIdResolver(),
+            new FakeShellInstanceProbe(),
+            gate,
+            updateTransactionRecovery: null,
+            shellLaunchReadyTimeout: TimeSpan.FromMilliseconds(20),
+            terminateProcess: _ => terminated = true);
+        var profile = new LauncherProfileDefinition(
+            "TestPluginLine",
+            "测试插件",
+            "TestPlugin profile",
+            null,
+            "TestPluginLine",
+            executablePath,
+            "BeakerOutline",
+            "#4D7C0F");
+
+        try
+        {
+            var exception = Assert.Throws<InvalidOperationException>(
+                () => service.Launch(profile));
+
+            Assert.Contains(
+                "未完成安全启动握手",
+                exception.Message,
+                StringComparison.Ordinal);
+            Assert.True(terminated);
+            Assert.False(service.HasAnyRunningShellProcess());
+            using var updateAfterFailedLaunch = gate.TryAcquireUpdate();
+            Assert.NotNull(updateAfterFailedLaunch);
+        }
+        finally
+        {
+            var root = Directory.GetParent(baseDirectory)?.FullName;
+            if (!string.IsNullOrWhiteSpace(root) && Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
     private static ShellLaunchService CreateService(
         IProcessStarter processStarter,
         IShellInstanceIdResolver? instanceIdResolver = null,

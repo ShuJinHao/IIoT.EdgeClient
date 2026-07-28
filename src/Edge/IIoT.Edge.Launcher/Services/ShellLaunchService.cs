@@ -16,6 +16,8 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
     private readonly IShellInstanceProbe _instanceProbe;
     private readonly ILauncherUpdateOperationGate _updateOperationGate;
     private readonly IEdgeUpdateTransactionRecovery? _updateTransactionRecovery;
+    private readonly TimeSpan _shellLaunchReadyTimeout;
+    private readonly Action<Process> _terminateProcess;
     private readonly object _syncRoot = new();
     private readonly List<TrackedShellProcess> _startedProcesses = [];
 
@@ -25,12 +27,37 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
         IShellInstanceProbe instanceProbe,
         ILauncherUpdateOperationGate? updateOperationGate = null,
         IEdgeUpdateTransactionRecovery? updateTransactionRecovery = null)
+        : this(
+            processStarter,
+            instanceIdResolver,
+            instanceProbe,
+            updateOperationGate,
+            updateTransactionRecovery,
+            ShellLaunchReadyTimeout,
+            TryTerminate)
+    {
+    }
+
+    internal ShellLaunchService(
+        IProcessStarter processStarter,
+        IShellInstanceIdResolver instanceIdResolver,
+        IShellInstanceProbe instanceProbe,
+        ILauncherUpdateOperationGate? updateOperationGate,
+        IEdgeUpdateTransactionRecovery? updateTransactionRecovery,
+        TimeSpan shellLaunchReadyTimeout,
+        Action<Process> terminateProcess)
     {
         _processStarter = processStarter ?? throw new ArgumentNullException(nameof(processStarter));
         _instanceIdResolver = instanceIdResolver ?? throw new ArgumentNullException(nameof(instanceIdResolver));
         _instanceProbe = instanceProbe ?? throw new ArgumentNullException(nameof(instanceProbe));
         _updateOperationGate = updateOperationGate ?? NoopLauncherUpdateOperationGate.Instance;
         _updateTransactionRecovery = updateTransactionRecovery;
+        _shellLaunchReadyTimeout = shellLaunchReadyTimeout > TimeSpan.Zero
+            ? shellLaunchReadyTimeout
+            : throw new ArgumentOutOfRangeException(
+                nameof(shellLaunchReadyTimeout));
+        _terminateProcess = terminateProcess
+            ?? throw new ArgumentNullException(nameof(terminateProcess));
     }
 
     public bool HasAnyRunningShellProcess()
@@ -96,9 +123,9 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
         }
 
         if (readiness is not null
-            && !readiness.Wait(ShellLaunchReadyTimeout))
+            && !readiness.Wait(_shellLaunchReadyTimeout))
         {
-            TryTerminate(process);
+            _terminateProcess(process);
             process.Dispose();
             throw new InvalidOperationException(
                 $"客户端启动失败：{profile.DisplayName} 未完成安全启动握手。");
