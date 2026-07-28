@@ -111,6 +111,8 @@ Require-Text 'scripts/TestEdgeVelopackPackage.ps1' "coreclr\.dll[\s\S]*?hostfxr\
 Require-Text 'scripts/PublishEdgePluginRelease.ps1' 'Assert-EdgeWorkspaceDispatch -ExpectedTarget EdgePlugin' 'Edge plugin publication must remain independent from the host release.'
 Require-Text 'scripts/PublishEdgePluginRelease.ps1' '\[string\]\$PluginRepositoryRoot' 'Edge plugin publication must require the independent Private Plugins repository root.'
 Require-Text 'scripts/PublishEdgePluginRelease.ps1' 'eng/PackEdgePlugin\.ps1' 'Edge plugin publication must call the Private Plugins unique pack implementation.'
+Require-Text 'scripts/tests/TestEdgeReleaseResumeBehavior.ps1' 'seed isolated plugin release fixture' 'The release-resume behavior test must create its own independent plugin repository fixture when no external repository is supplied.'
+Forbid-Text 'scripts/tests/TestEdgeReleaseResumeBehavior.ps1' 'Join-Path \(Split-Path -Parent \$sourceRepoRoot\) ''IIoT\.Edge\.Plugins\.Private''' 'Hosted release-resume tests must not require an unpopulated sibling checkout.'
 Require-Text 'scripts/PublishEdgePluginRelease.ps1' 'function\s+Invoke-PluginPack\s*\{[\s\S]*?\[hashtable\]\$Parameters[\s\S]*?&\s+\$scriptPath\s+@Parameters' 'PowerShell plugin pack dispatch must use named hashtable splatting.'
 Require-Text 'scripts/PublishEdgePluginRelease.ps1' 'Get-PreservedPluginMetadataPath[\s\S]*?if\s*\(\$null\s+-eq\s+\$metadataPath\)[\s\S]*?Invoke-PluginPack\s+-Parameters' 'A resumed plugin release must rebuild when the failed attempt has no complete package.'
 Require-Text 'scripts/PublishEdgePluginRelease.ps1' '\[switch\]\$ReconcileExistingRelease' 'From-zero deployment must explicitly opt into restored plugin release reconciliation.'

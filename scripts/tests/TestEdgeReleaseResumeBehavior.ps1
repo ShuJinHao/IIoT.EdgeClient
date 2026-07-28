@@ -10,7 +10,7 @@ Set-StrictMode -Version Latest
 $scriptsRoot = Split-Path -Parent $PSScriptRoot
 $sourceRepoRoot = Split-Path -Parent $scriptsRoot
 $resolvedPluginSourceRepoRoot = if ([string]::IsNullOrWhiteSpace($PluginRepositoryRoot)) {
-    Join-Path (Split-Path -Parent $sourceRepoRoot) 'IIoT.Edge.Plugins.Private'
+    ''
 } else {
     [System.IO.Path]::GetFullPath($PluginRepositoryRoot)
 }
@@ -29,6 +29,7 @@ $oldEnvironment = @{
     Dispatch = $env:IIOT_EDGE_WORKSPACE_DISPATCH
     Target = $env:IIOT_EDGE_WORKSPACE_TARGET
     Invocation = $env:IIOT_EDGE_WORKSPACE_INVOCATION_ID
+    DependencyReference = $env:IIOT_EDGE_DEPENDENCY_REFERENCE_PACKAGE
 }
 $passed = 0
 
@@ -83,8 +84,76 @@ function Get-RequestCount {
     return @(Get-Content -LiteralPath $RequestLog | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count
 }
 
+function Assert-GitClean {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot,
+        [Parameter(Mandatory = $true)][string]$Description
+    )
+
+    $dirty = @(& git -C $RepositoryRoot status --porcelain=v1)
+    if ($LASTEXITCODE -ne 0) { throw "Could not inspect $Description Git state." }
+    if ($dirty.Count -gt 0) {
+        throw "$Description fixture became dirty: $($dirty -join '; ')"
+    }
+    $script:passed++
+}
+
+function New-DependencyClosureFixtureArchive {
+    param(
+        [Parameter(Mandatory = $true)][string]$ArchivePath,
+        [Parameter(Mandatory = $true)][string]$LayoutRoot
+    )
+
+    $stagingRoot = Join-Path $testRoot ("dependency-{0}" -f ([Guid]::NewGuid().ToString('N')))
+    try {
+        $targetName = '.NETCoreApp,Version=v10.0/win-x64'
+        foreach ($applicationName in @('IIoT.Edge.Launcher', 'IIoT.Edge.Shell')) {
+            $applicationRoot = Join-Path $stagingRoot "$LayoutRoot/$applicationName"
+            New-Item -ItemType Directory -Force -Path $applicationRoot | Out-Null
+            $runtimeAssets = [ordered]@{
+                'Velopack.dll' = @{}
+                'IIoT.Edge.UI.Shared.dll' = @{}
+                'IIoT.Edge.Module.Contracts.dll' = @{}
+            }
+            $target = [ordered]@{
+                'ReleaseResumeFixture/1.0.0' = [ordered]@{
+                    runtime = $runtimeAssets
+                }
+            }
+            $targets = [ordered]@{}
+            $targets[$targetName] = $target
+            [ordered]@{
+                runtimeTarget = [ordered]@{ name = $targetName }
+                targets = $targets
+            } | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8NoBOM -LiteralPath (
+                Join-Path $applicationRoot "$applicationName.deps.json")
+
+            foreach ($assemblyName in $runtimeAssets.Keys) {
+                [IO.File]::WriteAllBytes(
+                    (Join-Path $applicationRoot $assemblyName),
+                    [byte[]](0x42, 0x30, 0x34))
+            }
+        }
+
+        $archiveDirectory = Split-Path -Parent $ArchivePath
+        New-Item -ItemType Directory -Force -Path $archiveDirectory | Out-Null
+        if (Test-Path -LiteralPath $ArchivePath) {
+            Remove-Item -LiteralPath $ArchivePath -Force
+        }
+        [IO.Compression.ZipFile]::CreateFromDirectory(
+            $stagingRoot,
+            $ArchivePath,
+            [IO.Compression.CompressionLevel]::Fastest,
+            $false)
+    }
+    finally {
+        Remove-Item -LiteralPath $stagingRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 try {
-    if (-not (Test-Path -LiteralPath $resolvedPluginSourceRepoRoot -PathType Container)) {
+    if (-not [string]::IsNullOrWhiteSpace($resolvedPluginSourceRepoRoot) -and
+        -not (Test-Path -LiteralPath $resolvedPluginSourceRepoRoot -PathType Container)) {
         throw "Independent plugin repository was not found: $resolvedPluginSourceRepoRoot"
     }
 
@@ -125,9 +194,45 @@ try {
     Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('config', 'core.longpaths', 'true')
     Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('config', 'user.name', 'edge-release-contract-test')
     Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('config', 'user.email', 'edge-release-contract-test@example.invalid')
-    Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('remote', 'add', 'source', $resolvedPluginSourceRepoRoot)
-    Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('fetch', '-q', 'source', 'HEAD')
-    Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('checkout', '-q', '-B', 'main', 'FETCH_HEAD')
+    if ([string]::IsNullOrWhiteSpace($resolvedPluginSourceRepoRoot)) {
+        Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('checkout', '-q', '-B', 'main')
+        $fixtureManifestRoot = Join-Path $pluginCloneRoot 'src/IIoT.Edge.Module.CP'
+        New-Item -ItemType Directory -Force -Path (
+            $fixtureManifestRoot,
+            (Join-Path $pluginCloneRoot 'eng')) | Out-Null
+        @'
+{
+  "moduleId": "CP",
+  "displayName": "正极模切",
+  "description": "Release resume behavior fixture",
+  "iconKind": "ContentCut",
+  "accentColor": "#2563EB",
+  "version": "9.8.7",
+  "hostApiVersion": "2.0.0",
+  "minHostVersion": "2.0.0",
+  "maxHostVersion": "2.0.0",
+  "entryAssembly": "IIoT.Edge.Module.CP.dll",
+  "entryType": "IIoT.Edge.Module.CP.DependencyInjection",
+  "supportedProcessType": "CP",
+  "dependencies": [],
+  "ownedAssemblies": []
+}
+'@ | Set-Content -Encoding utf8NoBOM -LiteralPath (
+            Join-Path $fixtureManifestRoot 'plugin.json')
+        'artifacts/' | Set-Content -Encoding utf8NoBOM -LiteralPath (
+            Join-Path $pluginCloneRoot '.gitignore')
+        Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @(
+            'add', '.gitignore', 'src/IIoT.Edge.Module.CP/plugin.json')
+        Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @(
+            'commit', '-q', '-m', 'seed isolated plugin release fixture')
+    }
+    else {
+        Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @(
+            'remote', 'add', 'source', $resolvedPluginSourceRepoRoot)
+        Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @('fetch', '-q', 'source', 'HEAD')
+        Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @(
+            'checkout', '-q', '-B', 'main', 'FETCH_HEAD')
+    }
     $pluginManifestPath = Join-Path $pluginCloneRoot 'src/IIoT.Edge.Module.CP/plugin.json'
     $pluginManifestJson = Get-Content -Raw -Encoding UTF8 -LiteralPath $pluginManifestPath
     $pluginManifest = $pluginManifestJson | ConvertFrom-Json
@@ -251,7 +356,11 @@ $packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagePath).Hash
         releaseNotes = 'fake host release notes'
     } | ConvertTo-Json | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $hostArtifactRoot 'installer-artifact.json')
     '{}' | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $hostVelopackRoot 'releases.stable.json')
-    'preserved host bundle' | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $hostReleaseRoot 'edge-release-bundle-stable-9.9.9.zip')
+    $hostBundlePath = Join-Path $hostReleaseRoot 'edge-release-bundle-stable-9.9.9.zip'
+    New-DependencyClosureFixtureArchive -ArchivePath $hostBundlePath -LayoutRoot 'installer'
+    $dependencyReferencePath = Join-Path $testRoot 'edge-dependency-reference.nupkg'
+    New-DependencyClosureFixtureArchive -ArchivePath $dependencyReferencePath -LayoutRoot 'lib/app'
+    $env:IIOT_EDGE_DEPENDENCY_REFERENCE_PACKAGE = $dependencyReferencePath
     $hostInvocation = [Guid]::NewGuid().ToString('D')
     @{
         schemaVersion = 1
@@ -353,6 +462,9 @@ $packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagePath).Hash
     }
     $passed++
 
+    Assert-GitClean -RepositoryRoot $cloneRoot -Description 'Edge release'
+    Assert-GitClean -RepositoryRoot $pluginCloneRoot -Description 'Plugin release'
+
     Set-Dispatch -Target EdgeHost
     Assert-ThrowsContaining -Action {
         & (Join-Path $cloneRoot 'scripts/LocalPublishAndDeploy.ps1') `
@@ -412,4 +524,5 @@ finally {
     if ($null -eq $oldEnvironment.Dispatch) { Remove-Item Env:IIOT_EDGE_WORKSPACE_DISPATCH -ErrorAction SilentlyContinue } else { $env:IIOT_EDGE_WORKSPACE_DISPATCH = $oldEnvironment.Dispatch }
     if ($null -eq $oldEnvironment.Target) { Remove-Item Env:IIOT_EDGE_WORKSPACE_TARGET -ErrorAction SilentlyContinue } else { $env:IIOT_EDGE_WORKSPACE_TARGET = $oldEnvironment.Target }
     if ($null -eq $oldEnvironment.Invocation) { Remove-Item Env:IIOT_EDGE_WORKSPACE_INVOCATION_ID -ErrorAction SilentlyContinue } else { $env:IIOT_EDGE_WORKSPACE_INVOCATION_ID = $oldEnvironment.Invocation }
+    if ($null -eq $oldEnvironment.DependencyReference) { Remove-Item Env:IIOT_EDGE_DEPENDENCY_REFERENCE_PACKAGE -ErrorAction SilentlyContinue } else { $env:IIOT_EDGE_DEPENDENCY_REFERENCE_PACKAGE = $oldEnvironment.DependencyReference }
 }
