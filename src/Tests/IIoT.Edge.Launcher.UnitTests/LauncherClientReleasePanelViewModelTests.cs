@@ -141,6 +141,47 @@ public sealed class LauncherClientReleasePanelViewModelTests
     }
 
     [Fact]
+    public async Task ApplyVersionAsync_WhenPluginInstallSucceeds_ShouldRefreshCatalogBeforeCompleting()
+    {
+        var initialCatalog = CreateReleaseCatalog();
+        var installedCatalog = initialCatalog with
+        {
+            Components = initialCatalog.Components
+                .Select(component => component.ModuleId == ModuleId
+                    ? component with
+                    {
+                        CurrentVersion = "1.1.0",
+                        Versions = component.Versions
+                            .Select(option => option.Version == "1.1.0"
+                                ? option with
+                                {
+                                    Status = EdgeVersionStatus.Current,
+                                    CanApply = false
+                                }
+                                : option)
+                            .ToArray()
+                    }
+                    : component)
+                .ToArray()
+        };
+        var service = new RecordingReleaseService(initialCatalog, installedCatalog);
+        var panel = CreatePanel(service);
+        await panel.CheckAsync(Profile());
+        var newer = panel.Components
+            .Single(component => component.ModuleId == ModuleId)
+            .Versions.Single(option => option.Version == "1.1.0");
+
+        await panel.ApplyVersionAsync(newer);
+
+        var refreshedPlugin = panel.Components.Single(component => component.ModuleId == ModuleId);
+        var installedVersion = refreshedPlugin.Versions.Single(option => option.Version == "1.1.0");
+        Assert.Equal(2, service.CheckCallCount);
+        Assert.Equal("1.1.0", refreshedPlugin.CurrentVersion);
+        Assert.Equal(EdgeVersionStatus.Current, installedVersion.Status);
+        Assert.False(installedVersion.CanApply);
+    }
+
+    [Fact]
     public async Task ApplyVersionAsync_WhenPluginOlderVersionCancelled_ShouldNotCallApplyPluginVersion()
     {
         var service = new RecordingReleaseService(CreateReleaseCatalog());
@@ -584,8 +625,12 @@ public sealed class LauncherClientReleasePanelViewModelTests
         public void Complete() => _complete.TrySetResult();
     }
 
-    private sealed class RecordingReleaseService(EdgeReleaseCatalogResult checkResult) : IEdgeReleaseService
+    private sealed class RecordingReleaseService(
+        EdgeReleaseCatalogResult checkResult,
+        EdgeReleaseCatalogResult? afterApplyCheckResult = null) : IEdgeReleaseService
     {
+        public int CheckCallCount { get; private set; }
+
         public string? AppliedPluginModuleId { get; private set; }
 
         public string? AppliedPluginVersion { get; private set; }
@@ -599,7 +644,13 @@ public sealed class LauncherClientReleasePanelViewModelTests
         public Task<EdgeReleaseCatalogResult> CheckReleaseCatalogAsync(
             EdgeUpdateTarget target,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(checkResult);
+        {
+            CheckCallCount++;
+            return Task.FromResult(
+                AppliedPluginModuleId is not null && afterApplyCheckResult is not null
+                    ? afterApplyCheckResult
+                    : checkResult);
+        }
 
         public Task<EdgePluginInstallResult> ApplyPluginVersionAsync(
             EdgeUpdateTarget target,

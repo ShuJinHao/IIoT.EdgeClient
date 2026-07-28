@@ -105,13 +105,22 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
     }
 
     public async Task CheckAsync(IReadOnlyList<LauncherProfileDefinition> profiles)
+        => await CheckAsyncCore(
+                profiles,
+                allowDuringCurrentOperation: false)
+            .ConfigureAwait(true);
+
+    private async Task CheckAsyncCore(
+        IReadOnlyList<LauncherProfileDefinition> profiles,
+        bool allowDuringCurrentOperation)
     {
         ArgumentNullException.ThrowIfNull(profiles);
-        if (IsBusy)
+        if (IsBusy && !allowDuringCurrentOperation)
         {
             return;
         }
 
+        var wasBusy = IsBusy;
         if (profiles.Count == 0)
         {
             Reset();
@@ -151,7 +160,7 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
         }
         finally
         {
-            IsBusy = false;
+            IsBusy = wasBusy;
         }
     }
 
@@ -302,7 +311,10 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
         SetStatus(
             "Launcher_ClientRelease_StatusInstalled",
             string.Join(", ", result.InstalledModuleIds));
-        await CheckAsync(_activeProfiles).ConfigureAwait(true);
+        await CheckAsyncCore(
+                _activeProfiles,
+                allowDuringCurrentOperation: true)
+            .ConfigureAwait(true);
     }
 
     private async Task ApplyHostVersionAsync(LauncherVersionOptionItem option, IProgress<int> progress)
