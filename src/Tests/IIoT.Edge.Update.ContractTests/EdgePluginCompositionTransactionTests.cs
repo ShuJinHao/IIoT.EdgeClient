@@ -34,8 +34,7 @@ public sealed class EdgePluginCompositionTransactionTests
 
         var result = await transaction.InstallAsync(
             [fixture.TargetForModules(["TestPlugin"])],
-            [fixture.Release("TestPlugin")],
-            fixture.CloudOptions,
+            [fixture.Source(fixture.Release("TestPlugin"))],
             "1.0.0",
             EdgeClientHostRuntime.HostApiVersion,
             pendingHostVersion: "2.0.0",
@@ -63,10 +62,9 @@ public sealed class EdgePluginCompositionTransactionTests
         var result = await transaction.InstallAsync(
             [fixture.TargetForModules(["Dependency", "TestPlugin"])],
             [
-                fixture.Release("Dependency"),
-                fixture.Release("TestPlugin", ["Dependency"])
+                fixture.Source(fixture.Release("Dependency")),
+                fixture.Source(fixture.Release("TestPlugin", ["Dependency"]))
             ],
-            fixture.CloudOptions,
             "1.0.0",
             EdgeClientHostRuntime.HostApiVersion,
             pendingHostVersion: null,
@@ -84,8 +82,7 @@ public sealed class EdgePluginCompositionTransactionTests
         var firstLauncher = fixture.CreateTransaction();
         var install = await firstLauncher.InstallAsync(
             [fixture.TargetForModules(["TestPlugin"])],
-            [fixture.Release("TestPlugin")],
-            fixture.CloudOptions,
+            [fixture.Source(fixture.Release("TestPlugin"))],
             "1.0.0",
             EdgeClientHostRuntime.HostApiVersion,
             pendingHostVersion: "99.0.0",
@@ -111,8 +108,7 @@ public sealed class EdgePluginCompositionTransactionTests
         var transaction = fixture.CreateTransaction();
         var install = await transaction.InstallAsync(
             [fixture.TargetForModules(["TestPlugin"])],
-            [fixture.Release("TestPlugin")],
-            fixture.CloudOptions,
+            [fixture.Source(fixture.Release("TestPlugin"))],
             "1.0.0",
             EdgeClientHostRuntime.HostApiVersion,
             pendingHostVersion: "99.0.0",
@@ -156,8 +152,7 @@ public sealed class EdgePluginCompositionTransactionTests
         var firstLauncher = fixture.CreateTransaction();
         var install = await firstLauncher.InstallAsync(
             [fixture.TargetForModules(["TestPlugin"])],
-            [fixture.Release("TestPlugin")],
-            fixture.CloudOptions,
+            [fixture.Source(fixture.Release("TestPlugin"))],
             "1.0.0",
             EdgeClientHostRuntime.HostApiVersion,
             pendingHostVersion: expectedHostVersion,
@@ -191,8 +186,7 @@ public sealed class EdgePluginCompositionTransactionTests
         });
         var install = await transaction.InstallAsync(
             [fixture.TargetForModules(["TestPlugin"])],
-            [fixture.Release("TestPlugin")],
-            fixture.CloudOptions,
+            [fixture.Source(fixture.Release("TestPlugin"))],
             "1.0.0",
             EdgeClientHostRuntime.HostApiVersion,
             pendingHostVersion: "2.0.0",
@@ -212,6 +206,52 @@ public sealed class EdgePluginCompositionTransactionTests
     }
 
     [Fact]
+    public async Task RollbackPendingHostHandoff_WhenJournalRemovalFails_ShouldKeepDurableCleanupMarkerWithoutBlockingShell()
+    {
+        using var fixture = TransactionFixture.Create(["TestPlugin"]);
+        var failJournalRemovalOnce = true;
+        var transaction = fixture.CreateTransaction(stage =>
+        {
+            if (stage == EdgePluginTransactionStage.JournalRemoval
+                && failJournalRemovalOnce)
+            {
+                failJournalRemovalOnce = false;
+                throw new IOException("simulated journal removal failure");
+            }
+        });
+        var install = await transaction.InstallAsync(
+            [fixture.TargetForModules(["TestPlugin"])],
+            [fixture.Source(fixture.Release("TestPlugin"))],
+            "1.0.0",
+            EdgeClientHostRuntime.HostApiVersion,
+            pendingHostVersion: "2.0.0",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(install.Success, install.ErrorMessage);
+
+        var rollback = transaction.RollbackPendingHostHandoff();
+
+        Assert.True(rollback.Success, rollback.ErrorMessage);
+        fixture.AssertOldCombination(["TestPlugin"]);
+        Assert.True(File.Exists(fixture.JournalPath));
+        Assert.False(transaction.IsProfileBlocked(fixture.Target.MachineProfile));
+        Assert.Contains(
+            "\"state\": \"rollbackCleanupPending\"",
+            File.ReadAllText(fixture.JournalPath),
+            StringComparison.Ordinal);
+        Assert.Empty(Directory.EnumerateDirectories(
+            Path.Combine(fixture.PluginsRoot, ".transactions")));
+
+        var recovery = transaction.RecoverPendingTransaction();
+
+        Assert.True(recovery.Success, recovery.ErrorMessage);
+        Assert.True(recovery.Recovered);
+        Assert.False(recovery.Blocked);
+        Assert.False(File.Exists(fixture.JournalPath));
+        fixture.AssertOldCombination(["TestPlugin"]);
+    }
+
+    [Fact]
     public async Task InstallAsync_WhenNoHostHandoff_ShouldPreserveCustomConfigurationAndUnrelatedState()
     {
         using var fixture = TransactionFixture.Create(["TestPlugin"]);
@@ -219,8 +259,7 @@ public sealed class EdgePluginCompositionTransactionTests
 
         var result = await transaction.InstallAsync(
             [fixture.TargetForModules(["TestPlugin"])],
-            [fixture.Release("TestPlugin")],
-            fixture.CloudOptions,
+            [fixture.Source(fixture.Release("TestPlugin"))],
             "1.0.0",
             EdgeClientHostRuntime.HostApiVersion,
             pendingHostVersion: null,
@@ -248,8 +287,7 @@ public sealed class EdgePluginCompositionTransactionTests
 
         var first = await transaction.InstallAsync(
             [fixture.TargetForModules(["TestPlugin"])],
-            [fixture.Release("TestPlugin")],
-            fixture.CloudOptions,
+            [fixture.Source(fixture.Release("TestPlugin"))],
             "1.0.0",
             EdgeClientHostRuntime.HostApiVersion,
             pendingHostVersion: null,
@@ -262,8 +300,7 @@ public sealed class EdgePluginCompositionTransactionTests
 
         var second = await transaction.InstallAsync(
             [fixture.TargetForModules(["TestPlugin"])],
-            [fixture.Release("TestPlugin")],
-            fixture.CloudOptions,
+            [fixture.Source(fixture.Release("TestPlugin"))],
             "1.0.0",
             EdgeClientHostRuntime.HostApiVersion,
             pendingHostVersion: null,
@@ -292,8 +329,7 @@ public sealed class EdgePluginCompositionTransactionTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             transaction.InstallAsync(
                 [fixture.TargetForModules(["TestPlugin"])],
-                [fixture.Release("TestPlugin")],
-                fixture.CloudOptions,
+                [fixture.Source(fixture.Release("TestPlugin"))],
                 "1.0.0",
                 EdgeClientHostRuntime.HostApiVersion,
                 pendingHostVersion: "2.0.0",
@@ -324,8 +360,7 @@ public sealed class EdgePluginCompositionTransactionTests
 
         var result = await transaction.InstallAsync(
             [fixture.TargetForModules(["TestPlugin"])],
-            [fixture.Release("TestPlugin")],
-            fixture.CloudOptions,
+            [fixture.Source(fixture.Release("TestPlugin"))],
             "1.0.0",
             EdgeClientHostRuntime.HostApiVersion,
             pendingHostVersion: "2.0.0",
@@ -545,6 +580,11 @@ public sealed class EdgePluginCompositionTransactionTests
                     DateTime.UtcNow,
                     DateTime.UtcNow));
         }
+
+        public EdgePluginCompositionRelease Source(
+            EdgePluginVersionRelease release,
+            EdgeUpdateCloudApiOptions? cloudOptions = null)
+            => new(release, cloudOptions ?? CloudOptions);
 
         public void AssertOldCombination(IReadOnlyList<string> moduleIds)
         {

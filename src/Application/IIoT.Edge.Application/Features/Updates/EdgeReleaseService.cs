@@ -343,8 +343,7 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
                 orderedReleases
                     .Select(static release => release.ModuleId)
                     .ToArray())],
-            orderedReleases,
-            context,
+            BindReleaseSources(orderedReleases, context.CloudOptions!),
             compatibilityHostVersion,
             compatibilityHostApiVersion,
             pendingHostVersion,
@@ -466,15 +465,6 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
             }
         }
 
-        foreach (var moduleId in selection.PluginVersions.Keys)
-        {
-            if (!targetContexts.Any(item => item.EnabledModules.Contains(moduleId)))
-            {
-                return EdgePluginInstallResult.Failed(
-                    $"插件 {moduleId} 未在任何本次工序 profile 中启用，拒绝把它加入宿主组合。");
-            }
-        }
-
         var selectedByModule = MergePluginVersions(
             targetContexts.Select(static item => item.Operation.Catalog!),
             canonicalHostRelease.Version,
@@ -485,17 +475,44 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
             return EdgePluginInstallResult.Failed(mergeIssue);
         }
 
+        var requestedReleaseSources = new Dictionary<string, EdgePluginCompositionRelease>(
+            StringComparer.OrdinalIgnoreCase);
         foreach (var item in selection.PluginVersions)
         {
-            if (!selectedByModule.TryGetValue(item.Key, out var releases)
-                || releases.FirstOrDefault(release =>
-                    string.Equals(release.PackageVersion, item.Value, StringComparison.OrdinalIgnoreCase)) is not { } selected)
+            var enabledContexts = targetContexts
+                .Where(context => context.EnabledModules.Contains(item.Key))
+                .ToArray();
+            if (enabledContexts.Length == 0)
             {
                 return EdgePluginInstallResult.Failed(
-                    $"全部工序 Cloud catalog 中均未找到插件 {item.Key} 的版本 {item.Value}。");
+                    $"插件 {item.Key} 未在任何本次工序 profile 中启用，拒绝把它加入宿主组合。");
+            }
+
+            CompositionTargetContext? owner = null;
+            EdgePluginVersionRelease? selected = null;
+            foreach (var candidateOwner in enabledContexts)
+            {
+                selected = FindCatalogRelease(
+                    candidateOwner.Operation.Catalog!,
+                    item.Key,
+                    item.Value);
+                if (selected is not null)
+                {
+                    owner = candidateOwner;
+                    break;
+                }
+            }
+
+            if (owner is null || selected is null)
+            {
+                return EdgePluginInstallResult.Failed(
+                    $"启用插件 {item.Key} 的工序 Cloud catalog 中没有版本 {item.Value}，拒绝跨用其他工序的下载源。");
             }
 
             selectedByModule[item.Key] = [selected];
+            requestedReleaseSources[item.Key] = new EdgePluginCompositionRelease(
+                selected,
+                owner.Operation.CloudOptions!);
         }
 
         var selectedReleaseByModule = selectedByModule.ToDictionary(
@@ -539,6 +556,41 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
             return EdgePluginInstallResult.Failed(installOrderIssue);
         }
 
+        var ownedReleases = new List<EdgePluginCompositionRelease>(orderedReleases.Count);
+        foreach (var release in orderedReleases)
+        {
+            if (requestedReleaseSources.TryGetValue(release.ModuleId, out var requested))
+            {
+                ownedReleases.Add(requested);
+                continue;
+            }
+
+            EdgePluginCompositionRelease? ownedDependency = null;
+            foreach (var targetContext in targetContexts)
+            {
+                var advertised = FindCatalogRelease(
+                    targetContext.Operation.Catalog!,
+                    release);
+                if (advertised is null)
+                {
+                    continue;
+                }
+
+                ownedDependency = new EdgePluginCompositionRelease(
+                    advertised,
+                    targetContext.Operation.CloudOptions!);
+                break;
+            }
+
+            if (ownedDependency is null)
+            {
+                return EdgePluginInstallResult.Failed(
+                    $"插件 {release.ModuleId} {release.PackageVersion} 没有可追溯的工序 catalog 下载源。");
+            }
+
+            ownedReleases.Add(ownedDependency);
+        }
+
         var transactionTargets = targetContexts
             .Select(targetContext => new EdgePluginCompositionTarget(
                 targetContext.Target,
@@ -549,8 +601,7 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
             .ToArray();
         var installResult = await InstallCompositionReleasesAsync(
             transactionTargets,
-            orderedReleases,
-            targetContexts[0].Operation,
+            ownedReleases,
             canonicalHostRelease.Version,
             canonicalHostRelease.HostApiVersion,
             canonicalHostRelease.Version,
@@ -877,6 +928,30 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
                    right.Dependencies.OrderBy(static value => value, StringComparer.OrdinalIgnoreCase),
                    StringComparer.OrdinalIgnoreCase);
 
+    private static EdgePluginVersionRelease? FindCatalogRelease(
+        EdgeReleaseCatalog catalog,
+        string moduleId,
+        string packageVersion)
+        => FlattenPluginVersions(catalog).TryGetValue(moduleId, out var releases)
+            ? releases.FirstOrDefault(release =>
+                string.Equals(
+                    release.PackageVersion,
+                    packageVersion,
+                    StringComparison.OrdinalIgnoreCase))
+            : null;
+
+    private static EdgePluginVersionRelease? FindCatalogRelease(
+        EdgeReleaseCatalog catalog,
+        EdgePluginVersionRelease expected)
+        => FlattenPluginVersions(catalog).TryGetValue(expected.ModuleId, out var releases)
+            ? releases.FirstOrDefault(release =>
+                string.Equals(
+                    release.PackageVersion,
+                    expected.PackageVersion,
+                    StringComparison.OrdinalIgnoreCase)
+                && HasSamePluginArtifact(release, expected))
+            : null;
+
     private static EdgeVersionOption BuildHostVersionOption(
         EdgeHostVersionEntry targetHost,
         string currentHostVersion,
@@ -1110,8 +1185,7 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
                         ordered
                             .Select(static release => release.ModuleId)
                             .ToArray())],
-                    ordered,
-                    context.CloudOptions!,
+                    BindReleaseSources(ordered, context.CloudOptions!),
                     compatibilityHostVersion,
                     compatibilityHostApiVersion,
                     pendingHostVersion: null,
@@ -1163,8 +1237,7 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
 
     private async Task<EdgePluginInstallResult> InstallCompositionReleasesAsync(
         IReadOnlyList<EdgePluginCompositionTarget> targets,
-        IReadOnlyList<EdgePluginVersionRelease> releases,
-        OperationContext context,
+        IReadOnlyList<EdgePluginCompositionRelease> releases,
         string compatibilityHostVersion,
         string compatibilityHostApiVersion,
         string? pendingHostVersion,
@@ -1182,7 +1255,6 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
                 .InstallAsync(
                     targets,
                     releases,
-                    context.CloudOptions!,
                     compatibilityHostVersion,
                     compatibilityHostApiVersion,
                     pendingHostVersion,
@@ -1199,8 +1271,8 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
             var result = await _packageInstaller
                 .InstallAsync(
                     owner,
-                    release,
-                    context.CloudOptions!,
+                    release.Release,
+                    release.CloudOptions,
                     compatibilityHostVersion,
                     compatibilityHostApiVersion,
                     CreateStepProgress(progress, index * 100 / releases.Count, releases.Count),
@@ -1229,6 +1301,13 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray());
     }
+
+    private static IReadOnlyList<EdgePluginCompositionRelease> BindReleaseSources(
+        IReadOnlyList<EdgePluginVersionRelease> releases,
+        EdgeUpdateCloudApiOptions cloudOptions)
+        => releases
+            .Select(release => new EdgePluginCompositionRelease(release, cloudOptions))
+            .ToArray();
 
     private async Task<EdgePluginInstallResult> ApplyHostReleaseWithRollbackAsync(
         EdgeHostVersionEntry release,

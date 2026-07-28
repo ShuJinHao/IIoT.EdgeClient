@@ -9,8 +9,7 @@ public interface IEdgePluginCompositionTransaction
 {
     Task<EdgePluginInstallResult> InstallAsync(
         IReadOnlyList<EdgePluginCompositionTarget> targets,
-        IReadOnlyList<EdgePluginVersionRelease> releases,
-        EdgeUpdateCloudApiOptions cloudOptions,
+        IReadOnlyList<EdgePluginCompositionRelease> releases,
         string compatibilityHostVersion,
         string compatibilityHostApiVersion,
         string? pendingHostVersion,
@@ -23,6 +22,10 @@ public interface IEdgePluginCompositionTransaction
 public sealed record EdgePluginCompositionTarget(
     EdgeUpdateTarget Target,
     IReadOnlyList<string> ModuleIds);
+
+public sealed record EdgePluginCompositionRelease(
+    EdgePluginVersionRelease Release,
+    EdgeUpdateCloudApiOptions CloudOptions);
 
 public interface IEdgeUpdateTransactionRecovery
 {

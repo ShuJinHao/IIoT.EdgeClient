@@ -18,6 +18,7 @@ public enum EdgePluginTransactionStage
     ProfileWritten,
     HostHandoffPending,
     Cleanup,
+    JournalRemoval,
     Rollback
 }
 
@@ -32,6 +33,7 @@ public sealed class EdgePluginCompositionTransaction
     private const string StateCommitting = "committing";
     private const string StateHostHandoffPending = "hostHandoffPending";
     private const string StateCleanupPending = "cleanupPending";
+    private const string StateRollbackCleanupPending = "rollbackCleanupPending";
     private const string StateRollbackFailed = "rollbackFailed";
 
     private static readonly JsonSerializerOptions JournalJsonOptions = new()
@@ -74,8 +76,7 @@ public sealed class EdgePluginCompositionTransaction
 
     public async Task<EdgePluginInstallResult> InstallAsync(
         IReadOnlyList<EdgePluginCompositionTarget> targets,
-        IReadOnlyList<EdgePluginVersionRelease> releases,
-        EdgeUpdateCloudApiOptions cloudOptions,
+        IReadOnlyList<EdgePluginCompositionRelease> releases,
         string compatibilityHostVersion,
         string compatibilityHostApiVersion,
         string? pendingHostVersion,
@@ -84,14 +85,13 @@ public sealed class EdgePluginCompositionTransaction
     {
         ArgumentNullException.ThrowIfNull(targets);
         ArgumentNullException.ThrowIfNull(releases);
-        ArgumentNullException.ThrowIfNull(cloudOptions);
         if (targets.Count == 0 || releases.Count == 0)
         {
             return EdgePluginInstallResult.Failed("插件组合事务缺少目标或发布包。");
         }
 
         if (releases
-            .GroupBy(static release => release.ModuleId, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(static release => release.Release.ModuleId, StringComparer.OrdinalIgnoreCase)
             .Any(static group => group.Count() > 1))
         {
             return EdgePluginInstallResult.Failed("插件组合事务包含重复 ModuleId。");
@@ -123,7 +123,7 @@ public sealed class EdgePluginCompositionTransaction
                 transactionRelativePath,
                 pluginsRoot,
                 targets,
-                releases,
+                releases.Select(static item => item.Release).ToArray(),
                 pendingHostVersion);
         }
         catch (Exception ex) when (ex is IOException
@@ -146,12 +146,12 @@ public sealed class EdgePluginCompositionTransaction
                 var stagingRoot = Path.Combine(
                     transactionRoot,
                     "staging",
-                    EdgeClientProgramDataPaths.SanitizePathSegment(release.ModuleId));
+                    EdgeClientProgramDataPaths.SanitizePathSegment(release.Release.ModuleId));
                 prepared.Add(await _packageInstaller
                     .PrepareAsync(
                         stagingRoot,
-                        release,
-                        cloudOptions,
+                        release.Release,
+                        release.CloudOptions,
                         compatibilityHostVersion,
                         compatibilityHostApiVersion,
                         ScaleProgress(progress, index, releases.Count, 0, 55),
@@ -227,7 +227,7 @@ public sealed class EdgePluginCompositionTransaction
             progress?.Report(100);
             return EdgePluginInstallResult.Succeeded(
                 releases
-                    .Select(static release => release.ModuleId)
+                    .Select(static release => release.Release.ModuleId)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToArray());
         }
@@ -365,6 +365,19 @@ public sealed class EdgePluginCompositionTransaction
                 ErrorMessage: cleaned ? null : "已提交更新的备份清理待重试。");
         }
 
+        if (string.Equals(
+                journal.State,
+                StateRollbackCleanupPending,
+                StringComparison.Ordinal))
+        {
+            var cleaned = FinalizeRolledBackTransaction(journal, pluginsRoot);
+            return new EdgeUpdateTransactionRecoveryResult(
+                Success: true,
+                Recovered: cleaned,
+                Blocked: false,
+                ErrorMessage: cleaned ? null : "已回滚更新的备份清理待重试。");
+        }
+
         if (string.Equals(journal.State, StateHostHandoffPending, StringComparison.Ordinal)
             && IsExpectedHostHandoffState(journal, pluginsRoot))
         {
@@ -407,7 +420,11 @@ public sealed class EdgePluginCompositionTransaction
                 return true;
             }
 
-            if (string.Equals(journal.State, StateCleanupPending, StringComparison.Ordinal))
+            if (string.Equals(journal.State, StateCleanupPending, StringComparison.Ordinal)
+                || string.Equals(
+                    journal.State,
+                    StateRollbackCleanupPending,
+                    StringComparison.Ordinal))
             {
                 return false;
             }
@@ -578,7 +595,10 @@ public sealed class EdgePluginCompositionTransaction
                 }
             }
 
-            DeleteTransactionEvidence(journal, pluginsRoot);
+            journal.State = StateRollbackCleanupPending;
+            journal.LastError = null;
+            WriteJournal(journal);
+            _ = FinalizeRolledBackTransaction(journal, pluginsRoot);
             _blockAllProfiles = false;
             return new RollbackResult(true, null);
         }
@@ -652,6 +672,32 @@ public sealed class EdgePluginCompositionTransaction
         }
     }
 
+    private bool FinalizeRolledBackTransaction(
+        UpdateTransactionJournal journal,
+        string pluginsRoot)
+    {
+        try
+        {
+            DeleteTransactionEvidence(journal, pluginsRoot);
+            _blockAllProfiles = false;
+            return true;
+        }
+        catch (IOException)
+        {
+            journal.State = StateRollbackCleanupPending;
+            TryWriteJournal(journal);
+            _blockAllProfiles = false;
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            journal.State = StateRollbackCleanupPending;
+            TryWriteJournal(journal);
+            _blockAllProfiles = false;
+            return false;
+        }
+    }
+
     private void DeleteTransactionEvidence(
         UpdateTransactionJournal journal,
         string pluginsRoot)
@@ -664,6 +710,7 @@ public sealed class EdgePluginCompositionTransaction
             Directory.Delete(transactionRoot, recursive: true);
         }
 
+        _faultInjector?.Invoke(EdgePluginTransactionStage.JournalRemoval);
         if (File.Exists(_journalPath))
         {
             File.Delete(_journalPath);
@@ -955,6 +1002,7 @@ public sealed class EdgePluginCompositionTransaction
             or StateCommitting
             or StateHostHandoffPending
             or StateCleanupPending
+            or StateRollbackCleanupPending
             or StateRollbackFailed;
 
     private static bool IsRecoveryException(Exception ex)

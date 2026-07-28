@@ -1047,6 +1047,213 @@ public sealed class EdgeUpdateInfrastructureTests
     }
 
     [Fact]
+    public async Task ApplyVersionCompositionAsync_WhenCatalogsOwnDifferentRelativePackages_ShouldKeepEachReleaseSource()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            const string targetVersion = "99.0.0";
+            var hostRelease = HostRelease(
+                targetVersion,
+                EdgeClientHostRuntime.HostApiVersion);
+            var firstCatalog = CatalogWithHostVersions(
+                [hostRelease],
+                PluginComponent(
+                    "FirstPlugin",
+                    Release(
+                        "FirstPlugin",
+                        targetVersion,
+                        EdgeClientHostRuntime.HostApiVersion,
+                        targetVersion,
+                        targetVersion) with
+                    {
+                        DownloadUrl = "packages/first.zip"
+                    }));
+            var secondCatalog = CatalogWithHostVersions(
+                [hostRelease],
+                PluginComponent(
+                    "SecondPlugin",
+                    Release(
+                        "SecondPlugin",
+                        targetVersion,
+                        EdgeClientHostRuntime.HostApiVersion,
+                        targetVersion,
+                        targetVersion) with
+                    {
+                        DownloadUrl = "packages/second.zip"
+                    }));
+            var firstOptions = CloudOptions(
+                "https://line-a.example.test",
+                "EDGE-A");
+            var secondOptions = CloudOptions(
+                "https://line-b.example.test",
+                "EDGE-B");
+            var transaction = new RecordingCompositionTransaction();
+            var hostUpdateService = new RecordingHostUpdateService();
+            var service = new EdgeReleaseService(
+                new ProfileCloudConfigurationProvider(
+                    new Dictionary<string, EdgeUpdateCloudApiOptions>(
+                        StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["LineA"] = firstOptions,
+                        ["LineB"] = secondOptions
+                    }),
+                new SuccessfulDeviceSessionClient(),
+                new ProfileCatalogClient(
+                    new Dictionary<string, EdgeReleaseCatalog>(
+                        StringComparer.OrdinalIgnoreCase)
+                    {
+                        [firstOptions.BaseUrl] = firstCatalog,
+                        [secondOptions.BaseUrl] = secondCatalog
+                    }),
+                new NoopVersionReporter(),
+                new FixedInstalledPluginCatalog([]),
+                new ProfileModuleConfigurationStore(
+                    new Dictionary<string, IReadOnlyList<string>>(
+                        StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["LineA"] = ["FirstPlugin"],
+                        ["LineB"] = ["SecondPlugin"]
+                    }),
+                new NoopPluginPackageInstaller(),
+                hostUpdateService,
+                new EdgeVersionCompatibilityPolicy(),
+                releaseSourceValidator: null,
+                compositionTransaction: transaction);
+            var firstTarget = Target(tempDirectory);
+            var secondTarget = firstTarget with { MachineProfile = "LineB" };
+
+            var result = await service.ApplyVersionCompositionAsync(
+                [firstTarget, secondTarget],
+                new EdgeVersionSelection(
+                    targetVersion,
+                    new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["FirstPlugin"] = targetVersion,
+                        ["SecondPlugin"] = targetVersion
+                    }),
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.True(result.Success, result.ErrorMessage);
+            Assert.Equal(1, transaction.InstallCallCount);
+            var firstSource = Assert.Single(
+                transaction.Releases,
+                item => item.Release.ModuleId == "FirstPlugin");
+            Assert.Equal("packages/first.zip", firstSource.Release.DownloadUrl);
+            Assert.Equal(firstOptions.BaseUrl, firstSource.CloudOptions.BaseUrl);
+            var secondSource = Assert.Single(
+                transaction.Releases,
+                item => item.Release.ModuleId == "SecondPlugin");
+            Assert.Equal("packages/second.zip", secondSource.Release.DownloadUrl);
+            Assert.Equal(secondOptions.BaseUrl, secondSource.CloudOptions.BaseUrl);
+            Assert.Equal(1, hostUpdateService.ApplyCallCount);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task ApplyVersionCompositionAsync_WhenEnabledProfileDoesNotAdvertiseSelectedPlugin_ShouldRejectCrossProfileSource()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            const string targetVersion = "99.0.0";
+            var hostRelease = HostRelease(
+                targetVersion,
+                EdgeClientHostRuntime.HostApiVersion);
+            var firstCatalog = CatalogWithHostVersions(
+                [hostRelease],
+                PluginComponent(
+                    "TestPlugin",
+                    Release(
+                        "TestPlugin",
+                        "1.0.0",
+                        EdgeClientHostRuntime.HostApiVersion,
+                        "1.0.0",
+                        targetVersion)));
+            var secondCatalog = CatalogWithHostVersions(
+                [hostRelease],
+                PluginComponent(
+                    "TestPlugin",
+                    Release(
+                        "TestPlugin",
+                        targetVersion,
+                        EdgeClientHostRuntime.HostApiVersion,
+                        targetVersion,
+                        targetVersion) with
+                    {
+                        DownloadUrl = "packages/test-plugin.zip"
+                    }));
+            var firstOptions = CloudOptions(
+                "https://line-a.example.test",
+                "EDGE-A");
+            var secondOptions = CloudOptions(
+                "https://line-b.example.test",
+                "EDGE-B");
+            var transaction = new RecordingCompositionTransaction();
+            var hostUpdateService = new RecordingHostUpdateService();
+            var service = new EdgeReleaseService(
+                new ProfileCloudConfigurationProvider(
+                    new Dictionary<string, EdgeUpdateCloudApiOptions>(
+                        StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["LineA"] = firstOptions,
+                        ["LineB"] = secondOptions
+                    }),
+                new SuccessfulDeviceSessionClient(),
+                new ProfileCatalogClient(
+                    new Dictionary<string, EdgeReleaseCatalog>(
+                        StringComparer.OrdinalIgnoreCase)
+                    {
+                        [firstOptions.BaseUrl] = firstCatalog,
+                        [secondOptions.BaseUrl] = secondCatalog
+                    }),
+                new NoopVersionReporter(),
+                new FixedInstalledPluginCatalog(
+                    [InstalledPlugin("TestPlugin", "1.0.0", "1.0.0", targetVersion)]),
+                new ProfileModuleConfigurationStore(
+                    new Dictionary<string, IReadOnlyList<string>>(
+                        StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["LineA"] = ["TestPlugin"],
+                        ["LineB"] = []
+                    }),
+                new NoopPluginPackageInstaller(),
+                hostUpdateService,
+                new EdgeVersionCompatibilityPolicy(),
+                releaseSourceValidator: null,
+                compositionTransaction: transaction);
+            var firstTarget = Target(tempDirectory);
+            var secondTarget = firstTarget with { MachineProfile = "LineB" };
+
+            var result = await service.ApplyVersionCompositionAsync(
+                [firstTarget, secondTarget],
+                new EdgeVersionSelection(
+                    targetVersion,
+                    new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["TestPlugin"] = targetVersion
+                    }),
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.False(result.Success);
+            Assert.Contains(
+                "拒绝跨用其他工序的下载源",
+                result.ErrorMessage ?? string.Empty,
+                StringComparison.Ordinal);
+            Assert.Equal(0, transaction.InstallCallCount);
+            Assert.Equal(0, hostUpdateService.ApplyCallCount);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
     public async Task ApplyPluginVersionAsync_WhenPluginHasDependency_ShouldSubmitOneAtomicTransaction()
     {
         var dependency = Release(
@@ -1087,7 +1294,7 @@ public sealed class EdgeUpdateInfrastructureTests
         Assert.Equal(1, transaction.InstallCallCount);
         Assert.Equal(
             ["Dependency", "TestPlugin"],
-            transaction.Releases.Select(static release => release.ModuleId));
+            transaction.Releases.Select(static release => release.Release.ModuleId));
         Assert.Null(transaction.PendingHostVersion);
     }
 
@@ -1344,10 +1551,15 @@ public sealed class EdgeUpdateInfrastructureTests
         => new("LineA", hostDirectory, Path.Combine(hostDirectory, "IIoT.Edge.Shell"));
 
     private static EdgeUpdateCloudApiOptions CloudOptions()
+        => CloudOptions("https://cloud.example.test", "EDGE-001");
+
+    private static EdgeUpdateCloudApiOptions CloudOptions(
+        string baseUrl,
+        string clientCode)
         => new(
-            "https://cloud.example.test",
+            baseUrl,
             5,
-            "EDGE-001",
+            clientCode,
             "secret",
             "/api/v1/bootstrap/device-instance",
             "/api/v1/edge/client-releases/device/{deviceId}/catalog",
@@ -1698,6 +1910,20 @@ public sealed class EdgeUpdateInfrastructureTests
             => new("stable", "win-x64");
     }
 
+    private sealed class ProfileCloudConfigurationProvider(
+        IReadOnlyDictionary<string, EdgeUpdateCloudApiOptions> optionsByProfile)
+        : IEdgeUpdateConfigurationProvider
+    {
+        public EdgeUpdateConfigurationResult Resolve(EdgeUpdateTarget target)
+            => optionsByProfile.TryGetValue(target.MachineProfile, out var options)
+                ? EdgeUpdateConfigurationResult.Succeeded(options)
+                : EdgeUpdateConfigurationResult.Failed(
+                    $"Missing profile configuration: {target.MachineProfile}");
+
+        public EdgeReleaseOptions ResolveReleaseOptions()
+            => new("stable", "win-x64");
+    }
+
     private sealed class SuccessfulDeviceSessionClient : IEdgeUpdateDeviceSessionClient
     {
         public Task<EdgeUpdateOperationResult<EdgeUpdateDeviceSession>> BootstrapAsync(
@@ -1734,6 +1960,22 @@ public sealed class EdgeUpdateInfrastructureTests
             EdgeReleaseOptions releaseOptions,
             CancellationToken cancellationToken = default)
             => Task.FromResult(EdgeUpdateOperationResult<EdgeReleaseCatalog>.Succeeded(catalog));
+    }
+
+    private sealed class ProfileCatalogClient(
+        IReadOnlyDictionary<string, EdgeReleaseCatalog> catalogsByBaseUrl)
+        : IEdgeUpdateCatalogClient
+    {
+        public Task<EdgeUpdateOperationResult<EdgeReleaseCatalog>> GetCatalogAsync(
+            EdgeUpdateCloudApiOptions options,
+            EdgeUpdateDeviceSession session,
+            EdgeReleaseOptions releaseOptions,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(
+                catalogsByBaseUrl.TryGetValue(options.BaseUrl, out var catalog)
+                    ? EdgeUpdateOperationResult<EdgeReleaseCatalog>.Succeeded(catalog)
+                    : EdgeUpdateOperationResult<EdgeReleaseCatalog>.Failed(
+                        $"Missing catalog: {options.BaseUrl}"));
     }
 
     private sealed class RecordingCatalogClient(EdgeReleaseCatalog catalog)
@@ -1847,6 +2089,20 @@ public sealed class EdgeUpdateInfrastructureTests
         }
     }
 
+    private sealed class ProfileModuleConfigurationStore(
+        IReadOnlyDictionary<string, IReadOnlyList<string>> modulesByProfile)
+        : IEdgeProfileModuleConfigurationStore
+    {
+        public IReadOnlyList<string> ReadEnabledModules(EdgeUpdateTarget target)
+            => modulesByProfile.TryGetValue(target.MachineProfile, out var modules)
+                ? modules
+                : [];
+
+        public void EnableModules(EdgeUpdateTarget target, IReadOnlyList<string> moduleIds)
+        {
+        }
+    }
+
     private sealed class FixedCloudSwitchReader(bool enabled) : IEdgeProfileCloudSwitchReader
     {
         public bool IsEnabled(EdgeUpdateTarget target) => enabled;
@@ -1898,14 +2154,13 @@ public sealed class EdgeUpdateInfrastructureTests
 
         public int RollbackCallCount { get; private set; }
 
-        public IReadOnlyList<EdgePluginVersionRelease> Releases { get; private set; } = [];
+        public IReadOnlyList<EdgePluginCompositionRelease> Releases { get; private set; } = [];
 
         public string? PendingHostVersion { get; private set; }
 
         public Task<EdgePluginInstallResult> InstallAsync(
             IReadOnlyList<EdgePluginCompositionTarget> targets,
-            IReadOnlyList<EdgePluginVersionRelease> releases,
-            EdgeUpdateCloudApiOptions cloudOptions,
+            IReadOnlyList<EdgePluginCompositionRelease> releases,
             string compatibilityHostVersion,
             string compatibilityHostApiVersion,
             string? pendingHostVersion,
@@ -1918,7 +2173,7 @@ public sealed class EdgeUpdateInfrastructureTests
             return Task.FromResult(
                 EdgePluginInstallResult.Succeeded(
                     releases
-                        .Select(static release => release.ModuleId)
+                        .Select(static release => release.Release.ModuleId)
                         .ToArray()));
         }
 
