@@ -156,7 +156,7 @@ public sealed class EdgePluginPackageInstaller
                     "插件包地址只允许绝对 HTTP/HTTPS URL 或 catalog 相对 URL。");
         }
 
-        if (candidate.StartsWith("//", StringComparison.Ordinal)
+        if (candidate.StartsWith("/", StringComparison.Ordinal)
             || candidate.StartsWith("\\", StringComparison.Ordinal)
             || candidate.Contains('\\')
             || !Uri.TryCreate(candidate, UriKind.Relative, out _))
