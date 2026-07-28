@@ -47,6 +47,14 @@ public sealed class LauncherProfileVisibilityServiceTests
                 selection.EnabledModuleIds.OrderBy(static x => x).ToArray());
             Assert.Equal("TestPluginAlphaLine", selection.ModuleProfileIds["TestPluginAlpha"]);
             Assert.Equal("TestPluginBetaLine", selection.ModuleProfileIds["TestPluginBeta"]);
+            Assert.Equal(
+                ["TestPluginAlpha"],
+                visible.Single(static profile => profile.ProfileId == "TestPluginAlphaLine").ExpectedModuleIds);
+            Assert.Equal(
+                ["TestPluginBeta"],
+                selection.VisibleProfiles
+                    .Single(static profile => profile.ProfileId == "TestPluginBetaLine")
+                    .ExpectedModuleIds);
         }
         finally
         {

@@ -28,6 +28,49 @@ public sealed class LauncherClientReleasePanelViewModelTests
     }
 
     [Fact]
+    public async Task CheckAsync_WhenUnrelatedProfileCatalogFails_ShouldKeepOwnedPluginAvailable()
+    {
+        const string cpModuleId = "IIoT.Edge.CP";
+        var apCatalog = CreateReleaseCatalog();
+        var cpFallback = new EdgeReleaseCatalogResult(
+            EdgeReleaseCatalogState.CatalogUnavailable,
+            "stable",
+            "win-x64",
+            "1.0.0",
+            "1.0.0",
+            [
+                ..apCatalog.Components,
+                new EdgeComponentVersionPlan(
+                    EdgeComponentKind.Plugin,
+                    cpModuleId,
+                    "CP",
+                    "1.0.0",
+                    [])
+            ],
+            "CP catalog unavailable");
+        var service = new ProfileReleaseService(
+            new Dictionary<string, EdgeReleaseCatalogResult>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["line-a"] = apCatalog,
+                ["line-b"] = cpFallback
+            });
+        var panel = CreatePanel(service);
+        var apProfile = Profile("line-a") with
+        {
+            ExpectedModuleIds = [ModuleId]
+        };
+        var cpProfile = Profile("line-b") with
+        {
+            ExpectedModuleIds = [cpModuleId]
+        };
+
+        await panel.CheckAsync([apProfile, cpProfile]);
+
+        Assert.True(panel.Components.Single(component => component.ModuleId == ModuleId).IsCatalogAvailable);
+        Assert.False(panel.Components.Single(component => component.ModuleId == cpModuleId).IsCatalogAvailable);
+    }
+
+    [Fact]
     public async Task ApplyVersionAsync_WhenPluginOlderVersionConfirmed_ShouldCallApplyPluginVersion()
     {
         var service = new RecordingReleaseService(CreateReleaseCatalog());
@@ -504,6 +547,50 @@ public sealed class LauncherClientReleasePanelViewModelTests
             progress?.Report(100);
             return Task.FromResult(EdgePluginInstallResult.Succeeded(selection.PluginVersions.Keys.ToArray()));
         }
+
+        public Task<EdgeVersionReportResult> ReportCurrentVersionsAsync(
+            EdgeUpdateTarget target,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(EdgeVersionReportResult.Succeeded());
+    }
+
+    private sealed class ProfileReleaseService(
+        IReadOnlyDictionary<string, EdgeReleaseCatalogResult> checksByMachineProfile)
+        : IEdgeReleaseService
+    {
+        public Task<EdgeReleaseCatalogResult> CheckReleaseCatalogAsync(
+            EdgeUpdateTarget target,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(checksByMachineProfile[target.MachineProfile]);
+
+        public Task<EdgePluginInstallResult> ApplyPluginVersionAsync(
+            EdgeUpdateTarget target,
+            string moduleId,
+            string version,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<EdgeHostUpdateApplyResult> ApplyHostVersionAsync(
+            EdgeUpdateTarget target,
+            string version,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<EdgePluginInstallResult> ApplyVersionCompositionAsync(
+            EdgeUpdateTarget target,
+            EdgeVersionSelection selection,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<EdgePluginInstallResult> ApplyVersionCompositionAsync(
+            IReadOnlyList<EdgeUpdateTarget> targets,
+            EdgeVersionSelection selection,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
 
         public Task<EdgeVersionReportResult> ReportCurrentVersionsAsync(
             EdgeUpdateTarget target,

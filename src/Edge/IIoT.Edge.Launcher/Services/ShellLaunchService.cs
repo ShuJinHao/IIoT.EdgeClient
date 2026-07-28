@@ -8,6 +8,7 @@ namespace IIoT.Edge.Launcher.Services;
 public sealed class ShellLaunchService : IShellLaunchService, IDisposable
 {
     private const string ShellProcessName = "IIoT.Edge.Shell";
+    private static readonly TimeSpan DefaultShellReadinessTimeout = TimeSpan.FromMinutes(5);
 
     private readonly IProcessStarter _processStarter;
     private readonly IShellInstanceIdResolver _instanceIdResolver;
@@ -15,6 +16,7 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
     private readonly ILauncherUpdateOperationGate _updateOperationGate;
     private readonly IEdgeUpdateTransactionRecovery? _updateTransactionRecovery;
     private readonly Action<Process> _terminateProcess;
+    private readonly Func<CancellationToken, Task> _readinessDeadline;
     private readonly CancellationTokenSource _disposeCts = new();
     private readonly object _syncRoot = new();
     private readonly List<TrackedShellProcess> _startedProcesses = [];
@@ -31,7 +33,8 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
             instanceProbe,
             updateOperationGate,
             updateTransactionRecovery,
-            TryTerminate)
+            TryTerminate,
+            readinessDeadline: null)
     {
     }
 
@@ -41,7 +44,8 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
         IShellInstanceProbe instanceProbe,
         ILauncherUpdateOperationGate? updateOperationGate,
         IEdgeUpdateTransactionRecovery? updateTransactionRecovery,
-        Action<Process> terminateProcess)
+        Action<Process> terminateProcess,
+        Func<CancellationToken, Task>? readinessDeadline = null)
     {
         _processStarter = processStarter ?? throw new ArgumentNullException(nameof(processStarter));
         _instanceIdResolver = instanceIdResolver ?? throw new ArgumentNullException(nameof(instanceIdResolver));
@@ -50,6 +54,10 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
         _updateTransactionRecovery = updateTransactionRecovery;
         _terminateProcess = terminateProcess
             ?? throw new ArgumentNullException(nameof(terminateProcess));
+        _readinessDeadline = readinessDeadline
+            ?? (cancellationToken => Task.Delay(
+                DefaultShellReadinessTimeout,
+                cancellationToken));
     }
 
     public bool HasAnyRunningShellProcess()
@@ -130,10 +138,23 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
         {
             var outcomeTask = readiness.WaitAsync(waitCts.Token);
             var processExitTask = process.WaitForExitAsync(waitCts.Token);
+            var deadlineTask = _readinessDeadline(waitCts.Token);
             var completed = await Task.WhenAny(
                     outcomeTask,
-                    processExitTask)
+                    processExitTask,
+                    deadlineTask)
                 .ConfigureAwait(false);
+            waitCts.Token.ThrowIfCancellationRequested();
+            if (completed == deadlineTask)
+            {
+                await deadlineTask.ConfigureAwait(false);
+                waitCts.Cancel();
+                TerminateIncompleteLaunch(process);
+                processHandled = true;
+                throw new InvalidOperationException(
+                    $"客户端启动失败：{profile.DisplayName} 未在允许的启动窗口内完成就绪握手。");
+            }
+
             if (completed == processExitTask)
             {
                 await processExitTask.ConfigureAwait(false);

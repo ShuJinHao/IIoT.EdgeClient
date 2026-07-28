@@ -480,6 +480,11 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
                     continue;
                 }
 
+                if (!ProfileOwnsModule(item, plan.ModuleId))
+                {
+                    continue;
+                }
+
                 if (!plannedModules.Add(plan.ModuleId))
                 {
                     continue;
@@ -605,17 +610,38 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
         }
 
         var owningResults = results
-            .Where(item => item.Result.Components.Any(component =>
-                component.ComponentKind == EdgeComponentKind.Plugin
-                && string.Equals(
-                    component.ModuleId,
-                    plan.ModuleId,
-                    StringComparison.OrdinalIgnoreCase)))
+            .Where(item => ProfileOwnsModule(item, plan.ModuleId))
             .ToArray();
         return owningResults.Length > 0
-               && owningResults.All(static item =>
-                   item.Result.State == EdgeReleaseCatalogState.Succeeded);
+               && owningResults.All(item =>
+                   item.Result.State == EdgeReleaseCatalogState.Succeeded
+                   && ResultContainsPlugin(item.Result, plan.ModuleId));
     }
+
+    private static bool ProfileOwnsModule(
+        ProfileReleaseCheckResult item,
+        string moduleId)
+    {
+        if (item.Profile.ExpectedModuleIds.Contains(
+                moduleId,
+                StringComparer.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return item.Result.State == EdgeReleaseCatalogState.Succeeded
+               && ResultContainsPlugin(item.Result, moduleId);
+    }
+
+    private static bool ResultContainsPlugin(
+        EdgeReleaseCatalogResult result,
+        string moduleId)
+        => result.Components.Any(component =>
+            component.ComponentKind == EdgeComponentKind.Plugin
+            && string.Equals(
+                component.ModuleId,
+                moduleId,
+                StringComparison.OrdinalIgnoreCase));
 
     private LauncherVersionOptionItem BuildVersionOption(EdgeComponentVersionPlan plan, EdgeVersionOption option)
     {

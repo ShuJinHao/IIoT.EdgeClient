@@ -515,7 +515,10 @@ public sealed class LauncherMainViewModelTests
     [Fact]
     public async Task LoginAsync_WhenCatalogUnavailable_ShouldShowUnableToCheckInsteadOfLatest()
     {
-        var profile = Profile("AP", "负极模切");
+        var profile = Profile("AP", "负极模切") with
+        {
+            ExpectedModuleIds = ["AP"]
+        };
         var releaseService = new RecordingUpdateClientReleaseService(
             CreateUnavailableReleaseCheck("AP", "负极模切"));
         var viewModel = new LauncherMainViewModel(

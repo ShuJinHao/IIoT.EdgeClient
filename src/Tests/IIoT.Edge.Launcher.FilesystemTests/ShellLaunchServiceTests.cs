@@ -862,6 +862,72 @@ public sealed class ShellLaunchServiceTests
         }
     }
 
+    [Fact]
+    public async Task Launch_WhenChildNeverSignalsReady_ShouldReachDeadlineAndReleaseLaunchGate()
+    {
+        var baseDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "edge-launcher-shell-handoff-tests",
+            Guid.NewGuid().ToString("N"),
+            "launcher");
+        var executablePath = Path.Combine(
+            baseDirectory,
+            "runtime",
+            OperatingSystem.IsWindows()
+                ? "IIoT.Edge.Shell.exe"
+                : "IIoT.Edge.Shell");
+        Directory.CreateDirectory(Path.GetDirectoryName(executablePath)!);
+        File.WriteAllText(executablePath, string.Empty);
+        var gate = new FileLauncherUpdateOperationGate(baseDirectory);
+        var starter = new SpyProcessStarter();
+        var deadline = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var terminated = false;
+        using var service = new ShellLaunchService(
+            starter,
+            new FakeShellInstanceIdResolver(),
+            new FakeShellInstanceProbe(),
+            gate,
+            updateTransactionRecovery: null,
+            terminateProcess: _ => terminated = true,
+            readinessDeadline: _ => deadline.Task);
+        var profile = new LauncherProfileDefinition(
+            "TestPluginLine",
+            "测试插件",
+            "TestPlugin profile",
+            null,
+            "TestPluginLine",
+            executablePath,
+            "BeakerOutline",
+            "#4D7C0F");
+
+        try
+        {
+            var launchTask = service.LaunchAsync(
+                profile,
+                TestContext.Current.CancellationToken);
+            Assert.False(launchTask.IsCompleted);
+
+            deadline.SetResult();
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => launchTask);
+
+            Assert.Contains("未在允许的启动窗口内完成就绪握手", exception.Message, StringComparison.Ordinal);
+            Assert.True(terminated);
+            Assert.False(service.HasAnyRunningShellProcess());
+            using var updateAfterFailedLaunch = gate.TryAcquireUpdate();
+            Assert.NotNull(updateAfterFailedLaunch);
+        }
+        finally
+        {
+            var root = Directory.GetParent(baseDirectory)?.FullName;
+            if (!string.IsNullOrWhiteSpace(root) && Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
     private static ShellLaunchService CreateService(
         IProcessStarter processStarter,
         IShellInstanceIdResolver? instanceIdResolver = null,
