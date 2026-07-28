@@ -19,6 +19,9 @@ public class PlcBuffer : IPlcBufferTransport, IPlcReadSnapshotProvider, IPlcRead
         new Dictionary<string, PlcBufferSignalBinding>(StringComparer.OrdinalIgnoreCase);
     private IReadOnlyDictionary<string, PlcReadSignalState> _readSignalStates =
         new Dictionary<string, PlcReadSignalState>(StringComparer.OrdinalIgnoreCase);
+    // 手动 IO 读取只覆盖页面/诊断值；业务快照仍仅由整轮扫描发布。
+    private IReadOnlyDictionary<string, ushort[]> _manualReadOverrides =
+        new Dictionary<string, ushort[]>(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, ushort[]> _writeSignals = new(StringComparer.OrdinalIgnoreCase);
     private long _readGeneration;
 
@@ -43,6 +46,13 @@ public class PlcBuffer : IPlcBufferTransport, IPlcReadSnapshotProvider, IPlcRead
 
     public bool TryGetReadWords(string signalKey, out ushort[] values)
     {
+        var manualSnapshot = Volatile.Read(ref _manualReadOverrides);
+        if (manualSnapshot.TryGetValue(signalKey, out var manualWords))
+        {
+            values = (ushort[])manualWords.Clone();
+            return true;
+        }
+
         var snapshot = Volatile.Read(ref _readSignalStates);
         if (snapshot.TryGetValue(signalKey, out var state))
         {
@@ -267,6 +277,9 @@ public class PlcBuffer : IPlcBufferTransport, IPlcReadSnapshotProvider, IPlcRead
 
             Interlocked.Exchange(ref _readBuffer, next);
             Volatile.Write(ref _readSignalStates, nextStates);
+            Volatile.Write(
+                ref _manualReadOverrides,
+                new Dictionary<string, ushort[]>(StringComparer.OrdinalIgnoreCase));
         }
 
         foreach (var binding in affected)
@@ -277,16 +290,24 @@ public class PlcBuffer : IPlcBufferTransport, IPlcReadSnapshotProvider, IPlcRead
 
     public void UpdateReadSignal(string signalKey, IReadOnlyList<ushort> data)
     {
-        PublishReadBatch(
-            new Dictionary<string, PlcReadSignalUpdate>(StringComparer.OrdinalIgnoreCase)
+        ArgumentException.ThrowIfNullOrWhiteSpace(signalKey);
+        ArgumentNullException.ThrowIfNull(data);
+        var words = NormalizeWords(data);
+        lock (_readSync)
+        {
+            var next = (ushort[])Volatile.Read(ref _readBuffer).Clone();
+            if (TryGetBinding(_readBindings, signalKey, out var binding))
             {
-                [signalKey] = new(
-                    NormalizeWords(data),
-                    ReadSucceeded: true,
-                    Guid.NewGuid(),
-                    DateTimeOffset.UtcNow,
-                    FailureReason: null)
-            });
+                ApplyWords(next, binding, words);
+            }
+
+            var nextOverrides = CopyManualReadOverrides();
+            nextOverrides[signalKey] = (ushort[])words.Clone();
+            Interlocked.Exchange(ref _readBuffer, next);
+            Volatile.Write(ref _manualReadOverrides, nextOverrides);
+        }
+
+        NotifyChanged(signalKey, "Read");
     }
 
     internal void UpdateReadSignals(IReadOnlyDictionary<string, ushort[]> signalValues)
@@ -329,6 +350,7 @@ public class PlcBuffer : IPlcBufferTransport, IPlcReadSnapshotProvider, IPlcRead
         {
             var next = (ushort[])Volatile.Read(ref _readBuffer).Clone();
             var nextStates = CopyReadSignalStates();
+            var nextManualOverrides = CopyManualReadOverrides();
             var generation = NextReadGeneration();
             affected = capturedUpdates.Select(static pair => pair.Key).ToArray();
             foreach (var (signalKey, update) in capturedUpdates)
@@ -345,10 +367,13 @@ public class PlcBuffer : IPlcBufferTransport, IPlcReadSnapshotProvider, IPlcRead
                 {
                     ApplyWords(next, binding, words);
                 }
+
+                nextManualOverrides.Remove(signalKey);
             }
 
             Interlocked.Exchange(ref _readBuffer, next);
             Volatile.Write(ref _readSignalStates, nextStates);
+            Volatile.Write(ref _manualReadOverrides, nextManualOverrides);
         }
 
         foreach (var signalKey in affected)
@@ -412,6 +437,9 @@ public class PlcBuffer : IPlcBufferTransport, IPlcReadSnapshotProvider, IPlcRead
                 Volatile.Write(
                     ref _readSignalStates,
                     new Dictionary<string, PlcReadSignalState>(StringComparer.OrdinalIgnoreCase));
+                Volatile.Write(
+                    ref _manualReadOverrides,
+                    new Dictionary<string, ushort[]>(StringComparer.OrdinalIgnoreCase));
             }
         }
     }
@@ -467,6 +495,13 @@ public class PlcBuffer : IPlcBufferTransport, IPlcReadSnapshotProvider, IPlcRead
 
     private Dictionary<string, PlcReadSignalState> CopyReadSignalStates()
         => Volatile.Read(ref _readSignalStates)
+            .ToDictionary(
+                static pair => pair.Key,
+                static pair => pair.Value,
+                StringComparer.OrdinalIgnoreCase);
+
+    private Dictionary<string, ushort[]> CopyManualReadOverrides()
+        => Volatile.Read(ref _manualReadOverrides)
             .ToDictionary(
                 static pair => pair.Key,
                 static pair => pair.Value,

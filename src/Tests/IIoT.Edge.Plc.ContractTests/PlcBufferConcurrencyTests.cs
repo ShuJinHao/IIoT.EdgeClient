@@ -147,7 +147,7 @@ public sealed class PlcBufferConcurrencyTests
     }
 
     [Fact]
-    public void TryCaptureReadSnapshot_ShouldRequireCompleteSingleGeneration()
+    public void TryCaptureReadSnapshot_ShouldRequireCompleteGenerationAndIgnoreManualDisplayUpdates()
     {
         var buffer = new PlcBuffer(
             readSize: 3,
@@ -180,13 +180,37 @@ public sealed class PlcBufferConcurrencyTests
         Assert.False(buffer.TryCaptureReadSnapshot(["Signal.A", "signal.a"], out _));
 
         buffer.UpdateReadSignal("Signal.A", [(ushort)33]);
+        buffer.UpdateReadSignal("Signal.B", [(ushort)44]);
 
-        Assert.False(buffer.TryCaptureReadSnapshot(["Signal.A", "Signal.B"], out _));
-        Assert.True(buffer.TryCaptureReadSnapshot(["Signal.A"], out var nextSnapshot));
+        Assert.True(buffer.TryGetReadWords("Signal.A", out var manualWords));
+        Assert.Equal((ushort)33, Assert.Single(manualWords));
+        Assert.True(buffer.TryGetReadWords("Signal.B", out var secondManualWords));
+        Assert.Equal((ushort)44, Assert.Single(secondManualWords));
+        Assert.Equal((ushort)33, buffer.GetReadValue(0));
+        Assert.Equal((ushort)44, buffer.GetReadValue(1));
+        Assert.True(
+            buffer.TryCaptureReadSnapshot(
+                ["Signal.A", "Signal.B"],
+                out var snapshotAfterManualRead));
+        Assert.NotNull(snapshotAfterManualRead);
+        Assert.Equal(firstSnapshot.Generation, snapshotAfterManualRead!.Generation);
+        Assert.Equal(firstSnapshot.BatchId, snapshotAfterManualRead.BatchId);
+        Assert.Equal((ushort)11, Assert.Single(snapshotAfterManualRead.Signals["Signal.A"].Words));
+        Assert.Equal((ushort)22, Assert.Single(snapshotAfterManualRead.Signals["Signal.B"].Words));
+        Assert.Equal((ushort)11, Assert.Single(firstSnapshot.Signals["Signal.A"].Words));
+
+        buffer.UpdateReadSignals(new Dictionary<string, ushort[]>
+        {
+            ["Signal.A"] = [(ushort)44],
+            ["Signal.B"] = [(ushort)55]
+        });
+
+        Assert.True(buffer.TryCaptureReadSnapshot(["Signal.A", "Signal.B"], out var nextSnapshot));
         Assert.NotNull(nextSnapshot);
         Assert.True(nextSnapshot!.Generation > firstSnapshot.Generation);
-        Assert.Equal((ushort)11, Assert.Single(firstSnapshot.Signals["Signal.A"].Words));
-        Assert.Equal((ushort)33, Assert.Single(nextSnapshot.Signals["Signal.A"].Words));
+        Assert.Equal((ushort)44, Assert.Single(nextSnapshot.Signals["Signal.A"].Words));
+        Assert.True(buffer.TryGetReadWords("Signal.A", out var refreshedWords));
+        Assert.Equal((ushort)44, Assert.Single(refreshedWords));
     }
 
     [Fact]

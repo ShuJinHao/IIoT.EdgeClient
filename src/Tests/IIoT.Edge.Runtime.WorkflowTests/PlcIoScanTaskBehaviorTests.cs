@@ -742,8 +742,12 @@ public sealed class PlcIoScanTaskBehaviorTests
         var dataStore = new PlcDataStore();
         dataStore.Register(17, readSize: 0, writeSize: 0);
         var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(17));
-        buffer.UpdateReadSignal("Read-D300", [(ushort)9]);
-        buffer.UpdateReadSignal("Read-D320", [(ushort)8]);
+        buffer.UpdateReadSignals(
+            new Dictionary<string, ushort[]>
+            {
+                ["Read-D300"] = [(ushort)9],
+                ["Read-D320"] = [(ushort)8]
+            });
         var statusStore = new PlcConnectionStatusStore();
         statusStore.MarkConnected(17, "PLC-DATA-SPLIT-FAIL", 15);
         var logger = new FakeLogService();
