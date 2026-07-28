@@ -72,9 +72,12 @@ foreach ($releasePath in $releasePaths) {
 }
 
 $orderedReleaseIds = @($releaseIds | Sort-Object)
-if ($orderedReleaseIds.Count -ne 23 -or
-    @($orderedReleaseIds | Sort-Object -Unique).Count -ne 23) {
-    throw "EDGE-ARCH-CATALOG-001 release catalog must contain exactly 23 unique compiler diagnostic IDs; actual=$($orderedReleaseIds.Count)."
+if ($orderedReleaseIds.Count -ne 24 -or
+    @($orderedReleaseIds | Sort-Object -Unique).Count -ne 24) {
+    throw "EDGE-ARCH-CATALOG-001 release catalog must contain exactly 24 unique compiler diagnostic IDs; actual=$($orderedReleaseIds.Count)."
+}
+if ($orderedReleaseIds -notcontains 'EDGEPLCREAD001') {
+    throw 'EDGE-ARCH-CATALOG-001 SDK 2.0.7 must expose the production PLC snapshot-read diagnostic EDGEPLCREAD001.'
 }
 
 $projectGraphOnlyIds = @('WSARCH001', 'WSARCH005', 'WSARCH006', 'WSARCH007')
