@@ -32,6 +32,7 @@ public sealed class EdgePluginCompositionTransaction
     public const string JournalFileName = "update-transaction.json";
 
     private const int JournalSchemaVersion = 1;
+    private const string TransactionsDirectoryName = ".transactions";
     private const string StatePrepared = "prepared";
     private const string StateCommitting = "committing";
     private const string StateHostHandoffPending = "hostHandoffPending";
@@ -100,6 +101,12 @@ public sealed class EdgePluginCompositionTransaction
             return EdgePluginInstallResult.Failed("插件组合事务包含重复 ModuleId。");
         }
 
+        var modulePathIssue = ValidateModulePaths(releases);
+        if (modulePathIssue is not null)
+        {
+            return EdgePluginInstallResult.Failed(modulePathIssue);
+        }
+
         var recovery = RecoverPendingTransaction();
         if (!recovery.Success || recovery.Blocked || File.Exists(_journalPath))
         {
@@ -119,7 +126,9 @@ public sealed class EdgePluginCompositionTransaction
         try
         {
             var transactionId = Guid.NewGuid().ToString("N");
-            var transactionRelativePath = Path.Combine(".transactions", transactionId);
+            var transactionRelativePath = Path.Combine(
+                TransactionsDirectoryName,
+                transactionId);
             transactionRoot = ResolveRelativePath(pluginsRoot, transactionRelativePath);
             journal = CreateJournal(
                 transactionId,
@@ -443,6 +452,30 @@ public sealed class EdgePluginCompositionTransaction
             _blockAllProfiles = true;
             return true;
         }
+    }
+
+    private static string? ValidateModulePaths(
+        IReadOnlyList<EdgePluginCompositionRelease> releases)
+    {
+        var modulePaths = releases
+            .Select(static release =>
+                EdgeClientProgramDataPaths.SanitizePathSegment(
+                    release.Release.ModuleId))
+            .ToArray();
+        if (modulePaths.Any(static segment =>
+                string.Equals(
+                    segment,
+                    TransactionsDirectoryName,
+                    StringComparison.OrdinalIgnoreCase)))
+        {
+            return "插件 ModuleId 映射到保留的事务目录。";
+        }
+
+        return modulePaths
+            .GroupBy(static segment => segment, StringComparer.OrdinalIgnoreCase)
+            .Any(static group => group.Count() > 1)
+            ? "不同插件 ModuleId 映射到同一插件目录。"
+            : null;
     }
 
     private UpdateTransactionJournal CreateJournal(

@@ -77,6 +77,58 @@ public sealed class EdgePluginCompositionTransactionTests
     }
 
     [Fact]
+    public async Task InstallAsync_WhenSanitizedModulePathsCollide_ShouldRejectBeforeCreatingTransaction()
+    {
+        using var fixture = TransactionFixture.Create(["Plugin A", "Plugin_A"]);
+        var transaction = fixture.CreateTransaction();
+
+        var result = await transaction.InstallAsync(
+            [fixture.TargetForModules(["Plugin A", "Plugin_A"])],
+            [
+                fixture.Source(fixture.Release("Plugin A")),
+                fixture.Source(fixture.Release("Plugin_A"))
+            ],
+            "1.0.0",
+            EdgeClientHostRuntime.HostApiVersion,
+            pendingHostVersion: null,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Contains(
+            "同一插件目录",
+            result.ErrorMessage ?? string.Empty,
+            StringComparison.Ordinal);
+        fixture.AssertOldCombination(["Plugin A", "Plugin_A"]);
+        Assert.False(File.Exists(fixture.JournalPath));
+        Assert.False(Directory.Exists(Path.Combine(fixture.PluginsRoot, ".transactions")));
+    }
+
+    [Fact]
+    public async Task InstallAsync_WhenModulePathIsReserved_ShouldRejectBeforeCreatingTransaction()
+    {
+        using var fixture = TransactionFixture.Create([".transactions"]);
+        var transaction = fixture.CreateTransaction();
+
+        var result = await transaction.InstallAsync(
+            [fixture.TargetForModules([".transactions"])],
+            [fixture.Source(fixture.Release(".transactions"))],
+            "1.0.0",
+            EdgeClientHostRuntime.HostApiVersion,
+            pendingHostVersion: null,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Contains(
+            "保留的事务目录",
+            result.ErrorMessage ?? string.Empty,
+            StringComparison.Ordinal);
+        fixture.AssertOldCombination([".transactions"]);
+        Assert.False(File.Exists(fixture.JournalPath));
+        Assert.Empty(Directory.EnumerateDirectories(
+            Path.Combine(fixture.PluginsRoot, ".transactions")));
+    }
+
+    [Fact]
     public async Task RecoverPendingTransaction_WhenHostVersionDoesNotMatch_ShouldRollbackOldCombination()
     {
         using var fixture = TransactionFixture.Create(["TestPlugin"]);
