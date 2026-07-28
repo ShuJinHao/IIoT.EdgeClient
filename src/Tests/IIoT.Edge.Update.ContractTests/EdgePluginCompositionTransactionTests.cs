@@ -128,6 +128,39 @@ public sealed class EdgePluginCompositionTransactionTests
             Path.Combine(fixture.PluginsRoot, ".transactions")));
     }
 
+    [Theory]
+    [InlineData(".transactions.")]
+    [InlineData("AP.")]
+    public async Task InstallAsync_WhenModulePathUsesWin32TrailingAlias_ShouldRejectBeforeCreatingTransaction(
+        string moduleId)
+    {
+        using var fixture = TransactionFixture.Create([moduleId]);
+        var transaction = fixture.CreateTransaction();
+
+        var result = await transaction.InstallAsync(
+            [fixture.TargetForModules([moduleId])],
+            [fixture.Source(fixture.Release(moduleId))],
+            "1.0.0",
+            EdgeClientHostRuntime.HostApiVersion,
+            pendingHostVersion: null,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Contains(
+            "Windows 尾随句点或空格别名",
+            result.ErrorMessage ?? string.Empty,
+            StringComparison.Ordinal);
+        fixture.AssertOldCombination([moduleId]);
+        Assert.False(File.Exists(fixture.JournalPath));
+        var transactionStorage = Path.Combine(
+            fixture.PluginsRoot,
+            ".transactions");
+        if (Directory.Exists(transactionStorage))
+        {
+            Assert.Empty(Directory.EnumerateDirectories(transactionStorage));
+        }
+    }
+
     [Fact]
     public async Task RecoverPendingTransaction_WhenHostVersionDoesNotMatch_ShouldRollbackOldCombination()
     {

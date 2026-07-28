@@ -463,6 +463,15 @@ public sealed class EdgePluginCompositionTransaction
                     release.Release.ModuleId))
             .ToArray();
         if (modulePaths.Any(static segment =>
+                !string.Equals(
+                    segment,
+                    segment.TrimEnd(' ', '.'),
+                    StringComparison.Ordinal)))
+        {
+            return "插件 ModuleId 映射到 Windows 尾随句点或空格别名。";
+        }
+
+        if (modulePaths.Any(static segment =>
                 string.Equals(
                     segment,
                     TransactionsDirectoryName,
