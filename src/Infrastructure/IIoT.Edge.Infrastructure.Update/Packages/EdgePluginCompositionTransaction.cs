@@ -21,7 +21,8 @@ public enum EdgePluginTransactionStage
     HostHandoffPending,
     Cleanup,
     JournalRemoval,
-    Rollback
+    Rollback,
+    RollbackPluginRestored
 }
 
 public sealed class EdgePluginCompositionTransaction
@@ -737,15 +738,11 @@ public sealed class EdgePluginCompositionTransaction
                 {
                     if (Directory.Exists(backupPath))
                     {
-                        if (Directory.Exists(modulePath))
-                        {
-                            Directory.Delete(modulePath, recursive: true);
-                        }
-
-                        Directory.CreateDirectory(
-                            Path.GetDirectoryName(modulePath)
-                            ?? throw new InvalidOperationException("插件目录缺少父目录。"));
-                        Directory.Move(backupPath, modulePath);
+                        RestorePluginDirectoryReplaySafe(
+                            backupPath,
+                            modulePath);
+                        _faultInjector?.Invoke(
+                            EdgePluginTransactionStage.RollbackPluginRestored);
                     }
                     else if (plugin.Committed || !Directory.Exists(modulePath))
                     {
@@ -772,6 +769,70 @@ public sealed class EdgePluginCompositionTransaction
             journal.LastError = $"回滚失败: {ex.GetType().Name}";
             TryWriteJournal(journal);
             return new RollbackResult(false, journal.LastError);
+        }
+    }
+
+    private static void RestorePluginDirectoryReplaySafe(
+        string backupPath,
+        string modulePath)
+    {
+        var restorePath = $"{backupPath}.restore";
+        if (Directory.Exists(restorePath))
+        {
+            Directory.Delete(restorePath, recursive: true);
+        }
+        else if (File.Exists(restorePath))
+        {
+            File.Delete(restorePath);
+        }
+
+        CopyDirectoryTree(backupPath, restorePath);
+        if (Directory.Exists(modulePath))
+        {
+            Directory.Delete(modulePath, recursive: true);
+        }
+        else if (File.Exists(modulePath))
+        {
+            File.Delete(modulePath);
+        }
+
+        Directory.CreateDirectory(
+            Path.GetDirectoryName(modulePath)
+            ?? throw new InvalidOperationException("插件目录缺少父目录。"));
+        Directory.Move(restorePath, modulePath);
+    }
+
+    private static void CopyDirectoryTree(
+        string sourcePath,
+        string destinationPath)
+    {
+        if (!Directory.Exists(sourcePath))
+        {
+            throw new DirectoryNotFoundException(
+                $"插件回滚备份不存在：{sourcePath}");
+        }
+
+        Directory.CreateDirectory(destinationPath);
+        foreach (var sourceEntry in Directory.EnumerateFileSystemEntries(sourcePath))
+        {
+            var attributes = File.GetAttributes(sourceEntry);
+            if ((attributes & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new InvalidOperationException(
+                    "插件回滚备份包含不允许的重解析点。");
+            }
+
+            var destinationEntry = Path.Combine(
+                destinationPath,
+                Path.GetFileName(sourceEntry));
+            if ((attributes & FileAttributes.Directory) != 0)
+            {
+                CopyDirectoryTree(sourceEntry, destinationEntry);
+            }
+            else
+            {
+                File.Copy(sourceEntry, destinationEntry, overwrite: false);
+            }
         }
     }
 

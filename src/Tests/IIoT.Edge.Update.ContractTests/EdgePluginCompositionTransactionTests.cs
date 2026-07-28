@@ -103,6 +103,43 @@ public sealed class EdgePluginCompositionTransactionTests
     }
 
     [Fact]
+    public async Task RecoverPendingTransaction_WhenProcessStopsAfterPluginRestore_ShouldReplayRollback()
+    {
+        using var fixture = TransactionFixture.Create(["TestPlugin"]);
+        var firstLauncher = fixture.CreateTransaction();
+        var install = await firstLauncher.InstallAsync(
+            [fixture.TargetForModules(["TestPlugin"])],
+            [fixture.Source(fixture.Release("TestPlugin"))],
+            "1.0.0",
+            EdgeClientHostRuntime.HostApiVersion,
+            pendingHostVersion: "99.0.0",
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(install.Success, install.ErrorMessage);
+
+        var interruptedLauncher = fixture.CreateTransaction(stage =>
+        {
+            if (stage == EdgePluginTransactionStage.RollbackPluginRestored)
+            {
+                throw new SimulatedProcessTerminationException();
+            }
+        });
+
+        Assert.Throws<SimulatedProcessTerminationException>(
+            () => interruptedLauncher.RollbackPendingHostHandoff());
+        fixture.AssertOldCombination(["TestPlugin"]);
+        Assert.True(File.Exists(fixture.JournalPath));
+
+        var restartedLauncher = fixture.CreateTransaction();
+        var recovery = restartedLauncher.RecoverPendingTransaction();
+
+        Assert.True(recovery.Success, recovery.ErrorMessage);
+        Assert.True(recovery.Recovered);
+        Assert.False(recovery.Blocked);
+        fixture.AssertOldCombination(["TestPlugin"]);
+        Assert.False(File.Exists(fixture.JournalPath));
+    }
+
+    [Fact]
     public async Task IsProfileBlocked_WhenHostHandoffIsPending_ShouldBlockUntilRecovery()
     {
         using var fixture = TransactionFixture.Create(["TestPlugin"]);
@@ -796,5 +833,9 @@ public sealed class EdgePluginCompositionTransactionTests
                 ?? throw new InvalidOperationException("test path has no directory"));
             File.WriteAllBytes(path, content);
         }
+    }
+
+    private sealed class SimulatedProcessTerminationException : Exception
+    {
     }
 }
