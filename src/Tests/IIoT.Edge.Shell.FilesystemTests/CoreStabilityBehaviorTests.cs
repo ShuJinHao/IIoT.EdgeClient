@@ -250,24 +250,42 @@ public sealed class StartupExceptionAllowlistSourceGuardTests
         var source = File.ReadAllText(Path.Combine(
             repositoryRoot,
             "src/Edge/IIoT.Edge.Shell/App.axaml.cs"));
+        const string acquirePresence =
+            "EdgeClientUpdateCoordination.TryAcquireShellPresence(";
+        const string loadConfiguration =
+            "_configurationLoader.Load(";
         const string lifecycleFailureGuard = "if (!startupResult.Success)";
         const string showMainWindow = "mainWindow.Show();";
+        const string validateTargetModules =
+            "ShellModuleLaunchReadiness.Evaluate(";
         const string signalReady =
             "EdgeClientUpdateCoordination.TrySignalShellLaunchReady(";
 
+        var acquirePresenceIndex = source.IndexOf(
+            acquirePresence,
+            StringComparison.Ordinal);
+        var loadConfigurationIndex = source.IndexOf(
+            loadConfiguration,
+            StringComparison.Ordinal);
         var failureGuardIndex = source.IndexOf(
             lifecycleFailureGuard,
             StringComparison.Ordinal);
         var showIndex = source.IndexOf(
             showMainWindow,
             StringComparison.Ordinal);
+        var moduleValidationIndex = source.IndexOf(
+            validateTargetModules,
+            StringComparison.Ordinal);
         var signalIndex = source.IndexOf(
             signalReady,
             StringComparison.Ordinal);
 
-        Assert.True(failureGuardIndex >= 0);
+        Assert.True(acquirePresenceIndex >= 0);
+        Assert.True(loadConfigurationIndex > acquirePresenceIndex);
+        Assert.True(failureGuardIndex > loadConfigurationIndex);
         Assert.True(showIndex > failureGuardIndex);
-        Assert.True(signalIndex > showIndex);
+        Assert.True(moduleValidationIndex > showIndex);
+        Assert.True(signalIndex > moduleValidationIndex);
         Assert.Equal(
             signalIndex,
             source.LastIndexOf(signalReady, StringComparison.Ordinal));

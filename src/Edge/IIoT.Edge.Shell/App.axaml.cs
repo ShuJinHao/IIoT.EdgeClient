@@ -64,8 +64,26 @@ public partial class App : global::Avalonia.Application
 
     private async Task StartShellAsync(IClassicDesktopStyleApplicationLifetime desktop)
     {
+        var machineProfile = ResolveRequestedMachineProfile();
+        IReadOnlyList<string> activeModuleIds = [];
         try
         {
+            _updatePresenceLease =
+                EdgeClientUpdateCoordination.TryAcquireShellPresence(
+                    AppDomain.CurrentDomain.BaseDirectory);
+            if (_updatePresenceLease is null)
+            {
+                ShowStartupError(
+                    desktop,
+                    "客户端更新正在进行，当前工序暂时不能启动。");
+                _ = EdgeClientUpdateCoordination.TrySignalShellLaunchFailure(
+                    machineProfile,
+                    activeModuleIds,
+                    "客户端更新正在进行，当前工序暂时不能启动。",
+                    AppDomain.CurrentDomain.BaseDirectory);
+                return;
+            }
+
             _startupServiceProvider = new ServiceCollection()
                 .AddShellStartupServices()
                 .BuildServiceProvider();
@@ -76,6 +94,9 @@ public partial class App : global::Avalonia.Application
 
             var configurationResult = _configurationLoader.Load(AppDomain.CurrentDomain.BaseDirectory);
             var configuration = configurationResult.Configuration;
+            machineProfile = string.IsNullOrWhiteSpace(configurationResult.MachineProfile)
+                ? machineProfile
+                : configurationResult.MachineProfile;
             var runtimePathResolution = _runtimePathResolver.ResolveWithDiagnostics(
                 AppDomain.CurrentDomain.BaseDirectory,
                 configuration);
@@ -94,30 +115,26 @@ public partial class App : global::Avalonia.Application
                 return;
             }
 
-            _updatePresenceLease =
-                EdgeClientUpdateCoordination.TryAcquireShellPresence(
-                    AppDomain.CurrentDomain.BaseDirectory);
-            if (_updatePresenceLease is null)
-            {
-                ReleaseRuntimeLocks();
-                ShowStartupError(
-                    desktop,
-                    "客户端更新正在进行，当前工序暂时不能启动。");
-                return;
-            }
-
-            _serviceProvider = ConfigureServices(
+            var serviceConfiguration = ConfigureServices(
                 configuration,
                 runtimePaths,
                 configurationResult.EnvironmentName,
-                bootstrapDiagnosticIssues).BuildServiceProvider();
+                bootstrapDiagnosticIssues);
+            activeModuleIds = serviceConfiguration.ActiveModuleIds;
+            _serviceProvider = serviceConfiguration.Services.BuildServiceProvider();
             _serviceProvider.GetRequiredService<IAppLanguageService>().Initialize();
 
             var lifecycle = _serviceProvider.GetRequiredService<IAppLifecycleCoordinator>();
             var startupResult = await lifecycle.StartAsync(_appCts.Token).ConfigureAwait(true);
             if (!startupResult.Success)
             {
-                ShowStartupError(desktop, "应用启动失败，详细信息已写入诊断日志。");
+                const string message = "应用启动失败，详细信息已写入诊断日志。";
+                ShowStartupError(desktop, message);
+                _ = EdgeClientUpdateCoordination.TrySignalShellLaunchFailure(
+                    machineProfile,
+                    activeModuleIds,
+                    message,
+                    AppDomain.CurrentDomain.BaseDirectory);
                 return;
             }
 
@@ -126,13 +143,34 @@ public partial class App : global::Avalonia.Application
             desktop.MainWindow = mainWindow;
             mainWindow.Show();
             Volatile.Write(ref _mainWindowReady, 1);
+            var moduleReadiness = ShellModuleLaunchReadiness.Evaluate(
+                serviceConfiguration.ConfiguredModuleIds,
+                activeModuleIds);
+            if (!moduleReadiness.Success)
+            {
+                _ = EdgeClientUpdateCoordination.TrySignalShellLaunchFailure(
+                    machineProfile,
+                    activeModuleIds,
+                    moduleReadiness.ErrorMessage!,
+                    AppDomain.CurrentDomain.BaseDirectory);
+                return;
+            }
+
             _ = EdgeClientUpdateCoordination.TrySignalShellLaunchReady(
+                machineProfile,
+                activeModuleIds,
                 AppDomain.CurrentDomain.BaseDirectory);
         }
         catch (Exception ex)
         {
             TryWriteCrashLog("Shell 启动失败。", ex);
-            ShowStartupError(desktop, "Shell 启动失败，详细信息已写入 crash.log。");
+            const string message = "Shell 启动失败，详细信息已写入 crash.log。";
+            ShowStartupError(desktop, message);
+            _ = EdgeClientUpdateCoordination.TrySignalShellLaunchFailure(
+                machineProfile,
+                activeModuleIds,
+                message,
+                AppDomain.CurrentDomain.BaseDirectory);
         }
     }
 
@@ -397,7 +435,7 @@ public partial class App : global::Avalonia.Application
         Interlocked.Exchange(ref _updatePresenceLease, null)?.Dispose();
     }
 
-    private ServiceCollection ConfigureServices(
+    private ShellServiceConfiguration ConfigureServices(
         IConfiguration configuration,
         EdgeRuntimePaths runtimePaths,
         string environmentName,
@@ -433,7 +471,24 @@ public partial class App : global::Avalonia.Application
             sp.GetRequiredService<NavigationHostView>(),
             sp.GetRequiredService<EquipmentView>(),
             sp.GetRequiredService<LogView>()));
-        return services;
+        return new ShellServiceConfiguration(
+            services,
+            activationResult.EnabledModuleIds,
+            activationResult.Modules
+                .Select(static module => module.ModuleId)
+                .ToArray());
+    }
+
+    private static string ResolveRequestedMachineProfile()
+    {
+        var candidate = Environment
+            .GetEnvironmentVariable("Shell__MachineProfile")
+            ?.Trim();
+        return string.IsNullOrWhiteSpace(candidate)
+               || candidate.Length > 128
+               || candidate.Any(char.IsControl)
+            ? "Default"
+            : candidate;
     }
 
     private void ConfigureCrashLogging(EdgeRuntimePaths runtimePaths)
@@ -475,4 +530,9 @@ public partial class App : global::Avalonia.Application
         dialog.Closed += (_, _) => desktop.Shutdown(-1);
         dialog.Show();
     }
+
+    private sealed record ShellServiceConfiguration(
+        ServiceCollection Services,
+        IReadOnlyList<string> ConfiguredModuleIds,
+        IReadOnlyList<string> ActiveModuleIds);
 }

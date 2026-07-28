@@ -8,5 +8,7 @@ public interface IShellLaunchService
 
     bool IsProfileRunning(LauncherProfileDefinition profile);
 
-    void Launch(LauncherProfileDefinition profile);
+    Task LaunchAsync(
+        LauncherProfileDefinition profile,
+        CancellationToken cancellationToken = default);
 }

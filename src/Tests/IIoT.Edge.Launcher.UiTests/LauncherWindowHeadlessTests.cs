@@ -360,8 +360,9 @@ public sealed class LauncherWindowHeadlessTests
 
         public bool IsProfileRunning(LauncherProfileDefinition profile) => false;
 
-        public void Launch(LauncherProfileDefinition profile)
-        {
-        }
+        public Task LaunchAsync(
+            LauncherProfileDefinition profile,
+            CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
     }
 }

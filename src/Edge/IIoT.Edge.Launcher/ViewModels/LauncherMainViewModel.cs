@@ -394,14 +394,14 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         }
     }
 
-    public Task LaunchAsync(LauncherProfileDefinition profile)
+    public async Task LaunchAsync(LauncherProfileDefinition profile)
     {
         ArgumentNullException.ThrowIfNull(profile);
 
         ErrorMessage = string.Empty;
         try
         {
-            _launchService.Launch(profile);
+            await _launchService.LaunchAsync(profile).ConfigureAwait(true);
             SetStatus(
                 "Launcher_Status_LaunchSucceededFormat",
                 profile.DisplayName,
@@ -415,8 +415,6 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
                 "Launcher_Status_LaunchFailedFormat",
                 profile.DisplayName);
         }
-
-        return Task.CompletedTask;
     }
 
     public async Task LaunchProfileCardAsync(LauncherProfileCardViewModel card)

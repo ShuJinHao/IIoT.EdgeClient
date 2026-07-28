@@ -8,16 +8,14 @@ namespace IIoT.Edge.Launcher.Services;
 public sealed class ShellLaunchService : IShellLaunchService, IDisposable
 {
     private const string ShellProcessName = "IIoT.Edge.Shell";
-    private static readonly TimeSpan ShellLaunchReadyTimeout =
-        TimeSpan.FromSeconds(10);
 
     private readonly IProcessStarter _processStarter;
     private readonly IShellInstanceIdResolver _instanceIdResolver;
     private readonly IShellInstanceProbe _instanceProbe;
     private readonly ILauncherUpdateOperationGate _updateOperationGate;
     private readonly IEdgeUpdateTransactionRecovery? _updateTransactionRecovery;
-    private readonly TimeSpan _shellLaunchReadyTimeout;
     private readonly Action<Process> _terminateProcess;
+    private readonly CancellationTokenSource _disposeCts = new();
     private readonly object _syncRoot = new();
     private readonly List<TrackedShellProcess> _startedProcesses = [];
 
@@ -33,7 +31,6 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
             instanceProbe,
             updateOperationGate,
             updateTransactionRecovery,
-            ShellLaunchReadyTimeout,
             TryTerminate)
     {
     }
@@ -44,7 +41,6 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
         IShellInstanceProbe instanceProbe,
         ILauncherUpdateOperationGate? updateOperationGate,
         IEdgeUpdateTransactionRecovery? updateTransactionRecovery,
-        TimeSpan shellLaunchReadyTimeout,
         Action<Process> terminateProcess)
     {
         _processStarter = processStarter ?? throw new ArgumentNullException(nameof(processStarter));
@@ -52,10 +48,6 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
         _instanceProbe = instanceProbe ?? throw new ArgumentNullException(nameof(instanceProbe));
         _updateOperationGate = updateOperationGate ?? NoopLauncherUpdateOperationGate.Instance;
         _updateTransactionRecovery = updateTransactionRecovery;
-        _shellLaunchReadyTimeout = shellLaunchReadyTimeout > TimeSpan.Zero
-            ? shellLaunchReadyTimeout
-            : throw new ArgumentOutOfRangeException(
-                nameof(shellLaunchReadyTimeout));
         _terminateProcess = terminateProcess
             ?? throw new ArgumentNullException(nameof(terminateProcess));
     }
@@ -76,7 +68,9 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
                && _instanceProbe.IsInstanceRunning(instanceId);
     }
 
-    public void Launch(LauncherProfileDefinition profile)
+    public async Task LaunchAsync(
+        LauncherProfileDefinition profile,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(profile);
 
@@ -122,23 +116,108 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
             throw new InvalidOperationException($"客户端启动失败：{profile.DisplayName}");
         }
 
-        if (readiness is not null
-            && !readiness.Wait(_shellLaunchReadyTimeout))
+        if (readiness is null)
         {
-            _terminateProcess(process);
-            process.Dispose();
-            throw new InvalidOperationException(
-                $"客户端启动失败：{profile.DisplayName} 未完成安全启动握手。");
+            TrackProcess(profile.MachineProfile, process);
+            return;
         }
 
-        lock (_syncRoot)
+        using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken,
+            _disposeCts.Token);
+        var processHandled = false;
+        try
         {
-            _startedProcesses.Add(new TrackedShellProcess(profile.MachineProfile, process));
+            var outcomeTask = readiness.WaitAsync(waitCts.Token);
+            var processExitTask = process.WaitForExitAsync(waitCts.Token);
+            var completed = await Task.WhenAny(
+                    outcomeTask,
+                    processExitTask)
+                .ConfigureAwait(false);
+            if (completed == processExitTask)
+            {
+                await processExitTask.ConfigureAwait(false);
+                process.Dispose();
+                processHandled = true;
+                throw new InvalidOperationException(
+                    $"客户端启动失败：{profile.DisplayName} 在完成启动握手前退出。");
+            }
+
+            var outcome = await outcomeTask.ConfigureAwait(false);
+            waitCts.Cancel();
+            if (!string.Equals(
+                    outcome.MachineProfile,
+                    profile.MachineProfile,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                TerminateIncompleteLaunch(process);
+                processHandled = true;
+                throw new InvalidOperationException(
+                    $"客户端启动失败：{profile.DisplayName} 返回了不匹配的工序身份。");
+            }
+
+            if (string.Equals(
+                    outcome.Status,
+                    EdgeClientShellLaunchStatuses.Failed,
+                    StringComparison.Ordinal))
+            {
+                TrackProcessIfRunning(profile.MachineProfile, process);
+                processHandled = true;
+                throw new InvalidOperationException(
+                    $"客户端启动失败：{profile.DisplayName}；{outcome.Message}");
+            }
+
+            var activeModuleIds = outcome.ActiveModuleIds.ToHashSet(
+                StringComparer.OrdinalIgnoreCase);
+            var missingExpectedModules = profile.ExpectedModuleIds
+                .Where(static moduleId => !string.IsNullOrWhiteSpace(moduleId))
+                .Select(static moduleId => moduleId.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Where(moduleId => !activeModuleIds.Contains(moduleId))
+                .ToArray();
+            if (missingExpectedModules.Length > 0)
+            {
+                TerminateIncompleteLaunch(process);
+                processHandled = true;
+                throw new InvalidOperationException(
+                    $"客户端启动失败：{profile.DisplayName} 未激活目标模块 {string.Join(", ", missingExpectedModules)}。");
+            }
+            if (!IsRunning(process))
+            {
+                process.Dispose();
+                processHandled = true;
+                throw new InvalidOperationException(
+                    $"客户端启动失败：{profile.DisplayName} 在报告就绪后退出。");
+            }
+
+            TrackProcess(profile.MachineProfile, process);
+            processHandled = true;
+        }
+        catch (InvalidDataException ex)
+        {
+            if (!processHandled)
+            {
+                TerminateIncompleteLaunch(process);
+            }
+
+            throw new InvalidOperationException(
+                $"客户端启动失败：{profile.DisplayName} 返回了无效的启动握手。",
+                ex);
+        }
+        catch
+        {
+            if (!processHandled)
+            {
+                TerminateIncompleteLaunch(process);
+            }
+
+            throw;
         }
     }
 
     public void Dispose()
     {
+        _disposeCts.Cancel();
         lock (_syncRoot)
         {
             foreach (var tracked in _startedProcesses)
@@ -148,6 +227,33 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
 
             _startedProcesses.Clear();
         }
+    }
+
+    private void TrackProcessIfRunning(
+        string machineProfile,
+        Process process)
+    {
+        if (IsRunning(process))
+        {
+            TrackProcess(machineProfile, process);
+            return;
+        }
+
+        process.Dispose();
+    }
+
+    private void TrackProcess(string machineProfile, Process process)
+    {
+        lock (_syncRoot)
+        {
+            _startedProcesses.Add(new TrackedShellProcess(machineProfile, process));
+        }
+    }
+
+    private void TerminateIncompleteLaunch(Process process)
+    {
+        _terminateProcess(process);
+        process.Dispose();
     }
 
     private bool HasTrackedRunningShellProcess()
@@ -237,7 +343,8 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
 
     private sealed class ShellLaunchReadinessSignal : IDisposable
     {
-        private readonly ManualResetEventSlim _ready = new(initialState: false);
+        private readonly TaskCompletionSource _changed = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly FileSystemWatcher _watcher;
 
         public ShellLaunchReadinessSignal(string readyPath)
@@ -261,14 +368,26 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
 
         public string ReadyPath { get; }
 
-        public bool Wait(TimeSpan timeout)
+        public async Task<EdgeClientShellLaunchOutcome> WaitAsync(
+            CancellationToken cancellationToken)
         {
-            if (File.Exists(ReadyPath))
+            if (EdgeClientUpdateCoordination.TryReadShellLaunchOutcome(
+                    ReadyPath,
+                    out var immediate))
             {
-                return true;
+                return immediate;
             }
 
-            return _ready.Wait(timeout) && File.Exists(ReadyPath);
+            await _changed.Task.WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
+            if (EdgeClientUpdateCoordination.TryReadShellLaunchOutcome(
+                    ReadyPath,
+                    out var outcome))
+            {
+                return outcome;
+            }
+
+            throw new InvalidDataException("Shell 启动握手内容无效。");
         }
 
         public void Dispose()
@@ -278,7 +397,6 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
             _watcher.Changed -= OnReadyFileChanged;
             _watcher.Renamed -= OnReadyFileChanged;
             _watcher.Dispose();
-            _ready.Dispose();
             try
             {
                 if (File.Exists(ReadyPath))
@@ -295,7 +413,7 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
         }
 
         private void OnReadyFileChanged(object sender, FileSystemEventArgs args)
-            => _ready.Set();
+            => _changed.TrySetResult();
     }
 
     private sealed record TrackedShellProcess(string MachineProfile, Process Process);

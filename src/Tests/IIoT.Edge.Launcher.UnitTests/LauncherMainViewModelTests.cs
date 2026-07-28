@@ -424,6 +424,29 @@ public sealed class LauncherMainViewModelTests
     }
 
     [Fact]
+    public async Task LaunchAsync_WhenShellStartupIsPending_ShouldYieldUntilHandshakeCompletes()
+    {
+        var profile = Profile("shell", "Shell");
+        var launchCompletion = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var launchService = new StubShellLaunchService(
+            launchTask: launchCompletion.Task);
+        var viewModel = new LauncherMainViewModel(
+            new StubLauncherProfileCatalog([profile]),
+            new StubLocalAccountAuthService(
+                LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
+            launchService);
+
+        var launchTask = viewModel.LaunchAsync(profile);
+
+        Assert.Equal(1, launchService.LaunchCallCount);
+        Assert.False(launchTask.IsCompleted);
+        launchCompletion.SetResult();
+        await launchTask;
+        Assert.Contains("Shell", viewModel.StatusMessage);
+    }
+
+    [Fact]
     public async Task LoginAsync_WhenUpdatesExist_ShouldOnlyPopulateUpdateCenterAndNotInstallOrApply()
     {
         var profile = Profile("shell", "Shell");
@@ -1119,7 +1142,8 @@ public sealed class LauncherMainViewModelTests
 
     private sealed class StubShellLaunchService(
         bool hasRunningShellProcess = false,
-        IReadOnlyList<string>? runningMachineProfiles = null) : IShellLaunchService
+        IReadOnlyList<string>? runningMachineProfiles = null,
+        Task? launchTask = null) : IShellLaunchService
     {
         private readonly HashSet<string> _runningMachineProfiles = new(
             runningMachineProfiles ?? [],
@@ -1136,10 +1160,13 @@ public sealed class LauncherMainViewModelTests
         public bool IsProfileRunning(LauncherProfileDefinition profile)
             => _runningMachineProfiles.Contains(profile.MachineProfile);
 
-        public void Launch(LauncherProfileDefinition profile)
+        public Task LaunchAsync(
+            LauncherProfileDefinition profile,
+            CancellationToken cancellationToken = default)
         {
             LaunchCallCount++;
             _launchedMachineProfiles.Add(profile.MachineProfile);
+            return launchTask ?? Task.CompletedTask;
         }
     }
 

@@ -80,7 +80,7 @@ public sealed class ShellLaunchServiceTests
     }
 
     [Fact]
-    public void Launch_WhenUpdateLeaseIsHeld_ShouldRejectBeforeStartingProcess()
+    public async Task Launch_WhenUpdateLeaseIsHeld_ShouldRejectBeforeStartingProcess()
     {
         var baseDirectory = Path.Combine(
             Path.GetTempPath(),
@@ -106,8 +106,10 @@ public sealed class ShellLaunchServiceTests
                 "ChartBar",
                 "#2563EB");
 
-            var exception = Assert.Throws<InvalidOperationException>(
-                () => service.Launch(profile));
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.LaunchAsync(
+                    profile,
+                    TestContext.Current.CancellationToken));
 
             Assert.Contains("更新正在进行", exception.Message, StringComparison.Ordinal);
             Assert.Null(starter.StartInfo);
@@ -123,7 +125,7 @@ public sealed class ShellLaunchServiceTests
     }
 
     [Fact]
-    public void Launch_WhenProfileIsBlockedByFailedRecovery_ShouldRejectBeforeStartingProcess()
+    public async Task Launch_WhenProfileIsBlockedByFailedRecovery_ShouldRejectBeforeStartingProcess()
     {
         var starter = new SpyProcessStarter();
         var service = CreateService(
@@ -139,8 +141,10 @@ public sealed class ShellLaunchServiceTests
             "ChartBar",
             "#2563EB");
 
-        var exception = Assert.Throws<InvalidOperationException>(
-            () => service.Launch(profile));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.LaunchAsync(
+                profile,
+                TestContext.Current.CancellationToken));
 
         Assert.Contains("事务恢复失败", exception.Message, StringComparison.Ordinal);
         Assert.Null(starter.StartInfo);
@@ -259,7 +263,7 @@ public sealed class ShellLaunchServiceTests
     }
 
     [Fact]
-    public void Launch_ShouldSetMachineProfileEnvironmentVariable()
+    public async Task Launch_ShouldSetMachineProfileEnvironmentVariable()
     {
         var executablePath = Path.Combine(
             Path.GetTempPath(),
@@ -282,7 +286,9 @@ public sealed class ShellLaunchServiceTests
 
         try
         {
-            service.Launch(profile);
+            await service.LaunchAsync(
+                profile,
+                TestContext.Current.CancellationToken);
 
             Assert.NotNull(starter.StartInfo);
             Assert.Equal(executablePath, starter.StartInfo!.FileName);
@@ -298,7 +304,7 @@ public sealed class ShellLaunchServiceTests
     }
 
     [Fact]
-    public void IsProfileRunning_WhenDifferentProfileIsTracked_ShouldReturnFalse()
+    public async Task IsProfileRunning_WhenDifferentProfileIsTracked_ShouldReturnFalse()
     {
         var executablePath = Path.Combine(
             Path.GetTempPath(),
@@ -326,7 +332,9 @@ public sealed class ShellLaunchServiceTests
 
         try
         {
-            service.Launch(alphaProfile);
+            await service.LaunchAsync(
+                alphaProfile,
+                TestContext.Current.CancellationToken);
 
             Assert.True(service.HasAnyRunningShellProcess());
             Assert.True(service.IsProfileRunning(alphaProfile));
@@ -516,7 +524,7 @@ public sealed class ShellLaunchServiceTests
     }
 
     [Fact]
-    public void Launch_WhenOnlyShellDllExists_ShouldFallbackToDotnet()
+    public async Task Launch_WhenOnlyShellDllExists_ShouldFallbackToDotnet()
     {
         var configuredPath = Path.Combine(Path.GetTempPath(), "edge-launcher-shell-tests", Guid.NewGuid().ToString("N"), "IIoT.Edge.Shell");
         var dllPath = configuredPath + ".dll";
@@ -536,7 +544,9 @@ public sealed class ShellLaunchServiceTests
 
         try
         {
-            service.Launch(profile);
+            await service.LaunchAsync(
+                profile,
+                TestContext.Current.CancellationToken);
 
             Assert.NotNull(starter.StartInfo);
             Assert.Equal("dotnet", starter.StartInfo!.FileName);
@@ -550,7 +560,7 @@ public sealed class ShellLaunchServiceTests
     }
 
     [Fact]
-    public void Launch_WhenDotnetChildSignalsReady_ShouldHoldGateUntilPersistentShellPresenceExists()
+    public async Task Launch_WhenDotnetChildSignalsReady_ShouldHoldGateUntilPersistentShellPresenceExists()
     {
         var baseDirectory = Path.Combine(
             Path.GetTempPath(),
@@ -581,7 +591,9 @@ public sealed class ShellLaunchServiceTests
 
         try
         {
-            service.Launch(profile);
+            await service.LaunchAsync(
+                profile,
+                TestContext.Current.CancellationToken);
 
             Assert.NotNull(starter.StartInfo);
             Assert.Equal("dotnet", starter.StartInfo!.FileName);
@@ -605,7 +617,192 @@ public sealed class ShellLaunchServiceTests
     }
 
     [Fact]
-    public void Launch_WhenChildNeverSignalsReady_ShouldFailAndReleaseLaunchGate()
+    public async Task Launch_WhenReadyOutcomeMissesExpectedModule_ShouldTerminateIncompleteChild()
+    {
+        var baseDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "edge-launcher-shell-handoff-tests",
+            Guid.NewGuid().ToString("N"),
+            "launcher");
+        var configuredPath = Path.Combine(
+            baseDirectory,
+            "runtime",
+            "IIoT.Edge.Shell");
+        var dllPath = configuredPath + ".dll";
+        Directory.CreateDirectory(Path.GetDirectoryName(dllPath)!);
+        File.WriteAllText(dllPath, string.Empty);
+        var gate = new FileLauncherUpdateOperationGate(baseDirectory);
+        using var starter = new ReadyShellProcessStarter(
+            baseDirectory,
+            activeModuleIds: []);
+        var terminated = false;
+        using var service = new ShellLaunchService(
+            starter,
+            new FakeShellInstanceIdResolver(),
+            new FakeShellInstanceProbe(),
+            gate,
+            updateTransactionRecovery: null,
+            terminateProcess: _ => terminated = true);
+        var profile = new LauncherProfileDefinition(
+            "DieCuttingAnodeLine",
+            "负极模切",
+            "AP profile",
+            null,
+            "DieCuttingAnodeLine",
+            configuredPath,
+            "ChartBar",
+            "#2563EB")
+        {
+            ExpectedModuleIds = ["AP"]
+        };
+
+        try
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.LaunchAsync(
+                    profile,
+                    TestContext.Current.CancellationToken));
+
+            Assert.Contains("未激活目标模块 AP", exception.Message, StringComparison.Ordinal);
+            Assert.True(terminated);
+            Assert.False(service.HasAnyRunningShellProcess());
+        }
+        finally
+        {
+            starter.ReleaseShellPresence();
+            var root = Directory.GetParent(baseDirectory)?.FullName;
+            if (!string.IsNullOrWhiteSpace(root) && Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Launch_WhenShellReportsDiagnosticFailure_ShouldKeepRepairWindowTracked()
+    {
+        var baseDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "edge-launcher-shell-handoff-tests",
+            Guid.NewGuid().ToString("N"),
+            "launcher");
+        var configuredPath = Path.Combine(
+            baseDirectory,
+            "runtime",
+            "IIoT.Edge.Shell");
+        var dllPath = configuredPath + ".dll";
+        Directory.CreateDirectory(Path.GetDirectoryName(dllPath)!);
+        File.WriteAllText(dllPath, string.Empty);
+        var gate = new FileLauncherUpdateOperationGate(baseDirectory);
+        using var starter = new ReadyShellProcessStarter(
+            baseDirectory,
+            status: EdgeClientShellLaunchStatuses.Failed,
+            message: "AP 插件未能加载。");
+        var terminated = false;
+        using var service = new ShellLaunchService(
+            starter,
+            new FakeShellInstanceIdResolver(),
+            new FakeShellInstanceProbe(),
+            gate,
+            updateTransactionRecovery: null,
+            terminateProcess: _ => terminated = true);
+        var profile = new LauncherProfileDefinition(
+            "DieCuttingAnodeLine",
+            "负极模切",
+            "AP profile",
+            null,
+            "DieCuttingAnodeLine",
+            configuredPath,
+            "ChartBar",
+            "#2563EB")
+        {
+            ExpectedModuleIds = ["AP"]
+        };
+
+        try
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.LaunchAsync(
+                    profile,
+                    TestContext.Current.CancellationToken));
+
+            Assert.Contains("AP 插件未能加载", exception.Message, StringComparison.Ordinal);
+            Assert.False(terminated);
+            Assert.True(service.HasAnyRunningShellProcess());
+            Assert.Null(gate.TryAcquireUpdate());
+        }
+        finally
+        {
+            starter.ReleaseShellPresence();
+            var root = Directory.GetParent(baseDirectory)?.FullName;
+            if (!string.IsNullOrWhiteSpace(root) && Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Launch_WhenLifecycleIsStillStarting_ShouldRemainAsynchronousUntilOutcomeArrives()
+    {
+        var baseDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "edge-launcher-shell-handoff-tests",
+            Guid.NewGuid().ToString("N"),
+            "launcher");
+        var configuredPath = Path.Combine(
+            baseDirectory,
+            "runtime",
+            "IIoT.Edge.Shell");
+        var dllPath = configuredPath + ".dll";
+        Directory.CreateDirectory(Path.GetDirectoryName(dllPath)!);
+        File.WriteAllText(dllPath, string.Empty);
+        var gate = new FileLauncherUpdateOperationGate(baseDirectory);
+        using var starter = new DeferredReadyShellProcessStarter(
+            baseDirectory,
+            ["AP"]);
+        using var service = CreateService(
+            starter,
+            updateOperationGate: gate);
+        var profile = new LauncherProfileDefinition(
+            "DieCuttingAnodeLine",
+            "负极模切",
+            "AP profile",
+            null,
+            "DieCuttingAnodeLine",
+            configuredPath,
+            "ChartBar",
+            "#2563EB")
+        {
+            ExpectedModuleIds = ["AP"]
+        };
+
+        try
+        {
+            var launchTask = service.LaunchAsync(
+                profile,
+                TestContext.Current.CancellationToken);
+            Assert.False(launchTask.IsCompleted);
+
+            starter.SignalReady();
+            await launchTask.WaitAsync(
+                TimeSpan.FromSeconds(5),
+                TestContext.Current.CancellationToken);
+            Assert.True(service.IsProfileRunning(profile));
+        }
+        finally
+        {
+            starter.ReleaseShellPresence();
+            var root = Directory.GetParent(baseDirectory)?.FullName;
+            if (!string.IsNullOrWhiteSpace(root) && Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Launch_WhenChildNeverSignalsReady_ShouldCancelAndReleaseLaunchGate()
     {
         var baseDirectory = Path.Combine(
             Path.GetTempPath(),
@@ -629,7 +826,6 @@ public sealed class ShellLaunchServiceTests
             new FakeShellInstanceProbe(),
             gate,
             updateTransactionRecovery: null,
-            shellLaunchReadyTimeout: TimeSpan.FromMilliseconds(20),
             terminateProcess: _ => terminated = true);
         var profile = new LauncherProfileDefinition(
             "TestPluginLine",
@@ -643,13 +839,14 @@ public sealed class ShellLaunchServiceTests
 
         try
         {
-            var exception = Assert.Throws<InvalidOperationException>(
-                () => service.Launch(profile));
+#pragma warning disable xUnit1051 // This test verifies caller-driven cancellation before the test token fires.
+            using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                TestContext.Current.CancellationToken);
+            cancellation.CancelAfter(TimeSpan.FromMilliseconds(100));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => service.LaunchAsync(profile, cancellation.Token));
+#pragma warning restore xUnit1051
 
-            Assert.Contains(
-                "未完成安全启动握手",
-                exception.Message,
-                StringComparison.Ordinal);
             Assert.True(terminated);
             Assert.False(service.HasAnyRunningShellProcess());
             using var updateAfterFailedLaunch = gate.TryAcquireUpdate();
@@ -690,7 +887,11 @@ public sealed class ShellLaunchServiceTests
     }
 
     private sealed class ReadyShellProcessStarter(
-        string baseDirectory) : IProcessStarter, IDisposable
+        string baseDirectory,
+        string status = EdgeClientShellLaunchStatuses.Ready,
+        IReadOnlyList<string>? activeModuleIds = null,
+        string? machineProfileOverride = null,
+        string? message = null) : IProcessStarter, IDisposable
     {
         private IDisposable? _shellPresence;
 
@@ -708,9 +909,67 @@ public sealed class ShellLaunchServiceTests
             var readyPath = startInfo.EnvironmentVariables[
                 EdgeClientUpdateCoordination.ShellLaunchReadyEnvironmentVariable];
             Assert.False(string.IsNullOrWhiteSpace(readyPath));
-            File.WriteAllText(readyPath!, "ready");
-            SignaledReady = true;
+            var machineProfile = machineProfileOverride
+                                 ?? startInfo.EnvironmentVariables[
+                                     "Shell__MachineProfile"]
+                                 ?? "Default";
+            SignaledReady =
+                EdgeClientUpdateCoordination.TryWriteShellLaunchOutcomeToPath(
+                    readyPath!,
+                    new EdgeClientShellLaunchOutcome(
+                        EdgeClientUpdateCoordination.ShellLaunchOutcomeSchemaVersion,
+                        status,
+                        machineProfile,
+                        activeModuleIds ?? [],
+                        status == EdgeClientShellLaunchStatuses.Failed
+                            ? message ?? "启动诊断失败。"
+                            : null),
+                    baseDirectory);
+            Assert.True(SignaledReady);
             return Process.GetCurrentProcess();
+        }
+
+        public void ReleaseShellPresence()
+            => Interlocked.Exchange(ref _shellPresence, null)?.Dispose();
+
+        public void Dispose() => ReleaseShellPresence();
+    }
+
+    private sealed class DeferredReadyShellProcessStarter(
+        string baseDirectory,
+        IReadOnlyList<string> activeModuleIds) : IProcessStarter, IDisposable
+    {
+        private IDisposable? _shellPresence;
+        private string? _machineProfile;
+        private string? _readyPath;
+
+        public Process? Start(ProcessStartInfo startInfo)
+        {
+            _shellPresence =
+                EdgeClientUpdateCoordination.TryAcquireShellPresence(
+                    baseDirectory);
+            Assert.NotNull(_shellPresence);
+            _readyPath = startInfo.EnvironmentVariables[
+                EdgeClientUpdateCoordination.ShellLaunchReadyEnvironmentVariable];
+            _machineProfile = startInfo.EnvironmentVariables[
+                "Shell__MachineProfile"];
+            Assert.False(string.IsNullOrWhiteSpace(_readyPath));
+            Assert.False(string.IsNullOrWhiteSpace(_machineProfile));
+            return Process.GetCurrentProcess();
+        }
+
+        public void SignalReady()
+        {
+            Assert.True(
+                EdgeClientUpdateCoordination.TryWriteShellLaunchOutcomeToPath(
+                    _readyPath!,
+                    new EdgeClientShellLaunchOutcome(
+                        EdgeClientUpdateCoordination.ShellLaunchOutcomeSchemaVersion,
+                        EdgeClientShellLaunchStatuses.Ready,
+                        _machineProfile!,
+                        activeModuleIds,
+                        Message: null),
+                    baseDirectory));
         }
 
         public void ReleaseShellPresence()
