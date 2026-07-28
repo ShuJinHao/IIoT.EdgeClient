@@ -112,7 +112,7 @@ public sealed class LauncherHostUpdatePanelViewModel : BaseNotifyPropertyChanged
 
     public async Task ApplyUpdateAsync()
     {
-        using var updateLease = _updateOperationGate.TryAcquire();
+        using var updateLease = _updateOperationGate.TryAcquireUpdate();
         if (updateLease is null)
         {
             IsProgressVisible = false;

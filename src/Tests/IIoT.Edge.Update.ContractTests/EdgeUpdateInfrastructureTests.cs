@@ -591,6 +591,49 @@ public sealed class EdgeUpdateInfrastructureTests
     }
 
     [Fact]
+    public void UpdateConfigInitializer_WhenJsonRootIsNotObject_ShouldKeepFileAndReturnWithoutThrowing()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var configPath = Path.Combine(
+                tempDirectory,
+                "launcher.update.json");
+            var samplePath = Path.Combine(
+                tempDirectory,
+                "launcher.update.sample.json");
+            File.WriteAllText(configPath, "[]");
+            File.WriteAllText(
+                samplePath,
+                """
+                {
+                  "source": "https://updates.example.test/stable/",
+                  "channel": "stable",
+                  "targetRuntime": "win-x64"
+                }
+                """);
+            var original = File.ReadAllBytes(configPath);
+            var initializer = new FileEdgeUpdateConfigInitializer(
+                new EdgeUpdateConfigPaths(configPath, samplePath));
+
+            var exception = Record.Exception(initializer.EnsureConfigExists);
+
+            Assert.Null(exception);
+            Assert.Equal(original, File.ReadAllBytes(configPath));
+            var validator = new FileEdgeReleaseSourceValidator(
+                new EdgeUpdateConfigPaths(configPath, samplePath));
+            Assert.Contains(
+                "根节点必须是对象",
+                validator.ValidateConfiguredSource() ?? string.Empty,
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
     public void ReleaseSourceValidator_ShouldRejectCatalogMismatchWithoutChangingFormalConfig()
     {
         var tempDirectory = CreateTempDirectory();

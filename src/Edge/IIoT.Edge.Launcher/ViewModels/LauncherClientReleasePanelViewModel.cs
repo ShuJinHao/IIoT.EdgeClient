@@ -182,7 +182,7 @@ public sealed class LauncherClientReleasePanelViewModel : BaseNotifyPropertyChan
             }
         }
 
-        using var updateLease = _updateOperationGate.TryAcquire();
+        using var updateLease = _updateOperationGate.TryAcquireUpdate();
         if (updateLease is null)
         {
             IsProgressVisible = false;

@@ -38,6 +38,7 @@ public partial class App : global::Avalonia.Application
     private IShellModuleCatalog? _moduleCatalog;
     private readonly CancellationTokenSource _appCts = new();
     private readonly SingleInstanceMutexHandle _instanceLock = new();
+    private IDisposable? _updatePresenceLease;
     private int _fatalDialogShown;
     private int _shutdownStarted;
     private int _mainWindowReady;
@@ -92,6 +93,21 @@ public partial class App : global::Avalonia.Application
             {
                 return;
             }
+
+            _updatePresenceLease =
+                EdgeClientUpdateCoordination.TryAcquireShellPresence(
+                    AppDomain.CurrentDomain.BaseDirectory);
+            if (_updatePresenceLease is null)
+            {
+                ReleaseRuntimeLocks();
+                ShowStartupError(
+                    desktop,
+                    "客户端更新正在进行，当前工序暂时不能启动。");
+                return;
+            }
+
+            _ = EdgeClientUpdateCoordination.TrySignalShellLaunchReady(
+                AppDomain.CurrentDomain.BaseDirectory);
 
             _serviceProvider = ConfigureServices(
                 configuration,
@@ -211,7 +227,7 @@ public partial class App : global::Avalonia.Application
         }
         finally
         {
-            ReleaseMutex();
+            ReleaseRuntimeLocks();
             _appCts.Dispose();
             _startupServiceProvider?.Dispose();
 
@@ -376,7 +392,11 @@ public partial class App : global::Avalonia.Application
         return false;
     }
 
-    private void ReleaseMutex() => _instanceLock.Release();
+    private void ReleaseRuntimeLocks()
+    {
+        _instanceLock.Release();
+        Interlocked.Exchange(ref _updatePresenceLease, null)?.Dispose();
+    }
 
     private ServiceCollection ConfigureServices(
         IConfiguration configuration,

@@ -417,6 +417,10 @@ public sealed class LauncherClientReleasePanelViewModelTests
             return new Lease(this);
         }
 
+        public IDisposable? TryAcquireUpdate() => TryAcquire();
+
+        public string? CreateShellLaunchReadyPath() => null;
+
         private sealed class Lease(TrackingUpdateOperationGate owner) : IDisposable
         {
             private bool _disposed;

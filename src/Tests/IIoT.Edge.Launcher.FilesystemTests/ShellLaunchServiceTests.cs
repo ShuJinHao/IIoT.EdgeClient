@@ -42,6 +42,44 @@ public sealed class ShellLaunchServiceTests
     }
 
     [Fact]
+    public void FileUpdateGate_WhenShellPresenceIsHeld_ShouldAllowOtherShellsButRejectUpdate()
+    {
+        var baseDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "edge-launcher-update-gate-tests",
+            Guid.NewGuid().ToString("N"),
+            "launcher");
+        try
+        {
+            using var firstShell =
+                EdgeClientUpdateCoordination.TryAcquireShellPresence(
+                    baseDirectory);
+            using var secondShell =
+                EdgeClientUpdateCoordination.TryAcquireShellPresence(
+                    baseDirectory);
+            Assert.NotNull(firstShell);
+            Assert.NotNull(secondShell);
+            var gate = new FileLauncherUpdateOperationGate(baseDirectory);
+
+            using var blockedUpdate = gate.TryAcquireUpdate();
+
+            Assert.Null(blockedUpdate);
+            secondShell.Dispose();
+            firstShell.Dispose();
+            using var updateAfterShellExit = gate.TryAcquireUpdate();
+            Assert.NotNull(updateAfterShellExit);
+        }
+        finally
+        {
+            var root = Directory.GetParent(baseDirectory)?.FullName;
+            if (!string.IsNullOrWhiteSpace(root) && Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void Launch_WhenUpdateLeaseIsHeld_ShouldRejectBeforeStartingProcess()
     {
         var baseDirectory = Path.Combine(
@@ -511,6 +549,61 @@ public sealed class ShellLaunchServiceTests
         }
     }
 
+    [Fact]
+    public void Launch_WhenDotnetChildSignalsReady_ShouldHoldGateUntilPersistentShellPresenceExists()
+    {
+        var baseDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "edge-launcher-shell-handoff-tests",
+            Guid.NewGuid().ToString("N"),
+            "launcher");
+        var configuredPath = Path.Combine(
+            baseDirectory,
+            "runtime",
+            "IIoT.Edge.Shell");
+        var dllPath = configuredPath + ".dll";
+        Directory.CreateDirectory(Path.GetDirectoryName(dllPath)!);
+        File.WriteAllText(dllPath, string.Empty);
+        var gate = new FileLauncherUpdateOperationGate(baseDirectory);
+        using var starter = new ReadyShellProcessStarter(baseDirectory);
+        using var service = CreateService(
+            starter,
+            updateOperationGate: gate);
+        var profile = new LauncherProfileDefinition(
+            "TestPluginLine",
+            "测试插件",
+            "TestPlugin profile",
+            null,
+            "TestPluginLine",
+            configuredPath,
+            "BeakerOutline",
+            "#4D7C0F");
+
+        try
+        {
+            service.Launch(profile);
+
+            Assert.NotNull(starter.StartInfo);
+            Assert.Equal("dotnet", starter.StartInfo!.FileName);
+            Assert.True(starter.SignaledReady);
+            Assert.Null(gate.TryAcquireUpdate());
+
+            starter.ReleaseShellPresence();
+            using var updateAfterShellExit = gate.TryAcquireUpdate();
+            Assert.NotNull(updateAfterShellExit);
+        }
+        finally
+        {
+            if (Directory.Exists(
+                    Directory.GetParent(baseDirectory)?.FullName))
+            {
+                Directory.Delete(
+                    Directory.GetParent(baseDirectory)!.FullName,
+                    recursive: true);
+            }
+        }
+    }
+
     private static ShellLaunchService CreateService(
         IProcessStarter processStarter,
         IShellInstanceIdResolver? instanceIdResolver = null,
@@ -533,6 +626,36 @@ public sealed class ShellLaunchServiceTests
             StartInfo = startInfo;
             return Process.GetCurrentProcess();
         }
+    }
+
+    private sealed class ReadyShellProcessStarter(
+        string baseDirectory) : IProcessStarter, IDisposable
+    {
+        private IDisposable? _shellPresence;
+
+        public ProcessStartInfo? StartInfo { get; private set; }
+
+        public bool SignaledReady { get; private set; }
+
+        public Process? Start(ProcessStartInfo startInfo)
+        {
+            StartInfo = startInfo;
+            _shellPresence =
+                EdgeClientUpdateCoordination.TryAcquireShellPresence(
+                    baseDirectory);
+            Assert.NotNull(_shellPresence);
+            var readyPath = startInfo.EnvironmentVariables[
+                EdgeClientUpdateCoordination.ShellLaunchReadyEnvironmentVariable];
+            Assert.False(string.IsNullOrWhiteSpace(readyPath));
+            File.WriteAllText(readyPath!, "ready");
+            SignaledReady = true;
+            return Process.GetCurrentProcess();
+        }
+
+        public void ReleaseShellPresence()
+            => Interlocked.Exchange(ref _shellPresence, null)?.Dispose();
+
+        public void Dispose() => ReleaseShellPresence();
     }
 
     private sealed class FakeShellInstanceIdResolver(params (string MachineProfile, string InstanceId)[] mappings)

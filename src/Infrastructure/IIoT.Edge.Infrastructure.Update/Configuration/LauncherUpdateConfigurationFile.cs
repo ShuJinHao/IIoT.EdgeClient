@@ -91,8 +91,10 @@ internal static class LauncherUpdateConfigurationFile
     private static void MigrateLegacyKeys(string configPath)
     {
         var json = File.ReadAllText(configPath);
-        var root = JsonNode.Parse(json)?.AsObject()
-            ?? throw new JsonException("Launcher 更新配置根节点必须是对象。");
+        if (JsonNode.Parse(json) is not JsonObject root)
+        {
+            throw new JsonException("Launcher 更新配置根节点必须是对象。");
+        }
 
         var source = ReadLegacyString(root, SourceKeys);
         var channel = ReadLegacyString(root, ChannelKeys);

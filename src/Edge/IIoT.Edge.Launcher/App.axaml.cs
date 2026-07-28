@@ -70,7 +70,7 @@ public partial class App : Avalonia.Application
 
         using var recoveryLease = services
             .GetRequiredService<ILauncherUpdateOperationGate>()
-            .TryAcquire();
+            .TryAcquireUpdate();
         if (recoveryLease is null)
         {
             return false;

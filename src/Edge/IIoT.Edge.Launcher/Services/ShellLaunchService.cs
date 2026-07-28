@@ -1,5 +1,6 @@
 using IIoT.Edge.Application.Features.Updates;
 using IIoT.Edge.Launcher.Models;
+using IIoT.Edge.SharedKernel.Configuration;
 using System.Diagnostics;
 
 namespace IIoT.Edge.Launcher.Services;
@@ -7,6 +8,8 @@ namespace IIoT.Edge.Launcher.Services;
 public sealed class ShellLaunchService : IShellLaunchService, IDisposable
 {
     private const string ShellProcessName = "IIoT.Edge.Shell";
+    private static readonly TimeSpan ShellLaunchReadyTimeout =
+        TimeSpan.FromSeconds(10);
 
     private readonly IProcessStarter _processStarter;
     private readonly IShellInstanceIdResolver _instanceIdResolver;
@@ -75,11 +78,30 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
         }
 
         startInfo.EnvironmentVariables["Shell__MachineProfile"] = profile.MachineProfile;
+        var readyPath = _updateOperationGate.CreateShellLaunchReadyPath();
+        using var readiness = string.IsNullOrWhiteSpace(readyPath)
+            ? null
+            : new ShellLaunchReadinessSignal(readyPath);
+        if (readiness is not null)
+        {
+            startInfo.EnvironmentVariables[
+                EdgeClientUpdateCoordination.ShellLaunchReadyEnvironmentVariable] =
+                readiness.ReadyPath;
+        }
 
         var process = _processStarter.Start(startInfo);
         if (process is null)
         {
             throw new InvalidOperationException($"客户端启动失败：{profile.DisplayName}");
+        }
+
+        if (readiness is not null
+            && !readiness.Wait(ShellLaunchReadyTimeout))
+        {
+            TryTerminate(process);
+            process.Dispose();
+            throw new InvalidOperationException(
+                $"客户端启动失败：{profile.DisplayName} 未完成安全启动握手。");
         }
 
         lock (_syncRoot)
@@ -157,6 +179,23 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
         return false;
     }
 
+    private static void TryTerminate(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit(milliseconds: 5000);
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException
+                                       or System.ComponentModel.Win32Exception
+                                       or NotSupportedException)
+        {
+        }
+    }
+
     private static bool IsRunning(Process process)
     {
         try
@@ -167,6 +206,69 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
         {
             return false;
         }
+    }
+
+    private sealed class ShellLaunchReadinessSignal : IDisposable
+    {
+        private readonly ManualResetEventSlim _ready = new(initialState: false);
+        private readonly FileSystemWatcher _watcher;
+
+        public ShellLaunchReadinessSignal(string readyPath)
+        {
+            ReadyPath = Path.GetFullPath(readyPath);
+            var directory = Path.GetDirectoryName(ReadyPath)
+                ?? throw new InvalidOperationException(
+                    "Shell 启动握手文件缺少目录。");
+            Directory.CreateDirectory(directory);
+            _watcher = new FileSystemWatcher(directory, Path.GetFileName(ReadyPath))
+            {
+                NotifyFilter = NotifyFilters.FileName
+                               | NotifyFilters.CreationTime
+                               | NotifyFilters.LastWrite
+            };
+            _watcher.Created += OnReadyFileChanged;
+            _watcher.Changed += OnReadyFileChanged;
+            _watcher.Renamed += OnReadyFileChanged;
+            _watcher.EnableRaisingEvents = true;
+        }
+
+        public string ReadyPath { get; }
+
+        public bool Wait(TimeSpan timeout)
+        {
+            if (File.Exists(ReadyPath))
+            {
+                return true;
+            }
+
+            return _ready.Wait(timeout) && File.Exists(ReadyPath);
+        }
+
+        public void Dispose()
+        {
+            _watcher.EnableRaisingEvents = false;
+            _watcher.Created -= OnReadyFileChanged;
+            _watcher.Changed -= OnReadyFileChanged;
+            _watcher.Renamed -= OnReadyFileChanged;
+            _watcher.Dispose();
+            _ready.Dispose();
+            try
+            {
+                if (File.Exists(ReadyPath))
+                {
+                    File.Delete(ReadyPath);
+                }
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+
+        private void OnReadyFileChanged(object sender, FileSystemEventArgs args)
+            => _ready.Set();
     }
 
     private sealed record TrackedShellProcess(string MachineProfile, Process Process);
