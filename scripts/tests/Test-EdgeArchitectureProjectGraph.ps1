@@ -1181,7 +1181,9 @@ foreach ($project in $projects) {
                 $usesProcess =
                     $sourceCode -match '\bSystem\.Diagnostics\.Process\s*\.' -or
                     (-not $declaresProcessType -and $sourceCode -match '\bProcess\.(?:Start|GetProcess|Kill|WaitForExit)[A-Za-z0-9_]*\s*\(')
-                $usesNetwork = $sourceCode -match '\b(?:System\.Net\.Sockets|Socket|TcpListener|TcpClient|UdpClient)\b'
+                # SocketException/SocketError are in-memory protocol-failure values and are safe in Pure tests.
+                # Keep rejecting constructors/usages of the real socket resource types.
+                $usesNetwork = $sourceCode -match '\b(?:System\.Net\.Sockets\.)?(?:Socket|TcpListener|TcpClient|UdpClient)\b'
                 $usesDefaultHttpClient = $sourceCode -match '\bnew\s+(?:System\.Net\.Http\.)?HttpClient\s*\(\s*\)'
                 if ($usesFileSystem -or $usesProcess -or $usesNetwork -or $usesDefaultHttpClient) {
                     Add-Finding 'WSTEST009' "$(Get-RepositoryPath $source.FullName) uses a real Filesystem/Process/Network resource inside a Pure runner. Move it to a resource-backed Serial runner or inject a deterministic fake."
