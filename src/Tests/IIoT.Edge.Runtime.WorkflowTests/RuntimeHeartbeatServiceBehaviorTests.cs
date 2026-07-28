@@ -72,7 +72,43 @@ public sealed class RuntimeHeartbeatServiceBehaviorTests
         Assert.Equal(0, reporter.ReportCallCount);
     }
 
-    private sealed class FixedUpdateConfigurationProvider : IEdgeUpdateConfigurationProvider
+    [Fact]
+    public async Task StartAsync_WhenHeartbeatPathIsMissing_ShouldSkipWithoutBootstrapRequest()
+    {
+        var logger = new FakeLogService();
+        var pathDiagnosticLogged = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        logger.EntryAdded += entry =>
+        {
+            if (entry.Message.Contains("上报路径未配置", StringComparison.Ordinal))
+            {
+                pathDiagnosticLogged.TrySetResult();
+            }
+        };
+        var sessionClient = new CountingDeviceSessionClient();
+        var reporter = new CountingRuntimeHeartbeatReporter();
+        var service = new EdgeRuntimeHeartbeatService(
+            new FixedUpdateConfigurationProvider(runtimeHeartbeatPath: string.Empty),
+            sessionClient,
+            reporter,
+            new FixedRuntimeConfigService(),
+            logger);
+
+        await service.StartAsync(
+            new EdgeUpdateTarget("LineA", AppContext.BaseDirectory, string.Empty),
+            TestContext.Current.CancellationToken);
+        await pathDiagnosticLogged.Task.WaitAsync(
+            TimeSpan.FromSeconds(2),
+            TestContext.Current.CancellationToken);
+        await service.StopAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, sessionClient.BootstrapCallCount);
+        Assert.Equal(0, reporter.ReportCallCount);
+    }
+
+    private sealed class FixedUpdateConfigurationProvider(
+        string runtimeHeartbeatPath = "/api/v1/edge/runtime-heartbeats")
+        : IEdgeUpdateConfigurationProvider
     {
         public EdgeUpdateConfigurationResult Resolve(EdgeUpdateTarget target)
             => EdgeUpdateConfigurationResult.Succeeded(new EdgeUpdateCloudApiOptions(
@@ -83,7 +119,7 @@ public sealed class RuntimeHeartbeatServiceBehaviorTests
                 "/api/v1/bootstrap/device-instance",
                 "/api/v1/edge/client-releases/device/{deviceId}/catalog",
                 "/api/v1/edge/client-releases/version-reports",
-                "/api/v1/edge/runtime-heartbeats"));
+                runtimeHeartbeatPath));
 
         public EdgeReleaseOptions ResolveReleaseOptions()
             => new("stable", "win-x64");

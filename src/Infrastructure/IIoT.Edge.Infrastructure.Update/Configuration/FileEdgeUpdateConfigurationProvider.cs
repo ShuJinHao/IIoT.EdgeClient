@@ -39,8 +39,8 @@ public sealed class FileEdgeUpdateConfigurationProvider : IEdgeUpdateConfigurati
             mutable.BootstrapSecret!,
             mutable.DeviceInstancePath!,
             mutable.ClientReleaseCatalogTemplate!,
-            mutable.ClientVersionReportPath!,
-            mutable.RuntimeHeartbeatPath!));
+            mutable.ClientVersionReportPath ?? string.Empty,
+            mutable.RuntimeHeartbeatPath ?? string.Empty));
     }
 
     public EdgeReleaseOptions ResolveReleaseOptions()
@@ -181,15 +181,6 @@ public sealed class FileEdgeUpdateConfigurationProvider : IEdgeUpdateConfigurati
                 yield return "CloudApi:Paths:ClientReleaseCatalogTemplate";
             }
 
-            if (string.IsNullOrWhiteSpace(ClientVersionReportPath))
-            {
-                yield return "CloudApi:Paths:ClientVersionReport";
-            }
-
-            if (string.IsNullOrWhiteSpace(RuntimeHeartbeatPath))
-            {
-                yield return "CloudApi:Paths:RuntimeHeartbeat";
-            }
         }
     }
 }

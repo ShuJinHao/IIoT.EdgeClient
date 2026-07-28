@@ -14,7 +14,7 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
     private readonly IShellInstanceIdResolver _instanceIdResolver;
     private readonly IShellInstanceProbe _instanceProbe;
     private readonly ILauncherUpdateOperationGate _updateOperationGate;
-    private readonly IEdgeUpdateTransactionRecovery? _updateTransactionRecovery;
+    private readonly IEdgeUpdateTransactionRecovery _updateTransactionRecovery;
     private readonly Action<Process> _terminateProcess;
     private readonly Func<CancellationToken, Task> _readinessDeadline;
     private readonly CancellationTokenSource _disposeCts = new();
@@ -25,8 +25,8 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
         IProcessStarter processStarter,
         IShellInstanceIdResolver instanceIdResolver,
         IShellInstanceProbe instanceProbe,
-        ILauncherUpdateOperationGate? updateOperationGate = null,
-        IEdgeUpdateTransactionRecovery? updateTransactionRecovery = null)
+        ILauncherUpdateOperationGate updateOperationGate,
+        IEdgeUpdateTransactionRecovery updateTransactionRecovery)
         : this(
             processStarter,
             instanceIdResolver,
@@ -42,16 +42,16 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
         IProcessStarter processStarter,
         IShellInstanceIdResolver instanceIdResolver,
         IShellInstanceProbe instanceProbe,
-        ILauncherUpdateOperationGate? updateOperationGate,
-        IEdgeUpdateTransactionRecovery? updateTransactionRecovery,
+        ILauncherUpdateOperationGate updateOperationGate,
+        IEdgeUpdateTransactionRecovery updateTransactionRecovery,
         Action<Process> terminateProcess,
         Func<CancellationToken, Task>? readinessDeadline = null)
     {
         _processStarter = processStarter ?? throw new ArgumentNullException(nameof(processStarter));
         _instanceIdResolver = instanceIdResolver ?? throw new ArgumentNullException(nameof(instanceIdResolver));
         _instanceProbe = instanceProbe ?? throw new ArgumentNullException(nameof(instanceProbe));
-        _updateOperationGate = updateOperationGate ?? NoopLauncherUpdateOperationGate.Instance;
-        _updateTransactionRecovery = updateTransactionRecovery;
+        _updateOperationGate = updateOperationGate ?? throw new ArgumentNullException(nameof(updateOperationGate));
+        _updateTransactionRecovery = updateTransactionRecovery ?? throw new ArgumentNullException(nameof(updateTransactionRecovery));
         _terminateProcess = terminateProcess
             ?? throw new ArgumentNullException(nameof(terminateProcess));
         _readinessDeadline = readinessDeadline
@@ -88,7 +88,7 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
             throw new InvalidOperationException("更新正在进行，暂时不能启动客户端。");
         }
 
-        if (_updateTransactionRecovery?.IsProfileBlocked(profile.MachineProfile) == true)
+        if (_updateTransactionRecovery.IsProfileBlocked(profile.MachineProfile))
         {
             throw new InvalidOperationException(
                 $"更新事务恢复失败，工序 {profile.DisplayName} 暂时不能启动；请保留诊断证据并人工恢复。");
@@ -108,26 +108,20 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
 
         startInfo.EnvironmentVariables["Shell__MachineProfile"] = profile.MachineProfile;
         var readyPath = _updateOperationGate.CreateShellLaunchReadyPath();
-        using var readiness = string.IsNullOrWhiteSpace(readyPath)
-            ? null
-            : new ShellLaunchReadinessSignal(readyPath);
-        if (readiness is not null)
+        if (string.IsNullOrWhiteSpace(readyPath))
         {
-            startInfo.EnvironmentVariables[
-                EdgeClientUpdateCoordination.ShellLaunchReadyEnvironmentVariable] =
-                readiness.ReadyPath;
+            throw new InvalidOperationException("Launcher 更新门控未提供 Shell 启动握手路径。");
         }
+
+        using var readiness = new ShellLaunchReadinessSignal(readyPath);
+        startInfo.EnvironmentVariables[
+            EdgeClientUpdateCoordination.ShellLaunchReadyEnvironmentVariable] =
+            readiness.ReadyPath;
 
         var process = _processStarter.Start(startInfo);
         if (process is null)
         {
             throw new InvalidOperationException($"客户端启动失败：{profile.DisplayName}");
-        }
-
-        if (readiness is null)
-        {
-            TrackProcess(profile.MachineProfile, process);
-            return;
         }
 
         using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(

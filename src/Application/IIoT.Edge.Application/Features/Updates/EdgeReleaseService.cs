@@ -12,11 +12,10 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
     private readonly IEdgeVersionReporter _versionReporter;
     private readonly IEdgeInstalledPluginCatalog _installedPluginCatalog;
     private readonly IEdgeProfileModuleConfigurationStore _profileModuleConfigurationStore;
-    private readonly IEdgePluginPackageInstaller _packageInstaller;
     private readonly IEdgeHostUpdateService _hostUpdateService;
     private readonly IEdgeVersionCompatibilityPolicy _compatibilityPolicy;
-    private readonly IEdgeReleaseSourceValidator? _releaseSourceValidator;
-    private readonly IEdgePluginCompositionTransaction? _compositionTransaction;
+    private readonly IEdgeReleaseSourceValidator _releaseSourceValidator;
+    private readonly IEdgePluginCompositionTransaction _compositionTransaction;
 
     public EdgeReleaseService(
         IEdgeUpdateConfigurationProvider configurationProvider,
@@ -25,11 +24,10 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
         IEdgeVersionReporter versionReporter,
         IEdgeInstalledPluginCatalog installedPluginCatalog,
         IEdgeProfileModuleConfigurationStore profileModuleConfigurationStore,
-        IEdgePluginPackageInstaller packageInstaller,
         IEdgeHostUpdateService hostUpdateService,
         IEdgeVersionCompatibilityPolicy compatibilityPolicy,
-        IEdgeReleaseSourceValidator? releaseSourceValidator = null,
-        IEdgePluginCompositionTransaction? compositionTransaction = null)
+        IEdgeReleaseSourceValidator releaseSourceValidator,
+        IEdgePluginCompositionTransaction compositionTransaction)
     {
         _configurationProvider = configurationProvider ?? throw new ArgumentNullException(nameof(configurationProvider));
         _deviceSessionClient = deviceSessionClient ?? throw new ArgumentNullException(nameof(deviceSessionClient));
@@ -37,11 +35,10 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
         _versionReporter = versionReporter ?? throw new ArgumentNullException(nameof(versionReporter));
         _installedPluginCatalog = installedPluginCatalog ?? throw new ArgumentNullException(nameof(installedPluginCatalog));
         _profileModuleConfigurationStore = profileModuleConfigurationStore ?? throw new ArgumentNullException(nameof(profileModuleConfigurationStore));
-        _packageInstaller = packageInstaller ?? throw new ArgumentNullException(nameof(packageInstaller));
         _hostUpdateService = hostUpdateService ?? throw new ArgumentNullException(nameof(hostUpdateService));
         _compatibilityPolicy = compatibilityPolicy ?? throw new ArgumentNullException(nameof(compatibilityPolicy));
-        _releaseSourceValidator = releaseSourceValidator;
-        _compositionTransaction = compositionTransaction;
+        _releaseSourceValidator = releaseSourceValidator ?? throw new ArgumentNullException(nameof(releaseSourceValidator));
+        _compositionTransaction = compositionTransaction ?? throw new ArgumentNullException(nameof(compositionTransaction));
     }
 
     public async Task<EdgeReleaseCatalogResult> CheckReleaseCatalogAsync(
@@ -54,7 +51,7 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
         var hostVersion = ResolveHostVersion(target);
         var hostApiVersion = EdgeClientHostRuntime.HostApiVersion;
         var installedPlugins = _installedPluginCatalog.LoadInstalledPlugins(target);
-        var releaseSourceIssue = _releaseSourceValidator?.ValidateConfiguredSource();
+        var releaseSourceIssue = _releaseSourceValidator.ValidateConfiguredSource();
         if (releaseSourceIssue is not null)
         {
             return CreateResult(
@@ -1175,52 +1172,20 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
             }
         }
 
-        EdgePluginInstallResult result;
-        if (_compositionTransaction is not null)
-        {
-            result = await _compositionTransaction
-                .InstallAsync(
-                    [new EdgePluginCompositionTarget(
-                        target,
-                        ordered
-                            .Select(static release => release.ModuleId)
-                            .ToArray())],
-                    BindReleaseSources(ordered, context.CloudOptions!),
-                    compatibilityHostVersion,
-                    compatibilityHostApiVersion,
-                    pendingHostVersion: null,
-                    progress,
-                    cancellationToken)
-                .ConfigureAwait(false);
-        }
-        else
-        {
-            var installedModuleIds = new List<string>();
-            var stepBase = 0;
-            foreach (var release in ordered)
-            {
-                result = await _packageInstaller
-                .InstallAsync(
+        var result = await _compositionTransaction
+            .InstallAsync(
+                [new EdgePluginCompositionTarget(
                     target,
-                    release,
-                    context.CloudOptions!,
-                    compatibilityHostVersion,
-                    compatibilityHostApiVersion,
-                    CreateStepProgress(progress, stepBase, ordered.Count),
-                    cancellationToken)
-                    .ConfigureAwait(false);
-                if (!result.Success)
-                {
-                    return result;
-                }
-
-                installedModuleIds.Add(release.ModuleId);
-                stepBase += 100 / Math.Max(ordered.Count, 1);
-            }
-
-            _profileModuleConfigurationStore.EnableModules(target, installedModuleIds);
-            result = EdgePluginInstallResult.Succeeded(installedModuleIds);
-        }
+                    ordered
+                        .Select(static release => release.ModuleId)
+                        .ToArray())],
+                BindReleaseSources(ordered, context.CloudOptions!),
+                compatibilityHostVersion,
+                compatibilityHostApiVersion,
+                pendingHostVersion: null,
+                progress,
+                cancellationToken)
+            .ConfigureAwait(false);
 
         if (!result.Success)
         {
@@ -1249,57 +1214,16 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
             return EdgePluginInstallResult.Succeeded([]);
         }
 
-        if (_compositionTransaction is not null)
-        {
-            return await _compositionTransaction
-                .InstallAsync(
-                    targets,
-                    releases,
-                    compatibilityHostVersion,
-                    compatibilityHostApiVersion,
-                    pendingHostVersion,
-                    progress,
-                    cancellationToken)
-                .ConfigureAwait(false);
-        }
-
-        var installedModuleIds = new List<string>();
-        var owner = targets[0].Target;
-        for (var index = 0; index < releases.Count; index++)
-        {
-            var release = releases[index];
-            var result = await _packageInstaller
-                .InstallAsync(
-                    owner,
-                    release.Release,
-                    release.CloudOptions,
-                    compatibilityHostVersion,
-                    compatibilityHostApiVersion,
-                    CreateStepProgress(progress, index * 100 / releases.Count, releases.Count),
-                    cancellationToken)
-                .ConfigureAwait(false);
-            if (!result.Success)
-            {
-                return result;
-            }
-
-            installedModuleIds.AddRange(result.InstalledModuleIds);
-        }
-
-        foreach (var target in targets)
-        {
-            if (target.ModuleIds.Count > 0)
-            {
-                _profileModuleConfigurationStore.EnableModules(
-                    target.Target,
-                    target.ModuleIds);
-            }
-        }
-
-        return EdgePluginInstallResult.Succeeded(
-            installedModuleIds
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray());
+        return await _compositionTransaction
+            .InstallAsync(
+                targets,
+                releases,
+                compatibilityHostVersion,
+                compatibilityHostApiVersion,
+                pendingHostVersion,
+                progress,
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private static IReadOnlyList<EdgePluginCompositionRelease> BindReleaseSources(
@@ -1334,8 +1258,8 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
         {
             if (hasPendingPluginTransaction)
             {
-                var rollback = _compositionTransaction?.RollbackPendingHostHandoff();
-                if (rollback is { Success: false })
+                var rollback = _compositionTransaction.RollbackPendingHostHandoff();
+                if (!rollback.Success)
                 {
                     return EdgePluginInstallResult.Failed(
                         $"宿主版本应用已取消；插件/profile 回滚失败：{rollback.ErrorMessage}");
@@ -1356,7 +1280,7 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
         bool hasPendingPluginTransaction,
         string error)
     {
-        if (!hasPendingPluginTransaction || _compositionTransaction is null)
+        if (!hasPendingPluginTransaction)
         {
             return EdgePluginInstallResult.Failed(error);
         }
@@ -1422,7 +1346,7 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
         var releaseOptions = _configurationProvider.ResolveReleaseOptions();
         var hostVersion = ResolveHostVersion(target);
         var hostApiVersion = EdgeClientHostRuntime.HostApiVersion;
-        var releaseSourceIssue = _releaseSourceValidator?.ValidateConfiguredSource();
+        var releaseSourceIssue = _releaseSourceValidator.ValidateConfiguredSource();
         if (releaseSourceIssue is not null)
         {
             return OperationContext.Failed(
@@ -1481,7 +1405,7 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
                 return EdgeUpdateOperationResult<EdgeReleaseCatalog>.Failed(catalogIssue);
             }
 
-            var sourceIssue = _releaseSourceValidator?
+            var sourceIssue = _releaseSourceValidator
                 .ValidateCatalogSource(catalog.Value.HostUpdateSource);
             if (sourceIssue is not null)
             {
@@ -1494,6 +1418,12 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
 
     private static string? ValidateCatalog(EdgeReleaseCatalog catalog)
     {
+        if (catalog.Host.Versions.Count == 0
+            && catalog.Plugins.All(static component => component.Versions.Count == 0))
+        {
+            return "Cloud catalog 未提供任何可用版本。";
+        }
+
         foreach (var release in catalog.Host.Versions)
         {
             if (!EdgeClientHostRuntime.TryParseVersion(release.Version, out _))
@@ -1663,15 +1593,6 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
 
         return modules;
     }
-
-    private static IProgress<int>? CreateStepProgress(IProgress<int>? progress, int stepBase, int stepCount)
-        => progress is null
-            ? null
-            : new Progress<int>(value =>
-            {
-                var scaled = stepBase + value / Math.Max(stepCount, 1);
-                progress.Report(Math.Clamp(scaled, 0, 99));
-            });
 
     private static string ResolveHostVersion(EdgeUpdateTarget target)
     {

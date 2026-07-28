@@ -147,6 +147,12 @@ public sealed class EdgeRuntimeHeartbeatService(
                 return;
             }
 
+            if (string.IsNullOrWhiteSpace(configuration.Options.RuntimeHeartbeatPath))
+            {
+                logger.Debug("[运行心跳] 上报路径未配置，跳过本次上报。");
+                return;
+            }
+
             var session = await deviceSessionClient
                 .BootstrapAsync(configuration.Options, cancellationToken)
                 .ConfigureAwait(false);
