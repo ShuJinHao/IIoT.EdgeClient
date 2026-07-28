@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -208,6 +209,7 @@ public sealed class CapacityViewModelBehaviorTests
         global::Avalonia.Application.Current.Resources["Edge.Brush.Status.Warning"] = Brushes.Goldenrod;
         global::Avalonia.Application.Current.Resources["Edge.Brush.Chart.Secondary"] = Brushes.MediumPurple;
 
+        var chartReady = WaitForChartReadyAsync(viewModel);
         await Task.Run(
             () => facade.PublishUploadGate(new EdgeUploadGateSnapshot
             {
@@ -216,8 +218,7 @@ public sealed class CapacityViewModelBehaviorTests
             }),
             TestContext.Current.CancellationToken);
 
-        await WaitUntilAsync(
-            () => viewModel.ChartPoints.Count == 1 && viewModel.ChartSeries.Count == 4);
+        await chartReady;
 
         var view = new CapacityViewPage(viewModel);
         var window = new Window
@@ -249,15 +250,34 @@ public sealed class CapacityViewModelBehaviorTests
         }
     }
 
-    private static async Task WaitUntilAsync(Func<bool> condition)
+    private static async Task WaitForChartReadyAsync(CapacityViewModel viewModel)
     {
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(
-            timeout.Token,
-            TestContext.Current.CancellationToken);
-        while (!condition())
+        var completion = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        NotifyCollectionChangedEventHandler handler = (_, _) =>
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(25), linked.Token);
+            if (viewModel.ChartPoints.Count == 1 && viewModel.ChartSeries.Count == 4)
+            {
+                completion.TrySetResult(true);
+            }
+        };
+        viewModel.ChartPoints.CollectionChanged += handler;
+        viewModel.ChartSeries.CollectionChanged += handler;
+        try
+        {
+            if (viewModel.ChartPoints.Count == 1 && viewModel.ChartSeries.Count == 4)
+            {
+                completion.TrySetResult(true);
+            }
+
+            await completion.Task.WaitAsync(
+                TimeSpan.FromSeconds(5),
+                TestContext.Current.CancellationToken);
+        }
+        finally
+        {
+            viewModel.ChartPoints.CollectionChanged -= handler;
+            viewModel.ChartSeries.CollectionChanged -= handler;
         }
     }
 

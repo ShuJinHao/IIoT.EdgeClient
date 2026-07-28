@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Globalization;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
@@ -61,7 +62,7 @@ public sealed class MainWindowThreadBoundaryBehaviorTests
             },
             TestContext.Current.CancellationToken);
 
-        await WaitUntilAsync(() =>
+        await WaitForPropertyStateAsync(viewModel, () =>
             observed.ContainsKey(nameof(MainWindowViewModel.OperatorName))
             && observed.ContainsKey(nameof(MainWindowViewModel.HasCloudDeviceIdentity))
             && observed.ContainsKey(nameof(MainWindowViewModel.AppTitle)));
@@ -88,7 +89,7 @@ public sealed class MainWindowThreadBoundaryBehaviorTests
                 ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(20)
             }),
             TestContext.Current.CancellationToken);
-        await WaitUntilAsync(() =>
+        await WaitForPropertyStateAsync(viewModel, () =>
             Volatile.Read(ref notificationCount) > beforeRefresh
             && viewModel.OperatorName == "云端员工（已刷新）");
 
@@ -96,7 +97,7 @@ public sealed class MainWindowThreadBoundaryBehaviorTests
         await Task.Run(
             () => auth.Publish(null),
             TestContext.Current.CancellationToken);
-        await WaitUntilAsync(() =>
+        await WaitForPropertyStateAsync(viewModel, () =>
             Volatile.Read(ref notificationCount) > beforeRefreshFailure
             && !viewModel.IsAuthenticated);
 
@@ -108,11 +109,11 @@ public sealed class MainWindowThreadBoundaryBehaviorTests
                 ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(10)
             }),
             TestContext.Current.CancellationToken);
-        await WaitUntilAsync(() => viewModel.IsAuthenticated);
+        await WaitForPropertyStateAsync(viewModel, () => viewModel.IsAuthenticated);
 
         var beforeLogout = Volatile.Read(ref notificationCount);
         await Task.Run(auth.Logout, TestContext.Current.CancellationToken);
-        await WaitUntilAsync(() =>
+        await WaitForPropertyStateAsync(viewModel, () =>
             Volatile.Read(ref notificationCount) > beforeLogout
             && !viewModel.IsAuthenticated);
 
@@ -130,15 +131,34 @@ public sealed class MainWindowThreadBoundaryBehaviorTests
             ShellDispatcherExceptionPolicy.Resolve(mainWindowReady: true));
     }
 
-    private static async Task WaitUntilAsync(Func<bool> condition)
+    private static async Task WaitForPropertyStateAsync(
+        MainWindowViewModel viewModel,
+        Func<bool> condition)
     {
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(
-            timeout.Token,
-            TestContext.Current.CancellationToken);
-        while (!condition())
+        var completion = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        PropertyChangedEventHandler handler = (_, _) =>
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(25), linked.Token);
+            if (condition())
+            {
+                completion.TrySetResult(true);
+            }
+        };
+        viewModel.PropertyChanged += handler;
+        try
+        {
+            if (condition())
+            {
+                return;
+            }
+
+            await completion.Task.WaitAsync(
+                TimeSpan.FromSeconds(5),
+                TestContext.Current.CancellationToken);
+        }
+        finally
+        {
+            viewModel.PropertyChanged -= handler;
         }
     }
 

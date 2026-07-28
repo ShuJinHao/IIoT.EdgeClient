@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 
 public sealed class FactAttribute : Attribute { }
 public static class File { public static string ReadAllText(string path) => path; }
@@ -13,6 +14,8 @@ public sealed class ResourceBoundaryTest
         _ = File.ReadAllText(Path.Combine("root", "value"));
         _ = Directory.GetFiles("root");
         _ = Process.Start("fake");
+        var socketError = SocketError.ConnectionReset;
+        _ = new SocketException((int)socketError);
         using var client = new HttpClient(new FakeHandler());
     }
 

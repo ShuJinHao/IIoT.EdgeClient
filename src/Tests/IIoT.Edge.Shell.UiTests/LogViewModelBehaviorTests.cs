@@ -99,12 +99,18 @@ public sealed class LogViewModelBehaviorTests
         var display = new LogDisplayService(source);
         var resetCount = 0;
         var collectionNotificationsStayedOnUiThread = true;
+        var batchCompleted = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
         display.Entries.CollectionChanged += (_, args) =>
         {
             collectionNotificationsStayedOnUiThread &= Dispatcher.UIThread.CheckAccess();
             if (args.Action == NotifyCollectionChangedAction.Reset)
             {
                 resetCount++;
+                if (display.Entries.Count == 200)
+                {
+                    batchCompleted.TrySetResult(true);
+                }
             }
         };
 
@@ -122,23 +128,13 @@ public sealed class LogViewModelBehaviorTests
         await Task.WhenAll(publishers);
 
         Assert.Empty(display.Entries);
-        await WaitUntilAsync(() => display.Entries.Count == 200);
+        await batchCompleted.Task.WaitAsync(
+            TimeSpan.FromSeconds(5),
+            TestContext.Current.CancellationToken);
 
         Assert.True(collectionNotificationsStayedOnUiThread);
         Assert.Equal(200, display.Entries.Count);
         Assert.Equal(1, resetCount);
-    }
-
-    private static async Task WaitUntilAsync(Func<bool> condition)
-    {
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(
-            timeout.Token,
-            TestContext.Current.CancellationToken);
-        while (!condition())
-        {
-            await Task.Delay(TimeSpan.FromMilliseconds(25), linked.Token);
-        }
     }
 
     private static LogEntry CreateEntry(string level, string message, int second)
