@@ -11,6 +11,7 @@ using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.SharedKernel.Repository;
+using IIoT.Edge.SharedKernel.Result;
 using MediatR;
 
 namespace IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
@@ -152,13 +153,29 @@ public class SaveHardwareConfigHandler(
             return CrudOperationResult.Failure("当前用户没有硬件配置权限。");
         }
 
-        var discoveredNetworkDevices = await LoadExistingNetworkDevicesAsync(ct);
-        var discoveredIoMappings = await LoadExistingIoMappingsAsync(
+        var discoveredNetworkDevicesResult = await LoadExistingNetworkDevicesAsync(ct);
+        if (!discoveredNetworkDevicesResult.IsSuccess
+            || discoveredNetworkDevicesResult.Value is null)
+        {
+            return CrudOperationResult.Failure(
+                discoveredNetworkDevicesResult.ErrorMessage
+                ?? "读取现有网络设备配置失败，已停止保存。");
+        }
+
+        var discoveredIoMappingsResult = await LoadExistingIoMappingsAsync(
             request.SelectedNetworkDeviceId,
             ct);
+        if (!discoveredIoMappingsResult.IsSuccess
+            || discoveredIoMappingsResult.Value is null)
+        {
+            return CrudOperationResult.Failure(
+                discoveredIoMappingsResult.ErrorMessage
+                ?? "读取现有 IO 映射失败，已停止保存。");
+        }
+
         var affectedPlcDeviceIds = FindAffectedPlcDeviceIds(
-            discoveredNetworkDevices,
-            discoveredIoMappings,
+            discoveredNetworkDevicesResult.Value,
+            discoveredIoMappingsResult.Value,
             request);
 
         using var mutationScope = await EnterMutationGatesAsync(affectedPlcDeviceIds, ct)
@@ -175,8 +192,28 @@ public class SaveHardwareConfigHandler(
         IReadOnlyCollection<int> lockedPlcDeviceIds,
         CancellationToken ct)
     {
-        var existingNetworkDevices = await LoadExistingNetworkDevicesAsync(ct);
-        var existingIoMappings = await LoadExistingIoMappingsAsync(request.SelectedNetworkDeviceId, ct);
+        var existingNetworkDevicesResult = await LoadExistingNetworkDevicesAsync(ct);
+        if (!existingNetworkDevicesResult.IsSuccess
+            || existingNetworkDevicesResult.Value is null)
+        {
+            return CrudOperationResult.Failure(
+                existingNetworkDevicesResult.ErrorMessage
+                ?? "重新读取现有网络设备配置失败，已停止保存。");
+        }
+
+        var existingIoMappingsResult = await LoadExistingIoMappingsAsync(
+            request.SelectedNetworkDeviceId,
+            ct);
+        if (!existingIoMappingsResult.IsSuccess
+            || existingIoMappingsResult.Value is null)
+        {
+            return CrudOperationResult.Failure(
+                existingIoMappingsResult.ErrorMessage
+                ?? "重新读取现有 IO 映射失败，已停止保存。");
+        }
+
+        var existingNetworkDevices = existingNetworkDevicesResult.Value;
+        var existingIoMappings = existingIoMappingsResult.Value;
         var unlockedAffectedPlcDeviceIds = FindAffectedPlcDeviceIds(
                 existingNetworkDevices,
                 existingIoMappings,
@@ -204,12 +241,15 @@ public class SaveHardwareConfigHandler(
                 request.SelectedNetworkDeviceId);
 
         await using var unitOfWork = await unitOfWorkFactory.BeginAsync(ct).ConfigureAwait(false);
+        var networkDeviceRepository = unitOfWork.Repository<NetworkDeviceEntity>();
+        var createdNetworkDevices = new List<NetworkDeviceEntity>();
 
         var networkResult = await SaveNetworkDevicesHandler.ApplyPlannedAsync(
-            unitOfWork.Repository<NetworkDeviceEntity>(),
+            networkDeviceRepository,
             new SaveNetworkDevicesCommand(request.NetworkDevices),
             networkDeviceIdsToUpdate,
             networkDeviceIdsToDelete,
+            createdNetworkDevices,
             ct).ConfigureAwait(false);
         if (!networkResult.IsSuccess)
         {
@@ -241,6 +281,25 @@ public class SaveHardwareConfigHandler(
             }
         }
 
+        await unitOfWork.FlushAsync(ct).ConfigureAwait(false);
+        var createdPlcDevices = createdNetworkDevices
+            .Where(static device => device.DeviceType == DeviceType.PLC)
+            .ToArray();
+        if (createdPlcDevices.Any(static device => device.Id <= 0))
+        {
+            return CrudOperationResult.Failure(
+                "新建 PLC 未取得稳定数据库 Id，已回滚并停止运行态应用。");
+        }
+
+        var createdPlcDeviceIds = createdPlcDevices
+            .Select(static device => device.Id)
+            .Except(lockedPlcDeviceIds)
+            .OrderBy(static deviceId => deviceId)
+            .ToArray();
+        using var createdPlcMutationScope = await EnterMutationGatesAsync(
+                createdPlcDeviceIds,
+                ct)
+            .ConfigureAwait(false);
         await unitOfWork.CommitAsync(ct).ConfigureAwait(false);
 
         var stopFailures = new List<string>();
@@ -277,19 +336,21 @@ public class SaveHardwareConfigHandler(
             && existingPlcById.TryGetValue(request.SelectedNetworkDeviceId, out _)
             && submittedPlcById.ContainsKey(request.SelectedNetworkDeviceId);
 
-        var reloadTargets = new List<(int? DeviceId, string DeviceName)>();
+        var reloadTargets = new List<(int DeviceId, string DeviceName)>();
         var reloadTargetIds = new HashSet<int>();
-        foreach (var plcDevice in submittedPlcDevices)
+        foreach (var createdPlc in createdPlcDevices)
+        {
+            if (reloadTargetIds.Add(createdPlc.Id))
+            {
+                reloadTargets.Add((createdPlc.Id, createdPlc.DeviceName));
+            }
+        }
+
+        foreach (var plcDevice in submittedPlcDevices.Where(static device => device.Id > 0))
         {
             var deviceName = plcDevice.DeviceName?.Trim();
             if (string.IsNullOrWhiteSpace(deviceName))
             {
-                continue;
-            }
-
-            if (plcDevice.Id == 0)
-            {
-                reloadTargets.Add((null, deviceName));
                 continue;
             }
 
@@ -313,28 +374,16 @@ public class SaveHardwareConfigHandler(
             }
         }
 
-        foreach (var target in reloadTargets)
+        foreach (var target in reloadTargets.OrderBy(static target => target.DeviceId))
         {
             try
             {
-                if (target.DeviceId.HasValue)
-                {
-                    await plcRuntimeApplyService
-                        .ApplyDeviceRuntimeAsync(
-                            target.DeviceId.Value,
-                            PlcRuntimeApplyReasons.HardwareOrIoMappingSave,
-                            ct)
-                        .ConfigureAwait(false);
-                }
-                else
-                {
-                    await plcRuntimeApplyService
-                        .ApplyDeviceRuntimeAsync(
-                            target.DeviceName,
-                            PlcRuntimeApplyReasons.HardwareOrIoMappingSave,
-                            ct)
-                        .ConfigureAwait(false);
-                }
+                await plcRuntimeApplyService
+                    .ApplyDeviceRuntimeAsync(
+                        target.DeviceId,
+                        PlcRuntimeApplyReasons.HardwareOrIoMappingSave,
+                        ct)
+                    .ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -481,31 +530,62 @@ public class SaveHardwareConfigHandler(
         }
     }
 
-    private async Task<List<NetworkDeviceEntity>> LoadExistingNetworkDevicesAsync(CancellationToken ct)
+    private async Task<Result<List<NetworkDeviceEntity>>> LoadExistingNetworkDevicesAsync(
+        CancellationToken ct)
     {
-        var result = await sender.Send(new GetAllNetworkDevicesQuery(), ct);
-        if (!result.IsSuccess || result.Value is null)
+        try
         {
-            return [];
-        }
+            var result = await sender.Send(new GetAllNetworkDevicesQuery(), ct);
+            if (!result.IsSuccess || result.Value is null)
+            {
+                return Result.Failure(
+                    $"读取现有网络设备配置失败，已停止保存：{result.ErrorMessage ?? "查询未返回有效结果。"}");
+            }
 
-        return result.Value;
+            return Result.Success(result.Value);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            return Result.Failure(
+                $"读取现有网络设备配置失败，已停止保存：{exception.Message}");
+        }
     }
 
-    private async Task<List<IoMappingEntity>> LoadExistingIoMappingsAsync(int networkDeviceId, CancellationToken ct)
+    private async Task<Result<List<IoMappingEntity>>> LoadExistingIoMappingsAsync(
+        int networkDeviceId,
+        CancellationToken ct)
     {
         if (networkDeviceId <= 0)
         {
-            return [];
+            return Result.Success(new List<IoMappingEntity>());
         }
 
-        var result = await sender.Send(new GetIoMappingsByDeviceQuery(networkDeviceId, 0, int.MaxValue), ct);
-        if (!result.IsSuccess || result.Value is null)
+        try
         {
-            return [];
-        }
+            var result = await sender.Send(
+                new GetIoMappingsByDeviceQuery(networkDeviceId, 0, int.MaxValue),
+                ct);
+            if (!result.IsSuccess || result.Value is null)
+            {
+                return Result.Failure(
+                    $"读取 PLC（DeviceId={networkDeviceId}）现有 IO 映射失败，已停止保存：{result.ErrorMessage ?? "查询未返回有效结果。"}");
+            }
 
-        return result.Value.Items;
+            return Result.Success(result.Value.Items);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            return Result.Failure(
+                $"读取 PLC（DeviceId={networkDeviceId}）现有 IO 映射失败，已停止保存：{exception.Message}");
+        }
     }
 
     private static bool HasRuntimeRelevantNetworkChange(NetworkDeviceEntity existing, NetworkDeviceDto incoming)

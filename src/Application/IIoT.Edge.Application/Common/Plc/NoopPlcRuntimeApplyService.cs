@@ -17,5 +17,7 @@ public sealed class NoopPlcRuntimeApplyService : IPlcRuntimeApplyService
         string deviceName,
         string reason,
         CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
+        => Task.FromException(
+            new NotSupportedException(
+                "按 DeviceName 应用 PLC 运行配置的入口已停用；必须使用稳定 NetworkDeviceId。"));
 }

@@ -695,7 +695,7 @@ public sealed class PlcTaskBindingBehaviorTests
             AssertDuplicateFault(statusStore.GetSnapshot(plcB.Id));
 
             logger.Warnings.Clear();
-            await coordinator.ReloadAsync("PLC-A", TestContext.Current.CancellationToken);
+            await coordinator.ReloadDeviceAsync(plcA.Id, TestContext.Current.CancellationToken);
 
             Assert.Contains(logger.Warnings, IsDuplicateEndpointWarning);
             Assert.Empty(plcServiceFactory.CreatedDeviceNames);
@@ -706,7 +706,7 @@ public sealed class PlcTaskBindingBehaviorTests
             plcB.UpdateEndpoint(plcB.IpAddress, 6301, plcB.Port2, plcB.ConnectTimeout);
             plcServiceFactory.CreatedDeviceNames.Clear();
             logger.Warnings.Clear();
-            await coordinator.ReloadAsync("PLC-A", TestContext.Current.CancellationToken);
+            await coordinator.ReloadDeviceAsync(plcA.Id, TestContext.Current.CancellationToken);
 
             Assert.DoesNotContain(logger.Warnings, IsDuplicateEndpointWarning);
             Assert.Equal(["PLC-A"], plcServiceFactory.CreatedDeviceNames);
@@ -843,7 +843,7 @@ public sealed class PlcTaskBindingBehaviorTests
             runtimeRegistry,
             statusStore);
 
-        await coordinator.ReloadAsync(device.DeviceName, TestContext.Current.CancellationToken);
+        await coordinator.ReloadDeviceAsync(device.Id, TestContext.Current.CancellationToken);
 
         Assert.Same(runtime, runtimeRegistry.GetRuntime(device.Id));
         Assert.Empty(replacementFactory.CreatedDeviceNames);
@@ -893,8 +893,8 @@ public sealed class PlcTaskBindingBehaviorTests
             runtimeRegistry,
             statusStore);
 
-        var reloadTask = coordinator.ReloadAsync(
-            device.DeviceName,
+        var reloadTask = coordinator.ReloadDeviceAsync(
+            device.Id,
             TestContext.Current.CancellationToken);
         await controlledService.DisposeStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
         Assert.True(runtimeRegistry.TryRemoveRuntime(device.Id, originalRuntime));

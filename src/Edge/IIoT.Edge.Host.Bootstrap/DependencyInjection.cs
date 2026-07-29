@@ -220,6 +220,7 @@ public static class DependencyInjection
         services.AddSingleton<IPlcRuntimeTaskBinder, PlcRuntimeTaskBinder>();
         services.AddSingleton<IPlcTaskBindingRuntimeTransaction, PlcTaskBindingRuntimeTransaction>();
         services.AddSingleton<IPlcTaskBindingTransactionService, PlcTaskBindingTransactionService>();
+        services.AddSingleton<IPlcRuntimeDeviceReloader, PlcRuntimeDeviceReloader>();
         services.AddSingleton<IPlcRuntimeApplyService, PlcRuntimeApplyService>();
         services.AddSingleton<IAppRuntimeStateCoordinator, AppRuntimeStateCoordinator>();
         services.AddSingleton<IAppLifecycleCoordinator, AppLifecycleManager>();

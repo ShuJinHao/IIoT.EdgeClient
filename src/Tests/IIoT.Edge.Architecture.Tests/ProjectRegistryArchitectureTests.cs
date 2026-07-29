@@ -281,6 +281,51 @@ public sealed partial class ProjectRegistryArchitectureTests
     }
 
     [Fact]
+    public void PlcRuntimeMutation_ProductionPath_ShouldUseStableNetworkDeviceId()
+    {
+        var root = FindRepositoryRoot();
+        var hardwareSave = File.ReadAllText(Path.Combine(
+            root,
+            "src/Application/IIoT.Edge.Application/Features/Hardware/HardwareConfig/HardwareConfigQueries.cs"));
+        var runtimeApply = File.ReadAllText(Path.Combine(
+            root,
+            "src/Edge/IIoT.Edge.Host.Bootstrap/Core/PlcRuntimeApplyService.cs"));
+        var lifecycle = File.ReadAllText(Path.Combine(
+            root,
+            "src/Infrastructure/IIoT.Edge.Infrastructure.DeviceComm/Plc/PlcLifecycleCoordinator.cs"));
+        var connectionManager = File.ReadAllText(Path.Combine(
+            root,
+            "src/Infrastructure/IIoT.Edge.Infrastructure.DeviceComm/Plc/PlcConnectionManager.cs"));
+
+        Assert.DoesNotMatch(
+            @"ApplyDeviceRuntimeAsync\(\s*target\.DeviceName",
+            hardwareSave);
+        Assert.DoesNotContain(
+            "GetListAsync(x => x.DeviceName",
+            runtimeApply,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "ReloadAsync(device.DeviceName",
+            runtimeApply,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "GetListAsync(x => x.DeviceName",
+            lifecycle,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "_lifecycleCoordinator.ReloadAsync(deviceName",
+            connectionManager,
+            StringComparison.Ordinal);
+        Assert.Matches(
+            @"ApplyDeviceRuntimeAsync\(\s*target\.DeviceId",
+            hardwareSave);
+        Assert.Contains(
+            "ReloadDeviceAsync(device.Id",
+            runtimeApply,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void PlcIoMappingMutation_ProductionInvocation_ShouldRemainOwnedByGuardedHardwareTransactions()
     {
         var root = FindRepositoryRoot();

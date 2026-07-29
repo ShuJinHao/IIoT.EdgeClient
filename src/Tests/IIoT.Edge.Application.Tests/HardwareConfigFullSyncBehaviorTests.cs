@@ -470,6 +470,147 @@ public sealed class HardwareConfigFullSyncBehaviorTests
     }
 
     [Fact]
+    public async Task SaveHardwareConfigHandler_WhenInitialNetworkQueryFails_ShouldNotPersistOrApplyRuntime()
+    {
+        var sender = new HardwareConfigSender
+        {
+            ExistingNetworkDevices =
+            [
+                CreateNetworkDevice(id: 1, name: "PLC-A", port1: 102)
+            ]
+        };
+        sender.FailedNetworkReadCalls.Add(1);
+        var networkRepo = new InMemoryRepository<NetworkDeviceEntity>(
+            CreateNetworkDevice(id: 1, name: "PLC-A", port1: 102));
+        var unitOfWorkFactory = new TestEdgeUnitOfWorkFactory(
+            networkRepo,
+            new InMemoryRepository<SerialDeviceEntity>(),
+            new InMemoryRepository<IoMappingEntity>());
+        var plcManager = new FakePlcConnectionManager();
+        var handler = new SaveHardwareConfigHandler(
+            sender,
+            unitOfWorkFactory,
+            new StubPermissionService { CanEditHardware = true },
+            plcManager,
+            new FakePlcRuntimeApplyService(sender, plcManager),
+            new PlcRuntimeConfigurationMutationGate());
+
+        var result = await handler.Handle(
+            new SaveHardwareConfigCommand(
+                [CreateNetworkDto(id: 1, name: "PLC-A", port1: 103)],
+                [],
+                1,
+                []),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("读取现有网络设备配置失败", result.Message, StringComparison.Ordinal);
+        Assert.Equal(102, Assert.Single(networkRepo.Items).Port1);
+        Assert.Equal(0, unitOfWorkFactory.BeginCount);
+        Assert.Equal(0, unitOfWorkFactory.CommitCount);
+        Assert.Empty(plcManager.StoppedDeviceIds);
+        Assert.Empty(plcManager.ReloadedDeviceIds);
+    }
+
+    [Fact]
+    public async Task SaveHardwareConfigHandler_WhenInitialIoQueryFails_ShouldNotPersistOrApplyRuntime()
+    {
+        var sender = new HardwareConfigSender
+        {
+            ExistingNetworkDevices =
+            [
+                CreateNetworkDevice(id: 1, name: "PLC-A")
+            ],
+            ExistingIoMappings =
+            [
+                CreateIoMapping(id: 11, deviceId: 1, signalKey: "Signal.A")
+            ]
+        };
+        sender.FailedIoReadCalls.Add(1);
+        var networkRepo = new InMemoryRepository<NetworkDeviceEntity>(
+            CreateNetworkDevice(id: 1, name: "PLC-A"));
+        var ioRepo = new InMemoryRepository<IoMappingEntity>(
+            CreateIoMapping(id: 11, deviceId: 1, signalKey: "Signal.A"));
+        var unitOfWorkFactory = new TestEdgeUnitOfWorkFactory(
+            networkRepo,
+            new InMemoryRepository<SerialDeviceEntity>(),
+            ioRepo);
+        var plcManager = new FakePlcConnectionManager();
+        var handler = new SaveHardwareConfigHandler(
+            sender,
+            unitOfWorkFactory,
+            new StubPermissionService { CanEditHardware = true },
+            plcManager,
+            new FakePlcRuntimeApplyService(sender, plcManager),
+            new PlcRuntimeConfigurationMutationGate());
+
+        var result = await handler.Handle(
+            new SaveHardwareConfigCommand(
+                [CreateNetworkDto(id: 1, name: "PLC-A")],
+                [],
+                1,
+                [
+                    CreateIoMappingDto(
+                        id: 11,
+                        deviceId: 1,
+                        signalKey: "Signal.A",
+                        remark: "changed")
+                ]),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("现有 IO 映射失败", result.Message, StringComparison.Ordinal);
+        Assert.Null(Assert.Single(ioRepo.Items).Remark);
+        Assert.Equal(0, unitOfWorkFactory.BeginCount);
+        Assert.Equal(0, unitOfWorkFactory.CommitCount);
+        Assert.Empty(plcManager.StoppedDeviceIds);
+        Assert.Empty(plcManager.ReloadedDeviceIds);
+    }
+
+    [Fact]
+    public async Task SaveHardwareConfigHandler_WhenAuthoritativeNetworkQueryFails_ShouldNotPersistOrApplyRuntime()
+    {
+        var sender = new HardwareConfigSender
+        {
+            ExistingNetworkDevices =
+            [
+                CreateNetworkDevice(id: 1, name: "PLC-A", port1: 102)
+            ]
+        };
+        sender.FailedNetworkReadCalls.Add(2);
+        var networkRepo = new InMemoryRepository<NetworkDeviceEntity>(
+            CreateNetworkDevice(id: 1, name: "PLC-A", port1: 102));
+        var unitOfWorkFactory = new TestEdgeUnitOfWorkFactory(
+            networkRepo,
+            new InMemoryRepository<SerialDeviceEntity>(),
+            new InMemoryRepository<IoMappingEntity>());
+        var plcManager = new FakePlcConnectionManager();
+        var handler = new SaveHardwareConfigHandler(
+            sender,
+            unitOfWorkFactory,
+            new StubPermissionService { CanEditHardware = true },
+            plcManager,
+            new FakePlcRuntimeApplyService(sender, plcManager),
+            new PlcRuntimeConfigurationMutationGate());
+
+        var result = await handler.Handle(
+            new SaveHardwareConfigCommand(
+                [CreateNetworkDto(id: 1, name: "PLC-A", port1: 103)],
+                [],
+                0,
+                []),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("读取现有网络设备配置失败", result.Message, StringComparison.Ordinal);
+        Assert.Equal(102, Assert.Single(networkRepo.Items).Port1);
+        Assert.Equal(0, unitOfWorkFactory.BeginCount);
+        Assert.Equal(0, unitOfWorkFactory.CommitCount);
+        Assert.Empty(plcManager.StoppedDeviceIds);
+        Assert.Empty(plcManager.ReloadedDeviceIds);
+    }
+
+    [Fact]
     public async Task SaveHardwareConfigHandler_WhenDeletedPlcGateIsHeld_ShouldWaitBeforeAuthoritativeSnapshotAndCommit()
     {
         var sender = new HardwareConfigSender
@@ -729,8 +870,35 @@ public sealed class HardwareConfigFullSyncBehaviorTests
             CancellationToken.None);
 
         Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal([1, 2], plcManager.ReloadedDeviceIds);
         Assert.Equal(2, plcManager.ReloadedDeviceNames.Count);
         Assert.All(plcManager.ReloadedDeviceNames, x => Assert.Equal("PLC-DUP", x));
+    }
+
+    [Fact]
+    public async Task SaveHardwareConfigHandler_WhenNewPlcIsSaved_ShouldApplyByGeneratedDeviceId()
+    {
+        var sender = new HardwareConfigSender();
+        var plcManager = new FakePlcConnectionManager();
+        var handler = CreateSaveHandler(sender, plcManager);
+
+        var result = await handler.Handle(
+            new SaveHardwareConfigCommand(
+                [
+                    CreateNetworkDto(
+                        id: 0,
+                        name: "PLC-NEW",
+                        ipAddress: "192.168.0.20")
+                ],
+                [],
+                0,
+                []),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Collection(
+            plcManager.ReloadedDeviceIds,
+            networkDeviceId => Assert.True(networkDeviceId > 0));
     }
 
     [Fact]
@@ -986,7 +1154,14 @@ public sealed class HardwareConfigFullSyncBehaviorTests
 
         public List<IoMappingEntity> ExistingIoMappings { get; init; } = [];
 
+        public HashSet<int> FailedNetworkReadCalls { get; } = [];
+
+        public HashSet<int> FailedIoReadCalls { get; } = [];
+
         public List<object> Requests { get; } = [];
+
+        private int _networkReadCount;
+        private int _ioReadCount;
 
         public Task<TResponse> Send<TResponse>(IRequest<TResponse> request, CancellationToken cancellationToken = default)
         {
@@ -994,13 +1169,8 @@ public sealed class HardwareConfigFullSyncBehaviorTests
 
             object response = request switch
             {
-                GetAllNetworkDevicesQuery => Result.Success(ExistingNetworkDevices.Select(Clone).ToList()),
-                GetIoMappingsByDeviceQuery query => Result.Success(new IoMappingPagedDto(
-                    ExistingIoMappings
-                        .Where(x => x.NetworkDeviceId == query.NetworkDeviceId)
-                        .Select(Clone)
-                        .ToList(),
-                    ExistingIoMappings.Count(x => x.NetworkDeviceId == query.NetworkDeviceId))),
+                GetAllNetworkDevicesQuery => ReadNetworkDevices(),
+                GetIoMappingsByDeviceQuery query => ReadIoMappings(query),
                 SaveNetworkDevicesCommand => Result.Success(),
                 SaveSerialDevicesCommand => Result.Success(),
                 SaveIoMappingsCommand => Result.Success(),
@@ -1008,6 +1178,34 @@ public sealed class HardwareConfigFullSyncBehaviorTests
             };
 
             return Task.FromResult((TResponse)response);
+        }
+
+        private Result<List<NetworkDeviceEntity>> ReadNetworkDevices()
+        {
+            _networkReadCount++;
+            if (FailedNetworkReadCalls.Contains(_networkReadCount))
+            {
+                return Result.Failure($"network read {_networkReadCount} failed");
+            }
+
+            return Result.Success(ExistingNetworkDevices.Select(Clone).ToList());
+        }
+
+        private Result<IoMappingPagedDto> ReadIoMappings(
+            GetIoMappingsByDeviceQuery query)
+        {
+            _ioReadCount++;
+            if (FailedIoReadCalls.Contains(_ioReadCount))
+            {
+                return Result.Failure($"io read {_ioReadCount} failed");
+            }
+
+            return Result.Success(new IoMappingPagedDto(
+                ExistingIoMappings
+                    .Where(x => x.NetworkDeviceId == query.NetworkDeviceId)
+                    .Select(Clone)
+                    .ToList(),
+                ExistingIoMappings.Count(x => x.NetworkDeviceId == query.NetworkDeviceId)));
         }
 
         public Task Send<TRequest>(TRequest request, CancellationToken cancellationToken = default)
@@ -1077,6 +1275,8 @@ public sealed class HardwareConfigFullSyncBehaviorTests
 
         public List<int> StoppedDeviceIds { get; } = [];
 
+        public List<int> ReloadedDeviceIds { get; } = [];
+
         public List<string> ReloadedDeviceNames { get; } = [];
 
         public Func<int, CancellationToken, Task>? StopBehavior { get; init; }
@@ -1102,7 +1302,18 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         }
 
         public async Task ReloadAsync(string deviceName, CancellationToken ct = default)
+            => await RecordRuntimeApplyAsync(0, deviceName, ct);
+
+        public async Task RecordRuntimeApplyAsync(
+            int networkDeviceId,
+            string deviceName,
+            CancellationToken ct = default)
         {
+            if (networkDeviceId > 0)
+            {
+                ReloadedDeviceIds.Add(networkDeviceId);
+            }
+
             ReloadedDeviceNames.Add(deviceName);
             if (ReloadFailures.TryGetValue(deviceName, out var exception))
             {
@@ -1170,14 +1381,19 @@ public sealed class HardwareConfigFullSyncBehaviorTests
             var deviceName = ResolveSubmittedDeviceName(networkDeviceId)
                              ?? sender.ExistingNetworkDevices.FirstOrDefault(x => x.Id == networkDeviceId)?.DeviceName
                              ?? $"DeviceId={networkDeviceId}";
-            return plcManager.ReloadAsync(deviceName, cancellationToken);
+            return plcManager.RecordRuntimeApplyAsync(
+                networkDeviceId,
+                deviceName,
+                cancellationToken);
         }
 
         public Task ApplyDeviceRuntimeAsync(
             string deviceName,
             string reason,
             CancellationToken cancellationToken = default)
-            => plcManager.ReloadAsync(deviceName, cancellationToken);
+            => Task.FromException(
+                new NotSupportedException(
+                    "测试禁止按 DeviceName 应用 PLC 运行配置。"));
 
         private string? ResolveSubmittedDeviceName(int networkDeviceId)
             => sender.Requests

@@ -59,6 +59,7 @@ public class SaveNetworkDevicesHandler(
             request,
             existingIdsToUpdate: null,
             existingIdsToDelete: null,
+            createdEntities: null,
             cancellationToken).ConfigureAwait(false);
 
     internal static async Task<Result> ApplyPlannedAsync(
@@ -66,12 +67,14 @@ public class SaveNetworkDevicesHandler(
         SaveNetworkDevicesCommand request,
         IReadOnlySet<int> existingIdsToUpdate,
         IReadOnlySet<int> existingIdsToDelete,
+        ICollection<NetworkDeviceEntity> createdEntities,
         CancellationToken cancellationToken)
         => await ApplyCoreAsync(
             repo,
             request,
             existingIdsToUpdate,
             existingIdsToDelete,
+            createdEntities,
             cancellationToken).ConfigureAwait(false);
 
     private static async Task<Result> ApplyCoreAsync(
@@ -79,6 +82,7 @@ public class SaveNetworkDevicesHandler(
         SaveNetworkDevicesCommand request,
         IReadOnlySet<int>? existingIdsToUpdate,
         IReadOnlySet<int>? existingIdsToDelete,
+        ICollection<NetworkDeviceEntity>? createdEntities,
         CancellationToken cancellationToken)
     {
         var existingItems = await repo.GetListAsync(_ => true, cancellationToken).ConfigureAwait(false);
@@ -98,11 +102,21 @@ public class SaveNetworkDevicesHandler(
             _ => Task.FromResult(existingItems),
             static dto => dto.Id,
             Validate,
-            dto => CreateWithUniquePlcCode(dto, usedPlcCodes),
+            dto => TrackCreatedEntity(
+                CreateWithUniquePlcCode(dto, usedPlcCodes),
+                createdEntities),
             Apply,
             entity => existingIdsToDelete is null || existingIdsToDelete.Contains(entity.Id),
             (entity, _) => existingIdsToUpdate is null || existingIdsToUpdate.Contains(entity.Id),
             cancellationToken).ConfigureAwait(false);
+    }
+
+    private static NetworkDeviceEntity TrackCreatedEntity(
+        NetworkDeviceEntity entity,
+        ICollection<NetworkDeviceEntity>? createdEntities)
+    {
+        createdEntities?.Add(entity);
+        return entity;
     }
 
     private static NetworkDeviceEntity Create(NetworkDeviceDto dto)

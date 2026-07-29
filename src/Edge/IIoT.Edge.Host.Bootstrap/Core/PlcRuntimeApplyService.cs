@@ -10,7 +10,7 @@ namespace IIoT.Edge.Shell.Core;
 public sealed class PlcRuntimeApplyService(
     IReadRepository<NetworkDeviceEntity> networkDevices,
     IPlcRuntimeTaskBinder runtimeTaskBinder,
-    IPlcConnectionManager plcConnectionManager,
+    IPlcRuntimeDeviceReloader runtimeDeviceReloader,
     ILogService logger) : IPlcRuntimeApplyService
 {
     public async Task ApplyDeviceRuntimeAsync(
@@ -32,26 +32,13 @@ public sealed class PlcRuntimeApplyService(
             .ConfigureAwait(false);
     }
 
-    public async Task ApplyDeviceRuntimeAsync(
+    public Task ApplyDeviceRuntimeAsync(
         string deviceName,
         string reason,
         CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(deviceName);
-
-        var normalizedName = deviceName.Trim();
-        var device = (await networkDevices
-                .GetListAsync(x => x.DeviceName == normalizedName, cancellationToken)
-                .ConfigureAwait(false))
-            .FirstOrDefault();
-        if (device is null)
-        {
-            throw new InvalidOperationException($"未找到要应用运行配置的 PLC 设备“{normalizedName}”。");
-        }
-
-        await ApplyDeviceRuntimeCoreAsync(device, reason, cancellationToken)
-            .ConfigureAwait(false);
-    }
+        => Task.FromException(
+            new NotSupportedException(
+                "按 DeviceName 应用 PLC 运行配置的入口已停用；必须使用稳定 NetworkDeviceId。"));
 
     private async Task ApplyDeviceRuntimeCoreAsync(
         NetworkDeviceEntity device,
@@ -74,8 +61,8 @@ public sealed class PlcRuntimeApplyService(
                 applyToRunningDevice: false,
                 cancellationToken: cancellationToken)
             .ConfigureAwait(false);
-        await plcConnectionManager
-            .ReloadAsync(device.DeviceName, cancellationToken)
+        await runtimeDeviceReloader
+            .ReloadDeviceAsync(device.Id, cancellationToken)
             .ConfigureAwait(false);
         logger.Info($"[{device.DeviceName}] PLC 运行配置已通过整机重载应用：{normalizedReason}。");
     }
