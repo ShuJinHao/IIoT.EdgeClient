@@ -153,27 +153,41 @@ public class SaveHardwareConfigHandler(
         }
 
         var discoveredNetworkDevices = await LoadExistingNetworkDevicesAsync(ct);
-        var affectedPlcDeviceIds = discoveredNetworkDevices
-            .Where(static device => device.DeviceType == DeviceType.PLC && device.Id > 0)
-            .Select(static device => device.Id)
-            .Concat(request.NetworkDevices
-                .Where(static device => device.DeviceType == DeviceType.PLC && device.Id > 0)
-                .Select(static device => device.Id))
-            .Distinct()
-            .OrderBy(static deviceId => deviceId)
-            .ToArray();
+        var discoveredIoMappings = await LoadExistingIoMappingsAsync(
+            request.SelectedNetworkDeviceId,
+            ct);
+        var affectedPlcDeviceIds = FindAffectedPlcDeviceIds(
+            discoveredNetworkDevices,
+            discoveredIoMappings,
+            request);
 
         using var mutationScope = await EnterMutationGatesAsync(affectedPlcDeviceIds, ct)
             .ConfigureAwait(false);
-        return await SaveWhileMutationGatesHeldAsync(request, ct).ConfigureAwait(false);
+        return await SaveWhileMutationGatesHeldAsync(
+                request,
+                affectedPlcDeviceIds,
+                ct)
+            .ConfigureAwait(false);
     }
 
     private async Task<CrudOperationResult> SaveWhileMutationGatesHeldAsync(
         SaveHardwareConfigCommand request,
+        IReadOnlyCollection<int> lockedPlcDeviceIds,
         CancellationToken ct)
     {
         var existingNetworkDevices = await LoadExistingNetworkDevicesAsync(ct);
         var existingIoMappings = await LoadExistingIoMappingsAsync(request.SelectedNetworkDeviceId, ct);
+        var unlockedAffectedPlcDeviceIds = FindAffectedPlcDeviceIds(
+                existingNetworkDevices,
+                existingIoMappings,
+                request)
+            .Except(lockedPlcDeviceIds)
+            .ToArray();
+        if (unlockedAffectedPlcDeviceIds.Length > 0)
+        {
+            return CrudOperationResult.Failure(
+                "PLC 配置在保存期间已发生并发变化，请重新加载后重试。");
+        }
 
         await using var unitOfWork = await unitOfWorkFactory.BeginAsync(ct).ConfigureAwait(false);
 
@@ -353,6 +367,52 @@ public class SaveHardwareConfigHandler(
             DisposeLeasesInReverseOrder(leases);
             throw;
         }
+    }
+
+    private static int[] FindAffectedPlcDeviceIds(
+        IReadOnlyCollection<NetworkDeviceEntity> existingNetworkDevices,
+        IReadOnlyCollection<IoMappingEntity> existingIoMappings,
+        SaveHardwareConfigCommand request)
+    {
+        var existingPlcById = existingNetworkDevices
+            .Where(static device => device.DeviceType == DeviceType.PLC && device.Id > 0)
+            .ToDictionary(static device => device.Id);
+        var submittedPlcById = request.NetworkDevices
+            .Where(static device => device.DeviceType == DeviceType.PLC && device.Id > 0)
+            .ToDictionary(static device => device.Id);
+        var affectedDeviceIds = new HashSet<int>();
+
+        foreach (var existingPlc in existingPlcById.Values)
+        {
+            if (!submittedPlcById.TryGetValue(existingPlc.Id, out var submittedPlc)
+                || HasRuntimeRelevantNetworkChange(existingPlc, submittedPlc))
+            {
+                affectedDeviceIds.Add(existingPlc.Id);
+            }
+        }
+
+        foreach (var submittedPlc in submittedPlcById.Values)
+        {
+            if (!existingPlcById.ContainsKey(submittedPlc.Id))
+            {
+                affectedDeviceIds.Add(submittedPlc.Id);
+            }
+        }
+
+        if (request.SelectedNetworkDeviceId > 0
+            && existingPlcById.ContainsKey(request.SelectedNetworkDeviceId)
+            && submittedPlcById.ContainsKey(request.SelectedNetworkDeviceId)
+            && HasIoMappingsChanged(
+                existingIoMappings,
+                request.IoMappings,
+                request.SelectedNetworkDeviceId))
+        {
+            affectedDeviceIds.Add(request.SelectedNetworkDeviceId);
+        }
+
+        return affectedDeviceIds
+            .OrderBy(static deviceId => deviceId)
+            .ToArray();
     }
 
     private static void DisposeLeasesInReverseOrder(IReadOnlyList<IDisposable> leases)

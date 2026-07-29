@@ -477,6 +477,67 @@ public sealed class HardwareConfigFullSyncBehaviorTests
     }
 
     [Fact]
+    public async Task SaveHardwareConfigHandler_WhenOnePlcReloads_ShouldNotHoldUnchangedPlcGate()
+    {
+        var sender = new HardwareConfigSender
+        {
+            ExistingNetworkDevices =
+            [
+                CreateNetworkDevice(id: 1, name: "PLC-A", port1: 102),
+                CreateNetworkDevice(id: 2, name: "PLC-B", port1: 102)
+            ]
+        };
+        var reloadEntered = NewCompletionSource();
+        var continueReload = NewCompletionSource();
+        var plcManager = new FakePlcConnectionManager
+        {
+            ReloadBehavior = async (deviceName, ct) =>
+            {
+                if (!string.Equals(deviceName, "PLC-A", StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                reloadEntered.TrySetResult(true);
+                await continueReload.Task.WaitAsync(ct);
+            }
+        };
+        var mutationGate = new PlcRuntimeConfigurationMutationGate();
+        var handler = CreateSaveHandler(sender, plcManager, mutationGate);
+
+        var save = handler.Handle(
+            new SaveHardwareConfigCommand(
+                [
+                    CreateNetworkDto(id: 1, name: "PLC-A", port1: 103),
+                    CreateNetworkDto(id: 2, name: "PLC-B", port1: 102)
+                ],
+                [],
+                1,
+                []),
+            TestContext.Current.CancellationToken);
+
+        await reloadEntered.Task.WaitAsync(TestContext.Current.CancellationToken);
+        var changedPlcMutation = mutationGate
+            .EnterAsync(1, TestContext.Current.CancellationToken)
+            .AsTask();
+        var unchangedPlcMutation = mutationGate
+            .EnterAsync(2, TestContext.Current.CancellationToken)
+            .AsTask();
+
+        Assert.False(changedPlcMutation.IsCompleted);
+        Assert.True(unchangedPlcMutation.IsCompleted);
+        using var unchangedLease = await unchangedPlcMutation;
+
+        continueReload.TrySetResult(true);
+        var result = await save.WaitAsync(TestContext.Current.CancellationToken);
+        using var changedLease = await changedPlcMutation.WaitAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal(["PLC-A"], plcManager.ReloadedDeviceNames);
+    }
+
+    [Fact]
     public async Task SaveHardwareConfigHandler_WhenSelectedPlcMappingsChange_ShouldReloadThatPlcOnly()
     {
         var sender = new HardwareConfigSender
