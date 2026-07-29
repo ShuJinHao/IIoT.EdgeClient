@@ -699,10 +699,14 @@ public sealed class PlcDeviceRuntimeHandle
                 throw;
             }
             catch (OperationCanceledException) when (
-                taskCancellation.IsCancellationRequested && execution.IsCompleted)
+                taskCancellation.IsCancellationRequested
+                && execution.IsCompleted
+                && !cancellationToken.IsCancellationRequested)
             {
             }
-            catch (Exception) when (execution.IsCompleted)
+            catch (Exception) when (
+                execution.IsCompleted
+                && !cancellationToken.IsCancellationRequested)
             {
                 // 执行故障由任务观察器按 TaskKey 记录；任务已经退出，不再把同一故障重复当作停止失败。
             }
@@ -750,10 +754,14 @@ public sealed class PlcDeviceRuntimeHandle
                 throw;
             }
             catch (OperationCanceledException) when (
-                taskCancellation.IsCancellationRequested && execution.IsCompleted)
+                taskCancellation.IsCancellationRequested
+                && execution.IsCompleted
+                && !cancellationToken.IsCancellationRequested)
             {
             }
-            catch (Exception) when (execution.IsCompleted)
+            catch (Exception) when (
+                execution.IsCompleted
+                && !cancellationToken.IsCancellationRequested)
             {
                 // 执行故障已由周期读取观察器记录；这里只确认句柄已退出。
             }
