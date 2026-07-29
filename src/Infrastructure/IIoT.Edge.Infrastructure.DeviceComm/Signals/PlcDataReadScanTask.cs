@@ -25,6 +25,7 @@ public sealed class PlcDataReadScanTask : IPlcTask
     private readonly ILogService _logger;
     private readonly PlcConnectionStatusStore? _statusStore;
     private readonly Func<CancellationToken, Task<int>> _dataReadLoopIntervalResolver;
+    private readonly Action<bool>? _connectionStateChanged;
     private readonly IReadOnlyList<PlcSignalBlock> _readBlocks;
     private int _retryCount;
     private DateTime _lastDisconnectLogTime = DateTime.MinValue;
@@ -38,13 +39,15 @@ public sealed class PlcDataReadScanTask : IPlcTask
         IPlcSignalBlockPlanner signalBlockPlanner,
         PlcConnectionStatusStore? statusStore = null,
         PlcIoRuntimePolicy? runtimePolicy = null,
-        Func<CancellationToken, Task<int>>? dataReadLoopIntervalResolver = null)
+        Func<CancellationToken, Task<int>>? dataReadLoopIntervalResolver = null,
+        Action<bool>? connectionStateChanged = null)
     {
         _plcService = plcService ?? throw new ArgumentNullException(nameof(plcService));
         _dataStore = dataStore ?? throw new ArgumentNullException(nameof(dataStore));
         _device = deviceConfig ?? throw new ArgumentNullException(nameof(deviceConfig));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _statusStore = statusStore;
+        _connectionStateChanged = connectionStateChanged;
         ArgumentNullException.ThrowIfNull(signalBlockPlanner);
 
         var policy = runtimePolicy ?? PlcIoRuntimePolicy.Default;
@@ -123,6 +126,7 @@ public sealed class PlcDataReadScanTask : IPlcTask
             catch (PlcServiceQuarantinedException ex)
             {
                 _statusStore?.MarkRuntimeFault(_device.Id, _device.DeviceName, ex.Message);
+                _connectionStateChanged?.Invoke(false);
                 _logger.Error($"[PLC-{_device.DeviceName}][采集] PLC service 已隔离，只读任务已停止：{ex.Message}");
                 break;
             }
@@ -250,6 +254,7 @@ public sealed class PlcDataReadScanTask : IPlcTask
         var message =
             $"PLC transport 故障，操作=Read，地址={block.StartAddress}，长度={block.WordCount}，原因={FormatException(exception)}。";
         _statusStore?.MarkDisconnected(_device.Id, _device.DeviceName, message);
+        _connectionStateChanged?.Invoke(false);
 
         if (!_plcService.IsConnected)
         {

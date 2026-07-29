@@ -15,6 +15,7 @@ namespace IIoT.Edge.Infrastructure.DeviceComm.Signals;
 public sealed class PlcIoScanTask : PlcIoScanTaskBase
 {
     private readonly PlcConnectionStatusStore? _statusStore;
+    private readonly Action<bool>? _connectionStateChanged;
 
     public PlcIoScanTask(
         IPlcService plcService,
@@ -25,7 +26,8 @@ public sealed class PlcIoScanTask : PlcIoScanTaskBase
         IPlcSignalBlockPlanner signalBlockPlanner,
         PlcConnectionStatusStore? statusStore = null,
         PlcIoRuntimePolicy? runtimePolicy = null,
-        PlcEndpoint? endpoint = null)
+        PlcEndpoint? endpoint = null,
+        Action<bool>? connectionStateChanged = null)
         : base(
             plcService,
             dataStore,
@@ -51,10 +53,14 @@ public sealed class PlcIoScanTask : PlcIoScanTaskBase
             runtimePolicy)
     {
         _statusStore = statusStore;
+        _connectionStateChanged = connectionStateChanged;
     }
 
     protected override void MarkConnected(int? latencyMs)
-        => _statusStore?.MarkConnected(DeviceId, DeviceName, latencyMs);
+    {
+        _statusStore?.MarkConnected(DeviceId, DeviceName, latencyMs);
+        _connectionStateChanged?.Invoke(true);
+    }
 
     protected override bool MarkProtocolSuccess(int? latencyMs)
         => _statusStore?.MarkProtocolSuccess(DeviceId, DeviceName, latencyMs) ?? true;
@@ -63,11 +69,20 @@ public sealed class PlcIoScanTask : PlcIoScanTaskBase
         => _statusStore?.IsStableOnline(DeviceId) ?? true;
 
     protected override void MarkRuntimeFault(string reason)
-        => _statusStore?.MarkRuntimeFault(DeviceId, DeviceName, reason);
+    {
+        _statusStore?.MarkRuntimeFault(DeviceId, DeviceName, reason);
+        _connectionStateChanged?.Invoke(false);
+    }
 
     protected override void MarkConnecting()
-        => _statusStore?.MarkConnecting(DeviceId, DeviceName);
+    {
+        _statusStore?.MarkConnecting(DeviceId, DeviceName);
+        _connectionStateChanged?.Invoke(false);
+    }
 
     protected override void MarkDisconnected(string reason)
-        => _statusStore?.MarkDisconnected(DeviceId, DeviceName, reason);
+    {
+        _statusStore?.MarkDisconnected(DeviceId, DeviceName, reason);
+        _connectionStateChanged?.Invoke(false);
+    }
 }

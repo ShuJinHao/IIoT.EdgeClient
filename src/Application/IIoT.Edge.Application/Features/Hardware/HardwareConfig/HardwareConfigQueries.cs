@@ -1,6 +1,7 @@
 using IIoT.Edge.Module.Contracts.Auth;
 using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Application.Common.Crud;
+using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Application.Features.Hardware.UseCases.IoMapping.Commands;
 using IIoT.Edge.Application.Features.Hardware.UseCases.NetworkDevice.Commands;
@@ -273,7 +274,7 @@ public class SaveHardwareConfigHandler(
                     await plcRuntimeApplyService
                         .ApplyDeviceRuntimeAsync(
                             target.DeviceId.Value,
-                            "硬件配置或 IO 映射保存",
+                            PlcRuntimeApplyReasons.HardwareOrIoMappingSave,
                             ct)
                         .ConfigureAwait(false);
                 }
@@ -282,7 +283,7 @@ public class SaveHardwareConfigHandler(
                     await plcRuntimeApplyService
                         .ApplyDeviceRuntimeAsync(
                             target.DeviceName,
-                            "硬件配置或 IO 映射保存",
+                            PlcRuntimeApplyReasons.HardwareOrIoMappingSave,
                             ct)
                         .ConfigureAwait(false);
                 }

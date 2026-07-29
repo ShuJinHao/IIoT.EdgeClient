@@ -1,6 +1,4 @@
 using IIoT.Edge.Module.Contracts.Plc;
-using IIoT.Edge.Module.Contracts.Plc.Store;
-using IIoT.Edge.Module.Contracts.Runtime;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc;
 
@@ -8,42 +6,60 @@ public sealed class PlcRuntimeRegistry
 {
     private readonly object _stateLock = new();
     private readonly Dictionary<int, PlcDeviceRuntimeHandle> _runtimes = new();
-    private readonly Dictionary<string, Func<IPlcBuffer, ProductionContext, List<IPlcTask>>> _taskFactories = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<string> _runtimeBlockedDevices = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<int, PlcRuntimeTaskPlan> _taskPlans = [];
+    private readonly Dictionary<int, SemaphoreSlim> _runtimeMutationGates = [];
 
-    public void RegisterTaskFactory(string deviceName, Func<IPlcBuffer, ProductionContext, List<IPlcTask>> factory)
+    internal async ValueTask<IDisposable> EnterRuntimeMutationAsync(
+        int networkDeviceId,
+        CancellationToken cancellationToken)
     {
+        if (networkDeviceId <= 0)
+        {
+            throw new ArgumentException(
+                "PLC runtime 变更门必须绑定有效的 NetworkDeviceId。",
+                nameof(networkDeviceId));
+        }
+
+        SemaphoreSlim gate;
         lock (_stateLock)
         {
-            _runtimeBlockedDevices.Remove(deviceName);
-            _taskFactories[deviceName] = factory;
+            if (!_runtimeMutationGates.TryGetValue(networkDeviceId, out gate!))
+            {
+                gate = new SemaphoreSlim(1, 1);
+                _runtimeMutationGates.Add(networkDeviceId, gate);
+            }
+        }
+
+        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        return new RuntimeMutationLease(gate);
+    }
+
+    public void RegisterTaskPlan(PlcRuntimeTaskPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        lock (_stateLock)
+        {
+            _taskPlans[plan.NetworkDeviceId] = plan;
         }
     }
 
-    public void BlockRuntime(string deviceName)
+    public PlcRuntimeTaskPlan GetTaskPlan(
+        int networkDeviceId,
+        string deviceName)
     {
-        lock (_stateLock)
+        if (networkDeviceId <= 0)
         {
-            _runtimeBlockedDevices.Add(deviceName);
-            _taskFactories.Remove(deviceName);
+            throw new ArgumentException(
+                "PLC 业务任务计划必须绑定有效的 NetworkDeviceId。",
+                nameof(networkDeviceId));
         }
-    }
 
-    public bool IsRuntimeBlocked(string deviceName)
-    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(deviceName);
         lock (_stateLock)
         {
-            return _runtimeBlockedDevices.Contains(deviceName);
-        }
-    }
-
-    public Func<IPlcBuffer, ProductionContext, List<IPlcTask>>? GetTaskFactory(string deviceName)
-    {
-        lock (_stateLock)
-        {
-            return _taskFactories.TryGetValue(deviceName, out var factory)
-                ? factory
-                : null;
+            return _taskPlans.TryGetValue(networkDeviceId, out var plan)
+                ? plan
+                : PlcRuntimeTaskPlan.Empty(networkDeviceId, deviceName);
         }
     }
 
@@ -109,6 +125,19 @@ public sealed class PlcRuntimeRegistry
         lock (_stateLock)
         {
             return _runtimes.Values.ToArray();
+        }
+    }
+
+    private sealed class RuntimeMutationLease(SemaphoreSlim gate) : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 0)
+            {
+                gate.Release();
+            }
         }
     }
 }
