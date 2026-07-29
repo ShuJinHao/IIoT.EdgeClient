@@ -916,6 +916,13 @@ public sealed class ModuleRuntimeRegistrationTests
                     Assert.Equal(
                         typeof(PlcTaskBindingTransactionService),
                         transactionRegistration.ImplementationType);
+                    var mutationGateRegistration = Assert.Single(
+                        services.Where(descriptor => descriptor.ServiceType
+                            == typeof(IPlcRuntimeConfigurationMutationGate)));
+                    Assert.Equal(
+                        typeof(PlcRuntimeConfigurationMutationGate),
+                        mutationGateRegistration.ImplementationType);
+                    Assert.Equal(ServiceLifetime.Singleton, mutationGateRegistration.Lifetime);
                 });
         }
         finally
@@ -1100,10 +1107,12 @@ public sealed class ModuleRuntimeRegistrationTests
                 x => x.DeviceType == DeviceType.PLC,
                 TestContext.Current.CancellationToken));
         var binder = new SpyPlcRuntimeTaskBinder();
+        var mutationGate = new PlcRuntimeConfigurationMutationGate();
         var service = new PlcRuntimeApplyService(
             networkDevices,
             binder,
             harness.PlcManager,
+            mutationGate,
             harness.Logger);
 
         var bypass = await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -1116,10 +1125,20 @@ public sealed class ModuleRuntimeRegistrationTests
         Assert.Empty(binder.DeviceCalls);
         Assert.Empty(harness.PlcManager.ReloadedDeviceNames);
 
-        await service.ApplyDeviceRuntimeAsync(
+        using var bindingMutation = await mutationGate.EnterAsync(
+            device.Id,
+            TestContext.Current.CancellationToken);
+        var hardwareApply = service.ApplyDeviceRuntimeAsync(
             device.Id,
             PlcRuntimeApplyReasons.HardwareOrIoMappingSave,
             TestContext.Current.CancellationToken);
+
+        Assert.False(hardwareApply.IsCompleted);
+        Assert.Empty(binder.DeviceCalls);
+        Assert.Empty(harness.PlcManager.ReloadedDeviceNames);
+
+        bindingMutation.Dispose();
+        await hardwareApply;
 
         Assert.Collection(
             binder.DeviceCalls,

@@ -11,6 +11,7 @@ public sealed class PlcRuntimeApplyService(
     IReadRepository<NetworkDeviceEntity> networkDevices,
     IPlcRuntimeTaskBinder runtimeTaskBinder,
     IPlcConnectionManager plcConnectionManager,
+    IPlcRuntimeConfigurationMutationGate runtimeConfigurationMutationGate,
     ILogService logger) : IPlcRuntimeApplyService
 {
     public async Task ApplyDeviceRuntimeAsync(
@@ -68,6 +69,9 @@ public sealed class PlcRuntimeApplyService(
                 "PLC 任务绑定禁止通过独立运行时应用入口执行；必须使用 SQLite 与 TaskKey 增量一体化事务命令。");
         }
 
+        using var mutation = await runtimeConfigurationMutationGate
+            .EnterAsync(device.Id, cancellationToken)
+            .ConfigureAwait(false);
         await runtimeTaskBinder
             .BindDeviceAsync(
                 device.Id,

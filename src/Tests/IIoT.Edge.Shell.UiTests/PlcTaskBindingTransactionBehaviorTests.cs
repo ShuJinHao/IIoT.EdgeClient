@@ -154,6 +154,37 @@ public sealed class PlcTaskBindingTransactionBehaviorTests
     }
 
     [Fact]
+    public async Task SaveAndApply_WhenSharedHardwareMutationGateIsHeld_ShouldWaitBeforeSnapshotAndCommit()
+    {
+        var gate = new PlcRuntimeConfigurationMutationGate();
+        using var hardwareMutation = await gate.EnterAsync(
+            1,
+            TestContext.Current.CancellationToken);
+        var persistence = new ControlledPersistenceTransaction();
+        var runtime = new ControlledRuntimeTransaction();
+        var service = CreateService(persistence, runtime, gate);
+
+        var save = service.SaveAndApplyAsync(
+            1,
+            "TestModule",
+            States(("Task.MG1", true)),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(save.IsCompleted);
+        Assert.Empty(persistence.PreparedDeviceIds);
+        Assert.Equal(0, runtime.CaptureCalls);
+        Assert.Equal(0, runtime.ApplyCalls);
+
+        hardwareMutation.Dispose();
+        var result = await save.WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(PlcTaskBindingSaveApplyState.Applied, result.State);
+        Assert.Equal([1], persistence.PreparedDeviceIds);
+        Assert.Equal(1, runtime.CaptureCalls);
+        Assert.Equal(1, runtime.ApplyCalls);
+    }
+
+    [Fact]
     public async Task SaveAndApply_ConcurrentForDifferentPlcs_ShouldRemainIndependent()
     {
         var persistence = new ControlledPersistenceTransaction
@@ -186,8 +217,13 @@ public sealed class PlcTaskBindingTransactionBehaviorTests
 
     private static PlcTaskBindingTransactionService CreateService(
         ControlledPersistenceTransaction persistence,
-        ControlledRuntimeTransaction runtime)
-        => new(persistence, runtime, new FakeLogService());
+        ControlledRuntimeTransaction runtime,
+        IPlcRuntimeConfigurationMutationGate? runtimeConfigurationMutationGate = null)
+        => new(
+            persistence,
+            runtime,
+            runtimeConfigurationMutationGate ?? new PlcRuntimeConfigurationMutationGate(),
+            new FakeLogService());
 
     private static IReadOnlyDictionary<string, bool> States(
         params (string Key, bool Enabled)[] states)

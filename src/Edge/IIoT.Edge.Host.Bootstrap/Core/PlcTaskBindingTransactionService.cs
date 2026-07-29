@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Runtime.ExceptionServices;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
@@ -50,11 +49,10 @@ public sealed class PlcTaskBindingRuntimeTransaction(
 public sealed class PlcTaskBindingTransactionService(
     IPlcTaskBindingPersistenceTransaction persistenceTransaction,
     IPlcTaskBindingRuntimeTransaction runtimeTransaction,
+    IPlcRuntimeConfigurationMutationGate runtimeConfigurationMutationGate,
     ILogService logger)
     : IPlcTaskBindingTransactionService
 {
-    private readonly ConcurrentDictionary<int, SemaphoreSlim> _deviceGates = new();
-
     public async Task<PlcTaskBindingSaveApplyResult> SaveAndApplyAsync(
         int networkDeviceId,
         string moduleId,
@@ -69,11 +67,9 @@ public sealed class PlcTaskBindingTransactionService(
         ArgumentException.ThrowIfNullOrWhiteSpace(moduleId);
         ArgumentNullException.ThrowIfNull(taskStates);
 
-        var gate = _deviceGates.GetOrAdd(
-            networkDeviceId,
-            static _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        using (await runtimeConfigurationMutationGate
+                   .EnterAsync(networkDeviceId, cancellationToken)
+                   .ConfigureAwait(false))
         {
             var preparation = await persistenceTransaction
                 .PrepareAsync(networkDeviceId, moduleId, taskStates, cancellationToken)
@@ -111,10 +107,6 @@ public sealed class PlcTaskBindingTransactionService(
                 runtimeResult.EnabledTaskKeys
                     .OrderBy(static key => key, StringComparer.OrdinalIgnoreCase)
                     .ToArray());
-        }
-        finally
-        {
-            gate.Release();
         }
     }
 
