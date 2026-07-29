@@ -763,6 +763,7 @@
     <sys:String x:Key="Navigation_PlcTaskBinding_SelectDeviceFirst">Select a PLC device first.</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_SaveCanceled">Save canceled.</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_SaveSuccess">Task bindings saved and applied to the current PLC.</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_SaveWaitingForPlc">Task bindings saved and waiting for the PLC.</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_SaveFailed">Failed to save PLC task bindings.</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_NoDevices">The current module has no PLC devices.</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_NoTasks">The current PLC has no bindable tasks.</sys:String>

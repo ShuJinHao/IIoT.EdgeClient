@@ -1,12 +1,14 @@
 using IIoT.Edge.Module.Contracts.Auth;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Application.Common.Crud;
+using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Application.Features.Hardware.UseCases.IoMapping.Commands;
 using IIoT.Edge.Application.Features.Hardware.UseCases.NetworkDevice.Commands;
 using IIoT.Edge.Application.Features.Hardware.UseCases.SerialDevice.Commands;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Module.Contracts.Hardware;
+using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Module.Sdk.Hardware;
 using MediatR;
 
@@ -45,7 +47,9 @@ public interface IHardwareConfigCrudService
 public sealed class HardwareConfigCrudService(
     ISender sender,
     ModuleHardwareProfileResolver hardwareProfileResolver,
-    IClientPermissionService permissionService) : IHardwareConfigCrudService
+    IClientPermissionService permissionService,
+    IPlcRuntimeConfigurationMutationGate runtimeConfigurationMutationGate,
+    IPlcRuntimeApplyService plcRuntimeApplyService) : IHardwareConfigCrudService
 {
     public Task<HardwareConfigInitResult> LoadAsync(CancellationToken cancellationToken = default)
         => sender.Send(new LoadHardwareConfigQuery(), cancellationToken);
@@ -159,9 +163,33 @@ public sealed class HardwareConfigCrudService(
                 template.Remark))
             .ToList();
 
-        await sender.Send(
-            new SaveIoMappingsCommand(selectedNetworkDevice.Id, resetMappings),
-            cancellationToken);
+        using var mutationScope = await runtimeConfigurationMutationGate
+            .EnterAsync(selectedNetworkDevice.Id, cancellationToken)
+            .ConfigureAwait(false);
+        var saveResult = await sender.Send(
+                new SaveIoMappingsCommand(selectedNetworkDevice.Id, resetMappings),
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (!saveResult.IsSuccess)
+        {
+            return CrudOperationResult.Failure(
+                saveResult.ErrorMessage ?? "插件标准点位保存失败。");
+        }
+
+        try
+        {
+            await plcRuntimeApplyService
+                .ApplyDeviceRuntimeAsync(
+                    selectedNetworkDevice.Id,
+                    PlcRuntimeApplyReasons.HardwareOrIoMappingSave,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            return CrudOperationResult.Failure(
+                $"插件标准点位已保存，但 PLC 重载失败：{exception.Message}");
+        }
 
         return CrudOperationResult.Success($"已重置 {resetMappings.Count} 条插件标准点位。");
     }

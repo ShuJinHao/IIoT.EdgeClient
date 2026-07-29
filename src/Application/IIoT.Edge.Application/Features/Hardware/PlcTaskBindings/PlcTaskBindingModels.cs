@@ -44,3 +44,64 @@ public sealed record PlcTaskBindingValidationIssue(
     TaskRequiredSignal? RequiredSignal,
     PlcTaskBindingValidationIssueType IssueType,
     string Message);
+
+public enum PlcTaskBindingSaveApplyState
+{
+    Applied,
+    WaitingForConnection,
+    WaitingForRuntime
+}
+
+public sealed record PlcTaskBindingSaveApplyResult(
+    PlcTaskBindingSaveApplyState State,
+    IReadOnlyList<string> EnabledTaskKeys);
+
+public sealed record PlcTaskBindingRowSnapshot(
+    int Id,
+    string TaskKey,
+    bool Enabled,
+    DateTimeOffset UpdatedAt);
+
+public sealed record PlcTaskBindingSavePreparation(
+    int NetworkDeviceId,
+    string DeviceName,
+    string ModuleId,
+    IReadOnlyList<string> CandidateTaskKeys,
+    IReadOnlyDictionary<string, bool> ResolvedStates,
+    IReadOnlyList<PlcTaskBindingRowSnapshot> OriginalRows,
+    DateTimeOffset UpdatedAt,
+    IReadOnlyList<string> DisabledHeartbeatTaskNames);
+
+public sealed class PlcTaskBindingTransactionException : Exception
+{
+    public PlcTaskBindingTransactionException(
+        Exception primaryFailure,
+        IReadOnlyList<Exception> rollbackFailures)
+        : base(
+            "PLC 任务绑定运行时应用失败，且数据库或运行时回滚未完整完成；禁止将本次操作显示为成功。",
+            CreateInnerException(primaryFailure, rollbackFailures))
+    {
+        PrimaryFailure = primaryFailure;
+        RollbackFailures = rollbackFailures.ToArray();
+    }
+
+    public Exception PrimaryFailure { get; }
+
+    public IReadOnlyList<Exception> RollbackFailures { get; }
+
+    private static AggregateException CreateInnerException(
+        Exception primaryFailure,
+        IReadOnlyList<Exception> rollbackFailures)
+    {
+        ArgumentNullException.ThrowIfNull(primaryFailure);
+        ArgumentNullException.ThrowIfNull(rollbackFailures);
+        if (rollbackFailures.Count == 0)
+        {
+            throw new ArgumentException(
+                "事务故障必须至少包含一个回滚失败。",
+                nameof(rollbackFailures));
+        }
+
+        return new AggregateException([primaryFailure, .. rollbackFailures]);
+    }
+}

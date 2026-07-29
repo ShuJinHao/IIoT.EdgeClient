@@ -2,6 +2,7 @@ using IIoT.Edge.Module.Contracts.Auth;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Module.Contracts.Plc.Store;
+using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Application.Auth;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Features.Config.ParamView;
@@ -102,10 +103,13 @@ public sealed class ConfigPermissionGuardBehaviorTests
     public async Task HardwareConfigCrudService_SaveAsync_WhenNoHardwarePermission_ShouldFailWithoutSending()
     {
         var sender = new CountingSender();
+        var plcManager = new FakePlcConnectionManager();
         var service = new HardwareConfigCrudService(
             sender,
             new ModuleHardwareProfileResolver([]),
-            new StubPermissionService { CanEditHardware = false });
+            new StubPermissionService { CanEditHardware = false },
+            new PlcRuntimeConfigurationMutationGate(),
+            new FakePlcRuntimeApplyService(plcManager, new Dictionary<int, string>()));
 
         var result = await service.SaveAsync(
             [CreateNetworkDeviceDto(1, "PLC-A")],
@@ -122,10 +126,13 @@ public sealed class ConfigPermissionGuardBehaviorTests
     public async Task HardwareConfigCrudService_ApplyModuleTemplateAsync_WhenNoHardwarePermission_ShouldFailWithoutSending()
     {
         var sender = new CountingSender();
+        var plcManager = new FakePlcConnectionManager();
         var service = new HardwareConfigCrudService(
             sender,
             new ModuleHardwareProfileResolver([]),
-            new StubPermissionService { CanEditHardware = false });
+            new StubPermissionService { CanEditHardware = false },
+            new PlcRuntimeConfigurationMutationGate(),
+            new FakePlcRuntimeApplyService(plcManager, new Dictionary<int, string>()));
 
         var result = await service.ApplyModuleTemplateAsync(
             CreateNetworkDeviceDto(1, "PLC-A"),
@@ -144,10 +151,16 @@ public sealed class ConfigPermissionGuardBehaviorTests
             SaveIoMappingsCommand command => Capture(command),
             _ => throw new NotSupportedException(request.GetType().FullName)
         });
+        var plcManager = new FakePlcConnectionManager();
+        var runtimeApplyService = new FakePlcRuntimeApplyService(
+            plcManager,
+            new Dictionary<int, string> { [7] = "PLC-A" });
         var service = new HardwareConfigCrudService(
             sender,
             new ModuleHardwareProfileResolver([new ResetTemplateProfile()]),
-            new StubPermissionService { CanEditHardware = true });
+            new StubPermissionService { CanEditHardware = true },
+            new PlcRuntimeConfigurationMutationGate(),
+            runtimeApplyService);
 
         var result = await service.ApplyModuleTemplateAsync(
             CreateNetworkDeviceDto(7, "PLC-A"),
@@ -160,12 +173,167 @@ public sealed class ConfigPermissionGuardBehaviorTests
         Assert.Contains(savedCommand.Mappings, x => x.SignalKey == "Test.Interaction.Outbound" && x.Direction == "Read");
         Assert.Contains(savedCommand.Mappings, x => x.SignalKey == "Test.Interaction.Outbound" && x.Direction == "Write");
         Assert.Contains(savedCommand.Mappings, x => x.SignalKey == "Test.Pending" && x.PlcAddress == string.Empty);
+        Assert.Equal(
+            [(7, PlcRuntimeApplyReasons.HardwareOrIoMappingSave)],
+            runtimeApplyService.DeviceApplies);
+        Assert.Equal(["PLC-A"], plcManager.ReloadedDeviceNames);
 
         Result Capture(SaveIoMappingsCommand command)
         {
             savedCommand = command;
             return Result.Success();
         }
+    }
+
+    [Fact]
+    public async Task HardwareConfigCrudService_ApplyModuleTemplateAsync_WhenPlcGateIsHeld_ShouldWaitBeforeMappingSave()
+    {
+        var sender = new CountingSender(request => request switch
+        {
+            SaveIoMappingsCommand => Result.Success(),
+            _ => throw new NotSupportedException(request.GetType().FullName)
+        });
+        var mutationGate = new PlcRuntimeConfigurationMutationGate();
+        using var bindingMutation = await mutationGate.EnterAsync(
+            7,
+            TestContext.Current.CancellationToken);
+        var plcManager = new FakePlcConnectionManager();
+        var runtimeApplyService = new FakePlcRuntimeApplyService(
+            plcManager,
+            new Dictionary<int, string> { [7] = "PLC-A" });
+        var service = new HardwareConfigCrudService(
+            sender,
+            new ModuleHardwareProfileResolver([new ResetTemplateProfile()]),
+            new StubPermissionService { CanEditHardware = true },
+            mutationGate,
+            runtimeApplyService);
+
+        var apply = service.ApplyModuleTemplateAsync(
+            CreateNetworkDeviceDto(7, "PLC-A"),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(apply.IsCompleted);
+        Assert.Equal(0, sender.SendCount);
+        Assert.Empty(runtimeApplyService.DeviceApplies);
+
+        bindingMutation.Dispose();
+        var result = await apply.WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal(1, sender.SendCount);
+        Assert.Equal(
+            [(7, PlcRuntimeApplyReasons.HardwareOrIoMappingSave)],
+            runtimeApplyService.DeviceApplies);
+    }
+
+    [Fact]
+    public async Task HardwareConfigCrudService_ApplyModuleTemplateAsync_ShouldHoldGateThroughRuntimeReload()
+    {
+        var sender = new CountingSender(request => request switch
+        {
+            SaveIoMappingsCommand => Result.Success(),
+            _ => throw new NotSupportedException(request.GetType().FullName)
+        });
+        var reloadEntered = NewCompletionSource();
+        var continueReload = NewCompletionSource();
+        var plcManager = new FakePlcConnectionManager
+        {
+            ReloadBehavior = async (_, ct) =>
+            {
+                reloadEntered.TrySetResult(true);
+                await continueReload.Task.WaitAsync(ct);
+            }
+        };
+        var mutationGate = new PlcRuntimeConfigurationMutationGate();
+        var runtimeApplyService = new FakePlcRuntimeApplyService(
+            plcManager,
+            new Dictionary<int, string> { [7] = "PLC-A" });
+        var service = new HardwareConfigCrudService(
+            sender,
+            new ModuleHardwareProfileResolver([new ResetTemplateProfile()]),
+            new StubPermissionService { CanEditHardware = true },
+            mutationGate,
+            runtimeApplyService);
+
+        var apply = service.ApplyModuleTemplateAsync(
+            CreateNetworkDeviceDto(7, "PLC-A"),
+            TestContext.Current.CancellationToken);
+
+        await reloadEntered.Task.WaitAsync(TestContext.Current.CancellationToken);
+        var competingMutation = mutationGate
+            .EnterAsync(7, TestContext.Current.CancellationToken)
+            .AsTask();
+        Assert.False(competingMutation.IsCompleted);
+
+        continueReload.TrySetResult(true);
+        var result = await apply.WaitAsync(TestContext.Current.CancellationToken);
+        using var competingLease = await competingMutation.WaitAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal(1, sender.SendCount);
+        Assert.Equal(["PLC-A"], plcManager.ReloadedDeviceNames);
+    }
+
+    [Fact]
+    public async Task HardwareConfigCrudService_ApplyModuleTemplateAsync_WhenMappingSaveFails_ShouldNotReloadRuntime()
+    {
+        var sender = new CountingSender(request => request switch
+        {
+            SaveIoMappingsCommand => Result.Failure("mapping save boom"),
+            _ => throw new NotSupportedException(request.GetType().FullName)
+        });
+        var plcManager = new FakePlcConnectionManager();
+        var runtimeApplyService = new FakePlcRuntimeApplyService(
+            plcManager,
+            new Dictionary<int, string> { [7] = "PLC-A" });
+        var service = new HardwareConfigCrudService(
+            sender,
+            new ModuleHardwareProfileResolver([new ResetTemplateProfile()]),
+            new StubPermissionService { CanEditHardware = true },
+            new PlcRuntimeConfigurationMutationGate(),
+            runtimeApplyService);
+
+        var result = await service.ApplyModuleTemplateAsync(
+            CreateNetworkDeviceDto(7, "PLC-A"),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("mapping save boom", result.Message, StringComparison.Ordinal);
+        Assert.Empty(runtimeApplyService.DeviceApplies);
+        Assert.Empty(plcManager.ReloadedDeviceNames);
+    }
+
+    [Fact]
+    public async Task HardwareConfigCrudService_ApplyModuleTemplateAsync_WhenReloadFails_ShouldReportSavedButNotApplied()
+    {
+        var sender = new CountingSender(request => request switch
+        {
+            SaveIoMappingsCommand => Result.Success(),
+            _ => throw new NotSupportedException(request.GetType().FullName)
+        });
+        var plcManager = new FakePlcConnectionManager();
+        plcManager.ReloadFailures["PLC-A"] = new InvalidOperationException("reload boom");
+        var runtimeApplyService = new FakePlcRuntimeApplyService(
+            plcManager,
+            new Dictionary<int, string> { [7] = "PLC-A" });
+        var service = new HardwareConfigCrudService(
+            sender,
+            new ModuleHardwareProfileResolver([new ResetTemplateProfile()]),
+            new StubPermissionService { CanEditHardware = true },
+            new PlcRuntimeConfigurationMutationGate(),
+            runtimeApplyService);
+
+        var result = await service.ApplyModuleTemplateAsync(
+            CreateNetworkDeviceDto(7, "PLC-A"),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("已保存，但 PLC 重载失败", result.Message, StringComparison.Ordinal);
+        Assert.Equal(
+            [(7, PlcRuntimeApplyReasons.HardwareOrIoMappingSave)],
+            runtimeApplyService.DeviceApplies);
+        Assert.Equal(["PLC-A"], plcManager.ReloadedDeviceNames);
     }
 
     [Fact]
@@ -194,7 +362,8 @@ public sealed class ConfigPermissionGuardBehaviorTests
                 {
                     [1] = "PLC-A",
                     [2] = "PLC-B"
-                }));
+                }),
+            new PlcRuntimeConfigurationMutationGate());
 
         var result = await handler.Handle(
             new SaveHardwareConfigCommand(
@@ -217,6 +386,8 @@ public sealed class ConfigPermissionGuardBehaviorTests
             plcManager.ReloadedDeviceNames);
         Assert.Equal(
             [
+                typeof(GetAllNetworkDevicesQuery),
+                typeof(GetIoMappingsByDeviceQuery),
                 typeof(GetAllNetworkDevicesQuery),
                 typeof(GetIoMappingsByDeviceQuery)
             ],
@@ -276,6 +447,9 @@ public sealed class ConfigPermissionGuardBehaviorTests
             string.Empty,
             1,
             null);
+
+    private static TaskCompletionSource<bool> NewCompletionSource()
+        => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private sealed class FakeAuthService : IAuthService
     {
@@ -454,6 +628,8 @@ public sealed class ConfigPermissionGuardBehaviorTests
 
         public List<int> StoppedDeviceIds { get; } = [];
 
+        public Func<string, CancellationToken, Task>? ReloadBehavior { get; init; }
+
         public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
 
         public Task StopAsync(CancellationToken ct = default) => Task.CompletedTask;
@@ -464,7 +640,7 @@ public sealed class ConfigPermissionGuardBehaviorTests
             return Task.CompletedTask;
         }
 
-        public Task ReloadAsync(string deviceName, CancellationToken ct = default)
+        public async Task ReloadAsync(string deviceName, CancellationToken ct = default)
         {
             ReloadedDeviceNames.Add(deviceName);
             if (ReloadFailures.TryGetValue(deviceName, out var exception))
@@ -472,7 +648,10 @@ public sealed class ConfigPermissionGuardBehaviorTests
                 throw exception;
             }
 
-            return Task.CompletedTask;
+            if (ReloadBehavior is not null)
+            {
+                await ReloadBehavior(deviceName, ct);
+            }
         }
 
         public void RegisterTasks(
@@ -505,11 +684,14 @@ public sealed class ConfigPermissionGuardBehaviorTests
         FakePlcConnectionManager plcManager,
         IReadOnlyDictionary<int, string> deviceNamesById) : IPlcRuntimeApplyService
     {
+        public List<(int NetworkDeviceId, string Reason)> DeviceApplies { get; } = [];
+
         public Task ApplyDeviceRuntimeAsync(
             int networkDeviceId,
             string reason,
             CancellationToken cancellationToken = default)
         {
+            DeviceApplies.Add((networkDeviceId, reason));
             var deviceName = deviceNamesById.GetValueOrDefault(networkDeviceId)
                 ?? $"DeviceId={networkDeviceId}";
             return plcManager.ReloadAsync(deviceName, cancellationToken);

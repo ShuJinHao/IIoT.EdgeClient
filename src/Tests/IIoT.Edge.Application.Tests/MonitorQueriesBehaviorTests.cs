@@ -911,13 +911,6 @@ public sealed class MonitorQueriesBehaviorTests
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
-        public Task SaveDeviceBindingsAsync(
-            int networkDeviceId,
-            string moduleId,
-            IReadOnlyDictionary<string, bool> taskStates,
-            CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
         public PlcTaskBindingValidationResult ValidateEnabledTasks(
             IReadOnlyCollection<TaskCandidate> candidates,
             IReadOnlySet<string> enabledTaskKeys,

@@ -3,6 +3,7 @@ using IIoT.Edge.Module.Contracts.Auth;
 using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Module.Contracts.Plc.Store;
 using IIoT.Edge.Application.Common.Crud;
+using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Application.Features.Hardware.UseCases.IoMapping.Commands;
@@ -154,6 +155,106 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         var updated = Assert.Single(repo.Items);
         Assert.Equal("一号 PLC", updated.DeviceName);
         Assert.Equal("PLC-A", updated.PlcCode);
+    }
+
+    [Fact]
+    public async Task SaveHardwareConfigHandler_WhenUnchangedPlcRowAdvancesAfterSnapshot_ShouldNotOverwriteIt()
+    {
+        var sender = new HardwareConfigSender
+        {
+            ExistingNetworkDevices =
+            [
+                CreateNetworkDevice(id: 1, name: "PLC-A", port1: 102),
+                CreateNetworkDevice(id: 2, name: "PLC-B", port1: 102)
+            ]
+        };
+        var networkRepo = new InMemoryRepository<NetworkDeviceEntity>(
+            CreateNetworkDevice(id: 1, name: "PLC-A", port1: 104),
+            CreateNetworkDevice(id: 2, name: "PLC-B", port1: 102));
+        var plcManager = new FakePlcConnectionManager();
+        var handler = new SaveHardwareConfigHandler(
+            sender,
+            new TestEdgeUnitOfWorkFactory(
+                networkRepo,
+                new InMemoryRepository<SerialDeviceEntity>(),
+                new InMemoryRepository<IoMappingEntity>()),
+            new StubPermissionService { CanEditHardware = true },
+            plcManager,
+            new FakePlcRuntimeApplyService(sender, plcManager),
+            new PlcRuntimeConfigurationMutationGate());
+
+        var result = await handler.Handle(
+            new SaveHardwareConfigCommand(
+                [
+                    CreateNetworkDto(id: 1, name: "PLC-A", port1: 102),
+                    CreateNetworkDto(id: 2, name: "PLC-B", port1: 103)
+                ],
+                [],
+                2,
+                []),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal(104, networkRepo.Items.Single(x => x.Id == 1).Port1);
+        Assert.Equal(103, networkRepo.Items.Single(x => x.Id == 2).Port1);
+        Assert.Equal(["PLC-B"], plcManager.ReloadedDeviceNames);
+    }
+
+    [Fact]
+    public async Task SaveHardwareConfigHandler_WhenUnchangedIoAdvancesAfterSnapshot_ShouldNotOverwriteIt()
+    {
+        var sender = new HardwareConfigSender
+        {
+            ExistingNetworkDevices =
+            [
+                CreateNetworkDevice(id: 1, name: "PLC-A")
+            ],
+            ExistingIoMappings =
+            [
+                CreateIoMapping(
+                    id: 11,
+                    deviceId: 1,
+                    signalKey: "Signal.A",
+                    plcAddress: "DB1.DBW0")
+            ]
+        };
+        var networkRepo = new InMemoryRepository<NetworkDeviceEntity>(
+            CreateNetworkDevice(id: 1, name: "PLC-A"));
+        var ioRepo = new InMemoryRepository<IoMappingEntity>(
+            CreateIoMapping(
+                id: 11,
+                deviceId: 1,
+                signalKey: "Signal.A",
+                plcAddress: "DB1.DBW2"));
+        var plcManager = new FakePlcConnectionManager();
+        var handler = new SaveHardwareConfigHandler(
+            sender,
+            new TestEdgeUnitOfWorkFactory(
+                networkRepo,
+                new InMemoryRepository<SerialDeviceEntity>(),
+                ioRepo),
+            new StubPermissionService { CanEditHardware = true },
+            plcManager,
+            new FakePlcRuntimeApplyService(sender, plcManager),
+            new PlcRuntimeConfigurationMutationGate());
+
+        var result = await handler.Handle(
+            new SaveHardwareConfigCommand(
+                [CreateNetworkDto(id: 1, name: "PLC-A")],
+                [],
+                1,
+                [
+                    CreateIoMappingDto(
+                        id: 11,
+                        deviceId: 1,
+                        signalKey: "Signal.A",
+                        plcAddress: "DB1.DBW0")
+                ]),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal("DB1.DBW2", Assert.Single(ioRepo.Items).PlcAddress);
+        Assert.Empty(plcManager.ReloadedDeviceNames);
     }
 
     [Fact]
@@ -369,6 +470,174 @@ public sealed class HardwareConfigFullSyncBehaviorTests
     }
 
     [Fact]
+    public async Task SaveHardwareConfigHandler_WhenDeletedPlcGateIsHeld_ShouldWaitBeforeAuthoritativeSnapshotAndCommit()
+    {
+        var sender = new HardwareConfigSender
+        {
+            ExistingNetworkDevices =
+            [
+                CreateNetworkDevice(id: 1, name: "PLC-A"),
+                CreateNetworkDevice(id: 2, name: "PLC-B")
+            ]
+        };
+        var plcManager = new FakePlcConnectionManager();
+        var mutationGate = new PlcRuntimeConfigurationMutationGate();
+        using var bindingMutation = await mutationGate.EnterAsync(
+            1,
+            TestContext.Current.CancellationToken);
+        var handler = CreateSaveHandler(sender, plcManager, mutationGate);
+
+        var save = handler.Handle(
+            new SaveHardwareConfigCommand(
+                [CreateNetworkDto(id: 2, name: "PLC-B")],
+                [],
+                2,
+                []),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(save.IsCompleted);
+        Assert.Single(sender.Requests, static request => request is GetAllNetworkDevicesQuery);
+        Assert.Empty(plcManager.StoppedDeviceIds);
+        Assert.Empty(plcManager.ReloadedDeviceNames);
+
+        bindingMutation.Dispose();
+        var result = await save.WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal(
+            2,
+            sender.Requests.Count(static request => request is GetAllNetworkDevicesQuery));
+        Assert.Equal([1], plcManager.StoppedDeviceIds);
+    }
+
+    [Fact]
+    public async Task SaveHardwareConfigHandler_ShouldHoldDeletedAndChangedPlcGatesThroughStopAndReload()
+    {
+        var sender = new HardwareConfigSender
+        {
+            ExistingNetworkDevices =
+            [
+                CreateNetworkDevice(id: 1, name: "PLC-A"),
+                CreateNetworkDevice(id: 2, name: "PLC-B", port1: 102)
+            ]
+        };
+        var stopEntered = NewCompletionSource();
+        var continueStop = NewCompletionSource();
+        var reloadEntered = NewCompletionSource();
+        var continueReload = NewCompletionSource();
+        var plcManager = new FakePlcConnectionManager
+        {
+            StopBehavior = async (_, ct) =>
+            {
+                stopEntered.TrySetResult(true);
+                await continueStop.Task.WaitAsync(ct);
+            },
+            ReloadBehavior = async (_, ct) =>
+            {
+                reloadEntered.TrySetResult(true);
+                await continueReload.Task.WaitAsync(ct);
+            }
+        };
+        var mutationGate = new PlcRuntimeConfigurationMutationGate();
+        var handler = CreateSaveHandler(sender, plcManager, mutationGate);
+
+        var save = handler.Handle(
+            new SaveHardwareConfigCommand(
+                [CreateNetworkDto(id: 2, name: "PLC-B", port1: 103)],
+                [],
+                2,
+                []),
+            TestContext.Current.CancellationToken);
+
+        await stopEntered.Task.WaitAsync(TestContext.Current.CancellationToken);
+        var deletedPlcMutation = mutationGate
+            .EnterAsync(1, TestContext.Current.CancellationToken)
+            .AsTask();
+        var changedPlcMutation = mutationGate
+            .EnterAsync(2, TestContext.Current.CancellationToken)
+            .AsTask();
+        Assert.False(deletedPlcMutation.IsCompleted);
+        Assert.False(changedPlcMutation.IsCompleted);
+
+        continueStop.TrySetResult(true);
+        await reloadEntered.Task.WaitAsync(TestContext.Current.CancellationToken);
+        Assert.False(deletedPlcMutation.IsCompleted);
+        Assert.False(changedPlcMutation.IsCompleted);
+
+        continueReload.TrySetResult(true);
+        var result = await save.WaitAsync(TestContext.Current.CancellationToken);
+        using var deletedLease = await deletedPlcMutation.WaitAsync(
+            TestContext.Current.CancellationToken);
+        using var changedLease = await changedPlcMutation.WaitAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal([1], plcManager.StoppedDeviceIds);
+        Assert.Equal(["PLC-B"], plcManager.ReloadedDeviceNames);
+    }
+
+    [Fact]
+    public async Task SaveHardwareConfigHandler_WhenOnePlcReloads_ShouldNotHoldUnchangedPlcGate()
+    {
+        var sender = new HardwareConfigSender
+        {
+            ExistingNetworkDevices =
+            [
+                CreateNetworkDevice(id: 1, name: "PLC-A", port1: 102),
+                CreateNetworkDevice(id: 2, name: "PLC-B", port1: 102)
+            ]
+        };
+        var reloadEntered = NewCompletionSource();
+        var continueReload = NewCompletionSource();
+        var plcManager = new FakePlcConnectionManager
+        {
+            ReloadBehavior = async (deviceName, ct) =>
+            {
+                if (!string.Equals(deviceName, "PLC-A", StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                reloadEntered.TrySetResult(true);
+                await continueReload.Task.WaitAsync(ct);
+            }
+        };
+        var mutationGate = new PlcRuntimeConfigurationMutationGate();
+        var handler = CreateSaveHandler(sender, plcManager, mutationGate);
+
+        var save = handler.Handle(
+            new SaveHardwareConfigCommand(
+                [
+                    CreateNetworkDto(id: 1, name: "PLC-A", port1: 103),
+                    CreateNetworkDto(id: 2, name: "PLC-B", port1: 102)
+                ],
+                [],
+                1,
+                []),
+            TestContext.Current.CancellationToken);
+
+        await reloadEntered.Task.WaitAsync(TestContext.Current.CancellationToken);
+        var changedPlcMutation = mutationGate
+            .EnterAsync(1, TestContext.Current.CancellationToken)
+            .AsTask();
+        var unchangedPlcMutation = mutationGate
+            .EnterAsync(2, TestContext.Current.CancellationToken)
+            .AsTask();
+
+        Assert.False(changedPlcMutation.IsCompleted);
+        Assert.True(unchangedPlcMutation.IsCompleted);
+        using var unchangedLease = await unchangedPlcMutation;
+
+        continueReload.TrySetResult(true);
+        var result = await save.WaitAsync(TestContext.Current.CancellationToken);
+        using var changedLease = await changedPlcMutation.WaitAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal(["PLC-A"], plcManager.ReloadedDeviceNames);
+    }
+
+    [Fact]
     public async Task SaveHardwareConfigHandler_WhenSelectedPlcMappingsChange_ShouldReloadThatPlcOnly()
     {
         var sender = new HardwareConfigSender
@@ -500,7 +769,10 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         Assert.Equal(["PLC-B"], plcManager.ReloadedDeviceNames);
     }
 
-    private static SaveHardwareConfigHandler CreateSaveHandler(HardwareConfigSender sender, FakePlcConnectionManager plcManager)
+    private static SaveHardwareConfigHandler CreateSaveHandler(
+        HardwareConfigSender sender,
+        FakePlcConnectionManager plcManager,
+        IPlcRuntimeConfigurationMutationGate? runtimeConfigurationMutationGate = null)
         => new(
             sender,
             new TestEdgeUnitOfWorkFactory(
@@ -509,7 +781,11 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                 new InMemoryRepository<IoMappingEntity>([.. sender.ExistingIoMappings])),
             new StubPermissionService { CanEditHardware = true },
             plcManager,
-            new FakePlcRuntimeApplyService(sender, plcManager));
+            new FakePlcRuntimeApplyService(sender, plcManager),
+            runtimeConfigurationMutationGate ?? new PlcRuntimeConfigurationMutationGate());
+
+    private static TaskCompletionSource<bool> NewCompletionSource()
+        => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private static NetworkDeviceEntity CreateNetworkDevice(
         int id,
@@ -803,11 +1079,15 @@ public sealed class HardwareConfigFullSyncBehaviorTests
 
         public List<string> ReloadedDeviceNames { get; } = [];
 
+        public Func<int, CancellationToken, Task>? StopBehavior { get; init; }
+
+        public Func<string, CancellationToken, Task>? ReloadBehavior { get; init; }
+
         public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
 
         public Task StopAsync(CancellationToken ct = default) => Task.CompletedTask;
 
-        public Task StopDeviceAsync(int networkDeviceId, CancellationToken ct = default)
+        public async Task StopDeviceAsync(int networkDeviceId, CancellationToken ct = default)
         {
             StoppedDeviceIds.Add(networkDeviceId);
             if (StopFailures.TryGetValue(networkDeviceId, out var exception))
@@ -815,10 +1095,13 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                 throw exception;
             }
 
-            return Task.CompletedTask;
+            if (StopBehavior is not null)
+            {
+                await StopBehavior(networkDeviceId, ct);
+            }
         }
 
-        public Task ReloadAsync(string deviceName, CancellationToken ct = default)
+        public async Task ReloadAsync(string deviceName, CancellationToken ct = default)
         {
             ReloadedDeviceNames.Add(deviceName);
             if (ReloadFailures.TryGetValue(deviceName, out var exception))
@@ -826,7 +1109,10 @@ public sealed class HardwareConfigFullSyncBehaviorTests
                 throw exception;
             }
 
-            return Task.CompletedTask;
+            if (ReloadBehavior is not null)
+            {
+                await ReloadBehavior(deviceName, ct);
+            }
         }
 
         public void RegisterTasks(

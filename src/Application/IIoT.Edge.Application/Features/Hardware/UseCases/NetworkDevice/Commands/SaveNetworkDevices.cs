@@ -54,6 +54,32 @@ public class SaveNetworkDevicesHandler(
         IRepository<NetworkDeviceEntity> repo,
         SaveNetworkDevicesCommand request,
         CancellationToken cancellationToken)
+        => await ApplyCoreAsync(
+            repo,
+            request,
+            existingIdsToUpdate: null,
+            existingIdsToDelete: null,
+            cancellationToken).ConfigureAwait(false);
+
+    internal static async Task<Result> ApplyPlannedAsync(
+        IRepository<NetworkDeviceEntity> repo,
+        SaveNetworkDevicesCommand request,
+        IReadOnlySet<int> existingIdsToUpdate,
+        IReadOnlySet<int> existingIdsToDelete,
+        CancellationToken cancellationToken)
+        => await ApplyCoreAsync(
+            repo,
+            request,
+            existingIdsToUpdate,
+            existingIdsToDelete,
+            cancellationToken).ConfigureAwait(false);
+
+    private static async Task<Result> ApplyCoreAsync(
+        IRepository<NetworkDeviceEntity> repo,
+        SaveNetworkDevicesCommand request,
+        IReadOnlySet<int>? existingIdsToUpdate,
+        IReadOnlySet<int>? existingIdsToDelete,
+        CancellationToken cancellationToken)
     {
         var existingItems = await repo.GetListAsync(_ => true, cancellationToken).ConfigureAwait(false);
         var submittedIds = request.Devices
@@ -74,6 +100,8 @@ public class SaveNetworkDevicesHandler(
             Validate,
             dto => CreateWithUniquePlcCode(dto, usedPlcCodes),
             Apply,
+            entity => existingIdsToDelete is null || existingIdsToDelete.Contains(entity.Id),
+            (entity, _) => existingIdsToUpdate is null || existingIdsToUpdate.Contains(entity.Id),
             cancellationToken).ConfigureAwait(false);
     }
 

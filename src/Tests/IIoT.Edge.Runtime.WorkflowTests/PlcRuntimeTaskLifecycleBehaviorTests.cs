@@ -158,6 +158,98 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
     }
 
     [Fact]
+    public async Task ApplyPlan_WhenNewTaskCreationFails_ShouldKeepOriginalTaskAndBaseRuntimeReferences()
+    {
+        var connection = new ControlledLoopTask("Connection");
+        var periodicRead = new ControlledLoopTask("PeriodicRead");
+        var mg2 = new ControlledBusinessTask("Task.MG2");
+        var runtime = CreateRuntime(connection, periodicRead);
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlan(runtime, ("Task.MG2", (_, _) => mg2)),
+            TestContext.Current.CancellationToken);
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await mg2.Starts.WaitForAtLeastAsync(
+            1,
+            TestContext.Current.CancellationToken);
+        var originalMg2 = runtime.GetBusinessTask("Task.MG2");
+        var originalService = runtime.PlcService;
+        var originalBuffer = runtime.Buffer;
+        var originalContext = runtime.Context;
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            runtime.ApplyTaskPlanAsync(
+                CreatePlan(
+                    runtime,
+                    ("Task.MG1", (_, _) => throw new InvalidOperationException("create failed")),
+                    ("Task.MG2", (_, _) => mg2)),
+                TestContext.Current.CancellationToken));
+
+        Assert.Equal("create failed", failure.Message);
+        Assert.Equal(["Task.MG2"], runtime.EnabledTaskKeys);
+        Assert.Null(runtime.GetBusinessTask("Task.MG1"));
+        Assert.Same(originalMg2, runtime.GetBusinessTask("Task.MG2"));
+        Assert.Same(originalService, runtime.PlcService);
+        Assert.Same(originalBuffer, runtime.Buffer);
+        Assert.Same(originalContext, runtime.Context);
+        Assert.Equal(1, connection.Starts.Count);
+        Assert.Equal(1, periodicRead.Starts.Count);
+        Assert.Equal(1, mg2.Starts.Count);
+        Assert.Equal(0, mg2.Stops.Count);
+
+        await CleanupAsync(runtime);
+    }
+
+    [Fact]
+    public async Task ApplyPlan_WhenNewTaskStartupFails_ShouldKeepOriginalTaskAndBaseRuntimeReferences()
+    {
+        var connection = new ControlledLoopTask("Connection");
+        var periodicRead = new ControlledLoopTask("PeriodicRead");
+        var failed = new ControlledBusinessTask("Task.MG1")
+        {
+            FailStartup = true
+        };
+        var mg2 = new ControlledBusinessTask("Task.MG2");
+        var runtime = CreateRuntime(connection, periodicRead);
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlan(runtime, ("Task.MG2", (_, _) => mg2)),
+            TestContext.Current.CancellationToken);
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await mg2.Starts.WaitForAtLeastAsync(
+            1,
+            TestContext.Current.CancellationToken);
+        var originalMg2 = runtime.GetBusinessTask("Task.MG2");
+        var originalService = runtime.PlcService;
+        var originalBuffer = runtime.Buffer;
+        var originalContext = runtime.Context;
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            runtime.ApplyTaskPlanAsync(
+                CreatePlan(
+                    runtime,
+                    ("Task.MG1", (_, _) => failed),
+                    ("Task.MG2", (_, _) => mg2)),
+                TestContext.Current.CancellationToken));
+
+        Assert.Contains("startup failed", failure.Message, StringComparison.Ordinal);
+        Assert.Equal(["Task.MG2"], runtime.EnabledTaskKeys);
+        Assert.Null(runtime.GetBusinessTask("Task.MG1"));
+        Assert.Same(originalMg2, runtime.GetBusinessTask("Task.MG2"));
+        Assert.Same(originalService, runtime.PlcService);
+        Assert.Same(originalBuffer, runtime.Buffer);
+        Assert.Same(originalContext, runtime.Context);
+        Assert.Equal(1, failed.Starts.Count);
+        Assert.Equal(1, failed.Stops.Count);
+        Assert.Equal(1, connection.Starts.Count);
+        Assert.Equal(1, periodicRead.Starts.Count);
+        Assert.Equal(1, mg2.Starts.Count);
+        Assert.Equal(0, mg2.Stops.Count);
+
+        await CleanupAsync(runtime);
+    }
+
+    [Fact]
     public async Task ConnectionStart_WhenOneBusinessStartupFails_ShouldStillStartOtherTask()
     {
         var failed = new ControlledBusinessTask("Task.MG1")
@@ -457,17 +549,23 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         var runtime = CreateRuntime(
             new ControlledLoopTask("Connection"),
             new ControlledLoopTask("PeriodicRead"));
+        var plan = CreatePlan(
+            runtime,
+            ("Task.MG1", (_, _) => faulting),
+            ("Task.MG2", (_, _) => healthy));
         await runtime.ApplyTaskPlanAsync(
-            CreatePlan(
-                runtime,
-                ("Task.MG1", (_, _) => faulting),
-                ("Task.MG2", (_, _) => healthy)),
+            plan,
             TestContext.Current.CancellationToken);
         runtime.Start();
         runtime.ConnectionSignal.Report(true);
         await Task.WhenAll(
             faulting.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
             healthy.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+        // The unchanged apply waits for the connection transition gate, so fault injection
+        // cannot race the startup handshake and turn an execution fault into a startup fault.
+        await runtime.ApplyTaskPlanAsync(
+            plan,
+            TestContext.Current.CancellationToken);
         var observed = runtime.WaitForLogAsync(
             entry => entry.Level == "Error"
                      && entry.Message.Contains("Task.MG1", StringComparison.Ordinal)
@@ -495,13 +593,18 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         var runtime = CreateRuntime(
             new ControlledLoopTask("Connection"),
             new ControlledLoopTask("PeriodicRead"));
+        var originalPlan = CreatePlan(runtime, ("Task.MG1", (_, _) => faulting));
         await runtime.ApplyTaskPlanAsync(
-            CreatePlan(runtime, ("Task.MG1", (_, _) => faulting)),
+            originalPlan,
             TestContext.Current.CancellationToken);
         runtime.Start();
         runtime.ConnectionSignal.Report(true);
         await faulting.Starts.WaitForAtLeastAsync(
             1,
+            TestContext.Current.CancellationToken);
+        // See the companion execution-fault test above: this is a deterministic startup barrier.
+        await runtime.ApplyTaskPlanAsync(
+            originalPlan,
             TestContext.Current.CancellationToken);
         var faultObserved = runtime.WaitForLogAsync(
             entry => entry.Level == "Error"

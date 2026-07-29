@@ -1,4 +1,3 @@
-using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Module.Contracts.Hardware;
@@ -13,8 +12,8 @@ public sealed class PlcTaskBindingService(
     IReadRepository<NetworkDeviceEntity> networkDevices,
     IReadRepository<IoMappingEntity> ioMappings,
     IReadRepository<PlcTaskBindingEntity> bindings,
-    IEdgeUnitOfWorkFactory unitOfWorkFactory,
-    ILogService logger) : IPlcTaskBindingService
+    IEdgeUnitOfWorkFactory unitOfWorkFactory)
+    : IPlcTaskBindingService, IPlcTaskBindingPersistenceTransaction
 {
     public async Task<IReadOnlyList<PlcTaskBindingDeviceDto>> GetModuleDeviceBindingsAsync(
         string moduleId,
@@ -82,7 +81,7 @@ public sealed class PlcTaskBindingService(
         return enabledTaskKeys;
     }
 
-    public async Task SaveDeviceBindingsAsync(
+    public async Task<PlcTaskBindingSavePreparation> PrepareAsync(
         int networkDeviceId,
         string moduleId,
         IReadOnlyDictionary<string, bool> taskStates,
@@ -98,17 +97,37 @@ public sealed class PlcTaskBindingService(
 
         var device = await networkDevices.GetByIdAsync(networkDeviceId, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException("未找到要保存任务绑定的 PLC 设备。");
+        if (device.DeviceType != DeviceType.PLC)
+        {
+            throw new InvalidOperationException($"设备“{device.DeviceName}”不是 PLC，已禁止保存 PLC 任务绑定。");
+        }
 
         if (!runtimeRegistry.TryGetFactory(moduleId, out var factory))
         {
             throw new InvalidOperationException("当前模块未注册 PLC 运行时任务工厂。");
         }
 
-        var candidates = factory.GetTaskCandidates();
+        var candidates = factory.GetTaskCandidates().ToArray();
+        if (candidates.Length == 0)
+        {
+            throw new InvalidOperationException("当前模块没有可绑定的 PLC 运行时任务候选，已禁止保存。");
+        }
+
         var candidateByKey = candidates.ToDictionary(static x => x.Key, StringComparer.OrdinalIgnoreCase);
-        var normalizedStates = taskStates
-            .Where(x => candidateByKey.ContainsKey(x.Key))
-            .ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
+        var normalizedStates = taskStates.ToDictionary(
+            static x => x.Key,
+            static x => x.Value,
+            StringComparer.OrdinalIgnoreCase);
+        var unknownTaskKeys = normalizedStates.Keys
+            .Where(key => !candidateByKey.ContainsKey(key))
+            .OrderBy(static key => key, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (unknownTaskKeys.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"提交内容包含当前模块未声明的 TaskKey：{string.Join("、", unknownTaskKeys)}。已禁止部分保存。");
+        }
+
         var savedRows = await bindings.GetListAsync(
             x => x.NetworkDeviceId == networkDeviceId,
             cancellationToken).ConfigureAwait(false);
@@ -142,38 +161,124 @@ public sealed class PlcTaskBindingService(
             .ToArray();
 
         var updatedAt = DateTimeOffset.UtcNow;
-        var replacements = candidates
-            .Select(candidate => PlcTaskBindingEntity.Create(
-                networkDeviceId,
-                candidate.Key,
-                resolvedStates[candidate.Key],
-                updatedAt))
+        var candidateTaskKeys = candidates
+            .Select(static candidate => candidate.Key)
             .ToArray();
-        await using (var unitOfWork = await unitOfWorkFactory
-                         .BeginAsync(cancellationToken)
-                         .ConfigureAwait(false))
+        var candidateTaskKeySet = candidateTaskKeys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var originalRows = savedRows
+            .Where(row => candidateTaskKeySet.Contains(row.TaskKey))
+            .Select(static row => new PlcTaskBindingRowSnapshot(
+                row.Id,
+                row.TaskKey,
+                row.Enabled,
+                row.UpdatedAt))
+            .OrderBy(static row => row.TaskKey, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return new PlcTaskBindingSavePreparation(
+            networkDeviceId,
+            device.DeviceName,
+            moduleId,
+            candidateTaskKeys,
+            resolvedStates,
+            originalRows,
+            updatedAt,
+            disabledHeartbeatTasks);
+    }
+
+    public Task CommitAsync(
+        PlcTaskBindingSavePreparation preparation,
+        CancellationToken cancellationToken = default)
+        => ApplyPreparedRowsAsync(preparation, restoreOriginal: false, cancellationToken);
+
+    public Task RestoreAsync(
+        PlcTaskBindingSavePreparation preparation,
+        CancellationToken cancellationToken = default)
+        => ApplyPreparedRowsAsync(preparation, restoreOriginal: true, cancellationToken);
+
+    private async Task ApplyPreparedRowsAsync(
+        PlcTaskBindingSavePreparation preparation,
+        bool restoreOriginal,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(preparation);
+        var candidateTaskKeys = preparation.CandidateTaskKeys
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (candidateTaskKeys.Count != preparation.CandidateTaskKeys.Count
+            || candidateTaskKeys.Count != preparation.ResolvedStates.Count)
         {
-            var repository = unitOfWork.Repository<PlcTaskBindingEntity>();
-            var existing = await repository
-                .GetListAsync(x => x.NetworkDeviceId == networkDeviceId, cancellationToken)
-                .ConfigureAwait(false);
-            foreach (var binding in existing)
-            {
-                repository.Delete(binding);
-            }
-
-            foreach (var replacement in replacements)
-            {
-                repository.Add(replacement);
-            }
-
-            await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
+            throw new InvalidOperationException("PLC 任务绑定事务快照包含重复或不完整的 TaskKey。");
         }
 
-        if (disabledHeartbeatTasks.Length > 0)
+        await using var unitOfWork = await unitOfWorkFactory
+            .BeginAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var repository = unitOfWork.Repository<PlcTaskBindingEntity>();
+        var deviceRows = await repository
+            .GetListAsync(
+                x => x.NetworkDeviceId == preparation.NetworkDeviceId,
+                cancellationToken)
+            .ConfigureAwait(false);
+        var currentCandidateRows = deviceRows
+            .Where(row => candidateTaskKeys.Contains(row.TaskKey))
+            .ToArray();
+        var currentByKey = currentCandidateRows.ToDictionary(
+            static row => row.TaskKey,
+            StringComparer.OrdinalIgnoreCase);
+
+        if (restoreOriginal)
         {
-            logger.Warn($"PLC“{device.DeviceName}”已关闭心跳类任务：{string.Join("、", disabledHeartbeatTasks)}。");
+            var originalByKey = preparation.OriginalRows.ToDictionary(
+                static row => row.TaskKey,
+                StringComparer.OrdinalIgnoreCase);
+            foreach (var current in currentCandidateRows)
+            {
+                if (!originalByKey.TryGetValue(current.TaskKey, out var original))
+                {
+                    repository.Delete(current);
+                    continue;
+                }
+
+                current.UpdateEnabled(original.Enabled, original.UpdatedAt);
+                repository.Update(current);
+            }
+
+            foreach (var original in preparation.OriginalRows)
+            {
+                if (currentByKey.ContainsKey(original.TaskKey))
+                {
+                    continue;
+                }
+
+                repository.Add(PlcTaskBindingEntity.Create(
+                    preparation.NetworkDeviceId,
+                    original.TaskKey,
+                    original.Enabled,
+                    original.UpdatedAt));
+            }
         }
+        else
+        {
+            EnsureOriginalRowsUnchanged(preparation, currentCandidateRows);
+            foreach (var taskKey in preparation.CandidateTaskKeys)
+            {
+                var enabled = preparation.ResolvedStates[taskKey];
+                if (currentByKey.TryGetValue(taskKey, out var current))
+                {
+                    current.UpdateEnabled(enabled, preparation.UpdatedAt);
+                    repository.Update(current);
+                    continue;
+                }
+
+                repository.Add(PlcTaskBindingEntity.Create(
+                    preparation.NetworkDeviceId,
+                    taskKey,
+                    enabled,
+                    preparation.UpdatedAt));
+            }
+        }
+
+        await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public PlcTaskBindingValidationResult ValidateEnabledTasks(
@@ -333,6 +438,32 @@ public sealed class PlcTaskBindingService(
 
     private static string NormalizeDeviceModel(string? deviceModel)
         => string.IsNullOrWhiteSpace(deviceModel) ? "未配置" : deviceModel.Trim();
+
+    private static void EnsureOriginalRowsUnchanged(
+        PlcTaskBindingSavePreparation preparation,
+        IReadOnlyCollection<PlcTaskBindingEntity> currentRows)
+    {
+        var originals = preparation.OriginalRows.ToDictionary(
+            static row => row.TaskKey,
+            StringComparer.OrdinalIgnoreCase);
+        if (originals.Count != currentRows.Count)
+        {
+            throw new InvalidOperationException(
+                "PLC 任务绑定在校验与提交之间已变化，已拒绝覆盖并要求重新加载。");
+        }
+
+        foreach (var current in currentRows)
+        {
+            if (!originals.TryGetValue(current.TaskKey, out var original)
+                || original.Id != current.Id
+                || original.Enabled != current.Enabled
+                || original.UpdatedAt != current.UpdatedAt)
+            {
+                throw new InvalidOperationException(
+                    "PLC 任务绑定在校验与提交之间已变化，已拒绝覆盖并要求重新加载。");
+            }
+        }
+    }
 
     private sealed record TaskAvailability(
         bool CanRun,

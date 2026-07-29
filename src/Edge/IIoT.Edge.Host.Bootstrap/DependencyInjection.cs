@@ -10,6 +10,7 @@ using IIoT.Edge.Module.Contracts.Device;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
+using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Module.Contracts.Tasks;
 using IIoT.Edge.Module.Contracts.Time;
@@ -217,6 +218,8 @@ public static class DependencyInjection
         services.AddSingleton<IStartupAsyncDiagnosticValidator, StartupPlcConfigurationValidator>();
         services.AddSingleton<IStartupDiagnosticsReportBuilder, StartupDiagnosticsReportBuilder>();
         services.AddSingleton<IPlcRuntimeTaskBinder, PlcRuntimeTaskBinder>();
+        services.AddSingleton<IPlcTaskBindingRuntimeTransaction, PlcTaskBindingRuntimeTransaction>();
+        services.AddSingleton<IPlcTaskBindingTransactionService, PlcTaskBindingTransactionService>();
         services.AddSingleton<IPlcRuntimeApplyService, PlcRuntimeApplyService>();
         services.AddSingleton<IAppRuntimeStateCoordinator, AppRuntimeStateCoordinator>();
         services.AddSingleton<IAppLifecycleCoordinator, AppLifecycleManager>();

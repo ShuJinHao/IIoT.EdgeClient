@@ -96,7 +96,7 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
     }
 
     [Fact]
-    public async Task SaveCommand_WhenDeviceSelected_ShouldPersistOnlySelectedDevice()
+    public async Task SaveCommand_WhenDeviceSelected_ShouldUseOneTransactionForOnlySelectedDevice()
     {
         var selectionService = new DeviceSelectionService();
         selectionService.SelectDevice("PLC-A02");
@@ -105,28 +105,73 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
             CreateDevice(1, "PLC-A01"),
             CreateDevice(2, "PLC-A02")
         ]);
-        var runtimeApplyService = new FakePlcRuntimeApplyService();
-        var viewModel = CreateViewModel(service, selectionService, runtimeApplyService);
+        var transactionService = new FakePlcTaskBindingTransactionService();
+        var viewModel = CreateViewModel(service, selectionService, transactionService);
         await viewModel.OnActivatedAsync();
 
         Assert.True(viewModel.SaveCommand.CanExecute(null));
         viewModel.SaveCommand.Execute(null);
-        await service.WaitForSaveAsync();
-        await runtimeApplyService.WaitForApplyAsync();
+        await transactionService.WaitForSaveAndApplyAsync();
+        await service.WaitForReloadAfterSaveAsync();
         await viewModel.OnDeactivatedAsync();
 
-        Assert.Equal(2, service.LastSavedNetworkDeviceId);
-        Assert.Equal(2, runtimeApplyService.LastAppliedNetworkDeviceId);
-        Assert.Single(service.SaveCalls);
+        Assert.Equal(2, transactionService.LastNetworkDeviceId);
+        Assert.Equal("TestPlugin", transactionService.LastModuleId);
+        Assert.Equal("任务绑定已保存并已应用到当前 PLC。", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public async Task SaveCommand_WhenPlcIsOffline_ShouldTreatWaitingAsSuccessfulSave()
+    {
+        var selectionService = new DeviceSelectionService();
+        selectionService.SelectDevice("PLC-A01");
+        var service = new FakePlcTaskBindingService([CreateDevice(1, "PLC-A01")]);
+        var transactionService = new FakePlcTaskBindingTransactionService
+        {
+            ResultState = PlcTaskBindingSaveApplyState.WaitingForConnection
+        };
+        var viewModel = CreateViewModel(service, selectionService, transactionService);
+        await viewModel.OnActivatedAsync();
+
+        viewModel.SaveCommand.Execute(null);
+        await transactionService.WaitForSaveAndApplyAsync();
+        await service.WaitForReloadAfterSaveAsync();
+        await viewModel.OnDeactivatedAsync();
+
+        Assert.Equal("任务绑定已保存，等待 PLC。", viewModel.StatusMessage);
+        Assert.False(viewModel.HasError);
+    }
+
+    [Fact]
+    public async Task SaveCommand_WhenTransactionFails_ShouldReloadDatabaseTruthAndShowNoSuccess()
+    {
+        var selectionService = new DeviceSelectionService();
+        selectionService.SelectDevice("PLC-A01");
+        var service = new FakePlcTaskBindingService([CreateDevice(1, "PLC-A01")]);
+        var transactionService = new FakePlcTaskBindingTransactionService
+        {
+            Failure = new InvalidOperationException("runtime apply failed")
+        };
+        var viewModel = CreateViewModel(service, selectionService, transactionService);
+        await viewModel.OnActivatedAsync();
+
+        viewModel.SaveCommand.Execute(null);
+        await transactionService.WaitForSaveAndApplyAsync();
+        await service.WaitForReloadAfterSaveAsync();
+        await viewModel.OnDeactivatedAsync();
+
+        Assert.Equal(2, service.GetCalls);
+        Assert.True(viewModel.HasError);
+        Assert.DoesNotContain("已应用", viewModel.StatusMessage, StringComparison.Ordinal);
     }
 
     private static PlcTaskBindingViewModel CreateViewModel(
         IPlcTaskBindingService service,
         IDeviceSelectionService selectionService,
-        IPlcRuntimeApplyService? runtimeApplyService = null)
+        IPlcTaskBindingTransactionService? transactionService = null)
         => new TestPlcTaskBindingViewModel(
             service,
-            runtimeApplyService ?? new FakePlcRuntimeApplyService(),
+            transactionService ?? new FakePlcTaskBindingTransactionService(),
             new FakeClientPermissionService(),
             new FakeConfirmationService(),
             new TestAppLanguageService(),
@@ -159,7 +204,7 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
 
     private sealed class TestPlcTaskBindingViewModel(
         IPlcTaskBindingService bindingService,
-        IPlcRuntimeApplyService runtimeApplyService,
+        IPlcTaskBindingTransactionService transactionService,
         IClientPermissionService permissionService,
         IPlcTaskBindingConfirmationService confirmationService,
         TestAppLanguageService languageService,
@@ -170,7 +215,7 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
         string moduleId)
         : PlcTaskBindingViewModel(
             bindingService,
-            runtimeApplyService,
+            transactionService,
             permissionService,
             confirmationService,
             languageService,
@@ -186,16 +231,22 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
     private sealed class FakePlcTaskBindingService(
         IReadOnlyList<PlcTaskBindingDeviceDto> devices) : IPlcTaskBindingService
     {
-        private readonly TaskCompletionSource _saveCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _reloadCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public List<(int NetworkDeviceId, IReadOnlyDictionary<string, bool> States)> SaveCalls { get; } = [];
-
-        public int? LastSavedNetworkDeviceId => SaveCalls.LastOrDefault().NetworkDeviceId;
+        public int GetCalls { get; private set; }
 
         public Task<IReadOnlyList<PlcTaskBindingDeviceDto>> GetModuleDeviceBindingsAsync(
             string moduleId,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(devices);
+        {
+            GetCalls++;
+            if (GetCalls >= 2)
+            {
+                _reloadCompletion.TrySetResult();
+            }
+
+            return Task.FromResult(devices);
+        }
 
         public Task<IReadOnlySet<string>> GetEnabledTaskKeysAsync(
             int networkDeviceId,
@@ -205,17 +256,6 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
             CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlySet<string>>(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
-        public Task SaveDeviceBindingsAsync(
-            int networkDeviceId,
-            string moduleId,
-            IReadOnlyDictionary<string, bool> taskStates,
-            CancellationToken cancellationToken = default)
-        {
-            SaveCalls.Add((networkDeviceId, taskStates));
-            _saveCompletion.TrySetResult();
-            return Task.CompletedTask;
-        }
-
         public PlcTaskBindingValidationResult ValidateEnabledTasks(
             IReadOnlyCollection<TaskCandidate> candidates,
             IReadOnlySet<string> enabledTaskKeys,
@@ -223,38 +263,41 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
             string? deviceModel = null)
             => PlcTaskBindingValidationResult.Success();
 
-        public Task WaitForSaveAsync() => _saveCompletion.Task;
+        public Task WaitForReloadAfterSaveAsync() => _reloadCompletion.Task;
     }
 
-    private sealed class FakePlcRuntimeApplyService : IPlcRuntimeApplyService
+    private sealed class FakePlcTaskBindingTransactionService
+        : IPlcTaskBindingTransactionService
     {
-        private readonly TaskCompletionSource _applyCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public int? LastAppliedNetworkDeviceId { get; private set; }
+        public int? LastNetworkDeviceId { get; private set; }
 
-        public string? LastAppliedDeviceName { get; private set; }
+        public string? LastModuleId { get; private set; }
 
-        public Task ApplyDeviceRuntimeAsync(
+        public PlcTaskBindingSaveApplyState ResultState { get; init; }
+            = PlcTaskBindingSaveApplyState.Applied;
+
+        public Exception? Failure { get; init; }
+
+        public Task<PlcTaskBindingSaveApplyResult> SaveAndApplyAsync(
             int networkDeviceId,
-            string reason,
+            string moduleId,
+            IReadOnlyDictionary<string, bool> taskStates,
             CancellationToken cancellationToken = default)
         {
-            LastAppliedNetworkDeviceId = networkDeviceId;
-            _applyCompletion.TrySetResult();
-            return Task.CompletedTask;
+            LastNetworkDeviceId = networkDeviceId;
+            LastModuleId = moduleId;
+            _completion.TrySetResult();
+            return Failure is null
+                ? Task.FromResult(new PlcTaskBindingSaveApplyResult(ResultState, taskStates
+                    .Where(static state => state.Value)
+                    .Select(static state => state.Key)
+                    .ToArray()))
+                : Task.FromException<PlcTaskBindingSaveApplyResult>(Failure);
         }
 
-        public Task ApplyDeviceRuntimeAsync(
-            string deviceName,
-            string reason,
-            CancellationToken cancellationToken = default)
-        {
-            LastAppliedDeviceName = deviceName;
-            _applyCompletion.TrySetResult();
-            return Task.CompletedTask;
-        }
-
-        public Task WaitForApplyAsync() => _applyCompletion.Task;
+        public Task WaitForSaveAndApplyAsync() => _completion.Task;
     }
 
     private sealed class FakeClientPermissionService : IClientPermissionService

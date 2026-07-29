@@ -17,12 +17,6 @@ public interface IPlcTaskBindingService
         string? deviceModel = null,
         CancellationToken cancellationToken = default);
 
-    Task SaveDeviceBindingsAsync(
-        int networkDeviceId,
-        string moduleId,
-        IReadOnlyDictionary<string, bool> taskStates,
-        CancellationToken cancellationToken = default);
-
     PlcTaskBindingValidationResult ValidateEnabledTasks(
         IReadOnlyCollection<TaskCandidate> candidates,
         IReadOnlySet<string> enabledTaskKeys,
