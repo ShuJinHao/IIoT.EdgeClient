@@ -46,6 +46,8 @@ public sealed class PlcDeviceRuntimeHandle
 
     public required CancellationTokenSource CancellationTokenSource { get; init; }
 
+    internal TimeProvider TransitionTimeProvider { get; init; } = TimeProvider.System;
+
     public bool IsConnected => Volatile.Read(ref _connected) != 0;
 
     public IReadOnlyCollection<string> EnabledTaskKeys
@@ -421,7 +423,10 @@ public sealed class PlcDeviceRuntimeHandle
             {
                 firstCompletion = await Task
                     .WhenAny(run.Startup, execution)
-                    .WaitAsync(StartupTimeout, cancellationToken)
+                    .WaitAsync(
+                        StartupTimeout,
+                        TransitionTimeProvider,
+                        cancellationToken)
                     .ConfigureAwait(false);
             }
             catch (TimeoutException ex)
@@ -723,7 +728,10 @@ public sealed class PlcDeviceRuntimeHandle
             try
             {
                 await stopExecution
-                    .WaitAsync(StopTimeout, cancellationToken)
+                    .WaitAsync(
+                        StopTimeout,
+                        TransitionTimeProvider,
+                        cancellationToken)
                     .ConfigureAwait(false);
             }
             catch (TimeoutException ex)
@@ -755,7 +763,12 @@ public sealed class PlcDeviceRuntimeHandle
         {
             try
             {
-                await execution.WaitAsync(StopTimeout, cancellationToken).ConfigureAwait(false);
+                await execution
+                    .WaitAsync(
+                        StopTimeout,
+                        TransitionTimeProvider,
+                        cancellationToken)
+                    .ConfigureAwait(false);
             }
             catch (TimeoutException)
             {
@@ -821,7 +834,10 @@ public sealed class PlcDeviceRuntimeHandle
             try
             {
                 await stopExecution
-                    .WaitAsync(StopTimeout, cancellationToken)
+                    .WaitAsync(
+                        StopTimeout,
+                        TransitionTimeProvider,
+                        cancellationToken)
                     .ConfigureAwait(false);
             }
             catch (TimeoutException ex)
@@ -853,7 +869,12 @@ public sealed class PlcDeviceRuntimeHandle
         {
             try
             {
-                await execution.WaitAsync(StopTimeout, cancellationToken).ConfigureAwait(false);
+                await execution
+                    .WaitAsync(
+                        StopTimeout,
+                        TransitionTimeProvider,
+                        cancellationToken)
+                    .ConfigureAwait(false);
             }
             catch (TimeoutException)
             {

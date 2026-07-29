@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Module.Contracts.Logging;
@@ -7,6 +6,7 @@ using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Module.Contracts.Runtime;
 using IIoT.Edge.Module.Contracts.Tasks;
 using IIoT.Edge.Testing;
+using Microsoft.Extensions.Time.Testing;
 
 namespace IIoT.Edge.Runtime.WorkflowTests;
 
@@ -248,9 +248,11 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
     {
         var stalledStop = new StalledStopBusinessTask("Task.MG1");
         var healthy = new ControlledBusinessTask("Task.MG2");
+        var timeProvider = new ObservableFakeTimeProvider();
         var runtime = CreateRuntime(
             new ControlledLoopTask("Connection"),
-            new ControlledLoopTask("PeriodicRead"));
+            new ControlledLoopTask("PeriodicRead"),
+            timeProvider: timeProvider);
         await runtime.ApplyTaskPlanAsync(
             CreatePlan(
                 runtime.DeviceName,
@@ -266,17 +268,17 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             entry => entry.Level == "Error"
                      && entry.Message.Contains("停止钩子超过 5 秒", StringComparison.Ordinal),
             TestContext.Current.CancellationToken);
-        var elapsed = Stopwatch.StartNew();
 
         runtime.ConnectionSignal.Report(false);
+        await timeProvider.ScheduledTimeouts.WaitForAtLeastAsync(
+            1,
+            TestContext.Current.CancellationToken);
+        timeProvider.Advance(TimeSpan.FromSeconds(5));
         await Task.WhenAll(
             boundedFailure,
             healthy.Stops.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
-        elapsed.Stop();
 
-        Assert.True(
-            elapsed.Elapsed < TimeSpan.FromSeconds(8),
-            $"停止钩子未在硬上限附近返回：{elapsed.Elapsed}。");
+        Assert.Equal(1, stalledStop.Stops.Count);
         Assert.Contains(
             stalledStop.StopCompletion,
             runtime.GetRunningHandlesSnapshot());
@@ -291,9 +293,11 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
     {
         var stalledStartup = new StalledStartupBusinessTask("Task.MG1");
         var healthy = new ControlledBusinessTask("Task.MG2");
+        var timeProvider = new ObservableFakeTimeProvider();
         var runtime = CreateRuntime(
             new ControlledLoopTask("Connection"),
-            new ControlledLoopTask("PeriodicRead"));
+            new ControlledLoopTask("PeriodicRead"),
+            timeProvider: timeProvider);
         await runtime.ApplyTaskPlanAsync(
             CreatePlan(
                 runtime.DeviceName,
@@ -304,18 +308,17 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             entry => entry.Level == "Error"
                      && entry.Message.Contains("启动握手超过 5 秒", StringComparison.Ordinal),
             TestContext.Current.CancellationToken);
-        var elapsed = Stopwatch.StartNew();
 
         runtime.Start();
         runtime.ConnectionSignal.Report(true);
+        await timeProvider.ScheduledTimeouts.WaitForAtLeastAsync(
+            1,
+            TestContext.Current.CancellationToken);
+        timeProvider.Advance(TimeSpan.FromSeconds(5));
         await Task.WhenAll(
             boundedFailure,
             healthy.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
-        elapsed.Stop();
 
-        Assert.True(
-            elapsed.Elapsed < TimeSpan.FromSeconds(8),
-            $"启动握手未在硬上限附近返回：{elapsed.Elapsed}。");
         Assert.Equal(1, stalledStartup.Starts.Count);
         Assert.Equal(1, stalledStartup.Stops.Count);
         Assert.Equal(1, healthy.Starts.Count);
@@ -596,7 +599,8 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         ControlledLoopTask connection,
         ControlledLoopTask periodicRead,
         string deviceName = "PLC-A",
-        int deviceId = 1)
+        int deviceId = 1,
+        TimeProvider? timeProvider = null)
     {
         var logger = new ConcurrentLogService();
         return new TestPlcDeviceRuntimeHandle(
@@ -617,7 +621,8 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
                 ConnectionSignal = new PlcRuntimeConnectionSignal(),
                 Logger = logger,
                 StatusStore = new PlcConnectionStatusStore(),
-                CancellationTokenSource = new CancellationTokenSource()
+                CancellationTokenSource = new CancellationTokenSource(),
+                TransitionTimeProvider = timeProvider ?? TimeProvider.System
             });
     }
 
@@ -823,6 +828,8 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
 
         public AsyncCounter Starts { get; } = new();
 
+        public AsyncCounter Stops { get; } = new();
+
         public Task StopCompletion => _stopCompletion.Task;
 
         public Task StartAsync(CancellationToken ct)
@@ -837,7 +844,10 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         }
 
         public Task StopAsync(CancellationToken ct)
-            => _stopCompletion.Task;
+        {
+            Stops.Increment();
+            return _stopCompletion.Task;
+        }
 
         public void ReleaseStop()
             => _stopCompletion.TrySetResult();
@@ -948,6 +958,39 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
                 return completion.Task.WaitAsync(cancellationToken);
             }
         }
+    }
+
+    private sealed class ObservableFakeTimeProvider : TimeProvider
+    {
+        private readonly FakeTimeProvider _inner = new();
+
+        public AsyncCounter ScheduledTimeouts { get; } = new();
+
+        public override DateTimeOffset GetUtcNow()
+            => _inner.GetUtcNow();
+
+        public override long GetTimestamp()
+            => _inner.GetTimestamp();
+
+        public override TimeZoneInfo LocalTimeZone
+            => _inner.LocalTimeZone;
+
+        public override long TimestampFrequency
+            => _inner.TimestampFrequency;
+
+        public override ITimer CreateTimer(
+            TimerCallback callback,
+            object? state,
+            TimeSpan dueTime,
+            TimeSpan period)
+        {
+            var timer = _inner.CreateTimer(callback, state, dueTime, period);
+            ScheduledTimeouts.Increment();
+            return timer;
+        }
+
+        public void Advance(TimeSpan delta)
+            => _inner.Advance(delta);
     }
 
     private sealed class ConcurrentLogService : ILogService
