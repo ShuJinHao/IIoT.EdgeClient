@@ -549,17 +549,23 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         var runtime = CreateRuntime(
             new ControlledLoopTask("Connection"),
             new ControlledLoopTask("PeriodicRead"));
+        var plan = CreatePlan(
+            runtime,
+            ("Task.MG1", (_, _) => faulting),
+            ("Task.MG2", (_, _) => healthy));
         await runtime.ApplyTaskPlanAsync(
-            CreatePlan(
-                runtime,
-                ("Task.MG1", (_, _) => faulting),
-                ("Task.MG2", (_, _) => healthy)),
+            plan,
             TestContext.Current.CancellationToken);
         runtime.Start();
         runtime.ConnectionSignal.Report(true);
         await Task.WhenAll(
             faulting.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
             healthy.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+        // The unchanged apply waits for the connection transition gate, so fault injection
+        // cannot race the startup handshake and turn an execution fault into a startup fault.
+        await runtime.ApplyTaskPlanAsync(
+            plan,
+            TestContext.Current.CancellationToken);
         var observed = runtime.WaitForLogAsync(
             entry => entry.Level == "Error"
                      && entry.Message.Contains("Task.MG1", StringComparison.Ordinal)
@@ -587,13 +593,18 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         var runtime = CreateRuntime(
             new ControlledLoopTask("Connection"),
             new ControlledLoopTask("PeriodicRead"));
+        var originalPlan = CreatePlan(runtime, ("Task.MG1", (_, _) => faulting));
         await runtime.ApplyTaskPlanAsync(
-            CreatePlan(runtime, ("Task.MG1", (_, _) => faulting)),
+            originalPlan,
             TestContext.Current.CancellationToken);
         runtime.Start();
         runtime.ConnectionSignal.Report(true);
         await faulting.Starts.WaitForAtLeastAsync(
             1,
+            TestContext.Current.CancellationToken);
+        // See the companion execution-fault test above: this is a deterministic startup barrier.
+        await runtime.ApplyTaskPlanAsync(
+            originalPlan,
             TestContext.Current.CancellationToken);
         var faultObserved = runtime.WaitForLogAsync(
             entry => entry.Level == "Error"
