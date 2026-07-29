@@ -218,9 +218,6 @@ public static class DependencyInjection
         services.AddSingleton<IStartupAsyncDiagnosticValidator, StartupPlcConfigurationValidator>();
         services.AddSingleton<IStartupDiagnosticsReportBuilder, StartupDiagnosticsReportBuilder>();
         services.AddSingleton<IPlcRuntimeTaskBinder, PlcRuntimeTaskBinder>();
-        services.AddSingleton<
-            IPlcRuntimeConfigurationMutationGate,
-            PlcRuntimeConfigurationMutationGate>();
         services.AddSingleton<IPlcTaskBindingRuntimeTransaction, PlcTaskBindingRuntimeTransaction>();
         services.AddSingleton<IPlcTaskBindingTransactionService, PlcTaskBindingTransactionService>();
         services.AddSingleton<IPlcRuntimeApplyService, PlcRuntimeApplyService>();

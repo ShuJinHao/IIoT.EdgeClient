@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Shell.Core;

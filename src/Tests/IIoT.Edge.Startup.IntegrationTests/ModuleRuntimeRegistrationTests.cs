@@ -1108,12 +1108,10 @@ public sealed class ModuleRuntimeRegistrationTests
                 x => x.DeviceType == DeviceType.PLC,
                 TestContext.Current.CancellationToken));
         var binder = new SpyPlcRuntimeTaskBinder();
-        var mutationGate = new PlcRuntimeConfigurationMutationGate();
         var service = new PlcRuntimeApplyService(
             networkDevices,
             binder,
             harness.PlcManager,
-            mutationGate,
             harness.Logger);
 
         var bypass = await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -1126,20 +1124,10 @@ public sealed class ModuleRuntimeRegistrationTests
         Assert.Empty(binder.DeviceCalls);
         Assert.Empty(harness.PlcManager.ReloadedDeviceNames);
 
-        using var bindingMutation = await mutationGate.EnterAsync(
-            device.Id,
-            TestContext.Current.CancellationToken);
-        var hardwareApply = service.ApplyDeviceRuntimeAsync(
+        await service.ApplyDeviceRuntimeAsync(
             device.Id,
             PlcRuntimeApplyReasons.HardwareOrIoMappingSave,
             TestContext.Current.CancellationToken);
-
-        Assert.False(hardwareApply.IsCompleted);
-        Assert.Empty(binder.DeviceCalls);
-        Assert.Empty(harness.PlcManager.ReloadedDeviceNames);
-
-        bindingMutation.Dispose();
-        await hardwareApply;
 
         Assert.Collection(
             binder.DeviceCalls,

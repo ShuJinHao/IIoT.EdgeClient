@@ -2,6 +2,7 @@ using IIoT.Edge.Module.Contracts.Auth;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Module.Contracts.Plc.Store;
+using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Application.Auth;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Features.Config.ParamView;
@@ -194,7 +195,8 @@ public sealed class ConfigPermissionGuardBehaviorTests
                 {
                     [1] = "PLC-A",
                     [2] = "PLC-B"
-                }));
+                }),
+            new PlcRuntimeConfigurationMutationGate());
 
         var result = await handler.Handle(
             new SaveHardwareConfigCommand(
@@ -217,6 +219,7 @@ public sealed class ConfigPermissionGuardBehaviorTests
             plcManager.ReloadedDeviceNames);
         Assert.Equal(
             [
+                typeof(GetAllNetworkDevicesQuery),
                 typeof(GetAllNetworkDevicesQuery),
                 typeof(GetIoMappingsByDeviceQuery)
             ],

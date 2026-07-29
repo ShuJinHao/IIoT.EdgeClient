@@ -77,6 +77,9 @@ public static class DependencyInjection
         services.AddTransient<IHardwareConfigCrudService, HardwareConfigCrudService>();
         services.AddTransient<IPlcTaskBindingService, PlcTaskBindingService>();
         services.AddTransient<IPlcTaskBindingPersistenceTransaction, PlcTaskBindingService>();
+        services.AddSingleton<
+            IPlcRuntimeConfigurationMutationGate,
+            PlcRuntimeConfigurationMutationGate>();
         services.AddSingleton<IPlcTaskBindingTransactionService, UnavailablePlcTaskBindingTransactionService>();
         services.AddSingleton<IPlcRuntimeApplyService, NoopPlcRuntimeApplyService>();
         services.AddTransient<IRecipeViewCrudService, RecipeViewCrudService>();

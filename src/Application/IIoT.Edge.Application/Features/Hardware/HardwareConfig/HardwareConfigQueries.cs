@@ -141,7 +141,8 @@ public class SaveHardwareConfigHandler(
     IEdgeUnitOfWorkFactory unitOfWorkFactory,
     IClientPermissionService permissionService,
     IPlcConnectionManager plcConnectionManager,
-    IPlcRuntimeApplyService plcRuntimeApplyService)
+    IPlcRuntimeApplyService plcRuntimeApplyService,
+    IPlcRuntimeConfigurationMutationGate runtimeConfigurationMutationGate)
     : IRequestHandler<SaveHardwareConfigCommand, CrudOperationResult>
 {
     public async Task<CrudOperationResult> Handle(SaveHardwareConfigCommand request, CancellationToken ct)
@@ -151,6 +152,26 @@ public class SaveHardwareConfigHandler(
             return CrudOperationResult.Failure("当前用户没有硬件配置权限。");
         }
 
+        var discoveredNetworkDevices = await LoadExistingNetworkDevicesAsync(ct);
+        var affectedPlcDeviceIds = discoveredNetworkDevices
+            .Where(static device => device.DeviceType == DeviceType.PLC && device.Id > 0)
+            .Select(static device => device.Id)
+            .Concat(request.NetworkDevices
+                .Where(static device => device.DeviceType == DeviceType.PLC && device.Id > 0)
+                .Select(static device => device.Id))
+            .Distinct()
+            .OrderBy(static deviceId => deviceId)
+            .ToArray();
+
+        using var mutationScope = await EnterMutationGatesAsync(affectedPlcDeviceIds, ct)
+            .ConfigureAwait(false);
+        return await SaveWhileMutationGatesHeldAsync(request, ct).ConfigureAwait(false);
+    }
+
+    private async Task<CrudOperationResult> SaveWhileMutationGatesHeldAsync(
+        SaveHardwareConfigCommand request,
+        CancellationToken ct)
+    {
         var existingNetworkDevices = await LoadExistingNetworkDevicesAsync(ct);
         var existingIoMappings = await LoadExistingIoMappingsAsync(request.SelectedNetworkDeviceId, ct);
 
@@ -308,6 +329,52 @@ public class SaveHardwareConfigHandler(
         return runtimeIssues.Count == 0
             ? CrudOperationResult.Success("硬件配置已保存。")
             : CrudOperationResult.Failure($"配置已保存，但 {string.Join("；", runtimeIssues)}");
+    }
+
+    private async ValueTask<IDisposable> EnterMutationGatesAsync(
+        IReadOnlyCollection<int> networkDeviceIds,
+        CancellationToken ct)
+    {
+        var leases = new List<IDisposable>(networkDeviceIds.Count);
+        try
+        {
+            foreach (var networkDeviceId in networkDeviceIds)
+            {
+                leases.Add(
+                    await runtimeConfigurationMutationGate
+                        .EnterAsync(networkDeviceId, ct)
+                        .ConfigureAwait(false));
+            }
+
+            return new CompositeMutationLease(leases);
+        }
+        catch
+        {
+            DisposeLeasesInReverseOrder(leases);
+            throw;
+        }
+    }
+
+    private static void DisposeLeasesInReverseOrder(IReadOnlyList<IDisposable> leases)
+    {
+        for (var index = leases.Count - 1; index >= 0; index--)
+        {
+            leases[index].Dispose();
+        }
+    }
+
+    private sealed class CompositeMutationLease(IReadOnlyList<IDisposable> leases)
+        : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 0)
+            {
+                DisposeLeasesInReverseOrder(leases);
+            }
+        }
     }
 
     private async Task<List<NetworkDeviceEntity>> LoadExistingNetworkDevicesAsync(CancellationToken ct)

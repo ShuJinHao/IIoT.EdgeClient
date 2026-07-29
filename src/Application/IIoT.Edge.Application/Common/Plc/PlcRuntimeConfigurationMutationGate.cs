@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace IIoT.Edge.Shell.Core;
+namespace IIoT.Edge.Application.Common.Plc;
 
 public interface IPlcRuntimeConfigurationMutationGate
 {
