@@ -269,10 +269,37 @@ public sealed partial class ProjectRegistryArchitectureTests
             .Where(path => File.ReadAllText(path)
                 .Contains(".ApplyDeviceRuntimeAsync(", StringComparison.Ordinal))
             .Select(path => Normalize(Path.GetRelativePath(root, path)))
+            .Order(StringComparer.Ordinal)
             .ToArray();
 
         Assert.Equal(
             [
+                "src/Application/IIoT.Edge.Application/Features/Hardware/HardwareConfig/HardwareConfigCrudService.cs",
+                "src/Application/IIoT.Edge.Application/Features/Hardware/HardwareConfig/HardwareConfigQueries.cs"
+            ],
+            callers);
+    }
+
+    [Fact]
+    public void PlcIoMappingMutation_ProductionInvocation_ShouldRemainOwnedByGuardedHardwareTransactions()
+    {
+        var root = FindRepositoryRoot();
+        var callers = EnumerateSourceFiles(Path.Combine(root, "src"), "*.cs")
+            .Where(path => !path.Contains(
+                $"{Path.DirectorySeparatorChar}Tests{Path.DirectorySeparatorChar}",
+                StringComparison.OrdinalIgnoreCase))
+            .Where(path => !path.Contains(
+                $"{Path.DirectorySeparatorChar}Testing{Path.DirectorySeparatorChar}",
+                StringComparison.OrdinalIgnoreCase))
+            .Where(path => File.ReadAllText(path)
+                .Contains("new SaveIoMappingsCommand(", StringComparison.Ordinal))
+            .Select(path => Normalize(Path.GetRelativePath(root, path)))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(
+            [
+                "src/Application/IIoT.Edge.Application/Features/Hardware/HardwareConfig/HardwareConfigCrudService.cs",
                 "src/Application/IIoT.Edge.Application/Features/Hardware/HardwareConfig/HardwareConfigQueries.cs"
             ],
             callers);
