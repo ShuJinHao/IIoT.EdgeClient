@@ -917,8 +917,9 @@ public sealed class ModuleRuntimeRegistrationTests
                         typeof(PlcTaskBindingTransactionService),
                         transactionRegistration.ImplementationType);
                     var mutationGateRegistration = Assert.Single(
-                        services.Where(descriptor => descriptor.ServiceType
-                            == typeof(IPlcRuntimeConfigurationMutationGate)));
+                        services,
+                        descriptor => descriptor.ServiceType
+                            == typeof(IPlcRuntimeConfigurationMutationGate));
                     Assert.Equal(
                         typeof(PlcRuntimeConfigurationMutationGate),
                         mutationGateRegistration.ImplementationType);
