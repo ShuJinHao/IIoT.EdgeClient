@@ -219,9 +219,9 @@ public sealed class PlcLifecycleCoordinator
         await _lifecycleGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            foreach (var runtime in _runtimeRegistry.GetRuntimesSnapshot())
+            foreach (var deviceId in _runtimeRegistry.GetTrackedDeviceIdsSnapshot())
             {
-                await CleanupRegisteredRuntimeAsync(runtime).ConfigureAwait(false);
+                await StopDeviceCoreAsync(deviceId, CancellationToken.None).ConfigureAwait(false);
             }
         }
         finally
@@ -342,6 +342,10 @@ public sealed class PlcLifecycleCoordinator
 
     private async Task<bool> StopDeviceCoreAsync(int deviceId, CancellationToken ct)
     {
+        using var mutation = await _runtimeRegistry
+            .EnterRuntimeMutationAsync(deviceId, ct)
+            .ConfigureAwait(false);
+
         var runtime = _runtimeRegistry.GetRuntime(deviceId);
         if (runtime is not null)
         {

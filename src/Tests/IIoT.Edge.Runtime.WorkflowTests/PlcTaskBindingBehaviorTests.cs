@@ -460,6 +460,66 @@ public sealed class PlcTaskBindingBehaviorTests
     }
 
     [Fact]
+    public async Task TaskPlanApply_DuringRuntimeCleanup_ShouldWaitAndRegisterForTheNextRuntime()
+    {
+        var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
+        var ioMappings = new InMemoryRepository<IoMappingEntity>();
+        var device = networkDevices.Add(CreateLifecyclePlc("PLC-A", 6151));
+        var contextStore = new FakeProductionContextStore();
+        var logger = new FakeLogService();
+        var runtimeRegistry = new PlcRuntimeRegistry();
+        var statusStore = new PlcConnectionStatusStore();
+        var controlledService = new ControlledDisposePlcService();
+        var runtime = CreateInertRuntime(
+            device.Id,
+            device.DeviceName,
+            controlledService,
+            logger,
+            statusStore);
+        Assert.True(runtimeRegistry.TryAddRuntime(runtime));
+        var coordinator = CreateLifecycleCoordinator(
+            networkDevices,
+            ioMappings,
+            new TrackingPlcServiceFactory(),
+            contextStore,
+            logger,
+            runtimeRegistry,
+            statusStore);
+        var controller = new PlcRuntimeTaskController(runtimeRegistry);
+        var replacementPlan = new PlcRuntimeTaskPlan(
+            device.Id,
+            device.DeviceName,
+            [
+                new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
+                    "Task.MG1",
+                    (_, _) => new NoopPlcTask("Task.MG1"))
+            ]);
+
+        var stop = coordinator.StopDeviceAsync(
+            device.Id,
+            TestContext.Current.CancellationToken);
+        await controlledService.DisposeStarted.Task.WaitAsync(
+            TestContext.Current.CancellationToken);
+        var apply = controller.RegisterAndApplyAsync(
+            replacementPlan,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(apply.IsCompleted);
+
+        controlledService.AllowDispose.TrySetResult();
+        await stop.WaitAsync(TestContext.Current.CancellationToken);
+        var result = await apply.WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(PlcRuntimeTaskApplyState.WaitingForRuntime, result.State);
+        Assert.Null(runtimeRegistry.GetRuntime(device.Id));
+        Assert.Equal(
+            ["Task.MG1"],
+            runtimeRegistry.GetTaskPlan(device.Id, device.DeviceName).TaskKeys);
+
+        await coordinator.DisposeAsync();
+    }
+
+    [Fact]
     public async Task PlcLifecycleCoordinator_WhenMultiplePlcConnectionsHang_ShouldNotWaitForConnections()
     {
         var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
