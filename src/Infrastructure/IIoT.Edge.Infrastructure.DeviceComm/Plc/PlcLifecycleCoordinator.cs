@@ -61,18 +61,26 @@ public sealed class PlcLifecycleCoordinator
         }
     }
 
-    public async Task ReloadAsync(string deviceName, CancellationToken ct = default)
+    public async Task ReloadDeviceAsync(int networkDeviceId, CancellationToken ct = default)
     {
+        if (networkDeviceId <= 0)
+        {
+            throw new ArgumentException(
+                "网络设备 Id 必须大于 0。",
+                nameof(networkDeviceId));
+        }
+
         await _lifecycleGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             ThrowIfDisposed();
 
-            var device = (await _networkDevices.GetListAsync(x => x.DeviceName == deviceName, ct).ConfigureAwait(false))
-                .FirstOrDefault();
+            var device = await _networkDevices
+                .GetByIdAsync(networkDeviceId, ct)
+                .ConfigureAwait(false);
             if (device is null)
             {
-                _logger.Warn($"[{deviceName}] 重载跳过：未找到设备。");
+                _logger.Warn($"[DeviceId={networkDeviceId}] 重载跳过：未找到设备。");
                 return;
             }
 

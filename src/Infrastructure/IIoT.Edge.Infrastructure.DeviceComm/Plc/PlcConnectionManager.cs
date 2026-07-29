@@ -31,7 +31,9 @@ public sealed class PlcConnectionManager : IPlcConnectionManager
         => _lifecycleCoordinator.StopAsync(ct);
 
     public Task ReloadAsync(string deviceName, CancellationToken ct = default)
-        => _lifecycleCoordinator.ReloadAsync(deviceName, ct);
+        => Task.FromException(
+            new NotSupportedException(
+                "按 DeviceName 重载 PLC 的入口已停用；配置变更必须使用稳定 NetworkDeviceId。"));
 
     public Task StopDeviceAsync(int networkDeviceId, CancellationToken ct = default)
         => _lifecycleCoordinator.StopDeviceAsync(networkDeviceId, ct);

@@ -1108,10 +1108,11 @@ public sealed class ModuleRuntimeRegistrationTests
                 x => x.DeviceType == DeviceType.PLC,
                 TestContext.Current.CancellationToken));
         var binder = new SpyPlcRuntimeTaskBinder();
+        var reloader = new SpyPlcRuntimeDeviceReloader();
         var service = new PlcRuntimeApplyService(
             networkDevices,
             binder,
-            harness.PlcManager,
+            reloader,
             harness.Logger);
 
         var bypass = await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -1122,7 +1123,7 @@ public sealed class ModuleRuntimeRegistrationTests
 
         Assert.Contains("一体化事务命令", bypass.Message, StringComparison.Ordinal);
         Assert.Empty(binder.DeviceCalls);
-        Assert.Empty(harness.PlcManager.ReloadedDeviceNames);
+        Assert.Empty(reloader.ReloadedDeviceIds);
 
         await service.ApplyDeviceRuntimeAsync(
             device.Id,
@@ -1136,7 +1137,7 @@ public sealed class ModuleRuntimeRegistrationTests
                 Assert.Equal(device.Id, call.NetworkDeviceId);
                 Assert.False(call.ApplyToRunningDevice);
             });
-        Assert.Equal([device.DeviceName], harness.PlcManager.ReloadedDeviceNames);
+        Assert.Equal([device.Id], reloader.ReloadedDeviceIds);
     }
 
     private static IConfiguration CreateConfiguration(
@@ -1720,6 +1721,19 @@ public sealed class ModuleRuntimeRegistrationTests
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class SpyPlcRuntimeDeviceReloader : IPlcRuntimeDeviceReloader
+    {
+        public List<int> ReloadedDeviceIds { get; } = [];
+
+        public Task ReloadDeviceAsync(
+            int networkDeviceId,
+            CancellationToken cancellationToken = default)
+        {
+            ReloadedDeviceIds.Add(networkDeviceId);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class SpyPlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
