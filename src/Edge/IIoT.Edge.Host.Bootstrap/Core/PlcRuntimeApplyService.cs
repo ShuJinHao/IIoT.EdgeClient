@@ -64,22 +64,8 @@ public sealed class PlcRuntimeApplyService(
                 PlcRuntimeApplyReasons.TaskBindingSave,
                 StringComparison.Ordinal))
         {
-            var result = await runtimeTaskBinder
-                .BindDeviceAsync(
-                    device.Id,
-                    applyToRunningDevice: true,
-                    cancellationToken: cancellationToken)
-                .ConfigureAwait(false);
-            var stateText = result.State switch
-            {
-                PlcRuntimeTaskApplyState.Applied => "已按 TaskKey 增量应用",
-                PlcRuntimeTaskApplyState.WaitingForConnection => "已保存，等待 PLC 连接后应用",
-                PlcRuntimeTaskApplyState.WaitingForRuntime => "已保存，等待 PLC runtime 启动后应用",
-                _ => throw new ArgumentOutOfRangeException(nameof(result.State))
-            };
-            logger.Info(
-                $"[{device.DeviceName}] PLC 任务绑定{stateText}：{string.Join("、", result.EnabledTaskKeys)}。");
-            return;
+            throw new InvalidOperationException(
+                "PLC 任务绑定禁止通过独立运行时应用入口执行；必须使用 SQLite 与 TaskKey 增量一体化事务命令。");
         }
 
         await runtimeTaskBinder

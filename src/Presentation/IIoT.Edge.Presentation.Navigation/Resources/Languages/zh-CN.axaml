@@ -763,6 +763,7 @@
     <sys:String x:Key="Navigation_PlcTaskBinding_SelectDeviceFirst">请先选择 PLC 设备。</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_SaveCanceled">已取消保存。</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_SaveSuccess">任务绑定已保存并已应用到当前 PLC。</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_SaveWaitingForPlc">任务绑定已保存，等待 PLC。</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_SaveFailed">保存 PLC 任务绑定失败。</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_NoDevices">当前模块暂无 PLC 设备。</sys:String>
     <sys:String x:Key="Navigation_PlcTaskBinding_NoTasks">当前 PLC 暂无可绑定任务。</sys:String>

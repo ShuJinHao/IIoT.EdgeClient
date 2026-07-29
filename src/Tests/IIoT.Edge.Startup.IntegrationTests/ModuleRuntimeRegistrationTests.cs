@@ -910,6 +910,12 @@ public sealed class ModuleRuntimeRegistrationTests
                     Assert.Contains(
                         viewRegistry.GetAllMenus(),
                         menu => string.Equals(menu.ViewId, CoreViewIds.Diagnostics, StringComparison.Ordinal));
+                    var transactionRegistration = services.Last(
+                        descriptor => descriptor.ServiceType
+                            == typeof(IPlcTaskBindingTransactionService));
+                    Assert.Equal(
+                        typeof(PlcTaskBindingTransactionService),
+                        transactionRegistration.ImplementationType);
                 });
         }
         finally
@@ -1082,7 +1088,7 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
-    public async Task PlcRuntimeApplyService_ShouldUseTaskDeltaForBindingsAndReloadOnlyHardwareChanges()
+    public async Task PlcRuntimeApplyService_ShouldRejectBindingBypassAndReloadOnlyHardwareChanges()
     {
         await using var harness = await AppLifecycleHarness.CreateAsync(
             enabledModules: ["TestPlugin"],
@@ -1100,18 +1106,14 @@ public sealed class ModuleRuntimeRegistrationTests
             harness.PlcManager,
             harness.Logger);
 
-        await service.ApplyDeviceRuntimeAsync(
-            device.Id,
-            PlcRuntimeApplyReasons.TaskBindingSave,
-            TestContext.Current.CancellationToken);
+        var bypass = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.ApplyDeviceRuntimeAsync(
+                device.Id,
+                PlcRuntimeApplyReasons.TaskBindingSave,
+                TestContext.Current.CancellationToken));
 
-        Assert.Collection(
-            binder.DeviceCalls,
-            call =>
-            {
-                Assert.Equal(device.Id, call.NetworkDeviceId);
-                Assert.True(call.ApplyToRunningDevice);
-            });
+        Assert.Contains("一体化事务命令", bypass.Message, StringComparison.Ordinal);
+        Assert.Empty(binder.DeviceCalls);
         Assert.Empty(harness.PlcManager.ReloadedDeviceNames);
 
         await service.ApplyDeviceRuntimeAsync(
@@ -1121,7 +1123,6 @@ public sealed class ModuleRuntimeRegistrationTests
 
         Assert.Collection(
             binder.DeviceCalls,
-            call => Assert.True(call.ApplyToRunningDevice),
             call =>
             {
                 Assert.Equal(device.Id, call.NetworkDeviceId);
@@ -1407,10 +1408,14 @@ public sealed class ModuleRuntimeRegistrationTests
             int networkDeviceId,
             string moduleId,
             IReadOnlyDictionary<string, bool> taskStates)
-            => await _serviceProvider
-                .GetRequiredService<IPlcTaskBindingService>()
-                .SaveDeviceBindingsAsync(networkDeviceId, moduleId, taskStates)
+        {
+            var persistence = _serviceProvider
+                .GetRequiredService<IPlcTaskBindingPersistenceTransaction>();
+            var preparation = await persistence
+                .PrepareAsync(networkDeviceId, moduleId, taskStates)
                 .ConfigureAwait(false);
+            await persistence.CommitAsync(preparation).ConfigureAwait(false);
+        }
 
         public static async Task<AppLifecycleHarness> CreateAsync(
             string[] enabledModules,
@@ -1479,6 +1484,7 @@ public sealed class ModuleRuntimeRegistrationTests
             services.AddSingleton<IDataPipelineService, SpyDataPipelineService>();
             services.AddSingleton<IProductionContextSignalBindingStore, ProductionContextSignalBindingStore>();
             services.AddTransient<IPlcTaskBindingService, PlcTaskBindingService>();
+            services.AddTransient<IPlcTaskBindingPersistenceTransaction, PlcTaskBindingService>();
             if (!string.IsNullOrWhiteSpace(unreachableServiceName))
             {
                 services.AddSingleton<IManagedBackgroundService>(new DelegatingBackgroundService(

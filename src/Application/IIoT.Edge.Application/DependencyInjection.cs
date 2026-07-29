@@ -76,6 +76,8 @@ public static class DependencyInjection
         services.AddTransient<IIoViewQueryFacade, IoViewQueryFacade>();
         services.AddTransient<IHardwareConfigCrudService, HardwareConfigCrudService>();
         services.AddTransient<IPlcTaskBindingService, PlcTaskBindingService>();
+        services.AddTransient<IPlcTaskBindingPersistenceTransaction, PlcTaskBindingService>();
+        services.AddSingleton<IPlcTaskBindingTransactionService, UnavailablePlcTaskBindingTransactionService>();
         services.AddSingleton<IPlcRuntimeApplyService, NoopPlcRuntimeApplyService>();
         services.AddTransient<IRecipeViewCrudService, RecipeViewCrudService>();
         services.AddTransient<ICapacityQueryFacade, CapacityQueryFacade>();

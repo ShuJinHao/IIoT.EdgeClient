@@ -193,14 +193,15 @@ public sealed class PlcTaskBindingBehaviorTests
     }
 
     [Fact]
-    public async Task SaveDeviceBindingsAsync_WhenHeartbeatDisabled_ShouldPersistRowsAndWriteWarning()
+    public async Task PrepareAndCommit_WhenHeartbeatDisabled_ShouldPersistCandidateRows()
     {
         var harness = CreateService(defaultEnableAllTasks: true);
         var device = NetworkDeviceEntity.Create("PLC-A", DeviceType.PLC, "127.0.0.1", 102);
         device.UpdateDeviceModel(PlcType.S7.ToString());
         harness.NetworkDevices.Add(device);
 
-        await harness.Service.SaveDeviceBindingsAsync(
+        await SaveBindingsForTestAsync(
+            harness.Service,
             device.Id,
             "TestModule",
             new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
@@ -213,19 +214,24 @@ public sealed class PlcTaskBindingBehaviorTests
         Assert.Equal(2, harness.Bindings.Items.Count);
         Assert.Contains(harness.Bindings.Items, static x => x.TaskKey == "Task.A" && !x.Enabled);
         Assert.Contains(harness.Bindings.Items, static x => x.TaskKey == "Task.B" && x.Enabled);
-        Assert.Contains(harness.Logger.Warnings, static message => message.Contains("心跳", StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task SaveDeviceBindingsAsync_WhenEnabledTaskMissingIo_ShouldFail()
+    public async Task PrepareAndCommit_ShouldPreserveRowsOutsideCurrentModuleCandidates()
     {
-        var harness = CreateService(defaultEnableAllTasks: false, seedIoMappings: false);
-        var device = NetworkDeviceEntity.Create("PLC-A", DeviceType.PLC, "127.0.0.1", 102);
+        var harness = CreateService(defaultEnableAllTasks: true);
+        var device = harness.NetworkDevices.Add(
+            NetworkDeviceEntity.Create("PLC-A", DeviceType.PLC, "127.0.0.1", 102));
         device.UpdateDeviceModel(PlcType.S7.ToString());
-        harness.NetworkDevices.Add(device);
-        AddTestIoMappings(harness.IoMappings, device.Id, includeBusinessSignal: false);
+        var unrelatedUpdatedAt = DateTimeOffset.UnixEpoch.AddDays(1);
+        var unrelated = harness.Bindings.Add(PlcTaskBindingEntity.Create(
+            device.Id,
+            "OtherModule.Task",
+            enabled: true,
+            unrelatedUpdatedAt));
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Service.SaveDeviceBindingsAsync(
+        await SaveBindingsForTestAsync(
+            harness.Service,
             device.Id,
             "TestModule",
             new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
@@ -233,7 +239,81 @@ public sealed class PlcTaskBindingBehaviorTests
                 ["Task.A"] = false,
                 ["Task.B"] = true
             },
-            TestContext.Current.CancellationToken));
+            TestContext.Current.CancellationToken);
+
+        Assert.Same(unrelated, harness.Bindings.Items.Single(
+            static row => row.TaskKey == "OtherModule.Task"));
+        Assert.True(unrelated.Enabled);
+        Assert.Equal(unrelatedUpdatedAt, unrelated.UpdatedAt);
+        Assert.Equal(3, harness.Bindings.Items.Count);
+    }
+
+    [Fact]
+    public async Task Prepare_WhenSubmittedTaskKeyIsUnknown_ShouldFailWithoutPartialSave()
+    {
+        var harness = CreateService(defaultEnableAllTasks: true);
+        var device = harness.NetworkDevices.Add(
+            NetworkDeviceEntity.Create("PLC-A", DeviceType.PLC, "127.0.0.1", 102));
+        device.UpdateDeviceModel(PlcType.S7.ToString());
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            SaveBindingsForTestAsync(
+                harness.Service,
+                device.Id,
+                "TestModule",
+                new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Task.A"] = true,
+                    ["Task.Unknown"] = true
+                },
+                TestContext.Current.CancellationToken));
+
+        Assert.Contains("Task.Unknown", error.Message, StringComparison.Ordinal);
+        Assert.Empty(harness.Bindings.Items);
+    }
+
+    [Fact]
+    public async Task Prepare_WhenDeviceIsNotPlc_ShouldFailWithoutPartialSave()
+    {
+        var harness = CreateService(defaultEnableAllTasks: true);
+        var device = harness.NetworkDevices.Add(
+            NetworkDeviceEntity.Create("Camera-A", DeviceType.Camera, "127.0.0.1", 102));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            SaveBindingsForTestAsync(
+                harness.Service,
+                device.Id,
+                "TestModule",
+                new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Task.A"] = true
+                },
+                TestContext.Current.CancellationToken));
+
+        Assert.Contains("不是 PLC", error.Message, StringComparison.Ordinal);
+        Assert.Empty(harness.Bindings.Items);
+    }
+
+    [Fact]
+    public async Task Prepare_WhenEnabledTaskMissingIo_ShouldFail()
+    {
+        var harness = CreateService(defaultEnableAllTasks: false, seedIoMappings: false);
+        var device = NetworkDeviceEntity.Create("PLC-A", DeviceType.PLC, "127.0.0.1", 102);
+        device.UpdateDeviceModel(PlcType.S7.ToString());
+        harness.NetworkDevices.Add(device);
+        AddTestIoMappings(harness.IoMappings, device.Id, includeBusinessSignal: false);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            SaveBindingsForTestAsync(
+                harness.Service,
+                device.Id,
+                "TestModule",
+                new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Task.A"] = false,
+                    ["Task.B"] = true
+                },
+                TestContext.Current.CancellationToken));
 
         Assert.Contains("Signal.Business/Read", error.Message, StringComparison.Ordinal);
     }
@@ -929,8 +1009,7 @@ public sealed class PlcTaskBindingBehaviorTests
             networkDevices,
             ioMappings,
             bindings,
-            new TestEdgeUnitOfWorkFactory(bindings),
-            logger);
+            new TestEdgeUnitOfWorkFactory(bindings));
 
         return new BindingServiceHarness(service, networkDevices, ioMappings, bindings, logger);
     }
@@ -987,11 +1066,24 @@ public sealed class PlcTaskBindingBehaviorTests
     }
 
     private sealed record BindingServiceHarness(
-        IPlcTaskBindingService Service,
+        PlcTaskBindingService Service,
         InMemoryRepository<NetworkDeviceEntity> NetworkDevices,
         InMemoryRepository<IoMappingEntity> IoMappings,
         InMemoryRepository<PlcTaskBindingEntity> Bindings,
         FakeLogService Logger);
+
+    private static async Task SaveBindingsForTestAsync(
+        PlcTaskBindingService service,
+        int networkDeviceId,
+        string moduleId,
+        IReadOnlyDictionary<string, bool> taskStates,
+        CancellationToken cancellationToken)
+    {
+        var preparation = await service
+            .PrepareAsync(networkDeviceId, moduleId, taskStates, cancellationToken)
+            .ConfigureAwait(false);
+        await service.CommitAsync(preparation, cancellationToken).ConfigureAwait(false);
+    }
 
     private sealed class FakeStationRuntimeRegistry(IStationRuntimeFactory factory) : IStationRuntimeRegistry
     {
