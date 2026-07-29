@@ -387,6 +387,7 @@ public sealed class ConfigPermissionGuardBehaviorTests
         Assert.Equal(
             [
                 typeof(GetAllNetworkDevicesQuery),
+                typeof(GetIoMappingsByDeviceQuery),
                 typeof(GetAllNetworkDevicesQuery),
                 typeof(GetIoMappingsByDeviceQuery)
             ],
