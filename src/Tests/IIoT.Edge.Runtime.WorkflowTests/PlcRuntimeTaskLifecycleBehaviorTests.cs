@@ -67,6 +67,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             mg2.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
         var originalMg1 = runtime.GetBusinessTask("Task.MG1");
         var originalMg2 = runtime.GetBusinessTask("Task.MG2");
+        Assert.Equal(5, runtime.GetRunningHandlesSnapshot().Count);
 
         runtime.ConnectionSignal.Report(true);
         Assert.Equal(1, periodicRead.Starts.Count);
@@ -90,6 +91,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         Assert.Same(originalContext, runtime.Context);
         Assert.Same(originalService, runtime.PlcService);
         Assert.Equal(1, connection.Starts.Count);
+        Assert.Equal(5, runtime.GetRunningHandlesSnapshot().Count);
 
         await CleanupAsync(runtime);
     }
@@ -228,6 +230,117 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         Assert.Equal(0, mg2.Stops.Count);
 
         mg1.ThrowOnStop = false;
+        await CleanupAsync(runtime);
+    }
+
+    [Fact]
+    public async Task ApplyPlan_WhenLaterStopFails_ShouldRestorePreviouslyStoppedTasks()
+    {
+        var mg1 = new ControlledBusinessTask("Task.MG1");
+        var mg2 = new ControlledBusinessTask("Task.MG2");
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            new ControlledLoopTask("PeriodicRead"));
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlan(
+                runtime.DeviceName,
+                ("Task.MG1", (_, _) => mg1),
+                ("Task.MG2", (_, _) => mg2)),
+            TestContext.Current.CancellationToken);
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await Task.WhenAll(
+            mg1.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
+            mg2.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+        var originalMg1 = runtime.GetBusinessTask("Task.MG1");
+        var originalMg2 = runtime.GetBusinessTask("Task.MG2");
+        mg2.ThrowOnStop = true;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            runtime.ApplyTaskPlanAsync(
+                PlcRuntimeTaskPlan.Empty(runtime.DeviceName),
+                TestContext.Current.CancellationToken));
+        await Task.WhenAll(
+            mg1.Starts.WaitForAtLeastAsync(2, TestContext.Current.CancellationToken),
+            mg2.Starts.WaitForAtLeastAsync(2, TestContext.Current.CancellationToken));
+
+        Assert.Same(originalMg1, runtime.GetBusinessTask("Task.MG1"));
+        Assert.Same(originalMg2, runtime.GetBusinessTask("Task.MG2"));
+        Assert.Equal(["Task.MG1", "Task.MG2"], runtime.EnabledTaskKeys);
+        Assert.Equal(1, mg1.Stops.Count);
+        Assert.Equal(1, mg2.Stops.Count);
+
+        mg2.ThrowOnStop = false;
+        await CleanupAsync(runtime);
+    }
+
+    [Fact]
+    public async Task BusinessExecutionFaultAfterStartup_ShouldBeObservedForThatTaskKey()
+    {
+        var faulting = new FaultingAfterStartupBusinessTask("Task.MG1");
+        var healthy = new ControlledBusinessTask("Task.MG2");
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            new ControlledLoopTask("PeriodicRead"));
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlan(
+                runtime.DeviceName,
+                ("Task.MG1", (_, _) => faulting),
+                ("Task.MG2", (_, _) => healthy)),
+            TestContext.Current.CancellationToken);
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await Task.WhenAll(
+            faulting.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
+            healthy.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+        var observed = runtime.WaitForLogAsync(
+            entry => entry.Level == "Error"
+                     && entry.Message.Contains("Task.MG1", StringComparison.Ordinal)
+                     && entry.Message.Contains("执行故障", StringComparison.Ordinal),
+            TestContext.Current.CancellationToken);
+
+        faulting.FailExecution();
+        await observed;
+
+        Assert.Equal(1, healthy.Starts.Count);
+        Assert.Equal(0, healthy.Stops.Count);
+        Assert.DoesNotContain(
+            runtime.LoggerEntries,
+            entry => entry.Level == "Error"
+                     && entry.Message.Contains("Task.MG2", StringComparison.Ordinal));
+
+        await CleanupAsync(runtime);
+    }
+
+    [Fact]
+    public async Task BusinessExecutionEndingBeforeStartup_ShouldFailWithoutBlockingOtherTask()
+    {
+        var earlyExit = new ExecutionBeforeStartupBusinessTask("Task.MG1");
+        var healthy = new ControlledBusinessTask("Task.MG2");
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            new ControlledLoopTask("PeriodicRead"));
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlan(
+                runtime.DeviceName,
+                ("Task.MG1", (_, _) => earlyExit),
+                ("Task.MG2", (_, _) => healthy)),
+            TestContext.Current.CancellationToken);
+        var failureLogged = runtime.WaitForLogAsync(
+            entry => entry.Level == "Error"
+                     && entry.Message.Contains("Task.MG1", StringComparison.Ordinal)
+                     && entry.Message.Contains("启动失败", StringComparison.Ordinal),
+            TestContext.Current.CancellationToken);
+
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await Task.WhenAll(
+            failureLogged,
+            healthy.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+
+        Assert.Equal(1, earlyExit.Starts.Count);
+        Assert.Equal(1, healthy.Starts.Count);
+
         await CleanupAsync(runtime);
     }
 
@@ -382,6 +495,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         public IPlcTask ConnectionTask => Runtime.ConnectionTask;
         public IPlcTask PeriodicReadTask => Runtime.PeriodicReadTask;
         public PlcRuntimeConnectionSignal ConnectionSignal => Runtime.ConnectionSignal;
+        public IReadOnlyCollection<string> EnabledTaskKeys => Runtime.EnabledTaskKeys;
 
         public void Start() => Runtime.Start();
 
@@ -392,6 +506,14 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
 
         public IPlcTask? GetBusinessTask(string taskKey)
             => Runtime.GetBusinessTask(taskKey);
+
+        public IReadOnlyCollection<Task> GetRunningHandlesSnapshot()
+            => Runtime.GetRunningHandlesSnapshot();
+
+        public Task WaitForLogAsync(
+            Func<LogEntry, bool> predicate,
+            CancellationToken cancellationToken)
+            => logger.WaitForAsync(predicate, cancellationToken);
     }
 
     private sealed class ControlledLoopTask(string taskName) : IPlcTask
@@ -474,6 +596,59 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         }
     }
 
+    private sealed class FaultingAfterStartupBusinessTask(string taskName)
+        : IPlcTask, IStartupAwareBackgroundTask
+    {
+        private readonly TaskCompletionSource _failExecution =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public string TaskName { get; } = taskName;
+
+        public AsyncCounter Starts { get; } = new();
+
+        public void FailExecution()
+            => _failExecution.TrySetResult();
+
+        public Task StartAsync(CancellationToken ct)
+            => StartWithStartup(ct).Execution;
+
+        public BackgroundTaskRun StartWithStartup(CancellationToken cancellationToken)
+        {
+            Starts.Increment();
+            return new BackgroundTaskRun(
+                Task.CompletedTask,
+                RunAsync(cancellationToken));
+        }
+
+        private async Task RunAsync(CancellationToken cancellationToken)
+        {
+            await _failExecution.Task.WaitAsync(cancellationToken);
+            throw new InvalidOperationException($"{TaskName} execution failed.");
+        }
+    }
+
+    private sealed class ExecutionBeforeStartupBusinessTask(string taskName)
+        : IPlcTask, IStartupAwareBackgroundTask
+    {
+        public string TaskName { get; } = taskName;
+
+        public AsyncCounter Starts { get; } = new();
+
+        public Task StartAsync(CancellationToken ct)
+            => StartWithStartup(ct).Execution;
+
+        public BackgroundTaskRun StartWithStartup(CancellationToken cancellationToken)
+        {
+            Starts.Increment();
+            return new BackgroundTaskRun(
+                new TaskCompletionSource(
+                    TaskCreationOptions.RunContinuationsAsynchronously).Task,
+                Task.FromException(
+                    new InvalidOperationException(
+                        $"{TaskName} execution ended before startup.")));
+        }
+    }
+
     private sealed class AsyncCounter
     {
         private readonly object _sync = new();
@@ -542,6 +717,42 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         public void Warn(string message) => Add("Warn", message);
         public void Error(string message) => Add("Error", message);
         public void Fatal(string message) => Add("Fatal", message);
+
+        public async Task WaitForAsync(
+            Func<LogEntry, bool> predicate,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(predicate);
+            if (_entries.Any(predicate))
+            {
+                return;
+            }
+
+            var completion = new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            void HandleEntry(LogEntry entry)
+            {
+                if (predicate(entry))
+                {
+                    completion.TrySetResult();
+                }
+            }
+
+            EntryAdded += HandleEntry;
+            try
+            {
+                if (_entries.Any(predicate))
+                {
+                    return;
+                }
+
+                await completion.Task.WaitAsync(cancellationToken);
+            }
+            finally
+            {
+                EntryAdded -= HandleEntry;
+            }
+        }
 
         private void Add(string level, string message)
         {

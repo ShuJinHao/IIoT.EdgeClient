@@ -390,11 +390,15 @@ public sealed class PlcLifecycleCoordinator
                 CancellationToken.None)
             .ConfigureAwait(false);
 
-        if (runningHandlesStopped)
+        if (!runningHandlesStopped)
         {
-            runtime.DisposeCancellation();
+            RetainQuarantinedRuntime(
+                runtime,
+                "PLC 运行任务未在 5 秒硬上限内退出，禁止释放 PLC service 或创建替代 runtime。");
+            return false;
         }
 
+        runtime.DisposeCancellation();
         try
         {
             await runtime.PlcService.DisposeAsync().ConfigureAwait(false);
@@ -409,14 +413,6 @@ public sealed class PlcLifecycleCoordinator
             RetainQuarantinedRuntime(
                 runtime,
                 $"PLC service 释放失败，禁止创建替代 runtime：{ex.Message}");
-            return false;
-        }
-
-        if (!runningHandlesStopped)
-        {
-            RetainQuarantinedRuntime(
-                runtime,
-                "PLC 运行任务未在 5 秒硬上限内退出，禁止创建替代 runtime。");
             return false;
         }
 

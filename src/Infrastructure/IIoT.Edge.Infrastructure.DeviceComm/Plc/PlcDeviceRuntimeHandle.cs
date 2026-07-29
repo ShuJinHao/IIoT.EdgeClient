@@ -14,7 +14,7 @@ public sealed class PlcDeviceRuntimeHandle
     private readonly SemaphoreSlim _taskGate = new(1, 1);
     private readonly Dictionary<string, BusinessTaskSlot> _businessTasks =
         new(StringComparer.OrdinalIgnoreCase);
-    private readonly List<Task> _baseRunningHandles = [];
+    private readonly HashSet<Task> _runningHandles = [];
     private Task? _stopTask;
     private Task? _periodicReadExecution;
     private CancellationTokenSource? _periodicReadCancellation;
@@ -68,11 +68,8 @@ public sealed class PlcDeviceRuntimeHandle
 
         var supervisor = ObserveConnectionStateAsync(CancellationTokenSource.Token);
         var connection = RunConnectionTaskAsync(CancellationTokenSource.Token);
-        lock (_baseRunningHandles)
-        {
-            _baseRunningHandles.Add(supervisor);
-            _baseRunningHandles.Add(connection);
-        }
+        TrackExecution(supervisor);
+        TrackExecution(connection);
     }
 
     public async Task<PlcRuntimeTaskApplyResult> ApplyTaskPlanAsync(
@@ -90,57 +87,93 @@ public sealed class PlcDeviceRuntimeHandle
         try
         {
             var nextKeys = plan.TaskKeys.ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var removedKeys = GetBusinessTaskKeysSnapshot()
-                .Where(key => !nextKeys.Contains(key))
-                .OrderBy(static key => key, StringComparer.OrdinalIgnoreCase)
+            var currentSlots = GetBusinessTaskSlotsSnapshot();
+            var removedSlots = currentSlots
+                .Where(pair => !nextKeys.Contains(pair.Key))
+                .OrderBy(static pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(static pair => new PreviousTaskState(
+                    pair.Value,
+                    pair.Value.IsRunning))
                 .ToArray();
-            foreach (var taskKey in removedKeys)
+            var stagedSlots = nextKeys
+                .Where(key => !currentSlots.ContainsKey(key))
+                .OrderBy(static key => key, StringComparer.OrdinalIgnoreCase)
+                .Select(key => new BusinessTaskSlot(
+                    key,
+                    plan.GetRequiredFactory(key)))
+                .ToArray();
+            var factoryChanges = currentSlots
+                .Where(pair => nextKeys.Contains(pair.Key) && pair.Value.Task is null)
+                .Select(pair => new PreviousTaskFactory(
+                    pair.Value,
+                    pair.Value.Factory,
+                    pair.Value.Task))
+                .ToArray();
+            foreach (var change in factoryChanges)
             {
-                var slot = GetRequiredBusinessTaskSlot(taskKey);
-                await StopBusinessTaskAsync(slot, cancellationToken).ConfigureAwait(false);
-                lock (_businessTasks)
-                {
-                    _businessTasks.Remove(taskKey);
-                }
+                change.Slot.Factory = plan.GetRequiredFactory(change.Slot.TaskKey);
             }
 
-            foreach (var taskKey in nextKeys.OrderBy(static key => key, StringComparer.OrdinalIgnoreCase))
+            var startedForApply = new List<BusinessTaskSlot>();
+            try
             {
+                if (IsConnected)
+                {
+                    var slotsToStart = currentSlots
+                        .Where(pair => nextKeys.Contains(pair.Key) && !pair.Value.IsRunning)
+                        .OrderBy(static pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+                        .Select(static pair => pair.Value)
+                        .Concat(stagedSlots)
+                        .ToArray();
+                    foreach (var slot in slotsToStart)
+                    {
+                        await StartBusinessTaskAsync(slot, cancellationToken).ConfigureAwait(false);
+                        startedForApply.Add(slot);
+                    }
+                }
+
+                foreach (var previous in removedSlots)
+                {
+                    await StopBusinessTaskAsync(previous.Slot, cancellationToken).ConfigureAwait(false);
+                }
+
                 lock (_businessTasks)
                 {
-                    if (_businessTasks.TryGetValue(taskKey, out var existing))
+                    foreach (var previous in removedSlots)
                     {
-                        if (existing.Task is null)
-                        {
-                            existing.Factory = plan.GetRequiredFactory(taskKey);
-                        }
-
-                        continue;
+                        _businessTasks.Remove(previous.Slot.TaskKey);
                     }
 
-                    _businessTasks.Add(
-                        taskKey,
-                        new BusinessTaskSlot(taskKey, plan.GetRequiredFactory(taskKey)));
+                    foreach (var slot in stagedSlots)
+                    {
+                        _businessTasks.Add(slot.TaskKey, slot);
+                    }
                 }
             }
-
-            if (!IsConnected)
+            catch (Exception applyFailure)
             {
-                return new PlcRuntimeTaskApplyResult(
-                    PlcRuntimeTaskApplyState.WaitingForConnection,
-                    GetBusinessTaskKeysSnapshot());
-            }
-
-            foreach (var taskKey in nextKeys.OrderBy(static key => key, StringComparer.OrdinalIgnoreCase))
-            {
-                await StartBusinessTaskAsync(
-                        GetRequiredBusinessTaskSlot(taskKey),
-                        cancellationToken)
+                var rollbackFailures = await RollbackTaskPlanAsync(
+                        startedForApply,
+                        stagedSlots,
+                        removedSlots,
+                        factoryChanges)
                     .ConfigureAwait(false);
+                if (rollbackFailures.Count > 0)
+                {
+                    throw new AggregateException(
+                        $"PLC“{DeviceName}”任务计划应用失败，且运行时回滚未完整完成。",
+                        [applyFailure, .. rollbackFailures]);
+                }
+
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo
+                    .Capture(applyFailure)
+                    .Throw();
             }
 
             return new PlcRuntimeTaskApplyResult(
-                PlcRuntimeTaskApplyState.Applied,
+                IsConnected
+                    ? PlcRuntimeTaskApplyState.Applied
+                    : PlcRuntimeTaskApplyState.WaitingForConnection,
                 GetBusinessTaskKeysSnapshot());
         }
         finally
@@ -159,9 +192,9 @@ public sealed class PlcDeviceRuntimeHandle
 
     public IReadOnlyCollection<Task> GetRunningHandlesSnapshot()
     {
-        lock (_baseRunningHandles)
+        lock (_runningHandles)
         {
-            return _baseRunningHandles.ToArray();
+            return _runningHandles.ToArray();
         }
     }
 
@@ -305,6 +338,7 @@ public sealed class PlcDeviceRuntimeHandle
         try
         {
             var execution = PeriodicReadTask.StartAsync(taskCancellation.Token);
+            TrackExecution(execution);
             await Task.Yield();
             if (execution.IsCompleted)
             {
@@ -315,6 +349,9 @@ public sealed class PlcDeviceRuntimeHandle
 
             _periodicReadCancellation = taskCancellation;
             _periodicReadExecution = execution;
+            _ = ObservePeriodicReadExecutionAsync(
+                execution,
+                taskCancellation.Token);
         }
         catch
         {
@@ -346,9 +383,26 @@ public sealed class PlcDeviceRuntimeHandle
 
         var taskCancellation = CancellationTokenSource.CreateLinkedTokenSource(
             CancellationTokenSource.Token);
+        Task? execution = null;
         try
         {
             var run = startupAware.StartWithStartup(taskCancellation.Token);
+            execution = run.Execution;
+            slot.Cancellation = taskCancellation;
+            slot.Execution = execution;
+            TrackExecution(execution);
+
+            var firstCompletion = await Task
+                .WhenAny(run.Startup, execution)
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
+            if (ReferenceEquals(firstCompletion, execution) && !run.Startup.IsCompleted)
+            {
+                await execution.ConfigureAwait(false);
+                throw new InvalidOperationException(
+                    $"业务任务 {slot.TaskKey} 在启动握手完成前提前结束。");
+            }
+
             await run.Startup.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (run.Execution.IsCompleted)
             {
@@ -357,14 +411,131 @@ public sealed class PlcDeviceRuntimeHandle
                     $"业务任务 {slot.TaskKey} 在启动阶段提前结束。");
             }
 
-            slot.Cancellation = taskCancellation;
-            slot.Execution = run.Execution;
+            slot.UnexpectedExitReason = null;
+            _ = ObserveBusinessExecutionAsync(
+                slot,
+                execution,
+                taskCancellation.Token);
         }
-        catch
+        catch (Exception startFailure)
         {
-            await taskCancellation.CancelAsync().ConfigureAwait(false);
-            taskCancellation.Dispose();
-            throw;
+            Exception? cleanupFailure = null;
+            try
+            {
+                await taskCancellation.CancelAsync().ConfigureAwait(false);
+                if (execution is { IsCompleted: false })
+                {
+                    try
+                    {
+                        await execution
+                            .WaitAsync(StopTimeout, CancellationToken.None)
+                            .ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (taskCancellation.IsCancellationRequested)
+                    {
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                cleanupFailure = ex;
+            }
+
+            if (execution is null || execution.IsCompleted)
+            {
+                slot.Cancellation = null;
+                slot.Execution = null;
+                taskCancellation.Dispose();
+            }
+
+            if (cleanupFailure is not null)
+            {
+                throw new AggregateException(
+                    $"业务任务 {slot.TaskKey} 启动失败，且启动清理未完成。",
+                    startFailure,
+                    cleanupFailure);
+            }
+
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo
+                .Capture(startFailure)
+                .Throw();
+        }
+    }
+
+    private async Task ObserveBusinessExecutionAsync(
+        BusinessTaskSlot slot,
+        Task execution,
+        CancellationToken taskCancellationToken)
+    {
+        try
+        {
+            await execution.ConfigureAwait(false);
+            if (!ReferenceEquals(slot.Execution, execution))
+            {
+                return;
+            }
+
+            if (!taskCancellationToken.IsCancellationRequested)
+            {
+                slot.UnexpectedExitReason = "任务执行句柄在 PLC 仍连接时提前结束。";
+                Logger.Error(
+                    $"[{DeviceName}] 业务任务 {slot.TaskKey} 意外停止：{slot.UnexpectedExitReason}");
+            }
+        }
+        catch (OperationCanceledException) when (taskCancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            if (!ReferenceEquals(slot.Execution, execution))
+            {
+                return;
+            }
+
+            slot.UnexpectedExitReason = ex.Message;
+            Logger.Error(
+                $"[{DeviceName}] 业务任务 {slot.TaskKey} 执行故障，已仅隔离该 TaskKey：{ex.Message}");
+        }
+    }
+
+    private async Task ObservePeriodicReadExecutionAsync(
+        Task execution,
+        CancellationToken taskCancellationToken)
+    {
+        try
+        {
+            await execution.ConfigureAwait(false);
+            if (!ReferenceEquals(_periodicReadExecution, execution))
+            {
+                return;
+            }
+
+            if (!taskCancellationToken.IsCancellationRequested)
+            {
+                StatusStore.MarkRuntimeFault(
+                    DeviceId,
+                    DeviceName,
+                    "周期读取任务在 PLC 仍连接时提前结束。");
+                Logger.Error($"[{DeviceName}] 周期读取任务意外停止，业务任务将暂停。");
+                ConnectionSignal.Report(false);
+            }
+        }
+        catch (OperationCanceledException) when (taskCancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            if (!ReferenceEquals(_periodicReadExecution, execution))
+            {
+                return;
+            }
+
+            StatusStore.MarkRuntimeFault(
+                DeviceId,
+                DeviceName,
+                $"周期读取任务执行故障：{ex.Message}");
+            Logger.Error($"[{DeviceName}] 周期读取任务执行故障，业务任务将暂停：{ex.Message}");
+            ConnectionSignal.Report(false);
         }
     }
 
@@ -380,6 +551,78 @@ public sealed class PlcDeviceRuntimeHandle
         }
 
         return task;
+    }
+
+    private async Task<IReadOnlyCollection<Exception>> RollbackTaskPlanAsync(
+        IReadOnlyCollection<BusinessTaskSlot> startedForApply,
+        IReadOnlyCollection<BusinessTaskSlot> stagedSlots,
+        IReadOnlyCollection<PreviousTaskState> removedSlots,
+        IReadOnlyCollection<PreviousTaskFactory> factoryChanges)
+    {
+        var failures = new List<Exception>();
+        var stoppedSlots = new HashSet<BusinessTaskSlot>();
+        var rollbackStopSlots = startedForApply
+            .Concat(stagedSlots)
+            .Concat(factoryChanges.Select(static change => change.Slot))
+            .Where(static slot => slot.Cancellation is not null)
+            .Distinct()
+            .Reverse()
+            .ToArray();
+        foreach (var slot in rollbackStopSlots)
+        {
+            try
+            {
+                await StopBusinessTaskAsync(slot, CancellationToken.None).ConfigureAwait(false);
+                stoppedSlots.Add(slot);
+            }
+            catch (Exception ex)
+            {
+                failures.Add(new InvalidOperationException(
+                    $"回滚新增或恢复任务 {slot.TaskKey} 失败：{ex.Message}",
+                    ex));
+            }
+        }
+
+        foreach (var change in factoryChanges)
+        {
+            change.Slot.Factory = change.Factory;
+            if (!change.Slot.IsRunning)
+            {
+                change.Slot.Task = change.Task;
+            }
+        }
+
+        foreach (var previous in removedSlots.Where(static state => state.WasRunning))
+        {
+            if (previous.Slot.IsRunning)
+            {
+                continue;
+            }
+
+            try
+            {
+                await StartBusinessTaskAsync(previous.Slot, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                failures.Add(new InvalidOperationException(
+                    $"回滚原任务 {previous.Slot.TaskKey} 失败：{ex.Message}",
+                    ex));
+            }
+        }
+
+        lock (_businessTasks)
+        {
+            foreach (var slot in stagedSlots)
+            {
+                if (!stoppedSlots.Contains(slot) && slot.IsRunning)
+                {
+                    _businessTasks.TryAdd(slot.TaskKey, slot);
+                }
+            }
+        }
+
+        return failures;
     }
 
     private async Task StopDependentTasksAsync(CancellationToken cancellationToken)
@@ -447,7 +690,22 @@ public sealed class PlcDeviceRuntimeHandle
 
         if (execution is not null)
         {
-            await execution.WaitAsync(StopTimeout, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await execution.WaitAsync(StopTimeout, cancellationToken).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                throw;
+            }
+            catch (OperationCanceledException) when (
+                taskCancellation.IsCancellationRequested && execution.IsCompleted)
+            {
+            }
+            catch (Exception) when (execution.IsCompleted)
+            {
+                // 执行故障由任务观察器按 TaskKey 记录；任务已经退出，不再把同一故障重复当作停止失败。
+            }
         }
 
         taskCancellation.Dispose();
@@ -483,7 +741,22 @@ public sealed class PlcDeviceRuntimeHandle
 
         if (execution is not null)
         {
-            await execution.WaitAsync(StopTimeout, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await execution.WaitAsync(StopTimeout, cancellationToken).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                throw;
+            }
+            catch (OperationCanceledException) when (
+                taskCancellation.IsCancellationRequested && execution.IsCompleted)
+            {
+            }
+            catch (Exception) when (execution.IsCompleted)
+            {
+                // 执行故障已由周期读取观察器记录；这里只确认句柄已退出。
+            }
         }
 
         taskCancellation.Dispose();
@@ -522,6 +795,16 @@ public sealed class PlcDeviceRuntimeHandle
         }
     }
 
+    private IReadOnlyDictionary<string, BusinessTaskSlot> GetBusinessTaskSlotsSnapshot()
+    {
+        lock (_businessTasks)
+        {
+            return new Dictionary<string, BusinessTaskSlot>(
+                _businessTasks,
+                StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
     private BusinessTaskSlot GetRequiredBusinessTaskSlot(string taskKey)
     {
         lock (_businessTasks)
@@ -532,6 +815,38 @@ public sealed class PlcDeviceRuntimeHandle
                     $"PLC“{DeviceName}”runtime 中不存在业务任务 {taskKey}。");
         }
     }
+
+    private void TrackExecution(Task execution)
+    {
+        ArgumentNullException.ThrowIfNull(execution);
+        lock (_runningHandles)
+        {
+            _runningHandles.Add(execution);
+        }
+
+        _ = execution.ContinueWith(
+            static (completed, state) =>
+            {
+                var runtime = (PlcDeviceRuntimeHandle)state!;
+                lock (runtime._runningHandles)
+                {
+                    runtime._runningHandles.Remove(completed);
+                }
+            },
+            this,
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+    }
+
+    private sealed record PreviousTaskState(
+        BusinessTaskSlot Slot,
+        bool WasRunning);
+
+    private sealed record PreviousTaskFactory(
+        BusinessTaskSlot Slot,
+        PlcRuntimeBusinessTaskFactory Factory,
+        IPlcTask? Task);
 
     private sealed class BusinessTaskSlot(
         string taskKey,
@@ -546,5 +861,9 @@ public sealed class PlcDeviceRuntimeHandle
         public CancellationTokenSource? Cancellation { get; set; }
 
         public Task? Execution { get; set; }
+
+        public string? UnexpectedExitReason { get; set; }
+
+        public bool IsRunning => Execution is { IsCompleted: false };
     }
 }
