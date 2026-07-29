@@ -189,11 +189,27 @@ public class SaveHardwareConfigHandler(
                 "PLC 配置在保存期间已发生并发变化，请重新加载后重试。");
         }
 
+        var networkDeviceIdsToUpdate = FindChangedNetworkDeviceIds(
+            existingNetworkDevices,
+            request.NetworkDevices);
+        var networkDeviceIdsToDelete = FindDeletedNetworkDeviceIds(
+            existingNetworkDevices,
+            request.NetworkDevices);
+        var selectedDeviceStillExists = request.SelectedNetworkDeviceId != 0
+            && request.NetworkDevices.Any(x => x.Id == request.SelectedNetworkDeviceId);
+        var selectedIoMappingsChanged = selectedDeviceStillExists
+            && HasIoMappingsChanged(
+                existingIoMappings,
+                request.IoMappings,
+                request.SelectedNetworkDeviceId);
+
         await using var unitOfWork = await unitOfWorkFactory.BeginAsync(ct).ConfigureAwait(false);
 
-        var networkResult = await SaveNetworkDevicesHandler.ApplyAsync(
+        var networkResult = await SaveNetworkDevicesHandler.ApplyPlannedAsync(
             unitOfWork.Repository<NetworkDeviceEntity>(),
             new SaveNetworkDevicesCommand(request.NetworkDevices),
+            networkDeviceIdsToUpdate,
+            networkDeviceIdsToDelete,
             ct).ConfigureAwait(false);
         if (!networkResult.IsSuccess)
         {
@@ -209,10 +225,7 @@ public class SaveHardwareConfigHandler(
             return CrudOperationResult.Failure(serialResult.ErrorMessage ?? "串口设备保存失败。");
         }
 
-        var selectedDeviceStillExists = request.SelectedNetworkDeviceId != 0
-            && request.NetworkDevices.Any(x => x.Id == request.SelectedNetworkDeviceId);
-
-        if (selectedDeviceStillExists)
+        if (selectedDeviceStillExists && selectedIoMappingsChanged)
         {
             var ioDtos = request.IoMappings
                 .Select(dto => dto with { NetworkDeviceId = request.SelectedNetworkDeviceId })
@@ -260,9 +273,9 @@ public class SaveHardwareConfigHandler(
         }
 
         var ioMappingsChanged = request.SelectedNetworkDeviceId > 0
+            && selectedIoMappingsChanged
             && existingPlcById.TryGetValue(request.SelectedNetworkDeviceId, out _)
-            && submittedPlcById.ContainsKey(request.SelectedNetworkDeviceId)
-            && HasIoMappingsChanged(existingIoMappings, request.IoMappings, request.SelectedNetworkDeviceId);
+            && submittedPlcById.ContainsKey(request.SelectedNetworkDeviceId);
 
         var reloadTargets = new List<(int? DeviceId, string DeviceName)>();
         var reloadTargetIds = new HashSet<int>();
@@ -385,7 +398,7 @@ public class SaveHardwareConfigHandler(
         foreach (var existingPlc in existingPlcById.Values)
         {
             if (!submittedPlcById.TryGetValue(existingPlc.Id, out var submittedPlc)
-                || HasRuntimeRelevantNetworkChange(existingPlc, submittedPlc))
+                || HasPersistedNetworkChange(existingPlc, submittedPlc))
             {
                 affectedDeviceIds.Add(existingPlc.Id);
             }
@@ -413,6 +426,37 @@ public class SaveHardwareConfigHandler(
         return affectedDeviceIds
             .OrderBy(static deviceId => deviceId)
             .ToArray();
+    }
+
+    private static HashSet<int> FindChangedNetworkDeviceIds(
+        IReadOnlyCollection<NetworkDeviceEntity> existingNetworkDevices,
+        IReadOnlyCollection<NetworkDeviceDto> submittedNetworkDevices)
+    {
+        var existingById = existingNetworkDevices
+            .Where(static device => device.Id > 0)
+            .ToDictionary(static device => device.Id);
+
+        return submittedNetworkDevices
+            .Where(static device => device.Id > 0)
+            .Where(device => existingById.TryGetValue(device.Id, out var existing)
+                             && HasPersistedNetworkChange(existing, device))
+            .Select(static device => device.Id)
+            .ToHashSet();
+    }
+
+    private static HashSet<int> FindDeletedNetworkDeviceIds(
+        IReadOnlyCollection<NetworkDeviceEntity> existingNetworkDevices,
+        IReadOnlyCollection<NetworkDeviceDto> submittedNetworkDevices)
+    {
+        var submittedIds = submittedNetworkDevices
+            .Where(static device => device.Id > 0)
+            .Select(static device => device.Id)
+            .ToHashSet();
+
+        return existingNetworkDevices
+            .Where(device => device.Id > 0 && !submittedIds.Contains(device.Id))
+            .Select(static device => device.Id)
+            .ToHashSet();
     }
 
     private static void DisposeLeasesInReverseOrder(IReadOnlyList<IDisposable> leases)
@@ -476,6 +520,45 @@ public class SaveHardwareConfigHandler(
             || !string.Equals(existing.SendCmd2?.Trim(), incoming.SendCmd2?.Trim(), StringComparison.Ordinal)
             || existing.ConnectTimeout != incoming.ConnectTimeout
             || existing.IsEnabled != incoming.IsEnabled;
+    }
+
+    private static bool HasPersistedNetworkChange(
+        NetworkDeviceEntity existing,
+        NetworkDeviceDto incoming)
+    {
+        return existing.DeviceType != incoming.DeviceType
+            || !string.Equals(
+                Normalize(existing.DeviceName),
+                Normalize(incoming.DeviceName),
+                StringComparison.Ordinal)
+            || !string.Equals(
+                NormalizeNullable(existing.DeviceModel),
+                NormalizeNullable(incoming.DeviceModel),
+                StringComparison.Ordinal)
+            || !string.Equals(
+                NormalizeNullable(existing.ProtocolFrame),
+                NormalizeNullable(incoming.ProtocolFrame),
+                StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(
+                Normalize(existing.IpAddress),
+                Normalize(incoming.IpAddress),
+                StringComparison.Ordinal)
+            || existing.Port1 != incoming.Port1
+            || existing.Port2 != incoming.Port2
+            || !string.Equals(
+                NormalizeNullable(existing.SendCmd1),
+                NormalizeNullable(incoming.SendCmd1),
+                StringComparison.Ordinal)
+            || !string.Equals(
+                NormalizeNullable(existing.SendCmd2),
+                NormalizeNullable(incoming.SendCmd2),
+                StringComparison.Ordinal)
+            || existing.ConnectTimeout != incoming.ConnectTimeout
+            || existing.IsEnabled != incoming.IsEnabled
+            || !string.Equals(
+                NormalizeNullable(existing.Remark),
+                NormalizeNullable(incoming.Remark),
+                StringComparison.Ordinal);
     }
 
     private static bool HasIoMappingsChanged(

@@ -158,6 +158,106 @@ public sealed class HardwareConfigFullSyncBehaviorTests
     }
 
     [Fact]
+    public async Task SaveHardwareConfigHandler_WhenUnchangedPlcRowAdvancesAfterSnapshot_ShouldNotOverwriteIt()
+    {
+        var sender = new HardwareConfigSender
+        {
+            ExistingNetworkDevices =
+            [
+                CreateNetworkDevice(id: 1, name: "PLC-A", port1: 102),
+                CreateNetworkDevice(id: 2, name: "PLC-B", port1: 102)
+            ]
+        };
+        var networkRepo = new InMemoryRepository<NetworkDeviceEntity>(
+            CreateNetworkDevice(id: 1, name: "PLC-A", port1: 104),
+            CreateNetworkDevice(id: 2, name: "PLC-B", port1: 102));
+        var plcManager = new FakePlcConnectionManager();
+        var handler = new SaveHardwareConfigHandler(
+            sender,
+            new TestEdgeUnitOfWorkFactory(
+                networkRepo,
+                new InMemoryRepository<SerialDeviceEntity>(),
+                new InMemoryRepository<IoMappingEntity>()),
+            new StubPermissionService { CanEditHardware = true },
+            plcManager,
+            new FakePlcRuntimeApplyService(sender, plcManager),
+            new PlcRuntimeConfigurationMutationGate());
+
+        var result = await handler.Handle(
+            new SaveHardwareConfigCommand(
+                [
+                    CreateNetworkDto(id: 1, name: "PLC-A", port1: 102),
+                    CreateNetworkDto(id: 2, name: "PLC-B", port1: 103)
+                ],
+                [],
+                2,
+                []),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal(104, networkRepo.Items.Single(x => x.Id == 1).Port1);
+        Assert.Equal(103, networkRepo.Items.Single(x => x.Id == 2).Port1);
+        Assert.Equal(["PLC-B"], plcManager.ReloadedDeviceNames);
+    }
+
+    [Fact]
+    public async Task SaveHardwareConfigHandler_WhenUnchangedIoAdvancesAfterSnapshot_ShouldNotOverwriteIt()
+    {
+        var sender = new HardwareConfigSender
+        {
+            ExistingNetworkDevices =
+            [
+                CreateNetworkDevice(id: 1, name: "PLC-A")
+            ],
+            ExistingIoMappings =
+            [
+                CreateIoMapping(
+                    id: 11,
+                    deviceId: 1,
+                    signalKey: "Signal.A",
+                    plcAddress: "DB1.DBW0")
+            ]
+        };
+        var networkRepo = new InMemoryRepository<NetworkDeviceEntity>(
+            CreateNetworkDevice(id: 1, name: "PLC-A"));
+        var ioRepo = new InMemoryRepository<IoMappingEntity>(
+            CreateIoMapping(
+                id: 11,
+                deviceId: 1,
+                signalKey: "Signal.A",
+                plcAddress: "DB1.DBW2"));
+        var plcManager = new FakePlcConnectionManager();
+        var handler = new SaveHardwareConfigHandler(
+            sender,
+            new TestEdgeUnitOfWorkFactory(
+                networkRepo,
+                new InMemoryRepository<SerialDeviceEntity>(),
+                ioRepo),
+            new StubPermissionService { CanEditHardware = true },
+            plcManager,
+            new FakePlcRuntimeApplyService(sender, plcManager),
+            new PlcRuntimeConfigurationMutationGate());
+
+        var result = await handler.Handle(
+            new SaveHardwareConfigCommand(
+                [CreateNetworkDto(id: 1, name: "PLC-A")],
+                [],
+                1,
+                [
+                    CreateIoMappingDto(
+                        id: 11,
+                        deviceId: 1,
+                        signalKey: "Signal.A",
+                        plcAddress: "DB1.DBW0")
+                ]),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal("DB1.DBW2", Assert.Single(ioRepo.Items).PlcAddress);
+        Assert.Empty(plcManager.ReloadedDeviceNames);
+    }
+
+    [Fact]
     public async Task SaveNetworkDevicesHandler_WhenNewDeviceNamesCollide_ShouldAssignDistinctPlcCodes()
     {
         var repo = new InMemoryRepository<NetworkDeviceEntity>();

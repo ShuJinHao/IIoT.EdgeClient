@@ -28,6 +28,28 @@ internal static class SubmittedEntityListSaveHelper
         return result;
     }
 
+    public static Task<Result> ReplaceSubmittedAsync<TEntity, TDto>(
+        IRepository<TEntity> repo,
+        IReadOnlyCollection<TDto> submittedItems,
+        Func<CancellationToken, Task<List<TEntity>>> loadExistingAsync,
+        Func<TDto, int> getSubmittedId,
+        Func<TDto, string?> validate,
+        Func<TDto, TEntity> create,
+        Action<TEntity, TDto> apply,
+        CancellationToken cancellationToken)
+        where TEntity : class, IEntity<int>, IAggregateRoot
+        => ReplaceSubmittedAsync(
+            repo,
+            submittedItems,
+            loadExistingAsync,
+            getSubmittedId,
+            validate,
+            create,
+            apply,
+            static _ => true,
+            static (_, _) => true,
+            cancellationToken);
+
     public static async Task<Result> ReplaceSubmittedAsync<TEntity, TDto>(
         IRepository<TEntity> repo,
         IReadOnlyCollection<TDto> submittedItems,
@@ -36,6 +58,8 @@ internal static class SubmittedEntityListSaveHelper
         Func<TDto, string?> validate,
         Func<TDto, TEntity> create,
         Action<TEntity, TDto> apply,
+        Func<TEntity, bool> shouldDelete,
+        Func<TEntity, TDto, bool> shouldUpdate,
         CancellationToken cancellationToken)
         where TEntity : class, IEntity<int>, IAggregateRoot
     {
@@ -55,7 +79,8 @@ internal static class SubmittedEntityListSaveHelper
             .Where(static id => id > 0)
             .ToHashSet();
 
-        foreach (var entity in existingItems.Where(x => !submittedIds.Contains(x.Id)))
+        foreach (var entity in existingItems.Where(
+                     x => !submittedIds.Contains(x.Id) && shouldDelete(x)))
         {
             repo.Delete(entity);
         }
@@ -71,7 +96,8 @@ internal static class SubmittedEntityListSaveHelper
                     apply(entity, item);
                     repo.Add(entity);
                 }
-                else if (existingById.TryGetValue(itemId, out var entity))
+                else if (existingById.TryGetValue(itemId, out var entity)
+                         && shouldUpdate(entity, item))
                 {
                     apply(entity, item);
                     repo.Update(entity);
