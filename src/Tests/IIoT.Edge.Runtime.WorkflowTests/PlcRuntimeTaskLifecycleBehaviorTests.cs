@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Module.Contracts.Logging;
@@ -191,6 +192,133 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             runtime.LoggerEntries,
             entry => entry.Level == "Error"
                      && entry.Message.Contains("Task.MG2", StringComparison.Ordinal));
+
+        await CleanupAsync(runtime);
+    }
+
+    [Fact]
+    public async Task Disconnect_WhenOneTaskStopFails_ShouldKeepSupervisingAndResumeOtherTasks()
+    {
+        var failedStop = new ControlledBusinessTask("Task.MG1")
+        {
+            ThrowOnStop = true
+        };
+        var healthy = new ControlledBusinessTask("Task.MG2");
+        var periodicRead = new ControlledLoopTask("PeriodicRead");
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            periodicRead);
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlan(
+                runtime.DeviceName,
+                ("Task.MG1", (_, _) => failedStop),
+                ("Task.MG2", (_, _) => healthy)),
+            TestContext.Current.CancellationToken);
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await Task.WhenAll(
+            failedStop.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
+            healthy.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+        var pauseFailure = runtime.WaitForLogAsync(
+            entry => entry.Level == "Error"
+                     && entry.Message.Contains("连接监督将继续", StringComparison.Ordinal),
+            TestContext.Current.CancellationToken);
+
+        runtime.ConnectionSignal.Report(false);
+        await Task.WhenAll(
+            pauseFailure,
+            healthy.Stops.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
+            periodicRead.Stops.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+        failedStop.ThrowOnStop = false;
+        runtime.ConnectionSignal.Report(true);
+        await Task.WhenAll(
+            failedStop.Starts.WaitForAtLeastAsync(2, TestContext.Current.CancellationToken),
+            healthy.Starts.WaitForAtLeastAsync(2, TestContext.Current.CancellationToken),
+            periodicRead.Starts.WaitForAtLeastAsync(2, TestContext.Current.CancellationToken));
+
+        Assert.Equal(2, failedStop.Starts.Count);
+        Assert.Equal(2, healthy.Starts.Count);
+        Assert.True(runtime.Runtime.IsConnected);
+
+        await CleanupAsync(runtime);
+    }
+
+    [Fact]
+    public async Task Disconnect_WhenTaskStopHookStalls_ShouldBoundItAndContinueStoppingOtherTasks()
+    {
+        var stalledStop = new StalledStopBusinessTask("Task.MG1");
+        var healthy = new ControlledBusinessTask("Task.MG2");
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            new ControlledLoopTask("PeriodicRead"));
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlan(
+                runtime.DeviceName,
+                ("Task.MG1", (_, _) => stalledStop),
+                ("Task.MG2", (_, _) => healthy)),
+            TestContext.Current.CancellationToken);
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await Task.WhenAll(
+            stalledStop.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
+            healthy.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+        var boundedFailure = runtime.WaitForLogAsync(
+            entry => entry.Level == "Error"
+                     && entry.Message.Contains("停止钩子超过 5 秒", StringComparison.Ordinal),
+            TestContext.Current.CancellationToken);
+        var elapsed = Stopwatch.StartNew();
+
+        runtime.ConnectionSignal.Report(false);
+        await Task.WhenAll(
+            boundedFailure,
+            healthy.Stops.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+        elapsed.Stop();
+
+        Assert.True(
+            elapsed.Elapsed < TimeSpan.FromSeconds(8),
+            $"停止钩子未在硬上限附近返回：{elapsed.Elapsed}。");
+        Assert.Contains(
+            stalledStop.StopCompletion,
+            runtime.GetRunningHandlesSnapshot());
+
+        stalledStop.ReleaseStop();
+        await stalledStop.StopCompletion;
+        await CleanupAsync(runtime);
+    }
+
+    [Fact]
+    public async Task ConnectionStart_WhenStartupHandshakeStalls_ShouldTimeOutAndStartLaterTask()
+    {
+        var stalledStartup = new StalledStartupBusinessTask("Task.MG1");
+        var healthy = new ControlledBusinessTask("Task.MG2");
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            new ControlledLoopTask("PeriodicRead"));
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlan(
+                runtime.DeviceName,
+                ("Task.MG1", (_, _) => stalledStartup),
+                ("Task.MG2", (_, _) => healthy)),
+            TestContext.Current.CancellationToken);
+        var boundedFailure = runtime.WaitForLogAsync(
+            entry => entry.Level == "Error"
+                     && entry.Message.Contains("启动握手超过 5 秒", StringComparison.Ordinal),
+            TestContext.Current.CancellationToken);
+        var elapsed = Stopwatch.StartNew();
+
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await Task.WhenAll(
+            boundedFailure,
+            healthy.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+        elapsed.Stop();
+
+        Assert.True(
+            elapsed.Elapsed < TimeSpan.FromSeconds(8),
+            $"启动握手未在硬上限附近返回：{elapsed.Elapsed}。");
+        Assert.Equal(1, stalledStartup.Starts.Count);
+        Assert.Equal(1, stalledStartup.Stops.Count);
+        Assert.Equal(1, healthy.Starts.Count);
 
         await CleanupAsync(runtime);
     }
@@ -682,6 +810,88 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
                 Task.FromException(
                     new InvalidOperationException(
                         $"{TaskName} execution ended before startup.")));
+        }
+    }
+
+    private sealed class StalledStopBusinessTask(string taskName)
+        : IPlcTask, IStartupAwareBackgroundTask
+    {
+        private readonly TaskCompletionSource _stopCompletion =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public string TaskName { get; } = taskName;
+
+        public AsyncCounter Starts { get; } = new();
+
+        public Task StopCompletion => _stopCompletion.Task;
+
+        public Task StartAsync(CancellationToken ct)
+            => StartWithStartup(ct).Execution;
+
+        public BackgroundTaskRun StartWithStartup(CancellationToken cancellationToken)
+        {
+            Starts.Increment();
+            return new BackgroundTaskRun(
+                Task.CompletedTask,
+                RunAsync(cancellationToken));
+        }
+
+        public Task StopAsync(CancellationToken ct)
+            => _stopCompletion.Task;
+
+        public void ReleaseStop()
+            => _stopCompletion.TrySetResult();
+
+        private static async Task RunAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+            }
+        }
+    }
+
+    private sealed class StalledStartupBusinessTask(string taskName)
+        : IPlcTask, IStartupAwareBackgroundTask
+    {
+        private readonly TaskCompletionSource _startup =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public string TaskName { get; } = taskName;
+
+        public AsyncCounter Starts { get; } = new();
+
+        public AsyncCounter Stops { get; } = new();
+
+        public Task StartAsync(CancellationToken ct)
+            => StartWithStartup(ct).Execution;
+
+        public BackgroundTaskRun StartWithStartup(CancellationToken cancellationToken)
+        {
+            Starts.Increment();
+            return new BackgroundTaskRun(
+                _startup.Task,
+                RunAsync(cancellationToken));
+        }
+
+        public Task StopAsync(CancellationToken ct)
+        {
+            Stops.Increment();
+            return Task.CompletedTask;
+        }
+
+        private static async Task RunAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+            }
         }
     }
 

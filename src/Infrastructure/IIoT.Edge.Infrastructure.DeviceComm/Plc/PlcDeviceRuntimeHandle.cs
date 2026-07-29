@@ -8,6 +8,7 @@ namespace IIoT.Edge.Infrastructure.DeviceComm.Plc;
 
 public sealed class PlcDeviceRuntimeHandle
 {
+    private static readonly TimeSpan StartupTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(5);
 
     private readonly object _stopLock = new();
@@ -17,6 +18,7 @@ public sealed class PlcDeviceRuntimeHandle
     private readonly HashSet<Task> _runningHandles = [];
     private Task? _stopTask;
     private Task? _periodicReadExecution;
+    private Task? _periodicReadStopExecution;
     private CancellationTokenSource? _periodicReadCancellation;
     private int _started;
     private int _connected;
@@ -299,7 +301,15 @@ public sealed class PlcDeviceRuntimeHandle
                     }
 
                     Interlocked.Exchange(ref _connected, 0);
-                    await StopDependentTasksAsync(cancellationToken).ConfigureAwait(false);
+                    try
+                    {
+                        await StopDependentTasksAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error(
+                            $"[{DeviceName}] 断联后的依赖任务暂停未完整完成，连接监督将继续等待后续状态：{ex.Message}");
+                    }
                 }
                 finally
                 {
@@ -325,10 +335,17 @@ public sealed class PlcDeviceRuntimeHandle
     {
         if (_periodicReadExecution is { IsCompleted: false })
         {
+            if (_periodicReadCancellation?.IsCancellationRequested == true)
+            {
+                throw new InvalidOperationException(
+                    $"PLC“{DeviceName}”上一周期读取任务尚未安全退出，拒绝重复启动。");
+            }
+
             return;
         }
 
-        if (_periodicReadCancellation is not null)
+        if (_periodicReadCancellation is not null
+            || _periodicReadStopExecution is not null)
         {
             await StopPeriodicReadTaskAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -366,10 +383,17 @@ public sealed class PlcDeviceRuntimeHandle
     {
         if (slot.Execution is { IsCompleted: false })
         {
+            if (slot.Cancellation?.IsCancellationRequested == true)
+            {
+                throw new InvalidOperationException(
+                    $"业务任务 {slot.TaskKey} 上一执行句柄尚未安全退出，拒绝重复启动。");
+            }
+
             return;
         }
 
-        if (slot.Cancellation is not null)
+        if (slot.Cancellation is not null
+            || slot.StopExecution is not null)
         {
             await StopBusinessTaskAsync(slot, cancellationToken).ConfigureAwait(false);
         }
@@ -392,10 +416,21 @@ public sealed class PlcDeviceRuntimeHandle
             slot.Execution = execution;
             TrackExecution(execution);
 
-            var firstCompletion = await Task
-                .WhenAny(run.Startup, execution)
-                .WaitAsync(cancellationToken)
-                .ConfigureAwait(false);
+            Task firstCompletion;
+            try
+            {
+                firstCompletion = await Task
+                    .WhenAny(run.Startup, execution)
+                    .WaitAsync(StartupTimeout, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (TimeoutException ex)
+            {
+                throw new TimeoutException(
+                    $"业务任务 {slot.TaskKey} 启动握手超过 {StartupTimeout.TotalSeconds:0} 秒，已失败关闭。",
+                    ex);
+            }
+
             if (ReferenceEquals(firstCompletion, execution) && !run.Startup.IsCompleted)
             {
                 await execution.ConfigureAwait(false);
@@ -422,26 +457,14 @@ public sealed class PlcDeviceRuntimeHandle
             Exception? cleanupFailure = null;
             try
             {
-                await taskCancellation.CancelAsync().ConfigureAwait(false);
-                if (execution is { IsCompleted: false })
-                {
-                    try
-                    {
-                        await execution
-                            .WaitAsync(StopTimeout, CancellationToken.None)
-                            .ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException) when (taskCancellation.IsCancellationRequested)
-                    {
-                    }
-                }
+                await StopBusinessTaskAsync(slot, CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 cleanupFailure = ex;
             }
 
-            if (execution is null || execution.IsCompleted)
+            if (execution is null)
             {
                 slot.Cancellation = null;
                 slot.Execution = null;
@@ -669,22 +692,62 @@ public sealed class PlcDeviceRuntimeHandle
     {
         var taskCancellation = slot.Cancellation;
         var execution = slot.Execution;
-        if (taskCancellation is null)
+        var stopExecution = slot.StopExecution;
+        if (taskCancellation is null && stopExecution is null)
         {
             return;
         }
 
-        await taskCancellation.CancelAsync().ConfigureAwait(false);
+        if (taskCancellation is not null)
+        {
+            await taskCancellation.CancelAsync().ConfigureAwait(false);
+        }
+
         Exception? stopFailure = null;
-        if (slot.Task is not null)
+        if (slot.Task is not null && stopExecution is null)
         {
             try
             {
-                await slot.Task.StopAsync(cancellationToken).ConfigureAwait(false);
+                stopExecution = slot.Task.StopAsync(cancellationToken);
+                slot.StopExecution = stopExecution;
+                TrackExecution(stopExecution);
             }
             catch (Exception ex)
             {
                 stopFailure = ex;
+            }
+        }
+
+        if (stopExecution is not null)
+        {
+            try
+            {
+                await stopExecution
+                    .WaitAsync(StopTimeout, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (TimeoutException ex)
+            {
+                throw new TimeoutException(
+                    $"业务任务 {slot.TaskKey} 停止钩子超过 {StopTimeout.TotalSeconds:0} 秒，runtime 将保留隔离。",
+                    ex);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                stopFailure = stopFailure is null
+                    ? ex
+                    : new AggregateException(stopFailure, ex);
+            }
+            finally
+            {
+                if (stopExecution.IsCompleted)
+                {
+                    slot.StopExecution = null;
+                }
             }
         }
 
@@ -699,7 +762,7 @@ public sealed class PlcDeviceRuntimeHandle
                 throw;
             }
             catch (OperationCanceledException) when (
-                taskCancellation.IsCancellationRequested
+                taskCancellation?.IsCancellationRequested == true
                 && execution.IsCompleted
                 && !cancellationToken.IsCancellationRequested)
             {
@@ -712,7 +775,7 @@ public sealed class PlcDeviceRuntimeHandle
             }
         }
 
-        taskCancellation.Dispose();
+        taskCancellation?.Dispose();
         slot.Cancellation = null;
         slot.Execution = null;
         if (stopFailure is not null)
@@ -727,20 +790,63 @@ public sealed class PlcDeviceRuntimeHandle
     {
         var taskCancellation = _periodicReadCancellation;
         var execution = _periodicReadExecution;
-        if (taskCancellation is null)
+        var stopExecution = _periodicReadStopExecution;
+        if (taskCancellation is null && stopExecution is null)
         {
             return;
         }
 
-        await taskCancellation.CancelAsync().ConfigureAwait(false);
-        Exception? stopFailure = null;
-        try
+        if (taskCancellation is not null)
         {
-            await PeriodicReadTask.StopAsync(cancellationToken).ConfigureAwait(false);
+            await taskCancellation.CancelAsync().ConfigureAwait(false);
         }
-        catch (Exception ex)
+
+        Exception? stopFailure = null;
+        if (stopExecution is null)
         {
-            stopFailure = ex;
+            try
+            {
+                stopExecution = PeriodicReadTask.StopAsync(cancellationToken);
+                _periodicReadStopExecution = stopExecution;
+                TrackExecution(stopExecution);
+            }
+            catch (Exception ex)
+            {
+                stopFailure = ex;
+            }
+        }
+
+        if (stopExecution is not null)
+        {
+            try
+            {
+                await stopExecution
+                    .WaitAsync(StopTimeout, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (TimeoutException ex)
+            {
+                throw new TimeoutException(
+                    $"PLC“{DeviceName}”周期读取停止钩子超过 {StopTimeout.TotalSeconds:0} 秒，runtime 将保留隔离。",
+                    ex);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                stopFailure = stopFailure is null
+                    ? ex
+                    : new AggregateException(stopFailure, ex);
+            }
+            finally
+            {
+                if (stopExecution.IsCompleted)
+                {
+                    _periodicReadStopExecution = null;
+                }
+            }
         }
 
         if (execution is not null)
@@ -754,7 +860,7 @@ public sealed class PlcDeviceRuntimeHandle
                 throw;
             }
             catch (OperationCanceledException) when (
-                taskCancellation.IsCancellationRequested
+                taskCancellation?.IsCancellationRequested == true
                 && execution.IsCompleted
                 && !cancellationToken.IsCancellationRequested)
             {
@@ -767,7 +873,7 @@ public sealed class PlcDeviceRuntimeHandle
             }
         }
 
-        taskCancellation.Dispose();
+        taskCancellation?.Dispose();
         _periodicReadCancellation = null;
         _periodicReadExecution = null;
         if (stopFailure is not null)
@@ -869,6 +975,8 @@ public sealed class PlcDeviceRuntimeHandle
         public CancellationTokenSource? Cancellation { get; set; }
 
         public Task? Execution { get; set; }
+
+        public Task? StopExecution { get; set; }
 
         public string? UnexpectedExitReason { get; set; }
 
