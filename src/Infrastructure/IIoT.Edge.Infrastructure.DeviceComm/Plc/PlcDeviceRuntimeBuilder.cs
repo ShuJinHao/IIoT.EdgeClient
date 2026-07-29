@@ -58,10 +58,12 @@ public sealed class PlcDeviceRuntimeBuilder
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(taskPlan);
-        if (!string.Equals(taskPlan.DeviceName, device.DeviceName, StringComparison.OrdinalIgnoreCase))
+        if (taskPlan.NetworkDeviceId != device.Id
+            || !string.Equals(taskPlan.DeviceName, device.DeviceName, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"任务计划设备“{taskPlan.DeviceName}”与待构建 PLC“{device.DeviceName}”不一致。");
+                $"任务计划设备“{taskPlan.DeviceName}”(NetworkDeviceId={taskPlan.NetworkDeviceId})"
+                + $"与待构建 PLC“{device.DeviceName}”(NetworkDeviceId={device.Id}) 不一致。");
         }
 
         var mappings = await _ioMappings.GetListAsync(x => x.NetworkDeviceId == device.Id, ct).ConfigureAwait(false);

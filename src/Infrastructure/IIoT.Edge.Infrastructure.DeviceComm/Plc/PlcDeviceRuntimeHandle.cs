@@ -20,6 +20,7 @@ public sealed class PlcDeviceRuntimeHandle
     private Task? _periodicReadExecution;
     private Task? _periodicReadStopExecution;
     private CancellationTokenSource? _periodicReadCancellation;
+    private StopDeadline? _shutdownStopDeadline;
     private int _started;
     private int _connected;
     private int _cancellationDisposed;
@@ -47,6 +48,9 @@ public sealed class PlcDeviceRuntimeHandle
     public required CancellationTokenSource CancellationTokenSource { get; init; }
 
     internal TimeProvider TransitionTimeProvider { get; init; } = TimeProvider.System;
+
+    internal TimeSpan GetRemainingShutdownTimeout()
+        => _shutdownStopDeadline?.Remaining ?? StopTimeout;
 
     public bool IsConnected => Volatile.Read(ref _connected) != 0;
 
@@ -81,10 +85,12 @@ public sealed class PlcDeviceRuntimeHandle
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        if (!string.Equals(plan.DeviceName, DeviceName, StringComparison.OrdinalIgnoreCase))
+        if (plan.NetworkDeviceId != DeviceId
+            || !string.Equals(plan.DeviceName, DeviceName, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"任务计划设备“{plan.DeviceName}”与 runtime 设备“{DeviceName}”不一致。");
+                $"任务计划设备“{plan.DeviceName}”(NetworkDeviceId={plan.NetworkDeviceId})"
+                + $"与 runtime 设备“{DeviceName}”(NetworkDeviceId={DeviceId}) 不一致。");
         }
 
         await _taskGate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -286,7 +292,10 @@ public sealed class PlcDeviceRuntimeHandle
                     Interlocked.Exchange(ref _connected, 0);
                     try
                     {
-                        await StopDependentTasksAsync(cancellationToken).ConfigureAwait(false);
+                        await StopDependentTasksAsync(
+                                CreateStopDeadline(),
+                                cancellationToken)
+                            .ConfigureAwait(false);
                     }
                     catch (Exception ex)
                     {
@@ -623,48 +632,67 @@ public sealed class PlcDeviceRuntimeHandle
         return failures;
     }
 
-    private async Task StopDependentTasksAsync(CancellationToken cancellationToken)
+    private async Task StopDependentTasksAsync(
+        StopDeadline deadline,
+        CancellationToken cancellationToken)
     {
-        List<Exception>? failures = null;
-        foreach (var taskKey in GetBusinessTaskKeysSnapshot()
-                     .OrderBy(static key => key, StringComparer.OrdinalIgnoreCase))
-        {
-            try
-            {
-                await StopBusinessTaskAsync(
-                        GetRequiredBusinessTaskSlot(taskKey),
-                        cancellationToken)
-                    .ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                (failures ??= []).Add(ex);
-                Logger.Error($"[{DeviceName}] 业务任务 {taskKey} 暂停失败：{ex.Message}");
-            }
-        }
+        var stopTasks = GetBusinessTaskKeysSnapshot()
+            .OrderBy(static key => key, StringComparer.OrdinalIgnoreCase)
+            .Select(StopBusinessForTransitionAsync)
+            .Append(StopPeriodicReadForTransitionAsync())
+            .ToArray();
+        var failures = (await Task.WhenAll(stopTasks).ConfigureAwait(false))
+            .Where(static failure => failure is not null)
+            .Select(static failure => failure!)
+            .ToArray();
 
-        try
-        {
-            await StopPeriodicReadTaskAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            (failures ??= []).Add(ex);
-            Logger.Error($"[{DeviceName}] 周期读取任务暂停失败：{ex.Message}");
-        }
-
-        if (failures is { Count: > 0 })
+        if (failures.Length > 0)
         {
             throw new AggregateException(
                 $"PLC“{DeviceName}”断联后存在未安全暂停的任务。",
                 failures);
         }
+
+        async Task<Exception?> StopBusinessForTransitionAsync(string taskKey)
+        {
+            try
+            {
+                await StopBusinessTaskAsync(
+                        GetRequiredBusinessTaskSlot(taskKey),
+                        cancellationToken,
+                        deadline)
+                    .ConfigureAwait(false);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"[{DeviceName}] 业务任务 {taskKey} 暂停失败：{ex.Message}");
+                return ex;
+            }
+        }
+
+        async Task<Exception?> StopPeriodicReadForTransitionAsync()
+        {
+            try
+            {
+                await StopPeriodicReadTaskAsync(cancellationToken, deadline)
+                    .ConfigureAwait(false);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"[{DeviceName}] 周期读取任务暂停失败：{ex.Message}");
+                return ex;
+            }
+        }
     }
 
     private async Task StopBusinessTaskAsync(
         BusinessTaskSlot slot,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        StopDeadline? deadline = null)
     {
+        deadline ??= CreateStopDeadline();
         var taskCancellation = slot.Cancellation;
         var execution = slot.Execution;
         var stopExecution = slot.StopExecution;
@@ -699,7 +727,7 @@ public sealed class PlcDeviceRuntimeHandle
             {
                 await stopExecution
                     .WaitAsync(
-                        StopTimeout,
+                        deadline.Remaining,
                         TransitionTimeProvider,
                         cancellationToken)
                     .ConfigureAwait(false);
@@ -735,7 +763,7 @@ public sealed class PlcDeviceRuntimeHandle
             {
                 await execution
                     .WaitAsync(
-                        StopTimeout,
+                        deadline.Remaining,
                         TransitionTimeProvider,
                         cancellationToken)
                     .ConfigureAwait(false);
@@ -769,8 +797,11 @@ public sealed class PlcDeviceRuntimeHandle
         }
     }
 
-    private async Task StopPeriodicReadTaskAsync(CancellationToken cancellationToken)
+    private async Task StopPeriodicReadTaskAsync(
+        CancellationToken cancellationToken,
+        StopDeadline? deadline = null)
     {
+        deadline ??= CreateStopDeadline();
         var taskCancellation = _periodicReadCancellation;
         var execution = _periodicReadExecution;
         var stopExecution = _periodicReadStopExecution;
@@ -805,7 +836,7 @@ public sealed class PlcDeviceRuntimeHandle
             {
                 await stopExecution
                     .WaitAsync(
-                        StopTimeout,
+                        deadline.Remaining,
                         TransitionTimeProvider,
                         cancellationToken)
                     .ConfigureAwait(false);
@@ -841,7 +872,7 @@ public sealed class PlcDeviceRuntimeHandle
             {
                 await execution
                     .WaitAsync(
-                        StopTimeout,
+                        deadline.Remaining,
                         TransitionTimeProvider,
                         cancellationToken)
                     .ConfigureAwait(false);
@@ -877,6 +908,7 @@ public sealed class PlcDeviceRuntimeHandle
 
     private async Task StopCoreAsync()
     {
+        _shutdownStopDeadline = CreateStopDeadline();
         await CancellationTokenSource.CancelAsync().ConfigureAwait(false);
         ConnectionSignal.Complete();
 
@@ -884,7 +916,10 @@ public sealed class PlcDeviceRuntimeHandle
         try
         {
             Interlocked.Exchange(ref _connected, 0);
-            await StopDependentTasksAsync(CancellationToken.None).ConfigureAwait(false);
+            await StopDependentTasksAsync(
+                    _shutdownStopDeadline,
+                    CancellationToken.None)
+                .ConfigureAwait(false);
         }
         finally
         {
@@ -944,6 +979,9 @@ public sealed class PlcDeviceRuntimeHandle
             TaskScheduler.Default);
     }
 
+    private StopDeadline CreateStopDeadline()
+        => new(TransitionTimeProvider);
+
     private sealed record PreviousTaskState(
         BusinessTaskSlot Slot,
         bool WasRunning);
@@ -967,5 +1005,19 @@ public sealed class PlcDeviceRuntimeHandle
         public string? UnexpectedExitReason { get; set; }
 
         public bool IsRunning => Execution is { IsCompleted: false };
+    }
+
+    private sealed class StopDeadline(TimeProvider timeProvider)
+    {
+        private readonly long _startedAt = timeProvider.GetTimestamp();
+
+        public TimeSpan Remaining
+        {
+            get
+            {
+                var remaining = StopTimeout - timeProvider.GetElapsedTime(_startedAt);
+                return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
+            }
+        }
     }
 }

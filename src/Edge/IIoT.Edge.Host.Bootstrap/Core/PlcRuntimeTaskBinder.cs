@@ -117,7 +117,7 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
         {
             _logger.Warn(
                 $"[{device.DeviceName}] PLC 业务任务绑定跳过：当前插件库未唯一确定运行时任务工厂；连接任务仍可独立运行。");
-            return PlcRuntimeTaskPlan.Empty(device.DeviceName);
+            return PlcRuntimeTaskPlan.Empty(device.Id, device.DeviceName);
         }
 
         var mappings = await _ioMappings.GetListAsync(
@@ -191,7 +191,7 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
                     }));
         }
 
-        return new PlcRuntimeTaskPlan(device.DeviceName, taskFactories);
+        return new PlcRuntimeTaskPlan(device.Id, device.DeviceName, taskFactories);
     }
 
     private IStationRuntimeFactory? ResolveActiveRuntimeFactory()

@@ -8,7 +8,7 @@ public sealed class PlcRuntimeTaskController(PlcRuntimeRegistry runtimeRegistry)
     {
         ArgumentNullException.ThrowIfNull(plan);
         using var mutation = await runtimeRegistry
-            .EnterRuntimeMutationAsync(plan.DeviceName, cancellationToken)
+            .EnterRuntimeMutationAsync(plan.NetworkDeviceId, cancellationToken)
             .ConfigureAwait(false);
         runtimeRegistry.RegisterTaskPlan(plan);
     }
@@ -19,10 +19,10 @@ public sealed class PlcRuntimeTaskController(PlcRuntimeRegistry runtimeRegistry)
     {
         ArgumentNullException.ThrowIfNull(plan);
         using var mutation = await runtimeRegistry
-            .EnterRuntimeMutationAsync(plan.DeviceName, cancellationToken)
+            .EnterRuntimeMutationAsync(plan.NetworkDeviceId, cancellationToken)
             .ConfigureAwait(false);
 
-        var runtime = runtimeRegistry.GetRuntime(plan.DeviceName);
+        var runtime = runtimeRegistry.GetRuntime(plan.NetworkDeviceId);
         if (runtime is null)
         {
             runtimeRegistry.RegisterTaskPlan(plan);

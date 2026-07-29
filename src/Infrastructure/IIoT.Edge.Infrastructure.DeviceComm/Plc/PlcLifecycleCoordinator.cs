@@ -252,7 +252,7 @@ public sealed class PlcLifecycleCoordinator
     {
         ThrowIfDisposed();
         using var mutation = await _runtimeRegistry
-            .EnterRuntimeMutationAsync(device.DeviceName, ct)
+            .EnterRuntimeMutationAsync(device.Id, ct)
             .ConfigureAwait(false);
 
         if (_runtimeRegistry.ContainsRuntime(device.Id))
@@ -262,7 +262,7 @@ public sealed class PlcLifecycleCoordinator
         }
 
         _statusStore.EnsureTracked(device.Id, device.DeviceName);
-        var taskPlan = _runtimeRegistry.GetTaskPlan(device.DeviceName);
+        var taskPlan = _runtimeRegistry.GetTaskPlan(device.Id, device.DeviceName);
         PlcDeviceRuntimeHandle? runtime = null;
         var registered = false;
 
@@ -388,7 +388,7 @@ public sealed class PlcLifecycleCoordinator
         }
 
         var runningHandlesStopped = await AwaitRunningHandlesAsync(
-                runtime.DeviceName,
+                runtime,
                 runtime.GetRunningHandlesSnapshot(),
                 CancellationToken.None)
             .ConfigureAwait(false);
@@ -435,7 +435,7 @@ public sealed class PlcLifecycleCoordinator
     }
 
     private async Task<bool> AwaitRunningHandlesAsync(
-        string deviceName,
+        PlcDeviceRuntimeHandle runtime,
         IReadOnlyCollection<Task> runningHandles,
         CancellationToken ct)
     {
@@ -447,12 +447,17 @@ public sealed class PlcLifecycleCoordinator
         var completion = Task.WhenAll(runningHandles);
         try
         {
-            await completion.WaitAsync(TimeSpan.FromSeconds(5), ct).ConfigureAwait(false);
+            await completion
+                .WaitAsync(
+                    runtime.GetRemainingShutdownTimeout(),
+                    runtime.TransitionTimeProvider,
+                    ct)
+                .ConfigureAwait(false);
             return true;
         }
         catch (TimeoutException) when (!completion.IsCompleted)
         {
-            _logger.Warn($"[{deviceName}] 等待 PLC 任务停止超时：5 秒内未完成。");
+            _logger.Warn($"[{runtime.DeviceName}] 等待 PLC 任务停止超时：共享的 5 秒停止期限内未完成。");
             return false;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -461,7 +466,7 @@ public sealed class PlcLifecycleCoordinator
         }
         catch (Exception ex)
         {
-            _logger.Error($"[{deviceName}] 等待 PLC 任务停止时发生异常：{ex.Message}");
+            _logger.Error($"[{runtime.DeviceName}] 等待 PLC 任务停止时发生异常：{ex.Message}");
             return true;
         }
     }

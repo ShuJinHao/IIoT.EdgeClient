@@ -277,6 +277,7 @@ public sealed class PlcTaskBindingBehaviorTests
         var runtimeA = await runtimeBuilder.BuildAsync(
             plcA,
             new PlcRuntimeTaskPlan(
+                plcA.Id,
                 plcA.DeviceName,
                 [
                     new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
@@ -287,6 +288,7 @@ public sealed class PlcTaskBindingBehaviorTests
         var runtimeB = await runtimeBuilder.BuildAsync(
             plcB,
             new PlcRuntimeTaskPlan(
+                plcB.Id,
                 plcB.DeviceName,
                 [
                     new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
@@ -419,8 +421,10 @@ public sealed class PlcTaskBindingBehaviorTests
             runtimeBuilder,
             statusStore);
         var controller = new PlcRuntimeTaskController(runtimeRegistry);
-        runtimeRegistry.RegisterTaskPlan(PlcRuntimeTaskPlan.Empty(device.DeviceName));
+        runtimeRegistry.RegisterTaskPlan(
+            PlcRuntimeTaskPlan.Empty(device.Id, device.DeviceName));
         var replacementPlan = new PlcRuntimeTaskPlan(
+            device.Id,
             device.DeviceName,
             [
                 new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
@@ -444,7 +448,7 @@ public sealed class PlcTaskBindingBehaviorTests
             Assert.Equal(["Task.MG1"], result.EnabledTaskKeys);
             Assert.Equal(
                 ["Task.MG1"],
-                runtimeRegistry.GetTaskPlan(device.DeviceName).TaskKeys);
+                runtimeRegistry.GetTaskPlan(device.Id, device.DeviceName).TaskKeys);
             Assert.Equal(
                 ["Task.MG1"],
                 runtimeRegistry.GetRuntime(device.Id)!.EnabledTaskKeys);

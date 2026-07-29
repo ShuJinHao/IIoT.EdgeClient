@@ -6,23 +6,27 @@ public sealed class PlcRuntimeRegistry
 {
     private readonly object _stateLock = new();
     private readonly Dictionary<int, PlcDeviceRuntimeHandle> _runtimes = new();
-    private readonly Dictionary<string, PlcRuntimeTaskPlan> _taskPlans =
-        new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, SemaphoreSlim> _runtimeMutationGates =
-        new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<int, PlcRuntimeTaskPlan> _taskPlans = [];
+    private readonly Dictionary<int, SemaphoreSlim> _runtimeMutationGates = [];
 
     internal async ValueTask<IDisposable> EnterRuntimeMutationAsync(
-        string deviceName,
+        int networkDeviceId,
         CancellationToken cancellationToken)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(deviceName);
+        if (networkDeviceId <= 0)
+        {
+            throw new ArgumentException(
+                "PLC runtime 变更门必须绑定有效的 NetworkDeviceId。",
+                nameof(networkDeviceId));
+        }
+
         SemaphoreSlim gate;
         lock (_stateLock)
         {
-            if (!_runtimeMutationGates.TryGetValue(deviceName, out gate!))
+            if (!_runtimeMutationGates.TryGetValue(networkDeviceId, out gate!))
             {
                 gate = new SemaphoreSlim(1, 1);
-                _runtimeMutationGates.Add(deviceName, gate);
+                _runtimeMutationGates.Add(networkDeviceId, gate);
             }
         }
 
@@ -35,18 +39,27 @@ public sealed class PlcRuntimeRegistry
         ArgumentNullException.ThrowIfNull(plan);
         lock (_stateLock)
         {
-            _taskPlans[plan.DeviceName] = plan;
+            _taskPlans[plan.NetworkDeviceId] = plan;
         }
     }
 
-    public PlcRuntimeTaskPlan GetTaskPlan(string deviceName)
+    public PlcRuntimeTaskPlan GetTaskPlan(
+        int networkDeviceId,
+        string deviceName)
     {
+        if (networkDeviceId <= 0)
+        {
+            throw new ArgumentException(
+                "PLC 业务任务计划必须绑定有效的 NetworkDeviceId。",
+                nameof(networkDeviceId));
+        }
+
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceName);
         lock (_stateLock)
         {
-            return _taskPlans.TryGetValue(deviceName, out var plan)
+            return _taskPlans.TryGetValue(networkDeviceId, out var plan)
                 ? plan
-                : PlcRuntimeTaskPlan.Empty(deviceName);
+                : PlcRuntimeTaskPlan.Empty(networkDeviceId, deviceName);
         }
     }
 
@@ -94,19 +107,6 @@ public sealed class PlcRuntimeRegistry
             return _runtimes.TryGetValue(deviceId, out var runtime)
                 ? runtime
                 : null;
-        }
-    }
-
-    public PlcDeviceRuntimeHandle? GetRuntime(string deviceName)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(deviceName);
-        lock (_stateLock)
-        {
-            return _runtimes.Values.FirstOrDefault(
-                runtime => string.Equals(
-                    runtime.DeviceName,
-                    deviceName,
-                    StringComparison.OrdinalIgnoreCase));
         }
     }
 

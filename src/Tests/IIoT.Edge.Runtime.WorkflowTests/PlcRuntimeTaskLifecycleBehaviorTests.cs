@@ -22,7 +22,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         var runtime = CreateRuntime(connection, periodicRead);
         await runtime.ApplyTaskPlanAsync(
             CreatePlan(
-                runtime.DeviceName,
+                runtime,
                 ("Task.MG1", (_, _) =>
                 {
                     factoryCalls.Increment();
@@ -55,7 +55,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         var originalService = runtime.PlcService;
         await runtime.ApplyTaskPlanAsync(
             CreatePlan(
-                runtime.DeviceName,
+                runtime,
                 ("Task.MG1", (_, _) => mg1),
                 ("Task.MG2", (_, _) => mg2)),
             TestContext.Current.CancellationToken);
@@ -107,7 +107,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         var mg2 = new ControlledBusinessTask("Task.MG2");
         var runtime = CreateRuntime(connection, periodicRead);
         var fullPlan = CreatePlan(
-            runtime.DeviceName,
+            runtime,
             ("Task.MG1", (_, _) =>
             {
                 var task = new ControlledBusinessTask("Task.MG1");
@@ -132,7 +132,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         Assert.True(mg1Instances.TryPeek(out var firstMg1));
 
         var disableResult = await runtime.ApplyTaskPlanAsync(
-            CreatePlan(runtime.DeviceName, ("Task.MG2", (_, _) => mg2)),
+            CreatePlan(runtime, ("Task.MG2", (_, _) => mg2)),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(PlcRuntimeTaskApplyState.Applied, disableResult.State);
@@ -170,7 +170,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             new ControlledLoopTask("PeriodicRead"));
         await runtime.ApplyTaskPlanAsync(
             CreatePlan(
-                runtime.DeviceName,
+                runtime,
                 ("Task.MG1", (_, _) => failed),
                 ("Task.MG2", (_, _) => healthy)),
             TestContext.Current.CancellationToken);
@@ -210,7 +210,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             periodicRead);
         await runtime.ApplyTaskPlanAsync(
             CreatePlan(
-                runtime.DeviceName,
+                runtime,
                 ("Task.MG1", (_, _) => failedStop),
                 ("Task.MG2", (_, _) => healthy)),
             TestContext.Current.CancellationToken);
@@ -255,7 +255,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             timeProvider: timeProvider);
         await runtime.ApplyTaskPlanAsync(
             CreatePlan(
-                runtime.DeviceName,
+                runtime,
                 ("Task.MG1", (_, _) => stalledStop),
                 ("Task.MG2", (_, _) => healthy)),
             TestContext.Current.CancellationToken);
@@ -289,6 +289,50 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
     }
 
     [Fact]
+    public async Task Shutdown_WhenMultipleStopHooksStall_ShouldUseOneSharedDeadline()
+    {
+        var first = new StalledStopBusinessTask("Task.MG1");
+        var second = new StalledStopBusinessTask("Task.MG2");
+        var timeProvider = new ObservableFakeTimeProvider();
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            new ControlledLoopTask("PeriodicRead"),
+            timeProvider: timeProvider);
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlan(
+                runtime,
+                ("Task.MG1", (_, _) => first),
+                ("Task.MG2", (_, _) => second)),
+            TestContext.Current.CancellationToken);
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await Task.WhenAll(
+            first.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
+            second.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+
+        var stop = runtime.Runtime.RequestStopAsync();
+        await Task.WhenAll(
+            first.Stops.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
+            second.Stops.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
+            timeProvider.ScheduledTimeouts.WaitForAtLeastAsync(
+                2,
+                TestContext.Current.CancellationToken));
+        timeProvider.Advance(TimeSpan.FromSeconds(5));
+
+        await Assert.ThrowsAsync<AggregateException>(() => stop);
+        Assert.Equal(TimeSpan.Zero, runtime.RemainingShutdownTimeout);
+        Assert.Contains(first.StopCompletion, runtime.GetRunningHandlesSnapshot());
+        Assert.Contains(second.StopCompletion, runtime.GetRunningHandlesSnapshot());
+
+        first.ReleaseStop();
+        second.ReleaseStop();
+        await Task.WhenAll(first.StopCompletion, second.StopCompletion);
+        await Task.WhenAll(runtime.GetRunningHandlesSnapshot());
+        await runtime.PlcService.DisposeAsync();
+        runtime.Runtime.DisposeCancellation();
+    }
+
+    [Fact]
     public async Task ConnectionStart_WhenStartupHandshakeStalls_ShouldTimeOutAndStartLaterTask()
     {
         var stalledStartup = new StalledStartupBusinessTask("Task.MG1");
@@ -300,7 +344,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             timeProvider: timeProvider);
         await runtime.ApplyTaskPlanAsync(
             CreatePlan(
-                runtime.DeviceName,
+                runtime,
                 ("Task.MG1", (_, _) => stalledStartup),
                 ("Task.MG2", (_, _) => healthy)),
             TestContext.Current.CancellationToken);
@@ -336,7 +380,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         var runtime = CreateRuntime(connection, periodicRead);
         await runtime.ApplyTaskPlanAsync(
             CreatePlan(
-                runtime.DeviceName,
+                runtime,
                 ("Task.MG1", (_, _) => mg1),
                 ("Task.MG2", (_, _) => mg2)),
             TestContext.Current.CancellationToken);
@@ -350,7 +394,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             runtime.ApplyTaskPlanAsync(
-                CreatePlan(runtime.DeviceName, ("Task.MG2", (_, _) => mg2)),
+                CreatePlan(runtime, ("Task.MG2", (_, _) => mg2)),
                 TestContext.Current.CancellationToken));
 
         Assert.Contains("Task.MG1", error.Message, StringComparison.Ordinal);
@@ -374,7 +418,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             new ControlledLoopTask("PeriodicRead"));
         await runtime.ApplyTaskPlanAsync(
             CreatePlan(
-                runtime.DeviceName,
+                runtime,
                 ("Task.MG1", (_, _) => mg1),
                 ("Task.MG2", (_, _) => mg2)),
             TestContext.Current.CancellationToken);
@@ -389,7 +433,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             runtime.ApplyTaskPlanAsync(
-                PlcRuntimeTaskPlan.Empty(runtime.DeviceName),
+                PlcRuntimeTaskPlan.Empty(runtime.DeviceId, runtime.DeviceName),
                 TestContext.Current.CancellationToken));
         await Task.WhenAll(
             mg1.Starts.WaitForAtLeastAsync(2, TestContext.Current.CancellationToken),
@@ -415,7 +459,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             new ControlledLoopTask("PeriodicRead"));
         await runtime.ApplyTaskPlanAsync(
             CreatePlan(
-                runtime.DeviceName,
+                runtime,
                 ("Task.MG1", (_, _) => faulting),
                 ("Task.MG2", (_, _) => healthy)),
             TestContext.Current.CancellationToken);
@@ -452,7 +496,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             new ControlledLoopTask("Connection"),
             new ControlledLoopTask("PeriodicRead"));
         await runtime.ApplyTaskPlanAsync(
-            CreatePlan(runtime.DeviceName, ("Task.MG1", (_, _) => faulting)),
+            CreatePlan(runtime, ("Task.MG1", (_, _) => faulting)),
             TestContext.Current.CancellationToken);
         runtime.Start();
         runtime.ConnectionSignal.Report(true);
@@ -469,7 +513,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
 
         await runtime.ApplyTaskPlanAsync(
             CreatePlan(
-                runtime.DeviceName,
+                runtime,
                 ("Task.MG1", (_, _) => faulting),
                 ("Task.MG2", (_, _) => added)),
             TestContext.Current.CancellationToken);
@@ -493,7 +537,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             new ControlledLoopTask("PeriodicRead"));
         await runtime.ApplyTaskPlanAsync(
             CreatePlan(
-                runtime.DeviceName,
+                runtime,
                 ("Task.MG1", (_, _) => earlyExit),
                 ("Task.MG2", (_, _) => healthy)),
             TestContext.Current.CancellationToken);
@@ -560,15 +604,15 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         var plcBPeriodic = new ControlledLoopTask("PLC-B.Periodic");
         var plcAMg1 = new ControlledBusinessTask("Task.MG1");
         var plcBMg1 = new ControlledBusinessTask("Task.MG1");
-        var plcA = CreateRuntime(plcAConnection, plcAPeriodic, "PLC-A", 1);
-        var plcB = CreateRuntime(plcBConnection, plcBPeriodic, "PLC-B", 2);
+        var plcA = CreateRuntime(plcAConnection, plcAPeriodic, "PLC-DUPLICATE", 1);
+        var plcB = CreateRuntime(plcBConnection, plcBPeriodic, "PLC-DUPLICATE", 2);
         Assert.True(registry.TryAddRuntime(plcA));
         Assert.True(registry.TryAddRuntime(plcB));
         await plcA.ApplyTaskPlanAsync(
-            CreatePlan(plcA.DeviceName, ("Task.MG1", (_, _) => plcAMg1)),
+            CreatePlan(plcA, ("Task.MG1", (_, _) => plcAMg1)),
             TestContext.Current.CancellationToken);
         await plcB.ApplyTaskPlanAsync(
-            CreatePlan(plcB.DeviceName, ("Task.MG1", (_, _) => plcBMg1)),
+            CreatePlan(plcB, ("Task.MG1", (_, _) => plcBMg1)),
             TestContext.Current.CancellationToken);
         plcA.Start();
         plcB.Start();
@@ -582,7 +626,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         var plcBService = plcB.PlcService;
 
         var result = await controller.RegisterAndApplyAsync(
-            PlcRuntimeTaskPlan.Empty(plcA.DeviceName),
+            PlcRuntimeTaskPlan.Empty(plcA.DeviceId, plcA.DeviceName),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(PlcRuntimeTaskApplyState.Applied, result.State);
@@ -609,7 +653,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             new ControlledLoopTask("Connection"),
             new ControlledLoopTask("PeriodicRead"));
         var originalPlan = CreatePlan(
-            runtime.DeviceName,
+            runtime,
             ("Task.MG1", (_, _) => businessTask));
         registry.RegisterTaskPlan(originalPlan);
         Assert.True(registry.TryAddRuntime(runtime));
@@ -625,10 +669,12 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             controller.RegisterAndApplyAsync(
-                PlcRuntimeTaskPlan.Empty(runtime.DeviceName),
+                PlcRuntimeTaskPlan.Empty(runtime.DeviceId, runtime.DeviceName),
                 TestContext.Current.CancellationToken));
 
-        Assert.Equal(["Task.MG1"], registry.GetTaskPlan(runtime.DeviceName).TaskKeys);
+        Assert.Equal(
+            ["Task.MG1"],
+            registry.GetTaskPlan(runtime.DeviceId, runtime.DeviceName).TaskKeys);
         Assert.Equal(["Task.MG1"], runtime.EnabledTaskKeys);
 
         businessTask.ThrowOnStop = false;
@@ -667,10 +713,11 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
     }
 
     private static PlcRuntimeTaskPlan CreatePlan(
-        string deviceName,
+        TestPlcDeviceRuntimeHandle runtime,
         params (string TaskKey, PlcRuntimeBusinessTaskFactory Factory)[] tasks)
         => new(
-            deviceName,
+            runtime.DeviceId,
+            runtime.DeviceName,
             tasks.Select(
                 static task =>
                     new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
@@ -698,6 +745,9 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         public IReadOnlyCollection<LogEntry> LoggerEntries => logger.Entries;
 
         public string DeviceName => Runtime.DeviceName;
+        public int DeviceId => Runtime.DeviceId;
+        public TimeSpan RemainingShutdownTimeout
+            => Runtime.GetRemainingShutdownTimeout();
         public IPlcService PlcService => Runtime.PlcService;
         public PlcBuffer Buffer => (PlcBuffer)Runtime.Buffer;
         public ProductionContext Context => Runtime.Context;
