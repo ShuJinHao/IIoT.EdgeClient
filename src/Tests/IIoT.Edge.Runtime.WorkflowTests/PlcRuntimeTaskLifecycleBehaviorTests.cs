@@ -428,6 +428,42 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         await CleanupAsync(plcB);
     }
 
+    [Fact]
+    public async Task TaskController_WhenRuntimeApplyFails_ShouldKeepPreviousRegisteredPlan()
+    {
+        var registry = new PlcRuntimeRegistry();
+        var controller = new PlcRuntimeTaskController(registry);
+        var businessTask = new ControlledBusinessTask("Task.MG1");
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            new ControlledLoopTask("PeriodicRead"));
+        var originalPlan = CreatePlan(
+            runtime.DeviceName,
+            ("Task.MG1", (_, _) => businessTask));
+        registry.RegisterTaskPlan(originalPlan);
+        Assert.True(registry.TryAddRuntime(runtime));
+        await runtime.ApplyTaskPlanAsync(
+            originalPlan,
+            TestContext.Current.CancellationToken);
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await businessTask.Starts.WaitForAtLeastAsync(
+            1,
+            TestContext.Current.CancellationToken);
+        businessTask.ThrowOnStop = true;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            controller.RegisterAndApplyAsync(
+                PlcRuntimeTaskPlan.Empty(runtime.DeviceName),
+                TestContext.Current.CancellationToken));
+
+        Assert.Equal(["Task.MG1"], registry.GetTaskPlan(runtime.DeviceName).TaskKeys);
+        Assert.Equal(["Task.MG1"], runtime.EnabledTaskKeys);
+
+        businessTask.ThrowOnStop = false;
+        await CleanupAsync(runtime);
+    }
+
     private static TestPlcDeviceRuntimeHandle CreateRuntime(
         ControlledLoopTask connection,
         ControlledLoopTask periodicRead,

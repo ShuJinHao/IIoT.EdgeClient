@@ -13,18 +13,20 @@ public sealed class PlcRuntimeTaskController(PlcRuntimeRegistry runtimeRegistry)
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        runtimeRegistry.RegisterTaskPlan(plan);
 
         var runtime = runtimeRegistry.GetRuntime(plan.DeviceName);
         if (runtime is null)
         {
+            runtimeRegistry.RegisterTaskPlan(plan);
             return new PlcRuntimeTaskApplyResult(
                 PlcRuntimeTaskApplyState.WaitingForRuntime,
                 plan.TaskKeys);
         }
 
-        return await runtime
+        var result = await runtime
             .ApplyTaskPlanAsync(plan, cancellationToken)
             .ConfigureAwait(false);
+        runtimeRegistry.RegisterTaskPlan(plan);
+        return result;
     }
 }
