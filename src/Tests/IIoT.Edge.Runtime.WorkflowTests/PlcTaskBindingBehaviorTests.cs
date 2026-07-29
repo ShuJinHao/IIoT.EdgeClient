@@ -391,6 +391,71 @@ public sealed class PlcTaskBindingBehaviorTests
     }
 
     [Fact]
+    public async Task TaskPlanApply_DuringRuntimeBuild_ShouldReachTheReplacementRuntime()
+    {
+        var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
+        var ioMappings = new InMemoryRepository<IoMappingEntity>();
+        var device = networkDevices.Add(CreateLifecyclePlc("PLC-A", 6150));
+        var contextStore = new FakeProductionContextStore();
+        var logger = new FakeLogService();
+        var runtimeRegistry = new PlcRuntimeRegistry();
+        var statusStore = new PlcConnectionStatusStore();
+        var endpointResolver = new ControlledPlcEndpointResolver();
+        var runtimeBuilder = new PlcDeviceRuntimeBuilder(
+            ioMappings,
+            new PlcDataStore(),
+            new TrackingPlcServiceFactory(),
+            contextStore,
+            logger,
+            statusStore,
+            new DefaultPlcSignalBlockPlanner(),
+            endpointResolver,
+            new ModuleHardwareProfileResolver([]));
+        var coordinator = new PlcLifecycleCoordinator(
+            networkDevices,
+            contextStore,
+            logger,
+            runtimeRegistry,
+            runtimeBuilder,
+            statusStore);
+        var controller = new PlcRuntimeTaskController(runtimeRegistry);
+        runtimeRegistry.RegisterTaskPlan(PlcRuntimeTaskPlan.Empty(device.DeviceName));
+        var replacementPlan = new PlcRuntimeTaskPlan(
+            device.DeviceName,
+            [
+                new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
+                    "Task.MG1",
+                    (_, _) => new NoopPlcTask("Task.MG1"))
+            ]);
+
+        var initialize = coordinator.InitializeAsync(TestContext.Current.CancellationToken);
+        await endpointResolver.ResolveStarted.Task.WaitAsync(
+            TestContext.Current.CancellationToken);
+        var apply = controller.RegisterAndApplyAsync(
+            replacementPlan,
+            TestContext.Current.CancellationToken);
+        endpointResolver.AllowResolve.TrySetResult();
+
+        await initialize;
+        var result = await apply;
+        try
+        {
+            Assert.NotEqual(PlcRuntimeTaskApplyState.WaitingForRuntime, result.State);
+            Assert.Equal(["Task.MG1"], result.EnabledTaskKeys);
+            Assert.Equal(
+                ["Task.MG1"],
+                runtimeRegistry.GetTaskPlan(device.DeviceName).TaskKeys);
+            Assert.Equal(
+                ["Task.MG1"],
+                runtimeRegistry.GetRuntime(device.Id)!.EnabledTaskKeys);
+        }
+        finally
+        {
+            await coordinator.StopAsync(TestContext.Current.CancellationToken);
+        }
+    }
+
+    [Fact]
     public async Task PlcLifecycleCoordinator_WhenMultiplePlcConnectionsHang_ShouldNotWaitForConnections()
     {
         var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
@@ -990,6 +1055,28 @@ public sealed class PlcTaskBindingBehaviorTests
             CancellationToken cancellationToken = default)
             => Task.FromResult<PlcEndpoint>(
                 new TcpPlcEndpoint(device.IpAddress, device.Port1, device.ConnectTimeout));
+    }
+
+    private sealed class ControlledPlcEndpointResolver : IPlcEndpointResolver
+    {
+        public TaskCompletionSource ResolveStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource AllowResolve { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<PlcEndpoint> ResolveAsync(
+            NetworkDeviceEntity device,
+            PlcType plcType,
+            CancellationToken cancellationToken = default)
+        {
+            ResolveStarted.TrySetResult();
+            await AllowResolve.Task.WaitAsync(cancellationToken);
+            return new TcpPlcEndpoint(
+                device.IpAddress,
+                device.Port1,
+                device.ConnectTimeout);
+        }
     }
 
     private sealed class ConnectedPlcService : PlcServiceTestDouble

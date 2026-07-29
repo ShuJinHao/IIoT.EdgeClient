@@ -106,30 +106,12 @@ public sealed class PlcDeviceRuntimeHandle
                     key,
                     plan.GetRequiredFactory(key)))
                 .ToArray();
-            var factoryChanges = currentSlots
-                .Where(pair => nextKeys.Contains(pair.Key) && pair.Value.Task is null)
-                .Select(pair => new PreviousTaskFactory(
-                    pair.Value,
-                    pair.Value.Factory,
-                    pair.Value.Task))
-                .ToArray();
-            foreach (var change in factoryChanges)
-            {
-                change.Slot.Factory = plan.GetRequiredFactory(change.Slot.TaskKey);
-            }
-
             var startedForApply = new List<BusinessTaskSlot>();
             try
             {
                 if (IsConnected)
                 {
-                    var slotsToStart = currentSlots
-                        .Where(pair => nextKeys.Contains(pair.Key) && !pair.Value.IsRunning)
-                        .OrderBy(static pair => pair.Key, StringComparer.OrdinalIgnoreCase)
-                        .Select(static pair => pair.Value)
-                        .Concat(stagedSlots)
-                        .ToArray();
-                    foreach (var slot in slotsToStart)
+                    foreach (var slot in stagedSlots)
                     {
                         await StartBusinessTaskAsync(slot, cancellationToken).ConfigureAwait(false);
                         startedForApply.Add(slot);
@@ -159,8 +141,7 @@ public sealed class PlcDeviceRuntimeHandle
                 var rollbackFailures = await RollbackTaskPlanAsync(
                         startedForApply,
                         stagedSlots,
-                        removedSlots,
-                        factoryChanges)
+                        removedSlots)
                     .ConfigureAwait(false);
                 if (rollbackFailures.Count > 0)
                 {
@@ -584,14 +565,12 @@ public sealed class PlcDeviceRuntimeHandle
     private async Task<IReadOnlyCollection<Exception>> RollbackTaskPlanAsync(
         IReadOnlyCollection<BusinessTaskSlot> startedForApply,
         IReadOnlyCollection<BusinessTaskSlot> stagedSlots,
-        IReadOnlyCollection<PreviousTaskState> removedSlots,
-        IReadOnlyCollection<PreviousTaskFactory> factoryChanges)
+        IReadOnlyCollection<PreviousTaskState> removedSlots)
     {
         var failures = new List<Exception>();
         var stoppedSlots = new HashSet<BusinessTaskSlot>();
         var rollbackStopSlots = startedForApply
             .Concat(stagedSlots)
-            .Concat(factoryChanges.Select(static change => change.Slot))
             .Where(static slot => slot.Cancellation is not null)
             .Distinct()
             .Reverse()
@@ -608,15 +587,6 @@ public sealed class PlcDeviceRuntimeHandle
                 failures.Add(new InvalidOperationException(
                     $"回滚新增或恢复任务 {slot.TaskKey} 失败：{ex.Message}",
                     ex));
-            }
-        }
-
-        foreach (var change in factoryChanges)
-        {
-            change.Slot.Factory = change.Factory;
-            if (!change.Slot.IsRunning)
-            {
-                change.Slot.Task = change.Task;
             }
         }
 
@@ -977,11 +947,6 @@ public sealed class PlcDeviceRuntimeHandle
     private sealed record PreviousTaskState(
         BusinessTaskSlot Slot,
         bool WasRunning);
-
-    private sealed record PreviousTaskFactory(
-        BusinessTaskSlot Slot,
-        PlcRuntimeBusinessTaskFactory Factory,
-        IPlcTask? Task);
 
     private sealed class BusinessTaskSlot(
         string taskKey,

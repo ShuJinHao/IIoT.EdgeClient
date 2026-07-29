@@ -251,6 +251,9 @@ public sealed class PlcLifecycleCoordinator
     private async Task InitializeDeviceAsync(NetworkDeviceEntity device, CancellationToken ct)
     {
         ThrowIfDisposed();
+        using var mutation = await _runtimeRegistry
+            .EnterRuntimeMutationAsync(device.DeviceName, ct)
+            .ConfigureAwait(false);
 
         if (_runtimeRegistry.ContainsRuntime(device.Id))
         {

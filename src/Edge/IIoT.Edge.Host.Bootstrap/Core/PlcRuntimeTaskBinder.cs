@@ -67,7 +67,9 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
             }
 
             var plan = await BuildTaskPlanAsync(device, cancellationToken).ConfigureAwait(false);
-            _taskController.RegisterPlan(plan);
+            await _taskController
+                .RegisterPlanAsync(plan, cancellationToken)
+                .ConfigureAwait(false);
         }
     }
 
@@ -98,7 +100,9 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
                 .ConfigureAwait(false);
         }
 
-        _taskController.RegisterPlan(plan);
+        await _taskController
+            .RegisterPlanAsync(plan, cancellationToken)
+            .ConfigureAwait(false);
         return new PlcRuntimeTaskApplyResult(
             PlcRuntimeTaskApplyState.WaitingForRuntime,
             plan.TaskKeys);

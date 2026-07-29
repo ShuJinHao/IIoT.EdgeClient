@@ -8,6 +8,27 @@ public sealed class PlcRuntimeRegistry
     private readonly Dictionary<int, PlcDeviceRuntimeHandle> _runtimes = new();
     private readonly Dictionary<string, PlcRuntimeTaskPlan> _taskPlans =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, SemaphoreSlim> _runtimeMutationGates =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    internal async ValueTask<IDisposable> EnterRuntimeMutationAsync(
+        string deviceName,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(deviceName);
+        SemaphoreSlim gate;
+        lock (_stateLock)
+        {
+            if (!_runtimeMutationGates.TryGetValue(deviceName, out gate!))
+            {
+                gate = new SemaphoreSlim(1, 1);
+                _runtimeMutationGates.Add(deviceName, gate);
+            }
+        }
+
+        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        return new RuntimeMutationLease(gate);
+    }
 
     public void RegisterTaskPlan(PlcRuntimeTaskPlan plan)
     {
@@ -104,6 +125,19 @@ public sealed class PlcRuntimeRegistry
         lock (_stateLock)
         {
             return _runtimes.Values.ToArray();
+        }
+    }
+
+    private sealed class RuntimeMutationLease(SemaphoreSlim gate) : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 0)
+            {
+                gate.Release();
+            }
         }
     }
 }

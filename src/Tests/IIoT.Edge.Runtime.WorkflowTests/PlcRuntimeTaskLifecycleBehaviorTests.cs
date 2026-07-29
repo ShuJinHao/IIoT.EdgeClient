@@ -444,6 +444,46 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
     }
 
     [Fact]
+    public async Task ApplyPlan_WhenUnchangedTaskHasFaulted_ShouldOnlyStartNewTaskKey()
+    {
+        var faulting = new FaultingAfterStartupBusinessTask("Task.MG1");
+        var added = new ControlledBusinessTask("Task.MG2");
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            new ControlledLoopTask("PeriodicRead"));
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlan(runtime.DeviceName, ("Task.MG1", (_, _) => faulting)),
+            TestContext.Current.CancellationToken);
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await faulting.Starts.WaitForAtLeastAsync(
+            1,
+            TestContext.Current.CancellationToken);
+        var faultObserved = runtime.WaitForLogAsync(
+            entry => entry.Level == "Error"
+                     && entry.Message.Contains("Task.MG1", StringComparison.Ordinal)
+                     && entry.Message.Contains("执行故障", StringComparison.Ordinal),
+            TestContext.Current.CancellationToken);
+        faulting.FailExecution();
+        await faultObserved;
+
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlan(
+                runtime.DeviceName,
+                ("Task.MG1", (_, _) => faulting),
+                ("Task.MG2", (_, _) => added)),
+            TestContext.Current.CancellationToken);
+        await added.Starts.WaitForAtLeastAsync(
+            1,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, faulting.Starts.Count);
+        Assert.Equal(1, added.Starts.Count);
+
+        await CleanupAsync(runtime);
+    }
+
+    [Fact]
     public async Task BusinessExecutionEndingBeforeStartup_ShouldFailWithoutBlockingOtherTask()
     {
         var earlyExit = new ExecutionBeforeStartupBusinessTask("Task.MG1");

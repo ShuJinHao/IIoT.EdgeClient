@@ -2,9 +2,14 @@ namespace IIoT.Edge.Infrastructure.DeviceComm.Plc;
 
 public sealed class PlcRuntimeTaskController(PlcRuntimeRegistry runtimeRegistry)
 {
-    public void RegisterPlan(PlcRuntimeTaskPlan plan)
+    public async Task RegisterPlanAsync(
+        PlcRuntimeTaskPlan plan,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(plan);
+        using var mutation = await runtimeRegistry
+            .EnterRuntimeMutationAsync(plan.DeviceName, cancellationToken)
+            .ConfigureAwait(false);
         runtimeRegistry.RegisterTaskPlan(plan);
     }
 
@@ -13,6 +18,9 @@ public sealed class PlcRuntimeTaskController(PlcRuntimeRegistry runtimeRegistry)
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(plan);
+        using var mutation = await runtimeRegistry
+            .EnterRuntimeMutationAsync(plan.DeviceName, cancellationToken)
+            .ConfigureAwait(false);
 
         var runtime = runtimeRegistry.GetRuntime(plan.DeviceName);
         if (runtime is null)
