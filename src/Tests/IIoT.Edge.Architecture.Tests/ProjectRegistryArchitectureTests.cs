@@ -305,6 +305,30 @@ public sealed partial class ProjectRegistryArchitectureTests
             callers);
     }
 
+    [Fact]
+    public void PlcNetworkDeviceMutation_ProductionInvocation_ShouldRemainOwnedByGuardedHardwareTransaction()
+    {
+        var root = FindRepositoryRoot();
+        var callers = EnumerateSourceFiles(Path.Combine(root, "src"), "*.cs")
+            .Where(path => !path.Contains(
+                $"{Path.DirectorySeparatorChar}Tests{Path.DirectorySeparatorChar}",
+                StringComparison.OrdinalIgnoreCase))
+            .Where(path => !path.Contains(
+                $"{Path.DirectorySeparatorChar}Testing{Path.DirectorySeparatorChar}",
+                StringComparison.OrdinalIgnoreCase))
+            .Where(path => File.ReadAllText(path)
+                .Contains("new SaveNetworkDevicesCommand(", StringComparison.Ordinal))
+            .Select(path => Normalize(Path.GetRelativePath(root, path)))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(
+            [
+                "src/Application/IIoT.Edge.Application/Features/Hardware/HardwareConfig/HardwareConfigQueries.cs"
+            ],
+            callers);
+    }
+
     [GeneratedRegex("<Project\\s+Path=\"([^\"]+\\.csproj)\"", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ProjectPathPattern();
 
