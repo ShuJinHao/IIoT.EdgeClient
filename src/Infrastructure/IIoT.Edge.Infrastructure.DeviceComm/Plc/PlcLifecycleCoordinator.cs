@@ -252,12 +252,6 @@ public sealed class PlcLifecycleCoordinator
     {
         ThrowIfDisposed();
 
-        if (_runtimeRegistry.IsRuntimeBlocked(device.DeviceName))
-        {
-            _logger.Warn($"[{device.DeviceName}] PLC 运行启动已被任务绑定校验阻断。");
-            return;
-        }
-
         if (_runtimeRegistry.ContainsRuntime(device.Id))
         {
             _logger.Info($"[{device.DeviceName}] 初始化跳过：设备已在运行。");
@@ -265,40 +259,13 @@ public sealed class PlcLifecycleCoordinator
         }
 
         _statusStore.EnsureTracked(device.Id, device.DeviceName);
-        var taskFactory = _runtimeRegistry.GetTaskFactory(device.DeviceName);
+        var taskPlan = _runtimeRegistry.GetTaskPlan(device.DeviceName);
         PlcDeviceRuntimeHandle? runtime = null;
+        var registered = false;
 
         try
         {
-            runtime = await _runtimeBuilder.BuildAsync(device, taskFactory, ct).ConfigureAwait(false);
-
-            foreach (var task in runtime.Tasks)
-            {
-                runtime.RunningHandles.Add(Task.Run(async () =>
-                {
-                    try
-                    {
-                        await task.StartAsync(runtime.CancellationTokenSource.Token).ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException) when (runtime.CancellationTokenSource.IsCancellationRequested)
-                    {
-                    }
-                    catch (ObjectDisposedException) when (runtime.CancellationTokenSource.IsCancellationRequested)
-                    {
-                    }
-                    catch (PlcServiceQuarantinedException ex)
-                    {
-                        _statusStore.MarkRuntimeFault(runtime.DeviceId, runtime.DeviceName, ex.Message);
-                        _logger.Error($"[{runtime.DeviceName}] PLC service 已隔离，运行任务已停止：{ex.Message}");
-                    }
-                    catch (Exception ex)
-                    {
-                        _statusStore.MarkDisconnected(runtime.DeviceId, runtime.DeviceName, ex.Message);
-                        _logger.Error($"[{runtime.DeviceName}] 运行任务异常：{ex.Message}");
-                    }
-                }, CancellationToken.None));
-            }
-
+            runtime = await _runtimeBuilder.BuildAsync(device, taskPlan, ct).ConfigureAwait(false);
             if (IsShutdownRequested || IsDisposed || !_runtimeRegistry.TryAddRuntime(runtime))
             {
                 await CleanupDeviceRuntimeAsync(runtime).ConfigureAwait(false);
@@ -306,13 +273,13 @@ public sealed class PlcLifecycleCoordinator
                 return;
             }
 
-            var taskNames = runtime.Tasks
-                .Select(static task => ToVisibleTaskName(task.TaskName))
-                .ToArray();
-            _logger.Info($"[{device.DeviceName}] 初始化完成，已启动 {runtime.Tasks.Count} 个任务：{string.Join("、", taskNames)}。");
-            if (runtime.Tasks.All(static task => IsBasePlcTask(task.TaskName)))
+            registered = true;
+            runtime.Start();
+            _logger.Info(
+                $"[{device.DeviceName}] 初始化完成：仅连接/重试任务已启动；周期读取和 {taskPlan.TaskKeys.Count} 个业务任务等待 TCP 成功后恢复。");
+            if (taskPlan.TaskKeys.Count == 0)
             {
-                _logger.Warn($"[{device.DeviceName}] 当前仅启动 PLC 基础任务，未挂载业务采集任务，请检查任务绑定和 IO 必需点位。");
+                _logger.Warn($"[{device.DeviceName}] 当前没有已启用且通过校验的业务任务，请检查任务绑定和 IO 必需点位。");
             }
         }
         catch
@@ -320,6 +287,10 @@ public sealed class PlcLifecycleCoordinator
             if (runtime is not null)
             {
                 await CleanupDeviceRuntimeAsync(runtime).ConfigureAwait(false);
+                if (registered)
+                {
+                    _runtimeRegistry.TryRemoveRuntime(runtime.DeviceId, runtime);
+                }
             }
 
             throw;
@@ -402,30 +373,6 @@ public sealed class PlcLifecycleCoordinator
         return false;
     }
 
-    private static bool IsBasePlcTask(string taskName)
-        => taskName.StartsWith("PlcIoScan_", StringComparison.OrdinalIgnoreCase)
-           || taskName.StartsWith("PlcDataReadScan_", StringComparison.OrdinalIgnoreCase);
-
-    private static string ToVisibleTaskName(string taskName)
-    {
-        if (taskName.StartsWith("PlcIoScan_", StringComparison.OrdinalIgnoreCase))
-        {
-            return "PLC交互扫描";
-        }
-
-        if (taskName.StartsWith("PlcDataReadScan_", StringComparison.OrdinalIgnoreCase))
-        {
-            return "PLC只读采集";
-        }
-
-        if (taskName.Contains("RealtimeSampleUpload", StringComparison.OrdinalIgnoreCase))
-        {
-            return "实时采样上传";
-        }
-
-        return taskName;
-    }
-
     private async Task<bool> CleanupDeviceRuntimeAsync(PlcDeviceRuntimeHandle runtime)
     {
         try
@@ -439,7 +386,7 @@ public sealed class PlcLifecycleCoordinator
 
         var runningHandlesStopped = await AwaitRunningHandlesAsync(
                 runtime.DeviceName,
-                runtime.RunningHandles,
+                runtime.GetRunningHandlesSnapshot(),
                 CancellationToken.None)
             .ConfigureAwait(false);
 

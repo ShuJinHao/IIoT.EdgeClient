@@ -1,6 +1,4 @@
 using IIoT.Edge.Module.Contracts.Plc;
-using IIoT.Edge.Module.Contracts.Plc.Store;
-using IIoT.Edge.Module.Contracts.Runtime;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc;
 
@@ -8,42 +6,26 @@ public sealed class PlcRuntimeRegistry
 {
     private readonly object _stateLock = new();
     private readonly Dictionary<int, PlcDeviceRuntimeHandle> _runtimes = new();
-    private readonly Dictionary<string, Func<IPlcBuffer, ProductionContext, List<IPlcTask>>> _taskFactories = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<string> _runtimeBlockedDevices = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, PlcRuntimeTaskPlan> _taskPlans =
+        new(StringComparer.OrdinalIgnoreCase);
 
-    public void RegisterTaskFactory(string deviceName, Func<IPlcBuffer, ProductionContext, List<IPlcTask>> factory)
+    public void RegisterTaskPlan(PlcRuntimeTaskPlan plan)
     {
+        ArgumentNullException.ThrowIfNull(plan);
         lock (_stateLock)
         {
-            _runtimeBlockedDevices.Remove(deviceName);
-            _taskFactories[deviceName] = factory;
+            _taskPlans[plan.DeviceName] = plan;
         }
     }
 
-    public void BlockRuntime(string deviceName)
+    public PlcRuntimeTaskPlan GetTaskPlan(string deviceName)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(deviceName);
         lock (_stateLock)
         {
-            _runtimeBlockedDevices.Add(deviceName);
-            _taskFactories.Remove(deviceName);
-        }
-    }
-
-    public bool IsRuntimeBlocked(string deviceName)
-    {
-        lock (_stateLock)
-        {
-            return _runtimeBlockedDevices.Contains(deviceName);
-        }
-    }
-
-    public Func<IPlcBuffer, ProductionContext, List<IPlcTask>>? GetTaskFactory(string deviceName)
-    {
-        lock (_stateLock)
-        {
-            return _taskFactories.TryGetValue(deviceName, out var factory)
-                ? factory
-                : null;
+            return _taskPlans.TryGetValue(deviceName, out var plan)
+                ? plan
+                : PlcRuntimeTaskPlan.Empty(deviceName);
         }
     }
 
@@ -91,6 +73,19 @@ public sealed class PlcRuntimeRegistry
             return _runtimes.TryGetValue(deviceId, out var runtime)
                 ? runtime
                 : null;
+        }
+    }
+
+    public PlcDeviceRuntimeHandle? GetRuntime(string deviceName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(deviceName);
+        lock (_stateLock)
+        {
+            return _runtimes.Values.FirstOrDefault(
+                runtime => string.Equals(
+                    runtime.DeviceName,
+                    deviceName,
+                    StringComparison.OrdinalIgnoreCase));
         }
     }
 

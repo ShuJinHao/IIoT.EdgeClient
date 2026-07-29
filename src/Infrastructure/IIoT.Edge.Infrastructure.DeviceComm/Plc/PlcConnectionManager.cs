@@ -37,7 +37,8 @@ public sealed class PlcConnectionManager : IPlcConnectionManager
         => _lifecycleCoordinator.StopDeviceAsync(networkDeviceId, ct);
 
     public void RegisterTasks(string deviceName, Func<IPlcBuffer, ProductionContext, List<IPlcTask>> factory)
-        => _runtimeRegistry.RegisterTaskFactory(deviceName, factory);
+        => throw new NotSupportedException(
+            "批量 PLC 任务注册入口已停用；业务任务必须按 TaskKey 通过原子运行计划应用。");
 
     public IPlcService? GetPlc(int networkDeviceId)
         => _runtimeRegistry.GetPlc(networkDeviceId);
@@ -47,7 +48,6 @@ public sealed class PlcConnectionManager : IPlcConnectionManager
 
     public void MarkRuntimeFault(int networkDeviceId, string deviceName, string error)
     {
-        _runtimeRegistry.BlockRuntime(deviceName);
         _statusStore.MarkRuntimeFault(networkDeviceId, deviceName, error);
     }
 

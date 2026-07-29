@@ -54,9 +54,16 @@ public sealed class PlcDeviceRuntimeBuilder
 
     public async Task<PlcDeviceRuntimeHandle> BuildAsync(
         NetworkDeviceEntity device,
-        Func<IPlcBuffer, ProductionContext, List<IPlcTask>>? taskFactory,
+        PlcRuntimeTaskPlan taskPlan,
         CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(taskPlan);
+        if (!string.Equals(taskPlan.DeviceName, device.DeviceName, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"任务计划设备“{taskPlan.DeviceName}”与待构建 PLC“{device.DeviceName}”不一致。");
+        }
+
         var mappings = await _ioMappings.GetListAsync(x => x.NetworkDeviceId == device.Id, ct).ConfigureAwait(false);
         var mappingArray = mappings
             .Where(static x => !string.IsNullOrWhiteSpace(x.PlcAddress))
@@ -83,6 +90,7 @@ public sealed class PlcDeviceRuntimeBuilder
         var endpoint = await _endpointResolver.ResolveAsync(device, plcType, ct).ConfigureAwait(false);
         var deviceCts = new CancellationTokenSource();
         var runtimePolicy = hardwareProfile?.GetIoRuntimePolicy() ?? PlcIoRuntimePolicy.Default;
+        var connectionSignal = new PlcRuntimeConnectionSignal();
 
         var ioScanTask = new PlcIoScanTask(
             plcService,
@@ -93,7 +101,8 @@ public sealed class PlcDeviceRuntimeBuilder
             _signalBlockPlanner,
             _statusStore,
             runtimePolicy,
-            endpoint);
+            endpoint,
+            connectionSignal.Report);
         var dataReadScanTask = new PlcDataReadScanTask(
             plcService,
             _dataStore,
@@ -103,22 +112,31 @@ public sealed class PlcDeviceRuntimeBuilder
             _signalBlockPlanner,
             _statusStore,
             runtimePolicy,
-            token => ResolveDataReadLoopIntervalAsync(hardwareProfile?.ModuleId, runtimePolicy, token));
+            token => ResolveDataReadLoopIntervalAsync(hardwareProfile?.ModuleId, runtimePolicy, token),
+            connectionSignal.Report);
 
-        var tasks = new List<IPlcTask> { ioScanTask, dataReadScanTask };
-        if (buffer is not null && taskFactory is not null)
+        if (buffer is null)
         {
-            tasks.AddRange(taskFactory(buffer, context));
+            throw new InvalidOperationException(
+                $"[{device.DeviceName}] PLC Buffer 注册后仍不可用，拒绝创建 runtime。");
         }
 
-        return new PlcDeviceRuntimeHandle
+        var runtime = new PlcDeviceRuntimeHandle
         {
             DeviceId = device.Id,
             DeviceName = device.DeviceName,
             PlcService = plcService,
+            Buffer = buffer,
+            Context = context,
+            ConnectionTask = ioScanTask,
+            PeriodicReadTask = dataReadScanTask,
+            ConnectionSignal = connectionSignal,
+            Logger = _logger,
+            StatusStore = _statusStore,
             CancellationTokenSource = deviceCts,
-            Tasks = tasks
         };
+        await runtime.ApplyTaskPlanAsync(taskPlan, ct).ConfigureAwait(false);
+        return runtime;
     }
 
     private async Task<int> ResolveDataReadLoopIntervalAsync(

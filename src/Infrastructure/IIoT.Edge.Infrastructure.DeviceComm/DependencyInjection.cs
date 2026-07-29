@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.AddSingleton<IPlcServiceFactory, PlcServiceFactory>();
         services.AddSingleton<IPlcSignalBlockPlanner, DefaultPlcSignalBlockPlanner>();
         services.AddSingleton<PlcRuntimeRegistry>();
+        services.AddSingleton<PlcRuntimeTaskController>();
         services.AddSingleton<PlcConnectionStatusStore>();
         services.AddSingleton<PlcDeviceRuntimeBuilder>();
         services.AddSingleton<PlcLifecycleCoordinator>();

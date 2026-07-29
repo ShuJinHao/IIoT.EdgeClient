@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using System.Collections.Concurrent;
 using IIoT.Edge.Module.Contracts.Context;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Modules;
@@ -7,6 +8,7 @@ using IIoT.Edge.Module.Contracts.Plc.Factory;
 using IIoT.Edge.Module.Contracts.Plc.Signals;
 using IIoT.Edge.Module.Contracts.Plc.Store;
 using IIoT.Edge.Module.Contracts.Time;
+using IIoT.Edge.Module.Contracts.Tasks;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
@@ -257,24 +259,56 @@ public sealed class PlcTaskBindingBehaviorTests
             new DefaultPlcSignalBlockPlanner(),
             new StaticPlcEndpointResolver(),
             new ModuleHardwareProfileResolver([]));
-        var factoryCalls = new List<(string DeviceName, int NetworkDeviceId, IPlcBuffer Buffer, ProductionContext Context)>();
+        var factoryCalls =
+            new ConcurrentQueue<(string DeviceName, int NetworkDeviceId, IPlcBuffer Buffer, ProductionContext Context)>();
+        var plcAFactoryCalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var plcBFactoryCalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        List<IPlcTask> CreateBusinessTasks(IPlcBuffer buffer, ProductionContext context)
+        IPlcTask CreateBusinessTask(
+            IPlcBuffer buffer,
+            ProductionContext context,
+            TaskCompletionSource factoryCalled)
         {
-            factoryCalls.Add((context.DeviceName, context.NetworkDeviceId, buffer, context));
-            return [new NoopPlcTask($"Business.{context.DeviceName}")];
+            factoryCalls.Enqueue((context.DeviceName, context.NetworkDeviceId, buffer, context));
+            factoryCalled.TrySetResult();
+            return new NoopPlcTask($"Business.{context.DeviceName}");
         }
 
         var runtimeA = await runtimeBuilder.BuildAsync(
             plcA,
-            CreateBusinessTasks,
+            new PlcRuntimeTaskPlan(
+                plcA.DeviceName,
+                [
+                    new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
+                        "Business.PLC-A",
+                        (buffer, context) => CreateBusinessTask(buffer, context, plcAFactoryCalled))
+                ]),
             TestContext.Current.CancellationToken);
         var runtimeB = await runtimeBuilder.BuildAsync(
             plcB,
-            CreateBusinessTasks,
+            new PlcRuntimeTaskPlan(
+                plcB.DeviceName,
+                [
+                    new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
+                        "Business.PLC-B",
+                        (buffer, context) => CreateBusinessTask(buffer, context, plcBFactoryCalled))
+                ]),
             TestContext.Current.CancellationToken);
 
         Assert.NotSame(dataStore.GetBuffer(plcA.Id), dataStore.GetBuffer(plcB.Id));
+        Assert.Empty(factoryCalls);
+        Assert.Equal("PlcIoScan_PLC-A", runtimeA.ConnectionTask.TaskName);
+        Assert.Equal("PlcDataReadScan_PLC-A", runtimeA.PeriodicReadTask.TaskName);
+        Assert.Equal(["Business.PLC-A"], runtimeA.EnabledTaskKeys);
+        Assert.Equal("PlcIoScan_PLC-B", runtimeB.ConnectionTask.TaskName);
+        Assert.Equal("PlcDataReadScan_PLC-B", runtimeB.PeriodicReadTask.TaskName);
+        Assert.Equal(["Business.PLC-B"], runtimeB.EnabledTaskKeys);
+
+        runtimeA.Start();
+        runtimeB.Start();
+        await Task.WhenAll(plcAFactoryCalled.Task, plcBFactoryCalled.Task)
+            .WaitAsync(TestContext.Current.CancellationToken);
+
         Assert.Collection(
             factoryCalls.OrderBy(static call => call.DeviceName, StringComparer.OrdinalIgnoreCase),
             call =>
@@ -289,16 +323,19 @@ public sealed class PlcTaskBindingBehaviorTests
                 Assert.Equal(plcB.Id, call.NetworkDeviceId);
                 Assert.Same(dataStore.GetBuffer(plcB.Id), call.Buffer);
             });
-        Assert.Contains(runtimeA.Tasks, task => task.TaskName == "PlcIoScan_PLC-A");
-        Assert.Contains(runtimeA.Tasks, task => task.TaskName == "PlcDataReadScan_PLC-A");
-        Assert.Contains(runtimeA.Tasks, task => task.TaskName == "Business.PLC-A");
-        Assert.Contains(runtimeB.Tasks, task => task.TaskName == "PlcIoScan_PLC-B");
-        Assert.Contains(runtimeB.Tasks, task => task.TaskName == "PlcDataReadScan_PLC-B");
-        Assert.Contains(runtimeB.Tasks, task => task.TaskName == "Business.PLC-B");
+
+        await runtimeA.RequestStopAsync();
+        await runtimeB.RequestStopAsync();
+        await Task.WhenAll(runtimeA.GetRunningHandlesSnapshot());
+        await Task.WhenAll(runtimeB.GetRunningHandlesSnapshot());
+        await runtimeA.PlcService.DisposeAsync();
+        await runtimeB.PlcService.DisposeAsync();
+        runtimeA.DisposeCancellation();
+        runtimeB.DisposeCancellation();
     }
 
     [Fact]
-    public async Task PlcLifecycleCoordinator_WhenOneDeviceHasRuntimeFault_ShouldSkipOnlyBlockedDevice()
+    public async Task PlcLifecycleCoordinator_WhenOneDeviceHasNoBusinessPlan_ShouldStillStartBothConnections()
     {
         var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
         var ioMappings = new InMemoryRepository<IoMappingEntity>();
@@ -326,28 +363,22 @@ public sealed class PlcTaskBindingBehaviorTests
             runtimeRegistry,
             runtimeBuilder,
             statusStore);
-        var bindingFault = "PLC“PLC-A”任务绑定校验失败：业务(Task.A) 缺少 Signal.Shared/Write。";
-        runtimeRegistry.BlockRuntime(blockedDevice.DeviceName);
-        statusStore.MarkRuntimeFault(blockedDevice.Id, blockedDevice.DeviceName, bindingFault);
-
         await coordinator.InitializeAsync(TestContext.Current.CancellationToken);
 
         try
         {
-            Assert.DoesNotContain("PLC-A", plcServiceFactory.CreatedDeviceNames);
+            Assert.Contains("PLC-A", plcServiceFactory.CreatedDeviceNames);
             Assert.Contains("PLC-B", plcServiceFactory.CreatedDeviceNames);
             var blockedSnapshot = statusStore.GetSnapshot(blockedDevice.Id);
             Assert.NotNull(blockedSnapshot);
-            Assert.False(blockedSnapshot!.IsConnected);
-            Assert.Equal(bindingFault, blockedSnapshot.LastError);
+            Assert.NotEqual(PlcConnectionState.Faulted, blockedSnapshot!.ConnectionState);
             var healthySnapshot = statusStore.GetSnapshot(healthyDevice.Id);
             Assert.NotNull(healthySnapshot);
             Assert.NotEqual(PlcConnectionState.Faulted, healthySnapshot.ConnectionState);
             Assert.Contains(
                 logger.Entries,
                 entry => entry.Level == "Info"
-                         && entry.Message.Contains("[PLC-B] 初始化完成，已启动", StringComparison.Ordinal)
-                         && entry.Message.Contains("个任务", StringComparison.Ordinal));
+                         && entry.Message.Contains("[PLC-B] 初始化完成：仅连接/重试任务已启动", StringComparison.Ordinal));
             Assert.DoesNotContain(
                 logger.Entries,
                 entry => entry.Message.Contains("Initialized and started", StringComparison.Ordinal)
@@ -502,14 +533,12 @@ public sealed class PlcTaskBindingBehaviorTests
         var runtimeRegistry = new PlcRuntimeRegistry();
         var statusStore = new PlcConnectionStatusStore();
         var service = new ControlledDisposePlcService();
-        var runtime = new PlcDeviceRuntimeHandle
-        {
-            DeviceId = 701,
-            DeviceName = "PLC-DISPOSE-JOIN",
-            PlcService = service,
-            CancellationTokenSource = new CancellationTokenSource(),
-            Tasks = []
-        };
+        var runtime = CreateInertRuntime(
+            701,
+            "PLC-DISPOSE-JOIN",
+            service,
+            logger,
+            statusStore);
         Assert.True(runtimeRegistry.TryAddRuntime(runtime));
         var coordinator = CreateLifecycleCoordinator(
             networkDevices,
@@ -544,14 +573,12 @@ public sealed class PlcTaskBindingBehaviorTests
         var runtimeRegistry = new PlcRuntimeRegistry();
         var statusStore = new PlcConnectionStatusStore();
         var service = new ControlledDisposePlcService();
-        var runtime = new PlcDeviceRuntimeHandle
-        {
-            DeviceId = 702,
-            DeviceName = "PLC-DISPOSE-SERIALIZED",
-            PlcService = service,
-            CancellationTokenSource = new CancellationTokenSource(),
-            Tasks = []
-        };
+        var runtime = CreateInertRuntime(
+            702,
+            "PLC-DISPOSE-SERIALIZED",
+            service,
+            logger,
+            statusStore);
         Assert.True(runtimeRegistry.TryAddRuntime(runtime));
         var coordinator = CreateLifecycleCoordinator(
             networkDevices,
@@ -591,14 +618,12 @@ public sealed class PlcTaskBindingBehaviorTests
         var statusStore = new PlcConnectionStatusStore();
         var replacementFactory = new TrackingPlcServiceFactory();
         var quarantinedService = new QuarantinedDisposePlcService();
-        var runtime = new PlcDeviceRuntimeHandle
-        {
-            DeviceId = device.Id,
-            DeviceName = device.DeviceName,
-            PlcService = quarantinedService,
-            CancellationTokenSource = new CancellationTokenSource(),
-            Tasks = []
-        };
+        var runtime = CreateInertRuntime(
+            device.Id,
+            device.DeviceName,
+            quarantinedService,
+            logger,
+            statusStore);
         Assert.True(runtimeRegistry.TryAddRuntime(runtime));
         var coordinator = CreateLifecycleCoordinator(
             networkDevices,
@@ -637,22 +662,18 @@ public sealed class PlcTaskBindingBehaviorTests
         var statusStore = new PlcConnectionStatusStore();
         var factory = new TrackingPlcServiceFactory();
         var controlledService = new ControlledDisposePlcService();
-        var originalRuntime = new PlcDeviceRuntimeHandle
-        {
-            DeviceId = device.Id,
-            DeviceName = device.DeviceName,
-            PlcService = controlledService,
-            CancellationTokenSource = new CancellationTokenSource(),
-            Tasks = []
-        };
-        var unexpectedReplacement = new PlcDeviceRuntimeHandle
-        {
-            DeviceId = device.Id,
-            DeviceName = device.DeviceName,
-            PlcService = new ConnectedPlcService(),
-            CancellationTokenSource = new CancellationTokenSource(),
-            Tasks = []
-        };
+        var originalRuntime = CreateInertRuntime(
+            device.Id,
+            device.DeviceName,
+            controlledService,
+            logger,
+            statusStore);
+        var unexpectedReplacement = CreateInertRuntime(
+            device.Id,
+            device.DeviceName,
+            new ConnectedPlcService(),
+            logger,
+            statusStore);
         Assert.True(runtimeRegistry.TryAddRuntime(originalRuntime));
         var coordinator = CreateLifecycleCoordinator(
             networkDevices,
@@ -710,6 +731,31 @@ public sealed class PlcTaskBindingBehaviorTests
             runtimeBuilder,
             statusStore);
     }
+
+    private static PlcDeviceRuntimeHandle CreateInertRuntime(
+        int deviceId,
+        string deviceName,
+        IPlcService plcService,
+        ILogService logger,
+        PlcConnectionStatusStore statusStore)
+        => new()
+        {
+            DeviceId = deviceId,
+            DeviceName = deviceName,
+            PlcService = plcService,
+            Buffer = new PlcBuffer(0, 0),
+            Context = new ProductionContext
+            {
+                DeviceName = deviceName,
+                NetworkDeviceId = deviceId
+            },
+            ConnectionTask = new NoopPlcTask($"PlcIoScan_{deviceName}"),
+            PeriodicReadTask = new NoopPlcTask($"PlcDataReadScan_{deviceName}"),
+            ConnectionSignal = new PlcRuntimeConnectionSignal(),
+            Logger = logger,
+            StatusStore = statusStore,
+            CancellationTokenSource = new CancellationTokenSource()
+        };
 
     private static readonly IReadOnlyCollection<TaskCandidate> TestCandidates =
     [
@@ -903,12 +949,26 @@ public sealed class PlcTaskBindingBehaviorTests
         public string FormatBusinessTimestamp(DateTime value) => ToBusinessTime(value).ToString("yyyy-MM-dd HH:mm:ss");
     }
 
-    private sealed class NoopPlcTask(string taskName) : IPlcTask
+    private sealed class NoopPlcTask(string taskName) : IPlcTask, IStartupAwareBackgroundTask
     {
         public string TaskName { get; } = taskName;
 
         public Task StartAsync(CancellationToken ct)
-            => Task.CompletedTask;
+            => RunAsync(ct);
+
+        public BackgroundTaskRun StartWithStartup(CancellationToken cancellationToken)
+            => new(Task.CompletedTask, RunAsync(cancellationToken));
+
+        private static async Task RunAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+            }
+        }
     }
 
     private sealed class TrackingPlcServiceFactory : IPlcServiceFactory

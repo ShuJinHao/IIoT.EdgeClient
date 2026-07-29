@@ -14,12 +14,14 @@ using IIoT.Edge.Module.Contracts.Recipe;
 using IIoT.Edge.Module.Contracts.Tasks;
 using IIoT.Edge.Module.Contracts.Time;
 using IIoT.Edge.Application.Common.Tasks;
+using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Application.Features.Config.CloudApi;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
 using IIoT.Edge.Application.Features.Config.SchemaReconciliation;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Module.Contracts.UI;
 using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Infrastructure.Persistence.Dapper;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
@@ -1079,6 +1081,55 @@ public sealed class ModuleRuntimeRegistrationTests
         }
     }
 
+    [Fact]
+    public async Task PlcRuntimeApplyService_ShouldUseTaskDeltaForBindingsAndReloadOnlyHardwareChanges()
+    {
+        await using var harness = await AppLifecycleHarness.CreateAsync(
+            enabledModules: ["TestPlugin"],
+            deviceModuleIds: ["TestPlugin"]);
+        var networkDevices =
+            harness.GetRequiredService<IReadRepository<NetworkDeviceEntity>>();
+        var device = Assert.Single(
+            await networkDevices.GetListAsync(
+                x => x.DeviceType == DeviceType.PLC,
+                TestContext.Current.CancellationToken));
+        var binder = new SpyPlcRuntimeTaskBinder();
+        var service = new PlcRuntimeApplyService(
+            networkDevices,
+            binder,
+            harness.PlcManager,
+            harness.Logger);
+
+        await service.ApplyDeviceRuntimeAsync(
+            device.Id,
+            PlcRuntimeApplyReasons.TaskBindingSave,
+            TestContext.Current.CancellationToken);
+
+        Assert.Collection(
+            binder.DeviceCalls,
+            call =>
+            {
+                Assert.Equal(device.Id, call.NetworkDeviceId);
+                Assert.True(call.ApplyToRunningDevice);
+            });
+        Assert.Empty(harness.PlcManager.ReloadedDeviceNames);
+
+        await service.ApplyDeviceRuntimeAsync(
+            device.Id,
+            PlcRuntimeApplyReasons.HardwareOrIoMappingSave,
+            TestContext.Current.CancellationToken);
+
+        Assert.Collection(
+            binder.DeviceCalls,
+            call => Assert.True(call.ApplyToRunningDevice),
+            call =>
+            {
+                Assert.Equal(device.Id, call.NetworkDeviceId);
+                Assert.False(call.ApplyToRunningDevice);
+            });
+        Assert.Equal([device.DeviceName], harness.PlcManager.ReloadedDeviceNames);
+    }
+
     private static IConfiguration CreateConfiguration(
         string[]? enabledModules = null,
         string environmentName = "Production",
@@ -1296,6 +1347,10 @@ public sealed class ModuleRuntimeRegistrationTests
 
         public IStartupDiagnosticsStore StartupDiagnosticsStore { get; }
 
+        public T GetRequiredService<T>()
+            where T : notnull
+            => _serviceProvider.GetRequiredService<T>();
+
         public TestPluginLifecycleProbeView GetTestPluginLifecycleProbe()
         {
             const string probeTypeName = "IIoT.Edge.TestPlugin.TestPluginLifecycleProbe";
@@ -1407,6 +1462,7 @@ public sealed class ModuleRuntimeRegistrationTests
             };
 
             var plcManager = new SpyPlcConnectionManager();
+            var plcRuntimeTaskController = new PlcRuntimeTaskController(new PlcRuntimeRegistry());
             var contextStore = new SpyProductionContextStore(contextSaveException);
             var backgroundCoordinator = new SpyBackgroundServiceCoordinator(backgroundStartException);
             var logger = new SpyLogService();
@@ -1513,10 +1569,10 @@ public sealed class ModuleRuntimeRegistrationTests
                     serviceProvider,
                     networkDevices,
                     ioMappings,
-                    plcManager,
                     runtimeRegistry,
                     serviceProvider.GetRequiredService<IPlcTaskBindingService>(),
                     serviceProvider.GetRequiredService<IProductionContextSignalBindingStore>(),
+                    plcRuntimeTaskController,
                     logger),
                 new AppRuntimeStateCoordinator(
                     contextStore,
@@ -1614,11 +1670,17 @@ public sealed class ModuleRuntimeRegistrationTests
 
         public List<RuntimeFault> RuntimeFaults { get; } = [];
 
+        public List<string> ReloadedDeviceNames { get; } = [];
+
         public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
 
         public Task StopAsync(CancellationToken ct = default) => Task.CompletedTask;
 
-        public Task ReloadAsync(string deviceName, CancellationToken ct = default) => Task.CompletedTask;
+        public Task ReloadAsync(string deviceName, CancellationToken ct = default)
+        {
+            ReloadedDeviceNames.Add(deviceName);
+            return Task.CompletedTask;
+        }
 
         public Task StopDeviceAsync(int networkDeviceId, CancellationToken ct = default) => Task.CompletedTask;
 
@@ -1644,6 +1706,32 @@ public sealed class ModuleRuntimeRegistrationTests
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class SpyPlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
+    {
+        public sealed record DeviceCall(
+            int NetworkDeviceId,
+            bool ApplyToRunningDevice);
+
+        public List<DeviceCall> DeviceCalls { get; } = [];
+
+        public Task BindAsync(CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task<PlcRuntimeTaskApplyResult> BindDeviceAsync(
+            int networkDeviceId,
+            bool applyToRunningDevice,
+            CancellationToken cancellationToken = default)
+        {
+            DeviceCalls.Add(new DeviceCall(networkDeviceId, applyToRunningDevice));
+            return Task.FromResult(
+                new PlcRuntimeTaskApplyResult(
+                    applyToRunningDevice
+                        ? PlcRuntimeTaskApplyState.Applied
+                        : PlcRuntimeTaskApplyState.WaitingForRuntime,
+                    ["Task.MG1", "Task.MG2"]));
+        }
     }
 
     private sealed class SpyDataPipelineService : IDataPipelineService

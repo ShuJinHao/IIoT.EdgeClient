@@ -3,6 +3,7 @@ using System.Windows.Input;
 using Avalonia.Threading;
 using IIoT.Edge.Module.Contracts.Auth;
 using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Presentation.Navigation.Common;
 using IIoT.Edge.Presentation.Navigation.Localization;
@@ -167,7 +168,7 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
             await _runtimeApplyService
                 .ApplyDeviceRuntimeAsync(
                     selected.NetworkDeviceId,
-                    "任务绑定保存")
+                    PlcRuntimeApplyReasons.TaskBindingSave)
                 .ConfigureAwait(false);
 
             await LoadCoreAsync().ConfigureAwait(false);
