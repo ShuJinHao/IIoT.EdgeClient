@@ -104,7 +104,7 @@ public sealed class EquipmentViewModelBehaviorTests
         Assert.Equal("未确定", viewModel.CurrentProcessDisplayName);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void CurrentProcessDisplayName_WhenLanguageChanges_ShouldRefreshModuleDisplayName()
     {
         var languageService = new TestAppLanguageService();
@@ -127,7 +127,7 @@ public sealed class EquipmentViewModelBehaviorTests
         Assert.Equal("TestPlugin", viewModel.CurrentProcessDisplayName);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void DeviceFilter_WhenLanguageChanges_ShouldRefreshAllSummaryDisplayWithoutChangingSelection()
     {
         var languageService = new TestAppLanguageService();
