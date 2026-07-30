@@ -826,6 +826,76 @@ public sealed class PlcTaskBindingBehaviorTests
     }
 
     [Fact]
+    public async Task PlcLifecycleCoordinator_StopDeviceAsync_ShouldLogStablePlcCode()
+    {
+        var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
+        var ioMappings = new InMemoryRepository<IoMappingEntity>();
+        var device = networkDevices.Add(
+            CreateLifecyclePlc(
+                "Renamed PLC",
+                6350,
+                plcCode: "PLC-STABLE-STOP"));
+        var contextStore = new FakeProductionContextStore();
+        var logger = new FakeLogService();
+        var runtimeRegistry = new PlcRuntimeRegistry();
+        var statusStore = new PlcConnectionStatusStore();
+        var coordinator = CreateLifecycleCoordinator(
+            networkDevices,
+            ioMappings,
+            new TrackingPlcServiceFactory(),
+            contextStore,
+            logger,
+            runtimeRegistry,
+            statusStore);
+
+        await coordinator.StopDeviceAsync(device.Id, TestContext.Current.CancellationToken);
+
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Message == "[PlcCode=PLC-STABLE-STOP] 停止完成。");
+        Assert.DoesNotContain(
+            logger.Entries,
+            entry => entry.Message.Contains($"DeviceId={device.Id}", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PlcLifecycleCoordinator_ReloadMissingDevice_ShouldUseTrackedPlcCode()
+    {
+        var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
+        var ioMappings = new InMemoryRepository<IoMappingEntity>();
+        var contextStore = new FakeProductionContextStore();
+        var logger = new FakeLogService();
+        var runtimeRegistry = new PlcRuntimeRegistry();
+        var statusStore = new PlcConnectionStatusStore();
+        var runtime = CreateInertRuntime(
+            703,
+            "PLC-STABLE-RELOAD",
+            new ConnectedPlcService(),
+            logger,
+            statusStore);
+        Assert.True(runtimeRegistry.TryAddRuntime(runtime));
+        var coordinator = CreateLifecycleCoordinator(
+            networkDevices,
+            ioMappings,
+            new TrackingPlcServiceFactory(),
+            contextStore,
+            logger,
+            runtimeRegistry,
+            statusStore);
+
+        await coordinator.ReloadDeviceAsync(703, TestContext.Current.CancellationToken);
+
+        Assert.Contains(
+            logger.Warnings,
+            message => message == "[PlcCode=PLC-STABLE-RELOAD] 重载跳过：未找到设备。");
+        Assert.DoesNotContain(
+            logger.Warnings,
+            message => message.Contains("DeviceId=703", StringComparison.Ordinal));
+
+        await coordinator.DisposeAsync();
+    }
+
+    [Fact]
     public async Task PlcLifecycleCoordinator_DisposeAsyncAfterDispose_ShouldJoinSingleCleanupTask()
     {
         var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
