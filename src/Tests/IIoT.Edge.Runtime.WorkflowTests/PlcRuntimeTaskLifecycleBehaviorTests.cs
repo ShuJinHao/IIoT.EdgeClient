@@ -194,6 +194,58 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
     }
 
     [Fact]
+    public async Task ConnectionQuarantine_ShouldPauseTasksWithoutReplacingFaultSnapshot()
+    {
+        var connection = new QuarantiningConnectionTask("Connection");
+        var periodicRead = new ControlledLoopTask("PeriodicRead");
+        var stalledStop = new StalledStopBusinessTask("Task.MG1");
+        var healthy = new ControlledBusinessTask("Task.MG2");
+        var runtime = CreateRuntime(connection, periodicRead);
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlan(
+                runtime,
+                ("Task.MG1", (_, _) => stalledStop),
+                ("Task.MG2", (_, _) => healthy)),
+            TestContext.Current.CancellationToken);
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await Task.WhenAll(
+            stalledStop.Starts.WaitForAtLeastAsync(
+                1,
+                TestContext.Current.CancellationToken),
+            healthy.Starts.WaitForAtLeastAsync(
+                1,
+                TestContext.Current.CancellationToken));
+
+        connection.Quarantine();
+        await Task.WhenAll(
+            stalledStop.Stops.WaitForAtLeastAsync(
+                1,
+                TestContext.Current.CancellationToken),
+            healthy.Stops.WaitForAtLeastAsync(
+                1,
+                TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            PlcTaskRuntimeState.Faulted,
+            runtime.GetTaskStatus("Task.MG1")?.State);
+        Assert.Equal(
+            PlcTaskRuntimeErrorCodes.RuntimeQuarantined,
+            runtime.GetTaskStatus("Task.MG1")?.ErrorCode);
+        Assert.Equal(
+            PlcTaskRuntimeState.Faulted,
+            runtime.GetTaskStatus("Task.MG2")?.State);
+        Assert.Equal(
+            PlcTaskRuntimeErrorCodes.RuntimeQuarantined,
+            runtime.GetTaskStatus("Task.MG2")?.ErrorCode);
+        Assert.False(runtime.Runtime.IsConnected);
+
+        stalledStop.ReleaseStop();
+        await stalledStop.StopCompletion;
+        await CleanupAsync(runtime);
+    }
+
+    [Fact]
     public async Task ApplyPlan_WhenOneTaskChanges_ShouldKeepOtherTaskAndBaseRuntimeReferences()
     {
         var connection = new ControlledLoopTask("Connection");
@@ -1007,8 +1059,8 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
     }
 
     private static TestPlcDeviceRuntimeHandle CreateRuntime(
-        ControlledLoopTask connection,
-        ControlledLoopTask periodicRead,
+        IPlcTask connection,
+        IPlcTask periodicRead,
         string deviceName = "PLC-A",
         int deviceId = 1,
         TimeProvider? timeProvider = null,
@@ -1181,6 +1233,29 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
             }
+        }
+    }
+
+    private sealed class QuarantiningConnectionTask(string taskName) : IPlcTask
+    {
+        private readonly TaskCompletionSource _quarantine =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public string TaskName { get; } = taskName;
+
+        public AsyncCounter Starts { get; } = new();
+
+        public void Quarantine()
+            => _quarantine.TrySetResult();
+
+        public async Task StartAsync(CancellationToken ct)
+        {
+            Starts.Increment();
+            await _quarantine.Task.WaitAsync(ct);
+            throw new PlcServiceQuarantinedException(
+                nameof(QuarantiningConnectionTask),
+                nameof(StartAsync),
+                "test quarantine");
         }
     }
 

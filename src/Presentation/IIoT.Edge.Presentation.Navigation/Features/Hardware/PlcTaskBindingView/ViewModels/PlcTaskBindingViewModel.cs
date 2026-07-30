@@ -26,7 +26,8 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
     private readonly AsyncCommand _saveCommand;
     private PlcTaskBindingDeviceVm? _selectedDevice;
     private bool _isDeviceSelectionSubscribed;
-    private bool _isRuntimeStatusSubscribed;
+    private int _runtimeStatusSubscriptionActive;
+    private int _runtimeStatusSubscriptionGeneration;
 
     public PlcTaskBindingViewModel(
         IPlcTaskBindingService bindingService,
@@ -318,31 +319,51 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
 
     private void SubscribeRuntimeStatus()
     {
-        if (_isRuntimeStatusSubscribed)
+        if (Interlocked.CompareExchange(
+                ref _runtimeStatusSubscriptionActive,
+                1,
+                0) != 0)
         {
             return;
         }
 
+        Interlocked.Increment(ref _runtimeStatusSubscriptionGeneration);
         _runtimeStatusReader.StatusChanged += OnRuntimeStatusChanged;
-        _isRuntimeStatusSubscribed = true;
     }
 
     private void UnsubscribeRuntimeStatus()
     {
-        if (!_isRuntimeStatusSubscribed)
+        if (Interlocked.Exchange(
+                ref _runtimeStatusSubscriptionActive,
+                0) == 0)
         {
             return;
         }
 
+        Interlocked.Increment(ref _runtimeStatusSubscriptionGeneration);
         _runtimeStatusReader.StatusChanged -= OnRuntimeStatusChanged;
-        _isRuntimeStatusSubscribed = false;
     }
 
     private void OnRuntimeStatusChanged(
         object? sender,
         PlcTaskRuntimeStatusChangedEventArgs args)
-        => RunOnUiThread(() =>
+    {
+        var subscriptionGeneration =
+            Volatile.Read(ref _runtimeStatusSubscriptionGeneration);
+        if (Volatile.Read(ref _runtimeStatusSubscriptionActive) == 0)
         {
+            return;
+        }
+
+        RunOnUiThread(() =>
+        {
+            if (Volatile.Read(ref _runtimeStatusSubscriptionActive) == 0
+                || subscriptionGeneration
+                != Volatile.Read(ref _runtimeStatusSubscriptionGeneration))
+            {
+                return;
+            }
+
             var device = Devices.SingleOrDefault(candidate => string.Equals(
                 candidate.PlcCode,
                 args.PlcCode,
@@ -354,6 +375,7 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
             task?.ApplyRuntimeSnapshot(
                 _runtimeStatusReader.GetSnapshot(args.PlcCode, args.TaskKey));
         });
+    }
 
     protected virtual void RunOnUiThread(Action action)
     {

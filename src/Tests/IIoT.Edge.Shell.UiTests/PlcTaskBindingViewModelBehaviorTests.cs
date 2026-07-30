@@ -336,6 +336,37 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
     }
 
     [Fact]
+    public async Task OnDeactivatedAsync_ShouldInvalidateAlreadyQueuedRuntimeStatusUpdate()
+    {
+        var selectionService = new DeviceSelectionService();
+        var runtimeStatuses = new PlcTaskRuntimeStatusStore();
+        var viewModel = CreateViewModel(
+            new FakePlcTaskBindingService(
+            [
+                CreateDevice(1, "PLC-A01", "P1-AP01")
+            ]),
+            selectionService,
+            runtimeStatusReader: runtimeStatuses);
+        await viewModel.OnActivatedAsync();
+        viewModel.QueueUiActions();
+
+        runtimeStatuses.SetState(
+            "P1-AP01",
+            "Task.Upload",
+            PlcTaskRuntimeState.Faulted,
+            PlcTaskRuntimeErrorCodes.TaskFault,
+            nameof(InvalidOperationException));
+        Assert.Equal(1, viewModel.QueuedUiActionCount);
+
+        await viewModel.OnDeactivatedAsync();
+        viewModel.FlushQueuedUiActions();
+
+        var task = Assert.Single(Assert.Single(viewModel.Devices).Tasks);
+        Assert.Null(task.RuntimeState);
+        Assert.Equal("等待 runtime", task.RuntimeStatusText);
+    }
+
+    [Fact]
     public async Task RuntimeFault_ShouldExposeOnlyStableCodeAndExceptionType()
     {
         var selectionService = new DeviceSelectionService();
@@ -360,7 +391,7 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
         await viewModel.OnDeactivatedAsync();
     }
 
-    private static PlcTaskBindingViewModel CreateViewModel(
+    private static TestPlcTaskBindingViewModel CreateViewModel(
         IPlcTaskBindingService service,
         IDeviceSelectionService selectionService,
         IPlcTaskBindingTransactionService? transactionService = null,
@@ -430,7 +461,33 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
             titleFallback,
             moduleId)
     {
-        protected override void RunOnUiThread(Action action) => action();
+        private readonly Queue<Action> _queuedUiActions = new();
+        private bool _queueUiActions;
+
+        public int QueuedUiActionCount => _queuedUiActions.Count;
+
+        public void QueueUiActions()
+            => _queueUiActions = true;
+
+        public void FlushQueuedUiActions()
+        {
+            _queueUiActions = false;
+            while (_queuedUiActions.TryDequeue(out var action))
+            {
+                action();
+            }
+        }
+
+        protected override void RunOnUiThread(Action action)
+        {
+            if (_queueUiActions)
+            {
+                _queuedUiActions.Enqueue(action);
+                return;
+            }
+
+            action();
+        }
     }
 
     private sealed class FakePlcTaskBindingService(

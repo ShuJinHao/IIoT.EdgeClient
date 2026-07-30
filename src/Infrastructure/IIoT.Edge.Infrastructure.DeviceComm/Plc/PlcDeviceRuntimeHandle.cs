@@ -25,6 +25,7 @@ public sealed class PlcDeviceRuntimeHandle
     private StopDeadline? _shutdownStopDeadline;
     private int _started;
     private int _connected;
+    private int _runtimeQuarantined;
     private int _cancellationDisposed;
 
     public required int DeviceId { get; init; }
@@ -163,7 +164,7 @@ public sealed class PlcDeviceRuntimeHandle
                 {
                     foreach (var slot in stagedSlots)
                     {
-                        SetTaskState(slot.TaskKey, PlcTaskRuntimeState.WaitingForConnection);
+                        SetTaskDisconnectedState(slot.TaskKey);
                     }
                 }
             }
@@ -248,16 +249,8 @@ public sealed class PlcDeviceRuntimeHandle
         }
         catch (PlcServiceQuarantinedException ex)
         {
+            MarkRuntimeQuarantined(ex);
             ConnectionSignal.Report(false);
-            StatusStore.MarkRuntimeFault(
-                DeviceId,
-                PlcCode,
-                DeviceName,
-                PlcServiceQuarantinedException.StableReasonCode);
-            SetAllTaskStates(
-                PlcTaskRuntimeState.Faulted,
-                PlcTaskRuntimeErrorCodes.RuntimeQuarantined,
-                ex.GetType().Name);
             Logger.Error(
                 $"[PlcCode={PlcCode}] PLC service 已隔离，连接任务已停止，"
                 + $"原因码={PlcServiceQuarantinedException.StableReasonCode}，异常类型={ex.GetType().Name}。");
@@ -307,6 +300,12 @@ public sealed class PlcDeviceRuntimeHandle
                 {
                     if (isConnected)
                     {
+                        if (IsRuntimeQuarantined)
+                        {
+                            ConnectionSignal.Report(false);
+                            continue;
+                        }
+
                         if (Interlocked.Exchange(ref _connected, 1) != 0)
                         {
                             continue;
@@ -398,7 +397,9 @@ public sealed class PlcDeviceRuntimeHandle
                         await StopDependentTasksAsync(
                                 CreateStopDeadline(),
                                 cancellationToken,
-                                BusinessTaskStopDisposition.WaitingForConnection)
+                                IsRuntimeQuarantined
+                                    ? BusinessTaskStopDisposition.PreserveState
+                                    : BusinessTaskStopDisposition.WaitingForConnection)
                             .ConfigureAwait(false);
                     }
                     catch (Exception ex) when (
@@ -412,6 +413,16 @@ public sealed class PlcDeviceRuntimeHandle
                         Logger.Error(
                             $"[PlcCode={PlcCode}] 断联后的依赖任务暂停未完整完成，"
                             + $"连接监督将继续等待后续状态，{failure.SafeDiagnostic}。");
+                    }
+                    finally
+                    {
+                        if (IsRuntimeQuarantined)
+                        {
+                            SetAllTaskStates(
+                                PlcTaskRuntimeState.Faulted,
+                                PlcTaskRuntimeErrorCodes.RuntimeQuarantined,
+                                nameof(PlcServiceQuarantinedException));
+                        }
                     }
                 }
                 finally
@@ -717,15 +728,7 @@ public sealed class PlcDeviceRuntimeHandle
         }
         catch (PlcServiceQuarantinedException ex)
         {
-            StatusStore.MarkRuntimeFault(
-                DeviceId,
-                PlcCode,
-                DeviceName,
-                PlcServiceQuarantinedException.StableReasonCode);
-            SetAllTaskStates(
-                PlcTaskRuntimeState.Faulted,
-                PlcTaskRuntimeErrorCodes.RuntimeQuarantined,
-                ex.GetType().Name);
+            MarkRuntimeQuarantined(ex);
             Logger.Error(
                 $"[PlcCode={PlcCode}] transport 断联后的连接释放进入隔离，"
                 + $"原因码={PlcServiceQuarantinedException.StableReasonCode}，"
@@ -1252,6 +1255,40 @@ public sealed class PlcDeviceRuntimeHandle
             state,
             errorCode,
             exceptionType);
+
+    private bool IsRuntimeQuarantined
+        => Volatile.Read(ref _runtimeQuarantined) != 0;
+
+    private void MarkRuntimeQuarantined(
+        PlcServiceQuarantinedException exception)
+    {
+        Interlocked.Exchange(ref _runtimeQuarantined, 1);
+        Interlocked.Exchange(ref _connected, 0);
+        StatusStore.MarkRuntimeFault(
+            DeviceId,
+            PlcCode,
+            DeviceName,
+            PlcServiceQuarantinedException.StableReasonCode);
+        SetAllTaskStates(
+            PlcTaskRuntimeState.Faulted,
+            PlcTaskRuntimeErrorCodes.RuntimeQuarantined,
+            exception.GetType().Name);
+    }
+
+    private void SetTaskDisconnectedState(string taskKey)
+    {
+        if (IsRuntimeQuarantined)
+        {
+            SetTaskState(
+                taskKey,
+                PlcTaskRuntimeState.Faulted,
+                PlcTaskRuntimeErrorCodes.RuntimeQuarantined,
+                nameof(PlcServiceQuarantinedException));
+            return;
+        }
+
+        SetTaskState(taskKey, PlcTaskRuntimeState.WaitingForConnection);
+    }
 
     private void CompleteTaskStop(
         string taskKey,
