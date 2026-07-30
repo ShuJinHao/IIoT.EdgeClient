@@ -4,6 +4,11 @@ using IIoT.Edge.Infrastructure.Integration.Capacity;
 using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
 using IIoT.Edge.Module.Contracts.Identity;
 using IIoT.Edge.Application.Common.Identity;
+using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Module.Contracts.Hardware;
+using IIoT.Edge.SharedKernel.Repository;
+using IIoT.Edge.SharedKernel.Specification;
+using System.Linq.Expressions;
 using System.Text.Json;
 using DeviceSession = IIoT.Edge.Module.Contracts.Device.DeviceSession;
 using NetworkState = IIoT.Edge.Module.Contracts.Device.NetworkState;
@@ -350,6 +355,56 @@ public sealed class CapacitySyncTaskBehaviorTests
         Assert.Empty(bufferStore.HourlySummaries);
     }
 
+    [Theory]
+    [InlineData("P1-AP01")]
+    [InlineData("禁用但已配置")]
+    public async Task RetryBuffer_WhenRuntimeContextIsMissing_ShouldResolveFromDisabledConfiguredPlc(
+        string persistedIdentity)
+    {
+        var cloudHttp = new FakeCloudHttpClient();
+        var deviceService = new FakeDeviceService();
+        deviceService.SetOnline(new DeviceSession
+        {
+            DeviceId = Guid.NewGuid(),
+            DeviceName = "Host",
+            ClientCode = "CLIENT-01",
+            ProcessId = Guid.NewGuid()
+        });
+        var bufferStore = new FakeCapacityBufferStore();
+        bufferStore.HourlySummaries.Add(new BufferHourlySummaryDto
+        {
+            Date = "2026-07-30",
+            Hour = 8,
+            MinuteBucket = 0,
+            ShiftCode = "D",
+            Total = 2,
+            OkCount = 2,
+            PlcName = persistedIdentity
+        });
+        var configuredPlc = NetworkDeviceEntity.Create(
+            "禁用但已配置",
+            DeviceType.PLC,
+            "127.0.0.1",
+            102,
+            "P1-AP01");
+        configuredPlc.Disable();
+        var task = CreateTask(
+            cloudHttp,
+            deviceService,
+            bufferStore,
+            new FakeLogService(),
+            new FakeProductionContextStore(),
+            new InMemoryPlcIdentityAliasRegistry(),
+            new FakeNetworkDeviceReadRepository([configuredPlc]));
+
+        var result = await task.RetryBufferAsync();
+
+        Assert.True(result);
+        var payload = ParsePayload(Assert.Single(cloudHttp.PostPayloads));
+        Assert.Equal("P1-AP01", payload.GetProperty("plcName").GetString());
+        Assert.Empty(bufferStore.HourlySummaries);
+    }
+
     [Fact]
     public async Task RetryBuffer_WhenLegacyIdentityIsUnresolved_ShouldPreserveOriginalRows()
     {
@@ -519,7 +574,8 @@ public sealed class CapacitySyncTaskBehaviorTests
         FakeCapacityBufferStore bufferStore,
         FakeLogService logger,
         FakeProductionContextStore? contextStore = null,
-        IPlcIdentityAliasRegistry? identityAliasRegistry = null)
+        IPlcIdentityAliasRegistry? identityAliasRegistry = null,
+        IReadRepository<NetworkDeviceEntity>? networkDevices = null)
     {
         var seedContextsFromBuffer = contextStore is null;
         contextStore ??= new FakeProductionContextStore();
@@ -553,7 +609,8 @@ public sealed class CapacitySyncTaskBehaviorTests
                 DayEnd = "20:00"
             },
             new FakeCloudDiagnosticsStore(),
-            identityAliasRegistry);
+            identityAliasRegistry,
+            networkDevices);
     }
 
     private static JsonElement ParsePayload(object payload)
@@ -575,5 +632,58 @@ public sealed class CapacitySyncTaskBehaviorTests
 
         await ObserveAsync(predicate, TestContext.Current.CancellationToken)
             .WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+    }
+
+    private sealed class FakeNetworkDeviceReadRepository(
+        IReadOnlyCollection<NetworkDeviceEntity> devices)
+        : IReadRepository<NetworkDeviceEntity>
+    {
+        public Task<List<NetworkDeviceEntity>> GetListAsync(
+            Expression<Func<NetworkDeviceEntity, bool>> expression,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(devices.Where(expression.Compile()).ToList());
+
+        public Task<NetworkDeviceEntity?> GetByIdAsync<TKey>(
+            TKey id,
+            CancellationToken cancellationToken = default)
+            where TKey : notnull
+            => throw new NotSupportedException();
+
+        public Task<NetworkDeviceEntity?> GetAsync(
+            Expression<Func<NetworkDeviceEntity, bool>> expression,
+            Expression<Func<NetworkDeviceEntity, object>>[]? includes = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<List<NetworkDeviceEntity>> GetListAsync(
+            Expression<Func<NetworkDeviceEntity, bool>> expression,
+            Expression<Func<NetworkDeviceEntity, object>>[]? includes = null,
+            CancellationToken cancellationToken = default)
+            => GetListAsync(expression, cancellationToken);
+
+        public Task<List<NetworkDeviceEntity>> GetListAsync(
+            ISpecification<NetworkDeviceEntity>? specification = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<NetworkDeviceEntity?> GetSingleOrDefaultAsync(
+            ISpecification<NetworkDeviceEntity>? specification = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<int> GetCountAsync(
+            Expression<Func<NetworkDeviceEntity, bool>> expression,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<int> CountAsync(
+            ISpecification<NetworkDeviceEntity>? specification = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<bool> AnyAsync(
+            ISpecification<NetworkDeviceEntity>? specification = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 }

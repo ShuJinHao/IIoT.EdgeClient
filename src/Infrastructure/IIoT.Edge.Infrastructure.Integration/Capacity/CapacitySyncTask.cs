@@ -9,6 +9,9 @@ using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
 using IIoT.Edge.Application.Common.Identity;
+using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Module.Contracts.Hardware;
+using IIoT.Edge.SharedKernel.Repository;
 
 namespace IIoT.Edge.Infrastructure.Integration.Capacity;
 
@@ -27,6 +30,7 @@ public class CapacitySyncTask : ICapacitySyncTask
     private readonly ShiftConfig _shiftConfig;
     private readonly ICloudUploadDiagnosticsStore _diagnosticsStore;
     private readonly IPlcIdentityAliasRegistry _identityAliasRegistry;
+    private readonly IReadRepository<NetworkDeviceEntity>? _networkDevices;
     private readonly object _lifecycleLock = new();
     private readonly SemaphoreSlim _syncGate = new(1, 1);
     private CancellationTokenSource? _cts;
@@ -43,7 +47,8 @@ public class CapacitySyncTask : ICapacitySyncTask
         ILogService logger,
         ShiftConfig shiftConfig,
         ICloudUploadDiagnosticsStore diagnosticsStore,
-        IPlcIdentityAliasRegistry? identityAliasRegistry = null)
+        IPlcIdentityAliasRegistry? identityAliasRegistry = null,
+        IReadRepository<NetworkDeviceEntity>? networkDevices = null)
     {
         _cloudHttp = cloudHttp;
         _endpointProvider = endpointProvider;
@@ -56,6 +61,7 @@ public class CapacitySyncTask : ICapacitySyncTask
         _diagnosticsStore = diagnosticsStore;
         _identityAliasRegistry =
             identityAliasRegistry ?? new InMemoryPlcIdentityAliasRegistry();
+        _networkDevices = networkDevices;
     }
 
     public Task StartAsync(CancellationToken ct)
@@ -254,6 +260,19 @@ public class CapacitySyncTask : ICapacitySyncTask
                 return false;
             }
 
+            IReadOnlyList<ConfiguredPlcIdentity> configuredPlcs;
+            try
+            {
+                configuredPlcs = await GetConfiguredPlcIdentitiesAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(
+                    $"[PlcCode=未解析][TaskKey=Capacity.Hourly][SignalKey=不适用] "
+                    + $"读取权威 PLC 身份配置失败，产能补传保持原记录且未领取数据：{ex.Message}");
+                return false;
+            }
+
             var identityBlockedInRound = false;
             for (var batchIndex = 0; batchIndex < RetryMaxBatchesPerRound; batchIndex++)
             {
@@ -271,6 +290,7 @@ public class CapacitySyncTask : ICapacitySyncTask
                     {
                         if (!TryResolveBufferedPlcIdentity(
                                 summary.PlcName,
+                                configuredPlcs,
                                 out var plcCode,
                                 out var deviceName,
                                 out var identityDiagnostic))
@@ -385,6 +405,7 @@ public class CapacitySyncTask : ICapacitySyncTask
 
     private bool TryResolveBufferedPlcIdentity(
         string persistedIdentity,
+        IReadOnlyList<ConfiguredPlcIdentity> configuredPlcs,
         out string plcCode,
         out string? deviceName,
         out string diagnostic)
@@ -398,19 +419,20 @@ public class CapacitySyncTask : ICapacitySyncTask
             return false;
         }
 
-        var matches = _contextStore.GetAll()
-            .Where(context => !string.IsNullOrWhiteSpace(context.PlcCode))
-            .Where(context =>
+        var matches = configuredPlcs
+            .Where(identity =>
                 string.Equals(
-                    context.PlcCode,
+                    identity.PlcCode,
+                    normalizedIdentity,
+                    StringComparison.OrdinalIgnoreCase)
+                || string.Equals(
+                    identity.DeviceName,
                     normalizedIdentity,
                     StringComparison.OrdinalIgnoreCase)
                 || _identityAliasRegistry
-                    .GetVerifiedAliases(context.PlcCode)
+                    .GetVerifiedAliases(identity.PlcCode)
                     .Contains(normalizedIdentity, StringComparer.OrdinalIgnoreCase))
-            .GroupBy(static context => context.PlcCode, StringComparer.OrdinalIgnoreCase)
             .Take(2)
-            .Select(static group => group.First())
             .ToArray();
         if (matches.Length != 1)
         {
@@ -423,6 +445,36 @@ public class CapacitySyncTask : ICapacitySyncTask
         plcCode = matches[0].PlcCode.Trim();
         deviceName = matches[0].DeviceName;
         return true;
+    }
+
+    private async Task<IReadOnlyList<ConfiguredPlcIdentity>> GetConfiguredPlcIdentitiesAsync()
+    {
+        if (_networkDevices is not null)
+        {
+            var configuredDevices = await _networkDevices
+                .GetListAsync(
+                    static device => device.DeviceType == DeviceType.PLC,
+                    includes: null,
+                    cancellationToken: default)
+                .ConfigureAwait(false);
+            return configuredDevices
+                .Where(static device =>
+                    !string.IsNullOrWhiteSpace(device.PlcCode)
+                    && !string.IsNullOrWhiteSpace(device.DeviceName))
+                .Select(static device => new ConfiguredPlcIdentity(
+                    device.PlcCode.Trim(),
+                    device.DeviceName.Trim()))
+                .ToArray();
+        }
+
+        return _contextStore.GetAll()
+            .Where(static context =>
+                !string.IsNullOrWhiteSpace(context.PlcCode)
+                && !string.IsNullOrWhiteSpace(context.DeviceName))
+            .Select(static context => new ConfiguredPlcIdentity(
+                context.PlcCode.Trim(),
+                context.DeviceName.Trim()))
+            .ToArray();
     }
 
     private async Task<CloudCallResult> PostCapacityAsync(
@@ -495,6 +547,8 @@ public class CapacitySyncTask : ICapacitySyncTask
             plcName = plcCode
         };
     }
+
+    private sealed record ConfiguredPlcIdentity(string PlcCode, string DeviceName);
 
     private string GetShiftCodeByTime(int hour, int minute)
     {

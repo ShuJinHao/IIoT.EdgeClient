@@ -165,7 +165,6 @@ public sealed class DeviceSelectionService : IDeviceSelectionService
         _selectedPlcCode = IsAllSelected
             ? null
             : !string.IsNullOrWhiteSpace(previousSelectedPlcCode)
-              && _deviceNameByPlcCode.ContainsKey(previousSelectedPlcCode)
                 ? previousSelectedPlcCode
                 : _plcCodeByDeviceName.GetValueOrDefault(_selectedDeviceKey);
 

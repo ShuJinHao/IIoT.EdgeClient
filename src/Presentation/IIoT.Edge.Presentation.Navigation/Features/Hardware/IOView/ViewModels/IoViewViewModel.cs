@@ -369,6 +369,19 @@ public class IoViewViewModel : NavigationViewModelBase
             return null;
         }
 
+        var selectedPlcCode = _deviceSelectionService.SelectedPlcCode;
+        if (!string.IsNullOrWhiteSpace(selectedPlcCode))
+        {
+            var byPlcCode = Devices
+                .Where(device => string.Equals(
+                    device.PlcCode,
+                    selectedPlcCode,
+                    StringComparison.OrdinalIgnoreCase))
+                .Take(2)
+                .ToArray();
+            return byPlcCode.Length == 1 ? byPlcCode[0] : null;
+        }
+
         var byDeviceName = Devices
             .Where(device => string.Equals(
                 device.DeviceName,

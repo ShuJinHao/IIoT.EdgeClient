@@ -83,6 +83,29 @@ public sealed class IoViewViewModelBehaviorTests
     }
 
     [AvaloniaFact]
+    public async Task LoadDevicesAsync_WhenSelectedPlcWasRenamed_ShouldResolveByStablePlcCode()
+    {
+        var selectionService = new DeviceSelectionService();
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("改名前", "P1-CP02")
+        ]);
+        selectionService.SelectDevice("改名前");
+        var renamed = CreateDevice(
+            10,
+            "改名后",
+            "TestProcess",
+            plcCode: "P1-CP02");
+        var viewModel = CreateViewModel([renamed], deviceSelectionService: selectionService);
+
+        await viewModel.LoadDevicesAsync();
+
+        Assert.Same(renamed, viewModel.SelectedDevice);
+        Assert.Equal("改名前", selectionService.SelectedDeviceKey);
+        Assert.Equal("P1-CP02", selectionService.SelectedPlcCode);
+    }
+
+    [AvaloniaFact]
     public async Task LoadDevicesAsync_WhenSharedSelectionMatchesDisabledPlc_ShouldKeepDeviceVisibleWithoutChangingGlobalSelection()
     {
         var enabled = CreateDevice(12, "PLC-Enabled", "TestProcess");

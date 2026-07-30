@@ -56,6 +56,30 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
     }
 
     [Fact]
+    public async Task OnActivatedAsync_WhenSelectedPlcWasRenamed_ShouldResolveByStablePlcCode()
+    {
+        var selectionService = new DeviceSelectionService();
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("改名前", "P1-AP02")
+        ]);
+        selectionService.SelectDevice("改名前");
+        var viewModel = CreateViewModel(
+            new FakePlcTaskBindingService(
+            [
+                CreateDevice(2, "改名后", "P1-AP02")
+            ]),
+            selectionService);
+
+        await viewModel.OnActivatedAsync();
+        await viewModel.OnDeactivatedAsync();
+
+        Assert.Equal("改名后", viewModel.SelectedDevice?.DeviceName);
+        Assert.Equal("P1-AP02", viewModel.SelectedDevice?.PlcCode);
+        Assert.Equal("改名前", selectionService.SelectedDeviceKey);
+    }
+
+    [Fact]
     public async Task OnActivatedAsync_WhenDeviceSelected_ShouldExposeCurrentDeviceTextWithoutSelectPrompt()
     {
         var selectionService = new DeviceSelectionService();

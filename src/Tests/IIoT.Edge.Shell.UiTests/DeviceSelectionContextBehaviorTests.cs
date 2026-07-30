@@ -79,6 +79,26 @@ public sealed class DeviceSelectionContextBehaviorTests
     }
 
     [Fact]
+    public void StableIdentityMapping_WhenSelectedPlcDisappearsAndNameIsReused_ShouldKeepPhantomStableSelection()
+    {
+        var selection = new DeviceSelectionService();
+        selection.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("旧名称", "P1-AP01")
+        ]);
+        selection.SelectDevice("旧名称");
+
+        selection.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("旧名称", "P1-AP02")
+        ]);
+
+        Assert.Equal("旧名称", selection.SelectedDeviceKey);
+        Assert.Equal("P1-AP01", selection.SelectedPlcCode);
+        Assert.Empty(selection.SelectedDeviceNameAliases);
+    }
+
+    [Fact]
     public void StableIdentityMapping_ShouldLoadPersistedVerifiedAliases()
     {
         var aliases = new InMemoryPlcIdentityAliasRegistry();
