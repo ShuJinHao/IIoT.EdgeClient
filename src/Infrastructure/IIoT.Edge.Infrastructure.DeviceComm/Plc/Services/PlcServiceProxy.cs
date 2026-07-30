@@ -1,5 +1,6 @@
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Infrastructure.DeviceComm.Signals;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc.Services;
 
@@ -75,12 +76,17 @@ public sealed class PlcServiceProxy : IPlcService
         }
         catch (PlcServiceQuarantinedException ex)
         {
-            _logger.Error($"[PlcCode={_plcCode}] PLC service 已隔离: {ex.Message}");
+            _logger.Error(
+                $"[PlcCode={_plcCode}] {failureMessage}，"
+                + $"原因码={PlcServiceQuarantinedException.StableReasonCode}，"
+                + $"异常类型={ex.GetType().Name}。");
             throw;
         }
         catch (Exception ex)
         {
-            _logger.Error($"[PlcCode={_plcCode}] {failureMessage}: {ex.Message}");
+            var failure = PlcOperationFailureClassifier.Classify(ex);
+            _logger.Error(
+                $"[PlcCode={_plcCode}] {failureMessage}，{failure.SafeDiagnostic}。");
             throw;
         }
     }

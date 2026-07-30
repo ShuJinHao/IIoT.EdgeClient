@@ -51,7 +51,12 @@ public sealed class PlcServiceProxyBehaviorTests
             () => proxy.ConnectAsync(TestContext.Current.CancellationToken));
 
         Assert.Equal("network down", ex.Message);
-        Assert.Contains(logger.Entries, x => x.Message == "[PlcCode=PLC-A] 连接异常: network down");
+        Assert.Contains(
+            logger.Entries,
+            x => x.Message == "[PlcCode=PLC-A] 连接异常，原因码=TaskFault，异常类型=InvalidOperationException。");
+        Assert.DoesNotContain(
+            logger.Entries,
+            x => x.Message.Contains("network down", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -72,7 +77,12 @@ public sealed class PlcServiceProxyBehaviorTests
             TestContext.Current.CancellationToken));
 
         Assert.Equal("read failed", ex.Message);
-        Assert.Contains(logger.Entries, x => x.Message == "[PlcCode=PLC-A] 读取 DB1.DBW0 失败: read failed");
+        Assert.Contains(
+            logger.Entries,
+            x => x.Message == "[PlcCode=PLC-A] 读取 DB1.DBW0 失败，原因码=TaskFault，异常类型=InvalidOperationException。");
+        Assert.DoesNotContain(
+            logger.Entries,
+            x => x.Message.Contains("read failed", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -93,7 +103,12 @@ public sealed class PlcServiceProxyBehaviorTests
             TestContext.Current.CancellationToken));
 
         Assert.Equal("write failed", ex.Message);
-        Assert.Contains(logger.Entries, x => x.Message == "[PlcCode=PLC-A] 写入 DB1.DBW0 失败: write failed");
+        Assert.Contains(
+            logger.Entries,
+            x => x.Message == "[PlcCode=PLC-A] 写入 DB1.DBW0 失败，原因码=TaskFault，异常类型=InvalidOperationException。");
+        Assert.DoesNotContain(
+            logger.Entries,
+            x => x.Message.Contains("write failed", StringComparison.Ordinal));
     }
 
     [Fact]

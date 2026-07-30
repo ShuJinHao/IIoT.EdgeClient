@@ -78,6 +78,7 @@
                     <edge:EdgeCheckColumn Binding="{Binding Enabled}" Header="{DynamicResource Navigation_Column_Enable}" MinWidth="64" Width="64" />
                     <edge:EdgeTextColumn Binding="{Binding DisplayName}" Header="{DynamicResource Navigation_Column_TaskName}" IsReadOnly="True" MinWidth="200" Width="2*" />
                     <edge:EdgeTextColumn Binding="{Binding AvailabilityText}" Header="{DynamicResource Navigation_Column_TaskAvailability}" IsReadOnly="True" MinWidth="120" Width="120" />
+                    <edge:EdgeTextColumn Binding="{Binding RuntimeStatusText}" Header="{DynamicResource Navigation_Column_RuntimeStatus}" IsReadOnly="True" MinWidth="120" Width="120" />
                     <edge:EdgeTextColumn Binding="{Binding NoteText}" Header="{DynamicResource Navigation_Column_Note}" IsReadOnly="True" MinWidth="200" Width="3*" />
                 </edge:EdgeDataGrid.Columns>
             </edge:EdgeDataGrid>

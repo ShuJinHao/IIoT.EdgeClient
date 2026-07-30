@@ -1,6 +1,7 @@
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Module.Contracts.Plc.Store;
+using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.Application.Modules.Hardware;
@@ -110,18 +111,32 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         }
         catch (PlcServiceQuarantinedException ex)
         {
-            MarkRuntimeFault(ex.Message);
-            _logger.Error($"[PlcCode={_device.PlcCode}] PLC service 已隔离：{ex.Message}");
+            MarkRuntimeFault(PlcServiceQuarantinedException.StableReasonCode);
+            _logger.Error(
+                $"[PlcCode={_device.PlcCode}] PLC service 已隔离，"
+                + $"原因码={PlcServiceQuarantinedException.StableReasonCode}，异常类型={ex.GetType().Name}。");
+            throw;
+        }
+        catch (Exception ex) when (
+            PlcOperationFailureClassifier.IsCallerCancellation(ex, cancellationToken))
+        {
             throw;
         }
         catch (Exception ex)
         {
-            await CloseHangingConnectionAsync(CancellationToken.None).ConfigureAwait(false);
+            var failure = PlcOperationFailureClassifier.Classify(ex);
+            if (failure.DisconnectsTransport)
+            {
+                await CloseHangingConnectionAsync(CancellationToken.None).ConfigureAwait(false);
+                MarkDisconnected(failure.ReasonCode);
+            }
+
             _retryCount++;
-            MarkDisconnected(ex.Message);
             if (ShouldLogDisconnect())
             {
-                _logger.Error($"[PlcCode={_device.PlcCode}] PLC 连接异常：{ex.Message}");
+                _logger.Error(
+                    $"[PlcCode={_device.PlcCode}] PLC 连接异常，{failure.SafeDiagnostic}；"
+                    + "连接状态按分类保持，稍后重试。");
             }
         }
     }
@@ -205,16 +220,25 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
             }
             catch (PlcServiceQuarantinedException ex)
             {
-                MarkRuntimeFault(ex.Message);
-                _logger.Error($"[PlcCode={_device.PlcCode}] PLC service 已隔离，扫描任务已停止：{ex.Message}");
+                MarkRuntimeFault(PlcServiceQuarantinedException.StableReasonCode);
+                _logger.Error(
+                    $"[PlcCode={_device.PlcCode}] PLC service 已隔离，扫描任务已停止，"
+                    + $"原因码={PlcServiceQuarantinedException.StableReasonCode}，异常类型={ex.GetType().Name}。");
                 break;
+            }
+            catch (Exception ex) when (
+                PlcOperationFailureClassifier.IsCallerCancellation(ex, ct))
+            {
+                throw;
             }
             catch (Exception ex)
             {
+                var failure = PlcOperationFailureClassifier.Classify(ex);
                 _retryCount++;
                 if (ShouldLogDisconnect())
                 {
-                    _logger.Error($"[PlcCode={_device.PlcCode}] PLC 信号交互循环异常：{ex.Message}");
+                    _logger.Error(
+                        $"[PlcCode={_device.PlcCode}] PLC 信号交互循环异常，{failure.SafeDiagnostic}。");
                 }
 
                 await Task.Delay(GetBackoffDelay(), ct).ConfigureAwait(false);
@@ -242,7 +266,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
                     block,
                     batchId,
                     attemptedAtUtc,
-                    remainingFailureReason ?? "PLC transport 当前不可用，未发起本 block 读取。");
+                    remainingFailureReason ?? PlcTaskRuntimeErrorCodes.TransportDisconnected);
                 allSucceeded = false;
                 continue;
             }
@@ -279,10 +303,16 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
             {
                 throw;
             }
+            catch (Exception ex) when (
+                PlcOperationFailureClassifier.IsCallerCancellation(ex, cancellationToken))
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 allSucceeded = false;
-                var failureReason = FormatException(ex);
+                var failure = PlcOperationFailureClassifier.Classify(ex);
+                var failureReason = failure.ReasonCode;
                 StageFailedBlock(
                     stagedUpdates,
                     block,
@@ -290,23 +320,21 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
                     attemptedAtUtc,
                     failureReason);
 
-                var isTransportFailure = PlcOperationFailureClassifier.IsTransportFailure(ex);
-                LogReadFailure(block, ex, isTransportFailure);
-                if (isTransportFailure)
+                LogReadFailure(block, failure);
+                if (failure.DisconnectsTransport)
                 {
                     remainingFailureReason =
-                        $"前序 block 已发生明确 transport 故障：{failureReason}";
+                        PlcTaskRuntimeErrorCodes.TransportDisconnected;
                     await HandleTransportFailureAsync(
                             "Read",
                             block.StartAddress,
                             block.WordCount,
-                            ex)
+                            failure)
                         .ConfigureAwait(false);
                 }
                 else if (!_plcService.IsConnected)
                 {
-                    remainingFailureReason =
-                        $"前序 block 失败后 PLC service 暂不可用：{failureReason}";
+                    remainingFailureReason = failure.ReasonCode;
                 }
             }
         }
@@ -365,22 +393,28 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
             {
                 throw;
             }
+            catch (Exception ex) when (
+                PlcOperationFailureClassifier.IsCallerCancellation(ex, cancellationToken))
+            {
+                throw;
+            }
             catch (Exception ex)
             {
-                var isTransportFailure = PlcOperationFailureClassifier.IsTransportFailure(ex);
+                var failure = PlcOperationFailureClassifier.Classify(ex);
                 if (ShouldLogDisconnect())
                 {
                     _logger.Error(
-                        $"[PlcCode={_device.PlcCode}][交互] PLC 写入失败，地址={block.StartAddress}，长度={block.WordCount}，失败类型={(isTransportFailure ? "Transport" : "Request")}，原因={FormatException(ex)}；待写 buffer 保持未消费。");
+                        $"[PlcCode={_device.PlcCode}][交互] PLC 写入失败，地址={block.StartAddress}，"
+                        + $"长度={block.WordCount}，{failure.SafeDiagnostic}；待写 buffer 保持未消费。");
                 }
 
-                if (isTransportFailure)
+                if (failure.DisconnectsTransport)
                 {
                     await HandleTransportFailureAsync(
                             "Write",
                             block.StartAddress,
                             block.WordCount,
-                            ex)
+                            failure)
                         .ConfigureAwait(false);
                 }
 
@@ -393,8 +427,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
 
     private void LogReadFailure(
         PlcSignalBlock block,
-        Exception exception,
-        bool isTransportFailure)
+        PlcOperationFailure failure)
     {
         if (!ShouldLogDisconnect())
         {
@@ -402,17 +435,19 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         }
 
         _logger.Error(
-            $"[PlcCode={_device.PlcCode}][交互] PLC 读取 block 失败，地址={block.StartAddress}，长度={block.WordCount}，失败类型={(isTransportFailure ? "Transport" : "Request")}，原因={FormatException(exception)}；受影响信号已发布默认值与失败质量，未执行单信号重读。");
+            $"[PlcCode={_device.PlcCode}][交互] PLC 读取 block 失败，地址={block.StartAddress}，"
+            + $"长度={block.WordCount}，{failure.SafeDiagnostic}；"
+            + "受影响信号已发布默认值与失败质量，未执行单信号重读。");
     }
 
     private async Task HandleTransportFailureAsync(
         string operation,
         string address,
         int wordCount,
-        Exception exception)
+        PlcOperationFailure failure)
     {
         var reason =
-            $"PLC transport 故障，操作={operation}，地址={address}，长度={wordCount}，原因={FormatException(exception)}。";
+            $"{failure.ReasonCode}: 操作={operation}，地址={address}，长度={wordCount}。";
         MarkDisconnected(reason);
 
         if (!_plcService.IsConnected)
@@ -430,8 +465,10 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         }
         catch (Exception disconnectException)
         {
+            var disconnectFailure = PlcOperationFailureClassifier.Classify(disconnectException);
             _logger.Error(
-                $"[PlcCode={_device.PlcCode}][交互] transport 故障后的连接释放失败：{FormatException(disconnectException)}");
+                $"[PlcCode={_device.PlcCode}][交互] transport 故障后的连接释放失败，"
+                + $"{disconnectFailure.SafeDiagnostic}。");
         }
     }
 
@@ -464,23 +501,6 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         }
 
         publisher.PublishReadBatch(stagedUpdates);
-    }
-
-    private static string FormatException(Exception exception)
-    {
-        var messages = new List<string>();
-        for (var current = exception; current is not null && messages.Count < 4; current = current.InnerException)
-        {
-            if (!string.IsNullOrWhiteSpace(current.Message)
-                && !messages.Contains(current.Message, StringComparer.Ordinal))
-            {
-                messages.Add(current.Message);
-            }
-        }
-
-        return messages.Count == 0
-            ? exception.GetType().Name
-            : string.Join(" -> ", messages);
     }
 
     private int GetBackoffDelay()

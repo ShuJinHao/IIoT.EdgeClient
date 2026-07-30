@@ -13,6 +13,7 @@ using IIoT.Edge.Module.Contracts.Runtime;
 using IIoT.Edge.Module.Contracts.Identity;
 using IIoT.Edge.SharedKernel.Repository;
 using System.Globalization;
+using IIoT.Edge.Application.Common.Plc;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc;
 
@@ -28,6 +29,7 @@ public sealed class PlcDeviceRuntimeBuilder
     private readonly IPlcEndpointResolver _endpointResolver;
     private readonly ModuleHardwareProfileResolver _hardwareProfileResolver;
     private readonly IModuleParamRoleProvider? _moduleParamRoleProvider;
+    private readonly IPlcTaskRuntimeStatusWriter? _taskStatusWriter;
 
     public PlcDeviceRuntimeBuilder(
         IReadRepository<IoMappingEntity> ioMappings,
@@ -39,7 +41,8 @@ public sealed class PlcDeviceRuntimeBuilder
         IPlcSignalBlockPlanner signalBlockPlanner,
         IPlcEndpointResolver endpointResolver,
         ModuleHardwareProfileResolver hardwareProfileResolver,
-        IModuleParamRoleProvider? moduleParamRoleProvider = null)
+        IModuleParamRoleProvider? moduleParamRoleProvider = null,
+        IPlcTaskRuntimeStatusWriter? taskStatusWriter = null)
     {
         _ioMappings = ioMappings;
         _dataStore = dataStore;
@@ -51,6 +54,7 @@ public sealed class PlcDeviceRuntimeBuilder
         _endpointResolver = endpointResolver;
         _hardwareProfileResolver = hardwareProfileResolver;
         _moduleParamRoleProvider = moduleParamRoleProvider;
+        _taskStatusWriter = taskStatusWriter;
     }
 
     public async Task<PlcDeviceRuntimeHandle> BuildAsync(
@@ -161,9 +165,22 @@ public sealed class PlcDeviceRuntimeBuilder
             ConnectionSignal = connectionSignal,
             Logger = _logger,
             StatusStore = _statusStore,
+            TaskStatusWriter = _taskStatusWriter,
             CancellationTokenSource = deviceCts,
         };
         await runtime.ApplyTaskPlanAsync(effectiveTaskPlan, ct).ConfigureAwait(false);
+        if (!contextResolution.IsSuccess)
+        {
+            foreach (var taskKey in taskPlan.TaskKeys)
+            {
+                _taskStatusWriter?.SetState(
+                    device.PlcCode,
+                    taskKey,
+                    PlcTaskRuntimeState.Faulted,
+                    PlcTaskRuntimeErrorCodes.ConfigurationInvalid);
+            }
+        }
+
         return runtime;
     }
 

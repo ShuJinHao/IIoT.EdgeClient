@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Module.Contracts.Logging;
@@ -18,17 +19,31 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         var runtime = CreateRuntime(
             new ControlledLoopTask("Connection"),
             new ControlledLoopTask("PeriodicRead"));
-        var renamedPlan = PlcRuntimeTaskPlan.Empty(
+        var business = new ControlledBusinessTask("Task.MG1");
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlan(runtime, ("Task.MG1", (_, _) => business)),
+            TestContext.Current.CancellationToken);
+        var beforeRename = runtime.GetTaskStatus("Task.MG1");
+        var renamedPlan = new PlcRuntimeTaskPlan(
             runtime.DeviceId,
             runtime.PlcCode,
-            "改名后的现场名称");
+            "改名后的现场名称",
+            [
+                new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
+                    "Task.MG1",
+                    (_, _) => business)
+            ]);
 
         var result = await runtime.ApplyTaskPlanAsync(
             renamedPlan,
             TestContext.Current.CancellationToken);
 
         Assert.Equal(PlcRuntimeTaskApplyState.WaitingForConnection, result.State);
-        Assert.Empty(result.EnabledTaskKeys);
+        Assert.Equal(["Task.MG1"], result.EnabledTaskKeys);
+        var afterRename = runtime.GetTaskStatus("task.mg1");
+        Assert.NotNull(afterRename);
+        Assert.Equal(PlcTaskRuntimeState.WaitingForConnection, afterRename!.State);
+        Assert.Equal(beforeRename?.StateChangedAtUtc, afterRename.StateChangedAtUtc);
         await CleanupAsync(runtime);
     }
 
@@ -63,6 +78,40 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
     }
 
     [Fact]
+    public async Task ConnectionStart_ShouldPublishStartingThenRunningForEachTaskKey()
+    {
+        var business = new ControlledBusinessTask("Task.MG1");
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            new ControlledLoopTask("PeriodicRead"));
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlan(runtime, ("Task.MG1", (_, _) => business)),
+            TestContext.Current.CancellationToken);
+        var states = new ConcurrentQueue<PlcTaskRuntimeState>();
+        runtime.TaskStatuses.StatusChanged += (_, args) =>
+        {
+            if (string.Equals(args.TaskKey, "Task.MG1", StringComparison.OrdinalIgnoreCase)
+                && args.Snapshot is not null)
+            {
+                states.Enqueue(args.Snapshot.State);
+            }
+        };
+
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await runtime.WaitForTaskStateAsync(
+            "Task.MG1",
+            PlcTaskRuntimeState.Running,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            [PlcTaskRuntimeState.Starting, PlcTaskRuntimeState.Running],
+            states.Where(static state =>
+                state is PlcTaskRuntimeState.Starting or PlcTaskRuntimeState.Running));
+        await CleanupAsync(runtime);
+    }
+
+    [Fact]
     public async Task ConnectionTransitions_ShouldPauseAndResumeSameTaskInstancesOnce()
     {
         var connection = new ControlledLoopTask("Connection");
@@ -86,6 +135,12 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             periodicRead.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
             mg1.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
             mg2.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+        Assert.Equal(
+            PlcTaskRuntimeState.Running,
+            runtime.GetTaskStatus("Task.MG1")?.State);
+        Assert.Equal(
+            PlcTaskRuntimeState.Running,
+            runtime.GetTaskStatus("Task.MG2")?.State);
         var originalMg1 = runtime.GetBusinessTask("Task.MG1");
         var originalMg2 = runtime.GetBusinessTask("Task.MG2");
         Assert.Equal(5, runtime.GetRunningHandlesSnapshot().Count);
@@ -95,16 +150,36 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         Assert.Equal(1, mg1.Starts.Count);
         Assert.Equal(1, mg2.Starts.Count);
 
+        var mg1Waiting = runtime.WaitForTaskStateAsync(
+            "Task.MG1",
+            PlcTaskRuntimeState.WaitingForConnection,
+            TestContext.Current.CancellationToken);
+        var mg2Waiting = runtime.WaitForTaskStateAsync(
+            "Task.MG2",
+            PlcTaskRuntimeState.WaitingForConnection,
+            TestContext.Current.CancellationToken);
         runtime.ConnectionSignal.Report(false);
         await Task.WhenAll(
             periodicRead.Stops.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
             mg1.Stops.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
-            mg2.Stops.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+            mg2.Stops.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
+            mg1Waiting,
+            mg2Waiting);
+        var mg1RunningAgain = runtime.WaitForTaskStateAsync(
+            "Task.MG1",
+            PlcTaskRuntimeState.Running,
+            TestContext.Current.CancellationToken);
+        var mg2RunningAgain = runtime.WaitForTaskStateAsync(
+            "Task.MG2",
+            PlcTaskRuntimeState.Running,
+            TestContext.Current.CancellationToken);
         runtime.ConnectionSignal.Report(true);
         await Task.WhenAll(
             periodicRead.Starts.WaitForAtLeastAsync(2, TestContext.Current.CancellationToken),
             mg1.Starts.WaitForAtLeastAsync(2, TestContext.Current.CancellationToken),
-            mg2.Starts.WaitForAtLeastAsync(2, TestContext.Current.CancellationToken));
+            mg2.Starts.WaitForAtLeastAsync(2, TestContext.Current.CancellationToken),
+            mg1RunningAgain,
+            mg2RunningAgain);
 
         Assert.Same(originalMg1, runtime.GetBusinessTask("Task.MG1"));
         Assert.Same(originalMg2, runtime.GetBusinessTask("Task.MG2"));
@@ -212,6 +287,10 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         Assert.Same(originalService, runtime.PlcService);
         Assert.Same(originalBuffer, runtime.Buffer);
         Assert.Same(originalContext, runtime.Context);
+        Assert.Null(runtime.GetTaskStatus("Task.MG1"));
+        Assert.Equal(
+            PlcTaskRuntimeState.Running,
+            runtime.GetTaskStatus("Task.MG2")?.State);
         Assert.Equal(1, connection.Starts.Count);
         Assert.Equal(1, periodicRead.Starts.Count);
         Assert.Equal(1, mg2.Starts.Count);
@@ -259,6 +338,10 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         Assert.Same(originalService, runtime.PlcService);
         Assert.Same(originalBuffer, runtime.Buffer);
         Assert.Same(originalContext, runtime.Context);
+        Assert.Null(runtime.GetTaskStatus("Task.MG1"));
+        Assert.Equal(
+            PlcTaskRuntimeState.Running,
+            runtime.GetTaskStatus("Task.MG2")?.State);
         Assert.Equal(1, failed.Starts.Count);
         Assert.Equal(1, failed.Stops.Count);
         Assert.Equal(1, connection.Starts.Count);
@@ -295,6 +378,15 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
 
         Assert.Equal(1, failed.Starts.Count);
         Assert.Equal(1, healthy.Starts.Count);
+        Assert.Equal(
+            PlcTaskRuntimeState.Faulted,
+            runtime.GetTaskStatus("Task.MG1")?.State);
+        Assert.Equal(
+            PlcTaskRuntimeErrorCodes.TaskStartFailed,
+            runtime.GetTaskStatus("Task.MG1")?.ErrorCode);
+        Assert.Equal(
+            PlcTaskRuntimeState.Running,
+            runtime.GetTaskStatus("Task.MG2")?.State);
         Assert.Contains(
             runtime.LoggerEntries,
             entry => entry.Level == "Error"
@@ -341,6 +433,12 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             pauseFailure,
             healthy.Stops.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
             periodicRead.Stops.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+        Assert.Equal(
+            PlcTaskRuntimeState.Faulted,
+            runtime.GetTaskStatus("Task.MG1")?.State);
+        Assert.Equal(
+            PlcTaskRuntimeState.WaitingForConnection,
+            runtime.GetTaskStatus("Task.MG2")?.State);
         failedStop.ThrowOnStop = false;
         runtime.ConnectionSignal.Report(true);
         await Task.WhenAll(
@@ -351,6 +449,12 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         Assert.Equal(2, failedStop.Starts.Count);
         Assert.Equal(2, healthy.Starts.Count);
         Assert.True(runtime.Runtime.IsConnected);
+        Assert.Equal(
+            PlcTaskRuntimeState.Running,
+            runtime.GetTaskStatus("Task.MG1")?.State);
+        Assert.Equal(
+            PlcTaskRuntimeState.Running,
+            runtime.GetTaskStatus("Task.MG2")?.State);
 
         await CleanupAsync(runtime);
     }
@@ -559,6 +663,12 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         Assert.Equal(["Task.MG1", "Task.MG2"], runtime.EnabledTaskKeys);
         Assert.Equal(1, mg1.Stops.Count);
         Assert.Equal(1, mg2.Stops.Count);
+        Assert.Equal(
+            PlcTaskRuntimeState.Running,
+            runtime.GetTaskStatus("Task.MG1")?.State);
+        Assert.Equal(
+            PlcTaskRuntimeState.Running,
+            runtime.GetTaskStatus("Task.MG2")?.State);
 
         mg2.ThrowOnStop = false;
         await CleanupAsync(runtime);
@@ -598,6 +708,15 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         faulting.FailExecution();
         await observed;
 
+        Assert.Equal(
+            PlcTaskRuntimeState.Faulted,
+            runtime.GetTaskStatus("Task.MG1")?.State);
+        Assert.Equal(
+            PlcTaskRuntimeErrorCodes.TaskFault,
+            runtime.GetTaskStatus("Task.MG1")?.ErrorCode);
+        Assert.Equal(
+            PlcTaskRuntimeState.Running,
+            runtime.GetTaskStatus("Task.MG2")?.State);
         Assert.Equal(1, healthy.Starts.Count);
         Assert.Equal(0, healthy.Stops.Count);
         Assert.DoesNotContain(
@@ -824,8 +943,10 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         TimeProvider? timeProvider = null)
     {
         var logger = new ConcurrentLogService();
+        var taskStatuses = new PlcTaskRuntimeStatusStore();
         return new TestPlcDeviceRuntimeHandle(
             logger,
+            taskStatuses,
             new PlcDeviceRuntimeHandle
             {
                 DeviceId = deviceId,
@@ -844,6 +965,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
                 ConnectionSignal = new PlcRuntimeConnectionSignal(),
                 Logger = logger,
                 StatusStore = new PlcConnectionStatusStore(),
+                TaskStatusWriter = taskStatuses,
                 CancellationTokenSource = new CancellationTokenSource(),
                 TransitionTimeProvider = timeProvider ?? TimeProvider.System
             });
@@ -872,6 +994,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
 
     private sealed class TestPlcDeviceRuntimeHandle(
         ConcurrentLogService logger,
+        PlcTaskRuntimeStatusStore taskStatuses,
         PlcDeviceRuntimeHandle runtime)
     {
         public static implicit operator PlcDeviceRuntimeHandle(
@@ -881,6 +1004,8 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         public PlcDeviceRuntimeHandle Runtime { get; } = runtime;
 
         public IReadOnlyCollection<LogEntry> LoggerEntries => logger.Entries;
+
+        public IPlcTaskRuntimeStatusReader TaskStatuses => taskStatuses;
 
         public string DeviceName => Runtime.DeviceName;
         public string PlcCode => Runtime.PlcCode;
@@ -894,6 +1019,9 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         public IPlcTask PeriodicReadTask => Runtime.PeriodicReadTask;
         public PlcRuntimeConnectionSignal ConnectionSignal => Runtime.ConnectionSignal;
         public IReadOnlyCollection<string> EnabledTaskKeys => Runtime.EnabledTaskKeys;
+
+        public PlcTaskRuntimeSnapshot? GetTaskStatus(string taskKey)
+            => TaskStatuses.GetSnapshot(PlcCode, taskKey);
 
         public void Start() => Runtime.Start();
 
@@ -912,6 +1040,44 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             Func<LogEntry, bool> predicate,
             CancellationToken cancellationToken)
             => logger.WaitForAsync(predicate, cancellationToken);
+
+        public async Task WaitForTaskStateAsync(
+            string taskKey,
+            PlcTaskRuntimeState state,
+            CancellationToken cancellationToken)
+        {
+            if (GetTaskStatus(taskKey)?.State == state)
+            {
+                return;
+            }
+
+            var completion = new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            EventHandler<PlcTaskRuntimeStatusChangedEventArgs>? handler = null;
+            handler = (_, args) =>
+            {
+                if (string.Equals(args.PlcCode, PlcCode, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(args.TaskKey, taskKey, StringComparison.OrdinalIgnoreCase)
+                    && args.Snapshot?.State == state)
+                {
+                    completion.TrySetResult();
+                }
+            };
+            TaskStatuses.StatusChanged += handler;
+            try
+            {
+                if (GetTaskStatus(taskKey)?.State == state)
+                {
+                    return;
+                }
+
+                await completion.Task.WaitAsync(cancellationToken);
+            }
+            finally
+            {
+                TaskStatuses.StatusChanged -= handler;
+            }
+        }
     }
 
     private sealed class ControlledLoopTask(string taskName) : IPlcTask

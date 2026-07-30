@@ -1,6 +1,7 @@
 using IIoT.Edge.Module.Contracts.Auth;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Module.Contracts.Hardware;
@@ -190,10 +191,88 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
         Assert.DoesNotContain("已应用", viewModel.StatusMessage, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task RuntimeStatusChanged_ShouldUpdateOnlyMatchingRowWithoutReloadingSqlite()
+    {
+        var selectionService = new DeviceSelectionService();
+        selectionService.SelectDevice("PLC-A01");
+        var service = new FakePlcTaskBindingService(
+        [
+            CreateDevice(1, "PLC-A01", "P1-AP01"),
+            CreateDevice(2, "PLC-A02", "P1-AP02")
+        ]);
+        var runtimeStatuses = new PlcTaskRuntimeStatusStore();
+        var viewModel = CreateViewModel(
+            service,
+            selectionService,
+            runtimeStatusReader: runtimeStatuses);
+        await viewModel.OnActivatedAsync();
+
+        runtimeStatuses.SetState(
+            "p1-ap01",
+            "task.upload",
+            PlcTaskRuntimeState.Running);
+
+        Assert.Equal("运行中", viewModel.Devices[0].Tasks[0].RuntimeStatusText);
+        Assert.Equal("等待 runtime", viewModel.Devices[1].Tasks[0].RuntimeStatusText);
+        Assert.Equal(1, service.GetCalls);
+        await viewModel.OnDeactivatedAsync();
+    }
+
+    [Fact]
+    public async Task OnDeactivatedAsync_ShouldUnsubscribeRuntimeStatusChanges()
+    {
+        var selectionService = new DeviceSelectionService();
+        var runtimeStatuses = new PlcTaskRuntimeStatusStore();
+        var viewModel = CreateViewModel(
+            new FakePlcTaskBindingService([CreateDevice(1, "PLC-A01", "P1-AP01")]),
+            selectionService,
+            runtimeStatusReader: runtimeStatuses);
+        await viewModel.OnActivatedAsync();
+        await viewModel.OnDeactivatedAsync();
+
+        runtimeStatuses.SetState(
+            "P1-AP01",
+            "Task.Upload",
+            PlcTaskRuntimeState.Faulted,
+            PlcTaskRuntimeErrorCodes.TaskFault,
+            nameof(InvalidOperationException));
+
+        var task = Assert.Single(Assert.Single(viewModel.Devices).Tasks);
+        Assert.Null(task.RuntimeState);
+        Assert.Equal("等待 runtime", task.RuntimeStatusText);
+    }
+
+    [Fact]
+    public async Task RuntimeFault_ShouldExposeOnlyStableCodeAndExceptionType()
+    {
+        var selectionService = new DeviceSelectionService();
+        var runtimeStatuses = new PlcTaskRuntimeStatusStore();
+        var viewModel = CreateViewModel(
+            new FakePlcTaskBindingService([CreateDevice(1, "PLC-A01", "P1-AP01")]),
+            selectionService,
+            runtimeStatusReader: runtimeStatuses);
+        await viewModel.OnActivatedAsync();
+
+        runtimeStatuses.SetState(
+            "P1-AP01",
+            "Task.Upload",
+            PlcTaskRuntimeState.Faulted,
+            PlcTaskRuntimeErrorCodes.TaskFault,
+            nameof(InvalidOperationException));
+
+        var task = Assert.Single(Assert.Single(viewModel.Devices).Tasks);
+        Assert.Equal("故障", task.RuntimeStatusText);
+        Assert.Contains("运行错误码=TaskFault", task.NoteText, StringComparison.Ordinal);
+        Assert.Contains("异常类型=InvalidOperationException", task.NoteText, StringComparison.Ordinal);
+        await viewModel.OnDeactivatedAsync();
+    }
+
     private static PlcTaskBindingViewModel CreateViewModel(
         IPlcTaskBindingService service,
         IDeviceSelectionService selectionService,
-        IPlcTaskBindingTransactionService? transactionService = null)
+        IPlcTaskBindingTransactionService? transactionService = null,
+        IPlcTaskRuntimeStatusReader? runtimeStatusReader = null)
         => new TestPlcTaskBindingViewModel(
             service,
             transactionService ?? new FakePlcTaskBindingTransactionService(),
@@ -201,6 +280,7 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
             new FakeConfirmationService(),
             new TestAppLanguageService(),
             selectionService,
+            runtimeStatusReader ?? new PlcTaskRuntimeStatusStore(),
             "Test.PlcTaskBinding",
             "Navigation_Title_PlcTaskBinding",
             "任务绑定",
@@ -240,6 +320,7 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
         IPlcTaskBindingConfirmationService confirmationService,
         TestAppLanguageService languageService,
         IDeviceSelectionService deviceSelectionService,
+        IPlcTaskRuntimeStatusReader runtimeStatusReader,
         string viewId,
         string titleResourceKey,
         string titleFallback,
@@ -251,6 +332,7 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
             confirmationService,
             languageService,
             deviceSelectionService,
+            runtimeStatusReader,
             viewId,
             titleResourceKey,
             titleFallback,

@@ -3,6 +3,8 @@ using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Module.Contracts.Plc.Store;
 using IIoT.Edge.Module.Contracts.Runtime;
 using IIoT.Edge.Module.Contracts.Tasks;
+using IIoT.Edge.Application.Common.Plc;
+using IIoT.Edge.Infrastructure.DeviceComm.Signals;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc;
 
@@ -46,6 +48,8 @@ public sealed class PlcDeviceRuntimeHandle
     public required ILogService Logger { get; init; }
 
     public required PlcConnectionStatusStore StatusStore { get; init; }
+
+    public IPlcTaskRuntimeStatusWriter? TaskStatusWriter { get; init; }
 
     public required CancellationTokenSource CancellationTokenSource { get; init; }
 
@@ -128,7 +132,13 @@ public sealed class PlcDeviceRuntimeHandle
 
                 foreach (var previous in removedSlots)
                 {
-                    await StopBusinessTaskAsync(previous.Slot, cancellationToken).ConfigureAwait(false);
+                    await StopBusinessTaskAsync(
+                            previous.Slot,
+                            cancellationToken,
+                            disposition: previous.WasRunning
+                                ? BusinessTaskStopDisposition.PreserveStopping
+                                : BusinessTaskStopDisposition.PreserveState)
+                        .ConfigureAwait(false);
                 }
 
                 lock (_businessTasks)
@@ -141,6 +151,19 @@ public sealed class PlcDeviceRuntimeHandle
                     foreach (var slot in stagedSlots)
                     {
                         _businessTasks.Add(slot.TaskKey, slot);
+                    }
+                }
+
+                foreach (var previous in removedSlots)
+                {
+                    TaskStatusWriter?.Remove(PlcCode, previous.Slot.TaskKey);
+                }
+
+                if (!IsConnected)
+                {
+                    foreach (var slot in stagedSlots)
+                    {
+                        SetTaskState(slot.TaskKey, PlcTaskRuntimeState.WaitingForConnection);
                     }
                 }
             }
@@ -226,14 +249,52 @@ public sealed class PlcDeviceRuntimeHandle
         catch (PlcServiceQuarantinedException ex)
         {
             ConnectionSignal.Report(false);
-            StatusStore.MarkRuntimeFault(DeviceId, PlcCode, DeviceName, ex.Message);
-            Logger.Error($"[PlcCode={PlcCode}] PLC service 已隔离，连接任务已停止：{ex.Message}");
+            StatusStore.MarkRuntimeFault(
+                DeviceId,
+                PlcCode,
+                DeviceName,
+                PlcServiceQuarantinedException.StableReasonCode);
+            SetAllTaskStates(
+                PlcTaskRuntimeState.Faulted,
+                PlcTaskRuntimeErrorCodes.RuntimeQuarantined,
+                ex.GetType().Name);
+            Logger.Error(
+                $"[PlcCode={PlcCode}] PLC service 已隔离，连接任务已停止，"
+                + $"原因码={PlcServiceQuarantinedException.StableReasonCode}，异常类型={ex.GetType().Name}。");
+        }
+        catch (Exception ex) when (
+            PlcOperationFailureClassifier.IsCallerCancellation(ex, cancellationToken))
+        {
+            throw;
         }
         catch (Exception ex)
         {
-            ConnectionSignal.Report(false);
-            StatusStore.MarkDisconnected(DeviceId, PlcCode, DeviceName, ex.Message);
-            Logger.Error($"[PlcCode={PlcCode}] PLC 连接任务异常：{ex.Message}");
+            var failure = PlcOperationFailureClassifier.Classify(ex);
+            if (failure.DisconnectsTransport)
+            {
+                ConnectionSignal.Report(false);
+                StatusStore.MarkDisconnected(
+                    DeviceId,
+                    PlcCode,
+                    DeviceName,
+                    failure.ReasonCode);
+            }
+            else
+            {
+                StatusStore.MarkRuntimeFault(
+                    DeviceId,
+                    PlcCode,
+                    DeviceName,
+                    failure.ReasonCode,
+                    preserveTransportConnection: true);
+                SetAllTaskStates(
+                    PlcTaskRuntimeState.Faulted,
+                    PlcTaskRuntimeErrorCodes.ConnectionTaskFault,
+                    failure.ExceptionType);
+            }
+
+            Logger.Error(
+                $"[PlcCode={PlcCode}] PLC 连接任务异常，{failure.SafeDiagnostic}。");
         }
     }
 
@@ -259,6 +320,11 @@ public sealed class PlcDeviceRuntimeHandle
                         {
                             await StartPeriodicReadTaskAsync(cancellationToken).ConfigureAwait(false);
                         }
+                        catch (Exception ex) when (
+                            PlcOperationFailureClassifier.IsCallerCancellation(ex, cancellationToken))
+                        {
+                            throw;
+                        }
                         catch (Exception ex)
                         {
                             Interlocked.Exchange(ref _connected, 0);
@@ -266,9 +332,15 @@ public sealed class PlcDeviceRuntimeHandle
                                 DeviceId,
                                 PlcCode,
                                 DeviceName,
-                                $"周期读取任务启动失败：{ex.Message}");
+                                PlcTaskRuntimeErrorCodes.PeriodicReadFault,
+                                preserveTransportConnection: true);
+                            SetAllTaskStates(
+                                PlcTaskRuntimeState.Faulted,
+                                PlcTaskRuntimeErrorCodes.PeriodicReadFault,
+                                ex.GetType().Name);
                             Logger.Error(
-                                $"[PlcCode={PlcCode}] 周期读取任务启动失败，业务任务保持暂停：{ex.Message}");
+                                $"[PlcCode={PlcCode}] 周期读取任务启动失败，业务任务保持暂停，"
+                                + $"原因码={PlcTaskRuntimeErrorCodes.PeriodicReadFault}，异常类型={ex.GetType().Name}。");
                             continue;
                         }
 
@@ -282,10 +354,20 @@ public sealed class PlcDeviceRuntimeHandle
                                         cancellationToken)
                                     .ConfigureAwait(false);
                             }
+                            catch (Exception ex) when (
+                                PlcOperationFailureClassifier.IsCallerCancellation(ex, cancellationToken))
+                            {
+                                throw;
+                            }
                             catch (Exception ex)
                             {
+                                var failure = PlcOperationFailureClassifier.Classify(ex);
+                                var safeDetail = ex is TimeoutException
+                                    ? $"启动握手超过 {StartupTimeout.TotalSeconds:0} 秒，"
+                                    : string.Empty;
                                 Logger.Error(
-                                    $"[PlcCode={PlcCode}] 业务任务 {taskKey} 启动失败，已仅隔离该 TaskKey：{ex.Message}");
+                                    $"[PlcCode={PlcCode}] 业务任务 {taskKey} 启动失败，"
+                                    + $"已仅隔离该 TaskKey，{safeDetail}{failure.SafeDiagnostic}。");
                             }
                         }
 
@@ -297,13 +379,21 @@ public sealed class PlcDeviceRuntimeHandle
                     {
                         await StopDependentTasksAsync(
                                 CreateStopDeadline(),
-                                cancellationToken)
+                                cancellationToken,
+                                BusinessTaskStopDisposition.WaitingForConnection)
                             .ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (
+                        PlcOperationFailureClassifier.IsCallerCancellation(ex, cancellationToken))
+                    {
+                        throw;
                     }
                     catch (Exception ex)
                     {
+                        var failure = PlcOperationFailureClassifier.Classify(ex);
                         Logger.Error(
-                            $"[PlcCode={PlcCode}] 断联后的依赖任务暂停未完整完成，连接监督将继续等待后续状态：{ex.Message}");
+                            $"[PlcCode={PlcCode}] 断联后的依赖任务暂停未完整完成，"
+                            + $"连接监督将继续等待后续状态，{failure.SafeDiagnostic}。");
                     }
                 }
                 finally
@@ -315,15 +405,29 @@ public sealed class PlcDeviceRuntimeHandle
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
         }
+        catch (Exception ex) when (
+            PlcOperationFailureClassifier.IsCallerCancellation(ex, cancellationToken))
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             Interlocked.Exchange(ref _connected, 0);
+            var failure = PlcOperationFailureClassifier.Classify(ex);
             StatusStore.MarkRuntimeFault(
                 DeviceId,
                 PlcCode,
                 DeviceName,
-                $"连接状态监督失败：{ex.Message}");
-            Logger.Error($"[PlcCode={PlcCode}] 连接状态监督失败，依赖任务保持暂停：{ex.Message}");
+                PlcTaskRuntimeErrorCodes.ConnectionSupervisorFault,
+                preserveTransportConnection: true);
+            SetAllTaskStates(
+                PlcTaskRuntimeState.Faulted,
+                PlcTaskRuntimeErrorCodes.ConnectionSupervisorFault,
+                failure.ExceptionType);
+            Logger.Error(
+                $"[PlcCode={PlcCode}] 连接状态监督失败，依赖任务保持暂停，"
+                + $"原因码={PlcTaskRuntimeErrorCodes.ConnectionSupervisorFault}，"
+                + $"异常类型={failure.ExceptionType}。");
         }
     }
 
@@ -391,21 +495,27 @@ public sealed class PlcDeviceRuntimeHandle
         if (slot.Cancellation is not null
             || slot.StopExecution is not null)
         {
-            await StopBusinessTaskAsync(slot, cancellationToken).ConfigureAwait(false);
+            await StopBusinessTaskAsync(
+                    slot,
+                    cancellationToken,
+                    disposition: BusinessTaskStopDisposition.PreserveState)
+                .ConfigureAwait(false);
         }
 
-        slot.Task ??= CreateBusinessTask(slot);
-        if (slot.Task is not IStartupAwareBackgroundTask startupAware)
-        {
-            throw new InvalidOperationException(
-                $"业务任务 {slot.TaskKey} 未实现 {nameof(IStartupAwareBackgroundTask)}，拒绝无启动握手运行。");
-        }
-
-        var taskCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-            CancellationTokenSource.Token);
+        CancellationTokenSource? taskCancellation = null;
         Task? execution = null;
+        SetTaskState(slot.TaskKey, PlcTaskRuntimeState.Starting);
         try
         {
+            slot.Task ??= CreateBusinessTask(slot);
+            if (slot.Task is not IStartupAwareBackgroundTask startupAware)
+            {
+                throw new InvalidOperationException(
+                    $"业务任务 {slot.TaskKey} 未实现 {nameof(IStartupAwareBackgroundTask)}，拒绝无启动握手运行。");
+            }
+
+            taskCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                CancellationTokenSource.Token);
             var run = startupAware.StartWithStartup(taskCancellation.Token);
             execution = run.Execution;
             slot.Cancellation = taskCancellation;
@@ -446,6 +556,7 @@ public sealed class PlcDeviceRuntimeHandle
             }
 
             slot.UnexpectedExitReason = null;
+            SetTaskState(slot.TaskKey, PlcTaskRuntimeState.Running);
             _ = ObserveBusinessExecutionAsync(
                 slot,
                 execution,
@@ -453,10 +564,33 @@ public sealed class PlcDeviceRuntimeHandle
         }
         catch (Exception startFailure)
         {
+            var failure = PlcOperationFailureClassifier.Classify(startFailure);
+            var callerCancellation = PlcOperationFailureClassifier.IsCallerCancellation(
+                startFailure,
+                cancellationToken);
+            if (callerCancellation)
+            {
+                SetTaskState(slot.TaskKey, PlcTaskRuntimeState.Stopping);
+            }
+            else
+            {
+                SetTaskState(
+                    slot.TaskKey,
+                    PlcTaskRuntimeState.Faulted,
+                    PlcTaskRuntimeErrorCodes.TaskStartFailed,
+                    failure.ExceptionType);
+            }
+
             Exception? cleanupFailure = null;
             try
             {
-                await StopBusinessTaskAsync(slot, CancellationToken.None).ConfigureAwait(false);
+                await StopBusinessTaskAsync(
+                        slot,
+                        CancellationToken.None,
+                        disposition: callerCancellation
+                            ? BusinessTaskStopDisposition.PreserveStopping
+                            : BusinessTaskStopDisposition.PreserveState)
+                    .ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -467,7 +601,7 @@ public sealed class PlcDeviceRuntimeHandle
             {
                 slot.Cancellation = null;
                 slot.Execution = null;
-                taskCancellation.Dispose();
+                taskCancellation?.Dispose();
             }
 
             if (cleanupFailure is not null)
@@ -499,9 +633,14 @@ public sealed class PlcDeviceRuntimeHandle
 
             if (!taskCancellationToken.IsCancellationRequested)
             {
-                slot.UnexpectedExitReason = "任务执行句柄在 PLC 仍连接时提前结束。";
+                slot.UnexpectedExitReason = PlcTaskRuntimeErrorCodes.TaskUnexpectedExit;
+                SetTaskState(
+                    slot.TaskKey,
+                    PlcTaskRuntimeState.Faulted,
+                    PlcTaskRuntimeErrorCodes.TaskUnexpectedExit);
                 Logger.Error(
-                    $"[PlcCode={PlcCode}] 业务任务 {slot.TaskKey} 意外停止：{slot.UnexpectedExitReason}");
+                    $"[PlcCode={PlcCode}] 业务任务 {slot.TaskKey} 意外停止，"
+                    + $"原因码={PlcTaskRuntimeErrorCodes.TaskUnexpectedExit}。");
             }
         }
         catch (OperationCanceledException) when (taskCancellationToken.IsCancellationRequested)
@@ -514,9 +653,16 @@ public sealed class PlcDeviceRuntimeHandle
                 return;
             }
 
-            slot.UnexpectedExitReason = ex.Message;
+            var failure = PlcOperationFailureClassifier.Classify(ex);
+            slot.UnexpectedExitReason = failure.ReasonCode;
+            SetTaskState(
+                slot.TaskKey,
+                PlcTaskRuntimeState.Faulted,
+                failure.ReasonCode,
+                failure.ExceptionType);
             Logger.Error(
-                $"[PlcCode={PlcCode}] 业务任务 {slot.TaskKey} 执行故障，已仅隔离该 TaskKey：{ex.Message}");
+                $"[PlcCode={PlcCode}] 业务任务 {slot.TaskKey} 执行故障，"
+                + $"已仅隔离该 TaskKey，{failure.SafeDiagnostic}。");
         }
     }
 
@@ -538,9 +684,11 @@ public sealed class PlcDeviceRuntimeHandle
                     DeviceId,
                     PlcCode,
                     DeviceName,
-                    "周期读取任务在 PLC 仍连接时提前结束。");
-                Logger.Error($"[PlcCode={PlcCode}] 周期读取任务意外停止，业务任务将暂停。");
-                ConnectionSignal.Report(false);
+                    PlcTaskRuntimeErrorCodes.PeriodicReadFault,
+                    preserveTransportConnection: true);
+                Logger.Error(
+                    $"[PlcCode={PlcCode}] 周期读取任务意外停止，"
+                    + $"原因码={PlcTaskRuntimeErrorCodes.PeriodicReadFault}。");
             }
         }
         catch (OperationCanceledException) when (taskCancellationToken.IsCancellationRequested)
@@ -553,13 +701,17 @@ public sealed class PlcDeviceRuntimeHandle
                 return;
             }
 
+            var failure = PlcOperationFailureClassifier.Classify(ex);
             StatusStore.MarkRuntimeFault(
                 DeviceId,
                 PlcCode,
                 DeviceName,
-                $"周期读取任务执行故障：{ex.Message}");
-            Logger.Error($"[PlcCode={PlcCode}] 周期读取任务执行故障，业务任务将暂停：{ex.Message}");
-            ConnectionSignal.Report(false);
+                PlcTaskRuntimeErrorCodes.PeriodicReadFault,
+                preserveTransportConnection: true);
+            Logger.Error(
+                $"[PlcCode={PlcCode}] 周期读取任务执行故障，"
+                + $"原因码={PlcTaskRuntimeErrorCodes.PeriodicReadFault}，"
+                + $"异常类型={failure.ExceptionType}。");
         }
     }
 
@@ -584,6 +736,7 @@ public sealed class PlcDeviceRuntimeHandle
     {
         var failures = new List<Exception>();
         var stoppedSlots = new HashSet<BusinessTaskSlot>();
+        var failedRollbackSlots = new HashSet<BusinessTaskSlot>();
         var rollbackStopSlots = startedForApply
             .Concat(stagedSlots)
             .Where(static slot => slot.Cancellation is not null)
@@ -599,8 +752,9 @@ public sealed class PlcDeviceRuntimeHandle
             }
             catch (Exception ex)
             {
+                failedRollbackSlots.Add(slot);
                 failures.Add(new InvalidOperationException(
-                    $"回滚新增或恢复任务 {slot.TaskKey} 失败：{ex.Message}",
+                    $"回滚新增或恢复任务 {slot.TaskKey} 失败，异常类型={ex.GetType().Name}。",
                     ex));
             }
         }
@@ -619,7 +773,7 @@ public sealed class PlcDeviceRuntimeHandle
             catch (Exception ex)
             {
                 failures.Add(new InvalidOperationException(
-                    $"回滚原任务 {previous.Slot.TaskKey} 失败：{ex.Message}",
+                    $"回滚原任务 {previous.Slot.TaskKey} 失败，异常类型={ex.GetType().Name}。",
                     ex));
             }
         }
@@ -635,12 +789,18 @@ public sealed class PlcDeviceRuntimeHandle
             }
         }
 
+        foreach (var slot in stagedSlots.Where(slot => !failedRollbackSlots.Contains(slot)))
+        {
+            TaskStatusWriter?.Remove(PlcCode, slot.TaskKey);
+        }
+
         return failures;
     }
 
     private async Task StopDependentTasksAsync(
         StopDeadline deadline,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        BusinessTaskStopDisposition businessTaskDisposition)
     {
         var stopTasks = GetBusinessTaskKeysSnapshot()
             .OrderBy(static key => key, StringComparer.OrdinalIgnoreCase)
@@ -666,13 +826,20 @@ public sealed class PlcDeviceRuntimeHandle
                 await StopBusinessTaskAsync(
                         GetRequiredBusinessTaskSlot(taskKey),
                         cancellationToken,
-                        deadline)
+                        deadline,
+                        businessTaskDisposition)
                     .ConfigureAwait(false);
                 return null;
             }
             catch (Exception ex)
             {
-                Logger.Error($"[PlcCode={PlcCode}] 业务任务 {taskKey} 暂停失败：{ex.Message}");
+                var failure = PlcOperationFailureClassifier.Classify(ex);
+                var safeDetail = ex is TimeoutException
+                    ? $"停止钩子超过 {StopTimeout.TotalSeconds:0} 秒，"
+                    : string.Empty;
+                Logger.Error(
+                    $"[PlcCode={PlcCode}] 业务任务 {taskKey} 暂停失败，"
+                    + $"{safeDetail}{failure.SafeDiagnostic}。");
                 return ex;
             }
         }
@@ -687,7 +854,9 @@ public sealed class PlcDeviceRuntimeHandle
             }
             catch (Exception ex)
             {
-                Logger.Error($"[PlcCode={PlcCode}] 周期读取任务暂停失败：{ex.Message}");
+                var failure = PlcOperationFailureClassifier.Classify(ex);
+                Logger.Error(
+                    $"[PlcCode={PlcCode}] 周期读取任务暂停失败，{failure.SafeDiagnostic}。");
                 return ex;
             }
         }
@@ -696,14 +865,21 @@ public sealed class PlcDeviceRuntimeHandle
     private async Task StopBusinessTaskAsync(
         BusinessTaskSlot slot,
         CancellationToken cancellationToken,
-        StopDeadline? deadline = null)
+        StopDeadline? deadline = null,
+        BusinessTaskStopDisposition disposition = BusinessTaskStopDisposition.Remove)
     {
         deadline ??= CreateStopDeadline();
+        if (disposition != BusinessTaskStopDisposition.PreserveState)
+        {
+            SetTaskState(slot.TaskKey, PlcTaskRuntimeState.Stopping);
+        }
+
         var taskCancellation = slot.Cancellation;
         var execution = slot.Execution;
         var stopExecution = slot.StopExecution;
         if (taskCancellation is null && stopExecution is null)
         {
+            CompleteTaskStop(slot.TaskKey, disposition);
             return;
         }
 
@@ -720,6 +896,11 @@ public sealed class PlcDeviceRuntimeHandle
                 stopExecution = slot.Task.StopAsync(cancellationToken);
                 slot.StopExecution = stopExecution;
                 TrackExecution(stopExecution);
+            }
+            catch (Exception ex) when (
+                PlcOperationFailureClassifier.IsCallerCancellation(ex, cancellationToken))
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -740,11 +921,21 @@ public sealed class PlcDeviceRuntimeHandle
             }
             catch (TimeoutException ex)
             {
+                SetTaskState(
+                    slot.TaskKey,
+                    PlcTaskRuntimeState.Faulted,
+                    PlcTaskRuntimeErrorCodes.TaskStopTimeout,
+                    ex.GetType().Name);
                 throw new TimeoutException(
                     $"业务任务 {slot.TaskKey} 停止钩子超过 {StopTimeout.TotalSeconds:0} 秒，runtime 将保留隔离。",
                     ex);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex) when (
+                PlcOperationFailureClassifier.IsCallerCancellation(ex, cancellationToken))
             {
                 throw;
             }
@@ -776,6 +967,11 @@ public sealed class PlcDeviceRuntimeHandle
             }
             catch (TimeoutException)
             {
+                SetTaskState(
+                    slot.TaskKey,
+                    PlcTaskRuntimeState.Faulted,
+                    PlcTaskRuntimeErrorCodes.TaskStopTimeout,
+                    nameof(TimeoutException));
                 throw;
             }
             catch (OperationCanceledException) when (
@@ -797,10 +993,18 @@ public sealed class PlcDeviceRuntimeHandle
         slot.Execution = null;
         if (stopFailure is not null)
         {
+            var failure = PlcOperationFailureClassifier.Classify(stopFailure);
+            SetTaskState(
+                slot.TaskKey,
+                PlcTaskRuntimeState.Faulted,
+                PlcTaskRuntimeErrorCodes.TaskStopFailed,
+                failure.ExceptionType);
             System.Runtime.ExceptionServices.ExceptionDispatchInfo
                 .Capture(stopFailure)
                 .Throw();
         }
+
+        CompleteTaskStop(slot.TaskKey, disposition);
     }
 
     private async Task StopPeriodicReadTaskAsync(
@@ -924,7 +1128,8 @@ public sealed class PlcDeviceRuntimeHandle
             Interlocked.Exchange(ref _connected, 0);
             await StopDependentTasksAsync(
                     _shutdownStopDeadline,
-                    CancellationToken.None)
+                    CancellationToken.None,
+                    BusinessTaskStopDisposition.PreserveStopping)
                 .ConfigureAwait(false);
         }
         finally
@@ -938,6 +1143,49 @@ public sealed class PlcDeviceRuntimeHandle
         lock (_businessTasks)
         {
             return _businessTasks.Keys.ToArray();
+        }
+    }
+
+    private void SetAllTaskStates(
+        PlcTaskRuntimeState state,
+        string? errorCode = null,
+        string? exceptionType = null)
+    {
+        foreach (var taskKey in GetBusinessTaskKeysSnapshot())
+        {
+            SetTaskState(taskKey, state, errorCode, exceptionType);
+        }
+    }
+
+    private void SetTaskState(
+        string taskKey,
+        PlcTaskRuntimeState state,
+        string? errorCode = null,
+        string? exceptionType = null)
+        => TaskStatusWriter?.SetState(
+            PlcCode,
+            taskKey,
+            state,
+            errorCode,
+            exceptionType);
+
+    private void CompleteTaskStop(
+        string taskKey,
+        BusinessTaskStopDisposition disposition)
+    {
+        switch (disposition)
+        {
+            case BusinessTaskStopDisposition.Remove:
+                TaskStatusWriter?.Remove(PlcCode, taskKey);
+                break;
+            case BusinessTaskStopDisposition.WaitingForConnection:
+                SetTaskState(taskKey, PlcTaskRuntimeState.WaitingForConnection);
+                break;
+            case BusinessTaskStopDisposition.PreserveStopping:
+            case BusinessTaskStopDisposition.PreserveState:
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(disposition), disposition, null);
         }
     }
 
@@ -991,6 +1239,14 @@ public sealed class PlcDeviceRuntimeHandle
     private sealed record PreviousTaskState(
         BusinessTaskSlot Slot,
         bool WasRunning);
+
+    private enum BusinessTaskStopDisposition
+    {
+        Remove,
+        WaitingForConnection,
+        PreserveStopping,
+        PreserveState
+    }
 
     private sealed class BusinessTaskSlot(
         string taskKey,

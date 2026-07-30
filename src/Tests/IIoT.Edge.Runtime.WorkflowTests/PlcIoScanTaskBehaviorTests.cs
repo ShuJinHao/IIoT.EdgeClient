@@ -1,6 +1,7 @@
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Module.Contracts.Plc.Store;
+using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.Application.Modules.Hardware;
@@ -14,12 +15,89 @@ using IIoT.Edge.Module.Sdk.Signals;
 using IIoT.Edge.Module.Contracts.Runtime;
 using Microsoft.Extensions.Time.Testing;
 using System.Reflection;
+using McpXLib.Exceptions;
 
 namespace IIoT.Edge.Runtime.WorkflowTests;
 
 public sealed class PlcIoScanTaskBehaviorTests
 {
     private static readonly IPlcSignalBlockPlanner SignalBlockPlanner = new DefaultPlcSignalBlockPlanner();
+
+    [Fact]
+    public void FailureClassifier_ShouldUseStructuredCategoriesAndPreferNestedSocket()
+    {
+        AssertFailure(
+            new System.Net.Sockets.SocketException(),
+            PlcOperationFailureKind.TransportDisconnected,
+            PlcTaskRuntimeErrorCodes.TransportDisconnected,
+            disconnectsTransport: true);
+        AssertFailure(
+            new TimeoutException("sensitive timeout detail"),
+            PlcOperationFailureKind.Timeout,
+            PlcTaskRuntimeErrorCodes.Timeout);
+        AssertFailure(
+            new McProtocolException("sensitive PLC response"),
+            PlcOperationFailureKind.ProtocolRejected,
+            PlcTaskRuntimeErrorCodes.ProtocolRejected);
+        AssertFailure(
+            new RecivePacketException("sensitive packet"),
+            PlcOperationFailureKind.InvalidResponse,
+            PlcTaskRuntimeErrorCodes.InvalidResponse);
+        AssertFailure(
+            new InvalidDataException("sensitive packet"),
+            PlcOperationFailureKind.InvalidResponse,
+            PlcTaskRuntimeErrorCodes.InvalidResponse);
+        AssertFailure(
+            new DeviceAddressException("sensitive address"),
+            PlcOperationFailureKind.ConfigurationInvalid,
+            PlcTaskRuntimeErrorCodes.ConfigurationInvalid);
+        AssertFailure(
+            new IOException("naked IO failure"),
+            PlcOperationFailureKind.TaskFault,
+            PlcTaskRuntimeErrorCodes.TaskFault);
+        AssertFailure(
+            new OperationCanceledException("not caller cancellation"),
+            PlcOperationFailureKind.TaskFault,
+            PlcTaskRuntimeErrorCodes.TaskFault);
+        AssertFailure(
+            new AggregateException(
+                new FormatException("configuration"),
+                new InvalidOperationException(
+                    "wrapper",
+                    new System.Net.Sockets.SocketException())),
+            PlcOperationFailureKind.TransportDisconnected,
+            PlcTaskRuntimeErrorCodes.TransportDisconnected,
+            disconnectsTransport: true);
+
+        static void AssertFailure(
+            Exception exception,
+            PlcOperationFailureKind expectedKind,
+            string expectedCode,
+            bool disconnectsTransport = false)
+        {
+            var failure = PlcOperationFailureClassifier.Classify(exception);
+            Assert.Equal(expectedKind, failure.Kind);
+            Assert.Equal(expectedCode, failure.ReasonCode);
+            Assert.Equal(disconnectsTransport, failure.DisconnectsTransport);
+            Assert.DoesNotContain("sensitive", failure.SafeDiagnostic, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public void FailureClassifier_ShouldRecognizeWrappedCallerCancellationOnlyForCanceledToken()
+    {
+        using var caller = new CancellationTokenSource();
+        var exception = new AggregateException(
+            new InvalidOperationException(
+                "wrapper",
+                new OperationCanceledException(caller.Token)));
+
+        Assert.False(PlcOperationFailureClassifier.IsCallerCancellation(exception, caller.Token));
+
+        caller.Cancel();
+
+        Assert.True(PlcOperationFailureClassifier.IsCallerCancellation(exception, caller.Token));
+    }
 
     [Fact]
     public void ProductionContextSignalBindingStore_ShouldPreserveIoDisplayMetadata()
@@ -84,7 +162,10 @@ public sealed class PlcIoScanTaskBehaviorTests
         Assert.Equal(1, plcService.ConnectAsyncCallCount);
         Assert.Contains(logger.Entries, x => x.Message.Contains("PLC 连接异常", StringComparison.Ordinal));
         Assert.False(statusStore.GetSnapshot(1)?.IsConnected);
-        Assert.Equal("connect timeout", statusStore.GetSnapshot(1)?.LastError);
+        Assert.Equal(PlcConnectionState.Connecting, statusStore.GetSnapshot(1)?.ConnectionState);
+        Assert.Null(statusStore.GetSnapshot(1)?.LastError);
+        Assert.Contains(logger.Entries, x => x.Message.Contains("原因码=Timeout", StringComparison.Ordinal));
+        Assert.DoesNotContain(logger.Entries, x => x.Message.Contains("connect timeout", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -112,7 +193,7 @@ public sealed class PlcIoScanTaskBehaviorTests
     }
 
     [Fact]
-    public async Task PlcIoScanTask_ConnectAsync_WhenConnectNeverReturns_ShouldTimeoutAndCloseConnection()
+    public async Task PlcIoScanTask_ConnectAsync_WhenConnectNeverReturns_ShouldClassifyTimeoutWithoutClosingTransport()
     {
         var timeProvider = new FakeTimeProvider();
         var plcService = new NeverCompletingConnectPlcService(timeProvider);
@@ -135,12 +216,12 @@ public sealed class PlcIoScanTaskBehaviorTests
         await connectTask;
 
         Assert.Equal(1, plcService.ConnectAsyncCallCount);
-        Assert.Equal(1, plcService.DisconnectCallCount);
+        Assert.Equal(0, plcService.DisconnectCallCount);
         var snapshot = statusStore.GetSnapshot(device.Id);
         Assert.NotNull(snapshot);
         Assert.False(snapshot!.IsConnected);
-        Assert.Equal(PlcConnectionState.Retrying, snapshot.ConnectionState);
-        Assert.False(string.IsNullOrWhiteSpace(snapshot.LastError));
+        Assert.Equal(PlcConnectionState.Connecting, snapshot.ConnectionState);
+        Assert.Null(snapshot.LastError);
     }
 
     [Fact]
@@ -155,12 +236,13 @@ public sealed class PlcIoScanTaskBehaviorTests
         dataStore.Register(1, readSize: 1, writeSize: 0);
         var statusStore = new PlcConnectionStatusStore();
 
+        var logger = new FakeLogService();
         var interaction = new PlcIoScanTask(
             plcService,
             dataStore,
             CreateDevice(1, "PLC-A"),
             [CreateIoMapping(1, "Read", "D100", 1)],
-            new FakeLogService(),
+            logger,
             SignalBlockPlanner,
             statusStore);
 
@@ -176,6 +258,8 @@ public sealed class PlcIoScanTaskBehaviorTests
         Assert.True(buffer.TryGetReadSignalState("Read-D100", out var failedState));
         Assert.False(failedState.ReadSucceeded);
         Assert.NotNull(failedState.FailedAtUtc);
+        Assert.Equal(PlcTaskRuntimeErrorCodes.Timeout, failedState.FailureReason);
+        Assert.DoesNotContain(logger.Entries, x => x.Message.Contains("read timeout", StringComparison.Ordinal));
 
         await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
@@ -998,7 +1082,11 @@ public sealed class PlcIoScanTaskBehaviorTests
         var runTask = interaction.StartAsync(cts.Token);
         await WaitUntilAsync(() => logger.Entries.Any(entry =>
             entry.Message.Contains("PLC 读取 block 失败", StringComparison.Ordinal)
-            && entry.Message.Contains("protocol canceled independently", StringComparison.Ordinal)));
+            && entry.Message.Contains("原因码=TaskFault", StringComparison.Ordinal)
+            && entry.Message.Contains("异常类型=OperationCanceledException", StringComparison.Ordinal)));
+        Assert.DoesNotContain(
+            logger.Entries,
+            entry => entry.Message.Contains("protocol canceled independently", StringComparison.Ordinal));
 
         Assert.False(cts.IsCancellationRequested);
         Assert.False(runTask.IsCompleted);

@@ -10,6 +10,7 @@ using IIoT.Edge.Module.Contracts.Plc.Store;
 using IIoT.Edge.Module.Contracts.Time;
 using IIoT.Edge.Module.Contracts.Tasks;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
+using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
@@ -457,6 +458,7 @@ public sealed class PlcTaskBindingBehaviorTests
                 plcCode: "PLC-STABLE-BLOCK"));
         var logger = new FakeLogService();
         var statusStore = new PlcConnectionStatusStore();
+        var taskStatuses = new PlcTaskRuntimeStatusStore();
         var plcServiceFactory = new TrackingPlcServiceFactory();
         var runtimeBuilder = new PlcDeviceRuntimeBuilder(
             ioMappings,
@@ -467,7 +469,8 @@ public sealed class PlcTaskBindingBehaviorTests
             statusStore,
             new DefaultPlcSignalBlockPlanner(),
             new StaticPlcEndpointResolver(),
-            new ModuleHardwareProfileResolver([]));
+            new ModuleHardwareProfileResolver([]),
+            taskStatusWriter: taskStatuses);
         var plan = new PlcRuntimeTaskPlan(
             device.Id,
             device.PlcCode,
@@ -487,6 +490,9 @@ public sealed class PlcTaskBindingBehaviorTests
         Assert.Empty(runtime.EnabledTaskKeys);
         Assert.Equal($"PlcIoScan_{device.DeviceName}", runtime.ConnectionTask.TaskName);
         Assert.Equal("PLC-STABLE-BLOCK", statusStore.GetSnapshot(device.Id)!.PlcCode);
+        Assert.Equal(
+            PlcTaskRuntimeState.Faulted,
+            taskStatuses.GetSnapshot(device.PlcCode, "Task.Blocked")?.State);
         Assert.Equal(["PLC-STABLE-BLOCK"], plcServiceFactory.CreatedDeviceNames);
         Assert.Contains(
             logger.Entries,
@@ -988,6 +994,7 @@ public sealed class PlcTaskBindingBehaviorTests
         var logger = new FakeLogService();
         var runtimeRegistry = new PlcRuntimeRegistry();
         var statusStore = new PlcConnectionStatusStore();
+        var taskStatuses = new PlcTaskRuntimeStatusStore();
         var replacementFactory = new TrackingPlcServiceFactory();
         var quarantinedService = new QuarantinedDisposePlcService();
         var runtime = CreateInertRuntime(
@@ -995,7 +1002,21 @@ public sealed class PlcTaskBindingBehaviorTests
             device.DeviceName,
             quarantinedService,
             logger,
-            statusStore);
+            statusStore,
+            taskStatuses);
+        var taskPlan = new PlcRuntimeTaskPlan(
+            device.Id,
+            device.PlcCode,
+            device.DeviceName,
+            [
+                new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
+                    "Task.MG1",
+                    (_, _) => new NoopPlcTask("Task.MG1"))
+            ]);
+        await runtime.ApplyTaskPlanAsync(
+            taskPlan,
+            TestContext.Current.CancellationToken);
+        runtimeRegistry.RegisterTaskPlan(taskPlan);
         Assert.True(runtimeRegistry.TryAddRuntime(runtime));
         var coordinator = CreateLifecycleCoordinator(
             networkDevices,
@@ -1004,7 +1025,8 @@ public sealed class PlcTaskBindingBehaviorTests
             contextStore,
             logger,
             runtimeRegistry,
-            statusStore);
+            statusStore,
+            taskStatuses);
 
         await coordinator.ReloadDeviceAsync(device.Id, TestContext.Current.CancellationToken);
 
@@ -1015,10 +1037,103 @@ public sealed class PlcTaskBindingBehaviorTests
         Assert.NotNull(snapshot);
         Assert.Equal(PlcConnectionState.Faulted, snapshot!.ConnectionState);
         Assert.Contains(PlcServiceQuarantinedException.StableReasonCode, snapshot.LastError);
+        var taskSnapshot = taskStatuses.GetSnapshot(device.PlcCode, "Task.MG1");
+        Assert.NotNull(taskSnapshot);
+        Assert.Equal(PlcTaskRuntimeState.Faulted, taskSnapshot!.State);
+        Assert.Equal(PlcTaskRuntimeErrorCodes.RuntimeQuarantined, taskSnapshot.ErrorCode);
         Assert.Contains(
             logger.Warnings,
             message => message.Contains("禁止创建替代 runtime", StringComparison.Ordinal));
 
+        await coordinator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task PlcLifecycleCoordinator_WhenRuntimeIsSafelyReleased_ShouldClearTaskSnapshots()
+    {
+        var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
+        var ioMappings = new InMemoryRepository<IoMappingEntity>();
+        var device = networkDevices.Add(CreateLifecyclePlc("PLC-SAFE-RELEASE", 6402));
+        var contextStore = new FakeProductionContextStore();
+        var logger = new FakeLogService();
+        var runtimeRegistry = new PlcRuntimeRegistry();
+        var statusStore = new PlcConnectionStatusStore();
+        var taskStatuses = new PlcTaskRuntimeStatusStore();
+        var runtime = CreateInertRuntime(
+            device.Id,
+            device.PlcCode,
+            new ConnectedPlcService(),
+            logger,
+            statusStore,
+            taskStatuses);
+        var taskPlan = new PlcRuntimeTaskPlan(
+            device.Id,
+            device.PlcCode,
+            device.DeviceName,
+            [
+                new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
+                    "Task.MG1",
+                    (_, _) => new NoopPlcTask("Task.MG1"))
+            ]);
+        await runtime.ApplyTaskPlanAsync(
+            taskPlan,
+            TestContext.Current.CancellationToken);
+        runtimeRegistry.RegisterTaskPlan(taskPlan);
+        Assert.True(runtimeRegistry.TryAddRuntime(runtime));
+        var coordinator = CreateLifecycleCoordinator(
+            networkDevices,
+            ioMappings,
+            new TrackingPlcServiceFactory(),
+            contextStore,
+            logger,
+            runtimeRegistry,
+            statusStore,
+            taskStatuses);
+
+        await coordinator.StopDeviceAsync(
+            device.Id,
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(taskStatuses.GetSnapshot(device.PlcCode, "Task.MG1"));
+        Assert.Null(runtimeRegistry.GetRuntime(device.Id));
+        await coordinator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task PlcLifecycleCoordinator_WhenDeletedDeviceHasNoRuntime_ShouldClearPlannedTaskSnapshots()
+    {
+        var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
+        var runtimeRegistry = new PlcRuntimeRegistry();
+        var taskStatuses = new PlcTaskRuntimeStatusStore();
+        var plan = new PlcRuntimeTaskPlan(
+            6403,
+            "PLC-DELETED",
+            "已删除 PLC",
+            [
+                new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
+                    "Task.MG1",
+                    (_, _) => new NoopPlcTask("Task.MG1"))
+            ]);
+        runtimeRegistry.RegisterTaskPlan(plan);
+        taskStatuses.SetState(
+            plan.PlcCode,
+            "Task.MG1",
+            PlcTaskRuntimeState.WaitingForRuntime);
+        var coordinator = CreateLifecycleCoordinator(
+            networkDevices,
+            new InMemoryRepository<IoMappingEntity>(),
+            new TrackingPlcServiceFactory(),
+            new FakeProductionContextStore(),
+            new FakeLogService(),
+            runtimeRegistry,
+            new PlcConnectionStatusStore(),
+            taskStatuses);
+
+        await coordinator.StopDeviceAsync(
+            plan.NetworkDeviceId,
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(taskStatuses.GetSnapshot(plan.PlcCode, "Task.MG1"));
         await coordinator.DisposeAsync();
     }
 
@@ -1083,7 +1198,8 @@ public sealed class PlcTaskBindingBehaviorTests
         FakeProductionContextStore contextStore,
         FakeLogService logger,
         PlcRuntimeRegistry runtimeRegistry,
-        PlcConnectionStatusStore statusStore)
+        PlcConnectionStatusStore statusStore,
+        IPlcTaskRuntimeStatusWriter? taskStatusWriter = null)
     {
         var runtimeBuilder = new PlcDeviceRuntimeBuilder(
             ioMappings,
@@ -1094,14 +1210,16 @@ public sealed class PlcTaskBindingBehaviorTests
             statusStore,
             new DefaultPlcSignalBlockPlanner(),
             new StaticPlcEndpointResolver(),
-            new ModuleHardwareProfileResolver([]));
+            new ModuleHardwareProfileResolver([]),
+            taskStatusWriter: taskStatusWriter);
         return new PlcLifecycleCoordinator(
             networkDevices,
             contextStore,
             logger,
             runtimeRegistry,
             runtimeBuilder,
-            statusStore);
+            statusStore,
+            taskStatusWriter);
     }
 
     private static PlcDeviceRuntimeHandle CreateInertRuntime(
@@ -1109,7 +1227,8 @@ public sealed class PlcTaskBindingBehaviorTests
         string deviceName,
         IPlcService plcService,
         ILogService logger,
-        PlcConnectionStatusStore statusStore)
+        PlcConnectionStatusStore statusStore,
+        IPlcTaskRuntimeStatusWriter? taskStatusWriter = null)
         => new()
         {
             DeviceId = deviceId,
@@ -1128,6 +1247,7 @@ public sealed class PlcTaskBindingBehaviorTests
             ConnectionSignal = new PlcRuntimeConnectionSignal(),
             Logger = logger,
             StatusStore = statusStore,
+            TaskStatusWriter = taskStatusWriter,
             CancellationTokenSource = new CancellationTokenSource()
         };
 

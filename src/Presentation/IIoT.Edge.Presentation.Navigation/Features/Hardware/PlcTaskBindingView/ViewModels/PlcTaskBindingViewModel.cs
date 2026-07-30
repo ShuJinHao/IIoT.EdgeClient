@@ -21,10 +21,12 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
     private readonly IClientPermissionService _permissionService;
     private readonly IPlcTaskBindingConfirmationService _confirmationService;
     private readonly IDeviceSelectionService _deviceSelectionService;
+    private readonly IPlcTaskRuntimeStatusReader _runtimeStatusReader;
     private readonly string _moduleId;
     private readonly AsyncCommand _saveCommand;
     private PlcTaskBindingDeviceVm? _selectedDevice;
     private bool _isDeviceSelectionSubscribed;
+    private bool _isRuntimeStatusSubscribed;
 
     public PlcTaskBindingViewModel(
         IPlcTaskBindingService bindingService,
@@ -32,7 +34,8 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
         IClientPermissionService permissionService,
         IPlcTaskBindingConfirmationService confirmationService,
         IAppLanguageService languageService,
-        IDeviceSelectionService deviceSelectionService)
+        IDeviceSelectionService deviceSelectionService,
+        IPlcTaskRuntimeStatusReader runtimeStatusReader)
         : this(
             bindingService,
             bindingTransactionService,
@@ -40,6 +43,7 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
             confirmationService,
             languageService,
             deviceSelectionService,
+            runtimeStatusReader,
             "Hardware.PlcTaskBindingView",
             "Navigation_Title_PlcTaskBinding",
             "任务绑定",
@@ -54,6 +58,7 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
         IPlcTaskBindingConfirmationService confirmationService,
         IAppLanguageService languageService,
         IDeviceSelectionService deviceSelectionService,
+        IPlcTaskRuntimeStatusReader runtimeStatusReader,
         string viewId,
         string titleResourceKey,
         string titleFallback,
@@ -65,6 +70,7 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
         _permissionService = permissionService;
         _confirmationService = confirmationService;
         _deviceSelectionService = deviceSelectionService;
+        _runtimeStatusReader = runtimeStatusReader;
         _moduleId = moduleId;
 
         RefreshCommand = new AsyncCommand(LoadAsync);
@@ -130,12 +136,14 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
     public override Task OnActivatedAsync()
     {
         SubscribeDeviceSelection();
+        SubscribeRuntimeStatus();
         return LoadAsync();
     }
 
     public override Task OnDeactivatedAsync()
     {
         UnsubscribeDeviceSelection();
+        UnsubscribeRuntimeStatus();
         return Task.CompletedTask;
     }
 
@@ -208,6 +216,15 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
         RunOnUiThread(() =>
         {
             ReplaceItems(Devices, deviceItems);
+            foreach (var device in Devices)
+            {
+                foreach (var task in device.Tasks)
+                {
+                    task.ApplyRuntimeSnapshot(
+                        _runtimeStatusReader.GetSnapshot(device.PlcCode, task.Key));
+                }
+            }
+
             OnPropertyChanged(nameof(HasDevices));
             OnPropertyChanged(nameof(ShouldShowDeviceSelectionPrompt));
 
@@ -299,6 +316,45 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
         _isDeviceSelectionSubscribed = false;
     }
 
+    private void SubscribeRuntimeStatus()
+    {
+        if (_isRuntimeStatusSubscribed)
+        {
+            return;
+        }
+
+        _runtimeStatusReader.StatusChanged += OnRuntimeStatusChanged;
+        _isRuntimeStatusSubscribed = true;
+    }
+
+    private void UnsubscribeRuntimeStatus()
+    {
+        if (!_isRuntimeStatusSubscribed)
+        {
+            return;
+        }
+
+        _runtimeStatusReader.StatusChanged -= OnRuntimeStatusChanged;
+        _isRuntimeStatusSubscribed = false;
+    }
+
+    private void OnRuntimeStatusChanged(
+        object? sender,
+        PlcTaskRuntimeStatusChangedEventArgs args)
+        => RunOnUiThread(() =>
+        {
+            var device = Devices.SingleOrDefault(candidate => string.Equals(
+                candidate.PlcCode,
+                args.PlcCode,
+                StringComparison.OrdinalIgnoreCase));
+            var task = device?.Tasks.SingleOrDefault(candidate => string.Equals(
+                candidate.Key,
+                args.TaskKey,
+                StringComparison.OrdinalIgnoreCase));
+            task?.ApplyRuntimeSnapshot(
+                _runtimeStatusReader.GetSnapshot(args.PlcCode, args.TaskKey));
+        });
+
     protected virtual void RunOnUiThread(Action action)
     {
         if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
@@ -329,7 +385,7 @@ public sealed class PlcTaskBindingDeviceVm
         IsDeviceEnabled = dto.IsDeviceEnabled;
         foreach (var task in dto.Tasks)
         {
-            Tasks.Add(new PlcTaskBindingTaskVm(task));
+            Tasks.Add(new PlcTaskBindingTaskVm(task, dto.IsDeviceEnabled));
         }
     }
 
@@ -351,12 +407,22 @@ public sealed class PlcTaskBindingDeviceVm
 public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
 {
     private bool _enabled;
+    private readonly bool _isDeviceEnabled;
+    private PlcTaskRuntimeState? _runtimeState;
+    private DateTimeOffset? _runtimeStateChangedAtUtc;
+    private string? _runtimeErrorCode;
+    private string? _runtimeExceptionType;
 
-    public PlcTaskBindingTaskVm(PlcTaskBindingItemDto dto)
+    public PlcTaskBindingTaskVm(PlcTaskBindingItemDto dto, bool isDeviceEnabled)
     {
         Key = dto.Key;
         DisplayName = dto.DisplayName;
         _enabled = dto.Enabled;
+        _isDeviceEnabled = isDeviceEnabled;
+        _runtimeState = dto.RuntimeState;
+        _runtimeStateChangedAtUtc = dto.RuntimeStateChangedAtUtc;
+        _runtimeErrorCode = dto.RuntimeErrorCode;
+        _runtimeExceptionType = dto.RuntimeExceptionType;
         OriginalEnabled = dto.Enabled;
         HasSavedBinding = dto.HasSavedBinding;
         IsHeartbeatLike = dto.IsHeartbeatLike;
@@ -393,6 +459,8 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
 
             _enabled = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(RuntimeStatusText));
+            OnPropertyChanged(nameof(NoteText));
         }
     }
 
@@ -418,6 +486,38 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
 
     public string AvailabilityText => CanRun ? "可运行" : UnavailableReason;
 
+    public PlcTaskRuntimeState? RuntimeState => _runtimeState;
+
+    public DateTimeOffset? RuntimeStateChangedAtUtc => _runtimeStateChangedAtUtc;
+
+    public string? RuntimeErrorCode => _runtimeErrorCode;
+
+    public string? RuntimeExceptionType => _runtimeExceptionType;
+
+    public string RuntimeStatusText
+    {
+        get
+        {
+            return PlcTaskBindingDisplayStateResolver.Resolve(
+                HasSavedBinding,
+                _isDeviceEnabled,
+                Enabled,
+                CanRun,
+                _runtimeState) switch
+            {
+                PlcTaskBindingDisplayState.BindingMissing => "绑定缺失",
+                PlcTaskBindingDisplayState.Disabled => "已禁用",
+                PlcTaskBindingDisplayState.ConfigurationInvalid => "配置无效",
+                PlcTaskBindingDisplayState.WaitingForConnection => "等待连接",
+                PlcTaskBindingDisplayState.Starting => "启动中",
+                PlcTaskBindingDisplayState.Running => "运行中",
+                PlcTaskBindingDisplayState.Stopping => "停止中",
+                PlcTaskBindingDisplayState.Faulted => "故障",
+                _ => "等待 runtime"
+            };
+        }
+    }
+
     public string NoteText
     {
         get
@@ -425,13 +525,45 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
             var items = new[]
                 {
                     !CanRun ? UnavailableReason : null,
-                    MissingRequiredSignalsText
+                    MissingRequiredSignalsText,
+                    _runtimeState == PlcTaskRuntimeState.Faulted
+                        ? FormatRuntimeFailure(_runtimeErrorCode, _runtimeExceptionType)
+                        : null,
+                    _runtimeStateChangedAtUtc.HasValue
+                        ? $"状态时间={_runtimeStateChangedAtUtc.Value:yyyy-MM-dd HH:mm:ss} UTC"
+                        : null
                 }
                 .Where(static x => !string.IsNullOrWhiteSpace(x));
 
             var text = string.Join("；", items);
             return string.IsNullOrWhiteSpace(text) ? "--" : text;
         }
+    }
+
+    public void ApplyRuntimeSnapshot(PlcTaskRuntimeSnapshot? snapshot)
+    {
+        _runtimeState = snapshot?.State;
+        _runtimeStateChangedAtUtc = snapshot?.StateChangedAtUtc;
+        _runtimeErrorCode = snapshot?.ErrorCode;
+        _runtimeExceptionType = snapshot?.ExceptionType;
+        OnPropertyChanged(nameof(RuntimeState));
+        OnPropertyChanged(nameof(RuntimeStateChangedAtUtc));
+        OnPropertyChanged(nameof(RuntimeErrorCode));
+        OnPropertyChanged(nameof(RuntimeExceptionType));
+        OnPropertyChanged(nameof(RuntimeStatusText));
+        OnPropertyChanged(nameof(NoteText));
+    }
+
+    private static string FormatRuntimeFailure(
+        string? errorCode,
+        string? exceptionType)
+    {
+        var safeCode = string.IsNullOrWhiteSpace(errorCode)
+            ? PlcTaskRuntimeErrorCodes.TaskFault
+            : errorCode;
+        return string.IsNullOrWhiteSpace(exceptionType)
+            ? $"运行错误码={safeCode}"
+            : $"运行错误码={safeCode}，异常类型={exceptionType}";
     }
 
     private static string FormatDirection(string direction)

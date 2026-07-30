@@ -4,6 +4,8 @@ using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.SharedKernel.Repository;
+using IIoT.Edge.Application.Common.Plc;
+using IIoT.Edge.Infrastructure.DeviceComm.Signals;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc;
 
@@ -15,6 +17,7 @@ public sealed class PlcLifecycleCoordinator
     private readonly PlcRuntimeRegistry _runtimeRegistry;
     private readonly PlcDeviceRuntimeBuilder _runtimeBuilder;
     private readonly PlcConnectionStatusStore _statusStore;
+    private readonly IPlcTaskRuntimeStatusWriter? _taskStatusWriter;
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
     private readonly object _disposeLock = new();
     private int _shutdownRequested;
@@ -26,7 +29,8 @@ public sealed class PlcLifecycleCoordinator
         ILogService logger,
         PlcRuntimeRegistry runtimeRegistry,
         PlcDeviceRuntimeBuilder runtimeBuilder,
-        PlcConnectionStatusStore statusStore)
+        PlcConnectionStatusStore statusStore,
+        IPlcTaskRuntimeStatusWriter? taskStatusWriter = null)
     {
         _networkDevices = networkDevices;
         _contextStore = contextStore;
@@ -34,6 +38,7 @@ public sealed class PlcLifecycleCoordinator
         _runtimeRegistry = runtimeRegistry;
         _runtimeBuilder = runtimeBuilder;
         _statusStore = statusStore;
+        _taskStatusWriter = taskStatusWriter;
     }
 
     public async Task InitializeAsync(CancellationToken ct = default)
@@ -162,7 +167,7 @@ public sealed class PlcLifecycleCoordinator
             catch (Exception ex)
             {
                 (failures ??= []).Add(ex);
-                _logger.Error($"[PLC] 关闭前运行上下文保存失败：{ex.Message}");
+                _logger.Error($"[PLC] 关闭前运行上下文保存失败，异常类型={ex.GetType().Name}。");
             }
 
             foreach (var deviceId in _runtimeRegistry.GetTrackedDeviceIdsSnapshot())
@@ -174,7 +179,8 @@ public sealed class PlcLifecycleCoordinator
                 catch (Exception ex)
                 {
                     (failures ??= []).Add(ex);
-                    _logger.Error($"[{ResolveLogIdentity(deviceId)}] 停止失败：{ex.Message}");
+                    _logger.Error(
+                        $"[{ResolveLogIdentity(deviceId)}] 停止失败，异常类型={ex.GetType().Name}。");
                 }
             }
 
@@ -218,7 +224,7 @@ public sealed class PlcLifecycleCoordinator
         }
         catch (Exception ex)
         {
-            _logger.Error($"PLC 生命周期释放清理失败：{ex.Message}");
+            _logger.Error($"PLC 生命周期释放清理失败，异常类型={ex.GetType().Name}。");
         }
     }
 
@@ -246,13 +252,55 @@ public sealed class PlcLifecycleCoordinator
         }
         catch (PlcServiceQuarantinedException ex)
         {
-            _statusStore.MarkRuntimeFault(device.Id, device.PlcCode, device.DeviceName, ex.Message);
-            _logger.Error($"[PlcCode={device.PlcCode}] PLC service 已隔离，客户端继续启动：{ex.Message}");
+            _statusStore.MarkRuntimeFault(
+                device.Id,
+                device.PlcCode,
+                device.DeviceName,
+                PlcServiceQuarantinedException.StableReasonCode);
+            SetTaskPlanState(
+                device,
+                PlcTaskRuntimeState.Faulted,
+                PlcTaskRuntimeErrorCodes.RuntimeQuarantined,
+                ex.GetType().Name);
+            _logger.Error(
+                $"[PlcCode={device.PlcCode}] PLC service 已隔离，客户端继续启动，"
+                + $"原因码={PlcServiceQuarantinedException.StableReasonCode}，异常类型={ex.GetType().Name}。");
+        }
+        catch (Exception ex) when (
+            PlcOperationFailureClassifier.IsCallerCancellation(ex, ct))
+        {
+            throw;
         }
         catch (Exception ex)
         {
-            _statusStore.MarkDisconnected(device.Id, device.PlcCode, device.DeviceName, ex.Message);
-            _logger.Error($"[PlcCode={device.PlcCode}] 初始化失败：{ex.Message}");
+            var failure = PlcOperationFailureClassifier.Classify(ex);
+            if (failure.DisconnectsTransport)
+            {
+                _statusStore.MarkDisconnected(
+                    device.Id,
+                    device.PlcCode,
+                    device.DeviceName,
+                    failure.ReasonCode);
+                SetTaskPlanState(
+                    device,
+                    PlcTaskRuntimeState.WaitingForConnection);
+            }
+            else
+            {
+                _statusStore.MarkRuntimeFault(
+                    device.Id,
+                    device.PlcCode,
+                    device.DeviceName,
+                    PlcTaskRuntimeErrorCodes.RuntimeInitializationFailed);
+                SetTaskPlanState(
+                    device,
+                    PlcTaskRuntimeState.Faulted,
+                    failure.ReasonCode,
+                    failure.ExceptionType);
+            }
+
+            _logger.Error(
+                $"[PlcCode={device.PlcCode}] 初始化失败，{failure.SafeDiagnostic}。");
         }
     }
 
@@ -279,7 +327,11 @@ public sealed class PlcLifecycleCoordinator
             runtime = await _runtimeBuilder.BuildAsync(device, taskPlan, ct).ConfigureAwait(false);
             if (IsShutdownRequested || IsDisposed || !_runtimeRegistry.TryAddRuntime(runtime))
             {
-                await CleanupDeviceRuntimeAsync(runtime).ConfigureAwait(false);
+                if (await CleanupDeviceRuntimeAsync(runtime).ConfigureAwait(false))
+                {
+                    _taskStatusWriter?.RemoveAll(runtime.PlcCode);
+                }
+
                 _logger.Warn($"[PlcCode={device.PlcCode}] 初始化已取消：任务句柄尚未完成登记。");
                 return;
             }
@@ -297,10 +349,18 @@ public sealed class PlcLifecycleCoordinator
         {
             if (runtime is not null)
             {
-                await CleanupDeviceRuntimeAsync(runtime).ConfigureAwait(false);
+                var cleaned = await CleanupDeviceRuntimeAsync(runtime).ConfigureAwait(false);
                 if (registered)
                 {
-                    _runtimeRegistry.TryRemoveRuntime(runtime.DeviceId, runtime);
+                    if (cleaned
+                        && _runtimeRegistry.TryRemoveRuntime(runtime.DeviceId, runtime))
+                    {
+                        _taskStatusWriter?.RemoveAll(runtime.PlcCode);
+                    }
+                }
+                else if (cleaned)
+                {
+                    _taskStatusWriter?.RemoveAll(runtime.PlcCode);
                 }
             }
 
@@ -347,6 +407,10 @@ public sealed class PlcLifecycleCoordinator
             }
 
             _statusStore.MarkRuntimeFault(device.Id, device.PlcCode, device.DeviceName, message);
+            SetTaskPlanState(
+                device,
+                PlcTaskRuntimeState.Faulted,
+                PlcTaskRuntimeErrorCodes.ConfigurationInvalid);
         }
     }
 
@@ -359,16 +423,36 @@ public sealed class PlcLifecycleCoordinator
         var runtime = _runtimeRegistry.GetRuntime(deviceId);
         if (runtime is not null)
         {
-            return await CleanupRegisteredRuntimeAsync(runtime).ConfigureAwait(false);
+            var stopped = await CleanupRegisteredRuntimeAsync(runtime).ConfigureAwait(false);
+            if (stopped)
+            {
+                await FinalizeStoppedDeviceStateAsync(deviceId, ct).ConfigureAwait(false);
+            }
+
+            return stopped;
         }
 
+        await FinalizeStoppedDeviceStateAsync(deviceId, ct).ConfigureAwait(false);
+        return true;
+    }
+
+    private async Task FinalizeStoppedDeviceStateAsync(
+        int deviceId,
+        CancellationToken ct)
+    {
         var device = (await _networkDevices.GetListAsync(x => x.Id == deviceId, ct).ConfigureAwait(false)).FirstOrDefault();
         if (device is not null)
         {
             _statusStore.MarkDisconnected(device.Id, device.PlcCode, device.DeviceName);
+            _taskStatusWriter?.RemoveAll(device.PlcCode);
+            return;
         }
 
-        return true;
+        var deletedPlan = _runtimeRegistry.RemoveTaskPlan(deviceId);
+        if (deletedPlan is not null)
+        {
+            _taskStatusWriter?.RemoveAll(deletedPlan.PlcCode);
+        }
     }
 
     private async Task<bool> CleanupRegisteredRuntimeAsync(PlcDeviceRuntimeHandle runtime)
@@ -381,11 +465,16 @@ public sealed class PlcLifecycleCoordinator
 
         if (_runtimeRegistry.TryRemoveRuntime(runtime.DeviceId, runtime))
         {
+            _taskStatusWriter?.RemoveAll(runtime.PlcCode);
             return true;
         }
 
         const string reason = "PLC runtime 已释放，但 registry reservation 不再指向原 runtime，禁止继续自动替换。";
         _statusStore.MarkRuntimeFault(runtime.DeviceId, runtime.PlcCode, runtime.DeviceName, reason);
+        SetRuntimeTaskState(
+            runtime,
+            PlcTaskRuntimeState.Faulted,
+            PlcTaskRuntimeErrorCodes.RuntimeQuarantined);
         _logger.Error($"[PlcCode={runtime.PlcCode}] {reason}");
         return false;
     }
@@ -398,7 +487,14 @@ public sealed class PlcLifecycleCoordinator
         }
         catch (Exception ex)
         {
-            _logger.Warn($"[PlcCode={runtime.PlcCode}] 取消 PLC 运行任务时发生异常：{ex.Message}");
+            var failure = PlcOperationFailureClassifier.Classify(ex);
+            SetRuntimeTaskState(
+                runtime,
+                PlcTaskRuntimeState.Faulted,
+                PlcTaskRuntimeErrorCodes.TaskStopFailed,
+                failure.ExceptionType);
+            _logger.Warn(
+                $"[PlcCode={runtime.PlcCode}] 取消 PLC 运行任务时发生异常，{failure.SafeDiagnostic}。");
         }
 
         var runningHandlesStopped = await AwaitRunningHandlesAsync(
@@ -422,14 +518,19 @@ public sealed class PlcLifecycleCoordinator
         }
         catch (PlcServiceQuarantinedException ex)
         {
-            RetainQuarantinedRuntime(runtime, ex.Message);
+            RetainQuarantinedRuntime(
+                runtime,
+                PlcServiceQuarantinedException.StableReasonCode,
+                ex.GetType().Name);
             return false;
         }
         catch (Exception ex)
         {
+            var failure = PlcOperationFailureClassifier.Classify(ex);
             RetainQuarantinedRuntime(
                 runtime,
-                $"PLC service 释放失败，禁止创建替代 runtime：{ex.Message}");
+                "PLC service 释放失败，禁止创建替代 runtime。",
+                failure.ExceptionType);
             return false;
         }
 
@@ -437,7 +538,10 @@ public sealed class PlcLifecycleCoordinator
         return true;
     }
 
-    private void RetainQuarantinedRuntime(PlcDeviceRuntimeHandle runtime, string reason)
+    private void RetainQuarantinedRuntime(
+        PlcDeviceRuntimeHandle runtime,
+        string reason,
+        string? exceptionType = null)
     {
         var retained = _runtimeRegistry.TryAddRuntime(runtime)
                        || ReferenceEquals(_runtimeRegistry.GetRuntime(runtime.DeviceId), runtime);
@@ -445,6 +549,11 @@ public sealed class PlcLifecycleCoordinator
             ? reason
             : $"{reason} 隔离 runtime 未能重新登记，但同 DeviceId 已有 runtime 占位。";
         _statusStore.MarkRuntimeFault(runtime.DeviceId, runtime.PlcCode, runtime.DeviceName, diagnostic);
+        SetRuntimeTaskState(
+            runtime,
+            PlcTaskRuntimeState.Faulted,
+            PlcTaskRuntimeErrorCodes.RuntimeQuarantined,
+            exceptionType);
         _logger.Error($"[PlcCode={runtime.PlcCode}] PLC runtime 已隔离：{diagnostic}");
     }
 
@@ -480,8 +589,54 @@ public sealed class PlcLifecycleCoordinator
         }
         catch (Exception ex)
         {
-            _logger.Error($"[PlcCode={runtime.PlcCode}] 等待 PLC 任务停止时发生异常：{ex.Message}");
+            var failure = PlcOperationFailureClassifier.Classify(ex);
+            _logger.Error(
+                $"[PlcCode={runtime.PlcCode}] 等待 PLC 任务停止时发生异常，{failure.SafeDiagnostic}。");
             return true;
+        }
+    }
+
+    private void SetTaskPlanState(
+        NetworkDeviceEntity device,
+        PlcTaskRuntimeState state,
+        string? errorCode = null,
+        string? exceptionType = null)
+    {
+        var plan = _runtimeRegistry.GetTaskPlan(
+            device.Id,
+            device.PlcCode,
+            device.DeviceName);
+        foreach (var taskKey in plan.TaskKeys)
+        {
+            _taskStatusWriter?.SetState(
+                device.PlcCode,
+                taskKey,
+                state,
+                errorCode,
+                exceptionType);
+        }
+    }
+
+    private void SetRuntimeTaskState(
+        PlcDeviceRuntimeHandle runtime,
+        PlcTaskRuntimeState state,
+        string? errorCode = null,
+        string? exceptionType = null)
+    {
+        var taskKeys = runtime.EnabledTaskKeys
+            .Concat(_runtimeRegistry.GetTaskPlan(
+                runtime.DeviceId,
+                runtime.PlcCode,
+                runtime.DeviceName).TaskKeys)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+        foreach (var taskKey in taskKeys)
+        {
+            _taskStatusWriter?.SetState(
+                runtime.PlcCode,
+                taskKey,
+                state,
+                errorCode,
+                exceptionType);
         }
     }
 

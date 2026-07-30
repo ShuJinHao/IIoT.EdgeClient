@@ -4,6 +4,7 @@ using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.SharedKernel.Repository;
+using IIoT.Edge.Application.Common.Plc;
 
 namespace IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 
@@ -12,7 +13,8 @@ public sealed class PlcTaskBindingService(
     IReadRepository<NetworkDeviceEntity> networkDevices,
     IReadRepository<IoMappingEntity> ioMappings,
     IReadRepository<PlcTaskBindingEntity> bindings,
-    IEdgeUnitOfWorkFactory unitOfWorkFactory)
+    IEdgeUnitOfWorkFactory unitOfWorkFactory,
+    IPlcTaskRuntimeStatusReader? runtimeStatuses = null)
     : IPlcTaskBindingService, IPlcTaskBindingPersistenceTransaction
 {
     public async Task<IReadOnlyList<PlcTaskBindingDeviceDto>> GetModuleDeviceBindingsAsync(
@@ -40,7 +42,12 @@ public sealed class PlcTaskBindingService(
             var rowByKey = rows.ToDictionary(x => x.TaskKey, StringComparer.OrdinalIgnoreCase);
             var signalBindings = await LoadSignalBindingsAsync(device.Id, cancellationToken).ConfigureAwait(false);
             var taskItems = candidates
-                .Select(candidate => CreateItem(candidate, rowByKey, signalBindings, device.DeviceModel))
+                .Select(candidate => CreateItem(
+                    candidate,
+                    rowByKey,
+                    signalBindings,
+                    device.DeviceModel,
+                    device.PlcCode))
                 .ToArray();
 
             results.Add(new PlcTaskBindingDeviceDto(
@@ -360,21 +367,31 @@ public sealed class PlcTaskBindingService(
         TaskCandidate candidate,
         IReadOnlyDictionary<string, PlcTaskBindingEntity> rowByKey,
         IReadOnlyCollection<ModuleIoSnapshot> signalBindings,
-        string? deviceModel)
+        string? deviceModel,
+        string plcCode)
     {
         var hasSavedBinding = rowByKey.ContainsKey(candidate.Key);
+        var configuredEnabled = rowByKey.TryGetValue(candidate.Key, out var configuredRow)
+                                && configuredRow.Enabled;
         var availability = EvaluateTaskAvailability(candidate, deviceModel, signalBindings);
+        var runtime = string.IsNullOrWhiteSpace(plcCode)
+            ? null
+            : runtimeStatuses?.GetSnapshot(plcCode, candidate.Key);
         return new PlcTaskBindingItemDto(
             candidate.Key,
             candidate.DisplayName,
-            ResolveEnabled(candidate, rowByKey, signalBindings, deviceModel),
+            configuredEnabled,
             hasSavedBinding,
             candidate.IsHeartbeatLike,
             candidate.RequiredSignals,
             availability.CanRun,
             availability.UnavailableReason,
             availability.MissingRequiredSignals,
-            availability.IsSupportedByCurrentPlc);
+            availability.IsSupportedByCurrentPlc,
+            runtime?.State,
+            runtime?.StateChangedAtUtc,
+            runtime?.ErrorCode,
+            runtime?.ExceptionType);
     }
 
     private static bool ResolveEnabled(
