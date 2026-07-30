@@ -140,22 +140,17 @@ public sealed class DeviceSelectionService : IDeviceSelectionService
             _identityAliasRegistry.ObserveVerifiedAlias(
                 identity.PlcCode,
                 identity.DeviceName);
-            foreach (var pair in _knownDeviceNamesByPlcCode
-                         .Where(pair => !string.Equals(
-                             pair.Key,
-                             identity.PlcCode,
-                             StringComparison.OrdinalIgnoreCase)))
-            {
-                pair.Value.Remove(identity.DeviceName);
-            }
+        }
 
+        foreach (var identity in resolvable)
+        {
             if (!_knownDeviceNamesByPlcCode.TryGetValue(identity.PlcCode, out var aliases))
             {
                 aliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 _knownDeviceNamesByPlcCode.Add(identity.PlcCode, aliases);
             }
 
-            aliases.Add(identity.DeviceName);
+            aliases.Clear();
             aliases.UnionWith(
                 _identityAliasRegistry.GetVerifiedAliases(identity.PlcCode));
         }
