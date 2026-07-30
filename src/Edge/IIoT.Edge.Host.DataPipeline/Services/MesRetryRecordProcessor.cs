@@ -126,7 +126,7 @@ internal sealed class MesRetryRecordProcessor : RetryRecordProcessorBase<MesRetr
             cancellationToken.ThrowIfCancellationRequested();
             await RetryStore.DeleteAsync(record.Id).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
-            Logger.Info($"[PLC-{record.DeviceName}][MES补传] {cellData.DisplayLabel} 补传成功，记录已删除。");
+            Logger.Info($"[PlcCode={record.PlcCode}][MES补传] {cellData.DisplayLabel} 补传成功，记录已删除。");
             return true;
         }
 

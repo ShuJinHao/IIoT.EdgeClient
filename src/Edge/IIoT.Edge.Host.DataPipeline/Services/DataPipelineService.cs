@@ -75,6 +75,19 @@ public class DataPipelineService : IDataPipelineService
             return DataPipelineEnqueueResult.Rejected("missing_plc_context");
         }
 
+        var conflictingContext = ResolveConflictingPlcContext(record);
+        if (conflictingContext.Length > 0)
+        {
+            _logger.Warn(
+                $"[数据管道] 入队失败：PLC 上下文冲突，字段={string.Join(",", conflictingContext)}。");
+            return DataPipelineEnqueueResult.Rejected("conflicting_plc_context");
+        }
+
+        record.PlcCode = record.ResolvePlcCode().Trim();
+        record.DeviceName = record.ResolveDeviceName().Trim();
+        record.NetworkDeviceId = record.ResolveNetworkDeviceId();
+        record.IdempotencyKeyVersion = CloudIdempotencyKeyVersion.PlcStableV2;
+
         if (_queue.Writer.TryWrite(record))
         {
             Interlocked.Increment(ref _pendingCount);
@@ -87,9 +100,8 @@ public class DataPipelineService : IDataPipelineService
                 null => "Unknown"
             };
 
-            var deviceName = record.ResolveDeviceName();
             _logger.Info(
-                $"[PLC-{deviceName}][数据管道] 工序={cellData.ProcessType} 已入队，结果={result}，待处理={PendingCount}。");
+                $"[PlcCode={record.PlcCode}][数据管道] 工序={cellData.ProcessType} 已入队，结果={result}，待处理={PendingCount}。");
             return DataPipelineEnqueueResult.Accepted();
         }
 
@@ -111,13 +123,18 @@ public class DataPipelineService : IDataPipelineService
 
     private static string[] ResolveMissingPlcContext(CellCompletedRecord record)
     {
-        var missing = new List<string>(4);
-        if (record.ResolveNetworkDeviceId() is not > 0)
+        var missing = new List<string>(5);
+        if (string.IsNullOrWhiteSpace(record.PlcCode))
+        {
+            missing.Add(nameof(CellCompletedRecord.PlcCode));
+        }
+
+        if (record.NetworkDeviceId is not > 0)
         {
             missing.Add(nameof(CellCompletedRecord.NetworkDeviceId));
         }
 
-        if (string.IsNullOrWhiteSpace(record.ResolveDeviceName()))
+        if (string.IsNullOrWhiteSpace(record.DeviceName))
         {
             missing.Add(nameof(CellCompletedRecord.DeviceName));
         }
@@ -133,5 +150,28 @@ public class DataPipelineService : IDataPipelineService
         }
 
         return missing.ToArray();
+    }
+
+    private static string[] ResolveConflictingPlcContext(CellCompletedRecord record)
+    {
+        var conflicts = new List<string>(2);
+        if (!string.IsNullOrWhiteSpace(record.PlcCode)
+            && !string.IsNullOrWhiteSpace(record.CellData.DeviceCode)
+            && !string.Equals(
+                record.PlcCode.Trim(),
+                record.CellData.DeviceCode.Trim(),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            conflicts.Add(nameof(CellCompletedRecord.PlcCode));
+        }
+
+        if (record.NetworkDeviceId is > 0
+            && record.CellData.PlcDeviceId is > 0
+            && record.NetworkDeviceId != record.CellData.PlcDeviceId)
+        {
+            conflicts.Add(nameof(CellCompletedRecord.NetworkDeviceId));
+        }
+
+        return conflicts.ToArray();
     }
 }

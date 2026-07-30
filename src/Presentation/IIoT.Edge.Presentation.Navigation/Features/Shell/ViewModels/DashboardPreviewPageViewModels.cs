@@ -323,6 +323,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         _lastPlcSnapshots = plcSnapshots;
 
         var selectedKey = _deviceSelectionService.SelectedDeviceKey;
+        var selectedPlcCode = _deviceSelectionService.SelectedPlcCode;
         var isAllSelected = string.Equals(
             selectedKey,
             IDeviceSelectionService.AllFilterKey,
@@ -330,7 +331,16 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         var projections = BuildPlcStatusProjections(configuredPlcs, plcSnapshots)
             .Where(snapshot =>
                 isAllSelected
-                || string.Equals(snapshot.DeviceName, selectedKey, StringComparison.OrdinalIgnoreCase))
+                || (!string.IsNullOrWhiteSpace(selectedPlcCode)
+                    && string.Equals(
+                        snapshot.PlcCode,
+                        selectedPlcCode,
+                        StringComparison.OrdinalIgnoreCase))
+                || (string.IsNullOrWhiteSpace(selectedPlcCode)
+                    && string.Equals(
+                        snapshot.DeviceName,
+                        selectedKey,
+                        StringComparison.OrdinalIgnoreCase)))
             .ToArray();
         var averagePlcLatency = ResolveAverageLatency(projections);
 
@@ -367,22 +377,39 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         var snapshotsById = plcSnapshots
             .Where(static snapshot => snapshot.NetworkDeviceId > 0)
             .GroupBy(static snapshot => snapshot.NetworkDeviceId)
+            .Where(static group => group.Take(2).Count() == 1)
             .ToDictionary(static group => group.Key, static group => group.First());
-        var snapshotsByName = plcSnapshots
-            .Where(static snapshot => !string.IsNullOrWhiteSpace(snapshot.DeviceName))
-            .GroupBy(static snapshot => snapshot.DeviceName.Trim(), StringComparer.OrdinalIgnoreCase)
+        var snapshotsByPlcCode = plcSnapshots
+            .Where(static snapshot => !string.IsNullOrWhiteSpace(snapshot.PlcCode))
+            .GroupBy(static snapshot => snapshot.PlcCode.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Where(static group => group.Take(2).Count() == 1)
             .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.OrdinalIgnoreCase);
         var projections = configuredPlcs
             .Where(static device => !string.IsNullOrWhiteSpace(device.DeviceName))
             .Select(device =>
             {
-                snapshotsById.TryGetValue(device.Id, out var snapshot);
-                if (snapshot is null)
+                PlcConnectionRuntimeSnapshot? snapshot = null;
+                if (!string.IsNullOrWhiteSpace(device.PlcCode))
                 {
-                    snapshotsByName.TryGetValue(device.DeviceName.Trim(), out snapshot);
+                    snapshotsByPlcCode.TryGetValue(device.PlcCode.Trim(), out snapshot);
+                    if (snapshot is null
+                        && snapshotsById.TryGetValue(device.Id, out var legacySnapshot)
+                        && string.IsNullOrWhiteSpace(legacySnapshot.PlcCode))
+                    {
+                        snapshot = legacySnapshot;
+                    }
+                }
+                else
+                {
+                    snapshotsById.TryGetValue(device.Id, out snapshot);
                 }
 
-                return new DashboardPreviewPlcStatusProjection(device.Id, device.DeviceName.Trim(), device, snapshot);
+                return new DashboardPreviewPlcStatusProjection(
+                    device.Id,
+                    device.PlcCode.Trim(),
+                    device.DeviceName.Trim(),
+                    device,
+                    snapshot);
             })
             .OrderBy(static projection => projection.DeviceName, StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -396,6 +423,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
             .Where(static snapshot => !string.IsNullOrWhiteSpace(snapshot.DeviceName))
             .Select(static snapshot => new DashboardPreviewPlcStatusProjection(
                 snapshot.NetworkDeviceId,
+                snapshot.PlcCode.Trim(),
                 snapshot.DeviceName.Trim(),
                 null,
                 snapshot))
@@ -411,7 +439,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         if (snapshot is null)
         {
             return new DashboardPreviewPlcStatusItem(
-                projection.DeviceName,
+                FormatPlcIdentity(projection),
                 GetText("Navigation_DashboardPreview_PlcStateUncollected", "未采集"),
                 EdgeVisualStatus.Offline,
                 EmptyValue,
@@ -429,7 +457,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
 
         var lastErrorDetail = string.IsNullOrWhiteSpace(snapshot.LastError) ? EmptyValue : snapshot.LastError.Trim();
         return new DashboardPreviewPlcStatusItem(
-            projection.DeviceName,
+            FormatPlcIdentity(projection),
             ResolvePlcConnectionStateText(snapshot),
             ResolvePlcVisualStatus(snapshot),
             snapshot.IsConnected && snapshot.LatencyMs.HasValue ? FormatLatency(snapshot.LatencyMs.Value) : EmptyValue,
@@ -1057,6 +1085,15 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
     private static string Normalize(string? value)
         => string.IsNullOrWhiteSpace(value) || value == "--" ? EmptyValue : value;
 
+    private static string FormatPlcIdentity(DashboardPreviewPlcStatusProjection projection)
+        => string.IsNullOrWhiteSpace(projection.PlcCode)
+           || string.Equals(
+               projection.PlcCode,
+               projection.DeviceName,
+               StringComparison.OrdinalIgnoreCase)
+            ? projection.DeviceName
+            : $"{projection.PlcCode} · {projection.DeviceName}";
+
     private sealed record DashboardPreviewChannelState(
         string StateText,
         string ProbeText,
@@ -1066,6 +1103,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
 
     private sealed record DashboardPreviewPlcStatusProjection(
         int NetworkDeviceId,
+        string PlcCode,
         string DeviceName,
         NetworkDeviceEntity? ConfiguredDevice,
         PlcConnectionRuntimeSnapshot? RuntimeSnapshot);

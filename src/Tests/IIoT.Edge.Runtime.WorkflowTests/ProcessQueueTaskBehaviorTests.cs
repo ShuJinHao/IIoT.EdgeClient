@@ -2066,6 +2066,7 @@ public sealed class ProcessQueueTaskBehaviorTests
         DataPipelineUploadTargets uploadTargets = DataPipelineUploadTargets.Cloud)
         => new()
         {
+            PlcCode = "PLC-TEST-01",
             NetworkDeviceId = 17,
             DeviceName = "PLC-TEST-01",
             ModuleId = "TestPlugin",

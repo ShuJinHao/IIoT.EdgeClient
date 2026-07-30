@@ -150,7 +150,9 @@ public class LogViewModel : PresentationViewModelBase
         var selectedKey = SelectedDeviceFilter?.Key ?? AllFilterKey;
         var entries = string.Equals(selectedKey, AllFilterKey, StringComparison.Ordinal)
             ? _logProjector.BuildAggregatedEntries(_logDisplayStore.Entries)
-            : _logProjector.BuildDeviceEntries(_logDisplayStore.Entries, selectedKey);
+            : _logProjector.BuildDeviceEntries(
+                _logDisplayStore.Entries,
+                _deviceSelectionService.SelectedPlcCode ?? selectedKey);
 
         Entries.Clear();
         foreach (var entry in entries)

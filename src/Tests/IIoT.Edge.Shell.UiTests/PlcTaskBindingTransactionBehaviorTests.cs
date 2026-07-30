@@ -275,6 +275,7 @@ public sealed class PlcTaskBindingTransactionBehaviorTests
             return Task.FromResult(new PlcTaskBindingSavePreparation(
                 networkDeviceId,
                 $"PLC-{networkDeviceId}",
+                $"Device-{networkDeviceId}",
                 moduleId,
                 taskKeys,
                 taskStates,
@@ -341,10 +342,13 @@ public sealed class PlcTaskBindingTransactionBehaviorTests
 
         public ConcurrentQueue<TransactionEvent> Events { get; } = [];
 
-        public PlcRuntimeTaskPlan Capture(int networkDeviceId, string deviceName)
+        public PlcRuntimeTaskPlan Capture(
+            int networkDeviceId,
+            string plcCode,
+            string deviceName)
         {
             CaptureCalls++;
-            return PlcRuntimeTaskPlan.Empty(networkDeviceId, deviceName);
+            return PlcRuntimeTaskPlan.Empty(networkDeviceId, plcCode, deviceName);
         }
 
         public Task<PlcRuntimeTaskApplyResult> ApplyCurrentBindingsAsync(

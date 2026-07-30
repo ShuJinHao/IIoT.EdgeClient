@@ -99,6 +99,20 @@ public sealed record DeadLetterRow(
     string FailureReason,
     string CellDataJson)
 {
+    public string PlcCode { get; init; } = string.Empty;
+
+    public string DeviceName { get; init; } = string.Empty;
+
+    public string TaskKey { get; init; } = string.Empty;
+
+    public string IdentityDisplay
+        => string.IsNullOrWhiteSpace(PlcCode)
+            ? DiagnosticsTextNormalizer.Normalize(DeviceName)
+            : string.IsNullOrWhiteSpace(DeviceName)
+              || string.Equals(PlcCode, DeviceName, StringComparison.OrdinalIgnoreCase)
+                ? PlcCode
+                : $"{PlcCode} · {DeviceName}";
+
     public static DeadLetterRow From(
         DataPipelineRetryChannel channel,
         DeadLetterRecord record,
@@ -113,7 +127,12 @@ public sealed record DeadLetterRow(
             $"{record.SourceTable}/{record.SourceRecordId?.ToString() ?? "--"}",
             createdAt,
             DiagnosticsTextNormalizer.Normalize(record.FailureReason),
-            DiagnosticsTextNormalizer.Normalize(record.CellDataJson));
+            DiagnosticsTextNormalizer.Normalize(record.CellDataJson))
+        {
+            PlcCode = record.PlcCode,
+            DeviceName = record.DeviceName,
+            TaskKey = record.TaskKey
+        };
 }
 
 public sealed record DiagnosticsRowsSnapshot(

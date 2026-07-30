@@ -160,7 +160,7 @@ public sealed class DataPipelineCascadingPersistenceWriter
         {
             retryFailure = ex;
             WriteLogBestEffort(logger =>
-                logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] 补传容量检查失败：{ex.Message}"));
+                logger.Error($"[PlcCode={record.ResolvePlcCode()}][{operations.LogPrefix}] 补传容量检查失败：{ex.Message}"));
         }
 
         if (retryFailure is null)
@@ -191,13 +191,13 @@ public sealed class DataPipelineCascadingPersistenceWriter
             {
                 retryFailure = ex;
                 WriteLogBestEffort(logger =>
-                    logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 写入补传队列失败：{ex.Message}"));
+                    logger.Error($"[PlcCode={record.ResolvePlcCode()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 写入补传队列失败：{ex.Message}"));
             }
 
             if (retryFailure is null)
             {
                 WriteLogBestEffort(logger =>
-                    logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 已写入 {operations.DisplayName} 补传队列。"));
+                    logger.Error($"[PlcCode={record.ResolvePlcCode()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 已写入 {operations.DisplayName} 补传队列。"));
                 return true;
             }
         }
@@ -218,7 +218,7 @@ public sealed class DataPipelineCascadingPersistenceWriter
         catch (Exception fallbackGuardEx)
         {
             WriteLogBestEffort(logger =>
-                logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] 兜底容量检查失败：{fallbackGuardEx.Message}"));
+                logger.Error($"[PlcCode={record.ResolvePlcCode()}][{operations.LogPrefix}] 兜底容量检查失败：{fallbackGuardEx.Message}"));
             return await TryPersistDeadLetterAsync(
                 record,
                 failedTarget,
@@ -268,7 +268,7 @@ public sealed class DataPipelineCascadingPersistenceWriter
         }
 
         WriteLogBestEffort(logger =>
-            logger.Error($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] 补传队列不可用，{record.CellData.DisplayLabel} 已写入 {operations.DisplayName} 兜底缓存。"));
+            logger.Error($"[PlcCode={record.ResolvePlcCode()}][{operations.LogPrefix}] 补传队列不可用，{record.CellData.DisplayLabel} 已写入 {operations.DisplayName} 兜底缓存。"));
         return true;
     }
 
@@ -317,7 +317,7 @@ public sealed class DataPipelineCascadingPersistenceWriter
         }
 
         WriteLogBestEffort(logger =>
-            logger.Fatal($"[PLC-{record.ResolveDeviceName()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 已进入 {operations.DisplayName} 死信。"));
+            logger.Fatal($"[PlcCode={record.ResolvePlcCode()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 已进入 {operations.DisplayName} 死信。"));
         return true;
     }
 
@@ -355,6 +355,8 @@ public sealed class DataPipelineCascadingPersistenceWriter
                 FailureReason: failureReason,
                 ProcessType: record.CellData.ProcessType,
                 CellDataJson: _cellDataJsonSerializer.Serialize(record.CellData),
+                PlcCode: record.ResolvePlcCode(),
+                IdempotencyKeyVersion: record.IdempotencyKeyVersion,
                 NetworkDeviceId: record.ResolveNetworkDeviceId(),
                 DeviceName: record.ResolveDeviceName(),
                 ModuleId: record.ModuleId,
@@ -411,6 +413,8 @@ public sealed class DataPipelineCascadingPersistenceWriter
             FailureStage = stage.ToString(),
             FailureReason = failureReason,
             CreatedAt = DateTime.UtcNow,
+            PlcCode = record.ResolvePlcCode(),
+            IdempotencyKeyVersion = record.IdempotencyKeyVersion,
             NetworkDeviceId = record.ResolveNetworkDeviceId(),
             DeviceName = record.ResolveDeviceName(),
             ModuleId = record.ModuleId,
@@ -462,6 +466,8 @@ public sealed class DataPipelineCascadingPersistenceWriter
         string FailureReason,
         string ProcessType,
         string CellDataJson,
+        string PlcCode,
+        CloudIdempotencyKeyVersion IdempotencyKeyVersion,
         int? NetworkDeviceId,
         string DeviceName,
         string? ModuleId,

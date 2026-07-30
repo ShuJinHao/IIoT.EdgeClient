@@ -13,6 +13,26 @@ namespace IIoT.Edge.Runtime.WorkflowTests;
 public sealed class PlcRuntimeTaskLifecycleBehaviorTests
 {
     [Fact]
+    public async Task ApplyPlan_WhenOnlyDisplayNameChanges_ShouldContinueByStablePlcCode()
+    {
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            new ControlledLoopTask("PeriodicRead"));
+        var renamedPlan = PlcRuntimeTaskPlan.Empty(
+            runtime.DeviceId,
+            runtime.PlcCode,
+            "改名后的现场名称");
+
+        var result = await runtime.ApplyTaskPlanAsync(
+            renamedPlan,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(PlcRuntimeTaskApplyState.WaitingForConnection, result.State);
+        Assert.Empty(result.EnabledTaskKeys);
+        await CleanupAsync(runtime);
+    }
+
+    [Fact]
     public async Task StartBeforeConnection_ShouldOnlyStartConnectionAndDeferBusinessCreation()
     {
         var connection = new ControlledLoopTask("Connection");
@@ -525,7 +545,10 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             runtime.ApplyTaskPlanAsync(
-                PlcRuntimeTaskPlan.Empty(runtime.DeviceId, runtime.DeviceName),
+                PlcRuntimeTaskPlan.Empty(
+                    runtime.DeviceId,
+                    runtime.PlcCode,
+                    runtime.DeviceName),
                 TestContext.Current.CancellationToken));
         await Task.WhenAll(
             mg1.Starts.WaitForAtLeastAsync(2, TestContext.Current.CancellationToken),
@@ -729,7 +752,10 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         var plcBService = plcB.PlcService;
 
         var result = await controller.RegisterAndApplyAsync(
-            PlcRuntimeTaskPlan.Empty(plcA.DeviceId, plcA.DeviceName),
+            PlcRuntimeTaskPlan.Empty(
+                plcA.DeviceId,
+                plcA.PlcCode,
+                plcA.DeviceName),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(PlcRuntimeTaskApplyState.Applied, result.State);
@@ -772,12 +798,18 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             controller.RegisterAndApplyAsync(
-                PlcRuntimeTaskPlan.Empty(runtime.DeviceId, runtime.DeviceName),
+                PlcRuntimeTaskPlan.Empty(
+                    runtime.DeviceId,
+                    runtime.PlcCode,
+                    runtime.DeviceName),
                 TestContext.Current.CancellationToken));
 
         Assert.Equal(
             ["Task.MG1"],
-            registry.GetTaskPlan(runtime.DeviceId, runtime.DeviceName).TaskKeys);
+            registry.GetTaskPlan(
+                runtime.DeviceId,
+                runtime.PlcCode,
+                runtime.DeviceName).TaskKeys);
         Assert.Equal(["Task.MG1"], runtime.EnabledTaskKeys);
 
         businessTask.ThrowOnStop = false;
@@ -797,11 +829,13 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             new PlcDeviceRuntimeHandle
             {
                 DeviceId = deviceId,
+                PlcCode = deviceName,
                 DeviceName = deviceName,
                 PlcService = new InertPlcService(),
                 Buffer = new PlcBuffer(0, 0),
                 Context = new ProductionContext
                 {
+                    PlcCode = deviceName,
                     DeviceName = deviceName,
                     NetworkDeviceId = deviceId
                 },
@@ -820,6 +854,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         params (string TaskKey, PlcRuntimeBusinessTaskFactory Factory)[] tasks)
         => new(
             runtime.DeviceId,
+            runtime.PlcCode,
             runtime.DeviceName,
             tasks.Select(
                 static task =>
@@ -848,6 +883,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         public IReadOnlyCollection<LogEntry> LoggerEntries => logger.Entries;
 
         public string DeviceName => Runtime.DeviceName;
+        public string PlcCode => Runtime.PlcCode;
         public int DeviceId => Runtime.DeviceId;
         public TimeSpan RemainingShutdownTimeout
             => Runtime.GetRemainingShutdownTimeout();

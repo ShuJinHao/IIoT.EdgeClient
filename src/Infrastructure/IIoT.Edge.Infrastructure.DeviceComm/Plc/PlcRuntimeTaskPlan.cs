@@ -14,6 +14,7 @@ public sealed class PlcRuntimeTaskPlan
 
     public PlcRuntimeTaskPlan(
         int networkDeviceId,
+        string plcCode,
         string deviceName,
         IEnumerable<KeyValuePair<string, PlcRuntimeBusinessTaskFactory>> taskFactories)
     {
@@ -24,10 +25,12 @@ public sealed class PlcRuntimeTaskPlan
                 nameof(networkDeviceId));
         }
 
+        ArgumentException.ThrowIfNullOrWhiteSpace(plcCode);
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceName);
         ArgumentNullException.ThrowIfNull(taskFactories);
 
         NetworkDeviceId = networkDeviceId;
+        PlcCode = plcCode.Trim();
         DeviceName = deviceName.Trim();
         var normalized = new Dictionary<string, PlcRuntimeBusinessTaskFactory>(
             StringComparer.OrdinalIgnoreCase);
@@ -40,7 +43,7 @@ public sealed class PlcRuntimeTaskPlan
             if (!normalized.TryAdd(taskKey, pair.Value))
             {
                 throw new InvalidOperationException(
-                    $"PLC“{DeviceName}”业务任务计划包含重复 TaskKey：{taskKey}。");
+                    $"PLC“{PlcCode}”业务任务计划包含重复 TaskKey：{taskKey}。");
             }
         }
 
@@ -49,15 +52,19 @@ public sealed class PlcRuntimeTaskPlan
 
     public int NetworkDeviceId { get; }
 
+    public string PlcCode { get; }
+
     public string DeviceName { get; }
 
     public IReadOnlyCollection<string> TaskKeys => _taskFactories.Keys.ToArray();
 
     public static PlcRuntimeTaskPlan Empty(
         int networkDeviceId,
+        string plcCode,
         string deviceName)
         => new(
             networkDeviceId,
+            plcCode,
             deviceName,
             Array.Empty<KeyValuePair<string, PlcRuntimeBusinessTaskFactory>>());
 
@@ -67,7 +74,7 @@ public sealed class PlcRuntimeTaskPlan
         return _taskFactories.TryGetValue(taskKey, out var factory)
             ? factory
             : throw new InvalidOperationException(
-                $"PLC“{DeviceName}”业务任务计划中不存在 TaskKey：{taskKey}。");
+                $"PLC“{PlcCode}”业务任务计划中不存在 TaskKey：{taskKey}。");
     }
 }
 

@@ -37,19 +37,31 @@ public sealed class EdgeHostPlcRuntimeStateSnapshotProvider(
         var snapshotsById = runtimeSnapshots
             .Where(static snapshot => snapshot.NetworkDeviceId > 0)
             .GroupBy(static snapshot => snapshot.NetworkDeviceId)
+            .Where(static group => group.Take(2).Count() == 1)
             .ToDictionary(static group => group.Key, static group => group.First());
-        var snapshotsByName = runtimeSnapshots
-            .Where(static snapshot => !string.IsNullOrWhiteSpace(snapshot.DeviceName))
-            .GroupBy(static snapshot => snapshot.DeviceName.Trim(), StringComparer.OrdinalIgnoreCase)
+        var snapshotsByPlcCode = runtimeSnapshots
+            .Where(static snapshot => !string.IsNullOrWhiteSpace(snapshot.PlcCode))
+            .GroupBy(static snapshot => snapshot.PlcCode.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Where(static group => group.Take(2).Count() == 1)
             .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.OrdinalIgnoreCase);
 
         return normalizedConfiguredPlcs
             .Select(device =>
             {
-                snapshotsById.TryGetValue(device.Id, out var snapshot);
-                if (snapshot is null)
+                PlcConnectionRuntimeSnapshot? snapshot = null;
+                if (!string.IsNullOrWhiteSpace(device.PlcCode))
                 {
-                    snapshotsByName.TryGetValue(device.DeviceName.Trim(), out snapshot);
+                    snapshotsByPlcCode.TryGetValue(device.PlcCode.Trim(), out snapshot);
+                    if (snapshot is null
+                        && snapshotsById.TryGetValue(device.Id, out var legacySnapshot)
+                        && string.IsNullOrWhiteSpace(legacySnapshot.PlcCode))
+                    {
+                        snapshot = legacySnapshot;
+                    }
+                }
+                else
+                {
+                    snapshotsById.TryGetValue(device.Id, out snapshot);
                 }
 
                 return CreateReportItem(device, snapshot);

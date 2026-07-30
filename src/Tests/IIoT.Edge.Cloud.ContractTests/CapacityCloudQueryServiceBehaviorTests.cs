@@ -365,6 +365,50 @@ public sealed class CapacityCloudQueryServiceBehaviorTests
         Assert.Equal(0, sender.SendCount);
     }
 
+    [Fact]
+    public async Task CapacityQueryFacade_WhenStableAndLegacyAliasesExist_ShouldQueryAllWithoutDoubleCountingSnapshots()
+    {
+        var sender = new CapacityAliasSender();
+        var deviceService = new FakeDeviceService
+        {
+            CanUploadToCloud = true,
+            CurrentDevice = new DeviceSession { DeviceId = Guid.NewGuid() }
+        };
+        var facade = new CapacityQueryFacade(sender, deviceService);
+
+        var result = await facade.LoadTodayAsync(
+            CapacityPlcQueryScope.ForPlc(
+                "P1-AP01",
+                ["改名后", "改名前"]),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            ["P1-AP01", "改名后", "改名前"],
+            sender.PlcNames);
+        Assert.Equal(CapacityQueryState.Success, result.State);
+        Assert.Equal(12, result.PeriodTotal);
+        Assert.Single(result.Rows);
+    }
+
+    [Fact]
+    public async Task CapacityQueryFacade_WhenSelectedPlcIdentityIsUnresolved_ShouldFailClosedWithoutQuery()
+    {
+        var sender = new CountingSender();
+        var deviceService = new FakeDeviceService
+        {
+            CanUploadToCloud = true,
+            CurrentDevice = new DeviceSession { DeviceId = Guid.NewGuid() }
+        };
+        var facade = new CapacityQueryFacade(sender, deviceService);
+
+        var result = await facade.LoadTodayAsync(
+            CapacityPlcQueryScope.ForPlc(string.Empty, ["可变名称"]),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(CapacityQueryState.Unavailable, result.State);
+        Assert.Equal(0, sender.SendCount);
+    }
+
     private static CapacityCloudQueryService CreateService(
         FakeCloudHttpClient cloud,
         FakeLogService? logger = null,
@@ -411,6 +455,68 @@ public sealed class CapacityCloudQueryServiceBehaviorTests
         {
             SendCount++;
             throw new NotSupportedException(request.GetType().FullName);
+        }
+
+        public Task Send<TRequest>(TRequest request, CancellationToken cancellationToken = default)
+            where TRequest : IRequest
+            => throw new NotSupportedException(request?.GetType().FullName);
+
+        public Task<object?> Send(object request, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException(request.GetType().FullName);
+
+        public IAsyncEnumerable<TResponse> CreateStream<TResponse>(
+            IStreamRequest<TResponse> request,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException(request.GetType().FullName);
+
+        public IAsyncEnumerable<object?> CreateStream(
+            object request,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException(request.GetType().FullName);
+    }
+
+    private sealed class CapacityAliasSender : ISender
+    {
+        public List<string> PlcNames { get; } = [];
+
+        public Task<TResponse> Send<TResponse>(
+            IRequest<TResponse> request,
+            CancellationToken cancellationToken = default)
+        {
+            if (request is not LoadTodayCapacityQuery capacityQuery)
+            {
+                throw new NotSupportedException(request.GetType().FullName);
+            }
+
+            PlcNames.Add(capacityQuery.PlcName);
+            var total = capacityQuery.PlcName switch
+            {
+                "P1-AP01" => 12,
+                "改名前" => 5,
+                _ => 0
+            };
+            CapacityViewResult result = total == 0
+                ? CapacityViewResult.Empty()
+                : CapacityViewResult.Success(
+                [
+                    new DailyCapacitySnapshot
+                    {
+                        Date = "07-30",
+                        DateFull = "08:00-08:30",
+                        DayOfWeek = "D",
+                        Total = total,
+                        OkCount = total,
+                        NgCount = 0,
+                        Yield = "100%"
+                    }
+                ],
+                total,
+                total,
+                0,
+                "100%",
+                total.ToString());
+
+            return Task.FromResult((TResponse)(object)result);
         }
 
         public Task Send<TRequest>(TRequest request, CancellationToken cancellationToken = default)

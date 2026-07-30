@@ -39,6 +39,7 @@ internal static class CapacityQueryReasonCodes
     internal const string Empty = "empty";
     internal const string CloudGateNotReady = "cloud_gate_not_ready";
     internal const string DeviceNotIdentified = "device_not_identified";
+    internal const string PlcIdentityUnresolved = "plc_identity_unresolved";
     internal const string CapacityPathUnavailable = "capacity_path_unavailable";
     internal const string CloudQueryException = "cloud_query_exception";
     internal const string CloudResponseEmpty = "cloud_response_empty";

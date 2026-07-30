@@ -122,6 +122,50 @@ public sealed class DashboardPreviewRuntimeViewModelTests
     }
 
     [Fact]
+    public void PlcStatusTableItems_WhenDisplayNameCollidesWithResolvedPlcCode_ShouldNotCrossMatch()
+    {
+        var selectionService = new DeviceSelectionService();
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("当前一号机", "P1-AP01"),
+            new PlcDeviceSelectionIdentity("P1-AP01", "P1-AP02")
+        ]);
+        selectionService.SelectDevice("当前一号机");
+        var languageService = new TestAppLanguageService();
+        var viewModel = new DashboardPreviewRuntimeViewModel(
+            new DashboardViewModel(new TestEquipmentPanelService(), languageService),
+            languageService,
+            selectionService,
+            new TestRuntimeConfigService(),
+            new TestEdgeSyncDiagnosticsQuery(),
+            new TestPlcConnectionManager(),
+            new TestMonitorConfiguredDeviceLoader());
+
+        ApplyDiagnostics(
+            viewModel,
+            [
+                new()
+                {
+                    NetworkDeviceId = 1,
+                    PlcCode = "P1-AP01",
+                    DeviceName = "当前一号机",
+                    ConnectionState = PlcConnectionState.Connected
+                },
+                new()
+                {
+                    NetworkDeviceId = 2,
+                    PlcCode = "P1-AP02",
+                    DeviceName = "P1-AP01",
+                    ConnectionState = PlcConnectionState.Connected
+                }
+            ]);
+
+        var item = Assert.Single(viewModel.PlcStatusTableItems);
+        Assert.Equal("P1-AP01 · 当前一号机", item.DeviceName);
+        Assert.Equal("当前一号机", selectionService.SelectedDeviceKey);
+    }
+
+    [Fact]
     public void PlcStatusTableItems_WhenLastErrorIsLong_ShouldExposeSummaryAndDetail()
     {
         var languageService = new TestAppLanguageService();

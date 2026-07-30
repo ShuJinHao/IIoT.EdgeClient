@@ -2,6 +2,7 @@ using IIoT.Edge.Module.Contracts.Config;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Application.Features.Config.CloudApi;
 using IIoT.Edge.Application.Features.Config.SchemaReconciliation;
+using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Module.Contracts.Diagnostics;
 using IIoT.Edge.Infrastructure.Persistence.Dapper;
 using IIoT.Edge.Infrastructure.Persistence.EfCore;
@@ -70,6 +71,8 @@ public sealed class AppStartupInitializer : IAppStartupInitializer
 
         _logger.Info($"[生命周期] Dapper 表初始化完成，失败 {dapperFailures.Count} 项。");
 
+        await MigrateDataPipelineIdentityAsync(issues, cancellationToken).ConfigureAwait(false);
+
         await RunNonBlockingInitializerStepAsync(
             "开发样例配置初始化",
             () => _developmentSampleInitializer.EnsureConfigurationSamplesAsync(cancellationToken),
@@ -88,6 +91,46 @@ public sealed class AppStartupInitializer : IAppStartupInitializer
         }
 
         return issues;
+    }
+
+    private async Task MigrateDataPipelineIdentityAsync(
+        List<StartupDiagnosticIssue> issues,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var migrator = _serviceProvider.GetService(typeof(IDataPipelineIdentityMigration))
+                as IDataPipelineIdentityMigration;
+            if (migrator is null)
+            {
+                return;
+            }
+
+            var result = await migrator
+                .MigrateAsync(cancellationToken)
+                .ConfigureAwait(false);
+            issues.AddRange(result.Issues.Select(issue =>
+                new StartupDiagnosticIssue(
+                    "DATA_PIPELINE_PLC_IDENTITY_BLOCKED",
+                    $"{issue.DatabaseName}/{issue.TableName}/{issue.RecordId}：{issue.DiagnosticMessage}",
+                    DeviceName: issue.DeviceName)
+                {
+                    PlcCode = string.IsNullOrWhiteSpace(issue.PlcCode) ? null : issue.PlcCode,
+                    TaskKey = string.IsNullOrWhiteSpace(issue.TaskKey) ? null : issue.TaskKey
+                }));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            var message = $"数据管道 PlcCode 历史迁移失败，原记录已保留并停止消费：{ex.Message}";
+            issues.Add(StartupDiagnosticIssueFactory.Create(
+                "DATA_PIPELINE_PLC_IDENTITY_MIGRATION_FAILED",
+                message));
+            _logger.Warn($"[生命周期] {message}");
+        }
     }
 
     private async Task RunNonBlockingInitializerStepAsync(

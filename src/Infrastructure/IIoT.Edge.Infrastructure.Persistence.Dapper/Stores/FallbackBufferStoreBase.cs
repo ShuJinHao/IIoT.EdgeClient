@@ -48,9 +48,11 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
         var sql = $@"
             INSERT INTO {TableName}
                 (ProcessType, CellDataJson, FailedTarget, ErrorMessage, CreatedAt,
+                 PlcCode, IdempotencyKeyVersion,
                  NetworkDeviceId, DeviceName, ModuleId, TaskKey, PlanSessionId, MainPlanCode, TraceBatchNumber)
             VALUES
                 (@ProcessType, @CellDataJson, @FailedTarget, @ErrorMessage, @CreatedAt,
+                 @PlcCode, @IdempotencyKeyVersion,
                  @NetworkDeviceId, @DeviceName, @ModuleId, @TaskKey, @PlanSessionId, @MainPlanCode, @TraceBatchNumber)";
 
         var affectedRows = await SafeExecuteAsync(sql, new
@@ -60,6 +62,8 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
             FailedTarget = failedTarget,
             ErrorMessage = errorMessage,
             CreatedAt = DateTime.UtcNow.ToString("O"),
+            context.PlcCode,
+            IdempotencyKeyVersion = (int)context.IdempotencyKeyVersion,
             context.NetworkDeviceId,
             context.DeviceName,
             context.ModuleId,
@@ -77,7 +81,16 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
 
     public async Task<List<TEntity>> GetPendingAsync(int batchSize = 50)
     {
-        return await SafeQueryByIdAscendingAsync<TEntity>(batchSize).ConfigureAwait(false);
+        return await SafeQueryListAsync<TEntity>(
+            $"""
+             SELECT *
+             FROM {TableName}
+             WHERE TRIM(PlcCode) <> ''
+               AND IdempotencyKeyVersion IN (1, 2)
+             ORDER BY Id ASC
+             LIMIT @BatchSize
+             """,
+            new { BatchSize = batchSize }).ConfigureAwait(false);
     }
 
     public async Task MovePendingToRetryAsync(IEnumerable<long> ids)
@@ -97,6 +110,7 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
                 $@"
                 INSERT INTO {RetryTableName}
                     (ProcessType, CellDataJson, FailedTarget, ErrorMessage, RetryCount, NextRetryTime, CreatedAt,
+                     PlcCode, IdempotencyKeyVersion,
                      NetworkDeviceId, DeviceName, ModuleId, TaskKey, PlanSessionId, MainPlanCode, TraceBatchNumber)
                 SELECT
                     ProcessType,
@@ -106,6 +120,8 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
                     0,
                     @NextRetryTime,
                     CreatedAt,
+                    PlcCode,
+                    IdempotencyKeyVersion,
                     NetworkDeviceId,
                     DeviceName,
                     ModuleId,
@@ -114,7 +130,9 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
                     MainPlanCode,
                     TraceBatchNumber
                 FROM {TableName}
-                WHERE Id IN @Ids",
+                WHERE Id IN @Ids
+                  AND TRIM(PlcCode) <> ''
+                  AND IdempotencyKeyVersion IN (1, 2)",
                 new
                 {
                     Ids = idList,
@@ -129,7 +147,12 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
             }
 
             var deleted = await conn.ExecuteAsync(
-                $"DELETE FROM {TableName} WHERE Id IN @Ids",
+                $"""
+                 DELETE FROM {TableName}
+                 WHERE Id IN @Ids
+                   AND TRIM(PlcCode) <> ''
+                   AND IdempotencyKeyVersion IN (1, 2)
+                 """,
                 new { Ids = idList },
                 tx,
                 commandTimeout: CommandTimeout).ConfigureAwait(false);
@@ -152,7 +175,12 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
         }
 
         await StrictExecuteAsync(
-            $"DELETE FROM {TableName} WHERE Id IN @Ids",
+            $"""
+             DELETE FROM {TableName}
+             WHERE Id IN @Ids
+               AND TRIM(PlcCode) <> ''
+               AND IdempotencyKeyVersion IN (1, 2)
+             """,
             new { Ids = idList },
             requireAffectedRows: true,
             failureMessage: $"删除 {ChannelDisplayName} 兜底记录失败。").ConfigureAwait(false);
@@ -166,6 +194,8 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
 
     private static DataPipelineContextRow CreateContextRow(CellCompletedRecord record)
         => new(
+            record.ResolvePlcCode(),
+            record.IdempotencyKeyVersion,
             record.ResolveNetworkDeviceId(),
             record.ResolveDeviceName(),
             record.ModuleId,
@@ -175,6 +205,8 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
             record.TraceBatchNumber);
 
     private sealed record DataPipelineContextRow(
+        string PlcCode,
+        CloudIdempotencyKeyVersion IdempotencyKeyVersion,
         int? NetworkDeviceId,
         string DeviceName,
         string ModuleId,

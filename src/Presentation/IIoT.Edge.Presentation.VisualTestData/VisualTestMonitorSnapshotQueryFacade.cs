@@ -115,7 +115,10 @@ public sealed class VisualTestMonitorSnapshotQueryFacade(VisualTestDataOptions o
             CellDebugRows: cells,
             CloudSync: diagnostics.Cloud,
             MesSync: diagnostics.Mes,
-            ContextPersistence: diagnostics.ContextPersistence);
+            ContextPersistence: diagnostics.ContextPersistence)
+        {
+            PlcCode = $"PLC-{networkDeviceId.ToString(CultureInfo.InvariantCulture)}"
+        };
     }
 
     private static IReadOnlyList<MonitorStateMachineTaskSnapshot> BuildStateMachineRows(

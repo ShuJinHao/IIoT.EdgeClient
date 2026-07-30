@@ -16,6 +16,7 @@ public sealed class PlcIoScanTask : PlcIoScanTaskBase
 {
     private readonly PlcConnectionStatusStore? _statusStore;
     private readonly Action<bool>? _connectionStateChanged;
+    private readonly string _plcCode;
 
     public PlcIoScanTask(
         IPlcService plcService,
@@ -37,7 +38,10 @@ public sealed class PlcIoScanTask : PlcIoScanTaskBase
                 endpoint ?? new TcpPlcEndpoint(
                     deviceConfig.IpAddress,
                     deviceConfig.Port1,
-                    deviceConfig.ConnectTimeout)),
+                    deviceConfig.ConnectTimeout))
+            {
+                PlcCode = deviceConfig.PlcCode
+            },
             ioMappings
                 .Where(static mapping => !string.IsNullOrWhiteSpace(mapping.PlcAddress))
                 .Select(static mapping => new PlcIoScanMapping(
@@ -54,35 +58,36 @@ public sealed class PlcIoScanTask : PlcIoScanTaskBase
     {
         _statusStore = statusStore;
         _connectionStateChanged = connectionStateChanged;
+        _plcCode = deviceConfig.PlcCode;
     }
 
     protected override void MarkConnected(int? latencyMs)
     {
-        _statusStore?.MarkConnected(DeviceId, DeviceName, latencyMs);
+        _statusStore?.MarkConnected(DeviceId, _plcCode, DeviceName, latencyMs);
         _connectionStateChanged?.Invoke(true);
     }
 
     protected override bool MarkProtocolSuccess(int? latencyMs)
-        => _statusStore?.MarkProtocolSuccess(DeviceId, DeviceName, latencyMs) ?? true;
+        => _statusStore?.MarkProtocolSuccess(DeviceId, _plcCode, DeviceName, latencyMs) ?? true;
 
     protected override bool IsStableOnline()
         => _statusStore?.IsStableOnline(DeviceId) ?? true;
 
     protected override void MarkRuntimeFault(string reason)
     {
-        _statusStore?.MarkRuntimeFault(DeviceId, DeviceName, reason);
+        _statusStore?.MarkRuntimeFault(DeviceId, _plcCode, DeviceName, reason);
         _connectionStateChanged?.Invoke(false);
     }
 
     protected override void MarkConnecting()
     {
-        _statusStore?.MarkConnecting(DeviceId, DeviceName);
+        _statusStore?.MarkConnecting(DeviceId, _plcCode, DeviceName);
         _connectionStateChanged?.Invoke(false);
     }
 
     protected override void MarkDisconnected(string reason)
     {
-        _statusStore?.MarkDisconnected(DeviceId, DeviceName, reason);
+        _statusStore?.MarkDisconnected(DeviceId, _plcCode, DeviceName, reason);
         _connectionStateChanged?.Invoke(false);
     }
 }

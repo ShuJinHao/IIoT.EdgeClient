@@ -106,6 +106,8 @@
                             ItemsSource="{Binding CloudDeadLetters}">
                             <controls:EdgeDataGrid.Columns>
                                 <controls:EdgeTextColumn Binding="{Binding Id}" Header="{DynamicResource Navigation_Column_Id}" MinWidth="70" Width="70" />
+                                <controls:EdgeTextColumn Binding="{Binding IdentityDisplay}" Header="{DynamicResource Navigation_Column_Device}" MinWidth="170" Width="170" />
+                                <controls:EdgeTextColumn Binding="{Binding TaskKey}" Header="{DynamicResource Navigation_Column_TaskKey}" MinWidth="180" Width="180" />
                                 <controls:EdgeTextColumn Binding="{Binding ProcessType}" Header="{DynamicResource Navigation_Column_Process}" MinWidth="130" Width="130" />
                                 <controls:EdgeTextColumn Binding="{Binding FailureStage}" Header="{DynamicResource Navigation_Column_Stage}" MinWidth="130" Width="130" />
                                 <controls:EdgeTextColumn Binding="{Binding FailureReason}" Header="{DynamicResource Navigation_Column_FailureReason}" MinWidth="300" Width="2*" />
@@ -163,6 +165,8 @@
                             ItemsSource="{Binding MesDeadLetters}">
                             <controls:EdgeDataGrid.Columns>
                                 <controls:EdgeTextColumn Binding="{Binding Id}" Header="{DynamicResource Navigation_Column_Id}" MinWidth="70" Width="70" />
+                                <controls:EdgeTextColumn Binding="{Binding IdentityDisplay}" Header="{DynamicResource Navigation_Column_Device}" MinWidth="170" Width="170" />
+                                <controls:EdgeTextColumn Binding="{Binding TaskKey}" Header="{DynamicResource Navigation_Column_TaskKey}" MinWidth="180" Width="180" />
                                 <controls:EdgeTextColumn Binding="{Binding ProcessType}" Header="{DynamicResource Navigation_Column_Process}" MinWidth="130" Width="130" />
                                 <controls:EdgeTextColumn Binding="{Binding FailureStage}" Header="{DynamicResource Navigation_Column_Stage}" MinWidth="130" Width="130" />
                                 <controls:EdgeTextColumn Binding="{Binding FailureReason}" Header="{DynamicResource Navigation_Column_FailureReason}" MinWidth="300" Width="2*" />

@@ -32,7 +32,7 @@ public sealed class PlcServiceProxyBehaviorTests
         var connected = await proxy.ConnectAsync(TestContext.Current.CancellationToken);
 
         Assert.False(connected);
-        Assert.Contains(logger.Entries, x => x.Message == "[PLC-A] 连接失败");
+        Assert.Contains(logger.Entries, x => x.Message == "[PlcCode=PLC-A] 连接失败");
     }
 
     [Fact]
@@ -51,7 +51,7 @@ public sealed class PlcServiceProxyBehaviorTests
             () => proxy.ConnectAsync(TestContext.Current.CancellationToken));
 
         Assert.Equal("network down", ex.Message);
-        Assert.Contains(logger.Entries, x => x.Message == "[PLC-A] 连接异常: network down");
+        Assert.Contains(logger.Entries, x => x.Message == "[PlcCode=PLC-A] 连接异常: network down");
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public sealed class PlcServiceProxyBehaviorTests
             TestContext.Current.CancellationToken));
 
         Assert.Equal("read failed", ex.Message);
-        Assert.Contains(logger.Entries, x => x.Message == "[PLC-A] 读取 DB1.DBW0 失败: read failed");
+        Assert.Contains(logger.Entries, x => x.Message == "[PlcCode=PLC-A] 读取 DB1.DBW0 失败: read failed");
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public sealed class PlcServiceProxyBehaviorTests
             TestContext.Current.CancellationToken));
 
         Assert.Equal("write failed", ex.Message);
-        Assert.Contains(logger.Entries, x => x.Message == "[PLC-A] 写入 DB1.DBW0 失败: write failed");
+        Assert.Contains(logger.Entries, x => x.Message == "[PlcCode=PLC-A] 写入 DB1.DBW0 失败: write failed");
     }
 
     [Fact]

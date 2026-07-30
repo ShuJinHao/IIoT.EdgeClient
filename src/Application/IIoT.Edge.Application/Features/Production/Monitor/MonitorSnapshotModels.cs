@@ -46,4 +46,7 @@ public record DeviceMonitorSnapshot(
     IReadOnlyList<MonitorCellDebugSnapshot> CellDebugRows,
     CloudSyncDiagnosticsSnapshot CloudSync,
     MesSyncDiagnosticsSnapshot MesSync,
-    ProductionContextPersistenceDiagnostics ContextPersistence);
+    ProductionContextPersistenceDiagnostics ContextPersistence)
+{
+    public string PlcCode { get; init; } = string.Empty;
+}

@@ -1,7 +1,13 @@
+using System.Linq.Expressions;
+using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
+using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Contracts.Production;
+using IIoT.Edge.SharedKernel.Repository;
+using IIoT.Edge.SharedKernel.Specification;
 using Microsoft.Data.Sqlite;
+using Dapper;
 
 namespace IIoT.Edge.Persistence.Tests;
 
@@ -60,8 +66,12 @@ public sealed class ModuleProductionRecordPersistenceBehaviorTests
                     "__all__"),
                 TestContext.Current.CancellationToken);
 
-            Assert.Equal("AP-CLIP-001", Assert.Single(apRows).RecordCode);
-            Assert.Equal("CP-CLIP-001", Assert.Single(cpRows).RecordCode);
+            var apRow = Assert.Single(apRows);
+            var cpRow = Assert.Single(cpRows);
+            Assert.Equal("AP-CLIP-001", apRow.RecordCode);
+            Assert.Equal("P1-AP01", apRow.PlcCode);
+            Assert.Equal("CP-CLIP-001", cpRow.RecordCode);
+            Assert.Equal("P2-CP01", cpRow.PlcCode);
         }
         finally
         {
@@ -119,7 +129,7 @@ public sealed class ModuleProductionRecordPersistenceBehaviorTests
                     "AP",
                     DayStartUtc,
                     DayStartUtc.AddDays(1),
-                    "负极模切01",
+                    "P1-AP01",
                     500),
                 TestContext.Current.CancellationToken);
 
@@ -127,6 +137,7 @@ public sealed class ModuleProductionRecordPersistenceBehaviorTests
             Assert.Equal("CLIP-509", allRows[0].RecordCode);
             Assert.DoesNotContain(allRows, row => row.RecordCode == "OLD");
             Assert.Equal(255, selectedRows.Count);
+            Assert.All(selectedRows, row => Assert.Equal("P1-AP01", row.PlcCode));
             Assert.All(selectedRows, row => Assert.Equal("负极模切01", row.DeviceName));
         }
         finally
@@ -193,10 +204,266 @@ public sealed class ModuleProductionRecordPersistenceBehaviorTests
         }
     }
 
-    private static ModuleProductionRecordPersistence CreateStore(string tempDirectory)
+    [Fact]
+    public async Task HistoricalTable_ShouldAddPlcCodeAndBackfillFromStableDeviceCode()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var factory = new SqliteConnectionFactory(tempDirectory);
+            using (var connection = factory.Create("ap_production"))
+            {
+                await connection.ExecuteAsync(
+                    """
+                    CREATE TABLE module_production_records
+                    (
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        IdempotencyKey TEXT NOT NULL UNIQUE,
+                        ModuleId TEXT NOT NULL,
+                        DeviceCode TEXT NOT NULL,
+                        DeviceName TEXT NOT NULL,
+                        TaskKey TEXT NOT NULL,
+                        SlotKey TEXT NOT NULL,
+                        RecordCode TEXT NOT NULL,
+                        MainPlanCode TEXT NOT NULL,
+                        TraceBatchNumber TEXT NOT NULL,
+                        Quantity INTEGER NOT NULL,
+                        Speed REAL NOT NULL,
+                        StartedAtUtc TEXT NOT NULL,
+                        CompletedAtUtc TEXT NOT NULL,
+                        QueueCreatedAtUtc TEXT NOT NULL,
+                        QueueProcessedAtUtc TEXT NOT NULL,
+                        IsOk INTEGER NOT NULL
+                    );
+                    INSERT INTO module_production_records
+                    (
+                        IdempotencyKey, ModuleId, DeviceCode, DeviceName, TaskKey,
+                        SlotKey, RecordCode, MainPlanCode, TraceBatchNumber,
+                        Quantity, Speed, StartedAtUtc, CompletedAtUtc,
+                        QueueCreatedAtUtc, QueueProcessedAtUtc, IsOk
+                    )
+                    VALUES
+                    (
+                        'LEGACY-AP', 'AP', 'P1-AP09', '旧显示名称', 'AP.ClipScan.MG1',
+                        'MG1', 'LEGACY-CLIP', '', '',
+                        1, 1.0, @StartedAtUtc, @CompletedAtUtc,
+                        @StartedAtUtc, @CompletedAtUtc, 1
+                    );
+                    """,
+                    new
+                    {
+                        StartedAtUtc = DayStartUtc.AddMinutes(1).ToString("O"),
+                        CompletedAtUtc = DayStartUtc.AddMinutes(2).ToString("O")
+                    });
+            }
+
+            var store = CreateStore(tempDirectory);
+            var rows = await store.QueryAsync(
+                new ModuleProductionRecordQuery(
+                    "AP",
+                    DayStartUtc,
+                    DayStartUtc.AddDays(1),
+                    "P1-AP09"),
+                TestContext.Current.CancellationToken);
+
+            var legacy = Assert.Single(rows);
+            Assert.Equal("P1-AP09", legacy.DeviceCode);
+            Assert.Equal("P1-AP09", legacy.PlcCode);
+            Assert.Equal("旧显示名称", legacy.DeviceName);
+        }
+        finally
+        {
+            DeleteTempDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task Query_WhenDeviceWasRenamed_ShouldResolveDisplaySelectionToStablePlcCode()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var device = NetworkDeviceEntity.Create(
+                    "当前显示名称",
+                    DeviceType.PLC,
+                    "127.0.0.1",
+                    6001,
+                    "P1-AP01")
+                .WithId(8);
+            var store = CreateStore(tempDirectory, [device]);
+            await store.AddAsync(
+                CreateEntry(
+                    "AP",
+                    "RENAMED-DEVICE",
+                    "P1-AP01",
+                    "旧显示名称",
+                    "AP.ClipScan.MG1",
+                    "MG1",
+                    "RENAMED-CLIP",
+                    DayStartUtc.AddMinutes(2),
+                    quantity: 3),
+                TestContext.Current.CancellationToken);
+
+            var rows = await store.QueryAsync(
+                new ModuleProductionRecordQuery(
+                    "AP",
+                    DayStartUtc,
+                    DayStartUtc.AddDays(1),
+                    "当前显示名称"),
+                TestContext.Current.CancellationToken);
+
+            var row = Assert.Single(rows);
+            Assert.Equal("P1-AP01", row.PlcCode);
+            Assert.Equal("旧显示名称", row.DeviceName);
+        }
+        finally
+        {
+            DeleteTempDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task Query_WhenAnotherDeviceNameEqualsSelectedPlcCode_ShouldPreferStableCode()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var selectedDevice = NetworkDeviceEntity.Create(
+                    "改名后的显示名",
+                    DeviceType.PLC,
+                    "127.0.0.1",
+                    6001,
+                    "P1-AP01")
+                .WithId(8);
+            var collidingDevice = NetworkDeviceEntity.Create(
+                    "P1-AP01",
+                    DeviceType.PLC,
+                    "127.0.0.2",
+                    6001,
+                    "P1-AP02")
+                .WithId(9);
+            var store = CreateStore(tempDirectory, [selectedDevice, collidingDevice]);
+            await store.AddAsync(
+                CreateEntry(
+                    "AP",
+                    "STABLE-CODE",
+                    "P1-AP01",
+                    "历史显示名",
+                    "AP.ClipScan.MG1",
+                    "MG1",
+                    "STABLE-CODE-CLIP",
+                    DayStartUtc.AddMinutes(2),
+                    quantity: 3),
+                TestContext.Current.CancellationToken);
+            await store.AddAsync(
+                CreateEntry(
+                    "AP",
+                    "COLLIDING-NAME",
+                    "P1-AP02",
+                    "P1-AP01",
+                    "AP.ClipScan.MG1",
+                    "MG1",
+                    "COLLIDING-NAME-CLIP",
+                    DayStartUtc.AddMinutes(3),
+                    quantity: 4),
+                TestContext.Current.CancellationToken);
+
+            var rows = await store.QueryAsync(
+                new ModuleProductionRecordQuery(
+                    "AP",
+                    DayStartUtc,
+                    DayStartUtc.AddDays(1),
+                    "P1-AP01"),
+                TestContext.Current.CancellationToken);
+
+            var row = Assert.Single(rows);
+            Assert.Equal("STABLE-CODE-CLIP", row.RecordCode);
+            Assert.Equal("P1-AP01", row.PlcCode);
+        }
+        finally
+        {
+            DeleteTempDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task Query_WhenSelectedPlcCodeIsDuplicated_ShouldFailClosedWithoutNameFallback()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var firstDuplicate = NetworkDeviceEntity.Create(
+                    "一号设备",
+                    DeviceType.PLC,
+                    "127.0.0.1",
+                    6001,
+                    "PLC-DUP")
+                .WithId(8);
+            var secondDuplicate = NetworkDeviceEntity.Create(
+                    "二号设备",
+                    DeviceType.PLC,
+                    "127.0.0.2",
+                    6001,
+                    "PLC-DUP")
+                .WithId(9);
+            var collidingName = NetworkDeviceEntity.Create(
+                    "PLC-DUP",
+                    DeviceType.PLC,
+                    "127.0.0.3",
+                    6001,
+                    "PLC-OTHER")
+                .WithId(10);
+            var store = CreateStore(
+                tempDirectory,
+                [firstDuplicate, secondDuplicate, collidingName]);
+            await store.AddAsync(
+                CreateEntry(
+                    "AP",
+                    "DUPLICATE-CODE",
+                    "PLC-DUP",
+                    "一号设备",
+                    "AP.ClipScan.MG1",
+                    "MG1",
+                    "DUPLICATE-CODE-CLIP",
+                    DayStartUtc.AddMinutes(2),
+                    quantity: 3),
+                TestContext.Current.CancellationToken);
+            await store.AddAsync(
+                CreateEntry(
+                    "AP",
+                    "COLLIDING-NAME-FALLBACK",
+                    "PLC-OTHER",
+                    "PLC-DUP",
+                    "AP.ClipScan.MG1",
+                    "MG1",
+                    "COLLIDING-NAME-FALLBACK-CLIP",
+                    DayStartUtc.AddMinutes(3),
+                    quantity: 4),
+                TestContext.Current.CancellationToken);
+
+            var rows = await store.QueryAsync(
+                new ModuleProductionRecordQuery(
+                    "AP",
+                    DayStartUtc,
+                    DayStartUtc.AddDays(1),
+                    "PLC-DUP"),
+                TestContext.Current.CancellationToken);
+
+            Assert.Empty(rows);
+        }
+        finally
+        {
+            DeleteTempDirectory(tempDirectory);
+        }
+    }
+
+    private static ModuleProductionRecordPersistence CreateStore(
+        string tempDirectory,
+        IReadOnlyCollection<NetworkDeviceEntity>? devices = null)
         => new(
             new SqliteConnectionFactory(tempDirectory),
-            new FakeLogService());
+            new FakeLogService(),
+            devices is null ? null : new FakeNetworkDeviceReadRepository(devices));
 
     private static ModuleProductionRecordEntry CreateEntry(
         string moduleId,
@@ -246,5 +513,58 @@ public sealed class ModuleProductionRecordPersistenceBehaviorTests
         {
             Directory.Delete(path, recursive: true);
         }
+    }
+
+    private sealed class FakeNetworkDeviceReadRepository(
+        IReadOnlyCollection<NetworkDeviceEntity> devices)
+        : IReadRepository<NetworkDeviceEntity>
+    {
+        public Task<List<NetworkDeviceEntity>> GetListAsync(
+            Expression<Func<NetworkDeviceEntity, bool>> expression,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(devices.Where(expression.Compile()).ToList());
+
+        public Task<NetworkDeviceEntity?> GetByIdAsync<TKey>(
+            TKey id,
+            CancellationToken cancellationToken = default)
+            where TKey : notnull
+            => throw new NotSupportedException();
+
+        public Task<NetworkDeviceEntity?> GetAsync(
+            Expression<Func<NetworkDeviceEntity, bool>> expression,
+            Expression<Func<NetworkDeviceEntity, object>>[]? includes = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<List<NetworkDeviceEntity>> GetListAsync(
+            Expression<Func<NetworkDeviceEntity, bool>> expression,
+            Expression<Func<NetworkDeviceEntity, object>>[]? includes = null,
+            CancellationToken cancellationToken = default)
+            => GetListAsync(expression, cancellationToken);
+
+        public Task<List<NetworkDeviceEntity>> GetListAsync(
+            ISpecification<NetworkDeviceEntity>? specification = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<NetworkDeviceEntity?> GetSingleOrDefaultAsync(
+            ISpecification<NetworkDeviceEntity>? specification = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<int> GetCountAsync(
+            Expression<Func<NetworkDeviceEntity, bool>> expression,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<int> CountAsync(
+            ISpecification<NetworkDeviceEntity>? specification = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<bool> AnyAsync(
+            ISpecification<NetworkDeviceEntity>? specification = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 }

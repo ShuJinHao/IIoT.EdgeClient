@@ -15,7 +15,10 @@ internal static class UploadDiagnosticsContextFactory
             DeviceName: ResolveLogDeviceName(recordList),
             ModuleId: ResolveSingle(recordList.Select(record => record.ModuleId)),
             TaskKey: ResolveSingle(recordList.Select(record => record.TaskKey)),
-            Scenario: ResolveScenario(recordList));
+            Scenario: ResolveScenario(recordList))
+        {
+            PlcCode = ResolveSingle(recordList.Select(record => record.ResolvePlcCode()))
+        };
     }
 
     public static MesUploadDiagnosticsContext CreateMesContext(CellCompletedRecord record)
@@ -23,7 +26,22 @@ internal static class UploadDiagnosticsContextFactory
             DeviceName: record.ResolveDeviceName(),
             ModuleId: record.ModuleId,
             TaskKey: record.TaskKey,
-            Scenario: ResolveScenario(record));
+            Scenario: ResolveScenario(record))
+        {
+            PlcCode = record.ResolvePlcCode()
+        };
+
+    public static string ResolveLogPlcCode(IEnumerable<CellCompletedRecord> records)
+    {
+        var plcCodes = records
+            .Select(record => record.ResolvePlcCode())
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .Select(static code => code.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return plcCodes.Count == 1 ? plcCodes[0] : "多PLC";
+    }
 
     public static string ResolveLogDeviceName(IEnumerable<CellCompletedRecord> records)
     {
@@ -37,7 +55,7 @@ internal static class UploadDiagnosticsContextFactory
     }
 
     public static UploadRecordSourceKey CreateSourceKey(CellCompletedRecord record)
-        => new(record.ResolveNetworkDeviceId(), record.ResolveDeviceName().Trim());
+        => new(record.ResolvePlcCode().Trim());
 
     public static bool IsDeviceStatusRecord(CellCompletedRecord record)
     {
@@ -74,4 +92,4 @@ internal static class UploadDiagnosticsContextFactory
             record.CellData.ProcessType);
 }
 
-internal readonly record struct UploadRecordSourceKey(int? NetworkDeviceId, string DeviceName);
+internal readonly record struct UploadRecordSourceKey(string PlcCode);

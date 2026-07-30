@@ -23,7 +23,8 @@ public record NetworkDeviceDto(
     int ConnectTimeout,
     bool IsEnabled,
     string? Remark,
-    string? ProtocolFrame = null
+    string? ProtocolFrame = null,
+    string PlcCode = ""
 );
 
 /// <summary>

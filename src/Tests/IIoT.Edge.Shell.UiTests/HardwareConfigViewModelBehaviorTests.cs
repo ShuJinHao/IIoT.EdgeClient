@@ -120,24 +120,50 @@ public sealed class HardwareConfigViewModelBehaviorTests
     }
 
     [AvaloniaFact]
-    public async Task LoadAll_WhenSharedSelectionMatchesPlc_ShouldSelectThatDeviceForIoMapping()
+    public async Task LoadAll_WhenSharedSelectionMatchesRealName_ShouldExposeStablePlcCodeForIoMapping()
     {
         var service = new StubHardwareConfigCrudService
         {
             InitialNetworkDevices =
             [
                 CreateNetworkDeviceDto(1, "PLC-01", DeviceType.PLC),
-                CreateNetworkDeviceDto(2, "PLC-02", DeviceType.PLC)
+                CreateNetworkDeviceDto(2, "改名后的 PLC-02", DeviceType.PLC, "P1-AP02")
             ]
         };
         var selectionService = new DeviceSelectionService();
-        selectionService.SelectDevice("PLC-02");
+        selectionService.SelectDevice("改名后的 PLC-02");
         var viewModel = CreateViewModel(service, selectionService);
 
         await viewModel.OnActivatedAsync();
 
-        Assert.Equal("PLC-02", viewModel.SelectedNetworkDevice?.DeviceName);
+        Assert.Equal("改名后的 PLC-02", viewModel.SelectedNetworkDevice?.DeviceName);
+        Assert.Equal("P1-AP02", viewModel.SelectedNetworkDevice?.PlcCode);
         Assert.False(viewModel.ShouldShowIoMappingDeviceSelectionPrompt);
+    }
+
+    [AvaloniaFact]
+    public async Task LoadAll_WhenSelectedPlcWasRenamed_ShouldResolveIoMappingDeviceByStablePlcCode()
+    {
+        var service = new StubHardwareConfigCrudService
+        {
+            InitialNetworkDevices =
+            [
+                CreateNetworkDeviceDto(2, "改名后", DeviceType.PLC, "P1-AP02")
+            ]
+        };
+        var selectionService = new DeviceSelectionService();
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("改名前", "P1-AP02")
+        ]);
+        selectionService.SelectDevice("改名前");
+        var viewModel = CreateViewModel(service, selectionService);
+
+        await viewModel.OnActivatedAsync();
+
+        Assert.Equal("改名后", viewModel.SelectedNetworkDevice?.DeviceName);
+        Assert.Equal("P1-AP02", viewModel.SelectedNetworkDevice?.PlcCode);
+        Assert.Equal("改名前", selectionService.SelectedDeviceKey);
     }
 
     [AvaloniaFact]
@@ -613,7 +639,8 @@ public sealed class HardwareConfigViewModelBehaviorTests
     private static NetworkDeviceDto CreateNetworkDeviceDto(
         int id,
         string deviceName,
-        DeviceType deviceType)
+        DeviceType deviceType,
+        string plcCode = "")
         => new(
             id,
             deviceName,
@@ -626,7 +653,9 @@ public sealed class HardwareConfigViewModelBehaviorTests
             null,
             3000,
             true,
-            null);
+            null,
+            ProtocolFrame: null,
+            PlcCode: plcCode);
 
     private static IoMappingVm CreateMapping(
         string signalKey,

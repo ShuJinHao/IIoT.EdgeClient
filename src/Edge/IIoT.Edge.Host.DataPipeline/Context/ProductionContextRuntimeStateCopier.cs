@@ -11,6 +11,7 @@ internal sealed class ProductionContextRuntimeStateCopier : IProductionContextRu
 {
     public void Copy(ProductionContext source, ProductionContext target)
     {
+        target.PlcCode = source.PlcCode;
         target.DeviceName = source.DeviceName;
         target.NetworkDeviceId = source.NetworkDeviceId;
         target.TodayCapacity = source.TodayCapacity;

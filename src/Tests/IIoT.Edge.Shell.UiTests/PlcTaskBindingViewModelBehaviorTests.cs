@@ -35,23 +35,48 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
     }
 
     [Fact]
-    public async Task OnActivatedAsync_WhenSharedSelectionMatchesDeviceName_ShouldSelectThatDevice()
+    public async Task OnActivatedAsync_WhenSharedSelectionMatchesRealName_ShouldExposeStablePlcCode()
     {
         var selectionService = new DeviceSelectionService();
-        selectionService.SelectDevice("PLC-A02");
+        selectionService.SelectDevice("改名后的 PLC-A02");
         var viewModel = CreateViewModel(
             new FakePlcTaskBindingService(
             [
                 CreateDevice(1, "PLC-A01"),
-                CreateDevice(2, "PLC-A02")
+                CreateDevice(2, "改名后的 PLC-A02", "P1-AP02")
             ]),
             selectionService);
 
         await viewModel.OnActivatedAsync();
         await viewModel.OnDeactivatedAsync();
 
-        Assert.Equal("PLC-A02", viewModel.SelectedDevice?.DeviceName);
-        Assert.Equal("PLC-A02", selectionService.SelectedDeviceKey);
+        Assert.Equal("改名后的 PLC-A02", viewModel.SelectedDevice?.DeviceName);
+        Assert.Equal("P1-AP02", viewModel.SelectedDevice?.PlcCode);
+        Assert.Equal("改名后的 PLC-A02", selectionService.SelectedDeviceKey);
+    }
+
+    [Fact]
+    public async Task OnActivatedAsync_WhenSelectedPlcWasRenamed_ShouldResolveByStablePlcCode()
+    {
+        var selectionService = new DeviceSelectionService();
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("改名前", "P1-AP02")
+        ]);
+        selectionService.SelectDevice("改名前");
+        var viewModel = CreateViewModel(
+            new FakePlcTaskBindingService(
+            [
+                CreateDevice(2, "改名后", "P1-AP02")
+            ]),
+            selectionService);
+
+        await viewModel.OnActivatedAsync();
+        await viewModel.OnDeactivatedAsync();
+
+        Assert.Equal("改名后", viewModel.SelectedDevice?.DeviceName);
+        Assert.Equal("P1-AP02", viewModel.SelectedDevice?.PlcCode);
+        Assert.Equal("改名前", selectionService.SelectedDeviceKey);
     }
 
     [Fact]
@@ -181,26 +206,32 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
             "任务绑定",
             "TestPlugin");
 
-    private static PlcTaskBindingDeviceDto CreateDevice(int id, string deviceName)
+    private static PlcTaskBindingDeviceDto CreateDevice(
+        int id,
+        string deviceName,
+        string? plcCode = null)
         => new(
-            id,
-            deviceName,
-            "TestPlugin",
-            IsDeviceEnabled: true,
-            Tasks:
-            [
-                new PlcTaskBindingItemDto(
-                    "Task.Upload",
-                    "上传任务",
-                    Enabled: true,
-                    HasSavedBinding: true,
-                    IsHeartbeatLike: false,
-                    RequiredSignals: [],
-                    CanRun: true,
-                    UnavailableReason: string.Empty,
-                    MissingRequiredSignals: [],
-                    IsSupportedByCurrentPlc: true)
-            ]);
+                id,
+                deviceName,
+                "TestPlugin",
+                IsDeviceEnabled: true,
+                Tasks:
+                [
+                    new PlcTaskBindingItemDto(
+                        "Task.Upload",
+                        "上传任务",
+                        Enabled: true,
+                        HasSavedBinding: true,
+                        IsHeartbeatLike: false,
+                        RequiredSignals: [],
+                        CanRun: true,
+                        UnavailableReason: string.Empty,
+                        MissingRequiredSignals: [],
+                        IsSupportedByCurrentPlc: true)
+                ])
+            {
+                PlcCode = plcCode ?? deviceName
+            };
 
     private sealed class TestPlcTaskBindingViewModel(
         IPlcTaskBindingService bindingService,
@@ -253,6 +284,12 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
             IReadOnlyCollection<TaskCandidate> candidates,
             IReadOnlyCollection<ModuleIoSnapshot> signalBindings,
             string? deviceModel = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlySet<string>>(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
+        public Task<IReadOnlySet<string>> GetConfiguredEnabledTaskKeysAsync(
+            int networkDeviceId,
+            IReadOnlyCollection<TaskCandidate> candidates,
             CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlySet<string>>(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 

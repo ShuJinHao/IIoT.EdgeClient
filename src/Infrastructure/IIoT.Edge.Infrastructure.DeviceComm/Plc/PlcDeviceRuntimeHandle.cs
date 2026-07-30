@@ -27,6 +27,8 @@ public sealed class PlcDeviceRuntimeHandle
 
     public required int DeviceId { get; init; }
 
+    public required string PlcCode { get; init; }
+
     public required string DeviceName { get; init; }
 
     public required IPlcService PlcService { get; init; }
@@ -71,7 +73,7 @@ public sealed class PlcDeviceRuntimeHandle
     {
         if (Interlocked.Exchange(ref _started, 1) != 0)
         {
-            throw new InvalidOperationException($"PLC“{DeviceName}”runtime 不得重复启动。");
+            throw new InvalidOperationException($"PLC“{PlcCode}”runtime 不得重复启动。");
         }
 
         var supervisor = ObserveConnectionStateAsync(CancellationTokenSource.Token);
@@ -86,11 +88,11 @@ public sealed class PlcDeviceRuntimeHandle
     {
         ArgumentNullException.ThrowIfNull(plan);
         if (plan.NetworkDeviceId != DeviceId
-            || !string.Equals(plan.DeviceName, DeviceName, StringComparison.OrdinalIgnoreCase))
+            || !string.Equals(plan.PlcCode, PlcCode, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"任务计划设备“{plan.DeviceName}”(NetworkDeviceId={plan.NetworkDeviceId})"
-                + $"与 runtime 设备“{DeviceName}”(NetworkDeviceId={DeviceId}) 不一致。");
+                $"任务计划 PLC“{plan.PlcCode}”(NetworkDeviceId={plan.NetworkDeviceId}, DeviceName={plan.DeviceName})"
+                + $"与 runtime PLC“{PlcCode}”(NetworkDeviceId={DeviceId}, DeviceName={DeviceName}) 不一致。");
         }
 
         await _taskGate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -152,7 +154,7 @@ public sealed class PlcDeviceRuntimeHandle
                 if (rollbackFailures.Count > 0)
                 {
                     throw new AggregateException(
-                        $"PLC“{DeviceName}”任务计划应用失败，且运行时回滚未完整完成。",
+                        $"PLC“{PlcCode}”任务计划应用失败，且运行时回滚未完整完成。",
                         [applyFailure, .. rollbackFailures]);
                 }
 
@@ -224,14 +226,14 @@ public sealed class PlcDeviceRuntimeHandle
         catch (PlcServiceQuarantinedException ex)
         {
             ConnectionSignal.Report(false);
-            StatusStore.MarkRuntimeFault(DeviceId, DeviceName, ex.Message);
-            Logger.Error($"[{DeviceName}] PLC service 已隔离，连接任务已停止：{ex.Message}");
+            StatusStore.MarkRuntimeFault(DeviceId, PlcCode, DeviceName, ex.Message);
+            Logger.Error($"[PlcCode={PlcCode}] PLC service 已隔离，连接任务已停止：{ex.Message}");
         }
         catch (Exception ex)
         {
             ConnectionSignal.Report(false);
-            StatusStore.MarkDisconnected(DeviceId, DeviceName, ex.Message);
-            Logger.Error($"[{DeviceName}] PLC 连接任务异常：{ex.Message}");
+            StatusStore.MarkDisconnected(DeviceId, PlcCode, DeviceName, ex.Message);
+            Logger.Error($"[PlcCode={PlcCode}] PLC 连接任务异常：{ex.Message}");
         }
     }
 
@@ -262,10 +264,11 @@ public sealed class PlcDeviceRuntimeHandle
                             Interlocked.Exchange(ref _connected, 0);
                             StatusStore.MarkRuntimeFault(
                                 DeviceId,
+                                PlcCode,
                                 DeviceName,
                                 $"周期读取任务启动失败：{ex.Message}");
                             Logger.Error(
-                                $"[{DeviceName}] 周期读取任务启动失败，业务任务保持暂停：{ex.Message}");
+                                $"[PlcCode={PlcCode}] 周期读取任务启动失败，业务任务保持暂停：{ex.Message}");
                             continue;
                         }
 
@@ -282,7 +285,7 @@ public sealed class PlcDeviceRuntimeHandle
                             catch (Exception ex)
                             {
                                 Logger.Error(
-                                    $"[{DeviceName}] 业务任务 {taskKey} 启动失败，已仅隔离该 TaskKey：{ex.Message}");
+                                    $"[PlcCode={PlcCode}] 业务任务 {taskKey} 启动失败，已仅隔离该 TaskKey：{ex.Message}");
                             }
                         }
 
@@ -300,7 +303,7 @@ public sealed class PlcDeviceRuntimeHandle
                     catch (Exception ex)
                     {
                         Logger.Error(
-                            $"[{DeviceName}] 断联后的依赖任务暂停未完整完成，连接监督将继续等待后续状态：{ex.Message}");
+                            $"[PlcCode={PlcCode}] 断联后的依赖任务暂停未完整完成，连接监督将继续等待后续状态：{ex.Message}");
                     }
                 }
                 finally
@@ -317,9 +320,10 @@ public sealed class PlcDeviceRuntimeHandle
             Interlocked.Exchange(ref _connected, 0);
             StatusStore.MarkRuntimeFault(
                 DeviceId,
+                PlcCode,
                 DeviceName,
                 $"连接状态监督失败：{ex.Message}");
-            Logger.Error($"[{DeviceName}] 连接状态监督失败，依赖任务保持暂停：{ex.Message}");
+            Logger.Error($"[PlcCode={PlcCode}] 连接状态监督失败，依赖任务保持暂停：{ex.Message}");
         }
     }
 
@@ -330,7 +334,7 @@ public sealed class PlcDeviceRuntimeHandle
             if (_periodicReadCancellation?.IsCancellationRequested == true)
             {
                 throw new InvalidOperationException(
-                    $"PLC“{DeviceName}”上一周期读取任务尚未安全退出，拒绝重复启动。");
+                    $"PLC“{PlcCode}”上一周期读取任务尚未安全退出，拒绝重复启动。");
             }
 
             return;
@@ -353,7 +357,7 @@ public sealed class PlcDeviceRuntimeHandle
             {
                 await execution.ConfigureAwait(false);
                 throw new InvalidOperationException(
-                    $"PLC“{DeviceName}”周期读取任务在启动阶段提前结束。");
+                    $"PLC“{PlcCode}”周期读取任务在启动阶段提前结束。");
             }
 
             _periodicReadCancellation = taskCancellation;
@@ -497,7 +501,7 @@ public sealed class PlcDeviceRuntimeHandle
             {
                 slot.UnexpectedExitReason = "任务执行句柄在 PLC 仍连接时提前结束。";
                 Logger.Error(
-                    $"[{DeviceName}] 业务任务 {slot.TaskKey} 意外停止：{slot.UnexpectedExitReason}");
+                    $"[PlcCode={PlcCode}] 业务任务 {slot.TaskKey} 意外停止：{slot.UnexpectedExitReason}");
             }
         }
         catch (OperationCanceledException) when (taskCancellationToken.IsCancellationRequested)
@@ -512,7 +516,7 @@ public sealed class PlcDeviceRuntimeHandle
 
             slot.UnexpectedExitReason = ex.Message;
             Logger.Error(
-                $"[{DeviceName}] 业务任务 {slot.TaskKey} 执行故障，已仅隔离该 TaskKey：{ex.Message}");
+                $"[PlcCode={PlcCode}] 业务任务 {slot.TaskKey} 执行故障，已仅隔离该 TaskKey：{ex.Message}");
         }
     }
 
@@ -532,9 +536,10 @@ public sealed class PlcDeviceRuntimeHandle
             {
                 StatusStore.MarkRuntimeFault(
                     DeviceId,
+                    PlcCode,
                     DeviceName,
                     "周期读取任务在 PLC 仍连接时提前结束。");
-                Logger.Error($"[{DeviceName}] 周期读取任务意外停止，业务任务将暂停。");
+                Logger.Error($"[PlcCode={PlcCode}] 周期读取任务意外停止，业务任务将暂停。");
                 ConnectionSignal.Report(false);
             }
         }
@@ -550,9 +555,10 @@ public sealed class PlcDeviceRuntimeHandle
 
             StatusStore.MarkRuntimeFault(
                 DeviceId,
+                PlcCode,
                 DeviceName,
                 $"周期读取任务执行故障：{ex.Message}");
-            Logger.Error($"[{DeviceName}] 周期读取任务执行故障，业务任务将暂停：{ex.Message}");
+            Logger.Error($"[PlcCode={PlcCode}] 周期读取任务执行故障，业务任务将暂停：{ex.Message}");
             ConnectionSignal.Report(false);
         }
     }
@@ -649,7 +655,7 @@ public sealed class PlcDeviceRuntimeHandle
         if (failures.Length > 0)
         {
             throw new AggregateException(
-                $"PLC“{DeviceName}”断联后存在未安全暂停的任务。",
+                $"PLC“{PlcCode}”断联后存在未安全暂停的任务。",
                 failures);
         }
 
@@ -666,7 +672,7 @@ public sealed class PlcDeviceRuntimeHandle
             }
             catch (Exception ex)
             {
-                Logger.Error($"[{DeviceName}] 业务任务 {taskKey} 暂停失败：{ex.Message}");
+                Logger.Error($"[PlcCode={PlcCode}] 业务任务 {taskKey} 暂停失败：{ex.Message}");
                 return ex;
             }
         }
@@ -681,7 +687,7 @@ public sealed class PlcDeviceRuntimeHandle
             }
             catch (Exception ex)
             {
-                Logger.Error($"[{DeviceName}] 周期读取任务暂停失败：{ex.Message}");
+                Logger.Error($"[PlcCode={PlcCode}] 周期读取任务暂停失败：{ex.Message}");
                 return ex;
             }
         }
@@ -844,7 +850,7 @@ public sealed class PlcDeviceRuntimeHandle
             catch (TimeoutException ex)
             {
                 throw new TimeoutException(
-                    $"PLC“{DeviceName}”周期读取停止钩子超过 {StopTimeout.TotalSeconds:0} 秒，runtime 将保留隔离。",
+                    $"PLC“{PlcCode}”周期读取停止钩子超过 {StopTimeout.TotalSeconds:0} 秒，runtime 将保留隔离。",
                     ex);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -952,7 +958,7 @@ public sealed class PlcDeviceRuntimeHandle
             return _businessTasks.TryGetValue(taskKey, out var slot)
                 ? slot
                 : throw new InvalidOperationException(
-                    $"PLC“{DeviceName}”runtime 中不存在业务任务 {taskKey}。");
+                    $"PLC“{PlcCode}”runtime 中不存在业务任务 {taskKey}。");
         }
     }
 

@@ -7,15 +7,19 @@ public interface ISystemLogDisplayProjector
 {
     IReadOnlyList<LogEntry> BuildAggregatedEntries(IEnumerable<LogEntry> entries, int limit = 200);
 
-    IReadOnlyList<LogEntry> BuildDeviceEntries(IEnumerable<LogEntry> entries, string deviceName, int limit = 200);
+    IReadOnlyList<LogEntry> BuildDeviceEntries(IEnumerable<LogEntry> entries, string plcCode, int limit = 200);
 
     IReadOnlyList<string> ExtractDeviceNames(IEnumerable<LogEntry> entries);
 }
 
 public sealed class SystemLogDisplayProjector : ISystemLogDisplayProjector
 {
-    private static readonly Regex DeviceLogPattern = new(
-        @"^\[(?<device>[^\]]+)\]\s*(?<body>.+)$",
+    private static readonly Regex StablePlcLogPattern = new(
+        @"^\[PlcCode=(?<device>[^\]]+)\]\s*(?<body>.+)$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    private static readonly Regex LegacyPlcLogPattern = new(
+        @"^\[(?<device>PLC-[^\]]+)\]\s*(?<body>.+)$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private static readonly Regex SignalPattern = new(
@@ -53,9 +57,9 @@ public sealed class SystemLogDisplayProjector : ISystemLogDisplayProjector
             .ToArray();
     }
 
-    public IReadOnlyList<LogEntry> BuildDeviceEntries(IEnumerable<LogEntry> entries, string deviceName, int limit = 200)
+    public IReadOnlyList<LogEntry> BuildDeviceEntries(IEnumerable<LogEntry> entries, string plcCode, int limit = 200)
         => entries
-            .Where(entry => IsDeviceEntry(entry, deviceName))
+            .Where(entry => IsDeviceEntry(entry, plcCode))
             .Take(limit)
             .ToArray();
 
@@ -68,29 +72,26 @@ public sealed class SystemLogDisplayProjector : ISystemLogDisplayProjector
             .Select(static deviceName => deviceName!)
             .ToArray();
 
-    private static bool IsDeviceEntry(LogEntry entry, string deviceName)
+    private static bool IsDeviceEntry(LogEntry entry, string plcCode)
         => TryExtractDeviceName(entry.Message, out var actual)
-           && string.Equals(actual, deviceName, StringComparison.OrdinalIgnoreCase);
+           && string.Equals(actual, plcCode, StringComparison.OrdinalIgnoreCase);
 
     private static bool TryCreatePlcFailureItem(LogEntry entry, out PlcFailureItem item)
     {
         item = default;
-        var match = DeviceLogPattern.Match(entry.Message);
-        if (!match.Success)
+        if (!TryMatchPlcLog(entry.Message, out var plcCode, out var body))
         {
             return false;
         }
 
-        var deviceName = match.Groups["device"].Value.Trim();
-        var body = match.Groups["body"].Value.Trim();
         if (!IsPlcFailureBody(body))
         {
             return false;
         }
 
         item = new PlcFailureItem(
-            deviceName,
-            ResolveLineName(deviceName),
+            plcCode,
+            ResolveLineName(plcCode),
             ResolveFailureKind(body),
             ResolveSignal(body),
             ResolveRecentError(body),
@@ -100,9 +101,26 @@ public sealed class SystemLogDisplayProjector : ISystemLogDisplayProjector
 
     private static bool TryExtractDeviceName(string message, out string deviceName)
     {
-        var match = DeviceLogPattern.Match(message ?? string.Empty);
-        deviceName = match.Success ? match.Groups["device"].Value.Trim() : string.Empty;
-        return !string.IsNullOrWhiteSpace(deviceName);
+        var matched = TryMatchPlcLog(message, out var plcCode, out _);
+        deviceName = plcCode;
+        return matched;
+    }
+
+    private static bool TryMatchPlcLog(
+        string? message,
+        out string plcCode,
+        out string body)
+    {
+        var text = message ?? string.Empty;
+        var match = StablePlcLogPattern.Match(text);
+        if (!match.Success)
+        {
+            match = LegacyPlcLogPattern.Match(text);
+        }
+
+        plcCode = match.Success ? match.Groups["device"].Value.Trim() : string.Empty;
+        body = match.Success ? match.Groups["body"].Value.Trim() : string.Empty;
+        return !string.IsNullOrWhiteSpace(plcCode);
     }
 
     private static bool IsPlcFailureBody(string body)
@@ -122,8 +140,9 @@ public sealed class SystemLogDisplayProjector : ISystemLogDisplayProjector
                || mentionsEnglishReadFailure;
     }
 
-    private static string ResolveLineName(string deviceName)
+    private static string ResolveLineName(string plcCode)
     {
+        _ = plcCode;
         return "PLC";
     }
 

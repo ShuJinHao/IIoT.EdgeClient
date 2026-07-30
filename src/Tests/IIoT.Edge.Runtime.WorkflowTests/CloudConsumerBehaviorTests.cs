@@ -363,12 +363,14 @@ public sealed class CloudConsumerBehaviorTests
 
         var plcARecord = new CellCompletedRecord
         {
+            PlcCode = "PLC-A",
             NetworkDeviceId = 1001,
             DeviceName = "PLC-A",
             ModuleId = "TestModule",
             TaskKey = "TestModule.Realtime",
             CellData = new TestCellData
             {
+                DeviceCode = "PLC-A",
                 Barcode = "BAR-PLC-A",
                 CellResult = true,
                 CompletedTime = DateTime.UtcNow
@@ -376,12 +378,14 @@ public sealed class CloudConsumerBehaviorTests
         };
         var plcBRecord = new CellCompletedRecord
         {
+            PlcCode = "PLC-B",
             NetworkDeviceId = 1002,
             DeviceName = "PLC-B",
             ModuleId = "TestModule",
             TaskKey = "TestModule.Realtime",
             CellData = new TestCellData
             {
+                DeviceCode = "PLC-B",
                 Barcode = "BAR-PLC-B",
                 CellResult = true,
                 CompletedTime = DateTime.UtcNow

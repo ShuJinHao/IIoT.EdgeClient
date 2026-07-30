@@ -7,7 +7,10 @@ public sealed record PlcTaskBindingDeviceDto(
     string DeviceName,
     string ModuleId,
     bool IsDeviceEnabled,
-    IReadOnlyList<PlcTaskBindingItemDto> Tasks);
+    IReadOnlyList<PlcTaskBindingItemDto> Tasks)
+{
+    public string PlcCode { get; init; } = string.Empty;
+}
 
 public sealed record PlcTaskBindingItemDto(
     string Key,
@@ -64,6 +67,7 @@ public sealed record PlcTaskBindingRowSnapshot(
 
 public sealed record PlcTaskBindingSavePreparation(
     int NetworkDeviceId,
+    string PlcCode,
     string DeviceName,
     string ModuleId,
     IReadOnlyList<string> CandidateTaskKeys,

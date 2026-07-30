@@ -88,7 +88,7 @@ internal abstract class RetryRecordProcessorBase<TRuntimeState> : RetryDeadLette
 
         if (newRetryCount > _maxRetryCount)
         {
-            Logger.Warn($"[PLC-{record.DeviceName}][{DeadLetterChannelMetadata.LogPrefix}] {record.ProcessType} 已达到最大补传次数 {_maxRetryCount}，自动补传停止。");
+            Logger.Warn($"[PlcCode={record.PlcCode}][{DeadLetterChannelMetadata.LogPrefix}] {record.ProcessType} 已达到最大补传次数 {_maxRetryCount}，自动补传停止。");
             await RetryStore.UpdateRetryAsync(record.Id, newRetryCount, errorMessage, AbandonedRetryTimeUtc).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             return;

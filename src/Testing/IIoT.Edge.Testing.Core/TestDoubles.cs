@@ -16,6 +16,8 @@ using IIoT.Edge.Module.Contracts.DataPipeline.Recipe;
 using IIoT.Edge.Module.Contracts.Mes;
 using IIoT.Edge.Module.Contracts.Recipe;
 using IIoT.Edge.Module.Contracts.Shared;
+using IIoT.Edge.Module.Contracts.Identity;
+using IIoT.Edge.Application.Features.DataPipeline.DeadLetters;
 
 namespace IIoT.Edge.Testing;
 
@@ -326,7 +328,11 @@ public sealed class FakeExternalHeartbeatStateStore : IExternalHeartbeatStateSto
     }
 }
 
-public sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryRecordStore
+public sealed class FakeFailedRecordStore :
+    ICloudRetryRecordStore,
+    IMesRetryRecordStore,
+    ICloudDeadLetterRequeueStore,
+    IMesDeadLetterRequeueStore
 {
     private readonly Dictionary<string, List<long>> _claims = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<long> _claimedRecordIds = new();
@@ -413,15 +419,48 @@ public sealed class FakeFailedRecordStore : ICloudRetryRecordStore, IMesRetryRec
             CellDataJson = "{}",
             NextRetryTime = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow,
+            PlcCode = record.ResolvePlcCode(),
             NetworkDeviceId = record.ResolveNetworkDeviceId(),
             DeviceName = record.ResolveDeviceName(),
             ModuleId = record.ModuleId,
             TaskKey = record.TaskKey,
             PlanSessionId = record.PlanSessionId,
             MainPlanCode = record.MainPlanCode,
-            TraceBatchNumber = record.TraceBatchNumber
+            TraceBatchNumber = record.TraceBatchNumber,
+            IdempotencyKeyVersion = record.IdempotencyKeyVersion
         });
         SaveReturning?.Invoke();
+        return Task.CompletedTask;
+    }
+
+    public Task SaveRequeuedAsync(DeadLetterRecord record)
+    {
+        SaveCallCount++;
+        if (SaveException is not null)
+        {
+            throw SaveException;
+        }
+
+        PendingRecords.Add(new FailedCellRecord
+        {
+            Id = PendingRecords.Count == 0 ? 1 : PendingRecords.Max(x => x.Id) + 1,
+            Channel = record.FailedTarget,
+            FailedTarget = record.FailedTarget,
+            ErrorMessage = $"manual_requeue:{record.FailureStage}:{record.FailureReason}",
+            ProcessType = record.ProcessType,
+            CellDataJson = record.CellDataJson,
+            NextRetryTime = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow,
+            PlcCode = record.PlcCode,
+            NetworkDeviceId = record.NetworkDeviceId,
+            DeviceName = record.DeviceName,
+            ModuleId = record.ModuleId,
+            TaskKey = record.TaskKey,
+            PlanSessionId = record.PlanSessionId,
+            MainPlanCode = record.MainPlanCode,
+            TraceBatchNumber = record.TraceBatchNumber,
+            IdempotencyKeyVersion = record.IdempotencyKeyVersion
+        });
         return Task.CompletedTask;
     }
 
@@ -1472,7 +1511,11 @@ public sealed class FakeCapacityBufferStore : ICapacityBufferStore
     public Task<ClaimedCapacityBufferBatch?> ClaimHourlySummaryBatchAsync(int batchSize = 200)
     {
         ClaimBatchSizes.Add(batchSize);
+        var alreadyClaimed = _claims.Values
+            .SelectMany(static summaries => summaries)
+            .ToArray();
         var rows = HourlySummaries
+            .Where(summary => !alreadyClaimed.Any(claimed => SameHourlySummary(claimed, summary)))
             .Take(batchSize)
             .Select(CloneHourlySummary)
             .ToList();
@@ -1571,9 +1614,18 @@ public sealed class FakeCapacityBufferStore : ICapacityBufferStore
             NgCount = source.NgCount,
             PlcName = source.PlcName
         };
+
+    private static bool SameHourlySummary(
+        BufferHourlySummaryDto left,
+        BufferHourlySummaryDto right)
+        => string.Equals(left.Date, right.Date, StringComparison.Ordinal)
+           && left.Hour == right.Hour
+           && left.MinuteBucket == right.MinuteBucket
+           && string.Equals(left.ShiftCode, right.ShiftCode, StringComparison.Ordinal)
+           && string.Equals(left.PlcName, right.PlcName, StringComparison.Ordinal);
 }
 
-public sealed class FakeProductionContextStore : IProductionContextStore
+public sealed class FakeProductionContextStore : IProductionContextStore, IPlcProductionContextStore
 {
     private readonly Dictionary<string, ProductionContext> _contexts = new(StringComparer.OrdinalIgnoreCase);
 
@@ -1594,6 +1646,34 @@ public sealed class FakeProductionContextStore : IProductionContextStore
     }
 
     public IReadOnlyCollection<ProductionContext> GetAll() => _contexts.Values.ToList().AsReadOnly();
+
+    public PlcProductionContextResolution GetOrCreate(
+        PlcIdentity identity,
+        string? moduleId = null)
+    {
+        ArgumentNullException.ThrowIfNull(identity);
+        if (string.IsNullOrWhiteSpace(identity.PlcCode)
+            || identity.NetworkDeviceId <= 0
+            || string.IsNullOrWhiteSpace(identity.DeviceName))
+        {
+            return PlcProductionContextResolution.Blocked(
+                PlcProductionContextResolutionOutcome.InvalidIdentity,
+                identity.PlcCode,
+                "plc_identity_invalid",
+                "invalid fake PLC identity");
+        }
+
+        if (!_contexts.TryGetValue(identity.PlcCode, out var context))
+        {
+            context = new ProductionContext();
+            _contexts[identity.PlcCode] = context;
+        }
+
+        context.PlcCode = identity.PlcCode;
+        context.NetworkDeviceId = identity.NetworkDeviceId;
+        context.DeviceName = identity.DeviceName;
+        return PlcProductionContextResolution.Success(context);
+    }
 
     public ProductionContextPersistenceDiagnostics GetPersistenceDiagnostics() => PersistenceDiagnostics;
 
@@ -1684,6 +1764,7 @@ public sealed class FakeCloudDiagnosticsStore : ICloudUploadDiagnosticsStore
             LastReasonCode = normalizedReasonCode,
             LastBlockedReason = isBlocked ? normalizedReasonCode : null,
             LastProcessType = processType,
+            LastPlcCode = NormalizeIdentity(context?.PlcCode),
             LastDeviceName = context?.DeviceName,
             LastModuleId = context?.ModuleId,
             LastTaskKey = context?.TaskKey,
@@ -1708,6 +1789,7 @@ public sealed class FakeCloudDiagnosticsStore : ICloudUploadDiagnosticsStore
             LastReasonCode = normalizedReasonCode,
             LastBlockedReason = normalizedReason,
             LastProcessType = processType,
+            LastPlcCode = NormalizeIdentity(context?.PlcCode),
             LastDeviceName = context?.DeviceName,
             LastModuleId = context?.ModuleId,
             LastTaskKey = context?.TaskKey,
@@ -1753,6 +1835,9 @@ public sealed class FakeCloudDiagnosticsStore : ICloudUploadDiagnosticsStore
 
     private static string NormalizeReason(string? reason, string fallback)
         => string.IsNullOrWhiteSpace(reason) ? fallback : reason.Trim();
+
+    private static string? NormalizeIdentity(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
 public sealed class FakeMesRetryDiagnosticsStore : IMesRetryDiagnosticsStore
@@ -1990,25 +2075,28 @@ public sealed class FakeMesUploadDiagnosticsStore : IMesUploadDiagnosticsStore
         DateTime? LastBlockedAt = null,
         string? LastBlockedReason = null)
         => new(
-            processType,
-            lastAttemptAt,
-            lastSuccessAt,
-            lastResult,
-            lastFailureReason,
-            LastBlockedAt: LastBlockedAt,
-            LastBlockedReason: LastBlockedReason,
-            DeviceName: Normalize(context?.DeviceName),
-            ModuleId: Normalize(context?.ModuleId),
-            TaskKey: Normalize(context?.TaskKey),
-            Scenario: Normalize(context?.Scenario));
+                processType,
+                lastAttemptAt,
+                lastSuccessAt,
+                lastResult,
+                lastFailureReason,
+                LastBlockedAt: LastBlockedAt,
+                LastBlockedReason: LastBlockedReason,
+                DeviceName: Normalize(context?.DeviceName),
+                ModuleId: Normalize(context?.ModuleId),
+                TaskKey: Normalize(context?.TaskKey),
+                Scenario: Normalize(context?.Scenario))
+            {
+                PlcCode = Normalize(context?.PlcCode)
+            };
 
     private static string BuildKey(string processType, MesUploadDiagnosticsContext? context)
     {
-        var deviceName = Normalize(context?.DeviceName);
+        var plcCode = Normalize(context?.PlcCode);
         var taskKey = Normalize(context?.TaskKey);
-        return deviceName is null && taskKey is null
+        return plcCode is null && taskKey is null
             ? processType
-            : $"{processType}|{deviceName ?? string.Empty}|{taskKey ?? string.Empty}";
+            : $"{processType}|{plcCode ?? "<unresolved>"}|{taskKey ?? string.Empty}";
     }
 
     private static string? Normalize(string? value)

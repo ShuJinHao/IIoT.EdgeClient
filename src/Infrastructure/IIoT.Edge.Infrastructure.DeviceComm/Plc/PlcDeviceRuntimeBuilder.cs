@@ -10,6 +10,7 @@ using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Signals;
 using IIoT.Edge.Module.Contracts.Runtime;
+using IIoT.Edge.Module.Contracts.Identity;
 using IIoT.Edge.SharedKernel.Repository;
 using System.Globalization;
 
@@ -20,7 +21,7 @@ public sealed class PlcDeviceRuntimeBuilder
     private readonly IReadRepository<IoMappingEntity> _ioMappings;
     private readonly IPlcDataStore _dataStore;
     private readonly IPlcServiceFactory _plcServiceFactory;
-    private readonly IProductionContextStore _contextStore;
+    private readonly IPlcProductionContextStore _contextStore;
     private readonly ILogService _logger;
     private readonly PlcConnectionStatusStore _statusStore;
     private readonly IPlcSignalBlockPlanner _signalBlockPlanner;
@@ -32,7 +33,7 @@ public sealed class PlcDeviceRuntimeBuilder
         IReadRepository<IoMappingEntity> ioMappings,
         IPlcDataStore dataStore,
         IPlcServiceFactory plcServiceFactory,
-        IProductionContextStore contextStore,
+        IPlcProductionContextStore contextStore,
         ILogService logger,
         PlcConnectionStatusStore statusStore,
         IPlcSignalBlockPlanner signalBlockPlanner,
@@ -59,11 +60,11 @@ public sealed class PlcDeviceRuntimeBuilder
     {
         ArgumentNullException.ThrowIfNull(taskPlan);
         if (taskPlan.NetworkDeviceId != device.Id
-            || !string.Equals(taskPlan.DeviceName, device.DeviceName, StringComparison.OrdinalIgnoreCase))
+            || !string.Equals(taskPlan.PlcCode, device.PlcCode, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"任务计划设备“{taskPlan.DeviceName}”(NetworkDeviceId={taskPlan.NetworkDeviceId})"
-                + $"与待构建 PLC“{device.DeviceName}”(NetworkDeviceId={device.Id}) 不一致。");
+                $"任务计划 PLC“{taskPlan.PlcCode}”(NetworkDeviceId={taskPlan.NetworkDeviceId}, DeviceName={taskPlan.DeviceName})"
+                + $"与待构建 PLC“{device.PlcCode}”(NetworkDeviceId={device.Id}, DeviceName={device.DeviceName}) 不一致。");
         }
 
         var mappings = await _ioMappings.GetListAsync(x => x.NetworkDeviceId == device.Id, ct).ConfigureAwait(false);
@@ -78,17 +79,41 @@ public sealed class PlcDeviceRuntimeBuilder
         _dataStore.Register(device.Id, readCount, writeCount, signalBindings);
         var buffer = _dataStore.GetBuffer(device.Id);
         var hardwareProfile = _hardwareProfileResolver.Resolve();
-        var context = _contextStore.GetOrCreate(device.DeviceName, hardwareProfile?.ModuleId ?? string.Empty);
-        context.NetworkDeviceId = device.Id;
+        var identity = new PlcIdentity(device.PlcCode, device.Id, device.DeviceName);
+        var contextResolution = _contextStore.GetOrCreate(
+            identity,
+            hardwareProfile?.ModuleId ?? string.Empty);
+        var effectiveTaskPlan = taskPlan;
+        ProductionContext context;
+        if (contextResolution.IsSuccess)
+        {
+            context = contextResolution.Context!;
+        }
+        else
+        {
+            context = new ProductionContext
+            {
+                PlcCode = device.PlcCode,
+                NetworkDeviceId = device.Id,
+                DeviceName = device.DeviceName
+            };
+            effectiveTaskPlan = PlcRuntimeTaskPlan.Empty(
+                device.Id,
+                device.PlcCode,
+                device.DeviceName);
+            _logger.Error(
+                $"[PlcCode={device.PlcCode}] 生产上下文稳定身份解析失败，已暂停该 PLC 全部业务 TaskKey，基础连接继续："
+                + $"{contextResolution.DiagnosticCode}/{contextResolution.DiagnosticMessage}");
+        }
 
         if (!Enum.TryParse<PlcType>(device.DeviceModel, ignoreCase: true, out var plcType))
         {
             throw new InvalidOperationException(
-                $"[{device.DeviceName}] Initialization skipped because DeviceModel is invalid: {device.DeviceModel ?? "<empty>"}.");
+                $"[PlcCode={device.PlcCode}] Initialization skipped because DeviceModel is invalid: {device.DeviceModel ?? "<empty>"}.");
         }
 
-        _statusStore.EnsureTracked(device.Id, device.DeviceName);
-        var plcService = _plcServiceFactory.Create(plcType, device.DeviceName);
+        _statusStore.EnsureTracked(device.Id, device.PlcCode, device.DeviceName);
+        var plcService = _plcServiceFactory.Create(plcType, device.PlcCode);
         var endpoint = await _endpointResolver.ResolveAsync(device, plcType, ct).ConfigureAwait(false);
         var deviceCts = new CancellationTokenSource();
         var runtimePolicy = hardwareProfile?.GetIoRuntimePolicy() ?? PlcIoRuntimePolicy.Default;
@@ -120,12 +145,13 @@ public sealed class PlcDeviceRuntimeBuilder
         if (buffer is null)
         {
             throw new InvalidOperationException(
-                $"[{device.DeviceName}] PLC Buffer 注册后仍不可用，拒绝创建 runtime。");
+                $"[PlcCode={device.PlcCode}] PLC Buffer 注册后仍不可用，拒绝创建 runtime。");
         }
 
         var runtime = new PlcDeviceRuntimeHandle
         {
             DeviceId = device.Id,
+            PlcCode = device.PlcCode,
             DeviceName = device.DeviceName,
             PlcService = plcService,
             Buffer = buffer,
@@ -137,7 +163,7 @@ public sealed class PlcDeviceRuntimeBuilder
             StatusStore = _statusStore,
             CancellationTokenSource = deviceCts,
         };
-        await runtime.ApplyTaskPlanAsync(taskPlan, ct).ConfigureAwait(false);
+        await runtime.ApplyTaskPlanAsync(effectiveTaskPlan, ct).ConfigureAwait(false);
         return runtime;
     }
 

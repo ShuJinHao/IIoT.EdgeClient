@@ -50,12 +50,12 @@ public class CapacityConsumer : ICapacityConsumer
         try
         {
             var cellData = record.CellData;
-            var deviceName = cellData.DeviceName;
+            var plcCode = record.ResolvePlcCode();
             var completedTime = _productionTime.ToBusinessTime(cellData.CompletedTime ?? _productionTime.UtcNow);
             var isOk = cellData.CellResult ?? false;
 
-            var shiftCode = _todayCapacityStore.Increment(deviceName, completedTime, isOk);
-            var snapshot = _todayCapacityStore.GetSnapshot(deviceName);
+            var shiftCode = _todayCapacityStore.Increment(plcCode, completedTime, isOk);
+            var snapshot = _todayCapacityStore.GetSnapshot(plcCode);
 
             await _publisher.Publish(new CapacityUpdatedNotification
             {
@@ -71,7 +71,7 @@ public class CapacityConsumer : ICapacityConsumer
                     ShiftCode = shiftCode,
                     CompletedTime = completedTime,
                     CreatedAt = _productionTime.UtcNow,
-                    PlcName = deviceName
+                    PlcName = plcCode
                 });
             }
 

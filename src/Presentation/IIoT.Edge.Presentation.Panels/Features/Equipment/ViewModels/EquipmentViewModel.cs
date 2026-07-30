@@ -151,7 +151,7 @@ public class EquipmentViewModel : PresentationViewModelBase
 
             _selectedDeviceFilter = value;
             OnPropertyChanged();
-            if (!_isApplyingDeviceSelection)
+            if (!_isApplyingDeviceSelection && value?.IsResolved != false)
             {
                 _deviceSelectionService.SelectDevice(value?.Key ?? IDeviceSelectionService.AllFilterKey);
             }
@@ -251,28 +251,59 @@ public class EquipmentViewModel : PresentationViewModelBase
     private void SyncDeviceSelectionOptions(IReadOnlyCollection<HardwareSnapshot> snapshots)
     {
         var preferredKey = _deviceSelectionService.SelectedDeviceKey;
+        var plcSnapshots = snapshots
+            .Where(static snapshot =>
+                string.Equals(snapshot.DeviceType, "PLC", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        _deviceSelectionService.UpdatePlcIdentities(
+            plcSnapshots.Select(static snapshot =>
+                new PlcDeviceSelectionIdentity(snapshot.Name, snapshot.PlcCode)));
+        var preferredPlcCode = _deviceSelectionService.SelectedPlcCode;
         var options = new List<DeviceSelectionOption>
         {
             CreateAllDeviceOption()
         };
 
         options.AddRange(
-            snapshots
-                .Where(static snapshot => string.Equals(snapshot.DeviceType, "PLC", StringComparison.OrdinalIgnoreCase))
-                .Select(static snapshot => snapshot.Name)
-                .Where(static name => !string.IsNullOrWhiteSpace(name))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(static name => name, StringComparer.OrdinalIgnoreCase)
-                .Select(static name => new DeviceSelectionOption(name, name)));
+            plcSnapshots
+                .Select(static snapshot => CreateDeviceSelectionOption(snapshot))
+                .Where(static option => option is not null)
+                .Select(static option => option!)
+                .GroupBy(static option => option.Key, StringComparer.OrdinalIgnoreCase)
+                .Where(static group => group.Take(2).Count() == 1)
+                .Select(static group => group.First())
+                .OrderBy(static option => option.DisplayName, StringComparer.OrdinalIgnoreCase));
 
-        if (!string.Equals(preferredKey, IDeviceSelectionService.AllFilterKey, StringComparison.OrdinalIgnoreCase)
-            && options.All(option => !string.Equals(option.Key, preferredKey, StringComparison.OrdinalIgnoreCase)))
+        if (!string.Equals(
+                preferredKey,
+                IDeviceSelectionService.AllFilterKey,
+                StringComparison.OrdinalIgnoreCase)
+            && NeedsUnresolvedSelectionOption(options, preferredKey, preferredPlcCode))
         {
-            options.Add(new DeviceSelectionOption(preferredKey, preferredKey));
+            options.Add(CreateUnresolvedDeviceSelectionOption(preferredKey, preferredPlcCode));
         }
 
         ReplaceItems(DeviceFilters, options);
-        ApplySelectedDevice(preferredKey);
+        ApplySelectedDevice(preferredKey, preferredPlcCode);
+    }
+
+    private static DeviceSelectionOption? CreateDeviceSelectionOption(HardwareSnapshot snapshot)
+    {
+        var deviceName = snapshot.Name?.Trim() ?? string.Empty;
+        var plcCode = snapshot.PlcCode?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(deviceName))
+        {
+            return null;
+        }
+
+        var displayName = string.IsNullOrWhiteSpace(plcCode)
+                          || string.Equals(plcCode, deviceName, StringComparison.OrdinalIgnoreCase)
+            ? deviceName
+            : $"{plcCode} · {deviceName}";
+        return new DeviceSelectionOption(deviceName, displayName)
+        {
+            PlcCode = plcCode
+        };
     }
 
     private DeviceSelectionOption CreateAllDeviceOption()
@@ -280,15 +311,91 @@ public class EquipmentViewModel : PresentationViewModelBase
             IDeviceSelectionService.AllFilterKey,
             _languageService.GetString("Panels_Filter_AllOrSummary", "全部/汇总"));
 
+    private static bool NeedsUnresolvedSelectionOption(
+        IReadOnlyCollection<DeviceSelectionOption> options,
+        string preferredKey,
+        string? preferredPlcCode)
+    {
+        if (!string.IsNullOrWhiteSpace(preferredPlcCode))
+        {
+            return options
+                .Where(static option => option.IsResolved)
+                .Count(option => string.Equals(
+                    option.PlcCode,
+                    preferredPlcCode,
+                    StringComparison.OrdinalIgnoreCase)) != 1;
+        }
+
+        return options
+            .Where(static option => option.IsResolved)
+            .Count(option => string.Equals(
+                option.Key,
+                preferredKey,
+                StringComparison.OrdinalIgnoreCase)) != 1;
+    }
+
+    private static DeviceSelectionOption CreateUnresolvedDeviceSelectionOption(
+        string preferredKey,
+        string? preferredPlcCode)
+    {
+        var normalizedPlcCode = preferredPlcCode?.Trim() ?? string.Empty;
+        var displayName = string.IsNullOrWhiteSpace(normalizedPlcCode)
+            ? preferredKey
+            : $"{normalizedPlcCode} · {preferredKey}";
+        return new DeviceSelectionOption(preferredKey, displayName)
+        {
+            PlcCode = normalizedPlcCode,
+            IsResolved = false
+        };
+    }
+
     private void OnSharedDeviceSelectionChanged(object? sender, EventArgs e)
         => AvaloniaDispatcher.UIThread.Post(
-            () => ApplySelectedDevice(_deviceSelectionService.SelectedDeviceKey));
+            () => ApplySelectedDevice(
+                _deviceSelectionService.SelectedDeviceKey,
+                _deviceSelectionService.SelectedPlcCode));
 
-    private void ApplySelectedDevice(string selectedKey)
+    private void ApplySelectedDevice(string selectedKey, string? selectedPlcCode = null)
     {
-        var option = DeviceFilters.FirstOrDefault(filter =>
-                string.Equals(filter.Key, selectedKey, StringComparison.OrdinalIgnoreCase))
-            ?? DeviceFilters.FirstOrDefault();
+        DeviceSelectionOption? option;
+        if (!string.IsNullOrWhiteSpace(selectedPlcCode))
+        {
+            var byPlcCode = DeviceFilters
+                .Where(static filter => filter.IsResolved)
+                .Where(filter => string.Equals(
+                    filter.PlcCode,
+                    selectedPlcCode,
+                    StringComparison.OrdinalIgnoreCase))
+                .Take(2)
+                .ToArray();
+            option = byPlcCode.Length == 1
+                ? byPlcCode[0]
+                : DeviceFilters.FirstOrDefault(filter =>
+                    !filter.IsResolved
+                    && string.Equals(
+                        filter.PlcCode,
+                        selectedPlcCode,
+                        StringComparison.OrdinalIgnoreCase));
+        }
+        else
+        {
+            var byDeviceName = DeviceFilters
+                .Where(static filter => filter.IsResolved)
+                .Where(filter => string.Equals(
+                    filter.Key,
+                    selectedKey,
+                    StringComparison.OrdinalIgnoreCase))
+                .Take(2)
+                .ToArray();
+            option = byDeviceName.Length == 1
+                ? byDeviceName[0]
+                : DeviceFilters.FirstOrDefault(filter =>
+                    !filter.IsResolved
+                    && string.Equals(
+                        filter.Key,
+                        selectedKey,
+                        StringComparison.OrdinalIgnoreCase));
+        }
 
         _isApplyingDeviceSelection = true;
         try
@@ -335,7 +442,9 @@ public class EquipmentViewModel : PresentationViewModelBase
             }
 
             DeviceFilters[index] = CreateAllDeviceOption();
-            ApplySelectedDevice(_deviceSelectionService.SelectedDeviceKey);
+            ApplySelectedDevice(
+                _deviceSelectionService.SelectedDeviceKey,
+                _deviceSelectionService.SelectedPlcCode);
             return;
         }
     }

@@ -50,6 +50,9 @@ public sealed class DiagnosticsViewModelBehaviorTests
             DeviceBindings:
             [
                 new DeviceModuleBindingSnapshot("PLC-A", "TestPlugin", true, true, true)
+                {
+                    PlcCode = "PLC-A"
+                }
             ],
             Issues: []));
 
@@ -96,6 +99,9 @@ public sealed class DiagnosticsViewModelBehaviorTests
                                 DeviceName: "PLC-A",
                                 TaskKey: "TestPlugin.Realtime",
                                 Scenario: "实时数据上传")
+                            {
+                                PlcCode = "PLC-A"
+                            }
                     ],
                     true,
                     CapacityBlockedChannel.Fallback,
@@ -197,6 +203,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
         var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
         {
             Current = CreateReadySyncSnapshot(
+                cloudLastPlcCode: "P1-CLOUD-01",
                 cloudLastDeviceName: "PLC-CLOUD-01",
                 cloudLastScenario: "生产上传")
         };
@@ -205,7 +212,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
         await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
 
         var cloudRow = Assert.Single(viewModel.SyncChannels, x => x.Channel == "云端");
-        Assert.Equal("最近：PLC=PLC-CLOUD-01，场景=生产上传", cloudRow.Note);
+        Assert.Equal("最近：PLC=P1-CLOUD-01 · PLC-CLOUD-01，场景=生产上传", cloudRow.Note);
     }
 
     [AvaloniaFact]
@@ -341,17 +348,43 @@ public sealed class DiagnosticsViewModelBehaviorTests
             ModuleRegistrations: [],
             DeviceBindings:
             [
-                new DeviceModuleBindingSnapshot("PLC-A01", "ModuleA", true, true, true),
-                    new DeviceModuleBindingSnapshot("PLC-A02", "ModuleA", true, true, true)
+                new DeviceModuleBindingSnapshot("一号机", "ModuleA", true, true, true)
+                {
+                    PlcCode = "PLC-A01"
+                },
+                    new DeviceModuleBindingSnapshot("二号机", "ModuleA", true, true, true)
+                    {
+                        PlcCode = "PLC-A02"
+                    }
             ],
             Issues:
             [
-                new StartupDiagnosticIssue("PLC_A", "PLC-A01 地址缺失", "ModuleA", "PLC-A01"),
-                    new StartupDiagnosticIssue("PLC_B", "PLC-A02 地址缺失", "ModuleA", "PLC-A02"),
-                    new StartupDiagnosticIssue("GLOBAL", "插件配置缺失", "ModuleA")
+                new StartupDiagnosticIssue("PLC_A", "PLC-A01 地址缺失", "ModuleA", "一号机")
+                {
+                    PlcCode = "PLC-A01",
+                    TaskKey = "Task.Upload",
+                    SignalKey = "Signal.A"
+                },
+                    new StartupDiagnosticIssue("PLC_B", "PLC-A02 地址缺失", "ModuleA", "二号机")
+                    {
+                        PlcCode = "PLC-A02",
+                        TaskKey = "Task.Upload",
+                        SignalKey = "Signal.B"
+                    },
+                    new StartupDiagnosticIssue("GLOBAL", "插件配置缺失", "ModuleA"),
+                    new StartupDiagnosticIssue(
+                        "PLC_IDENTITY_UNRESOLVED",
+                        "旧身份待确认",
+                        "ModuleA",
+                        "旧显示名")
             ]));
         var selectionService = new DeviceSelectionService();
-        selectionService.SelectDevice("PLC-A01");
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("一号机", "PLC-A01"),
+            new PlcDeviceSelectionIdentity("二号机", "PLC-A02")
+        ]);
+        selectionService.SelectDevice("一号机");
         var viewModel = CreateViewModel(
             startupStore,
             new FakeEdgeSyncDiagnosticsQuery(),
@@ -361,19 +394,25 @@ public sealed class DiagnosticsViewModelBehaviorTests
         await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
 
         var binding = Assert.Single(viewModel.DeviceBindings);
-        Assert.Equal("PLC-A01", binding.DeviceName);
-        Assert.Equal(2, viewModel.Issues.Count);
+        Assert.Equal("PLC-A01 · 一号机", binding.DeviceName);
+        Assert.Equal(3, viewModel.Issues.Count);
         Assert.Contains(viewModel.Issues, row => row.Message == "PLC-A01 地址缺失");
         Assert.Contains(viewModel.Issues, row => row.Message == "插件配置缺失");
+        Assert.Contains(viewModel.Issues, row => row.Message == "旧身份待确认");
         Assert.DoesNotContain(viewModel.Issues, row => row.Message == "PLC-A02 地址缺失");
-        Assert.Equal(2, viewModel.TotalIssueCount);
+        Assert.Equal(3, viewModel.TotalIssueCount);
     }
 
     [AvaloniaFact]
     public async Task DiagnosticsViewModel_WhenDeviceSelected_ShouldFilterAttributableDeadLettersAndKeepGlobalChannels()
     {
         var selectionService = new DeviceSelectionService();
-        selectionService.SelectDevice("PLC-A01");
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("展示名-PLC-A01", "PLC-A01"),
+            new PlcDeviceSelectionIdentity("展示名-PLC-A02", "PLC-A02")
+        ]);
+        selectionService.SelectDevice("展示名-PLC-A01");
         var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
         {
             Current = CreateReadySyncSnapshot(
@@ -382,8 +421,12 @@ public sealed class DiagnosticsViewModelBehaviorTests
                     [],
                     [
                         CreateDeadLetterRecord(101, "Cloud-A", "PLC-A01"),
-                            CreateDeadLetterRecord(102, "Cloud-B", "PLC-A02"),
-                            CreateDeadLetterRecord(103, "Cloud-Global")
+                        CreateDeadLetterRecord(102, "Cloud-B", "PLC-A02"),
+                        CreateDeadLetterRecord(103, "Cloud-Global"),
+                        CreateDeadLetterRecord(
+                            104,
+                            "Cloud-Unresolved",
+                            deviceName: "旧显示名")
                     ],
                     false,
                     null,
@@ -405,10 +448,11 @@ public sealed class DiagnosticsViewModelBehaviorTests
         await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(2, viewModel.SyncChannels.Count);
-        Assert.Equal(2, viewModel.CloudDeadLetters.Count);
+        Assert.Equal(3, viewModel.CloudDeadLetters.Count);
         Assert.Empty(viewModel.MesDeadLetters);
         Assert.Contains(viewModel.CloudDeadLetters, row => row.FailedTarget == "Cloud-A");
         Assert.Contains(viewModel.CloudDeadLetters, row => row.FailedTarget == "Cloud-Global");
+        Assert.Contains(viewModel.CloudDeadLetters, row => row.FailedTarget == "Cloud-Unresolved");
         Assert.DoesNotContain(viewModel.CloudDeadLetters, row => row.FailedTarget == "Cloud-B");
     }
 
@@ -822,6 +866,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
         DeadLetterDiagnosticsSnapshot? cloudDeadLetters = null,
         DeadLetterDiagnosticsSnapshot? mesDeadLetters = null,
         string? cloudLastDeviceName = null,
+        string? cloudLastPlcCode = null,
         string? cloudLastScenario = null,
         CloudCallOutcome cloudLastOutcome = CloudCallOutcome.Success,
         string cloudLastReasonCode = "none",
@@ -829,31 +874,34 @@ public sealed class DiagnosticsViewModelBehaviorTests
         => new(
             "PLC-A",
             new CloudSyncDiagnosticsSnapshot(
-                EdgeUploadGateState.Ready,
-                EdgeUploadBlockReason.None,
-                CloudRetryRuntimeState.Idle,
-                null,
-                null,
-                null,
-                cloudLastOutcome,
-                cloudLastReasonCode,
-                null,
-                0,
-                0,
-                0,
-                false,
-                false,
-                null,
-                "none",
-                null,
-                false,
-                null,
-                null,
-                DeadLetters: cloudDeadLetters,
-                LastDeviceName: cloudLastDeviceName,
-                LastScenario: cloudLastScenario,
-                LastBlockedAt: string.IsNullOrWhiteSpace(cloudLastBlockedReason) ? null : TestNow,
-                LastBlockedReason: cloudLastBlockedReason),
+                    EdgeUploadGateState.Ready,
+                    EdgeUploadBlockReason.None,
+                    CloudRetryRuntimeState.Idle,
+                    null,
+                    null,
+                    null,
+                    cloudLastOutcome,
+                    cloudLastReasonCode,
+                    null,
+                    0,
+                    0,
+                    0,
+                    false,
+                    false,
+                    null,
+                    "none",
+                    null,
+                    false,
+                    null,
+                    null,
+                    DeadLetters: cloudDeadLetters,
+                    LastDeviceName: cloudLastDeviceName,
+                    LastScenario: cloudLastScenario,
+                    LastBlockedAt: string.IsNullOrWhiteSpace(cloudLastBlockedReason) ? null : TestNow,
+                    LastBlockedReason: cloudLastBlockedReason)
+                {
+                    LastPlcCode = cloudLastPlcCode
+                },
             new MesSyncDiagnosticsSnapshot(
                 MesRetryRuntimeState.Idle,
                 null,
@@ -872,14 +920,19 @@ public sealed class DiagnosticsViewModelBehaviorTests
                 DeadLetters: mesDeadLetters),
             new ProductionContextPersistenceDiagnostics(0, null));
 
-    private static DeadLetterRecord CreateDeadLetterRecord(long id, string failedTarget, string? deviceName = null)
+    private static DeadLetterRecord CreateDeadLetterRecord(
+        long id,
+        string failedTarget,
+        string? plcCode = null,
+        string? deviceName = null)
         => new()
         {
             Id = id,
             ProcessType = "TestPlugin",
-            CellDataJson = deviceName is null
-                ? "{\"trayCode\":\"TRAY-10\"}"
-                : $"{{\"trayCode\":\"TRAY-10\",\"deviceName\":\"{deviceName}\"}}",
+            PlcCode = plcCode ?? string.Empty,
+            DeviceName = deviceName ?? (plcCode is null ? string.Empty : $"展示名-{plcCode}"),
+            TaskKey = plcCode is null ? string.Empty : "Task.Upload",
+            CellDataJson = "{\"trayCode\":\"TRAY-10\"}",
             FailedTarget = failedTarget,
             SourceTable = "failed_records",
             SourceRecordId = id,

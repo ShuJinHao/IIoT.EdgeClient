@@ -93,6 +93,54 @@ public sealed class LogViewModelBehaviorTests
     }
 
     [AvaloniaFact]
+    public void Entries_WhenSharedSelectionUsesRealName_ShouldFilterStablePlcCodeLogs()
+    {
+        var store = new TestSystemLogDisplayStore();
+        var selectionService = new DeviceSelectionService();
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("当前显示名称", "P1-AP01")
+        ]);
+        var viewModel = new LogViewModel(
+            store,
+            new SystemLogDisplayProjector(),
+            new TestAppLanguageService(),
+            selectionService);
+
+        selectionService.SelectDevice("当前显示名称");
+        store.Entries.Add(
+            CreateEntry(
+                "ERROR",
+                "[PlcCode=P1-AP01] 读取 R2450 失败：Read R2450 failed.",
+                second: 1));
+        store.Entries.Add(
+            CreateEntry(
+                "ERROR",
+                "[PlcCode=P1-AP02] 读取 R2450 失败：Read R2450 failed.",
+                second: 2));
+
+        var entry = Assert.Single(viewModel.Entries);
+        Assert.Contains("[PlcCode=P1-AP01]", entry.Message, StringComparison.Ordinal);
+        Assert.Equal("当前显示名称", viewModel.SelectedDeviceFilter?.Key);
+        Assert.Equal("当前显示名称", selectionService.SelectedDeviceKey);
+    }
+
+    [Fact]
+    public void Projector_ShouldUseStablePlcCodePrefixAndIgnoreGenericBracketPrefixes()
+    {
+        var projector = new SystemLogDisplayProjector();
+        var entries = new[]
+        {
+            CreateEntry("ERROR", "[PlcCode=P1-AP01] 读取 R2450 失败：Read R2450 failed.", second: 1),
+            CreateEntry("INFO", "[生命周期] Host 已启动。", second: 2)
+        };
+
+        Assert.Equal(["P1-AP01"], projector.ExtractDeviceNames(entries));
+        var selected = Assert.Single(projector.BuildDeviceEntries(entries, "P1-AP01"));
+        Assert.Contains("[PlcCode=P1-AP01]", selected.Message, StringComparison.Ordinal);
+    }
+
+    [AvaloniaFact]
     public async Task LogDisplayService_WhenPublishedConcurrently_ShouldBatchOnUiThreadAndKeepLatestTwoHundred()
     {
         var source = new ConcurrentLogService();

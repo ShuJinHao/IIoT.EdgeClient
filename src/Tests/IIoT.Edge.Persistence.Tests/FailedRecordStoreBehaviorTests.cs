@@ -327,6 +327,201 @@ public sealed class FailedRecordStoreBehaviorTests
         }
     }
 
+    [Fact]
+    public async Task CloudStores_ShouldRoundTripStableIdentityAndIdempotencyVersion()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-failed-store-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var logger = new FakeLogService();
+            var connectionFactory = new SqliteConnectionFactory(tempDir);
+            var serializer = CreateCellDataJsonSerializer();
+            var retryStore = new CloudRetryRecordStore(connectionFactory, logger, serializer);
+            var fallbackStore = new CloudFallbackBufferStore(connectionFactory, logger, serializer);
+            var deadLetterStore = new CloudDeadLetterStore(connectionFactory, logger);
+            using (var connection = connectionFactory.Create(retryStore.DbName))
+            {
+                await retryStore.InitializeTableAsync(connection);
+                await fallbackStore.InitializeTableAsync(connection);
+                await deadLetterStore.InitializeTableAsync(connection);
+            }
+
+            var source = CreateRecord("IDENTITY-CLOUD");
+            await retryStore.SaveAsync(source, "Cloud", "seed", TestContext.Current.CancellationToken);
+            await fallbackStore.SaveAsync(source, "Cloud", "seed", TestContext.Current.CancellationToken);
+            await deadLetterStore.SaveAsync(
+                CreateDeadLetter(source, serializer, "Cloud"),
+                TestContext.Current.CancellationToken);
+            using (var connection = connectionFactory.Create(retryStore.DbName))
+            {
+                await connection.ExecuteAsync(
+                    "UPDATE failed_cloud_records SET NextRetryTime = @Now",
+                    new { Now = DateTime.UtcNow.AddMinutes(-1).ToString("O") });
+            }
+
+            AssertStableIdentity(Assert.Single(await retryStore.GetPendingAsync()));
+            AssertStableIdentity(Assert.Single(await fallbackStore.GetPendingAsync()));
+            AssertStableIdentity(Assert.Single(await deadLetterStore.GetLatestAsync()));
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task MesStores_ShouldRoundTripStableIdentityAndIdempotencyVersion()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-failed-store-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var logger = new FakeLogService();
+            var connectionFactory = new SqliteConnectionFactory(tempDir);
+            var serializer = CreateCellDataJsonSerializer();
+            var retryStore = new MesRetryRecordStore(connectionFactory, logger, serializer);
+            var fallbackStore = new MesFallbackBufferStore(connectionFactory, logger, serializer);
+            var deadLetterStore = new MesDeadLetterStore(connectionFactory, logger);
+            using (var connection = connectionFactory.Create(retryStore.DbName))
+            {
+                await retryStore.InitializeTableAsync(connection);
+                await fallbackStore.InitializeTableAsync(connection);
+                await deadLetterStore.InitializeTableAsync(connection);
+            }
+
+            var source = CreateRecord("IDENTITY-MES");
+            await retryStore.SaveAsync(source, "MES", "seed", TestContext.Current.CancellationToken);
+            await fallbackStore.SaveAsync(source, "MES", "seed", TestContext.Current.CancellationToken);
+            await deadLetterStore.SaveAsync(
+                CreateDeadLetter(source, serializer, "MES"),
+                TestContext.Current.CancellationToken);
+            using (var connection = connectionFactory.Create(retryStore.DbName))
+            {
+                await connection.ExecuteAsync(
+                    "UPDATE failed_mes_records SET NextRetryTime = @Now",
+                    new { Now = DateTime.UtcNow.AddMinutes(-1).ToString("O") });
+            }
+
+            AssertStableIdentity(Assert.Single(await retryStore.GetPendingAsync()));
+            AssertStableIdentity(Assert.Single(await fallbackStore.GetPendingAsync()));
+            AssertStableIdentity(Assert.Single(await deadLetterStore.GetLatestAsync()));
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task LegacyV1_WhenMovedOrRequeued_ShouldKeepOriginalIdentityVersion()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-failed-store-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var logger = new FakeLogService();
+            var connectionFactory = new SqliteConnectionFactory(tempDir);
+            var serializer = CreateCellDataJsonSerializer();
+            var retryStore = new CloudRetryRecordStore(connectionFactory, logger, serializer);
+            var fallbackStore = new CloudFallbackBufferStore(connectionFactory, logger, serializer);
+            using (var connection = connectionFactory.Create(retryStore.DbName))
+            {
+                await retryStore.InitializeTableAsync(connection);
+                await fallbackStore.InitializeTableAsync(connection);
+            }
+
+            var legacy = CreateRecord("LEGACY-V1");
+            legacy.IdempotencyKeyVersion = CloudIdempotencyKeyVersion.LegacyV1;
+            await fallbackStore.SaveAsync(legacy, "Cloud", "legacy", TestContext.Current.CancellationToken);
+            var fallbackId = Assert.Single(await fallbackStore.GetPendingAsync()).Id;
+            await fallbackStore.MovePendingToRetryAsync([fallbackId]);
+
+            var deadLetter = CreateDeadLetter(legacy, serializer, "Cloud");
+            await retryStore.SaveRequeuedAsync(deadLetter);
+
+            using var readConnection = connectionFactory.Create(retryStore.DbName);
+            var rows = (await readConnection.QueryAsync<FailedCellRecord>(
+                "SELECT * FROM failed_cloud_records ORDER BY Id ASC")).ToArray();
+            Assert.Equal(2, rows.Length);
+            Assert.All(rows, row =>
+            {
+                Assert.Equal("PLC-PERSIST-01", row.PlcCode);
+                Assert.Equal(CloudIdempotencyKeyVersion.LegacyV1, row.IdempotencyKeyVersion);
+            });
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task UnresolvedLegacyRows_ShouldRemainInvisibleAndRejectMoveOrDelete()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-failed-store-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var logger = new FakeLogService();
+            var connectionFactory = new SqliteConnectionFactory(tempDir);
+            var serializer = CreateCellDataJsonSerializer();
+            var retryStore = new CloudRetryRecordStore(connectionFactory, logger, serializer);
+            var fallbackStore = new CloudFallbackBufferStore(connectionFactory, logger, serializer);
+            using (var connection = connectionFactory.Create(retryStore.DbName))
+            {
+                await retryStore.InitializeTableAsync(connection);
+                await fallbackStore.InitializeTableAsync(connection);
+                await connection.ExecuteAsync(
+                    """
+                    INSERT INTO cloud_fallback_records
+                        (ProcessType, CellDataJson, FailedTarget, ErrorMessage, CreatedAt,
+                         PlcCode, IdempotencyKeyVersion, NetworkDeviceId, DeviceName,
+                         ModuleId, TaskKey, PlanSessionId, MainPlanCode, TraceBatchNumber)
+                    VALUES
+                        ('TestProcess', '{}', 'Cloud', 'legacy', @CreatedAt,
+                         '', 1, NULL, 'Same-Display',
+                         'TestModule', 'TestModule.Task', '', '', '')
+                    """,
+                    new { CreatedAt = DateTime.UtcNow.ToString("O") });
+            }
+
+            Assert.Empty(await fallbackStore.GetPendingAsync());
+            var moveFailure = await Assert.ThrowsAnyAsync<Exception>(
+                () => fallbackStore.MovePendingToRetryAsync([1]));
+            Assert.Contains("移动", moveFailure.Message, StringComparison.Ordinal);
+            var deleteFailure = await Assert.ThrowsAnyAsync<Exception>(
+                () => fallbackStore.DeleteBatchAsync([1]));
+            Assert.Contains("删除", deleteFailure.Message, StringComparison.Ordinal);
+            Assert.Equal(1, await CountTableRowsAsync(connectionFactory, "cloud_fallback_records"));
+            Assert.Equal(0, await CountTableRowsAsync(connectionFactory, "failed_cloud_records"));
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
     private static CellCompletedRecord CreateRecord(string barcode)
     {
         return new CellCompletedRecord
@@ -335,13 +530,92 @@ public sealed class FailedRecordStoreBehaviorTests
             {
                 Barcode = barcode,
                 WorkOrderNo = $"WO-{barcode}",
-                CompletedTime = DateTime.UtcNow
-            }
+                CompletedTime = DateTime.UtcNow,
+                DeviceCode = "PLC-PERSIST-01",
+                DeviceName = "Display-Persist",
+                PlcDeviceId = 101
+            },
+            PlcCode = "PLC-PERSIST-01",
+            NetworkDeviceId = 101,
+            DeviceName = "Display-Persist",
+            ModuleId = "TestModule",
+            TaskKey = "TestModule.Task",
+            PlanSessionId = "PLAN-SESSION",
+            MainPlanCode = "PLAN-001",
+            TraceBatchNumber = "TRACE-001",
+            IdempotencyKeyVersion = CloudIdempotencyKeyVersion.PlcStableV2
         };
     }
 
     private static ICellDataJsonSerializer CreateCellDataJsonSerializer()
         => new CellDataJsonSerializer(new CellDataTypeRegistry());
+
+    private static DeadLetterRecord CreateDeadLetter(
+        CellCompletedRecord source,
+        ICellDataJsonSerializer serializer,
+        string target)
+        => new()
+        {
+            ProcessType = source.CellData.ProcessType,
+            CellDataJson = serializer.Serialize(source.CellData),
+            FailedTarget = target,
+            SourceTable = $"failed_{target.ToLowerInvariant()}_records",
+            FailureStage = "RetryPersist",
+            FailureReason = "seed",
+            CreatedAt = DateTime.UtcNow,
+            PlcCode = source.PlcCode,
+            NetworkDeviceId = source.NetworkDeviceId,
+            DeviceName = source.DeviceName,
+            ModuleId = source.ModuleId,
+            TaskKey = source.TaskKey,
+            PlanSessionId = source.PlanSessionId,
+            MainPlanCode = source.MainPlanCode,
+            TraceBatchNumber = source.TraceBatchNumber,
+            IdempotencyKeyVersion = source.IdempotencyKeyVersion
+        };
+
+    private static void AssertStableIdentity(FailedCellRecord record)
+        => AssertStableIdentity(
+            record.PlcCode,
+            record.IdempotencyKeyVersion,
+            record.NetworkDeviceId,
+            record.DeviceName,
+            record.ModuleId,
+            record.TaskKey);
+
+    private static void AssertStableIdentity(IFallbackRecord record)
+        => AssertStableIdentity(
+            record.PlcCode,
+            record.IdempotencyKeyVersion,
+            record.NetworkDeviceId,
+            record.DeviceName,
+            record.ModuleId,
+            record.TaskKey);
+
+    private static void AssertStableIdentity(DeadLetterRecord record)
+        => AssertStableIdentity(
+            record.PlcCode,
+            record.IdempotencyKeyVersion,
+            record.NetworkDeviceId,
+            record.DeviceName,
+            record.ModuleId,
+            record.TaskKey);
+
+    private static void AssertStableIdentity(
+        string plcCode,
+        CloudIdempotencyKeyVersion version,
+        int? networkDeviceId,
+        string deviceName,
+        string moduleId,
+        string taskKey)
+    {
+        Assert.Equal("PLC-PERSIST-01", plcCode);
+        Assert.Equal(CloudIdempotencyKeyVersion.PlcStableV2, version);
+        Assert.Equal(101, networkDeviceId);
+        Assert.Equal("Display-Persist", deviceName);
+        Assert.Equal("TestModule", moduleId);
+        Assert.Equal("TestModule.Task", taskKey);
+    }
 
     private static async Task UpdateFailedRecordAsync(
         SqliteConnectionFactory connectionFactory,

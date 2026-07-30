@@ -2,6 +2,8 @@ using IIoT.Edge.Module.Contracts.Context;
 using IIoT.Edge.Host.DataPipeline.Context;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 using IIoT.Edge.Module.Contracts.Runtime;
+using IIoT.Edge.Module.Contracts.Identity;
+using System.Text.Json;
 
 namespace IIoT.Edge.Persistence.FilesystemTests;
 
@@ -245,6 +247,355 @@ public sealed class ProductionContextStorePersistenceTests
             Assert.Equal("B-1001", typedContext.Get<string>("BatchNo"));
             Assert.True(typedContext.HasCell("BC-1001"));
             Assert.Equal("Display-Only", Assert.IsType<NamedCellData>(typedContext.GetCell("BC-1001")).DisplayLabel);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void StableIdentity_WhenDeviceRenamed_ShouldReuseContextAndUpdateDisplayName()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-context-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new ProductionContextStore(
+                new FakeLogService(),
+                CreateCellDataTypeRegistry(),
+                tempDir);
+            var first = store.GetOrCreate(new PlcIdentity("PLC-STABLE-01", 7, "Old-Name"));
+            first.Context!.Set("WorkOrder", "WO-RENAME");
+
+            var renamed = store.GetOrCreate(new PlcIdentity("PLC-STABLE-01", 7, "New-Name"));
+
+            Assert.True(renamed.IsSuccess);
+            Assert.Same(first.Context, renamed.Context);
+            Assert.Equal("New-Name", renamed.Context!.DeviceName);
+            Assert.Equal("WO-RENAME", renamed.Context.Get<string>("WorkOrder"));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void StableIdentity_WhenDatabaseRowRecreated_ShouldReuseContextByPlcCode()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-context-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new ProductionContextStore(
+                new FakeLogService(),
+                CreateCellDataTypeRegistry(),
+                tempDir);
+            var first = store.GetOrCreate(new PlcIdentity("PLC-STABLE-02", 8, "PLC-A"));
+            first.Context!.SetStep("Task-A", 4);
+
+            var recreated = store.GetOrCreate(new PlcIdentity("PLC-STABLE-02", 88, "PLC-A2"));
+
+            Assert.True(recreated.IsSuccess);
+            Assert.Same(first.Context, recreated.Context);
+            Assert.Equal(88, recreated.Context!.NetworkDeviceId);
+            Assert.Equal(4, recreated.Context.GetStep("Task-A"));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void StableIdentity_WhenDeviceIsRenamed_ShouldPersistVerifiedCapacityAliases()
+    {
+        var tempDir = Path.Combine(
+            Path.GetTempPath(),
+            "edge-context-tests",
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var logger = new FakeLogService();
+            var aliases = new PersistentPlcIdentityAliasRegistry(tempDir, logger);
+            var store = new ProductionContextStore(
+                logger,
+                Array.Empty<IProductionContextFactory>(),
+                CreateCellDataTypeRegistry(),
+                new ProductionContextPersistenceFileSystem(),
+                tempDir,
+                identityAliasRegistry: aliases);
+
+            Assert.True(store.GetOrCreate(
+                new PlcIdentity("PLC-STABLE-ALIAS", 8, "改名前")).IsSuccess);
+            Assert.True(store.GetOrCreate(
+                new PlcIdentity("PLC-STABLE-ALIAS", 8, "改名后")).IsSuccess);
+
+            var restoredAliases = new PersistentPlcIdentityAliasRegistry(
+                tempDir,
+                logger);
+            Assert.Equal(
+                ["改名前", "改名后"],
+                restoredAliases.GetVerifiedAliases("PLC-STABLE-ALIAS"));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void LoadLegacyContext_WithPositiveNetworkDeviceId_ShouldMigrateWithoutDeviceNameGuessing()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-context-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var logger = new FakeLogService();
+            var source = new ProductionContextStore(logger, CreateCellDataTypeRegistry(), tempDir);
+            var legacy = source.GetOrCreate("Legacy-Display");
+            legacy.NetworkDeviceId = 21;
+            legacy.Set("Plan", "PLAN-21");
+            source.SaveToFile();
+
+            var restored = new ProductionContextStore(logger, CreateCellDataTypeRegistry(), tempDir);
+            restored.LoadFromFile();
+            var migrated = restored.GetOrCreate(
+                new PlcIdentity("PLC-MIGRATED-21", 21, "Renamed-Display"));
+
+            Assert.True(migrated.IsSuccess);
+            Assert.Equal("PLC-MIGRATED-21", migrated.Context!.PlcCode);
+            Assert.Equal("Renamed-Display", migrated.Context.DeviceName);
+            Assert.Equal("PLAN-21", migrated.Context.Get<string>("Plan"));
+            Assert.Empty(restored.GetPersistenceDiagnostics().IdentityBlocks);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void LoadLegacyContext_WithUniqueCellDeviceCode_ShouldMigrateByStableCode()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-context-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var logger = new FakeLogService();
+            var source = new ProductionContextStore(logger, CreateCellDataTypeRegistry(), tempDir);
+            var legacy = source.GetOrCreate("Legacy-Display");
+            legacy.AddCell("BC-1", new NamedCellData
+            {
+                Label = "BC-1",
+                DeviceCode = "PLC-CELL-01"
+            });
+            source.SaveToFile();
+
+            var restored = new ProductionContextStore(logger, CreateCellDataTypeRegistry(), tempDir);
+            restored.LoadFromFile();
+            var migrated = restored.GetOrCreate(
+                new PlcIdentity("PLC-CELL-01", 31, "Current-Display"));
+
+            Assert.True(migrated.IsSuccess);
+            Assert.True(migrated.Context!.HasCell("BC-1"));
+            Assert.Equal(31, migrated.Context.NetworkDeviceId);
+            Assert.Empty(restored.GetPersistenceDiagnostics().IdentityBlocks);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void LoadLegacyContext_WithMutableCellDeviceCode_ShouldRemainPendingUntilAuthorityRejectsIt()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-context-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var logger = new FakeLogService();
+            var source = new ProductionContextStore(logger, CreateCellDataTypeRegistry(), tempDir);
+            var legacy = source.GetOrCreate("旧显示名称");
+            legacy.NetworkDeviceId = 32;
+            legacy.AddCell("BC-1", new NamedCellData
+            {
+                Label = "BC-1",
+                DeviceCode = "旧显示名称"
+            });
+            source.SaveToFile();
+
+            var restored = new ProductionContextStore(logger, CreateCellDataTypeRegistry(), tempDir);
+            restored.LoadFromFile();
+
+            Assert.DoesNotContain(
+                restored.GetAll(),
+                context => string.Equals(
+                    context.PlcCode,
+                    "旧显示名称",
+                    StringComparison.OrdinalIgnoreCase));
+
+            var blocked = restored.GetOrCreate(
+                new PlcIdentity("PLC-STABLE-32", 32, "当前显示名称"));
+
+            Assert.False(blocked.IsSuccess);
+            Assert.Equal(
+                PlcProductionContextResolutionOutcome.MigrationBlocked,
+                blocked.Outcome);
+            Assert.Contains(
+                restored.GetPersistenceDiagnostics().IdentityBlocks,
+                issue => issue.DiagnosticCode == "production_context_plc_code_conflict");
+
+            restored.SaveToFile();
+            var persisted = File.ReadAllText(Path.Combine(tempDir, "production_context.json"));
+            using var document = JsonDocument.Parse(persisted);
+            var preserved = Assert.Single(document.RootElement.EnumerateArray());
+            Assert.Equal("旧显示名称", preserved.GetProperty("deviceName").GetString());
+            Assert.Equal(string.Empty, preserved.GetProperty("plcCode").GetString());
+            Assert.DoesNotContain("PLC-STABLE-32", persisted, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void LoadLegacyContext_WithConflictingCellDeviceCodes_ShouldPreserveAndBlock()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-context-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var logger = new FakeLogService();
+            var source = new ProductionContextStore(logger, CreateCellDataTypeRegistry(), tempDir);
+            var legacy = source.GetOrCreate("Legacy-Conflict");
+            legacy.NetworkDeviceId = 41;
+            legacy.AddCell("BC-A", new NamedCellData { Label = "A", DeviceCode = "PLC-A" });
+            legacy.AddCell("BC-B", new NamedCellData { Label = "B", DeviceCode = "PLC-B" });
+            source.SaveToFile();
+
+            var restored = new ProductionContextStore(logger, CreateCellDataTypeRegistry(), tempDir);
+            restored.LoadFromFile();
+            var blocked = restored.GetOrCreate(
+                new PlcIdentity("PLC-A", 41, "Current-Display"));
+
+            Assert.False(blocked.IsSuccess);
+            Assert.Equal(
+                PlcProductionContextResolutionOutcome.MigrationBlocked,
+                blocked.Outcome);
+            Assert.Contains(
+                restored.GetPersistenceDiagnostics().IdentityBlocks,
+                issue => issue.NetworkDeviceId == 41);
+            Assert.DoesNotContain(
+                restored.GetAll(),
+                context => context.NetworkDeviceId == 41);
+
+            restored.SaveToFile();
+            var persisted = File.ReadAllText(Path.Combine(tempDir, "production_context.json"));
+            Assert.Contains("PLC-A", persisted, StringComparison.Ordinal);
+            Assert.Contains("PLC-B", persisted, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void LoadContexts_WithDuplicateExplicitPlcCode_ShouldPreserveBothAndBlock()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-context-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var logger = new FakeLogService();
+            var source = new ProductionContextStore(logger, CreateCellDataTypeRegistry(), tempDir);
+            var first = source.GetOrCreate("First-Display");
+            first.PlcCode = "PLC-DUPLICATE";
+            first.NetworkDeviceId = 61;
+            first.Set("Origin", "first");
+            var second = source.GetOrCreate("Second-Display");
+            second.PlcCode = "PLC-DUPLICATE";
+            second.NetworkDeviceId = 62;
+            second.Set("Origin", "second");
+            source.SaveToFile();
+
+            var restored = new ProductionContextStore(logger, CreateCellDataTypeRegistry(), tempDir);
+            restored.LoadFromFile();
+            var blocked = restored.GetOrCreate(
+                new PlcIdentity("PLC-DUPLICATE", 61, "Current-Display"));
+
+            Assert.False(blocked.IsSuccess);
+            Assert.Equal(
+                PlcProductionContextResolutionOutcome.IdentityConflict,
+                blocked.Outcome);
+            Assert.Contains(
+                restored.GetPersistenceDiagnostics().IdentityBlocks,
+                issue => issue.DiagnosticCode == "production_context_duplicate_plc_code");
+            Assert.DoesNotContain(
+                restored.GetAll(),
+                context => string.Equals(
+                    context.PlcCode,
+                    "PLC-DUPLICATE",
+                    StringComparison.OrdinalIgnoreCase));
+
+            restored.SaveToFile();
+            var persisted = File.ReadAllText(Path.Combine(tempDir, "production_context.json"));
+            Assert.Contains("\"Origin\": \"first\"", persisted, StringComparison.Ordinal);
+            Assert.Contains("\"Origin\": \"second\"", persisted, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void LoadLegacyContext_WithOnlyDeviceNameMatch_ShouldNotClaimHistoricalState()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-context-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var logger = new FakeLogService();
+            var source = new ProductionContextStore(logger, CreateCellDataTypeRegistry(), tempDir);
+            source.GetOrCreate("Same-Display").Set("LegacyOnly", "do-not-claim");
+            source.SaveToFile();
+
+            var restored = new ProductionContextStore(logger, CreateCellDataTypeRegistry(), tempDir);
+            restored.LoadFromFile();
+            var resolution = restored.GetOrCreate(
+                new PlcIdentity("PLC-NEW", 51, "Same-Display"));
+
+            Assert.True(resolution.IsSuccess);
+            Assert.False(resolution.Context!.Has("LegacyOnly"));
+            Assert.DoesNotContain(
+                restored.GetAll(),
+                context => context.Has("LegacyOnly"));
+            Assert.Contains(
+                restored.GetPersistenceDiagnostics().IdentityBlocks,
+                issue => issue.DiagnosticCode == "production_context_identity_unresolved");
         }
         finally
         {

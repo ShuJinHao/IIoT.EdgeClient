@@ -2,11 +2,16 @@ using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
+using IIoT.Edge.Application.Features.DataPipeline.DeadLetters;
+using IIoT.Edge.Module.Contracts.DataPipeline;
 
 using IIoT.Edge.Module.Contracts.Cloud;
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 
-public sealed class CloudRetryRecordStore : RetryRecordStoreBase, ICloudRetryRecordStore
+public sealed class CloudRetryRecordStore :
+    RetryRecordStoreBase,
+    ICloudRetryRecordStore,
+    ICloudDeadLetterRequeueStore
 {
     public override string DbName => "pipeline_cloud";
     protected override string TableName => "failed_cloud_records";
@@ -50,4 +55,7 @@ public sealed class CloudRetryRecordStore : RetryRecordStoreBase, ICloudRetryRec
         : base(connectionFactory, logger, cellDataJsonSerializer)
     {
     }
+
+    public Task SaveRequeuedAsync(DeadLetterRecord record)
+        => SaveRequeuedCoreAsync(record);
 }

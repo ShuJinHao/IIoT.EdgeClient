@@ -67,10 +67,10 @@ public sealed class IoViewViewModelBehaviorTests
     }
 
     [AvaloniaFact]
-    public async Task LoadDevicesAsync_WhenSharedSelectionMatchesDeviceName_ShouldSelectThatPlc()
+    public async Task LoadDevicesAsync_WhenSharedSelectionMatchesRealName_ShouldExposeStablePlcCode()
     {
         var deviceA = CreateDevice(8, "PLC-A", "TestProcess");
-        var deviceB = CreateDevice(9, "PLC-B", "TestProcess");
+        var deviceB = CreateDevice(9, "改名后的 PLC-B", "TestProcess", plcCode: "P1-CP02");
         var selectionService = new DeviceSelectionService();
         selectionService.SelectDevice(deviceB.DeviceName);
         var viewModel = CreateViewModel([deviceA, deviceB], deviceSelectionService: selectionService);
@@ -78,7 +78,31 @@ public sealed class IoViewViewModelBehaviorTests
         await viewModel.LoadDevicesAsync();
 
         Assert.Equal(deviceB.DeviceName, viewModel.SelectedDevice?.DeviceName);
+        Assert.Equal("P1-CP02", viewModel.SelectedDevice?.PlcCode);
         Assert.Equal(deviceB.DeviceName, selectionService.SelectedDeviceKey);
+    }
+
+    [AvaloniaFact]
+    public async Task LoadDevicesAsync_WhenSelectedPlcWasRenamed_ShouldResolveByStablePlcCode()
+    {
+        var selectionService = new DeviceSelectionService();
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("改名前", "P1-CP02")
+        ]);
+        selectionService.SelectDevice("改名前");
+        var renamed = CreateDevice(
+            10,
+            "改名后",
+            "TestProcess",
+            plcCode: "P1-CP02");
+        var viewModel = CreateViewModel([renamed], deviceSelectionService: selectionService);
+
+        await viewModel.LoadDevicesAsync();
+
+        Assert.Same(renamed, viewModel.SelectedDevice);
+        Assert.Equal("改名前", selectionService.SelectedDeviceKey);
+        Assert.Equal("P1-CP02", selectionService.SelectedPlcCode);
     }
 
     [AvaloniaFact]
@@ -563,9 +587,10 @@ public sealed class IoViewViewModelBehaviorTests
         string deviceName,
         string moduleId,
         DeviceType deviceType = DeviceType.PLC,
-        bool isEnabled = true)
+        bool isEnabled = true,
+        string? plcCode = null)
     {
-        var entity = NetworkDeviceEntity.Create(deviceName, deviceType, "127.0.0.1", 102);
+        var entity = NetworkDeviceEntity.Create(deviceName, deviceType, "127.0.0.1", 102, plcCode);
         entity.WithId(id);
         entity.UpdateDeviceModel("S7");
         entity.SetEnabled(isEnabled);

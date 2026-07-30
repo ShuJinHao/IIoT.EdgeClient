@@ -20,7 +20,7 @@ public class PlcServiceFactory : IPlcServiceFactory
         _modbusAddressParser = modbusAddressParser;
     }
 
-    public IPlcService Create(PlcType plcType, string deviceName)
+    public IPlcService Create(PlcType plcType, string plcCode)
     {
         IPlcService service = plcType switch
         {
@@ -31,6 +31,6 @@ public class PlcServiceFactory : IPlcServiceFactory
             _ => throw new NotSupportedException($"不支持的 PLC 类型: {plcType}")
         };
 
-        return new PlcServiceProxy(service, _logger, deviceName);
+        return new PlcServiceProxy(service, _logger, plcCode);
     }
 }

@@ -23,10 +23,12 @@ public abstract class DeadLetterStoreBase : DapperRepositoryBase<DeadLetterRecor
             INSERT INTO {TableName}
                 (ProcessType, CellDataJson, FailedTarget, SourceTable, SourceRecordId,
                  FailureStage, FailureReason, CreatedAt,
+                 PlcCode, IdempotencyKeyVersion,
                  NetworkDeviceId, DeviceName, ModuleId, TaskKey, PlanSessionId, MainPlanCode, TraceBatchNumber)
             VALUES
                 (@ProcessType, @CellDataJson, @FailedTarget, @SourceTable, @SourceRecordId,
                  @FailureStage, @FailureReason, @CreatedAt,
+                 @PlcCode, @IdempotencyKeyVersion,
                  @NetworkDeviceId, @DeviceName, @ModuleId, @TaskKey, @PlanSessionId, @MainPlanCode, @TraceBatchNumber)";
 
         var affectedRows = await SafeExecuteAsync(sql, new
@@ -39,6 +41,8 @@ public abstract class DeadLetterStoreBase : DapperRepositoryBase<DeadLetterRecor
             record.FailureStage,
             record.FailureReason,
             CreatedAt = record.CreatedAt.ToString("O"),
+            record.PlcCode,
+            IdempotencyKeyVersion = (int)record.IdempotencyKeyVersion,
             record.NetworkDeviceId,
             record.DeviceName,
             record.ModuleId,

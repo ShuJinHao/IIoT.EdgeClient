@@ -90,7 +90,9 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
     public IReadOnlyList<string> IoDataTypes => IoMappingOptionCatalog.DataTypes;
 
     public string SelectedNetworkDeviceDisplayName
-        => SelectedNetworkDevice?.DeviceName ?? GetText("Navigation_DeviceSelection_AllOrSummary", "全部/汇总");
+        => SelectedNetworkDevice is null
+            ? GetText("Navigation_DeviceSelection_AllOrSummary", "全部/汇总")
+            : FormatPlcIdentity(SelectedNetworkDevice.PlcCode, SelectedNetworkDevice.DeviceName);
 
     public ObservableCollection<IoStandardSignalOptionVm> StandardIoSignals { get; } = new();
     public ObservableCollection<IoStandardSignalOptionVm> StandardDataSignals { get; } = new();
@@ -749,9 +751,34 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
             return null;
         }
 
-        return IoMappingNetworkDevices.FirstOrDefault(device =>
-            string.Equals(device.DeviceName, selectedKey, StringComparison.OrdinalIgnoreCase));
+        var selectedPlcCode = _deviceSelectionService.SelectedPlcCode;
+        if (!string.IsNullOrWhiteSpace(selectedPlcCode))
+        {
+            var byPlcCode = IoMappingNetworkDevices
+                .Where(device => string.Equals(
+                    device.PlcCode,
+                    selectedPlcCode,
+                    StringComparison.OrdinalIgnoreCase))
+                .Take(2)
+                .ToArray();
+            return byPlcCode.Length == 1 ? byPlcCode[0] : null;
+        }
+
+        var byDeviceName = IoMappingNetworkDevices
+            .Where(device => string.Equals(
+                device.DeviceName,
+                selectedKey,
+                StringComparison.OrdinalIgnoreCase))
+            .Take(2)
+            .ToArray();
+        return byDeviceName.Length == 1 ? byDeviceName[0] : null;
     }
+
+    private static string FormatPlcIdentity(string? plcCode, string deviceName)
+        => string.IsNullOrWhiteSpace(plcCode)
+           || string.Equals(plcCode, deviceName, StringComparison.OrdinalIgnoreCase)
+            ? deviceName
+            : $"{plcCode} · {deviceName}";
 
     private void OnSharedDeviceSelectionChanged(object? sender, EventArgs e)
     {

@@ -49,9 +49,94 @@ public sealed class MonitorViewModelBehaviorTests
         await viewModel.OnDeactivatedAsync();
 
         Assert.Equal("PLC-A02", viewModel.SelectedDevice);
+        Assert.Equal("CODE-2 · PLC-A02", viewModel.SelectedDeviceDisplayName);
         Assert.Equal("B", Assert.Single(viewModel.DeviceDataRows).Value);
         Assert.Equal("PLC-A02", Assert.Single(viewModel.CellDebugItems).DeviceName);
         Assert.Equal("上传任务", Assert.Single(viewModel.StateMachineTaskItems).DisplayName);
+    }
+
+    [Fact]
+    public async Task OnActivatedAsync_WhenSharedSelectionUsesRealName_ShouldRetainStablePlcIdentity()
+    {
+        var selectionService = new DeviceSelectionService();
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("改名后的显示名", "CODE-2")
+        ]);
+        selectionService.SelectDevice("改名后的显示名");
+        var viewModel = CreateViewModel(
+            selectionService,
+            [
+                CreateSnapshot(1, "旧显示名"),
+                CreateSnapshot(2, "改名后的显示名", deviceDataValue: "stable")
+            ]);
+
+        await viewModel.OnActivatedAsync();
+        await viewModel.OnDeactivatedAsync();
+
+        Assert.Equal("改名后的显示名", viewModel.SelectedDevice);
+        Assert.Equal("CODE-2 · 改名后的显示名", viewModel.SelectedDeviceDisplayName);
+        Assert.Equal("stable", Assert.Single(viewModel.DeviceDataRows).Value);
+        Assert.Equal("改名后的显示名", selectionService.SelectedDeviceKey);
+        Assert.Equal("CODE-2", selectionService.SelectedPlcCode);
+    }
+
+    [Fact]
+    public async Task OnActivatedAsync_WhenOldNameIsReused_ShouldResolveSnapshotByStablePlcCode()
+    {
+        var selectionService = new DeviceSelectionService();
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("旧名称", "CODE-1")
+        ]);
+        selectionService.SelectDevice("旧名称");
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("新名称", "CODE-1"),
+            new PlcDeviceSelectionIdentity("旧名称", "CODE-2")
+        ]);
+        var viewModel = CreateViewModel(
+            selectionService,
+            [
+                CreateSnapshot(1, "新名称", deviceDataValue: "stable"),
+                CreateSnapshot(2, "旧名称", deviceDataValue: "reused-name")
+            ]);
+
+        await viewModel.OnActivatedAsync();
+        await viewModel.OnDeactivatedAsync();
+
+        Assert.Equal("新名称", viewModel.SelectedDevice);
+        Assert.Equal("stable", Assert.Single(viewModel.DeviceDataRows).Value);
+        Assert.Equal("旧名称", selectionService.SelectedDeviceKey);
+        Assert.Equal("CODE-1", selectionService.SelectedPlcCode);
+    }
+
+    [Fact]
+    public async Task OnActivatedAsync_WhenStablePlcIsMissingAndNameIsReused_ShouldKeepPhantomAndShowEmpty()
+    {
+        var selectionService = new DeviceSelectionService();
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("旧名称", "CODE-1")
+        ]);
+        selectionService.SelectDevice("旧名称");
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("旧名称", "CODE-2")
+        ]);
+        var viewModel = CreateViewModel(
+            selectionService,
+            [
+                CreateSnapshot(2, "旧名称", deviceDataValue: "reused-name")
+            ]);
+
+        await viewModel.OnActivatedAsync();
+        await viewModel.OnDeactivatedAsync();
+
+        Assert.Equal("旧名称", viewModel.SelectedDevice);
+        Assert.Empty(viewModel.DeviceDataRows);
+        Assert.Equal("CODE-1 · 旧名称", viewModel.SelectedDeviceDisplayName);
+        Assert.Equal("CODE-1", selectionService.SelectedPlcCode);
     }
 
     [Fact]
@@ -162,7 +247,10 @@ public sealed class MonitorViewModelBehaviorTests
             ],
             CloudSync: CreateCloudSync(),
             MesSync: CreateMesSync(),
-            ContextPersistence: new ProductionContextPersistenceDiagnostics(0, null));
+            ContextPersistence: new ProductionContextPersistenceDiagnostics(0, null))
+        {
+            PlcCode = $"CODE-{deviceId}"
+        };
 
     private static CloudSyncDiagnosticsSnapshot CreateCloudSync()
         => new(

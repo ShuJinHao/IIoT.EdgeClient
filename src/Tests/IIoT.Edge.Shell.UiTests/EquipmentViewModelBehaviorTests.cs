@@ -104,7 +104,7 @@ public sealed class EquipmentViewModelBehaviorTests
         Assert.Equal("未确定", viewModel.CurrentProcessDisplayName);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void CurrentProcessDisplayName_WhenLanguageChanges_ShouldRefreshModuleDisplayName()
     {
         var languageService = new TestAppLanguageService();
@@ -127,7 +127,7 @@ public sealed class EquipmentViewModelBehaviorTests
         Assert.Equal("TestPlugin", viewModel.CurrentProcessDisplayName);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void DeviceFilter_WhenLanguageChanges_ShouldRefreshAllSummaryDisplayWithoutChangingSelection()
     {
         var languageService = new TestAppLanguageService();
@@ -143,10 +143,149 @@ public sealed class EquipmentViewModelBehaviorTests
         Assert.Single(viewModel.DeviceFilters);
     }
 
+    [AvaloniaFact]
+    public async Task DeviceFilter_WhenDeviceIsRenamed_ShouldKeepRealNameKeyAndResolveStablePlcCode()
+    {
+        var panelService = new FakeEquipmentPanelService
+        {
+            HardwareSnapshots =
+            [
+                new HardwareSnapshot("旧名称", "192.168.1.10", "PLC", true)
+                {
+                    PlcCode = "P1-AP01"
+                }
+            ]
+        };
+        var selectionService = new DeviceSelectionService();
+        var viewModel = CreateViewModel(
+            [],
+            [],
+            equipmentPanelService: panelService,
+            deviceSelectionService: selectionService);
+
+        try
+        {
+            await viewModel.OnActivatedAsync();
+            viewModel.SelectedDeviceFilter = Assert.Single(
+                viewModel.DeviceFilters,
+                static option => option.Key == "旧名称");
+
+            Assert.Equal("旧名称", selectionService.SelectedDeviceKey);
+            Assert.Equal("P1-AP01", selectionService.SelectedPlcCode);
+            Assert.Equal("旧名称", viewModel.SelectedDeviceFilter?.Key);
+            Assert.Equal("P1-AP01 · 旧名称", viewModel.SelectedDeviceFilter?.DisplayName);
+
+            panelService.HardwareSnapshots =
+            [
+                new HardwareSnapshot("新名称", "192.168.1.10", "PLC", true)
+                {
+                    PlcCode = "P1-AP01"
+                }
+            ];
+
+            await viewModel.OnActivatedAsync();
+
+            Assert.Equal("旧名称", selectionService.SelectedDeviceKey);
+            Assert.Equal("P1-AP01", selectionService.SelectedPlcCode);
+            Assert.Equal("新名称", viewModel.SelectedDeviceFilter?.Key);
+            Assert.Equal("P1-AP01 · 新名称", viewModel.SelectedDeviceFilter?.DisplayName);
+            Assert.DoesNotContain(
+                viewModel.DeviceFilters,
+                static option => option.Key == "旧名称");
+            Assert.Equal(
+                ["新名称", "旧名称"],
+                selectionService.SelectedDeviceNameAliases);
+        }
+        finally
+        {
+            await viewModel.OnDeactivatedAsync();
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task DeviceFilter_WhenOldNameIsReused_ShouldKeepStablePlcSelectionUntilExplicitSwitch()
+    {
+        var panelService = new FakeEquipmentPanelService
+        {
+            HardwareSnapshots =
+            [
+                new HardwareSnapshot("旧名称", "192.168.1.10", "PLC", true)
+                {
+                    PlcCode = "P1-AP01"
+                }
+            ]
+        };
+        var selectionService = new DeviceSelectionService();
+        var viewModel = CreateViewModel(
+            [],
+            [],
+            equipmentPanelService: panelService,
+            deviceSelectionService: selectionService);
+
+        try
+        {
+            await viewModel.OnActivatedAsync();
+            viewModel.SelectedDeviceFilter = Assert.Single(
+                viewModel.DeviceFilters,
+                static option => option.Key == "旧名称");
+
+            panelService.HardwareSnapshots =
+            [
+                new HardwareSnapshot("新名称", "192.168.1.10", "PLC", true)
+                {
+                    PlcCode = "P1-AP01"
+                },
+                new HardwareSnapshot("旧名称", "192.168.1.11", "PLC", true)
+                {
+                    PlcCode = "P1-AP02"
+                }
+            ];
+
+            await viewModel.OnActivatedAsync();
+
+            Assert.Equal("旧名称", selectionService.SelectedDeviceKey);
+            Assert.Equal("P1-AP01", selectionService.SelectedPlcCode);
+            Assert.Equal("新名称", viewModel.SelectedDeviceFilter?.Key);
+            Assert.Equal("P1-AP01", viewModel.SelectedDeviceFilter?.PlcCode);
+            Assert.True(viewModel.SelectedDeviceFilter?.IsResolved);
+
+            panelService.HardwareSnapshots =
+            [
+                new HardwareSnapshot("旧名称", "192.168.1.11", "PLC", true)
+                {
+                    PlcCode = "P1-AP02"
+                }
+            ];
+
+            await viewModel.OnActivatedAsync();
+
+            Assert.Equal("旧名称", selectionService.SelectedDeviceKey);
+            Assert.Equal("P1-AP01", selectionService.SelectedPlcCode);
+            Assert.Equal("旧名称", viewModel.SelectedDeviceFilter?.Key);
+            Assert.Equal("P1-AP01", viewModel.SelectedDeviceFilter?.PlcCode);
+            Assert.False(viewModel.SelectedDeviceFilter?.IsResolved);
+
+            var reusedName = Assert.Single(
+                viewModel.DeviceFilters,
+                static option => option.IsResolved && option.PlcCode == "P1-AP02");
+            viewModel.SelectedDeviceFilter = reusedName;
+
+            Assert.Equal("旧名称", selectionService.SelectedDeviceKey);
+            Assert.Equal("P1-AP02", selectionService.SelectedPlcCode);
+            Assert.Same(reusedName, viewModel.SelectedDeviceFilter);
+        }
+        finally
+        {
+            await viewModel.OnDeactivatedAsync();
+        }
+    }
+
     private static EquipmentViewModel CreateViewModel(
         IEnumerable<MenuInfo> menus,
         IEnumerable<IEdgeProcessModule> processModules,
-        TestAppLanguageService? languageService = null)
+        TestAppLanguageService? languageService = null,
+        IEquipmentPanelService? equipmentPanelService = null,
+        DeviceSelectionService? deviceSelectionService = null)
     {
         var viewRegistry = new FakeViewRegistry();
         foreach (var menu in menus)
@@ -155,12 +294,12 @@ public sealed class EquipmentViewModelBehaviorTests
         }
 
         return new EquipmentViewModel(
-            new FakeEquipmentPanelService(),
+            equipmentPanelService ?? new FakeEquipmentPanelService(),
             new FakeRecipeService(),
             new FakeProductionPlanSelectionServiceResolver(),
             new FakeProductionPlanSelectionPopupService(),
             languageService ?? new TestAppLanguageService(),
-            new DeviceSelectionService(),
+            deviceSelectionService ?? new DeviceSelectionService(),
             viewRegistry,
             processModules);
     }
@@ -214,8 +353,10 @@ public sealed class EquipmentViewModelBehaviorTests
 
     private sealed class FakeEquipmentPanelService : IEquipmentPanelService
     {
+        public IReadOnlyList<HardwareSnapshot> HardwareSnapshots { get; set; } = [];
+
         public Task<List<HardwareSnapshot>> GetHardwareStatusAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(new List<HardwareSnapshot>());
+            => Task.FromResult(HardwareSnapshots.ToList());
 
         public Task<RecipeSnapshot?> GetRecipeSnapshotAsync(CancellationToken cancellationToken = default)
             => Task.FromResult<RecipeSnapshot?>(null);

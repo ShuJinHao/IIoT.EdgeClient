@@ -52,6 +52,7 @@ public sealed class CloudUploadDiagnosticsStore
                 LastReasonCode = normalizedReasonCode,
                 LastBlockedReason = isBlocked ? normalizedReasonCode : null,
                 LastProcessType = processType,
+                LastPlcCode = NormalizeIdentity(context?.PlcCode),
                 LastDeviceName = context?.DeviceName,
                 LastModuleId = context?.ModuleId,
                 LastTaskKey = context?.TaskKey,
@@ -76,6 +77,7 @@ public sealed class CloudUploadDiagnosticsStore
             LastReasonCode = normalizedReasonCode,
             LastBlockedReason = normalizedReason,
             LastProcessType = processType,
+            LastPlcCode = NormalizeIdentity(context?.PlcCode),
             LastDeviceName = context?.DeviceName,
             LastModuleId = context?.ModuleId,
             LastTaskKey = context?.TaskKey,
@@ -121,4 +123,7 @@ public sealed class CloudUploadDiagnosticsStore
 
     private static string NormalizeReason(string? reason, string fallback)
         => string.IsNullOrWhiteSpace(reason) ? fallback : reason.Trim();
+
+    private static string? NormalizeIdentity(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

@@ -127,7 +127,32 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
     public bool ShouldShowDeviceSelectionPrompt => HasDevices && IsDeviceSelectionRequired;
 
     public string SelectedDeviceDisplayName
-        => SelectedDevice ?? GetText("Navigation_DeviceSelection_AllOrSummary", "全部/汇总");
+    {
+        get
+        {
+            var snapshot = FindSelectedSnapshot();
+            if (snapshot is null)
+            {
+                var displayName = SelectedDevice
+                    ?? GetText("Navigation_DeviceSelection_AllOrSummary", "全部/汇总");
+                return string.IsNullOrWhiteSpace(_deviceSelectionService.SelectedPlcCode)
+                       || string.Equals(
+                           _deviceSelectionService.SelectedPlcCode,
+                           displayName,
+                           StringComparison.OrdinalIgnoreCase)
+                    ? displayName
+                    : $"{_deviceSelectionService.SelectedPlcCode} · {displayName}";
+            }
+
+            return string.IsNullOrWhiteSpace(snapshot.PlcCode)
+                   || string.Equals(
+                       snapshot.PlcCode,
+                       snapshot.DeviceName,
+                       StringComparison.OrdinalIgnoreCase)
+                ? snapshot.DeviceName
+                : $"{snapshot.PlcCode} · {snapshot.DeviceName}";
+        }
+    }
 
     private MonitorStatusItemVm _lastErrorItem = new(string.Empty, string.Empty);
 
@@ -296,7 +321,8 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
 
         ApplySelectedDeviceFromSharedSelection(MonitorViewModelSnapshotApplier.ResolveSelectedDevice(
             snapshots,
-            _deviceSelectionService.SelectedDeviceKey));
+            _deviceSelectionService.SelectedDeviceKey,
+            _deviceSelectionService.SelectedPlcCode));
 
         ApplySelectedSnapshot();
     }
@@ -322,7 +348,8 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
         {
             ApplySelectedDeviceFromSharedSelection(MonitorViewModelSnapshotApplier.ResolveSelectedDevice(
                 _lastSnapshots,
-                _deviceSelectionService.SelectedDeviceKey));
+                _deviceSelectionService.SelectedDeviceKey,
+                _deviceSelectionService.SelectedPlcCode));
             ApplySelectedSnapshot();
             return;
         }
@@ -332,7 +359,8 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
             {
                 ApplySelectedDeviceFromSharedSelection(MonitorViewModelSnapshotApplier.ResolveSelectedDevice(
                     _lastSnapshots,
-                    _deviceSelectionService.SelectedDeviceKey));
+                    _deviceSelectionService.SelectedDeviceKey,
+                    _deviceSelectionService.SelectedPlcCode));
                 ApplySelectedSnapshot();
             },
             DispatcherPriority.Background);
@@ -423,7 +451,10 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
     }
 
     private DeviceMonitorSnapshot? FindSelectedSnapshot()
-        => MonitorViewModelSnapshotApplier.FindSelectedSnapshot(_lastSnapshots, _selectedDevice);
+        => MonitorViewModelSnapshotApplier.FindSelectedSnapshot(
+            _lastSnapshots,
+            _selectedDevice,
+            _deviceSelectionService.SelectedPlcCode);
 
     private void ApplyStateMachineTaskItems(IReadOnlyList<MonitorStateMachineTaskItemViewModel> items)
     {
@@ -485,6 +516,7 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
 
     private void RaiseSnapshotPropertiesChanged()
     {
+        OnPropertyChanged(nameof(SelectedDeviceDisplayName));
         OnPropertyChanged(nameof(HasDevices));
         OnPropertyChanged(nameof(IsDevicesEmpty));
         OnPropertyChanged(nameof(ShouldShowDeviceSelectionPrompt));

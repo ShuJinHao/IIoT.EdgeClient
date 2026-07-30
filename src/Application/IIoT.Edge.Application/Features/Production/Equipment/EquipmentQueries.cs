@@ -4,6 +4,7 @@ using IIoT.Edge.Module.Contracts.Recipe;
 using IIoT.Edge.Module.Contracts.Time;
 using IIoT.Edge.Module.Contracts.UI;
 using IIoT.Edge.Application.Features.Hardware.Queries;
+using IIoT.Edge.Application.Common.Identity;
 using MediatR;
 
 namespace IIoT.Edge.Application.Features.Production.Equipment;
@@ -12,7 +13,10 @@ public record HardwareSnapshot(
     string Name,
     string Address,
     string DeviceType,
-    bool IsConnected);
+    bool IsConnected)
+{
+    public string PlcCode { get; init; } = string.Empty;
+}
 
 public record RecipeSnapshot(
     string RecipeName,
@@ -69,7 +73,10 @@ public class GetHardwareStatusHandler(
                     device.DeviceName,
                     device.IpAddress,
                     device.DeviceType.ToString(),
-                    isConnected);
+                    isConnected)
+                {
+                    PlcCode = device.PlcCode
+                };
             })
             .ToList();
     }
@@ -124,7 +131,7 @@ public class GetRecipeSnapshotHandler(IRecipeService recipeService)
 public class GetCapacitySnapshotHandler(
     IEnumerable<IModuleProductionRecordSummarySource> summarySources,
     IProductionTimeProvider productionTime,
-    IDeviceSelectionContext deviceSelectionContext)
+    IPlcDeviceSelectionContext deviceSelectionContext)
     : IRequestHandler<GetCapacitySnapshotQuery, CapacitySnapshot>
 {
     public async Task<CapacitySnapshot> Handle(
@@ -137,11 +144,14 @@ public class GetCapacitySnapshotHandler(
         var rangeStartUtc = EnsureUtc(productionTime.ToUtc(businessDayStart));
         var rangeEndUtc = EnsureUtc(productionTime.ToUtc(businessDayStart.AddDays(1)));
         var recentWindowStartUtc = utcNow.AddHours(-1);
+        var selectedIdentity = string.IsNullOrWhiteSpace(deviceSelectionContext.SelectedPlcCode)
+            ? deviceSelectionContext.SelectedDeviceKey
+            : deviceSelectionContext.SelectedPlcCode;
         var query = new ProductionRecordSummaryQuery(
             rangeStartUtc,
             rangeEndUtc,
             recentWindowStartUtc,
-            deviceSelectionContext.SelectedDeviceKey);
+            selectedIdentity);
         var summaries = new List<ModuleProductionRecordSummary>();
 
         foreach (var source in summarySources.OrderBy(

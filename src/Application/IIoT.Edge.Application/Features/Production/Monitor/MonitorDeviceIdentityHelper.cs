@@ -17,9 +17,11 @@ internal static class MonitorDeviceIdentityHelper
         => contexts.Any(context => MatchesDevice(context, runtimeStatus));
 
     public static string RuntimeStatusKey(PlcConnectionRuntimeSnapshot runtimeStatus)
-        => runtimeStatus.NetworkDeviceId > 0
+        => !string.IsNullOrWhiteSpace(runtimeStatus.PlcCode)
+            ? $"plc:{runtimeStatus.PlcCode}"
+            : runtimeStatus.NetworkDeviceId > 0
             ? $"id:{runtimeStatus.NetworkDeviceId.ToString(CultureInfo.InvariantCulture)}"
-            : $"name:{runtimeStatus.DeviceName}";
+            : "unresolved";
 
     public static bool HasMonitorSourceForConfiguredDevice(
         IReadOnlyCollection<ProductionContext> contexts,
@@ -29,18 +31,20 @@ internal static class MonitorDeviceIdentityHelper
             || runtimeStatuses.Any(runtimeStatus => MatchesDevice(runtimeStatus, device));
 
     public static string ConfiguredDeviceKey(NetworkDeviceEntity device)
-        => device.Id > 0
+        => !string.IsNullOrWhiteSpace(device.PlcCode)
+            ? $"plc:{device.PlcCode}"
+            : device.Id > 0
             ? $"id:{device.Id.ToString(CultureInfo.InvariantCulture)}"
-            : $"name:{device.DeviceName}";
+            : "unresolved";
 
     public static int ResolveNetworkDeviceId(
         int contextNetworkDeviceId,
         PlcConnectionRuntimeSnapshot? runtimeStatus,
         NetworkDeviceEntity? configuredDevice)
     {
-        if (contextNetworkDeviceId > 0)
+        if (configuredDevice?.Id > 0)
         {
-            return contextNetworkDeviceId;
+            return configuredDevice.Id;
         }
 
         if (runtimeStatus?.NetworkDeviceId > 0)
@@ -48,7 +52,7 @@ internal static class MonitorDeviceIdentityHelper
             return runtimeStatus.NetworkDeviceId;
         }
 
-        return configuredDevice?.Id ?? 0;
+        return contextNetworkDeviceId > 0 ? contextNetworkDeviceId : 0;
     }
 
     public static string ResolveDeviceName(
@@ -56,9 +60,9 @@ internal static class MonitorDeviceIdentityHelper
         PlcConnectionRuntimeSnapshot? runtimeStatus,
         NetworkDeviceEntity? configuredDevice)
     {
-        if (!string.IsNullOrWhiteSpace(contextDeviceName))
+        if (!string.IsNullOrWhiteSpace(configuredDevice?.DeviceName))
         {
-            return contextDeviceName;
+            return configuredDevice.DeviceName;
         }
 
         if (!string.IsNullOrWhiteSpace(runtimeStatus?.DeviceName))
@@ -66,15 +70,29 @@ internal static class MonitorDeviceIdentityHelper
             return runtimeStatus.DeviceName;
         }
 
-        if (!string.IsNullOrWhiteSpace(configuredDevice?.DeviceName))
+        if (!string.IsNullOrWhiteSpace(contextDeviceName))
         {
-            return configuredDevice.DeviceName;
+            return contextDeviceName;
         }
 
         return runtimeStatus?.NetworkDeviceId > 0
             ? runtimeStatus.NetworkDeviceId.ToString(CultureInfo.InvariantCulture)
             : "--";
     }
+
+    public static string ResolvePlcCode(
+        string? contextPlcCode,
+        PlcConnectionRuntimeSnapshot? runtimeStatus,
+        NetworkDeviceEntity? configuredDevice)
+        => new[]
+            {
+                contextPlcCode,
+                runtimeStatus?.PlcCode,
+                configuredDevice?.PlcCode
+            }
+            .FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value))
+            ?.Trim()
+            ?? string.Empty;
 
     public static string FormatEndpoint(NetworkDeviceEntity? device)
     {
@@ -105,8 +123,19 @@ internal static class MonitorDeviceIdentityHelper
     }
 
     private static bool MatchesDevice(IDeviceIdentifiable source, IDeviceIdentifiable target)
-        => (target.NetworkDeviceId > 0
-                && source.NetworkDeviceId == target.NetworkDeviceId)
-            || !string.IsNullOrWhiteSpace(source.DeviceName)
-                && string.Equals(source.DeviceName, target.DeviceName, StringComparison.OrdinalIgnoreCase);
+    {
+        if (source is IPlcIdentifiable sourcePlc
+            && target is IPlcIdentifiable targetPlc
+            && !string.IsNullOrWhiteSpace(sourcePlc.PlcCode)
+            && !string.IsNullOrWhiteSpace(targetPlc.PlcCode))
+        {
+            return string.Equals(
+                sourcePlc.PlcCode,
+                targetPlc.PlcCode,
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        return target.NetworkDeviceId > 0
+               && source.NetworkDeviceId == target.NetworkDeviceId;
+    }
 }

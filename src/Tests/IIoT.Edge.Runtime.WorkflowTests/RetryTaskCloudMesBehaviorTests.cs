@@ -375,12 +375,32 @@ public sealed class RetryTaskCloudMesBehaviorTests
         var integrationRegistry = new FakeProcessIntegrationRegistry();
         integrationRegistry.RegisterCloudUploader("OtherProcess", ProcessUploadMode.Batch);
 
-        var first = CreateFailedRecord(33, "Cloud", "Cloud", 0, "OtherProcess", new TestCellData { Barcode = "ST-33" });
-        first.NetworkDeviceId = 1001;
-        first.DeviceName = "PLC-A";
-        var second = CreateFailedRecord(34, "Cloud", "Cloud", 0, "OtherProcess", new TestCellData { Barcode = "ST-34" });
-        second.NetworkDeviceId = 1002;
-        second.DeviceName = "PLC-B";
+        var first = CreateFailedRecord(
+            33,
+            "Cloud",
+            "Cloud",
+            0,
+            "OtherProcess",
+            new TestCellData
+            {
+                Barcode = "ST-33",
+                DeviceCode = "PLC-A",
+                PlcDeviceId = 1001,
+                DeviceName = "PLC-A"
+            });
+        var second = CreateFailedRecord(
+            34,
+            "Cloud",
+            "Cloud",
+            0,
+            "OtherProcess",
+            new TestCellData
+            {
+                Barcode = "ST-34",
+                DeviceCode = "PLC-B",
+                PlcDeviceId = 1002,
+                DeviceName = "PLC-B"
+            });
         failedStore.PendingRecords.Add(first);
         failedStore.PendingRecords.Add(second);
 
@@ -572,6 +592,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         cloudFallbackStore.Records.Add(new CloudFallbackRecord
         {
             Id = 501,
+            PlcCode = "PLC-CLOUD-501",
             ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = SerializeCellData(new TestProcessCellData { Barcode = "CLOUD-501" }),
             FailedTarget = "Cloud",
@@ -602,6 +623,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         mesFallbackStore.Records.Add(new MesFallbackRecord
         {
             Id = 601,
+            PlcCode = "PLC-MES-601",
             ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = SerializeCellData(new TestProcessCellData { Barcode = "MES-601" }),
             FailedTarget = "MES",
@@ -666,6 +688,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         fallbackStore.Records.Add(new MesFallbackRecord
         {
             Id = 604,
+            PlcCode = "PLC-MES-604",
             ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = SerializeCellData(new TestProcessCellData { Barcode = "MES-604" }),
             FailedTarget = "MES",
@@ -732,6 +755,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         fallbackStore.Records.Add(new MesFallbackRecord
         {
             Id = 605,
+            PlcCode = "PLC-MES-605",
             ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = SerializeCellData(new TestProcessCellData { Barcode = "MES-605" }),
             FailedTarget = "MES",
@@ -790,6 +814,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         fallbackStore.Records.Add(new MesFallbackRecord
         {
             Id = 606,
+            PlcCode = "PLC-MES-606",
             ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = SerializeCellData(new TestProcessCellData { Barcode = "MES-606" }),
             FailedTarget = "MES",
@@ -870,6 +895,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         mesFallbackStore.Records.Add(new MesFallbackRecord
         {
             Id = 100,
+            PlcCode = "PLC-MES-100",
             ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = SerializeCellData(new TestProcessCellData { Barcode = "BC-MES-100", WorkOrderNo = "WO-MES-100" }),
             FailedTarget = "MES",
@@ -914,6 +940,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         cloudFallbackStore.Records.Add(new CloudFallbackRecord
         {
             Id = 901,
+            PlcCode = "PLC-CLOUD-901",
             ProcessType = "TestProcess",
             CellDataJson = SerializeCellData(new TestCellData { Barcode = "ST-901" }),
             FailedTarget = "Cloud",
@@ -951,6 +978,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         cloudFallbackStore.Records.Add(new CloudFallbackRecord
         {
             Id = 201,
+            PlcCode = "PLC-CLOUD-201",
             ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = SerializeCellData(new TestProcessCellData { Barcode = "BC-CLOUD-201", WorkOrderNo = "WO-201" }),
             FailedTarget = "Cloud",
@@ -1007,6 +1035,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         mesFallbackStore.Records.Add(new MesFallbackRecord
         {
             Id = 502,
+            PlcCode = "PLC-MES-502",
             ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = SerializeCellData(new TestProcessCellData { Barcode = "MES-502" }),
             FailedTarget = "MES",
@@ -1101,6 +1130,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         mesFallbackStore.Records.Add(new MesFallbackRecord
         {
             Id = 1001,
+            PlcCode = "PLC-MES-1001",
             ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = SerializeCellData(new TestProcessCellData { Barcode = "MES-1001", WorkOrderNo = "WO-1001" }),
             FailedTarget = "MES",
@@ -1157,6 +1187,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         cloudFallbackStore.Records.Add(new CloudFallbackRecord
         {
             Id = 201,
+            PlcCode = "PLC-CLOUD-201",
             ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = "{bad-json",
             FailedTarget = "Cloud",
@@ -1166,6 +1197,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         cloudFallbackStore.Records.Add(new CloudFallbackRecord
         {
             Id = 202,
+            PlcCode = "PLC-CLOUD-202",
             ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = SerializeCellData(new TestProcessCellData { Barcode = "BC-CLOUD-202", WorkOrderNo = "WO-202" }),
             FailedTarget = "Cloud",
@@ -1207,6 +1239,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         cloudFallbackStore.Records.Add(new CloudFallbackRecord
         {
             Id = 701,
+            PlcCode = "PLC-CLOUD-701",
             ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = "{bad-json",
             FailedTarget = "Cloud",
@@ -1236,6 +1269,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         mesFallbackStore.Records.Add(new MesFallbackRecord
         {
             Id = 801,
+            PlcCode = "PLC-MES-801",
             ProcessType = TestProcessCellData.ProcessTypeKey,
             CellDataJson = "{bad-json",
             FailedTarget = "MES",
@@ -1900,7 +1934,21 @@ public sealed class RetryTaskCloudMesBehaviorTests
         int retryCount,
         string processType,
         CellDataBase cellData)
-        => new()
+    {
+        var networkDeviceId = cellData.PlcDeviceId.GetValueOrDefault() > 0
+            ? cellData.PlcDeviceId!.Value
+            : checked((int)id);
+        var plcCode = string.IsNullOrWhiteSpace(cellData.DeviceCode)
+            ? "PLC-TEST"
+            : cellData.DeviceCode.Trim();
+        var deviceName = string.IsNullOrWhiteSpace(cellData.DeviceName)
+            ? "PLC-Test-Display"
+            : cellData.DeviceName.Trim();
+        cellData.DeviceCode = plcCode;
+        cellData.PlcDeviceId = networkDeviceId;
+        cellData.DeviceName = deviceName;
+
+        return new FailedCellRecord
         {
             Id = id,
             Channel = channel,
@@ -1910,8 +1958,15 @@ public sealed class RetryTaskCloudMesBehaviorTests
             ErrorMessage = "seed",
             RetryCount = retryCount,
             NextRetryTime = DateTime.UtcNow.AddMinutes(-1),
-            CreatedAt = DateTime.UtcNow.AddMinutes(-2)
+            CreatedAt = DateTime.UtcNow.AddMinutes(-2),
+            PlcCode = plcCode,
+            NetworkDeviceId = networkDeviceId,
+            DeviceName = deviceName,
+            ModuleId = "TestPluginBeta",
+            TaskKey = "TestPluginBeta.Realtime",
+            IdempotencyKeyVersion = CloudIdempotencyKeyVersion.LegacyV1
         };
+    }
 
     private static string SerializeCellData(CellDataBase cellData)
     {

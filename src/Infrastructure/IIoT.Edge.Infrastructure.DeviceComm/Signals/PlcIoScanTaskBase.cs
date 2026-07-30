@@ -101,7 +101,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
             MarkDisconnected("PLC 连接失败。");
             if (ShouldLogDisconnect())
             {
-                _logger.Warn($"[{_device.DeviceName}] PLC 连接失败，进入退避重试。");
+                _logger.Warn($"[PlcCode={_device.PlcCode}] PLC 连接失败，进入退避重试。");
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -111,7 +111,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         catch (PlcServiceQuarantinedException ex)
         {
             MarkRuntimeFault(ex.Message);
-            _logger.Error($"[{_device.DeviceName}] PLC service 已隔离：{ex.Message}");
+            _logger.Error($"[PlcCode={_device.PlcCode}] PLC service 已隔离：{ex.Message}");
             throw;
         }
         catch (Exception ex)
@@ -121,7 +121,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
             MarkDisconnected(ex.Message);
             if (ShouldLogDisconnect())
             {
-                _logger.Error($"[{_device.DeviceName}] PLC 连接异常：{ex.Message}");
+                _logger.Error($"[PlcCode={_device.PlcCode}] PLC 连接异常：{ex.Message}");
             }
         }
     }
@@ -206,7 +206,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
             catch (PlcServiceQuarantinedException ex)
             {
                 MarkRuntimeFault(ex.Message);
-                _logger.Error($"[{_device.DeviceName}] PLC service 已隔离，扫描任务已停止：{ex.Message}");
+                _logger.Error($"[PlcCode={_device.PlcCode}] PLC service 已隔离，扫描任务已停止：{ex.Message}");
                 break;
             }
             catch (Exception ex)
@@ -214,7 +214,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
                 _retryCount++;
                 if (ShouldLogDisconnect())
                 {
-                    _logger.Error($"[{_device.DeviceName}] PLC 信号交互循环异常：{ex.Message}");
+                    _logger.Error($"[PlcCode={_device.PlcCode}] PLC 信号交互循环异常：{ex.Message}");
                 }
 
                 await Task.Delay(GetBackoffDelay(), ct).ConfigureAwait(false);
@@ -322,7 +322,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
             return;
         }
 
-        _logger.Info($"[{_device.DeviceName}] PLC 连接已恢复。");
+        _logger.Info($"[PlcCode={_device.PlcCode}] PLC 连接已恢复。");
         _lastDisconnectLogTime = DateTime.MinValue;
         _retryCount = 0;
     }
@@ -371,7 +371,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
                 if (ShouldLogDisconnect())
                 {
                     _logger.Error(
-                        $"[PLC-{_device.DeviceName}][交互] PLC 写入失败，地址={block.StartAddress}，长度={block.WordCount}，失败类型={(isTransportFailure ? "Transport" : "Request")}，原因={FormatException(ex)}；待写 buffer 保持未消费。");
+                        $"[PlcCode={_device.PlcCode}][交互] PLC 写入失败，地址={block.StartAddress}，长度={block.WordCount}，失败类型={(isTransportFailure ? "Transport" : "Request")}，原因={FormatException(ex)}；待写 buffer 保持未消费。");
                 }
 
                 if (isTransportFailure)
@@ -402,7 +402,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         }
 
         _logger.Error(
-            $"[PLC-{_device.DeviceName}][交互] PLC 读取 block 失败，地址={block.StartAddress}，长度={block.WordCount}，失败类型={(isTransportFailure ? "Transport" : "Request")}，原因={FormatException(exception)}；受影响信号已发布默认值与失败质量，未执行单信号重读。");
+            $"[PlcCode={_device.PlcCode}][交互] PLC 读取 block 失败，地址={block.StartAddress}，长度={block.WordCount}，失败类型={(isTransportFailure ? "Transport" : "Request")}，原因={FormatException(exception)}；受影响信号已发布默认值与失败质量，未执行单信号重读。");
     }
 
     private async Task HandleTransportFailureAsync(
@@ -431,7 +431,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         catch (Exception disconnectException)
         {
             _logger.Error(
-                $"[PLC-{_device.DeviceName}][交互] transport 故障后的连接释放失败：{FormatException(disconnectException)}");
+                $"[PlcCode={_device.PlcCode}][交互] transport 故障后的连接释放失败：{FormatException(disconnectException)}");
         }
     }
 
@@ -575,7 +575,10 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
 /// <summary>
 /// PLC IO 扫描任务绑定的设备信息。
 /// </summary>
-public sealed record PlcIoScanDevice(int DeviceId, string DeviceName, PlcEndpoint Endpoint);
+public sealed record PlcIoScanDevice(int DeviceId, string DeviceName, PlcEndpoint Endpoint)
+{
+    public string PlcCode { get; init; } = string.Empty;
+}
 
 /// <summary>
 /// PLC IO 扫描任务使用的数据库映射快照。

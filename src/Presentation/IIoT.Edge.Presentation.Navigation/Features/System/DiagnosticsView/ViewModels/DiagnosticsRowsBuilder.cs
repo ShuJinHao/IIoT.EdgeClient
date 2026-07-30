@@ -10,8 +10,6 @@ using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using IIoT.Edge.UI.Shared.Localization;
-using System.Text.Json;
-
 using IIoT.Edge.Module.Contracts.Cloud;
 namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 
@@ -38,7 +36,8 @@ internal sealed class DiagnosticsRowsBuilder(
         var cloudDeadLetters = BuildDeadLetters(DataPipelineRetryChannel.Cloud, syncDiagnostics.Cloud.DeadLetters?.LatestRecords);
         var mesDeadLetters = BuildDeadLetters(DataPipelineRetryChannel.Mes, syncDiagnostics.Mes.DeadLetters?.LatestRecords);
         var issues = BuildIssues(report);
-        var visibleIssueCount = report.Issues.Count(x => ShouldIncludeDeviceScopedRow(x.DeviceName));
+        var visibleIssueCount = report.Issues.Count(x =>
+            ShouldIncludeDeviceScopedRow(x.PlcCode, x.DeviceName));
 
         return new DiagnosticsRowsSnapshot(
             BuildModuleRegistrations(report, moduleNameMap),
@@ -82,9 +81,9 @@ internal sealed class DiagnosticsRowsBuilder(
 
     private IReadOnlyList<DeviceModuleBindingRow> BuildDeviceBindings(StartupDiagnosticsReport report)
         => report.DeviceBindings
-            .Where(x => ShouldIncludeDeviceScopedRow(x.DeviceName))
+            .Where(x => ShouldIncludeDeviceScopedRow(x.PlcCode, x.DeviceName))
             .Select(x => new DeviceModuleBindingRow(
-                x.DeviceName,
+                FormatPlcIdentity(x.PlcCode, x.DeviceName),
                 DiagnosticsTextNormalizer.Normalize(x.ModuleId),
                 x.ModuleExists,
                 x.ModuleEnabled,
@@ -102,7 +101,7 @@ internal sealed class DiagnosticsRowsBuilder(
             .GroupBy(x => NormalizeModuleId(x.ModuleId), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
         var bindings = report.DeviceBindings
-            .Where(x => ShouldIncludeDeviceScopedRow(x.DeviceName))
+            .Where(x => ShouldIncludeDeviceScopedRow(x.PlcCode, x.DeviceName))
             .GroupBy(x => NormalizeModuleId(x.ModuleId), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.ToArray(), StringComparer.OrdinalIgnoreCase);
         var moduleIds = pluginStates.Keys
@@ -127,7 +126,9 @@ internal sealed class DiagnosticsRowsBuilder(
                     ? "--"
                     : string.Join(
                         GetText("Navigation_ListSeparator", "、"),
-                        bindingRows.Select(x => DiagnosticsTextNormalizer.Normalize(x.DeviceName)).Distinct(StringComparer.OrdinalIgnoreCase));
+                        bindingRows
+                            .Select(x => FormatPlcIdentity(x.PlcCode, x.DeviceName))
+                            .Distinct(StringComparer.OrdinalIgnoreCase));
 
                 return new ModuleReadinessRow(
                     moduleId,
@@ -154,7 +155,7 @@ internal sealed class DiagnosticsRowsBuilder(
     private IReadOnlyList<StartupDiagnosticIssueRow> BuildIssues(StartupDiagnosticsReport report)
     {
         var issueRows = report.Issues
-            .Where(x => ShouldIncludeDeviceScopedRow(x.DeviceName))
+            .Where(x => ShouldIncludeDeviceScopedRow(x.PlcCode, x.DeviceName))
             .Select(x => new StartupDiagnosticIssueCandidate(
                 NormalizeIssueMessage(DiagnosticsTextNormalizer.Normalize(x.Message)),
                 EdgeVisualStatus.Error,
@@ -183,10 +184,14 @@ internal sealed class DiagnosticsRowsBuilder(
     private static string NormalizeIssueMessage(string message)
     {
         var normalized = message;
-        var signalIndex = normalized.IndexOf("信号 ", StringComparison.Ordinal);
-        if (signalIndex > 0)
+        if (!normalized.Contains("PlcCode=", StringComparison.OrdinalIgnoreCase)
+            && !normalized.Contains("TaskKey=", StringComparison.OrdinalIgnoreCase))
         {
-            normalized = normalized[signalIndex..];
+            var signalIndex = normalized.IndexOf("信号 ", StringComparison.Ordinal);
+            if (signalIndex > 0)
+            {
+                normalized = normalized[signalIndex..];
+            }
         }
 
         return normalized.Replace(" PLC 地址", " 地址", StringComparison.Ordinal);
@@ -197,7 +202,7 @@ internal sealed class DiagnosticsRowsBuilder(
         EdgeVisualStatus Status,
         string LevelText);
 
-    private bool ShouldIncludeDeviceScopedRow(string? deviceName)
+    private bool ShouldIncludeDeviceScopedRow(string? plcCode, string? deviceName)
     {
         var selectedKey = deviceSelectionService.SelectedDeviceKey;
         if (string.Equals(selectedKey, IDeviceSelectionService.AllFilterKey, StringComparison.OrdinalIgnoreCase))
@@ -205,21 +210,24 @@ internal sealed class DiagnosticsRowsBuilder(
             return true;
         }
 
-        if (string.IsNullOrWhiteSpace(deviceName))
+        if (string.IsNullOrWhiteSpace(plcCode))
         {
             return true;
         }
 
-        return string.Equals(deviceName.Trim(), selectedKey, StringComparison.OrdinalIgnoreCase);
+        var selectedPlcCode = deviceSelectionService.SelectedPlcCode;
+        return !string.IsNullOrWhiteSpace(selectedPlcCode)
+            ? string.Equals(plcCode?.Trim(), selectedPlcCode, StringComparison.OrdinalIgnoreCase)
+            : string.Equals(deviceName?.Trim(), selectedKey, StringComparison.OrdinalIgnoreCase);
     }
 
     private IReadOnlyList<MesChannelDiagnosticsRow> BuildMesUploadDiagnostics(
         EdgeSyncDiagnosticsSnapshot syncDiagnostics)
         => syncDiagnostics.Mes.Channels
-            .Where(x => ShouldIncludeDeviceScopedRow(x.DeviceName))
+            .Where(x => ShouldIncludeDeviceScopedRow(x.PlcCode, x.DeviceName))
             .Select(x => new MesChannelDiagnosticsRow(
                 displayNameResolver.ResolveProcessDisplayName(x.ProcessType, x.ProcessDisplayName),
-                DiagnosticsTextNormalizer.Normalize(x.DeviceName),
+                FormatPlcIdentity(x.PlcCode, x.DeviceName),
                 DiagnosticsTextNormalizer.Normalize(ResolveMesScenario(x)),
                 diagnosticsText.FormatMesChannelResult(x.LastResult),
                 diagnosticsText.FormatTimestamp(x.LastAttemptAt),
@@ -368,13 +376,14 @@ internal sealed class DiagnosticsRowsBuilder(
                 diagnosticsText.FormatBlockReason(cloud.BlockReason));
         }
 
-        if (!string.IsNullOrWhiteSpace(cloud.LastDeviceName)
+        if (!string.IsNullOrWhiteSpace(cloud.LastPlcCode)
+            || !string.IsNullOrWhiteSpace(cloud.LastDeviceName)
             || !string.IsNullOrWhiteSpace(cloud.LastScenario))
         {
             return FormatText(
                 "Navigation_Diagnostics_SyncCloudLastContextFormat",
                 "最近：PLC={0}，场景={1}",
-                DiagnosticsTextNormalizer.Normalize(cloud.LastDeviceName),
+                FormatPlcIdentity(cloud.LastPlcCode, cloud.LastDeviceName),
                 DiagnosticsTextNormalizer.Normalize(cloud.LastScenario));
         }
 
@@ -428,49 +437,30 @@ internal sealed class DiagnosticsRowsBuilder(
             return true;
         }
 
-        var deviceName = TryReadDeviceName(record.CellDataJson);
-        if (string.IsNullOrWhiteSpace(deviceName))
+        if (string.IsNullOrWhiteSpace(record.PlcCode))
         {
             return true;
         }
 
-        return string.Equals(deviceName, selectedKey, StringComparison.OrdinalIgnoreCase);
+        var selectedPlcCode = deviceSelectionService.SelectedPlcCode;
+        return !string.IsNullOrWhiteSpace(selectedPlcCode)
+            ? string.Equals(record.PlcCode.Trim(), selectedPlcCode, StringComparison.OrdinalIgnoreCase)
+            : string.Equals(record.DeviceName.Trim(), selectedKey, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string? TryReadDeviceName(string? cellDataJson)
+    private static string FormatPlcIdentity(string? plcCode, string? deviceName)
     {
-        if (string.IsNullOrWhiteSpace(cellDataJson))
+        var normalizedCode = DiagnosticsTextNormalizer.Normalize(plcCode);
+        var normalizedName = DiagnosticsTextNormalizer.Normalize(deviceName);
+        if (normalizedCode == "--")
         {
-            return null;
+            return normalizedName;
         }
 
-        try
-        {
-            using var document = JsonDocument.Parse(cellDataJson);
-            if (document.RootElement.ValueKind != JsonValueKind.Object)
-            {
-                return null;
-            }
-
-            return TryGetStringProperty(document.RootElement, "deviceName")
-                   ?? TryGetStringProperty(document.RootElement, "DeviceName");
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
-    private static string? TryGetStringProperty(JsonElement root, string propertyName)
-    {
-        if (!root.TryGetProperty(propertyName, out var value)
-            || value.ValueKind != JsonValueKind.String)
-        {
-            return null;
-        }
-
-        var text = value.GetString();
-        return string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+        return normalizedName == "--"
+               || string.Equals(normalizedCode, normalizedName, StringComparison.OrdinalIgnoreCase)
+            ? normalizedCode
+            : $"{normalizedCode} · {normalizedName}";
     }
 
     private string GetText(string key, string fallback)
