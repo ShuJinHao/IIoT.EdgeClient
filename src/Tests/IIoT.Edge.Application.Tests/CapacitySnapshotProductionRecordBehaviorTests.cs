@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Common.Identity;
 using IIoT.Edge.Application.Features.Production.Equipment;
 using IIoT.Edge.Module.Contracts.Production;
 using IIoT.Edge.Module.Contracts.UI;
@@ -84,6 +85,30 @@ public sealed class CapacitySnapshotProductionRecordBehaviorTests
         Assert.Equal(0, result.RecentHourOutput);
     }
 
+    [Fact]
+    public async Task Handler_WhenStablePlcCodeIsAvailable_ShouldUseItForProductionSummarySelection()
+    {
+        var time = new FakeProductionTimeProvider
+        {
+            FixedUtcNow = new DateTime(2026, 7, 25, 1, 30, 0, DateTimeKind.Utc)
+        };
+        var source = new FakeSummarySource(
+            "AP",
+            new ModuleProductionRecordSummary(0, 0, 0, 0, 0, 0, string.Empty));
+        var handler = new GetCapacitySnapshotHandler(
+            [source],
+            time,
+            new FakeSelectionContext("旧显示名", "P1-AP01"));
+
+        await handler.Handle(
+            new GetCapacitySnapshotQuery(),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            "P1-AP01",
+            Assert.IsType<ProductionRecordSummaryQuery>(source.LastQuery).SelectedDeviceKey);
+    }
+
     private sealed class FakeSummarySource(
         string moduleId,
         ModuleProductionRecordSummary summary)
@@ -102,9 +127,13 @@ public sealed class CapacitySnapshotProductionRecordBehaviorTests
         }
     }
 
-    private sealed class FakeSelectionContext(string selectedDeviceKey) : IDeviceSelectionContext
+    private sealed class FakeSelectionContext(
+        string selectedDeviceKey,
+        string? selectedPlcCode = null) : IPlcDeviceSelectionContext
     {
         public string SelectedDeviceKey { get; } = selectedDeviceKey;
+
+        public string? SelectedPlcCode { get; } = selectedPlcCode;
 
         public bool IsAllSelected => string.Equals(
             SelectedDeviceKey,

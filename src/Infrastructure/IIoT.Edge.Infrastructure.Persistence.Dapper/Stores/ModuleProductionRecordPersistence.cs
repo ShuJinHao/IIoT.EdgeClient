@@ -442,18 +442,6 @@ public sealed partial class ModuleProductionRecordPersistence(
         var devices = await networkDevices.GetListAsync(
             static device => device.DeviceType == DeviceType.PLC,
             cancellationToken).ConfigureAwait(false);
-        var nameMatches = devices
-            .Where(device => string.Equals(
-                device.DeviceName,
-                normalized,
-                StringComparison.OrdinalIgnoreCase))
-            .Take(2)
-            .ToArray();
-        if (nameMatches.Length == 1 && !string.IsNullOrWhiteSpace(nameMatches[0].PlcCode))
-        {
-            return SelectionResolution.Success(nameMatches[0].PlcCode.Trim());
-        }
-
         var codeMatches = devices
             .Where(device => string.Equals(
                 device.PlcCode,
@@ -461,8 +449,22 @@ public sealed partial class ModuleProductionRecordPersistence(
                 StringComparison.OrdinalIgnoreCase))
             .Take(2)
             .ToArray();
-        return codeMatches.Length == 1
-            ? SelectionResolution.Success(codeMatches[0].PlcCode.Trim())
+        if (codeMatches.Length > 0)
+        {
+            return codeMatches.Length == 1
+                ? SelectionResolution.Success(codeMatches[0].PlcCode.Trim())
+                : SelectionResolution.Blocked(normalized);
+        }
+
+        var nameMatches = devices
+            .Where(device => string.Equals(
+                device.DeviceName,
+                normalized,
+                StringComparison.OrdinalIgnoreCase))
+            .Take(2)
+            .ToArray();
+        return nameMatches.Length == 1 && !string.IsNullOrWhiteSpace(nameMatches[0].PlcCode)
+            ? SelectionResolution.Success(nameMatches[0].PlcCode.Trim())
             : SelectionResolution.Blocked(normalized);
     }
 

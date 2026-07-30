@@ -82,6 +82,64 @@ public sealed class MonitorViewModelBehaviorTests
     }
 
     [Fact]
+    public async Task OnActivatedAsync_WhenOldNameIsReused_ShouldResolveSnapshotByStablePlcCode()
+    {
+        var selectionService = new DeviceSelectionService();
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("旧名称", "CODE-1")
+        ]);
+        selectionService.SelectDevice("旧名称");
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("新名称", "CODE-1"),
+            new PlcDeviceSelectionIdentity("旧名称", "CODE-2")
+        ]);
+        var viewModel = CreateViewModel(
+            selectionService,
+            [
+                CreateSnapshot(1, "新名称", deviceDataValue: "stable"),
+                CreateSnapshot(2, "旧名称", deviceDataValue: "reused-name")
+            ]);
+
+        await viewModel.OnActivatedAsync();
+        await viewModel.OnDeactivatedAsync();
+
+        Assert.Equal("新名称", viewModel.SelectedDevice);
+        Assert.Equal("stable", Assert.Single(viewModel.DeviceDataRows).Value);
+        Assert.Equal("旧名称", selectionService.SelectedDeviceKey);
+        Assert.Equal("CODE-1", selectionService.SelectedPlcCode);
+    }
+
+    [Fact]
+    public async Task OnActivatedAsync_WhenStablePlcIsMissingAndNameIsReused_ShouldKeepPhantomAndShowEmpty()
+    {
+        var selectionService = new DeviceSelectionService();
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("旧名称", "CODE-1")
+        ]);
+        selectionService.SelectDevice("旧名称");
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("旧名称", "CODE-2")
+        ]);
+        var viewModel = CreateViewModel(
+            selectionService,
+            [
+                CreateSnapshot(2, "旧名称", deviceDataValue: "reused-name")
+            ]);
+
+        await viewModel.OnActivatedAsync();
+        await viewModel.OnDeactivatedAsync();
+
+        Assert.Equal("旧名称", viewModel.SelectedDevice);
+        Assert.Empty(viewModel.DeviceDataRows);
+        Assert.Equal("CODE-1 · 旧名称", viewModel.SelectedDeviceDisplayName);
+        Assert.Equal("CODE-1", selectionService.SelectedPlcCode);
+    }
+
+    [Fact]
     public async Task SelectedDevice_WhenSetInsideMonitorPage_ShouldNotWriteSharedSelection()
     {
         var selectionService = new DeviceSelectionService();

@@ -17,6 +17,20 @@ internal static class MonitorViewModelSnapshotApplier
         }
 
         var selectedKey = selectedDevice.Trim();
+        if (!string.IsNullOrWhiteSpace(selectedPlcCode))
+        {
+            var byPlcCode = snapshots
+                .Where(snapshot => string.Equals(
+                    snapshot.PlcCode,
+                    selectedPlcCode.Trim(),
+                    StringComparison.OrdinalIgnoreCase))
+                .Take(2)
+                .ToArray();
+            return byPlcCode.Length == 1
+                ? byPlcCode[0].DeviceName
+                : selectedKey;
+        }
+
         var byDeviceName = snapshots
             .Where(snapshot => string.Equals(
                 snapshot.DeviceName,
@@ -29,6 +43,20 @@ internal static class MonitorViewModelSnapshotApplier
             return byDeviceName[0].DeviceName;
         }
 
+        return selectedKey;
+    }
+
+    public static DeviceMonitorSnapshot? FindSelectedSnapshot(
+        IReadOnlyList<DeviceMonitorSnapshot> snapshots,
+        string? selectedDevice,
+        string? selectedPlcCode = null)
+    {
+        if (string.IsNullOrWhiteSpace(selectedDevice))
+        {
+            return null;
+        }
+
+        var selectedKey = selectedDevice.Trim();
         if (!string.IsNullOrWhiteSpace(selectedPlcCode))
         {
             var byPlcCode = snapshots
@@ -38,25 +66,9 @@ internal static class MonitorViewModelSnapshotApplier
                     StringComparison.OrdinalIgnoreCase))
                 .Take(2)
                 .ToArray();
-            if (byPlcCode.Length == 1)
-            {
-                return byPlcCode[0].DeviceName;
-            }
+            return byPlcCode.Length == 1 ? byPlcCode[0] : null;
         }
 
-        return selectedKey;
-    }
-
-    public static DeviceMonitorSnapshot? FindSelectedSnapshot(
-        IReadOnlyList<DeviceMonitorSnapshot> snapshots,
-        string? selectedDevice)
-    {
-        if (string.IsNullOrWhiteSpace(selectedDevice))
-        {
-            return null;
-        }
-
-        var selectedKey = selectedDevice.Trim();
         var byDeviceName = snapshots
             .Where(snapshot => string.Equals(
                 snapshot.DeviceName,

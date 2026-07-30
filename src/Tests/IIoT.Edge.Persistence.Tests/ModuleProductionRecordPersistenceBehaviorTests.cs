@@ -322,6 +322,141 @@ public sealed class ModuleProductionRecordPersistenceBehaviorTests
         }
     }
 
+    [Fact]
+    public async Task Query_WhenAnotherDeviceNameEqualsSelectedPlcCode_ShouldPreferStableCode()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var selectedDevice = NetworkDeviceEntity.Create(
+                    "改名后的显示名",
+                    DeviceType.PLC,
+                    "127.0.0.1",
+                    6001,
+                    "P1-AP01")
+                .WithId(8);
+            var collidingDevice = NetworkDeviceEntity.Create(
+                    "P1-AP01",
+                    DeviceType.PLC,
+                    "127.0.0.2",
+                    6001,
+                    "P1-AP02")
+                .WithId(9);
+            var store = CreateStore(tempDirectory, [selectedDevice, collidingDevice]);
+            await store.AddAsync(
+                CreateEntry(
+                    "AP",
+                    "STABLE-CODE",
+                    "P1-AP01",
+                    "历史显示名",
+                    "AP.ClipScan.MG1",
+                    "MG1",
+                    "STABLE-CODE-CLIP",
+                    DayStartUtc.AddMinutes(2),
+                    quantity: 3),
+                TestContext.Current.CancellationToken);
+            await store.AddAsync(
+                CreateEntry(
+                    "AP",
+                    "COLLIDING-NAME",
+                    "P1-AP02",
+                    "P1-AP01",
+                    "AP.ClipScan.MG1",
+                    "MG1",
+                    "COLLIDING-NAME-CLIP",
+                    DayStartUtc.AddMinutes(3),
+                    quantity: 4),
+                TestContext.Current.CancellationToken);
+
+            var rows = await store.QueryAsync(
+                new ModuleProductionRecordQuery(
+                    "AP",
+                    DayStartUtc,
+                    DayStartUtc.AddDays(1),
+                    "P1-AP01"),
+                TestContext.Current.CancellationToken);
+
+            var row = Assert.Single(rows);
+            Assert.Equal("STABLE-CODE-CLIP", row.RecordCode);
+            Assert.Equal("P1-AP01", row.PlcCode);
+        }
+        finally
+        {
+            DeleteTempDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task Query_WhenSelectedPlcCodeIsDuplicated_ShouldFailClosedWithoutNameFallback()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var firstDuplicate = NetworkDeviceEntity.Create(
+                    "一号设备",
+                    DeviceType.PLC,
+                    "127.0.0.1",
+                    6001,
+                    "PLC-DUP")
+                .WithId(8);
+            var secondDuplicate = NetworkDeviceEntity.Create(
+                    "二号设备",
+                    DeviceType.PLC,
+                    "127.0.0.2",
+                    6001,
+                    "PLC-DUP")
+                .WithId(9);
+            var collidingName = NetworkDeviceEntity.Create(
+                    "PLC-DUP",
+                    DeviceType.PLC,
+                    "127.0.0.3",
+                    6001,
+                    "PLC-OTHER")
+                .WithId(10);
+            var store = CreateStore(
+                tempDirectory,
+                [firstDuplicate, secondDuplicate, collidingName]);
+            await store.AddAsync(
+                CreateEntry(
+                    "AP",
+                    "DUPLICATE-CODE",
+                    "PLC-DUP",
+                    "一号设备",
+                    "AP.ClipScan.MG1",
+                    "MG1",
+                    "DUPLICATE-CODE-CLIP",
+                    DayStartUtc.AddMinutes(2),
+                    quantity: 3),
+                TestContext.Current.CancellationToken);
+            await store.AddAsync(
+                CreateEntry(
+                    "AP",
+                    "COLLIDING-NAME-FALLBACK",
+                    "PLC-OTHER",
+                    "PLC-DUP",
+                    "AP.ClipScan.MG1",
+                    "MG1",
+                    "COLLIDING-NAME-FALLBACK-CLIP",
+                    DayStartUtc.AddMinutes(3),
+                    quantity: 4),
+                TestContext.Current.CancellationToken);
+
+            var rows = await store.QueryAsync(
+                new ModuleProductionRecordQuery(
+                    "AP",
+                    DayStartUtc,
+                    DayStartUtc.AddDays(1),
+                    "PLC-DUP"),
+                TestContext.Current.CancellationToken);
+
+            Assert.Empty(rows);
+        }
+        finally
+        {
+            DeleteTempDirectory(tempDirectory);
+        }
+    }
+
     private static ModuleProductionRecordPersistence CreateStore(
         string tempDirectory,
         IReadOnlyCollection<NetworkDeviceEntity>? devices = null)

@@ -3,11 +3,9 @@ using IIoT.Edge.Application.Common.Identity;
 
 namespace IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 
-public interface IDeviceSelectionService : IDeviceSelectionContext
+public interface IDeviceSelectionService : IPlcDeviceSelectionContext
 {
     new const string AllFilterKey = IDeviceSelectionContext.AllFilterKey;
-
-    string? SelectedPlcCode { get; }
 
     IReadOnlyList<string> SelectedDeviceNameAliases { get; }
 
@@ -183,6 +181,8 @@ public sealed record PlcDeviceSelectionIdentity(string DeviceName, string PlcCod
 public sealed record DeviceSelectionOption(string Key, string DisplayName)
 {
     public string PlcCode { get; init; } = string.Empty;
+
+    public bool IsResolved { get; init; } = true;
 
     public override string ToString() => DisplayName;
 }

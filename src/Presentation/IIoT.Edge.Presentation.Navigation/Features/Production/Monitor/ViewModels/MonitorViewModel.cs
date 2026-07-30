@@ -133,7 +133,15 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
             var snapshot = FindSelectedSnapshot();
             if (snapshot is null)
             {
-                return SelectedDevice ?? GetText("Navigation_DeviceSelection_AllOrSummary", "全部/汇总");
+                var displayName = SelectedDevice
+                    ?? GetText("Navigation_DeviceSelection_AllOrSummary", "全部/汇总");
+                return string.IsNullOrWhiteSpace(_deviceSelectionService.SelectedPlcCode)
+                       || string.Equals(
+                           _deviceSelectionService.SelectedPlcCode,
+                           displayName,
+                           StringComparison.OrdinalIgnoreCase)
+                    ? displayName
+                    : $"{_deviceSelectionService.SelectedPlcCode} · {displayName}";
             }
 
             return string.IsNullOrWhiteSpace(snapshot.PlcCode)
@@ -443,7 +451,10 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
     }
 
     private DeviceMonitorSnapshot? FindSelectedSnapshot()
-        => MonitorViewModelSnapshotApplier.FindSelectedSnapshot(_lastSnapshots, _selectedDevice);
+        => MonitorViewModelSnapshotApplier.FindSelectedSnapshot(
+            _lastSnapshots,
+            _selectedDevice,
+            _deviceSelectionService.SelectedPlcCode);
 
     private void ApplyStateMachineTaskItems(IReadOnlyList<MonitorStateMachineTaskItemViewModel> items)
     {

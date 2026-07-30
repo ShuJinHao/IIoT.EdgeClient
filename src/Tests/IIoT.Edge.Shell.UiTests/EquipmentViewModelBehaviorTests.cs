@@ -202,6 +202,84 @@ public sealed class EquipmentViewModelBehaviorTests
         }
     }
 
+    [AvaloniaFact]
+    public async Task DeviceFilter_WhenOldNameIsReused_ShouldKeepStablePlcSelectionUntilExplicitSwitch()
+    {
+        var panelService = new FakeEquipmentPanelService
+        {
+            HardwareSnapshots =
+            [
+                new HardwareSnapshot("旧名称", "192.168.1.10", "PLC", true)
+                {
+                    PlcCode = "P1-AP01"
+                }
+            ]
+        };
+        var selectionService = new DeviceSelectionService();
+        var viewModel = CreateViewModel(
+            [],
+            [],
+            equipmentPanelService: panelService,
+            deviceSelectionService: selectionService);
+
+        try
+        {
+            await viewModel.OnActivatedAsync();
+            viewModel.SelectedDeviceFilter = Assert.Single(
+                viewModel.DeviceFilters,
+                static option => option.Key == "旧名称");
+
+            panelService.HardwareSnapshots =
+            [
+                new HardwareSnapshot("新名称", "192.168.1.10", "PLC", true)
+                {
+                    PlcCode = "P1-AP01"
+                },
+                new HardwareSnapshot("旧名称", "192.168.1.11", "PLC", true)
+                {
+                    PlcCode = "P1-AP02"
+                }
+            ];
+
+            await viewModel.OnActivatedAsync();
+
+            Assert.Equal("旧名称", selectionService.SelectedDeviceKey);
+            Assert.Equal("P1-AP01", selectionService.SelectedPlcCode);
+            Assert.Equal("新名称", viewModel.SelectedDeviceFilter?.Key);
+            Assert.Equal("P1-AP01", viewModel.SelectedDeviceFilter?.PlcCode);
+            Assert.True(viewModel.SelectedDeviceFilter?.IsResolved);
+
+            panelService.HardwareSnapshots =
+            [
+                new HardwareSnapshot("旧名称", "192.168.1.11", "PLC", true)
+                {
+                    PlcCode = "P1-AP02"
+                }
+            ];
+
+            await viewModel.OnActivatedAsync();
+
+            Assert.Equal("旧名称", selectionService.SelectedDeviceKey);
+            Assert.Equal("P1-AP01", selectionService.SelectedPlcCode);
+            Assert.Equal("旧名称", viewModel.SelectedDeviceFilter?.Key);
+            Assert.Equal("P1-AP01", viewModel.SelectedDeviceFilter?.PlcCode);
+            Assert.False(viewModel.SelectedDeviceFilter?.IsResolved);
+
+            var reusedName = Assert.Single(
+                viewModel.DeviceFilters,
+                static option => option.IsResolved && option.PlcCode == "P1-AP02");
+            viewModel.SelectedDeviceFilter = reusedName;
+
+            Assert.Equal("旧名称", selectionService.SelectedDeviceKey);
+            Assert.Equal("P1-AP02", selectionService.SelectedPlcCode);
+            Assert.Same(reusedName, viewModel.SelectedDeviceFilter);
+        }
+        finally
+        {
+            await viewModel.OnDeactivatedAsync();
+        }
+    }
+
     private static EquipmentViewModel CreateViewModel(
         IEnumerable<MenuInfo> menus,
         IEnumerable<IEdgeProcessModule> processModules,

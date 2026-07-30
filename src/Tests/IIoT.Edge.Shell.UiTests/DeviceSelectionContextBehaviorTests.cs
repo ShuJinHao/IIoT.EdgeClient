@@ -17,8 +17,10 @@ public sealed class DeviceSelectionContextBehaviorTests
 
         var writable = provider.GetRequiredService<IDeviceSelectionService>();
         var readOnly = provider.GetRequiredService<IDeviceSelectionContext>();
+        var stable = provider.GetRequiredService<IPlcDeviceSelectionContext>();
 
         Assert.Same(writable, readOnly);
+        Assert.Same(writable, stable);
         Assert.True(readOnly.IsAllSelected);
         writable.SelectDevice("正极模切07");
         Assert.Equal("正极模切07", readOnly.SelectedDeviceKey);
