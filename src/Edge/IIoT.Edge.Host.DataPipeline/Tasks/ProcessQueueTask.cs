@@ -96,9 +96,9 @@ public class ProcessQueueTask : ScheduledTaskBase
     private async Task ProcessOneAsync(CellCompletedRecord record, CancellationToken cancellationToken)
     {
         var label = record.CellData.DisplayLabel;
-        var deviceName = record.ResolveDeviceName();
+        var plcCode = record.ResolvePlcCode();
         WriteLogBestEffort(() =>
-            Logger.Info($"[PLC-{deviceName}][数据管道] 工序={record.CellData.ProcessType} 开始处理 {label}。"));
+            Logger.Info($"[PlcCode={plcCode}][数据管道] 工序={record.CellData.ProcessType} 开始处理 {label}。"));
 
         foreach (var consumer in _consumers.Where(consumer => DataPipelineRetryChannelMetadata.ShouldProcess(record, consumer)))
         {
@@ -112,7 +112,7 @@ public class ProcessQueueTask : ScheduledTaskBase
         }
 
         WriteLogBestEffort(() =>
-            Logger.Info($"[PLC-{deviceName}][数据管道] 工序={record.CellData.ProcessType} {label} 已完成本地处理并投递目标出口。"));
+            Logger.Info($"[PlcCode={plcCode}][数据管道] 工序={record.CellData.ProcessType} {label} 已完成本地处理并投递目标出口。"));
     }
 
     private async Task ProcessConsumerAsync(
@@ -171,19 +171,19 @@ public class ProcessQueueTask : ScheduledTaskBase
     {
         cancellationToken.ThrowIfCancellationRequested();
         var label = record.CellData.DisplayLabel;
-        var deviceName = record.ResolveDeviceName();
+        var plcCode = record.ResolvePlcCode();
 
         if (consumer.FailureMode == ConsumerFailureMode.BestEffort)
         {
             WriteLogBestEffort(() =>
-                Logger.Warn($"[PLC-{deviceName}][数据管道] 工序={record.CellData.ProcessType} {consumer.Name} 处理 {label} 失败：{errorMessage}（非关键消费者，继续后续链路）。"));
+                Logger.Warn($"[PlcCode={plcCode}][数据管道] 工序={record.CellData.ProcessType} {consumer.Name} 处理 {label} 失败：{errorMessage}（非关键消费者，继续后续链路）。"));
             return;
         }
 
         if (consumer.RetryChannel == DataPipelineRetryChannel.None)
         {
             var details =
-                $"[PLC-{deviceName}][数据管道] 工序={record.CellData.ProcessType} 关键消费者 {consumer.Name} 处理 {label} 失败，但未配置补偿链路。";
+                $"[PlcCode={plcCode}][数据管道] 工序={record.CellData.ProcessType} 关键消费者 {consumer.Name} 处理 {label} 失败，但未配置补偿链路。";
             WriteLogBestEffort(() => Logger.Error(details));
             _criticalFallbackWriter.Write("DataPipeline.ProcessQueue.InvalidRetryChannel", details);
             return;
@@ -191,14 +191,14 @@ public class ProcessQueueTask : ScheduledTaskBase
 
         WriteLogBestEffort(() =>
             Logger.Warn(
-                $"[PLC-{deviceName}][数据管道] 工序={record.CellData.ProcessType} {consumer.Name} 处理 {label} 失败，准备写入 {DataPipelineRetryChannelMetadata.Format(consumer.RetryChannel)} 补偿链路。"));
+                $"[PlcCode={plcCode}][数据管道] 工序={record.CellData.ProcessType} {consumer.Name} 处理 {label} 失败，准备写入 {DataPipelineRetryChannelMetadata.Format(consumer.RetryChannel)} 补偿链路。"));
 
         var sourceTable = DataPipelineRetryChannelMetadata.TryGetFailedRecordSourceTable(consumer.RetryChannel);
 
         if (string.IsNullOrWhiteSpace(sourceTable))
         {
             var unsupportedDetails =
-                $"[PLC-{deviceName}][数据管道] 工序={record.CellData.ProcessType} {consumer.Name} 使用了不支持的补偿链路：{DataPipelineRetryChannelMetadata.Format(consumer.RetryChannel)}。";
+                $"[PlcCode={plcCode}][数据管道] 工序={record.CellData.ProcessType} {consumer.Name} 使用了不支持的补偿链路：{DataPipelineRetryChannelMetadata.Format(consumer.RetryChannel)}。";
             WriteLogBestEffort(() => Logger.Error(unsupportedDetails));
             _criticalFallbackWriter.Write("DataPipeline.ProcessQueue.UnsupportedRetryChannel", unsupportedDetails);
             return;
@@ -563,7 +563,7 @@ public class ProcessQueueTask : ScheduledTaskBase
     {
         var record = item.Record;
         var details =
-            $"[PLC-{record.ResolveDeviceName()}][数据管道] 工序={record.CellData.ProcessType} " +
+            $"[PlcCode={record.ResolvePlcCode()}][数据管道] 工序={record.CellData.ProcessType} " +
             $"后台出口={DataPipelineRetryChannelMetadata.Format(channel)} 消费异常，" +
             $"模块={record.ModuleId ?? "<unknown>"}，任务={record.TaskKey ?? "<unknown>"}：{exception.Message}";
         try

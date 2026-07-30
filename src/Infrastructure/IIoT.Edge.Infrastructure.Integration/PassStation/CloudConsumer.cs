@@ -89,7 +89,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
                 CloudCallOutcome.SkippedUploadNotReady,
                 reasonCode);
             _logger.Warn(
-                $"[PLC-{UploadDiagnosticsContextFactory.ResolveLogDeviceName(deviceStatusRecords)}][云端] PLC 设备状态专用接口未就绪，{deviceStatusRecords.Count} 条设备状态记录保持待传。");
+                $"[PlcCode={UploadDiagnosticsContextFactory.ResolveLogPlcCode(deviceStatusRecords)}][云端] PLC 设备状态专用接口未就绪，{deviceStatusRecords.Count} 条设备状态记录保持待传。");
             _diagnosticsStore.RecordBlocked(
                 deviceStatusRecords[0].CellData.ProcessType,
                 reasonCode,
@@ -121,7 +121,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
                     CloudCallOutcome.SkippedUploadNotReady,
                     reasonCode);
                 _logger.Warn(
-                    $"[PLC-{UploadDiagnosticsContextFactory.ResolveLogDeviceName(group)}][云端] 工序 {group.Key} 未注册 Cloud 上传器，{group.Count()} 条记录转入补传队列。");
+                    $"[PlcCode={UploadDiagnosticsContextFactory.ResolveLogPlcCode(group)}][云端] 工序 {group.Key} 未注册 Cloud 上传器，{group.Count()} 条记录转入补传队列。");
                 _diagnosticsStore.RecordBlocked(
                     group.Key,
                     reasonCode,
@@ -133,12 +133,12 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
             var gate = _uploadGate.GetSnapshot();
             if (!gate.CanUpload)
             {
-                var blockedDevice = UploadDiagnosticsContextFactory.ResolveLogDeviceName(group);
+                var blockedPlcCode = UploadDiagnosticsContextFactory.ResolveLogPlcCode(group);
                 var blockedResult = CloudCallResult.Failure(
                     CloudCallOutcome.SkippedUploadNotReady,
                     gate.ReasonCode);
                 _logger.Warn(
-                    $"[PLC-{blockedDevice}][云端] 上传门控已阻塞（{gate.ReasonCode}），{group.Count()} 条记录转入补传队列。");
+                    $"[PlcCode={blockedPlcCode}][云端] 上传门控已阻塞（{gate.ReasonCode}），{group.Count()} 条记录转入补传队列。");
                 _diagnosticsStore.RecordBlocked(
                     group.Key,
                     gate.ReasonCode,
@@ -153,11 +153,11 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
                 var device = ResolveUploadDevice(groupRecords, _deviceService.CurrentDevice);
                 if (device is null)
                 {
-                    var unidentifiedDevice = UploadDiagnosticsContextFactory.ResolveLogDeviceName(groupRecords);
+                    var unidentifiedPlcCode = UploadDiagnosticsContextFactory.ResolveLogPlcCode(groupRecords);
                     var unidentifiedResult = CloudCallResult.Failure(
                         CloudCallOutcome.SkippedUploadNotReady,
                         EdgeUploadBlockReason.DeviceUnidentified.ToReasonCode());
-                    _logger.Warn($"[PLC-{unidentifiedDevice}][云端] 设备尚未识别，记录转入补传队列。");
+                    _logger.Warn($"[PlcCode={unidentifiedPlcCode}][云端] 设备尚未识别，记录转入补传队列。");
                     _diagnosticsStore.RecordBlocked(
                         group.Key,
                         EdgeUploadBlockReason.DeviceUnidentified.ToReasonCode(),
@@ -174,7 +174,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
                 if (!result.IsSuccess)
                 {
                     _logger.Error(
-                        $"[PLC-{UploadDiagnosticsContextFactory.ResolveLogDeviceName(groupRecords)}][云端] 工序 {group.Key} 上传失败，数量：{groupRecords.Count}，结果：{result.Outcome}，原因：{result.ReasonCode}。");
+                        $"[PlcCode={UploadDiagnosticsContextFactory.ResolveLogPlcCode(groupRecords)}][云端] 工序 {group.Key} 上传失败，数量：{groupRecords.Count}，结果：{result.Outcome}，原因：{result.ReasonCode}。");
                     return result;
                 }
             }

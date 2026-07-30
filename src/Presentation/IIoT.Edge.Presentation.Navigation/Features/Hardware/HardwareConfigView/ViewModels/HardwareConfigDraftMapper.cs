@@ -13,6 +13,7 @@ internal static class HardwareConfigDraftMapper
         {
             Id = source.Id,
             DeviceName = source.DeviceName,
+            PlcCode = source.PlcCode,
             DeviceType = source.DeviceType,
             IpAddress = source.IpAddress,
             Port1 = source.Port1,
@@ -31,6 +32,7 @@ internal static class HardwareConfigDraftMapper
     public static void CopyNetworkDevice(NetworkDeviceVm source, NetworkDeviceVm target)
     {
         target.DeviceName = source.DeviceName;
+        target.PlcCode = source.PlcCode;
         target.DeviceType = source.DeviceType;
         target.DeviceModel = source.DeviceModel;
         target.ProtocolFrame = source.ProtocolFrame;

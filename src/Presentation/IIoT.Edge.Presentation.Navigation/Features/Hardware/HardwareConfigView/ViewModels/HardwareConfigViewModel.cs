@@ -90,7 +90,9 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
     public IReadOnlyList<string> IoDataTypes => IoMappingOptionCatalog.DataTypes;
 
     public string SelectedNetworkDeviceDisplayName
-        => SelectedNetworkDevice?.DeviceName ?? GetText("Navigation_DeviceSelection_AllOrSummary", "全部/汇总");
+        => SelectedNetworkDevice is null
+            ? GetText("Navigation_DeviceSelection_AllOrSummary", "全部/汇总")
+            : FormatPlcIdentity(SelectedNetworkDevice.PlcCode, SelectedNetworkDevice.DeviceName);
 
     public ObservableCollection<IoStandardSignalOptionVm> StandardIoSignals { get; } = new();
     public ObservableCollection<IoStandardSignalOptionVm> StandardDataSignals { get; } = new();
@@ -749,9 +751,28 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
             return null;
         }
 
+        var byPlcCode = IoMappingNetworkDevices
+            .Where(device => string.Equals(
+                device.PlcCode,
+                selectedKey,
+                StringComparison.OrdinalIgnoreCase))
+            .Take(2)
+            .ToArray();
+        if (byPlcCode.Length == 1)
+        {
+            return byPlcCode[0];
+        }
+
         return IoMappingNetworkDevices.FirstOrDefault(device =>
-            string.Equals(device.DeviceName, selectedKey, StringComparison.OrdinalIgnoreCase));
+            string.IsNullOrWhiteSpace(device.PlcCode)
+            && string.Equals(device.DeviceName, selectedKey, StringComparison.OrdinalIgnoreCase));
     }
+
+    private static string FormatPlcIdentity(string? plcCode, string deviceName)
+        => string.IsNullOrWhiteSpace(plcCode)
+           || string.Equals(plcCode, deviceName, StringComparison.OrdinalIgnoreCase)
+            ? deviceName
+            : $"{plcCode} · {deviceName}";
 
     private void OnSharedDeviceSelectionChanged(object? sender, EventArgs e)
     {

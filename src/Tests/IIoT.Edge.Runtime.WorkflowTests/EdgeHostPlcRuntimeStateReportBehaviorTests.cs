@@ -99,6 +99,51 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
     }
 
     [Fact]
+    public async Task SnapshotProvider_WhenDeviceRowIsRebuilt_ShouldMatchRuntimeByStablePlcCode()
+    {
+        var plc = CreatePlc(99, "重建后名称", "10.10.1.11", 6000, "MC-3E");
+        var provider = new EdgeHostPlcRuntimeStateSnapshotProvider(
+            new InMemoryRepository<NetworkDeviceEntity>(plc),
+            new FakePlcConnectionManager(
+                new PlcConnectionRuntimeSnapshot
+                {
+                    NetworkDeviceId = 1,
+                    PlcCode = plc.PlcCode,
+                    DeviceName = "重建前名称",
+                    ConnectionState = PlcConnectionState.Connected,
+                    IsConnected = true
+                }));
+
+        var item = Assert.Single(await provider.GetCurrentAsync(TestContext.Current.CancellationToken));
+
+        Assert.True(item.IsConnected);
+        Assert.Equal(plc.PlcCode, item.PlcCode);
+        Assert.Equal("重建后名称", item.ReportedPlcName);
+    }
+
+    [Fact]
+    public async Task SnapshotProvider_WhenRuntimePlcCodeConflictsWithSameRowId_ShouldFailClosed()
+    {
+        var plc = CreatePlc(1, "PLC-A01", "10.10.1.11", 6000, "MC-3E");
+        var provider = new EdgeHostPlcRuntimeStateSnapshotProvider(
+            new InMemoryRepository<NetworkDeviceEntity>(plc),
+            new FakePlcConnectionManager(
+                new PlcConnectionRuntimeSnapshot
+                {
+                    NetworkDeviceId = plc.Id,
+                    PlcCode = "PLC-OTHER",
+                    DeviceName = plc.DeviceName,
+                    ConnectionState = PlcConnectionState.Connected,
+                    IsConnected = true
+                }));
+
+        var item = Assert.Single(await provider.GetCurrentAsync(TestContext.Current.CancellationToken));
+
+        Assert.False(item.IsConnected);
+        Assert.Equal("Unknown", item.RuntimeStatus);
+    }
+
+    [Fact]
     public async Task SnapshotProvider_WhenNoConfiguredPlcs_ShouldIgnoreStaleRuntimeSnapshots()
     {
         var provider = new EdgeHostPlcRuntimeStateSnapshotProvider(

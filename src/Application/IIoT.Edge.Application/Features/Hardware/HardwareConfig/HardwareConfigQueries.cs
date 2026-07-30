@@ -83,7 +83,8 @@ public class LoadHardwareConfigHandler(ISender sender)
             entity.ConnectTimeout,
             entity.IsEnabled,
             entity.Remark,
-            entity.ProtocolFrame);
+            entity.ProtocolFrame,
+            entity.PlcCode);
 
     private static SerialDeviceDto MapSerialDevice(SerialDeviceEntity entity)
         => new(

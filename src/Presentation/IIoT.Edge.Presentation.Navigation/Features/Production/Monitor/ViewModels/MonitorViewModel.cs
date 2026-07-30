@@ -127,7 +127,24 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
     public bool ShouldShowDeviceSelectionPrompt => HasDevices && IsDeviceSelectionRequired;
 
     public string SelectedDeviceDisplayName
-        => SelectedDevice ?? GetText("Navigation_DeviceSelection_AllOrSummary", "全部/汇总");
+    {
+        get
+        {
+            var snapshot = FindSelectedSnapshot();
+            if (snapshot is null)
+            {
+                return SelectedDevice ?? GetText("Navigation_DeviceSelection_AllOrSummary", "全部/汇总");
+            }
+
+            return string.IsNullOrWhiteSpace(snapshot.PlcCode)
+                   || string.Equals(
+                       snapshot.PlcCode,
+                       snapshot.DeviceName,
+                       StringComparison.OrdinalIgnoreCase)
+                ? snapshot.DeviceName
+                : $"{snapshot.PlcCode} · {snapshot.DeviceName}";
+        }
+    }
 
     private MonitorStatusItemVm _lastErrorItem = new(string.Empty, string.Empty);
 
@@ -485,6 +502,7 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
 
     private void RaiseSnapshotPropertiesChanged()
     {
+        OnPropertyChanged(nameof(SelectedDeviceDisplayName));
         OnPropertyChanged(nameof(HasDevices));
         OnPropertyChanged(nameof(IsDevicesEmpty));
         OnPropertyChanged(nameof(ShouldShowDeviceSelectionPrompt));

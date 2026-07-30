@@ -650,7 +650,90 @@ public sealed class ModuleRuntimeRegistrationTests
         Assert.Contains(
             harness.StartupDiagnosticsStore.Current.Issues,
             issue => string.Equals(issue.Code, "DEVICE_MODULE_MISMATCH", StringComparison.Ordinal)
-                     && issue.Message.Contains("没有配置 IO 映射", StringComparison.Ordinal));
+                     && issue.Message.Contains("没有配置 IO 映射", StringComparison.Ordinal)
+                     && string.Equals(issue.PlcCode, device.PlcCode, StringComparison.Ordinal));
+        Assert.DoesNotContain(harness.Logger.Entries, entry => entry.Level == "Fatal");
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    public async Task AppLifecycleManager_WhenRuntimeFactoryIsNotUnique_ShouldKeepShellAndPlcBaseRuntime(
+        int factoryCount)
+    {
+        await using var harness = await AppLifecycleHarness.CreateAsync(
+            enabledModules: factoryCount == 0 ? [] : ["TestPlugin"],
+            deviceModuleIds: ["TestPlugin"]);
+        if (factoryCount == 2)
+        {
+            harness.GetRequiredService<IStationRuntimeRegistry>()
+                .Register(new DiagnosticRuntimeFactory("SecondRuntime"));
+        }
+
+        var device = Assert.Single(await harness.GetNetworkDevicesAsync());
+        var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Message);
+        var issue = Assert.Single(
+            harness.StartupDiagnosticsStore.Current.Issues,
+            item => item.Code == "PLC_RUNTIME_FACTORY_NOT_UNIQUE"
+                    && string.Equals(item.PlcCode, device.PlcCode, StringComparison.Ordinal));
+        Assert.Equal("未解析", issue.TaskKey);
+        Assert.Equal("不适用", issue.SignalKey);
+        Assert.Contains(
+            harness.Logger.Entries,
+            entry => entry.Level == "Warn"
+                     && entry.Message.Contains(
+                         $"[PlcCode={device.PlcCode}][TaskKey=未解析][SignalKey=不适用]",
+                         StringComparison.Ordinal)
+                     && entry.Message.Contains($"数量={factoryCount}", StringComparison.Ordinal));
+        Assert.DoesNotContain(harness.Logger.Entries, entry => entry.Level == "Fatal");
+    }
+
+    [Theory]
+    [InlineData("duplicate", "未解析")]
+    [InlineData("missing-signal", "Signal.Missing")]
+    public async Task AppLifecycleManager_WhenConfiguredTaskIsInvalid_ShouldIsolateOnlyTaskWithStableDiagnostic(
+        string scenario,
+        string expectedSignalKey)
+    {
+        const string taskKey = "Diagnostic.Task";
+        TaskCandidate[] candidates = scenario == "duplicate"
+            ?
+            [
+                new TaskCandidate(taskKey, "重复任务 A", []),
+                new TaskCandidate(taskKey, "重复任务 B", [])
+            ]
+            :
+            [
+                new TaskCandidate(
+                    taskKey,
+                    "缺失信号任务",
+                    [new TaskRequiredSignal(expectedSignalKey, "Read")])
+            ];
+        await using var harness = await AppLifecycleHarness.CreateAsync(
+            enabledModules: [],
+            deviceModuleIds: ["TestPlugin"]);
+        harness.GetRequiredService<IStationRuntimeRegistry>()
+            .Register(new DiagnosticRuntimeFactory("DiagnosticRuntime", candidates));
+        var device = Assert.Single(await harness.GetNetworkDevicesAsync());
+        await harness.ForceTaskBindingAsync(device.Id, taskKey, enabled: true);
+
+        var result = await harness.Manager.StartAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Message);
+        var issue = Assert.Single(
+            harness.StartupDiagnosticsStore.Current.Issues,
+            item => item.Code == "PLC_TASK_BINDING_INVALID"
+                    && string.Equals(item.PlcCode, device.PlcCode, StringComparison.Ordinal)
+                    && string.Equals(item.TaskKey, taskKey, StringComparison.Ordinal));
+        Assert.Equal(expectedSignalKey, issue.SignalKey);
+        Assert.Contains(
+            harness.Logger.Entries,
+            entry => entry.Level == "Error"
+                     && entry.Message.Contains($"[PlcCode={device.PlcCode}]", StringComparison.Ordinal)
+                     && entry.Message.Contains($"[TaskKey={taskKey}]", StringComparison.Ordinal)
+                     && entry.Message.Contains($"[SignalKey={expectedSignalKey}]", StringComparison.Ordinal));
         Assert.DoesNotContain(harness.Logger.Entries, entry => entry.Level == "Fatal");
     }
 
@@ -1426,6 +1509,24 @@ public sealed class ModuleRuntimeRegistrationTests
             await persistence.CommitAsync(preparation).ConfigureAwait(false);
         }
 
+        public async Task ForceTaskBindingAsync(
+            int networkDeviceId,
+            string taskKey,
+            bool enabled)
+        {
+            await using var unitOfWork = await _serviceProvider
+                .GetRequiredService<IEdgeUnitOfWorkFactory>()
+                .BeginAsync()
+                .ConfigureAwait(false);
+            unitOfWork.Repository<PlcTaskBindingEntity>().Add(
+                PlcTaskBindingEntity.Create(
+                    networkDeviceId,
+                    taskKey,
+                    enabled,
+                    DateTimeOffset.UtcNow));
+            await unitOfWork.CommitAsync().ConfigureAwait(false);
+        }
+
         public static async Task<AppLifecycleHarness> CreateAsync(
             string[] enabledModules,
             string[] deviceModuleIds,
@@ -1541,16 +1642,25 @@ public sealed class ModuleRuntimeRegistrationTests
             var networkDevices = serviceProvider.GetRequiredService<IReadRepository<NetworkDeviceEntity>>();
             var ioMappings = serviceProvider.GetRequiredService<IReadRepository<IoMappingEntity>>();
             var configurationProfileBuilder = new StartupConfigurationProfileBuilder(configuration, runtimePaths);
+            var taskBindingService = serviceProvider.GetRequiredService<IPlcTaskBindingService>();
             var syncValidators = new IStartupDiagnosticValidator[]
             {
                 new StartupAppSettingsValidator(configuration, shiftConfig),
                 new StartupModuleRegistrationValidator(cellDataRegistry, runtimeRegistry, integrationRegistry)
             };
             IStartupAsyncDiagnosticValidator[] asyncValidators = startupDiagnosticException is null
-                ? [new StartupPlcConfigurationValidator(ioMappings, cellDataRegistry, runtimeRegistry)]
+                ? [new StartupPlcConfigurationValidator(
+                    ioMappings,
+                    cellDataRegistry,
+                    runtimeRegistry,
+                    taskBindingService)]
                 :
                 [
-                    new StartupPlcConfigurationValidator(ioMappings, cellDataRegistry, runtimeRegistry),
+                    new StartupPlcConfigurationValidator(
+                        ioMappings,
+                        cellDataRegistry,
+                        runtimeRegistry,
+                        taskBindingService),
                     new ThrowingStartupAsyncDiagnosticValidator(startupDiagnosticException)
                 ];
             var hardwareProfiles = serviceProvider.GetServices<IModuleHardwareProfileProvider>().ToArray();
@@ -2096,11 +2206,13 @@ public sealed class ModuleRuntimeRegistrationTests
         public override string ProcessType => "BrokenProcess";
     }
 
-    private sealed class DiagnosticRuntimeFactory(string moduleId) : IStationRuntimeFactory
+    private sealed class DiagnosticRuntimeFactory(
+        string moduleId,
+        IReadOnlyCollection<TaskCandidate>? candidates = null) : IStationRuntimeFactory
     {
         public string ModuleId { get; } = moduleId;
 
-        public IReadOnlyCollection<TaskCandidate> GetTaskCandidates() => [];
+        public IReadOnlyCollection<TaskCandidate> GetTaskCandidates() => candidates ?? [];
 
         public List<IPlcTask> CreateTasks(
             IServiceProvider serviceProvider,

@@ -27,6 +27,7 @@ public sealed class HardwareConfigEditModelMapper : IHardwareConfigEditModelMapp
         {
             Id = dto.Id,
             DeviceName = dto.DeviceName,
+            PlcCode = dto.PlcCode,
             DeviceType = dto.DeviceType,
             DeviceModel = dto.DeviceModel,
             ProtocolFrame = dto.ProtocolFrame,
@@ -87,7 +88,8 @@ public sealed class HardwareConfigEditModelMapper : IHardwareConfigEditModelMapp
             model.ConnectTimeout,
             model.IsEnabled,
             model.Remark,
-            model.ProtocolFrame);
+            model.ProtocolFrame,
+            model.PlcCode);
 
     public SerialDeviceDto ToSerialDeviceDto(SerialDeviceVm model)
         => new(

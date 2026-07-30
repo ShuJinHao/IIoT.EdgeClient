@@ -102,6 +102,7 @@ public sealed class TestPluginSnapshotTask : PeriodicSnapshotUploadTaskBase<Test
     {
         var record = new CellCompletedRecord
         {
+            PlcCode = Context.PlcCode,
             NetworkDeviceId = Context.NetworkDeviceId,
             DeviceName = Context.DeviceName,
             ModuleId = DependencyInjection.ModuleKey,
@@ -111,7 +112,7 @@ public sealed class TestPluginSnapshotTask : PeriodicSnapshotUploadTaskBase<Test
             {
                 PlcDeviceId = Context.NetworkDeviceId,
                 DeviceName = Context.DeviceName,
-                DeviceCode = Context.DeviceName,
+                DeviceCode = Context.PlcCode,
                 CompletedTime = snapshot.CapturedAtUtc,
                 UploadTargets = DataPipelineUploadTargets.Cloud
             }

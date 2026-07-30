@@ -46,6 +46,17 @@ internal abstract class FallbackRecoveryServiceBase<TFallbackRecord> : RetryDead
         var deadLetterIds = new List<long>();
         foreach (var fallback in pending)
         {
+            if (string.IsNullOrWhiteSpace(fallback.PlcCode)
+                || fallback.IdempotencyKeyVersion is not (
+                    CloudIdempotencyKeyVersion.LegacyV1
+                    or CloudIdempotencyKeyVersion.PlcStableV2))
+            {
+                Logger.Error(
+                    $"[PlcCode={FormatPlcCode(fallback.PlcCode)}][TaskKey={fallback.TaskKey}] "
+                    + $"{ChannelDisplayName}兜底记录 {fallback.Id} 身份未解析，原记录保留并停止移动。");
+                continue;
+            }
+
             var cellData = DeserializeCellData(fallback.ProcessType, fallback.CellDataJson);
             if (cellData is null)
             {
@@ -73,7 +84,7 @@ internal abstract class FallbackRecoveryServiceBase<TFallbackRecord> : RetryDead
                 if (!string.IsNullOrWhiteSpace(retryBlockedReason))
                 {
                     Logger.Warn(
-                        $"[PLC-{fallback.DeviceName}][{DeadLetterChannelMetadata.LogPrefix}] {ChannelDisplayName}兜底记录 {fallback.Id} 因补传容量阻塞继续保留，原因：{retryBlockedReason}。");
+                        $"[PlcCode={fallback.PlcCode}][{DeadLetterChannelMetadata.LogPrefix}] {ChannelDisplayName}兜底记录 {fallback.Id} 因补传容量阻塞继续保留，原因：{retryBlockedReason}。");
                     continue;
                 }
 
@@ -81,7 +92,7 @@ internal abstract class FallbackRecoveryServiceBase<TFallbackRecord> : RetryDead
             }
             catch (Exception ex)
             {
-                Logger.Error($"[PLC-{fallback.DeviceName}][{DeadLetterChannelMetadata.LogPrefix}] 恢复 {ChannelDisplayName}兜底记录 {fallback.Id} 失败：{ex.Message}");
+                Logger.Error($"[PlcCode={fallback.PlcCode}][{DeadLetterChannelMetadata.LogPrefix}] 恢复 {ChannelDisplayName}兜底记录 {fallback.Id} 失败：{ex.Message}");
             }
         }
 
@@ -118,12 +129,17 @@ internal abstract class FallbackRecoveryServiceBase<TFallbackRecord> : RetryDead
             ProcessType = fallback.ProcessType,
             CellDataJson = fallback.CellDataJson,
             FailedTarget = fallback.FailedTarget,
+            PlcCode = fallback.PlcCode,
             NetworkDeviceId = fallback.NetworkDeviceId,
             DeviceName = fallback.DeviceName,
             ModuleId = fallback.ModuleId,
             TaskKey = fallback.TaskKey,
             PlanSessionId = fallback.PlanSessionId,
             MainPlanCode = fallback.MainPlanCode,
-            TraceBatchNumber = fallback.TraceBatchNumber
+            TraceBatchNumber = fallback.TraceBatchNumber,
+            IdempotencyKeyVersion = fallback.IdempotencyKeyVersion
         };
+
+    private static string FormatPlcCode(string? plcCode)
+        => string.IsNullOrWhiteSpace(plcCode) ? "未解析" : plcCode;
 }

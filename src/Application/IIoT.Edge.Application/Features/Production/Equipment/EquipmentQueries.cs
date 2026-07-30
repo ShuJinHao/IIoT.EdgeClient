@@ -12,7 +12,10 @@ public record HardwareSnapshot(
     string Name,
     string Address,
     string DeviceType,
-    bool IsConnected);
+    bool IsConnected)
+{
+    public string PlcCode { get; init; } = string.Empty;
+}
 
 public record RecipeSnapshot(
     string RecipeName,
@@ -69,7 +72,10 @@ public class GetHardwareStatusHandler(
                     device.DeviceName,
                     device.IpAddress,
                     device.DeviceType.ToString(),
-                    isConnected);
+                    isConnected)
+                {
+                    PlcCode = device.PlcCode
+                };
             })
             .ToList();
     }

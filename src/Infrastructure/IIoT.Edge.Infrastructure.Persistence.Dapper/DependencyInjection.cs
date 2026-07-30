@@ -3,6 +3,7 @@ using IIoT.Edge.Infrastructure.Persistence.Dapper.Repository;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 using IIoT.Edge.Module.Contracts.Production;
+using IIoT.Edge.Application.Common.DataPipeline;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Reflection;
@@ -35,6 +36,9 @@ public static class DependencyInjection
         services.AddSingleton<ModuleProductionRecordPersistence>();
         services.AddSingleton<IModuleProductionRecordPersistence>(
             sp => sp.GetRequiredService<ModuleProductionRecordPersistence>());
+        services.AddSingleton<DataPipelineIdentityMigration>();
+        services.AddSingleton<IDataPipelineIdentityMigration>(
+            sp => sp.GetRequiredService<DataPipelineIdentityMigration>());
 
         // 自动扫描注册所有 Store
         var assembly = Assembly.GetExecutingAssembly();

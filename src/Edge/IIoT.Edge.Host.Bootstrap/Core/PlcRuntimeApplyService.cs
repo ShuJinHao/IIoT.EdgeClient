@@ -64,6 +64,6 @@ public sealed class PlcRuntimeApplyService(
         await runtimeDeviceReloader
             .ReloadDeviceAsync(device.Id, cancellationToken)
             .ConfigureAwait(false);
-        logger.Info($"[{device.DeviceName}] PLC 运行配置已通过整机重载应用：{normalizedReason}。");
+        logger.Info($"[PlcCode={device.PlcCode}] PLC 运行配置已通过整机重载应用：{normalizedReason}。");
     }
 }

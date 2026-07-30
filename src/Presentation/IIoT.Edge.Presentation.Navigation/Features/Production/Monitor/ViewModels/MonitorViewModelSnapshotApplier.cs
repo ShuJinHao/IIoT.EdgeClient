@@ -15,14 +15,49 @@ internal static class MonitorViewModelSnapshotApplier
             return null;
         }
 
-        return selectedDevice.Trim();
+        var selectedKey = selectedDevice.Trim();
+        var byPlcCode = snapshots
+            .Where(snapshot => string.Equals(
+                snapshot.PlcCode,
+                selectedKey,
+                StringComparison.OrdinalIgnoreCase))
+            .Take(2)
+            .ToArray();
+
+        return byPlcCode.Length == 1
+            ? byPlcCode[0].DeviceName
+            : selectedKey;
     }
 
     public static DeviceMonitorSnapshot? FindSelectedSnapshot(
         IReadOnlyList<DeviceMonitorSnapshot> snapshots,
         string? selectedDevice)
-        => string.IsNullOrWhiteSpace(selectedDevice)
-            ? null
-            : snapshots.FirstOrDefault(snapshot =>
-                string.Equals(snapshot.DeviceName, selectedDevice, StringComparison.Ordinal));
+    {
+        if (string.IsNullOrWhiteSpace(selectedDevice))
+        {
+            return null;
+        }
+
+        var selectedKey = selectedDevice.Trim();
+        var byPlcCode = snapshots
+            .Where(snapshot => string.Equals(
+                snapshot.PlcCode,
+                selectedKey,
+                StringComparison.OrdinalIgnoreCase))
+            .Take(2)
+            .ToArray();
+        if (byPlcCode.Length == 1)
+        {
+            return byPlcCode[0];
+        }
+
+        var byDeviceName = snapshots
+            .Where(snapshot => string.Equals(
+                snapshot.DeviceName,
+                selectedKey,
+                StringComparison.Ordinal))
+            .Take(2)
+            .ToArray();
+        return byDeviceName.Length == 1 ? byDeviceName[0] : null;
+    }
 }

@@ -48,7 +48,10 @@ public sealed class PlcTaskBindingService(
                 device.DeviceName,
                 moduleId,
                 device.IsEnabled,
-                taskItems));
+                taskItems)
+            {
+                PlcCode = device.PlcCode
+            });
         }
 
         return results;
@@ -79,6 +82,29 @@ public sealed class PlcTaskBindingService(
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         return enabledTaskKeys;
+    }
+
+    public async Task<IReadOnlySet<string>> GetConfiguredEnabledTaskKeysAsync(
+        int networkDeviceId,
+        IReadOnlyCollection<TaskCandidate> candidates,
+        CancellationToken cancellationToken = default)
+    {
+        if (networkDeviceId <= 0)
+        {
+            throw new ArgumentException("网络设备 Id 必须大于 0。", nameof(networkDeviceId));
+        }
+
+        ArgumentNullException.ThrowIfNull(candidates);
+        var candidateKeys = candidates
+            .Select(static candidate => candidate.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var rows = await bindings.GetListAsync(
+            x => x.NetworkDeviceId == networkDeviceId,
+            cancellationToken).ConfigureAwait(false);
+        return rows
+            .Where(row => row.Enabled && candidateKeys.Contains(row.TaskKey))
+            .Select(static row => row.TaskKey)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     public async Task<PlcTaskBindingSavePreparation> PrepareAsync(
@@ -177,6 +203,7 @@ public sealed class PlcTaskBindingService(
 
         return new PlcTaskBindingSavePreparation(
             networkDeviceId,
+            device.PlcCode,
             device.DeviceName,
             moduleId,
             candidateTaskKeys,

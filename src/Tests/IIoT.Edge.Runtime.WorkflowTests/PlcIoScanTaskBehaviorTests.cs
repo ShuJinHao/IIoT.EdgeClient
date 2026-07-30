@@ -359,7 +359,11 @@ public sealed class PlcIoScanTaskBehaviorTests
         var dataStore = new PlcDataStore();
         dataStore.Register(16, readSize: 0, writeSize: 0);
         var statusStore = new PlcConnectionStatusStore();
-        statusStore.MarkConnected(16, "PLC-SPLIT-FAIL", 11);
+        statusStore.MarkConnected(
+            16,
+            "PLC-SPLIT-FAIL",
+            "PLC-SPLIT-FAIL",
+            11);
 
         var interaction = new PlcIoScanTask(
             plcService,
@@ -749,7 +753,11 @@ public sealed class PlcIoScanTaskBehaviorTests
                 ["Read-D320"] = [(ushort)8]
             });
         var statusStore = new PlcConnectionStatusStore();
-        statusStore.MarkConnected(17, "PLC-DATA-SPLIT-FAIL", 15);
+        statusStore.MarkConnected(
+            17,
+            "PLC-DATA-SPLIT-FAIL",
+            "PLC-DATA-SPLIT-FAIL",
+            15);
         var logger = new FakeLogService();
 
         var dataReadScan = new PlcDataReadScanTask(
@@ -804,7 +812,11 @@ public sealed class PlcIoScanTaskBehaviorTests
         var dataStore = new PlcDataStore();
         dataStore.Register(22, readSize: 0, writeSize: 0);
         var statusStore = new PlcConnectionStatusStore();
-        statusStore.MarkConnected(22, "PLC-DATA-FIRST-FAIL", 10);
+        statusStore.MarkConnected(
+            22,
+            "PLC-DATA-FIRST-FAIL",
+            "PLC-DATA-FIRST-FAIL",
+            10);
 
         var dataReadScan = new PlcDataReadScanTask(
             plcService,
@@ -866,7 +878,10 @@ public sealed class PlcIoScanTaskBehaviorTests
         var dataStore = new PlcDataStore();
         dataStore.Register(19, readSize: 0, writeSize: 0);
         var statusStore = new PlcConnectionStatusStore();
-        statusStore.MarkConnecting(19, "PLC-DATA-READONLY");
+        statusStore.MarkConnecting(
+            19,
+            "PLC-DATA-READONLY",
+            "PLC-DATA-READONLY");
 
         var dataReadScan = new PlcDataReadScanTask(
             plcService,
@@ -904,7 +919,10 @@ public sealed class PlcIoScanTaskBehaviorTests
         var dataStore = new PlcDataStore();
         dataStore.Register(20, readSize: 0, writeSize: 0);
         var statusStore = new PlcConnectionStatusStore();
-        statusStore.MarkConnecting(20, "PLC-DATA-GATED");
+        statusStore.MarkConnecting(
+            20,
+            "PLC-DATA-GATED",
+            "PLC-DATA-GATED");
 
         var dataReadScan = new PlcDataReadScanTask(
             plcService,
@@ -1207,7 +1225,10 @@ public sealed class PlcIoScanTaskBehaviorTests
                 new PlcIoScanDevice(
                     21,
                     "PLC-INDEPENDENT-CANCEL",
-                    new TcpPlcEndpoint("127.0.0.1", 102, 3000)),
+                    new TcpPlcEndpoint("127.0.0.1", 102, 3000))
+                {
+                    PlcCode = "PLC-INDEPENDENT-CANCEL"
+                },
                 [
                     new PlcIoScanMapping(
                         "Read-D300",

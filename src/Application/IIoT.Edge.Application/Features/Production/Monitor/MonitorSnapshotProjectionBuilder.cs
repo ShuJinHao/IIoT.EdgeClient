@@ -23,10 +23,14 @@ internal sealed class MonitorSnapshotProjectionBuilder(
         EdgeSyncDiagnosticsSnapshot diagnostics,
         IReadOnlyDictionary<int, PlcTaskBindingDeviceDto> taskBindingsByDevice)
     {
+        var deviceName = MonitorDeviceIdentityHelper.ResolveDeviceName(
+            context.DeviceName,
+            runtimeStatus,
+            configuredDevice);
         var stepRows = context.StepStates
             .OrderBy(kv => kv.Key)
             .Select(kv => new MonitorSnapshotRow(
-                context.DeviceName,
+                deviceName,
                 kv.Key,
                 kv.Value.ToString(CultureInfo.InvariantCulture)))
             .ToList();
@@ -34,7 +38,7 @@ internal sealed class MonitorSnapshotProjectionBuilder(
         var deviceRows =
             context.DeviceBag.OrderBy(kv => kv.Key)
                 .Select(kv => new MonitorSnapshotRow(
-                    context.DeviceName,
+                    deviceName,
                     kv.Key,
                     MonitorValueFormatting.FormatValue(kv.Value, productionTime)))
                 .ToList();
@@ -56,10 +60,7 @@ internal sealed class MonitorSnapshotProjectionBuilder(
                 context.NetworkDeviceId,
                 runtimeStatus,
                 configuredDevice),
-            DeviceName: MonitorDeviceIdentityHelper.ResolveDeviceName(
-                context.DeviceName,
-                runtimeStatus,
-                configuredDevice),
+            DeviceName: deviceName,
             Source: MonitorSnapshotSource.ProductionContext,
             HasPlcConfiguration: configuredDevice is not null,
             IsPlcConfigurationEnabled: configuredDevice?.IsEnabled == true,
@@ -88,7 +89,13 @@ internal sealed class MonitorSnapshotProjectionBuilder(
             CellDebugRows: MonitorCellDebugProjection.Build(context, productionTime),
             CloudSync: diagnostics.Cloud,
             MesSync: diagnostics.Mes,
-            ContextPersistence: diagnostics.ContextPersistence);
+            ContextPersistence: diagnostics.ContextPersistence)
+        {
+            PlcCode = MonitorDeviceIdentityHelper.ResolvePlcCode(
+                context.PlcCode,
+                runtimeStatus,
+                configuredDevice)
+        };
     }
 
     public DeviceMonitorSnapshot BuildRuntimeOnlySnapshot(
@@ -126,7 +133,13 @@ internal sealed class MonitorSnapshotProjectionBuilder(
             CellDebugRows: [],
             CloudSync: diagnostics.Cloud,
             MesSync: diagnostics.Mes,
-            ContextPersistence: diagnostics.ContextPersistence);
+            ContextPersistence: diagnostics.ContextPersistence)
+        {
+            PlcCode = MonitorDeviceIdentityHelper.ResolvePlcCode(
+                null,
+                runtimeStatus,
+                configuredDevice)
+        };
     }
 
     public DeviceMonitorSnapshot BuildConfiguredDeviceSnapshot(
@@ -160,5 +173,8 @@ internal sealed class MonitorSnapshotProjectionBuilder(
             CellDebugRows: [],
             CloudSync: diagnostics.Cloud,
             MesSync: diagnostics.Mes,
-            ContextPersistence: diagnostics.ContextPersistence);
+            ContextPersistence: diagnostics.ContextPersistence)
+        {
+            PlcCode = device.PlcCode
+        };
 }

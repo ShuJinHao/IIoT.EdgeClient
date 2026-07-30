@@ -38,6 +38,7 @@ public sealed partial class ModuleProductionRecordPersistence(
                 (
                     IdempotencyKey,
                     ModuleId,
+                    PlcCode,
                     DeviceCode,
                     DeviceName,
                     TaskKey,
@@ -57,6 +58,7 @@ public sealed partial class ModuleProductionRecordPersistence(
                 (
                     @IdempotencyKey,
                     @ModuleId,
+                    @PlcCode,
                     @DeviceCode,
                     @DeviceName,
                     @TaskKey,
@@ -77,6 +79,7 @@ public sealed partial class ModuleProductionRecordPersistence(
                 {
                     entry.IdempotencyKey,
                     ModuleId = moduleId,
+                    PlcCode = entry.ResolvePlcCode(),
                     entry.DeviceCode,
                     entry.DeviceName,
                     entry.TaskKey,
@@ -123,6 +126,7 @@ public sealed partial class ModuleProductionRecordPersistence(
                     Id,
                     IdempotencyKey,
                     ModuleId,
+                    PlcCode,
                     DeviceCode,
                     DeviceName,
                     TaskKey,
@@ -143,8 +147,7 @@ public sealed partial class ModuleProductionRecordPersistence(
                   AND CompletedAtUtc < @RangeEndUtc
                   AND (
                       @SelectedDeviceKey = @AllDevicesKey
-                      OR DeviceName = @SelectedDeviceKey COLLATE NOCASE
-                      OR DeviceCode = @SelectedDeviceKey COLLATE NOCASE
+                      OR PlcCode = @SelectedDeviceKey COLLATE NOCASE
                   )
                 ORDER BY CompletedAtUtc DESC, Id DESC
                 LIMIT @Limit;
@@ -207,8 +210,7 @@ public sealed partial class ModuleProductionRecordPersistence(
                   AND CompletedAtUtc < @RangeEndUtc
                   AND (
                       @SelectedDeviceKey = @AllDevicesKey
-                      OR DeviceName = @SelectedDeviceKey COLLATE NOCASE
-                      OR DeviceCode = @SelectedDeviceKey COLLATE NOCASE
+                      OR PlcCode = @SelectedDeviceKey COLLATE NOCASE
                   );
                 """,
                 parameters,
@@ -229,8 +231,7 @@ public sealed partial class ModuleProductionRecordPersistence(
                   AND CompletedAtUtc < @RangeEndUtc
                   AND (
                       @SelectedDeviceKey = @AllDevicesKey
-                      OR DeviceName = @SelectedDeviceKey COLLATE NOCASE
-                      OR DeviceCode = @SelectedDeviceKey COLLATE NOCASE
+                      OR PlcCode = @SelectedDeviceKey COLLATE NOCASE
                   )
                 ORDER BY CompletedAtUtc DESC, Id DESC
                 LIMIT 1;
@@ -283,6 +284,7 @@ public sealed partial class ModuleProductionRecordPersistence(
                     Id INTEGER PRIMARY KEY AUTOINCREMENT,
                     IdempotencyKey TEXT NOT NULL UNIQUE,
                     ModuleId TEXT NOT NULL,
+                    PlcCode TEXT NOT NULL,
                     DeviceCode TEXT NOT NULL,
                     DeviceName TEXT NOT NULL,
                     TaskKey TEXT NOT NULL,
@@ -306,6 +308,28 @@ public sealed partial class ModuleProductionRecordPersistence(
                 commandTimeout: CommandTimeoutSeconds,
                 cancellationToken: cancellationToken);
             await connection.ExecuteAsync(command).ConfigureAwait(false);
+            var columns = await connection.QueryAsync<TableColumnInfo>(
+                "PRAGMA table_info('module_production_records');").ConfigureAwait(false);
+            if (!columns.Any(static column =>
+                    string.Equals(column.Name, "PlcCode", StringComparison.OrdinalIgnoreCase)))
+            {
+                await connection.ExecuteAsync(new CommandDefinition(
+                    "ALTER TABLE module_production_records ADD COLUMN PlcCode TEXT NOT NULL DEFAULT '';",
+                    commandTimeout: CommandTimeoutSeconds,
+                    cancellationToken: cancellationToken)).ConfigureAwait(false);
+            }
+
+            await connection.ExecuteAsync(new CommandDefinition(
+                """
+                UPDATE module_production_records
+                SET PlcCode = DeviceCode
+                WHERE TRIM(PlcCode) = ''
+                  AND TRIM(DeviceCode) <> '';
+                CREATE INDEX IF NOT EXISTS ix_module_production_records_plc_completed
+                    ON module_production_records (PlcCode, CompletedAtUtc DESC);
+                """,
+                commandTimeout: CommandTimeoutSeconds,
+                cancellationToken: cancellationToken)).ConfigureAwait(false);
             _initializedModules.TryAdd(moduleId, 0);
         }
         finally
@@ -332,13 +356,17 @@ public sealed partial class ModuleProductionRecordPersistence(
             ParseUtc(row.CompletedAtUtc),
             ParseUtc(row.QueueCreatedAtUtc),
             ParseUtc(row.QueueProcessedAtUtc),
-            row.IsOk == 1);
+            row.IsOk == 1)
+        {
+            PlcCode = row.PlcCode
+        };
 
     private static void Validate(ModuleProductionRecordEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
         _ = NormalizeModuleId(entry.ModuleId);
         if (string.IsNullOrWhiteSpace(entry.IdempotencyKey)
+            || string.IsNullOrWhiteSpace(entry.ResolvePlcCode())
             || string.IsNullOrWhiteSpace(entry.DeviceCode)
             || string.IsNullOrWhiteSpace(entry.DeviceName)
             || string.IsNullOrWhiteSpace(entry.TaskKey)
@@ -407,6 +435,8 @@ public sealed partial class ModuleProductionRecordPersistence(
         public long Id { get; init; }
         public string IdempotencyKey { get; init; } = string.Empty;
         public string ModuleId { get; init; } = string.Empty;
+
+        public string PlcCode { get; init; } = string.Empty;
         public string DeviceCode { get; init; } = string.Empty;
         public string DeviceName { get; init; } = string.Empty;
         public string TaskKey { get; init; } = string.Empty;
@@ -421,6 +451,11 @@ public sealed partial class ModuleProductionRecordPersistence(
         public string QueueCreatedAtUtc { get; init; } = string.Empty;
         public string QueueProcessedAtUtc { get; init; } = string.Empty;
         public int IsOk { get; init; }
+    }
+
+    private sealed class TableColumnInfo
+    {
+        public string Name { get; init; } = string.Empty;
     }
 
     private sealed class SummaryRow

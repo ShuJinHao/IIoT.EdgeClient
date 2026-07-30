@@ -162,6 +162,14 @@ public class CapacitySyncTask : ICapacitySyncTask
         foreach (var ctx in contexts)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(ctx.PlcCode))
+            {
+                _logger.Error(
+                    $"[PlcCode=未解析][TaskKey=Capacity.Hourly][SignalKey=不适用] "
+                    + $"产能上下文“{ctx.DeviceName}”缺少稳定身份，已保留本地数据并停止上传。");
+                continue;
+            }
+
             var capacity = ctx.TodayCapacity.CreateSnapshot();
             if (string.IsNullOrWhiteSpace(capacity.Date) || capacity.TotalAll == 0)
             {
@@ -180,6 +188,7 @@ public class CapacitySyncTask : ICapacitySyncTask
                     slot.Total,
                     slot.OkCount,
                     slot.NgCount,
+                    ctx.PlcCode,
                     ctx.DeviceName,
                     cancellationToken).ConfigureAwait(false);
             }
@@ -195,7 +204,8 @@ public class CapacitySyncTask : ICapacitySyncTask
         int totalCount,
         int okCount,
         int ngCount,
-        string plcName,
+        string plcCode,
+        string deviceName,
         CancellationToken cancellationToken)
     {
         var result = await PostCapacityAsync(
@@ -207,22 +217,23 @@ public class CapacitySyncTask : ICapacitySyncTask
             totalCount,
             okCount,
             ngCount,
-            plcName,
+            plcCode,
+            deviceName,
             cancellationToken).ConfigureAwait(false);
         var slotLabel = FormatCapacitySlot(date, hour, minute, shiftCode);
         if (result.IsSuccess)
         {
             _logger.Info(
-                $"[产能同步] [{plcName}] {slotLabel} 已同步。总数：{totalCount}，OK：{okCount}，NG：{ngCount}");
+                $"[PlcCode={plcCode}][产能同步] [{deviceName}] {slotLabel} 已同步。总数：{totalCount}，OK：{okCount}，NG：{ngCount}");
         }
         else if (IsUploadPaused(result))
         {
             _logger.Warn(
-                $"[产能同步] [{plcName}] {slotLabel} 等待云端恢复，原因：{result.ReasonCode}");
+                $"[PlcCode={plcCode}][产能同步] [{deviceName}] {slotLabel} 等待云端恢复，原因：{result.ReasonCode}");
         }
         else
         {
-            _logger.Warn($"[产能同步] [{plcName}] {slotLabel} 同步失败。");
+            _logger.Warn($"[PlcCode={plcCode}][产能同步] [{deviceName}] {slotLabel} 同步失败。");
         }
 
         return result.IsSuccess;
@@ -260,7 +271,8 @@ public class CapacitySyncTask : ICapacitySyncTask
                             summary.Total,
                             summary.OkCount,
                             summary.NgCount,
-                            summary.PlcName).ConfigureAwait(false);
+                            summary.PlcName,
+                            deviceName: null).ConfigureAwait(false);
                         if (!result.IsSuccess)
                         {
                             await _bufferStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
@@ -356,16 +368,36 @@ public class CapacitySyncTask : ICapacitySyncTask
         int totalCount,
         int okCount,
         int ngCount,
-        string plcName,
+        string plcCode,
+        string? deviceName,
         CancellationToken cancellationToken = default)
     {
-        var payload = CreatePayload(deviceId, date, hour, minute, shiftCode, totalCount, okCount, ngCount, plcName);
+        var payload = CreatePayload(
+            deviceId,
+            date,
+            hour,
+            minute,
+            shiftCode,
+            totalCount,
+            okCount,
+            ngCount,
+            plcCode);
         var result = await _cloudHttp.PostAsync(
                 _endpointProvider.GetCapacityHourlyPath(),
                 payload,
                 cancellationToken: cancellationToken)
             .ConfigureAwait(false);
-        _diagnosticsStore.RecordResult("Capacity", result);
+        _diagnosticsStore.RecordResult(
+            "Capacity",
+            result,
+            new CloudUploadDiagnosticsContext(
+                DeviceName: deviceName,
+                ModuleId: "Capacity",
+                TaskKey: "Capacity.Hourly",
+                Scenario: "产能上传")
+            {
+                PlcCode = plcCode
+            });
         return result;
     }
 
@@ -378,7 +410,7 @@ public class CapacitySyncTask : ICapacitySyncTask
         int totalCount,
         int okCount,
         int ngCount,
-        string plcName)
+        string plcCode)
     {
         var endMinute = minute == 30 ? 0 : 30;
         var endHour = minute == 30 ? (hour + 1) % 24 : hour;
@@ -394,7 +426,7 @@ public class CapacitySyncTask : ICapacitySyncTask
             totalCount,
             okCount,
             ngCount,
-            plcName
+            plcName = plcCode
         };
     }
 

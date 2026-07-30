@@ -98,7 +98,7 @@ public sealed class PlcLifecycleCoordinator
                 var stopped = await StopDeviceCoreAsync(device.Id, ct).ConfigureAwait(false);
                 if (!stopped)
                 {
-                    _logger.Warn($"[{device.DeviceName}] 重载已停止：旧 PLC runtime 未安全退出，禁止创建替代 runtime。");
+                    _logger.Warn($"[PlcCode={device.PlcCode}] 重载已停止：旧 PLC runtime 未安全退出，禁止创建替代 runtime。");
                     return;
                 }
             }
@@ -106,18 +106,18 @@ public sealed class PlcLifecycleCoordinator
             ApplyDuplicateEndpointFaults(enabledDevices, duplicateEndpointFaults);
             if (!device.IsEnabled)
             {
-                _logger.Info($"[{device.DeviceName}] 重载完成：设备未启用。");
+                _logger.Info($"[PlcCode={device.PlcCode}] 重载完成：设备未启用。");
                 return;
             }
 
             if (duplicateEndpointFaults.ContainsKey(device.Id))
             {
-                _logger.Warn($"[{device.DeviceName}] 重载完成：PLC 端点重复，运行任务已暂停。");
+                _logger.Warn($"[PlcCode={device.PlcCode}] 重载完成：PLC 端点重复，运行任务已暂停。");
                 return;
             }
 
             await InitializeDeviceAsync(device, ct).ConfigureAwait(false);
-            _logger.Info($"[{device.DeviceName}] 重载完成，运行上下文已保留。");
+            _logger.Info($"[PlcCode={device.PlcCode}] 重载完成，运行上下文已保留。");
         }
         finally
         {
@@ -246,13 +246,13 @@ public sealed class PlcLifecycleCoordinator
         }
         catch (PlcServiceQuarantinedException ex)
         {
-            _statusStore.MarkRuntimeFault(device.Id, device.DeviceName, ex.Message);
-            _logger.Error($"[{device.DeviceName}] PLC service 已隔离，客户端继续启动：{ex.Message}");
+            _statusStore.MarkRuntimeFault(device.Id, device.PlcCode, device.DeviceName, ex.Message);
+            _logger.Error($"[PlcCode={device.PlcCode}] PLC service 已隔离，客户端继续启动：{ex.Message}");
         }
         catch (Exception ex)
         {
-            _statusStore.MarkDisconnected(device.Id, device.DeviceName, ex.Message);
-            _logger.Error($"[{device.DeviceName}] 初始化失败：{ex.Message}");
+            _statusStore.MarkDisconnected(device.Id, device.PlcCode, device.DeviceName, ex.Message);
+            _logger.Error($"[PlcCode={device.PlcCode}] 初始化失败：{ex.Message}");
         }
     }
 
@@ -265,12 +265,12 @@ public sealed class PlcLifecycleCoordinator
 
         if (_runtimeRegistry.ContainsRuntime(device.Id))
         {
-            _logger.Info($"[{device.DeviceName}] 初始化跳过：设备已在运行。");
+            _logger.Info($"[PlcCode={device.PlcCode}] 初始化跳过：设备已在运行。");
             return;
         }
 
-        _statusStore.EnsureTracked(device.Id, device.DeviceName);
-        var taskPlan = _runtimeRegistry.GetTaskPlan(device.Id, device.DeviceName);
+        _statusStore.EnsureTracked(device.Id, device.PlcCode, device.DeviceName);
+        var taskPlan = _runtimeRegistry.GetTaskPlan(device.Id, device.PlcCode, device.DeviceName);
         PlcDeviceRuntimeHandle? runtime = null;
         var registered = false;
 
@@ -280,17 +280,17 @@ public sealed class PlcLifecycleCoordinator
             if (IsShutdownRequested || IsDisposed || !_runtimeRegistry.TryAddRuntime(runtime))
             {
                 await CleanupDeviceRuntimeAsync(runtime).ConfigureAwait(false);
-                _logger.Warn($"[{device.DeviceName}] 初始化已取消：任务句柄尚未完成登记。");
+                _logger.Warn($"[PlcCode={device.PlcCode}] 初始化已取消：任务句柄尚未完成登记。");
                 return;
             }
 
             registered = true;
             runtime.Start();
             _logger.Info(
-                $"[{device.DeviceName}] 初始化完成：仅连接/重试任务已启动；周期读取和 {taskPlan.TaskKeys.Count} 个业务任务等待 TCP 成功后恢复。");
+                $"[PlcCode={device.PlcCode}] 初始化完成：仅连接/重试任务已启动；周期读取和 {taskPlan.TaskKeys.Count} 个业务任务等待 TCP 成功后恢复。");
             if (taskPlan.TaskKeys.Count == 0)
             {
-                _logger.Warn($"[{device.DeviceName}] 当前没有已启用且通过校验的业务任务，请检查任务绑定和 IO 必需点位。");
+                _logger.Warn($"[PlcCode={device.PlcCode}] 当前没有已启用且通过校验的业务任务，请检查任务绑定和 IO 必需点位。");
             }
         }
         catch
@@ -316,8 +316,10 @@ public sealed class PlcLifecycleCoordinator
                      .GroupBy(static device => $"{device.IpAddress.Trim()}:{device.Port1}", StringComparer.OrdinalIgnoreCase)
                      .Where(static group => group.Count() > 1))
         {
-            var deviceNames = string.Join("、", group.Select(static device => device.DeviceName));
-            var message = $"多个已启用 PLC 指向同一端点 {group.Key}：{deviceNames}。已暂停这些 PLC 的运行任务，请修正为唯一端点或停用重复配置，避免多个 service 并发访问同一物理 PLC。";
+            var deviceIdentities = string.Join(
+                "、",
+                group.Select(static device => $"{device.PlcCode}({device.DeviceName})"));
+            var message = $"多个已启用 PLC 指向同一端点 {group.Key}：{deviceIdentities}。已暂停这些 PLC 的运行任务，请修正为唯一端点或停用重复配置，避免多个 service 并发访问同一物理 PLC。";
             _logger.Warn($"[PLC配置][诊断] {message}");
             foreach (var device in group)
             {
@@ -344,7 +346,7 @@ public sealed class PlcLifecycleCoordinator
                 continue;
             }
 
-            _statusStore.MarkRuntimeFault(device.Id, device.DeviceName, message);
+            _statusStore.MarkRuntimeFault(device.Id, device.PlcCode, device.DeviceName, message);
         }
     }
 
@@ -363,7 +365,7 @@ public sealed class PlcLifecycleCoordinator
         var device = (await _networkDevices.GetListAsync(x => x.Id == deviceId, ct).ConfigureAwait(false)).FirstOrDefault();
         if (device is not null)
         {
-            _statusStore.MarkDisconnected(device.Id, device.DeviceName);
+            _statusStore.MarkDisconnected(device.Id, device.PlcCode, device.DeviceName);
         }
 
         return true;
@@ -383,8 +385,8 @@ public sealed class PlcLifecycleCoordinator
         }
 
         const string reason = "PLC runtime 已释放，但 registry reservation 不再指向原 runtime，禁止继续自动替换。";
-        _statusStore.MarkRuntimeFault(runtime.DeviceId, runtime.DeviceName, reason);
-        _logger.Error($"[{runtime.DeviceName}] {reason}");
+        _statusStore.MarkRuntimeFault(runtime.DeviceId, runtime.PlcCode, runtime.DeviceName, reason);
+        _logger.Error($"[PlcCode={runtime.PlcCode}] {reason}");
         return false;
     }
 
@@ -396,7 +398,7 @@ public sealed class PlcLifecycleCoordinator
         }
         catch (Exception ex)
         {
-            _logger.Warn($"[{runtime.DeviceName}] 取消 PLC 运行任务时发生异常：{ex.Message}");
+            _logger.Warn($"[PlcCode={runtime.PlcCode}] 取消 PLC 运行任务时发生异常：{ex.Message}");
         }
 
         var runningHandlesStopped = await AwaitRunningHandlesAsync(
@@ -431,7 +433,7 @@ public sealed class PlcLifecycleCoordinator
             return false;
         }
 
-        _statusStore.MarkDisconnected(runtime.DeviceId, runtime.DeviceName);
+        _statusStore.MarkDisconnected(runtime.DeviceId, runtime.PlcCode, runtime.DeviceName);
         return true;
     }
 
@@ -442,8 +444,8 @@ public sealed class PlcLifecycleCoordinator
         var diagnostic = retained
             ? reason
             : $"{reason} 隔离 runtime 未能重新登记，但同 DeviceId 已有 runtime 占位。";
-        _statusStore.MarkRuntimeFault(runtime.DeviceId, runtime.DeviceName, diagnostic);
-        _logger.Error($"[{runtime.DeviceName}] PLC runtime 已隔离：{diagnostic}");
+        _statusStore.MarkRuntimeFault(runtime.DeviceId, runtime.PlcCode, runtime.DeviceName, diagnostic);
+        _logger.Error($"[PlcCode={runtime.PlcCode}] PLC runtime 已隔离：{diagnostic}");
     }
 
     private async Task<bool> AwaitRunningHandlesAsync(
@@ -469,7 +471,7 @@ public sealed class PlcLifecycleCoordinator
         }
         catch (TimeoutException) when (!completion.IsCompleted)
         {
-            _logger.Warn($"[{runtime.DeviceName}] 等待 PLC 任务停止超时：共享的 5 秒停止期限内未完成。");
+            _logger.Warn($"[PlcCode={runtime.PlcCode}] 等待 PLC 任务停止超时：共享的 5 秒停止期限内未完成。");
             return false;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -478,7 +480,7 @@ public sealed class PlcLifecycleCoordinator
         }
         catch (Exception ex)
         {
-            _logger.Error($"[{runtime.DeviceName}] 等待 PLC 任务停止时发生异常：{ex.Message}");
+            _logger.Error($"[PlcCode={runtime.PlcCode}] 等待 PLC 任务停止时发生异常：{ex.Message}");
             return true;
         }
     }

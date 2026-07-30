@@ -193,7 +193,7 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
                 await HandleRetryFailureAsync(source, "处理超时。", cancellationToken).ConfigureAwait(false);
             }
 
-            Logger.Warn($"[PLC-{DataPipelineRetryChannelMetadata.ResolveLogDeviceName(validSourceRecords)}][云端补传] {processType} 批量补传超时，数量：{validSourceRecords.Count}。");
+            Logger.Warn($"[PlcCode={DataPipelineRetryChannelMetadata.ResolveLogPlcCode(validSourceRecords)}][云端补传] {processType} 批量补传超时，数量：{validSourceRecords.Count}。");
             return CloudRetryProcessResult.Continue;
         }
 
@@ -206,7 +206,7 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
                 cancellationToken.ThrowIfCancellationRequested();
             }
 
-            Logger.Info($"[PLC-{DataPipelineRetryChannelMetadata.ResolveLogDeviceName(validSourceRecords)}][云端补传] {processType} 批量补传成功，数量：{validSourceRecords.Count}。");
+            Logger.Info($"[PlcCode={DataPipelineRetryChannelMetadata.ResolveLogPlcCode(validSourceRecords)}][云端补传] {processType} 批量补传成功，数量：{validSourceRecords.Count}。");
             return CloudRetryProcessResult.Continue;
         }
 
@@ -214,7 +214,7 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
         {
             cancellationToken.ThrowIfCancellationRequested();
             await ReleaseClaimAndPauseAsync(claimToken).ConfigureAwait(false);
-            Logger.Warn($"[PLC-{DataPipelineRetryChannelMetadata.ResolveLogDeviceName(validSourceRecords)}][云端补传] {processType} 批量补传已暂停，结果：{result.Outcome}，原因：{result.ReasonCode}。");
+            Logger.Warn($"[PlcCode={DataPipelineRetryChannelMetadata.ResolveLogPlcCode(validSourceRecords)}][云端补传] {processType} 批量补传已暂停，结果：{result.Outcome}，原因：{result.ReasonCode}。");
             return CloudRetryProcessResult.PauseForRecovery;
         }
 
@@ -226,7 +226,7 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
                 await HandleInvalidPayloadAsync(source, result.ReasonCode, cancellationToken).ConfigureAwait(false);
             }
 
-            Logger.Warn($"[PLC-{DataPipelineRetryChannelMetadata.ResolveLogDeviceName(validSourceRecords)}][云端补传] {processType} 批量补传记录因永久契约错误进入死信，数量：{validSourceRecords.Count}。");
+            Logger.Warn($"[PlcCode={DataPipelineRetryChannelMetadata.ResolveLogPlcCode(validSourceRecords)}][云端补传] {processType} 批量补传记录因永久契约错误进入死信，数量：{validSourceRecords.Count}。");
             return CloudRetryProcessResult.Continue;
         }
 
@@ -236,7 +236,7 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
             await HandleRetryFailureAsync(source, $"Cloud 批量补传失败（{result.ReasonCode}）。", cancellationToken).ConfigureAwait(false);
         }
 
-        Logger.Warn($"[PLC-{DataPipelineRetryChannelMetadata.ResolveLogDeviceName(validSourceRecords)}][云端补传] {processType} 批量补传失败，数量：{validSourceRecords.Count}。");
+        Logger.Warn($"[PlcCode={DataPipelineRetryChannelMetadata.ResolveLogPlcCode(validSourceRecords)}][云端补传] {processType} 批量补传失败，数量：{validSourceRecords.Count}。");
         return CloudRetryProcessResult.Continue;
     }
 
@@ -299,13 +299,13 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
             cancellationToken.ThrowIfCancellationRequested();
             await RetryStore.DeleteAsync(record.Id).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
-            Logger.Info($"[PLC-{record.DeviceName}][云端补传] {cellData.DisplayLabel} 补传成功，记录已删除。");
+            Logger.Info($"[PlcCode={record.PlcCode}][云端补传] {cellData.DisplayLabel} 补传成功，记录已删除。");
             return CloudRetryProcessResult.Continue;
         }
 
         if (ShouldPauseForRecovery(result))
         {
-            Logger.Warn($"[PLC-{record.DeviceName}][云端补传] {cellData.DisplayLabel} 补传已暂停，结果：{result.Outcome}，原因：{result.ReasonCode}。");
+            Logger.Warn($"[PlcCode={record.PlcCode}][云端补传] {cellData.DisplayLabel} 补传已暂停，结果：{result.Outcome}，原因：{result.ReasonCode}。");
             return CloudRetryProcessResult.PauseForRecovery;
         }
 

@@ -22,6 +22,13 @@ public class NetworkDeviceVm : HardwareConfigEditModelBase
         set { _deviceName = value; OnPropertyChanged(); }
     }
 
+    private string _plcCode = string.Empty;
+    public string PlcCode
+    {
+        get => _plcCode;
+        set { _plcCode = value; OnPropertyChanged(); }
+    }
+
     private DeviceType _deviceType;
     public DeviceType DeviceType
     {

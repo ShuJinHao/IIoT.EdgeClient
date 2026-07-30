@@ -17,6 +17,11 @@ public interface IPlcTaskBindingService
         string? deviceModel = null,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlySet<string>> GetConfiguredEnabledTaskKeysAsync(
+        int networkDeviceId,
+        IReadOnlyCollection<TaskCandidate> candidates,
+        CancellationToken cancellationToken = default);
+
     PlcTaskBindingValidationResult ValidateEnabledTasks(
         IReadOnlyCollection<TaskCandidate> candidates,
         IReadOnlySet<string> enabledTaskKeys,

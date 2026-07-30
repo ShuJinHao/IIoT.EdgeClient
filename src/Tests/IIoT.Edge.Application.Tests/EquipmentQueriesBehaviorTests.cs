@@ -35,7 +35,7 @@ public sealed class EquipmentQueriesBehaviorTests
     [Fact]
     public async Task GetHardwareStatusHandler_WhenRuntimeIsConnected_ShouldReportConnected()
     {
-        var device = CreateDevice(2, "PLC-B");
+        var device = CreateDevice(2, "改名后的 PLC", "P1-CP01");
         var handler = new GetHardwareStatusHandler(
             new HardwareSender(device),
             new FakePlcConnectionManager(
@@ -50,10 +50,12 @@ public sealed class EquipmentQueriesBehaviorTests
 
         Assert.Single(result);
         Assert.True(result[0].IsConnected);
+        Assert.Equal("P1-CP01", result[0].PlcCode);
+        Assert.Equal("改名后的 PLC", result[0].Name);
     }
 
-    private static NetworkDeviceEntity CreateDevice(int id, string deviceName)
-        => NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, "127.0.0.1", 102)
+    private static NetworkDeviceEntity CreateDevice(int id, string deviceName, string? plcCode = null)
+        => NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, "127.0.0.1", 102, plcCode)
             .WithId(id);
 
     private sealed class HardwareSender(NetworkDeviceEntity device) : ISender

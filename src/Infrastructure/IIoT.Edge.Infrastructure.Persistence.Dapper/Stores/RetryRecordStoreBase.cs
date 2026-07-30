@@ -41,7 +41,13 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
     {
         var cellData = record.CellData;
         var cellDataJson = _cellDataJsonSerializer.Serialize(cellData);
-        await SaveRawCoreAsync(cellData.ProcessType, cellDataJson, failedTarget, errorMessage, record, cancellationToken).ConfigureAwait(false);
+        await SaveRawCoreAsync(
+            cellData.ProcessType,
+            cellDataJson,
+            failedTarget,
+            errorMessage,
+            CreateContextRow(record),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public Task SaveRawAsync(
@@ -49,27 +55,53 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
         string cellDataJson,
         string failedTarget,
         string errorMessage)
-        => SaveRawCoreAsync(processType, cellDataJson, failedTarget, errorMessage, sourceRecord: null);
+        => SaveRawCoreAsync(
+            processType,
+            cellDataJson,
+            failedTarget,
+            errorMessage,
+            DataPipelineContextRow.Empty);
+
+    protected Task SaveRequeuedCoreAsync(DeadLetterRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        return SaveRawCoreAsync(
+            record.ProcessType,
+            record.CellDataJson,
+            record.FailedTarget,
+            $"manual_requeue:{record.FailureStage}:{record.FailureReason}",
+            new DataPipelineContextRow(
+                record.PlcCode,
+                record.IdempotencyKeyVersion,
+                record.NetworkDeviceId,
+                record.DeviceName,
+                record.ModuleId,
+                record.TaskKey,
+                record.PlanSessionId,
+                record.MainPlanCode,
+                record.TraceBatchNumber));
+    }
 
     private async Task SaveRawCoreAsync(
         string processType,
         string cellDataJson,
         string failedTarget,
         string errorMessage,
-        CellCompletedRecord? sourceRecord,
+        DataPipelineContextRow context,
         CancellationToken cancellationToken = default)
     {
         var nowUtc = DateTime.UtcNow;
-        var context = CreateContextRow(sourceRecord);
 
         var sql = $@"
             INSERT INTO {TableName}
                 (ProcessType, CellDataJson, FailedTarget, ErrorMessage,
                  RetryCount, NextRetryTime, CreatedAt,
+                 PlcCode, IdempotencyKeyVersion,
                  NetworkDeviceId, DeviceName, ModuleId, TaskKey, PlanSessionId, MainPlanCode, TraceBatchNumber)
             VALUES
                 (@ProcessType, @CellDataJson, @FailedTarget, @ErrorMessage,
                  0, @NextRetryTime, @CreatedAt,
+                 @PlcCode, @IdempotencyKeyVersion,
                  @NetworkDeviceId, @DeviceName, @ModuleId, @TaskKey, @PlanSessionId, @MainPlanCode, @TraceBatchNumber)";
 
         var affectedRows = await SafeExecuteAsync(sql, new
@@ -80,6 +112,8 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
             ErrorMessage = errorMessage,
             NextRetryTime = nowUtc.AddSeconds(30).ToString("O"),
             CreatedAt = nowUtc.ToString("O"),
+            context.PlcCode,
+            IdempotencyKeyVersion = (int)context.IdempotencyKeyVersion,
             context.NetworkDeviceId,
             context.DeviceName,
             context.ModuleId,
@@ -108,6 +142,8 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
                 RetryCount,
                 NextRetryTime,
                 CreatedAt,
+                PlcCode,
+                IdempotencyKeyVersion,
                 NetworkDeviceId,
                 DeviceName,
                 ModuleId,
@@ -117,6 +153,8 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
                 TraceBatchNumber
             FROM {TableName}
             WHERE NextRetryTime <= @Now
+              AND TRIM(PlcCode) <> ''
+              AND IdempotencyKeyVersion IN (1, 2)
             ORDER BY NextRetryTime ASC
             LIMIT @BatchSize";
 
@@ -142,6 +180,8 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
                 LEFT JOIN {ClaimTableName} c ON c.RecordId = r.Id
                 WHERE c.RecordId IS NULL
                   AND r.NextRetryTime <= @Now
+                  AND TRIM(r.PlcCode) <> ''
+                  AND r.IdempotencyKeyVersion IN (1, 2)
                 ORDER BY r.NextRetryTime ASC, r.Id ASC
                 LIMIT @BatchSize",
                 new
@@ -163,6 +203,8 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
                     r.RetryCount,
                     r.NextRetryTime,
                     r.CreatedAt,
+                    r.PlcCode,
+                    r.IdempotencyKeyVersion,
                     r.NetworkDeviceId,
                     r.DeviceName,
                     r.ModuleId,
@@ -285,7 +327,9 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
             UPDATE {TableName}
             SET RetryCount = 0,
                 NextRetryTime = @Now
-            WHERE NextRetryTime = @MaxTime";
+            WHERE NextRetryTime = @MaxTime
+              AND TRIM(PlcCode) <> ''
+              AND IdempotencyKeyVersion IN (1, 2)";
 
         await StrictExecuteAsync(sql, new
         {
@@ -307,19 +351,21 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
             .ConfigureAwait(false);
     }
 
-    private static DataPipelineContextRow CreateContextRow(CellCompletedRecord? sourceRecord)
-        => sourceRecord is null
-            ? DataPipelineContextRow.Empty
-            : new DataPipelineContextRow(
-                sourceRecord.ResolveNetworkDeviceId(),
-                sourceRecord.ResolveDeviceName(),
-                sourceRecord.ModuleId,
-                sourceRecord.TaskKey,
-                sourceRecord.PlanSessionId,
-                sourceRecord.MainPlanCode,
-                sourceRecord.TraceBatchNumber);
+    private static DataPipelineContextRow CreateContextRow(CellCompletedRecord sourceRecord)
+        => new(
+            sourceRecord.ResolvePlcCode(),
+            sourceRecord.IdempotencyKeyVersion,
+            sourceRecord.ResolveNetworkDeviceId(),
+            sourceRecord.ResolveDeviceName(),
+            sourceRecord.ModuleId,
+            sourceRecord.TaskKey,
+            sourceRecord.PlanSessionId,
+            sourceRecord.MainPlanCode,
+            sourceRecord.TraceBatchNumber);
 
     private sealed record DataPipelineContextRow(
+        string PlcCode,
+        CloudIdempotencyKeyVersion IdempotencyKeyVersion,
         int? NetworkDeviceId,
         string DeviceName,
         string ModuleId,
@@ -329,6 +375,8 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
         string TraceBatchNumber)
     {
         public static DataPipelineContextRow Empty { get; } = new(
+            string.Empty,
+            CloudIdempotencyKeyVersion.LegacyV1,
             null,
             string.Empty,
             string.Empty,
@@ -343,7 +391,9 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
         var sql = $@"
             DELETE FROM {TableName}
             WHERE NextRetryTime = @MaxTime
-              AND CreatedAt < @OlderThanUtc";
+              AND CreatedAt < @OlderThanUtc
+              AND TRIM(PlcCode) <> ''
+              AND IdempotencyKeyVersion IN (1, 2)";
 
         return await StrictExecuteAsync(sql, new
         {

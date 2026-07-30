@@ -34,6 +34,9 @@ public sealed class DataPipelineDeadLetterWriter : IDataPipelineDeadLetterWriter
                 FailureStage = stage.ToString(),
                 FailureReason = failureReason,
                 CreatedAt = DateTime.UtcNow,
+                PlcCode = sourceRecord?.PlcCode ?? string.Empty,
+                IdempotencyKeyVersion = sourceRecord?.IdempotencyKeyVersion
+                    ?? CloudIdempotencyKeyVersion.LegacyV1,
                 NetworkDeviceId = sourceRecord?.NetworkDeviceId,
                 DeviceName = sourceRecord?.DeviceName ?? string.Empty,
                 ModuleId = sourceRecord?.ModuleId ?? string.Empty,
@@ -44,10 +47,10 @@ public sealed class DataPipelineDeadLetterWriter : IDataPipelineDeadLetterWriter
             }).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
 
-            var deviceName = string.IsNullOrWhiteSpace(sourceRecord?.DeviceName)
-                ? "未知"
-                : sourceRecord.DeviceName;
-            logger.Fatal($"[PLC-{deviceName}][{channel.DeadLetterName}] 工序={processType} 记录 {sourceRecordId} 已进入死信表。");
+            var plcCode = string.IsNullOrWhiteSpace(sourceRecord?.PlcCode)
+                ? "未解析"
+                : sourceRecord.PlcCode;
+            logger.Fatal($"[PlcCode={plcCode}][{channel.DeadLetterName}] 工序={processType} 记录 {sourceRecordId} 已进入死信表。");
             return true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

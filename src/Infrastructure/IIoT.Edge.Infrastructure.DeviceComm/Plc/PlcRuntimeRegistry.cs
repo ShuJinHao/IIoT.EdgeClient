@@ -45,6 +45,7 @@ public sealed class PlcRuntimeRegistry
 
     public PlcRuntimeTaskPlan GetTaskPlan(
         int networkDeviceId,
+        string plcCode,
         string deviceName)
     {
         if (networkDeviceId <= 0)
@@ -54,12 +55,13 @@ public sealed class PlcRuntimeRegistry
                 nameof(networkDeviceId));
         }
 
+        ArgumentException.ThrowIfNullOrWhiteSpace(plcCode);
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceName);
         lock (_stateLock)
         {
             return _taskPlans.TryGetValue(networkDeviceId, out var plan)
                 ? plan
-                : PlcRuntimeTaskPlan.Empty(networkDeviceId, deviceName);
+                : PlcRuntimeTaskPlan.Empty(networkDeviceId, plcCode, deviceName);
         }
     }
 

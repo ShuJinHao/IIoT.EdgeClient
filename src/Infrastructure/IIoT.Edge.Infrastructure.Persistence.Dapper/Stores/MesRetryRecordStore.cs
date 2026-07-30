@@ -2,6 +2,8 @@ using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
+using IIoT.Edge.Application.Features.DataPipeline.DeadLetters;
+using IIoT.Edge.Module.Contracts.DataPipeline;
 
 using IIoT.Edge.Module.Contracts.Mes;
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
@@ -9,7 +11,10 @@ namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 /// <summary>
 /// MES 主补传表。只保存完整 CellDataJson 和失败目标，不为插件业务字段建列。
 /// </summary>
-public sealed class MesRetryRecordStore : RetryRecordStoreBase, IMesRetryRecordStore
+public sealed class MesRetryRecordStore :
+    RetryRecordStoreBase,
+    IMesRetryRecordStore,
+    IMesDeadLetterRequeueStore
 {
     /// <summary>
     /// MES 使用独立 SQLite 数据库文件，避免和 Cloud 补偿链路混库。
@@ -65,4 +70,7 @@ public sealed class MesRetryRecordStore : RetryRecordStoreBase, IMesRetryRecordS
         : base(connectionFactory, logger, cellDataJsonSerializer)
     {
     }
+
+    public Task SaveRequeuedAsync(DeadLetterRecord record)
+        => SaveRequeuedCoreAsync(record);
 }

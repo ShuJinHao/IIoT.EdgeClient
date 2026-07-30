@@ -97,6 +97,38 @@ public sealed class EfRepositoryBehaviorTests
     }
 
     [Fact]
+    public async Task Commit_WhenPlcCodeDuplicated_ShouldRejectAtSqliteBoundary()
+    {
+        var database = await CreateDatabaseAsync();
+        try
+        {
+            var first = NetworkDeviceEntity.Create(
+                "Display-A",
+                DeviceType.PLC,
+                "127.0.0.1",
+                6001,
+                "PLC-STABLE-DUP");
+            var second = NetworkDeviceEntity.Create(
+                "Display-B",
+                DeviceType.PLC,
+                "127.0.0.2",
+                6002,
+                "PLC-STABLE-DUP");
+            await using var unitOfWork = await database.UnitOfWorkFactory.BeginAsync(
+                TestContext.Current.CancellationToken);
+            unitOfWork.Repository<NetworkDeviceEntity>().Add(first);
+            unitOfWork.Repository<NetworkDeviceEntity>().Add(second);
+
+            await Assert.ThrowsAsync<DbUpdateException>(
+                () => unitOfWork.CommitAsync(TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            database.Dispose();
+        }
+    }
+
+    [Fact]
     public async Task QuerySurface_ShouldMatchForReadAndUnitOfWorkRepositories()
     {
         var database = await CreateDatabaseAsync();

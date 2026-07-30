@@ -20,6 +20,8 @@ public sealed class DeadLetterMaintenanceBehaviorTests
         var retry = Assert.Single(cloudRetry.PendingRecords);
         Assert.Equal("Cloud", retry.Channel);
         Assert.Equal("TRAY-10", retry.CellDataJson);
+        Assert.Equal("PLC-DEADLETTER", retry.PlcCode);
+        Assert.Equal(CloudIdempotencyKeyVersion.LegacyV1, retry.IdempotencyKeyVersion);
     }
 
     [Fact]
@@ -111,18 +113,44 @@ public sealed class DeadLetterMaintenanceBehaviorTests
         Assert.Contains(logger.Entries, x => x.Level == "Error" && x.Message.Contains("60", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task DeadLetter_WhenStableIdentityUnresolved_ShouldRejectRequeueAndDelete()
+    {
+        var cloudDeadLetters = new FakeCloudDeadLetterStore();
+        var unresolved = CreateDeadLetter(70, "Cloud", "failed_cloud_records");
+        unresolved.PlcCode = string.Empty;
+        cloudDeadLetters.Records.Add(unresolved);
+        var cloudRetry = new FakeFailedRecordStore();
+        var service = CreateService(cloudDeadLetters: cloudDeadLetters, cloudRetry: cloudRetry);
+
+        var requeue = await service.RequeueAsync(DataPipelineRetryChannel.Cloud, 70);
+        var delete = await service.DeleteAsync(DataPipelineRetryChannel.Cloud, 70);
+
+        Assert.False(requeue.IsSuccess);
+        Assert.False(delete.IsSuccess);
+        Assert.Contains("身份未解析", requeue.Message, StringComparison.Ordinal);
+        Assert.Single(cloudDeadLetters.Records);
+        Assert.Empty(cloudRetry.PendingRecords);
+    }
+
     private static DeadLetterMaintenanceService CreateService(
         FakeCloudDeadLetterStore? cloudDeadLetters = null,
         FakeMesDeadLetterStore? mesDeadLetters = null,
         FakeFailedRecordStore? cloudRetry = null,
         FakeFailedRecordStore? mesRetry = null,
         FakeLogService? logger = null)
-        => new(
+    {
+        var resolvedCloudRetry = cloudRetry ?? new FakeFailedRecordStore();
+        var resolvedMesRetry = mesRetry ?? new FakeFailedRecordStore();
+        return new DeadLetterMaintenanceService(
             cloudDeadLetters ?? new FakeCloudDeadLetterStore(),
             mesDeadLetters ?? new FakeMesDeadLetterStore(),
-            cloudRetry ?? new FakeFailedRecordStore(),
-            mesRetry ?? new FakeFailedRecordStore(),
+            resolvedCloudRetry,
+            resolvedMesRetry,
+            resolvedCloudRetry,
+            resolvedMesRetry,
             logger ?? new FakeLogService());
+    }
 
     private static DeadLetterRecord CreateDeadLetter(long id, string failedTarget, string sourceTable)
         => new()
@@ -135,6 +163,12 @@ public sealed class DeadLetterMaintenanceBehaviorTests
             SourceRecordId = id,
             FailureStage = nameof(DeadLetterStage.FallbackPersist),
             FailureReason = "test",
-            CreatedAt = DateTime.UtcNow.AddMinutes(-id)
+            CreatedAt = DateTime.UtcNow.AddMinutes(-id),
+            PlcCode = "PLC-DEADLETTER",
+            NetworkDeviceId = 10,
+            DeviceName = "Display-Deadletter",
+            ModuleId = "TestModule",
+            TaskKey = "TestModule.Task",
+            IdempotencyKeyVersion = CloudIdempotencyKeyVersion.LegacyV1
         };
 }

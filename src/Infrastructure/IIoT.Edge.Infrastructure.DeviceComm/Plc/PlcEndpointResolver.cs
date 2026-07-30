@@ -36,7 +36,7 @@ public sealed class PlcEndpointResolver(
         if (string.IsNullOrWhiteSpace(serialDeviceName))
         {
             throw new InvalidOperationException(
-                $"[{device.DeviceName}] Modbus RTU PLC 必须在 Command1 中填写已配置的串口设备名称。");
+                $"[PlcCode={device.PlcCode}] Modbus RTU PLC 必须在 Command1 中填写已配置的串口设备名称。");
         }
 
         var serialDevice = await serialDevices
@@ -47,13 +47,13 @@ public sealed class PlcEndpointResolver(
         if (serialDevice is null)
         {
             throw new InvalidOperationException(
-                $"[{device.DeviceName}] Modbus RTU 绑定的串口设备不存在：{serialDeviceName}。");
+                $"[PlcCode={device.PlcCode}] Modbus RTU 绑定的串口设备不存在：{serialDeviceName}。");
         }
 
         if (!serialDevice.IsEnabled)
         {
             throw new InvalidOperationException(
-                $"[{device.DeviceName}] Modbus RTU 绑定的串口设备已停用：{serialDeviceName}。");
+                $"[PlcCode={device.PlcCode}] Modbus RTU 绑定的串口设备已停用：{serialDeviceName}。");
         }
 
         var slaveId = NormalizeSlaveId(device.Port1, device.DeviceName);
@@ -91,6 +91,6 @@ public sealed class PlcEndpointResolver(
         }
 
         throw new InvalidOperationException(
-            $"[{device.DeviceName}] MC PLC 协议帧配置无效：{device.ProtocolFrame}，只支持 E3 或 E4。");
+            $"[PlcCode={device.PlcCode}] MC PLC 协议帧配置无效：{device.ProtocolFrame}，只支持 E3 或 E4。");
     }
 }

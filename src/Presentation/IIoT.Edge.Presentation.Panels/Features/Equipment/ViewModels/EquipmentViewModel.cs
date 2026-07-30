@@ -259,11 +259,13 @@ public class EquipmentViewModel : PresentationViewModelBase
         options.AddRange(
             snapshots
                 .Where(static snapshot => string.Equals(snapshot.DeviceType, "PLC", StringComparison.OrdinalIgnoreCase))
-                .Select(static snapshot => snapshot.Name)
-                .Where(static name => !string.IsNullOrWhiteSpace(name))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(static name => name, StringComparer.OrdinalIgnoreCase)
-                .Select(static name => new DeviceSelectionOption(name, name)));
+                .Select(static snapshot => CreateDeviceSelectionOption(snapshot))
+                .Where(static option => option is not null)
+                .Select(static option => option!)
+                .GroupBy(static option => option.Key, StringComparer.OrdinalIgnoreCase)
+                .Where(static group => group.Take(2).Count() == 1)
+                .Select(static group => group.First())
+                .OrderBy(static option => option.DisplayName, StringComparer.OrdinalIgnoreCase));
 
         if (!string.Equals(preferredKey, IDeviceSelectionService.AllFilterKey, StringComparison.OrdinalIgnoreCase)
             && options.All(option => !string.Equals(option.Key, preferredKey, StringComparison.OrdinalIgnoreCase)))
@@ -273,6 +275,24 @@ public class EquipmentViewModel : PresentationViewModelBase
 
         ReplaceItems(DeviceFilters, options);
         ApplySelectedDevice(preferredKey);
+    }
+
+    private static DeviceSelectionOption? CreateDeviceSelectionOption(HardwareSnapshot snapshot)
+    {
+        var deviceName = snapshot.Name?.Trim() ?? string.Empty;
+        var plcCode = snapshot.PlcCode?.Trim() ?? string.Empty;
+        var key = !string.IsNullOrWhiteSpace(plcCode) ? plcCode : deviceName;
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return null;
+        }
+
+        var displayName = string.IsNullOrWhiteSpace(plcCode)
+                          || string.IsNullOrWhiteSpace(deviceName)
+                          || string.Equals(plcCode, deviceName, StringComparison.OrdinalIgnoreCase)
+            ? key
+            : $"{plcCode} · {deviceName}";
+        return new DeviceSelectionOption(key, displayName);
     }
 
     private DeviceSelectionOption CreateAllDeviceOption()

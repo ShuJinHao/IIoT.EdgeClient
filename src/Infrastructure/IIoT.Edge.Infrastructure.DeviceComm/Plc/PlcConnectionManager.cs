@@ -46,11 +46,14 @@ public sealed class PlcConnectionManager : IPlcConnectionManager
         => _runtimeRegistry.GetPlc(networkDeviceId);
 
     public ProductionContext? GetContext(string deviceName)
-        => _contextStore.GetOrCreate(deviceName);
+        => null;
 
     public void MarkRuntimeFault(int networkDeviceId, string deviceName, string error)
     {
-        _statusStore.MarkRuntimeFault(networkDeviceId, deviceName, error);
+        var plcCode = _runtimeRegistry.GetRuntime(networkDeviceId)?.PlcCode
+            ?? _statusStore.GetSnapshot(networkDeviceId)?.PlcCode
+            ?? string.Empty;
+        _statusStore.MarkRuntimeFault(networkDeviceId, plcCode, deviceName, error);
     }
 
     public PlcConnectionRuntimeSnapshot? GetRuntimeStatus(int networkDeviceId)

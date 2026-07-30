@@ -70,6 +70,8 @@ public abstract class DapperRepositoryBase<TEntity> : ITableInitializer
 
     protected async Task EnsureDataPipelineContextColumnsAsync(IDbConnection connection, string tableName)
     {
+        await EnsureColumnAsync(connection, tableName, "PlcCode", "TEXT NOT NULL DEFAULT ''").ConfigureAwait(false);
+        await EnsureColumnAsync(connection, tableName, "IdempotencyKeyVersion", "INTEGER NOT NULL DEFAULT 1").ConfigureAwait(false);
         await EnsureColumnAsync(connection, tableName, "NetworkDeviceId", "INTEGER NULL").ConfigureAwait(false);
         await EnsureColumnAsync(connection, tableName, "DeviceName", "TEXT NOT NULL DEFAULT ''").ConfigureAwait(false);
         await EnsureColumnAsync(connection, tableName, "ModuleId", "TEXT NOT NULL DEFAULT ''").ConfigureAwait(false);

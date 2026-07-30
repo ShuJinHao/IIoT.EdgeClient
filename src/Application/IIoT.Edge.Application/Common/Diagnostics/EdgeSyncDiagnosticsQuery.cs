@@ -69,6 +69,9 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
             .Where(x => string.Equals(x.LastResult, "Failed", StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(x => x.LastAttemptAt ?? DateTime.MinValue)
             .FirstOrDefault();
+        var latestMesChannel = mesChannels
+            .OrderByDescending(x => x.LastAttemptAt ?? DateTime.MinValue)
+            .FirstOrDefault();
 
         var cloudPendingTask = GetCloudPendingDiagnosticsAsync(ct);
         var mesPendingTask = GetMesPendingDiagnosticsAsync(ct);
@@ -114,7 +117,10 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
             LastDeviceName: cloudDiagnostics.LastDeviceName,
             LastModuleId: cloudDiagnostics.LastModuleId,
             LastTaskKey: cloudDiagnostics.LastTaskKey,
-            LastScenario: cloudDiagnostics.LastScenario);
+            LastScenario: cloudDiagnostics.LastScenario)
+        {
+            LastPlcCode = cloudDiagnostics.LastPlcCode
+        };
 
         var mes = new MesSyncDiagnosticsSnapshot(
             RuntimeState: mesRuntime.RuntimeState,
@@ -132,13 +138,21 @@ public sealed class EdgeSyncDiagnosticsQuery : IEdgeSyncDiagnosticsQuery
             LastPersistenceFaultAt: mesPending.LastPersistenceFaultAt,
             PersistenceFaultMessage: mesPending.PersistenceFaultMessage,
             Heartbeat: GetHeartbeat(ExternalSystemKind.Mes),
-            DeadLetters: mesDeadLetters);
+            DeadLetters: mesDeadLetters)
+        {
+            LastPlcCode = latestMesChannel?.PlcCode
+        };
 
         return new EdgeSyncDiagnosticsSnapshot(
             DeviceName: _deviceService.CurrentDevice?.DeviceName ?? "未知",
             Cloud: cloud,
             Mes: mes,
-            ContextPersistence: _productionContextStore.GetPersistenceDiagnostics());
+            ContextPersistence: _productionContextStore.GetPersistenceDiagnostics())
+        {
+            PlcCode = cloud.LastPlcCode
+                      ?? mes.LastPlcCode
+                      ?? string.Empty
+        };
     }
 
     private Task<PendingDiagnosticsSnapshot> GetCloudPendingDiagnosticsAsync(CancellationToken ct)

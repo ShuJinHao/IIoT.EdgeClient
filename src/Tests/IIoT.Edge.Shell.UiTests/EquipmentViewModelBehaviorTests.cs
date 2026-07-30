@@ -143,10 +143,59 @@ public sealed class EquipmentViewModelBehaviorTests
         Assert.Single(viewModel.DeviceFilters);
     }
 
+    [AvaloniaFact]
+    public async Task DeviceFilter_WhenDeviceIsRenamed_ShouldKeepStablePlcCodeSelection()
+    {
+        var panelService = new FakeEquipmentPanelService
+        {
+            HardwareSnapshots =
+            [
+                new HardwareSnapshot("旧名称", "192.168.1.10", "PLC", true)
+                {
+                    PlcCode = "P1-AP01"
+                }
+            ]
+        };
+        var selectionService = new DeviceSelectionService();
+        selectionService.SelectDevice("P1-AP01");
+        var viewModel = CreateViewModel(
+            [],
+            [],
+            equipmentPanelService: panelService,
+            deviceSelectionService: selectionService);
+
+        try
+        {
+            await viewModel.OnActivatedAsync();
+            Assert.Equal("P1-AP01", viewModel.SelectedDeviceFilter?.Key);
+            Assert.Equal("P1-AP01 · 旧名称", viewModel.SelectedDeviceFilter?.DisplayName);
+
+            panelService.HardwareSnapshots =
+            [
+                new HardwareSnapshot("新名称", "192.168.1.10", "PLC", true)
+                {
+                    PlcCode = "P1-AP01"
+                }
+            ];
+
+            await viewModel.OnActivatedAsync();
+
+            Assert.Equal("P1-AP01", selectionService.SelectedDeviceKey);
+            Assert.Equal("P1-AP01", viewModel.SelectedDeviceFilter?.Key);
+            Assert.Equal("P1-AP01 · 新名称", viewModel.SelectedDeviceFilter?.DisplayName);
+        }
+        finally
+        {
+            await viewModel.OnDeactivatedAsync();
+        }
+    }
+
     private static EquipmentViewModel CreateViewModel(
         IEnumerable<MenuInfo> menus,
         IEnumerable<IEdgeProcessModule> processModules,
-        TestAppLanguageService? languageService = null)
+        TestAppLanguageService? languageService = null,
+        IEquipmentPanelService? equipmentPanelService = null,
+        DeviceSelectionService? deviceSelectionService = null)
     {
         var viewRegistry = new FakeViewRegistry();
         foreach (var menu in menus)
@@ -155,12 +204,12 @@ public sealed class EquipmentViewModelBehaviorTests
         }
 
         return new EquipmentViewModel(
-            new FakeEquipmentPanelService(),
+            equipmentPanelService ?? new FakeEquipmentPanelService(),
             new FakeRecipeService(),
             new FakeProductionPlanSelectionServiceResolver(),
             new FakeProductionPlanSelectionPopupService(),
             languageService ?? new TestAppLanguageService(),
-            new DeviceSelectionService(),
+            deviceSelectionService ?? new DeviceSelectionService(),
             viewRegistry,
             processModules);
     }
@@ -214,8 +263,10 @@ public sealed class EquipmentViewModelBehaviorTests
 
     private sealed class FakeEquipmentPanelService : IEquipmentPanelService
     {
+        public IReadOnlyList<HardwareSnapshot> HardwareSnapshots { get; set; } = [];
+
         public Task<List<HardwareSnapshot>> GetHardwareStatusAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(new List<HardwareSnapshot>());
+            => Task.FromResult(HardwareSnapshots.ToList());
 
         public Task<RecipeSnapshot?> GetRecipeSnapshotAsync(CancellationToken cancellationToken = default)
             => Task.FromResult<RecipeSnapshot?>(null);

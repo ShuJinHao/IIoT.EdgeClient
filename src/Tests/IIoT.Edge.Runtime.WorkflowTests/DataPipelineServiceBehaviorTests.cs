@@ -66,9 +66,72 @@ public sealed class DataPipelineServiceBehaviorTests
         Assert.Equal(1, pipeline.SpillCount);
     }
 
+    [Fact]
+    public async Task EnqueueAsync_WhenStableIdentityConflicts_ShouldRejectWithoutPersistence()
+    {
+        var overflowPersistence = new FakeIngressOverflowPersistence();
+        var logger = new FakeLogService();
+        var pipeline = new DataPipelineService(overflowPersistence, logger);
+        var record = CreateRecord("BC-CONFLICT");
+        record.PlcCode = "PLC-OTHER";
+
+        var result = await pipeline.EnqueueAsync(
+            record,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsDurablyAccepted);
+        Assert.Equal("conflicting_plc_context", result.ReasonCode);
+        Assert.Equal(0, pipeline.PendingCount);
+        Assert.Empty(overflowPersistence.Records);
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Level == "Warn"
+                     && entry.Message.Contains(nameof(CellCompletedRecord.PlcCode), StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task EnqueueAsync_WhenExplicitPlcCodeIsMissing_ShouldNotInferItFromCellData()
+    {
+        var pipeline = new DataPipelineService(
+            new FakeIngressOverflowPersistence(),
+            new FakeLogService());
+        var record = CreateRecord("BC-NO-INFERENCE");
+        record.PlcCode = string.Empty;
+
+        var result = await pipeline.EnqueueAsync(
+            record,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsDurablyAccepted);
+        Assert.Equal("missing_plc_context", result.ReasonCode);
+        Assert.Equal(0, pipeline.PendingCount);
+    }
+
+    [Fact]
+    public async Task EnqueueAsync_WhenAccepted_ShouldFreezeStableV2Identity()
+    {
+        var pipeline = new DataPipelineService(
+            new FakeIngressOverflowPersistence(),
+            new FakeLogService());
+        var record = CreateRecord("BC-V2");
+        record.DeviceName = "Current-Display";
+
+        var result = await pipeline.EnqueueAsync(
+            record,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsDurablyAccepted);
+        Assert.True(pipeline.TryDequeue(out var queued));
+        Assert.NotNull(queued);
+        Assert.Equal("PLC-A", queued!.PlcCode);
+        Assert.Equal("Current-Display", queued.DeviceName);
+        Assert.Equal(CloudIdempotencyKeyVersion.PlcStableV2, queued.IdempotencyKeyVersion);
+    }
+
     private static CellCompletedRecord CreateRecord(string barcode)
         => new()
         {
+            PlcCode = "PLC-A",
             NetworkDeviceId = 1,
             DeviceName = "PLC-A",
             ModuleId = "TestProcess",

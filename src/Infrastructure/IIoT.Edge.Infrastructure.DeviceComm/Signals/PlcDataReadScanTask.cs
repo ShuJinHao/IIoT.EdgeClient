@@ -105,6 +105,7 @@ public sealed class PlcDataReadScanTask : IPlcTask
         {
             _statusStore?.MarkProtocolSuccess(
                 _device.Id,
+                _device.PlcCode,
                 _device.DeviceName,
                 ToLatencyMs(stopwatch.ElapsedMilliseconds));
         }
@@ -125,9 +126,13 @@ public sealed class PlcDataReadScanTask : IPlcTask
             }
             catch (PlcServiceQuarantinedException ex)
             {
-                _statusStore?.MarkRuntimeFault(_device.Id, _device.DeviceName, ex.Message);
+                _statusStore?.MarkRuntimeFault(
+                    _device.Id,
+                    _device.PlcCode,
+                    _device.DeviceName,
+                    ex.Message);
                 _connectionStateChanged?.Invoke(false);
-                _logger.Error($"[PLC-{_device.DeviceName}][采集] PLC service 已隔离，只读任务已停止：{ex.Message}");
+                _logger.Error($"[PlcCode={_device.PlcCode}][采集] PLC service 已隔离，只读任务已停止：{ex.Message}");
                 break;
             }
             catch (Exception ex)
@@ -135,7 +140,7 @@ public sealed class PlcDataReadScanTask : IPlcTask
                 _retryCount++;
                 if (ShouldLogDisconnect())
                 {
-                    _logger.Error($"[{_device.DeviceName}] PLC 只读数据扫描异常：{ex.Message}");
+                    _logger.Error($"[PlcCode={_device.PlcCode}] PLC 只读数据扫描异常：{ex.Message}");
                 }
 
                 await Task.Delay(GetBackoffDelay(), ct).ConfigureAwait(false);
@@ -243,7 +248,7 @@ public sealed class PlcDataReadScanTask : IPlcTask
 
         if (ShouldLogDisconnect())
         {
-            _logger.Error($"[PLC-{_device.DeviceName}][采集] {message}");
+            _logger.Error($"[PlcCode={_device.PlcCode}][采集] {message}");
         }
     }
 
@@ -253,7 +258,11 @@ public sealed class PlcDataReadScanTask : IPlcTask
     {
         var message =
             $"PLC transport 故障，操作=Read，地址={block.StartAddress}，长度={block.WordCount}，原因={FormatException(exception)}。";
-        _statusStore?.MarkDisconnected(_device.Id, _device.DeviceName, message);
+        _statusStore?.MarkDisconnected(
+            _device.Id,
+            _device.PlcCode,
+            _device.DeviceName,
+            message);
         _connectionStateChanged?.Invoke(false);
 
         if (!_plcService.IsConnected)
@@ -272,7 +281,7 @@ public sealed class PlcDataReadScanTask : IPlcTask
         catch (Exception disconnectException)
         {
             _logger.Error(
-                $"[PLC-{_device.DeviceName}][采集] transport 故障后的连接释放失败：{FormatException(disconnectException)}");
+                $"[PlcCode={_device.PlcCode}][采集] transport 故障后的连接释放失败：{FormatException(disconnectException)}");
         }
     }
 

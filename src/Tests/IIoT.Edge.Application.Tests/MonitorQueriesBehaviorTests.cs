@@ -15,6 +15,7 @@ using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 using IIoT.Edge.Module.Contracts.Runtime;
 using IIoT.Edge.Module.Contracts.Hardware;
+using IIoT.Edge.Module.Contracts.Identity;
 using IIoT.Edge.SharedKernel.Result;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -70,6 +71,7 @@ public sealed class MonitorQueriesBehaviorTests
 
         var snapshot = Assert.Single(snapshots);
         Assert.Equal(7, snapshot.NetworkDeviceId);
+        Assert.Equal("MONITOR-TEST", snapshot.PlcCode);
         Assert.Equal("Monitor-Test", snapshot.DeviceName);
         Assert.Equal(MonitorSnapshotSource.ProductionContext, snapshot.Source);
         Assert.True(snapshot.HasPlcConfiguration);
@@ -513,6 +515,45 @@ public sealed class MonitorQueriesBehaviorTests
     }
 
     [Fact]
+    public async Task Handle_WhenStablePlcIsRenamedAndRecreated_ShouldUseCurrentDisplayNameWithoutDuplicatingSnapshot()
+    {
+        var configured = CreatePlcDevice(
+            99,
+            "当前现场名称",
+            plcCode: "P1-AP01");
+        var handler = CreateHandler(
+            new FakeDeviceService(),
+            new FakeFailedRecordStore(),
+            new FakeFailedRecordStore(),
+            new FakeCloudDiagnosticsStore(),
+            new FakeMesRetryDiagnosticsStore(),
+            new FakeMesUploadDiagnosticsStore(),
+            false,
+            out var contextStore,
+            [
+                new PlcConnectionRuntimeSnapshot
+                {
+                    NetworkDeviceId = 99,
+                    PlcCode = "P1-AP01",
+                    DeviceName = "当前现场名称",
+                    IsConnected = true
+                }
+            ],
+            [configured]);
+        var contextResolution = contextStore.GetOrCreate(
+            new PlcIdentity("P1-AP01", 7, "历史显示名称"));
+        Assert.True(contextResolution.IsSuccess);
+
+        var snapshots = await handler.Handle(new GetMonitorSnapshotQuery(), CancellationToken.None);
+
+        var snapshot = Assert.Single(snapshots);
+        Assert.Equal("P1-AP01", snapshot.PlcCode);
+        Assert.Equal(99, snapshot.NetworkDeviceId);
+        Assert.Equal("当前现场名称", snapshot.DeviceName);
+        Assert.Equal(MonitorSnapshotSource.ProductionContext, snapshot.Source);
+    }
+
+    [Fact]
     public async Task Handle_WhenProductionContextAndRuntimeAreEmptyButDisabledConfiguredPlcExists_ShouldReturnConfiguredPlcSnapshot()
     {
         var handler = CreateHandler(
@@ -755,9 +796,10 @@ public sealed class MonitorQueriesBehaviorTests
     private static NetworkDeviceEntity CreatePlcDevice(
         int id,
         string deviceName,
-        bool isEnabled = true)
+        bool isEnabled = true,
+        string? plcCode = null)
     {
-        var device = NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, "127.0.0.1", 6000)
+        var device = NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, "127.0.0.1", 6000, plcCode)
             .WithId(id);
         device.UpdateDeviceModel("S7");
 
@@ -769,7 +811,10 @@ public sealed class MonitorQueriesBehaviorTests
         NetworkDeviceEntity device,
         string moduleId,
         IReadOnlyList<PlcTaskBindingItemDto> tasks)
-        => new(device.Id, device.DeviceName, moduleId, device.IsEnabled, tasks);
+        => new(device.Id, device.DeviceName, moduleId, device.IsEnabled, tasks)
+        {
+            PlcCode = device.PlcCode
+        };
 
     private static PlcTaskBindingDeviceDto CreateTaskBindingDevice(
         NetworkDeviceEntity device,
@@ -908,6 +953,12 @@ public sealed class MonitorQueriesBehaviorTests
             IReadOnlyCollection<TaskCandidate> candidates,
             IReadOnlyCollection<ModuleIoSnapshot> signalBindings,
             string? deviceModel = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<IReadOnlySet<string>> GetConfiguredEnabledTaskKeysAsync(
+            int networkDeviceId,
+            IReadOnlyCollection<TaskCandidate> candidates,
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 

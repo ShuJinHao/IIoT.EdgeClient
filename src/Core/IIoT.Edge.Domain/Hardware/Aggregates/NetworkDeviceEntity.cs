@@ -4,7 +4,7 @@ using IIoT.Edge.Module.Contracts.Identity;
 
 namespace IIoT.Edge.Domain.Hardware.Aggregates;
 
-public class NetworkDeviceEntity : BaseEntity<int>, IAggregateRoot, IDeviceIdentifiable
+public class NetworkDeviceEntity : BaseEntity<int>, IAggregateRoot, IDeviceIdentifiable, IPlcIdentifiable
 {
     public const int PlcCodeMaxLength = 64;
     private const string InternalPlcCodePrefix = "PLC-INTERNAL-";

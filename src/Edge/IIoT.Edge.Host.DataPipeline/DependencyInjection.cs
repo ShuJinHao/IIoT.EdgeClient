@@ -38,6 +38,7 @@ public static class DependencyInjection
                 sp.GetRequiredService<IProductionContextCorruptFileQuarantine>(),
                 sp.GetRequiredService<IProductionContextRuntimeStateCopier>()));
         services.AddSingleton<IProductionContextStore>(sp => sp.GetRequiredService<ProductionContextStore>());
+        services.AddSingleton<IPlcProductionContextStore>(sp => sp.GetRequiredService<ProductionContextStore>());
         services.AddSingleton<ITodayCapacityStore, TodayCapacityStore>();
 
         AddHostDataPipelineCore(services);

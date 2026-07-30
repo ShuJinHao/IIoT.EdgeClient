@@ -19,6 +19,7 @@ using IIoT.Edge.SharedKernel.Domain;
 using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.SharedKernel.Specification;
+using IIoT.Edge.Module.Contracts.Identity;
 
 namespace IIoT.Edge.Runtime.WorkflowTests;
 
@@ -169,6 +170,32 @@ public sealed class PlcTaskBindingBehaviorTests
             cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(["Task.A"], enabledKeys.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task GetConfiguredEnabledTaskKeys_WhenSavedTaskLosesSignal_ShouldRetainTaskForDiagnostics()
+    {
+        var service = CreateService(defaultEnableAllTasks: true);
+        service.Bindings.Add(PlcTaskBindingEntity.Create(1, "Task.B", enabled: true, DateTimeOffset.UtcNow));
+        var mappings = AllTestMappings
+            .Where(static mapping => !string.Equals(
+                mapping.SignalKey,
+                "Signal.Business",
+                StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        var configuredKeys = await service.Service.GetConfiguredEnabledTaskKeysAsync(
+            1,
+            TestCandidates,
+            TestContext.Current.CancellationToken);
+        var runnableKeys = await service.Service.GetEnabledTaskKeysAsync(
+            1,
+            TestCandidates,
+            mappings,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(["Task.B"], configuredKeys);
+        Assert.Empty(runnableKeys);
     }
 
     [Fact]
@@ -358,6 +385,7 @@ public sealed class PlcTaskBindingBehaviorTests
             plcA,
             new PlcRuntimeTaskPlan(
                 plcA.Id,
+                plcA.PlcCode,
                 plcA.DeviceName,
                 [
                     new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
@@ -369,6 +397,7 @@ public sealed class PlcTaskBindingBehaviorTests
             plcB,
             new PlcRuntimeTaskPlan(
                 plcB.Id,
+                plcB.PlcCode,
                 plcB.DeviceName,
                 [
                     new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
@@ -417,6 +446,57 @@ public sealed class PlcTaskBindingBehaviorTests
     }
 
     [Fact]
+    public async Task PlcDeviceRuntimeBuilder_WhenStableContextBlocked_ShouldKeepBaseRuntimeAndIsolateBusinessTasks()
+    {
+        var ioMappings = new InMemoryRepository<IoMappingEntity>();
+        var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
+        var device = networkDevices.Add(
+            CreateLifecyclePlc(
+                "Current-Display",
+                6050,
+                plcCode: "PLC-STABLE-BLOCK"));
+        var logger = new FakeLogService();
+        var statusStore = new PlcConnectionStatusStore();
+        var runtimeBuilder = new PlcDeviceRuntimeBuilder(
+            ioMappings,
+            new PlcDataStore(),
+            new TrackingPlcServiceFactory(),
+            new BlockedPlcProductionContextStore(),
+            logger,
+            statusStore,
+            new DefaultPlcSignalBlockPlanner(),
+            new StaticPlcEndpointResolver(),
+            new ModuleHardwareProfileResolver([]));
+        var plan = new PlcRuntimeTaskPlan(
+            device.Id,
+            device.PlcCode,
+            device.DeviceName,
+            [
+                new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
+                    "Task.Blocked",
+                    (_, _) => new NoopPlcTask("Task.Blocked"))
+            ]);
+
+        var runtime = await runtimeBuilder.BuildAsync(
+            device,
+            plan,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("PLC-STABLE-BLOCK", runtime.PlcCode);
+        Assert.Empty(runtime.EnabledTaskKeys);
+        Assert.Equal($"PlcIoScan_{device.DeviceName}", runtime.ConnectionTask.TaskName);
+        Assert.Equal("PLC-STABLE-BLOCK", statusStore.GetSnapshot(device.Id)!.PlcCode);
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Level == "Error"
+                     && entry.Message.Contains("基础连接继续", StringComparison.Ordinal)
+                     && entry.Message.Contains("PLC-STABLE-BLOCK", StringComparison.Ordinal));
+
+        await runtime.PlcService.DisposeAsync();
+        runtime.DisposeCancellation();
+    }
+
+    [Fact]
     public async Task PlcLifecycleCoordinator_WhenOneDeviceHasNoBusinessPlan_ShouldStillStartBothConnections()
     {
         var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
@@ -460,7 +540,7 @@ public sealed class PlcTaskBindingBehaviorTests
             Assert.Contains(
                 logger.Entries,
                 entry => entry.Level == "Info"
-                         && entry.Message.Contains("[PLC-B] 初始化完成：仅连接/重试任务已启动", StringComparison.Ordinal));
+                         && entry.Message.Contains("[PlcCode=PLC-B] 初始化完成：仅连接/重试任务已启动", StringComparison.Ordinal));
             Assert.DoesNotContain(
                 logger.Entries,
                 entry => entry.Message.Contains("Initialized and started", StringComparison.Ordinal)
@@ -502,9 +582,13 @@ public sealed class PlcTaskBindingBehaviorTests
             statusStore);
         var controller = new PlcRuntimeTaskController(runtimeRegistry);
         runtimeRegistry.RegisterTaskPlan(
-            PlcRuntimeTaskPlan.Empty(device.Id, device.DeviceName));
+            PlcRuntimeTaskPlan.Empty(
+                device.Id,
+                device.PlcCode,
+                device.DeviceName));
         var replacementPlan = new PlcRuntimeTaskPlan(
             device.Id,
+            device.PlcCode,
             device.DeviceName,
             [
                 new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
@@ -528,7 +612,10 @@ public sealed class PlcTaskBindingBehaviorTests
             Assert.Equal(["Task.MG1"], result.EnabledTaskKeys);
             Assert.Equal(
                 ["Task.MG1"],
-                runtimeRegistry.GetTaskPlan(device.Id, device.DeviceName).TaskKeys);
+                runtimeRegistry.GetTaskPlan(
+                    device.Id,
+                    device.PlcCode,
+                    device.DeviceName).TaskKeys);
             Assert.Equal(
                 ["Task.MG1"],
                 runtimeRegistry.GetRuntime(device.Id)!.EnabledTaskKeys);
@@ -568,6 +655,7 @@ public sealed class PlcTaskBindingBehaviorTests
         var controller = new PlcRuntimeTaskController(runtimeRegistry);
         var replacementPlan = new PlcRuntimeTaskPlan(
             device.Id,
+            device.PlcCode,
             device.DeviceName,
             [
                 new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
@@ -594,7 +682,10 @@ public sealed class PlcTaskBindingBehaviorTests
         Assert.Null(runtimeRegistry.GetRuntime(device.Id));
         Assert.Equal(
             ["Task.MG1"],
-            runtimeRegistry.GetTaskPlan(device.Id, device.DeviceName).TaskKeys);
+            runtimeRegistry.GetTaskPlan(
+                device.Id,
+                device.PlcCode,
+                device.DeviceName).TaskKeys);
 
         await coordinator.DisposeAsync();
     }
@@ -950,11 +1041,13 @@ public sealed class PlcTaskBindingBehaviorTests
         => new()
         {
             DeviceId = deviceId,
+            PlcCode = deviceName,
             DeviceName = deviceName,
             PlcService = plcService,
             Buffer = new PlcBuffer(0, 0),
             Context = new ProductionContext
             {
+                PlcCode = deviceName,
                 DeviceName = deviceName,
                 NetworkDeviceId = deviceId
             },
@@ -965,6 +1058,18 @@ public sealed class PlcTaskBindingBehaviorTests
             StatusStore = statusStore,
             CancellationTokenSource = new CancellationTokenSource()
         };
+
+    private sealed class BlockedPlcProductionContextStore : IPlcProductionContextStore
+    {
+        public PlcProductionContextResolution GetOrCreate(
+            PlcIdentity identity,
+            string? moduleId = null)
+            => PlcProductionContextResolution.Blocked(
+                PlcProductionContextResolutionOutcome.MigrationBlocked,
+                identity.PlcCode,
+                "test_identity_block",
+                "test conflict");
+    }
 
     private static readonly IReadOnlyCollection<TaskCandidate> TestCandidates =
     [
@@ -1053,9 +1158,18 @@ public sealed class PlcTaskBindingBehaviorTests
             "业务信号"));
     }
 
-    private static NetworkDeviceEntity CreateLifecyclePlc(string deviceName, int port, int? connectTimeout = null)
+    private static NetworkDeviceEntity CreateLifecyclePlc(
+        string deviceName,
+        int port,
+        int? connectTimeout = null,
+        string? plcCode = null)
     {
-        var device = NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, "127.0.0.1", port);
+        var device = NetworkDeviceEntity.Create(
+            deviceName,
+            DeviceType.PLC,
+            "127.0.0.1",
+            port,
+            plcCode);
         if (connectTimeout.HasValue)
         {
             device.UpdateEndpoint(device.IpAddress, device.Port1, device.Port2, connectTimeout.Value);

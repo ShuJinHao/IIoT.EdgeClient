@@ -115,9 +115,12 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
         var factory = ResolveActiveRuntimeFactory();
         if (factory is null)
         {
+            var factoryCount = _runtimeRegistry.GetRegistrations().Count;
             _logger.Warn(
-                $"[{device.DeviceName}] PLC 业务任务绑定跳过：当前插件库未唯一确定运行时任务工厂；连接任务仍可独立运行。");
-            return PlcRuntimeTaskPlan.Empty(device.Id, device.DeviceName);
+                $"[PlcCode={device.PlcCode}][TaskKey=未解析][SignalKey=不适用] "
+                + $"PLC 业务任务绑定跳过：运行时任务工厂数量={factoryCount}，"
+                + "未唯一确定；连接任务仍可独立运行。");
+            return PlcRuntimeTaskPlan.Empty(device.Id, device.PlcCode, device.DeviceName);
         }
 
         var mappings = await _ioMappings.GetListAsync(
@@ -135,11 +138,9 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
                 mapping.BusinessGroup))
             .ToArray();
         var candidates = factory.GetTaskCandidates().ToArray();
-        var enabledTaskKeys = await _taskBindingService.GetEnabledTaskKeysAsync(
+        var enabledTaskKeys = await _taskBindingService.GetConfiguredEnabledTaskKeysAsync(
             device.Id,
             candidates,
-            signalBindings,
-            device.DeviceModel,
             cancellationToken).ConfigureAwait(false);
         var taskFactories = new List<KeyValuePair<string, PlcRuntimeBusinessTaskFactory>>();
 
@@ -156,7 +157,8 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
             if (matches.Length != 1)
             {
                 _logger.Error(
-                    $"[{device.DeviceName}] 业务任务 {taskKey} 候选数量为 {matches.Length}，已仅隔离该 TaskKey。");
+                    $"[PlcCode={device.PlcCode}][TaskKey={taskKey}][SignalKey=未解析] "
+                    + $"业务任务候选数量为 {matches.Length}，已仅隔离该 TaskKey。");
                 continue;
             }
 
@@ -170,7 +172,7 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
                 device.DeviceModel);
             if (!validation.IsValid)
             {
-                _logger.Error(BuildValidationFailureMessage(device.DeviceName, validation));
+                _logger.Error(BuildValidationFailureMessage(device.PlcCode, validation));
                 continue;
             }
 
@@ -191,7 +193,11 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
                     }));
         }
 
-        return new PlcRuntimeTaskPlan(device.Id, device.DeviceName, taskFactories);
+        return new PlcRuntimeTaskPlan(
+            device.Id,
+            device.PlcCode,
+            device.DeviceName,
+            taskFactories);
     }
 
     private IStationRuntimeFactory? ResolveActiveRuntimeFactory()
@@ -201,13 +207,17 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
     }
 
     private static string BuildValidationFailureMessage(
-        string deviceName,
+        string plcCode,
         PlcTaskBindingValidationResult validation)
     {
         var missing = validation.Issues
-            .Select(static issue => $"{issue.TaskDisplayName}({issue.TaskKey}) {issue.Message}")
+            .Select(issue =>
+                $"[PlcCode={plcCode}]"
+                + $"[TaskKey={issue.TaskKey}]"
+                + $"[SignalKey={issue.RequiredSignal?.SignalKey ?? "不适用"}] "
+                + issue.Message)
             .Distinct(StringComparer.OrdinalIgnoreCase);
 
-        return $"PLC“{deviceName}”任务绑定校验失败，相关 TaskKey 已单独暂停：{string.Join("；", missing)}。";
+        return $"PLC 任务绑定校验失败，相关 TaskKey 已单独暂停：{string.Join("；", missing)}。";
     }
 }

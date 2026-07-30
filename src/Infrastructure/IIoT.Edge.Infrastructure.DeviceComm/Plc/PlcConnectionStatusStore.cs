@@ -7,7 +7,7 @@ public sealed class PlcConnectionStatusStore
     private readonly object _stateLock = new();
     private readonly Dictionary<int, PlcConnectionRuntimeSnapshot> _snapshots = new();
 
-    public void EnsureTracked(int networkDeviceId, string deviceName)
+    public void EnsureTracked(int networkDeviceId, string plcCode, string deviceName)
     {
         lock (_stateLock)
         {
@@ -16,6 +16,7 @@ public sealed class PlcConnectionStatusStore
             {
                 _snapshots[networkDeviceId] = existing with
                 {
+                    PlcCode = ResolvePlcCode(plcCode, existing.PlcCode),
                     DeviceName = deviceName
                 };
                 return;
@@ -23,6 +24,7 @@ public sealed class PlcConnectionStatusStore
 
             _snapshots[networkDeviceId] = new PlcConnectionRuntimeSnapshot
             {
+                PlcCode = plcCode,
                 NetworkDeviceId = networkDeviceId,
                 DeviceName = deviceName,
                 IsConnected = false,
@@ -33,14 +35,15 @@ public sealed class PlcConnectionStatusStore
         }
     }
 
-    public void MarkConnecting(int networkDeviceId, string deviceName)
+    public void MarkConnecting(int networkDeviceId, string plcCode, string deviceName)
     {
         lock (_stateLock)
         {
             var now = DateTimeOffset.UtcNow;
-            var existing = GetOrCreateSnapshot(networkDeviceId, deviceName);
+            var existing = GetOrCreateSnapshot(networkDeviceId, plcCode, deviceName);
             _snapshots[networkDeviceId] = existing with
             {
+                PlcCode = ResolvePlcCode(plcCode, existing.PlcCode),
                 DeviceName = deviceName,
                 IsConnected = false,
                 ConnectionState = PlcConnectionState.Connecting,
@@ -51,14 +54,19 @@ public sealed class PlcConnectionStatusStore
         }
     }
 
-    public void MarkConnected(int networkDeviceId, string deviceName, int? latencyMs = null)
+    public void MarkConnected(
+        int networkDeviceId,
+        string plcCode,
+        string deviceName,
+        int? latencyMs = null)
     {
         lock (_stateLock)
         {
             var now = DateTimeOffset.UtcNow;
-            var existing = GetOrCreateSnapshot(networkDeviceId, deviceName);
+            var existing = GetOrCreateSnapshot(networkDeviceId, plcCode, deviceName);
             _snapshots[networkDeviceId] = existing with
             {
+                PlcCode = ResolvePlcCode(plcCode, existing.PlcCode),
                 DeviceName = deviceName,
                 IsConnected = true,
                 ConnectionState = PlcConnectionState.Connected,
@@ -71,14 +79,19 @@ public sealed class PlcConnectionStatusStore
         }
     }
 
-    public bool MarkProtocolSuccess(int networkDeviceId, string deviceName, int? latencyMs = null)
+    public bool MarkProtocolSuccess(
+        int networkDeviceId,
+        string plcCode,
+        string deviceName,
+        int? latencyMs = null)
     {
         lock (_stateLock)
         {
             var now = DateTimeOffset.UtcNow;
-            var existing = GetOrCreateSnapshot(networkDeviceId, deviceName);
+            var existing = GetOrCreateSnapshot(networkDeviceId, plcCode, deviceName);
             _snapshots[networkDeviceId] = existing with
             {
+                PlcCode = ResolvePlcCode(plcCode, existing.PlcCode),
                 DeviceName = deviceName,
                 LastAttemptAtUtc = now,
                 LastReadAtUtc = now,
@@ -98,17 +111,22 @@ public sealed class PlcConnectionStatusStore
         }
     }
 
-    public void MarkDisconnected(int networkDeviceId, string deviceName, string? error = null)
+    public void MarkDisconnected(
+        int networkDeviceId,
+        string plcCode,
+        string deviceName,
+        string? error = null)
     {
         lock (_stateLock)
         {
             var now = DateTimeOffset.UtcNow;
-            var existing = GetOrCreateSnapshot(networkDeviceId, deviceName);
+            var existing = GetOrCreateSnapshot(networkDeviceId, plcCode, deviceName);
             var nextState = string.IsNullOrWhiteSpace(error)
                 ? PlcConnectionState.Disconnected
                 : PlcConnectionState.Retrying;
             _snapshots[networkDeviceId] = existing with
             {
+                PlcCode = ResolvePlcCode(plcCode, existing.PlcCode),
                 DeviceName = deviceName,
                 IsConnected = false,
                 ConnectionState = nextState,
@@ -124,14 +142,19 @@ public sealed class PlcConnectionStatusStore
         }
     }
 
-    public void MarkRuntimeFault(int networkDeviceId, string deviceName, string error)
+    public void MarkRuntimeFault(
+        int networkDeviceId,
+        string plcCode,
+        string deviceName,
+        string error)
     {
         lock (_stateLock)
         {
             var now = DateTimeOffset.UtcNow;
-            var existing = GetOrCreateSnapshot(networkDeviceId, deviceName);
+            var existing = GetOrCreateSnapshot(networkDeviceId, plcCode, deviceName);
             _snapshots[networkDeviceId] = existing with
             {
+                PlcCode = ResolvePlcCode(plcCode, existing.PlcCode),
                 DeviceName = deviceName,
                 IsConnected = false,
                 ConnectionState = PlcConnectionState.Faulted,
@@ -163,7 +186,10 @@ public sealed class PlcConnectionStatusStore
         }
     }
 
-    private PlcConnectionRuntimeSnapshot GetOrCreateSnapshot(int networkDeviceId, string deviceName)
+    private PlcConnectionRuntimeSnapshot GetOrCreateSnapshot(
+        int networkDeviceId,
+        string plcCode,
+        string deviceName)
     {
         if (_snapshots.TryGetValue(networkDeviceId, out var existing))
         {
@@ -172,6 +198,7 @@ public sealed class PlcConnectionStatusStore
 
         return new PlcConnectionRuntimeSnapshot
         {
+            PlcCode = plcCode,
             NetworkDeviceId = networkDeviceId,
             DeviceName = deviceName,
             IsConnected = false,
@@ -180,6 +207,9 @@ public sealed class PlcConnectionStatusStore
             StateChangedAtUtc = DateTimeOffset.UtcNow
         };
     }
+
+    private static string ResolvePlcCode(string plcCode, string existingPlcCode)
+        => string.IsNullOrWhiteSpace(plcCode) ? existingPlcCode : plcCode;
 
     private static DateTimeOffset ResolveStateChangedAt(
         PlcConnectionRuntimeSnapshot existing,

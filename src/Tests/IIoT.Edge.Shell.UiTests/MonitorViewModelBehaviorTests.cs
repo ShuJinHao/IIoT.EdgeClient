@@ -49,9 +49,30 @@ public sealed class MonitorViewModelBehaviorTests
         await viewModel.OnDeactivatedAsync();
 
         Assert.Equal("PLC-A02", viewModel.SelectedDevice);
+        Assert.Equal("CODE-2 · PLC-A02", viewModel.SelectedDeviceDisplayName);
         Assert.Equal("B", Assert.Single(viewModel.DeviceDataRows).Value);
         Assert.Equal("PLC-A02", Assert.Single(viewModel.CellDebugItems).DeviceName);
         Assert.Equal("上传任务", Assert.Single(viewModel.StateMachineTaskItems).DisplayName);
+    }
+
+    [Fact]
+    public async Task OnActivatedAsync_WhenSharedSelectionUsesPlcCode_ShouldResolveCurrentDisplayName()
+    {
+        var selectionService = new DeviceSelectionService();
+        selectionService.SelectDevice("CODE-2");
+        var viewModel = CreateViewModel(
+            selectionService,
+            [
+                CreateSnapshot(1, "旧显示名"),
+                CreateSnapshot(2, "改名后的显示名", deviceDataValue: "stable")
+            ]);
+
+        await viewModel.OnActivatedAsync();
+        await viewModel.OnDeactivatedAsync();
+
+        Assert.Equal("改名后的显示名", viewModel.SelectedDevice);
+        Assert.Equal("CODE-2 · 改名后的显示名", viewModel.SelectedDeviceDisplayName);
+        Assert.Equal("stable", Assert.Single(viewModel.DeviceDataRows).Value);
     }
 
     [Fact]
@@ -162,7 +183,10 @@ public sealed class MonitorViewModelBehaviorTests
             ],
             CloudSync: CreateCloudSync(),
             MesSync: CreateMesSync(),
-            ContextPersistence: new ProductionContextPersistenceDiagnostics(0, null));
+            ContextPersistence: new ProductionContextPersistenceDiagnostics(0, null))
+        {
+            PlcCode = $"CODE-{deviceId}"
+        };
 
     private static CloudSyncDiagnosticsSnapshot CreateCloudSync()
         => new(

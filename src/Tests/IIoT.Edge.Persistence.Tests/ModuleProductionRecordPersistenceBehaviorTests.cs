@@ -2,6 +2,7 @@ using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 using IIoT.Edge.Module.Contracts.Production;
 using Microsoft.Data.Sqlite;
+using Dapper;
 
 namespace IIoT.Edge.Persistence.Tests;
 
@@ -60,8 +61,12 @@ public sealed class ModuleProductionRecordPersistenceBehaviorTests
                     "__all__"),
                 TestContext.Current.CancellationToken);
 
-            Assert.Equal("AP-CLIP-001", Assert.Single(apRows).RecordCode);
-            Assert.Equal("CP-CLIP-001", Assert.Single(cpRows).RecordCode);
+            var apRow = Assert.Single(apRows);
+            var cpRow = Assert.Single(cpRows);
+            Assert.Equal("AP-CLIP-001", apRow.RecordCode);
+            Assert.Equal("P1-AP01", apRow.PlcCode);
+            Assert.Equal("CP-CLIP-001", cpRow.RecordCode);
+            Assert.Equal("P2-CP01", cpRow.PlcCode);
         }
         finally
         {
@@ -119,7 +124,7 @@ public sealed class ModuleProductionRecordPersistenceBehaviorTests
                     "AP",
                     DayStartUtc,
                     DayStartUtc.AddDays(1),
-                    "负极模切01",
+                    "P1-AP01",
                     500),
                 TestContext.Current.CancellationToken);
 
@@ -127,6 +132,7 @@ public sealed class ModuleProductionRecordPersistenceBehaviorTests
             Assert.Equal("CLIP-509", allRows[0].RecordCode);
             Assert.DoesNotContain(allRows, row => row.RecordCode == "OLD");
             Assert.Equal(255, selectedRows.Count);
+            Assert.All(selectedRows, row => Assert.Equal("P1-AP01", row.PlcCode));
             Assert.All(selectedRows, row => Assert.Equal("负极模切01", row.DeviceName));
         }
         finally
@@ -186,6 +192,79 @@ public sealed class ModuleProductionRecordPersistenceBehaviorTests
             Assert.Equal(0, summary.RecentOk);
             Assert.Equal(3, summary.RecentNg);
             Assert.Equal("CP-NG", summary.CurrentBatch);
+        }
+        finally
+        {
+            DeleteTempDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task HistoricalTable_ShouldAddPlcCodeAndBackfillFromStableDeviceCode()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var factory = new SqliteConnectionFactory(tempDirectory);
+            using (var connection = factory.Create("ap_production"))
+            {
+                await connection.ExecuteAsync(
+                    """
+                    CREATE TABLE module_production_records
+                    (
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        IdempotencyKey TEXT NOT NULL UNIQUE,
+                        ModuleId TEXT NOT NULL,
+                        DeviceCode TEXT NOT NULL,
+                        DeviceName TEXT NOT NULL,
+                        TaskKey TEXT NOT NULL,
+                        SlotKey TEXT NOT NULL,
+                        RecordCode TEXT NOT NULL,
+                        MainPlanCode TEXT NOT NULL,
+                        TraceBatchNumber TEXT NOT NULL,
+                        Quantity INTEGER NOT NULL,
+                        Speed REAL NOT NULL,
+                        StartedAtUtc TEXT NOT NULL,
+                        CompletedAtUtc TEXT NOT NULL,
+                        QueueCreatedAtUtc TEXT NOT NULL,
+                        QueueProcessedAtUtc TEXT NOT NULL,
+                        IsOk INTEGER NOT NULL
+                    );
+                    INSERT INTO module_production_records
+                    (
+                        IdempotencyKey, ModuleId, DeviceCode, DeviceName, TaskKey,
+                        SlotKey, RecordCode, MainPlanCode, TraceBatchNumber,
+                        Quantity, Speed, StartedAtUtc, CompletedAtUtc,
+                        QueueCreatedAtUtc, QueueProcessedAtUtc, IsOk
+                    )
+                    VALUES
+                    (
+                        'LEGACY-AP', 'AP', 'P1-AP09', '旧显示名称', 'AP.ClipScan.MG1',
+                        'MG1', 'LEGACY-CLIP', '', '',
+                        1, 1.0, @StartedAtUtc, @CompletedAtUtc,
+                        @StartedAtUtc, @CompletedAtUtc, 1
+                    );
+                    """,
+                    new
+                    {
+                        StartedAtUtc = DayStartUtc.AddMinutes(1).ToString("O"),
+                        CompletedAtUtc = DayStartUtc.AddMinutes(2).ToString("O")
+                    });
+            }
+
+            var store = CreateStore(tempDirectory);
+            var rows = await store.QueryAsync(
+                new ModuleProductionRecordQuery(
+                    "AP",
+                    DayStartUtc,
+                    DayStartUtc.AddDays(1),
+                    "P1-AP09"),
+                TestContext.Current.CancellationToken);
+
+            var legacy = Assert.Single(rows);
+            Assert.Equal("P1-AP09", legacy.DeviceCode);
+            Assert.Equal("P1-AP09", legacy.PlcCode);
+            Assert.Equal("旧显示名称", legacy.DeviceName);
         }
         finally
         {

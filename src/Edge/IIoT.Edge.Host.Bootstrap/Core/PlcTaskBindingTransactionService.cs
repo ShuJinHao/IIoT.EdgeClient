@@ -8,7 +8,7 @@ namespace IIoT.Edge.Shell.Core;
 
 public interface IPlcTaskBindingRuntimeTransaction
 {
-    PlcRuntimeTaskPlan Capture(int networkDeviceId, string deviceName);
+    PlcRuntimeTaskPlan Capture(int networkDeviceId, string plcCode, string deviceName);
 
     Task<PlcRuntimeTaskApplyResult> ApplyCurrentBindingsAsync(
         int networkDeviceId,
@@ -25,8 +25,8 @@ public sealed class PlcTaskBindingRuntimeTransaction(
     IPlcRuntimeTaskBinder runtimeTaskBinder)
     : IPlcTaskBindingRuntimeTransaction
 {
-    public PlcRuntimeTaskPlan Capture(int networkDeviceId, string deviceName)
-        => runtimeRegistry.GetTaskPlan(networkDeviceId, deviceName);
+    public PlcRuntimeTaskPlan Capture(int networkDeviceId, string plcCode, string deviceName)
+        => runtimeRegistry.GetTaskPlan(networkDeviceId, plcCode, deviceName);
 
     public Task<PlcRuntimeTaskApplyResult> ApplyCurrentBindingsAsync(
         int networkDeviceId,
@@ -77,6 +77,7 @@ public sealed class PlcTaskBindingTransactionService(
                 .ConfigureAwait(false);
             var runtimeSnapshot = runtimeTransaction.Capture(
                 preparation.NetworkDeviceId,
+                preparation.PlcCode,
                 preparation.DeviceName);
 
             await persistenceTransaction
@@ -160,7 +161,7 @@ public sealed class PlcTaskBindingTransactionService(
             if (preparation.DisabledHeartbeatTaskNames.Count > 0)
             {
                 logger.Warn(
-                    $"PLC“{preparation.DeviceName}”已关闭心跳类任务：{string.Join("、", preparation.DisabledHeartbeatTaskNames)}。");
+                    $"PLC“{preparation.PlcCode}”已关闭心跳类任务：{string.Join("、", preparation.DisabledHeartbeatTaskNames)}。");
             }
 
             var stateText = runtimeResult.State switch
@@ -171,7 +172,7 @@ public sealed class PlcTaskBindingTransactionService(
                 _ => "已保存"
             };
             logger.Info(
-                $"[{preparation.DeviceName}] PLC 任务绑定{stateText}：{string.Join("、", runtimeResult.EnabledTaskKeys)}。");
+                $"[PlcCode={preparation.PlcCode}] PLC 任务绑定{stateText}：{string.Join("、", runtimeResult.EnabledTaskKeys)}。");
         }
         catch
         {

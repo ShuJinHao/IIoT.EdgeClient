@@ -107,12 +107,17 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
     public bool ShouldShowDeviceSelectionPrompt => HasDevices && IsDeviceSelectionRequired;
 
     public string SelectedDeviceDisplayName
-        => SelectedDevice?.DeviceName ?? GetText("Navigation_DeviceSelection_AllOrSummary", "全部/汇总");
+        => SelectedDevice is null
+            ? GetText("Navigation_DeviceSelection_AllOrSummary", "全部/汇总")
+            : FormatPlcIdentity(SelectedDevice.PlcCode, SelectedDevice.DeviceName);
 
     public string SelectedDeviceTitle
         => SelectedDevice is null
             ? GetText("Navigation_DeviceSelection_AllOrSummary", "全部/汇总")
-            : FormatText("Navigation_DeviceSelection_CurrentPlcFormat", "当前 PLC：{0}", SelectedDevice.DeviceName);
+            : FormatText(
+                "Navigation_DeviceSelection_CurrentPlcFormat",
+                "当前 PLC：{0}",
+                FormatPlcIdentity(SelectedDevice.PlcCode, SelectedDevice.DeviceName));
 
     public bool CanEdit => _permissionService.CanEditHardware;
 
@@ -225,9 +230,28 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
             return null;
         }
 
+        var byPlcCode = Devices
+            .Where(device => string.Equals(
+                device.PlcCode,
+                selectedKey,
+                StringComparison.OrdinalIgnoreCase))
+            .Take(2)
+            .ToArray();
+        if (byPlcCode.Length == 1)
+        {
+            return byPlcCode[0];
+        }
+
         return Devices.FirstOrDefault(device =>
-            string.Equals(device.DeviceName, selectedKey, StringComparison.OrdinalIgnoreCase));
+            string.IsNullOrWhiteSpace(device.PlcCode)
+            && string.Equals(device.DeviceName, selectedKey, StringComparison.OrdinalIgnoreCase));
     }
+
+    private static string FormatPlcIdentity(string? plcCode, string deviceName)
+        => string.IsNullOrWhiteSpace(plcCode)
+           || string.Equals(plcCode, deviceName, StringComparison.OrdinalIgnoreCase)
+            ? deviceName
+            : $"{plcCode} · {deviceName}";
 
     private void ApplySelectedDeviceFromSharedSelection(PlcTaskBindingDeviceVm? device)
     {
@@ -293,6 +317,7 @@ public sealed class PlcTaskBindingDeviceVm
     public PlcTaskBindingDeviceVm(PlcTaskBindingDeviceDto dto)
     {
         NetworkDeviceId = dto.NetworkDeviceId;
+        PlcCode = dto.PlcCode;
         DeviceName = dto.DeviceName;
         ModuleId = dto.ModuleId;
         IsDeviceEnabled = dto.IsDeviceEnabled;
@@ -303,6 +328,8 @@ public sealed class PlcTaskBindingDeviceVm
     }
 
     public int NetworkDeviceId { get; }
+
+    public string PlcCode { get; }
 
     public string DeviceName { get; }
 

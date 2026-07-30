@@ -61,6 +61,7 @@ internal static class DataPipelineRetryChannelMetadata
         => new()
         {
             CellData = cellData,
+            PlcCode = record.PlcCode,
             NetworkDeviceId = record.NetworkDeviceId,
             DeviceName = record.DeviceName,
             ModuleId = record.ModuleId,
@@ -68,22 +69,23 @@ internal static class DataPipelineRetryChannelMetadata
             PlanSessionId = record.PlanSessionId,
             MainPlanCode = record.MainPlanCode,
             TraceBatchNumber = record.TraceBatchNumber,
+            IdempotencyKeyVersion = record.IdempotencyKeyVersion,
             CreatedAtUtc = DateTime.SpecifyKind(record.CreatedAt, DateTimeKind.Utc)
         };
 
-    public static string ResolveLogDeviceName(IReadOnlyList<FailedCellRecord> records)
+    public static string ResolveLogPlcCode(IReadOnlyList<FailedCellRecord> records)
     {
-        var deviceNames = records
-            .Select(record => record.DeviceName)
-            .Where(name => !string.IsNullOrWhiteSpace(name))
+        var plcCodes = records
+            .Select(record => record.PlcCode)
+            .Where(code => !string.IsNullOrWhiteSpace(code))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        return deviceNames.Count == 1 ? deviceNames[0] : "多PLC";
+        return plcCodes.Count == 1 ? plcCodes[0] : "多PLC";
     }
 
     public static FailedRecordSourceKey CreateSourceKey(FailedCellRecord record)
-        => new(record.NetworkDeviceId, (record.DeviceName ?? string.Empty).Trim());
+        => new((record.PlcCode ?? string.Empty).Trim());
 }
 
-internal readonly record struct FailedRecordSourceKey(int? NetworkDeviceId, string DeviceName);
+internal readonly record struct FailedRecordSourceKey(string PlcCode);

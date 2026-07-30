@@ -1,10 +1,10 @@
 # Local SDK package feed
 
-Host 只消费 SDK merge commit `7b63b15956c732cf4e05e33d57c66f3bde99f43b` 从干净 `main` 单次 pack 产生并已提交的 `2.0.7` nupkg 原字节，不读取 SDK 源码路径，也不保留 DLL fallback。完整机器清单位于 `sdk-package-set.json`；Private Plugins 必须提交同一组原字节。
+Host 只消费 SDK merge commit `e7a746d22b49215344c2e5cdaca3b3b9e5536cb2` 从干净 `main` 单次 pack 产生并已提交的 `2.0.8` nupkg 原字节，不读取 SDK 源码路径，也不保留 DLL fallback。完整机器清单位于 `sdk-package-set.json`；Private Plugins 必须提交同一组原字节。
 
 | Package | SHA-256 |
 |---|---|
-| `IIoT.Edge.Module.Analyzers.2.0.7.nupkg` | `207da8d41d2bbf0c026f518331a15d4a1ab9579d7eddec01948672dc03fd5f69` |
-| `IIoT.Edge.Module.Contracts.2.0.7.nupkg` | `de40f370ebdbeb96e8bf8a0fffbaa77cb447359108d9573ff2218cb23117a431` |
-| `IIoT.Edge.Module.Sdk.2.0.7.nupkg` | `a95f0f1686e38026566028c83b142ff9132a0221d7efdd23c3785ca1a74ee79b` |
-| `IIoT.Edge.UI.Shared.2.0.7.nupkg` | `94c9c0d89f1d9bbdd860283ac03986b2bb9541c157d3a002e9f654d468e6dd45` |
+| `IIoT.Edge.Module.Analyzers.2.0.8.nupkg` | `302e31a3bac227a6a9ccf7204973189178e345aa0446a75e90e18bbc6f396426` |
+| `IIoT.Edge.Module.Contracts.2.0.8.nupkg` | `b25b3f7749e9d3d223cbd1b8e0dcd6350699bbbdb86f9f6c4f7194fd46b9e5a5` |
+| `IIoT.Edge.Module.Sdk.2.0.8.nupkg` | `ba8400c3a7da50e145800cb0f686312c87d34e611929978d3ed59d84b5bc66fc` |
+| `IIoT.Edge.UI.Shared.2.0.8.nupkg` | `39b68376ad5d80e86c01f9a463af44da7ce79be698959bfba933829834ef6b72` |

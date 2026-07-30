@@ -2,6 +2,7 @@ using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
 using IIoT.Edge.Module.Contracts.Config;
 using IIoT.Edge.Infrastructure.Integration.Capacity;
 using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
+using IIoT.Edge.Module.Contracts.Identity;
 using System.Text.Json;
 using DeviceSession = IIoT.Edge.Module.Contracts.Device.DeviceSession;
 using NetworkState = IIoT.Edge.Module.Contracts.Device.NetworkState;
@@ -320,10 +321,14 @@ public sealed class CapacitySyncTaskBehaviorTests
         });
 
         var contextStore = new FakeProductionContextStore();
-        var context = contextStore.GetOrCreate("PLC-A");
+        var contextResolution = contextStore.GetOrCreate(
+            new PlcIdentity("P1-AP01", 7, "改名后的 AP"));
+        Assert.True(contextResolution.IsSuccess);
+        var context = contextResolution.Context!;
         context.TodayCapacity.Date = DateTime.UtcNow.ToString("yyyy-MM-dd");
         context.TodayCapacity.DayShift.OkCount = 1;
         context.TodayCapacity.HalfHourly[0].OkCount = 1;
+        var diagnostics = new FakeCloudDiagnosticsStore();
 
         var task = new CapacitySyncTask(
             cloudHttp,
@@ -344,7 +349,7 @@ public sealed class CapacitySyncTaskBehaviorTests
                 DayStart = "08:00",
                 DayEnd = "20:00"
             },
-            new FakeCloudDiagnosticsStore());
+            diagnostics);
 
         using var cts = new CancellationTokenSource();
         await task.StartAsync(cts.Token);
@@ -352,6 +357,10 @@ public sealed class CapacitySyncTaskBehaviorTests
         await task.StopAsync();
 
         Assert.True(cloudHttp.PostCallCount >= 1);
+        var payload = ParsePayload(cloudHttp.PostPayloads[0]);
+        Assert.Equal("P1-AP01", payload.GetProperty("plcName").GetString());
+        Assert.Equal("P1-AP01", diagnostics.Snapshot.LastPlcCode);
+        Assert.Equal("改名后的 AP", diagnostics.Snapshot.LastDeviceName);
     }
 
     private static CapacitySyncTask CreateTask(
