@@ -457,10 +457,11 @@ public sealed class PlcTaskBindingBehaviorTests
                 plcCode: "PLC-STABLE-BLOCK"));
         var logger = new FakeLogService();
         var statusStore = new PlcConnectionStatusStore();
+        var plcServiceFactory = new TrackingPlcServiceFactory();
         var runtimeBuilder = new PlcDeviceRuntimeBuilder(
             ioMappings,
             new PlcDataStore(),
-            new TrackingPlcServiceFactory(),
+            plcServiceFactory,
             new BlockedPlcProductionContextStore(),
             logger,
             statusStore,
@@ -486,6 +487,7 @@ public sealed class PlcTaskBindingBehaviorTests
         Assert.Empty(runtime.EnabledTaskKeys);
         Assert.Equal($"PlcIoScan_{device.DeviceName}", runtime.ConnectionTask.TaskName);
         Assert.Equal("PLC-STABLE-BLOCK", statusStore.GetSnapshot(device.Id)!.PlcCode);
+        Assert.Equal(["PLC-STABLE-BLOCK"], plcServiceFactory.CreatedDeviceNames);
         Assert.Contains(
             logger.Entries,
             entry => entry.Level == "Error"

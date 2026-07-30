@@ -387,13 +387,72 @@ public sealed class CapacitySyncTaskBehaviorTests
         Assert.False(result);
         Assert.Equal(0, cloudHttp.PostCallCount);
         Assert.Single(bufferStore.HourlySummaries);
-        Assert.Single(bufferStore.ReleasedClaimTokens);
+        Assert.Empty(bufferStore.ReleasedClaimTokens);
         Assert.Empty(bufferStore.DeletedSummaries);
         Assert.Contains(
             logger.Entries,
-            entry => entry.Message.Contains(
-                "原记录已保留，未上传、移动或删除",
-                StringComparison.Ordinal));
+            entry => entry.Message.Contains("原记录已保留", StringComparison.Ordinal)
+                     && entry.Message.Contains(
+                         "未上传、移动或删除",
+                         StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task RetryBuffer_WhenBlockedRowsFillFirstBatch_ShouldContinueWithLaterResolvableRows()
+    {
+        var cloudHttp = new FakeCloudHttpClient();
+        var deviceService = new FakeDeviceService();
+        deviceService.SetOnline(new DeviceSession
+        {
+            DeviceId = Guid.NewGuid(),
+            DeviceName = "Host",
+            ClientCode = "CLIENT-01",
+            ProcessId = Guid.NewGuid()
+        });
+        var bufferStore = new FakeCapacityBufferStore();
+        for (var index = 0; index < 200; index++)
+        {
+            bufferStore.HourlySummaries.Add(new BufferHourlySummaryDto
+            {
+                Date = "2026-07-30",
+                Hour = index % 24,
+                MinuteBucket = index % 2 == 0 ? 0 : 30,
+                ShiftCode = index % 24 is >= 8 and < 20 ? "D" : "N",
+                Total = 1,
+                OkCount = 1,
+                PlcName = $"无法解析-{index:D3}"
+            });
+        }
+
+        bufferStore.HourlySummaries.Add(new BufferHourlySummaryDto
+        {
+            Date = "2026-07-31",
+            Hour = 8,
+            MinuteBucket = 0,
+            ShiftCode = "D",
+            Total = 2,
+            OkCount = 2,
+            PlcName = "P1-AP01"
+        });
+        var contexts = new FakeProductionContextStore();
+        contexts.GetOrCreate(new PlcIdentity("P1-AP01", 7, "当前名称"));
+        var task = CreateTask(
+            cloudHttp,
+            deviceService,
+            bufferStore,
+            new FakeLogService(),
+            contexts,
+            new InMemoryPlcIdentityAliasRegistry());
+
+        var result = await task.RetryBufferAsync();
+
+        Assert.False(result);
+        var payload = ParsePayload(Assert.Single(cloudHttp.PostPayloads));
+        Assert.Equal("P1-AP01", payload.GetProperty("plcName").GetString());
+        Assert.Equal(200, bufferStore.HourlySummaries.Count);
+        Assert.DoesNotContain(bufferStore.HourlySummaries, row => row.PlcName == "P1-AP01");
+        Assert.Empty(bufferStore.ReleasedClaimTokens);
+        Assert.Equal([200, 200], bufferStore.ClaimBatchSizes);
     }
 
     [Fact]

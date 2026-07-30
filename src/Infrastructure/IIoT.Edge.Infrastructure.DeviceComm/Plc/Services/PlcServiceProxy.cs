@@ -7,15 +7,15 @@ public sealed class PlcServiceProxy : IPlcService
 {
     private readonly IPlcService _target;
     private readonly ILogService _logger;
-    private readonly string _deviceName;
+    private readonly string _plcCode;
 
     public bool IsConnected => _target.IsConnected;
 
-    public PlcServiceProxy(IPlcService target, ILogService logger, string deviceName)
+    public PlcServiceProxy(IPlcService target, ILogService logger, string plcCode)
     {
         _target = target;
         _logger = logger;
-        _deviceName = deviceName;
+        _plcCode = plcCode;
     }
 
     public void Init(PlcEndpoint endpoint) => _target.Init(endpoint);
@@ -28,7 +28,7 @@ public sealed class PlcServiceProxy : IPlcService
             .ConfigureAwait(false);
         if (!result)
         {
-            _logger.Warn($"[{_deviceName}] 连接失败");
+            _logger.Warn($"[PlcCode={_plcCode}] 连接失败");
         }
 
         return result;
@@ -75,12 +75,12 @@ public sealed class PlcServiceProxy : IPlcService
         }
         catch (PlcServiceQuarantinedException ex)
         {
-            _logger.Error($"[{_deviceName}] PLC service 已隔离: {ex.Message}");
+            _logger.Error($"[PlcCode={_plcCode}] PLC service 已隔离: {ex.Message}");
             throw;
         }
         catch (Exception ex)
         {
-            _logger.Error($"[{_deviceName}] {failureMessage}: {ex.Message}");
+            _logger.Error($"[PlcCode={_plcCode}] {failureMessage}: {ex.Message}");
             throw;
         }
     }

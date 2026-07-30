@@ -1511,7 +1511,11 @@ public sealed class FakeCapacityBufferStore : ICapacityBufferStore
     public Task<ClaimedCapacityBufferBatch?> ClaimHourlySummaryBatchAsync(int batchSize = 200)
     {
         ClaimBatchSizes.Add(batchSize);
+        var alreadyClaimed = _claims.Values
+            .SelectMany(static summaries => summaries)
+            .ToArray();
         var rows = HourlySummaries
+            .Where(summary => !alreadyClaimed.Any(claimed => SameHourlySummary(claimed, summary)))
             .Take(batchSize)
             .Select(CloneHourlySummary)
             .ToList();
@@ -1610,6 +1614,15 @@ public sealed class FakeCapacityBufferStore : ICapacityBufferStore
             NgCount = source.NgCount,
             PlcName = source.PlcName
         };
+
+    private static bool SameHourlySummary(
+        BufferHourlySummaryDto left,
+        BufferHourlySummaryDto right)
+        => string.Equals(left.Date, right.Date, StringComparison.Ordinal)
+           && left.Hour == right.Hour
+           && left.MinuteBucket == right.MinuteBucket
+           && string.Equals(left.ShiftCode, right.ShiftCode, StringComparison.Ordinal)
+           && string.Equals(left.PlcName, right.PlcName, StringComparison.Ordinal);
 }
 
 public sealed class FakeProductionContextStore : IProductionContextStore, IPlcProductionContextStore

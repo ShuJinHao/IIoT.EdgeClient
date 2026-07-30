@@ -113,7 +113,7 @@ public sealed class PlcDeviceRuntimeBuilder
         }
 
         _statusStore.EnsureTracked(device.Id, device.PlcCode, device.DeviceName);
-        var plcService = _plcServiceFactory.Create(plcType, device.DeviceName);
+        var plcService = _plcServiceFactory.Create(plcType, device.PlcCode);
         var endpoint = await _endpointResolver.ResolveAsync(device, plcType, ct).ConfigureAwait(false);
         var deviceCts = new CancellationTokenSource();
         var runtimePolicy = hardwareProfile?.GetIoRuntimePolicy() ?? PlcIoRuntimePolicy.Default;

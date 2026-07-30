@@ -52,6 +52,9 @@ public sealed class DeviceSelectionService : IDeviceSelectionService
             var currentCodes = _deviceNameByPlcCode.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
             return names
                 .Where(name =>
+                    !currentCodes.Contains(name)
+                    || string.Equals(name, _selectedPlcCode, StringComparison.OrdinalIgnoreCase))
+                .Where(name =>
                     !_plcCodeByDeviceName.TryGetValue(name, out var currentCode)
                     || string.Equals(currentCode, _selectedPlcCode, StringComparison.OrdinalIgnoreCase))
                 .Where(name => _knownDeviceNamesByPlcCode

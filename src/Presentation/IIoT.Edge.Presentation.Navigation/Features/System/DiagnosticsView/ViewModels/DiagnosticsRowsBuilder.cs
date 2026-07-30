@@ -438,8 +438,7 @@ internal sealed class DiagnosticsRowsBuilder(
             return true;
         }
 
-        if (string.IsNullOrWhiteSpace(record.PlcCode)
-            && string.IsNullOrWhiteSpace(record.DeviceName))
+        if (string.IsNullOrWhiteSpace(record.PlcCode))
         {
             return true;
         }

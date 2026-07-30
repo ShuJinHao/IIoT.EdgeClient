@@ -415,8 +415,12 @@ public sealed class DiagnosticsViewModelBehaviorTests
                     [],
                     [
                         CreateDeadLetterRecord(101, "Cloud-A", "PLC-A01"),
-                            CreateDeadLetterRecord(102, "Cloud-B", "PLC-A02"),
-                            CreateDeadLetterRecord(103, "Cloud-Global")
+                        CreateDeadLetterRecord(102, "Cloud-B", "PLC-A02"),
+                        CreateDeadLetterRecord(103, "Cloud-Global"),
+                        CreateDeadLetterRecord(
+                            104,
+                            "Cloud-Unresolved",
+                            deviceName: "旧显示名")
                     ],
                     false,
                     null,
@@ -438,10 +442,11 @@ public sealed class DiagnosticsViewModelBehaviorTests
         await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(2, viewModel.SyncChannels.Count);
-        Assert.Equal(2, viewModel.CloudDeadLetters.Count);
+        Assert.Equal(3, viewModel.CloudDeadLetters.Count);
         Assert.Empty(viewModel.MesDeadLetters);
         Assert.Contains(viewModel.CloudDeadLetters, row => row.FailedTarget == "Cloud-A");
         Assert.Contains(viewModel.CloudDeadLetters, row => row.FailedTarget == "Cloud-Global");
+        Assert.Contains(viewModel.CloudDeadLetters, row => row.FailedTarget == "Cloud-Unresolved");
         Assert.DoesNotContain(viewModel.CloudDeadLetters, row => row.FailedTarget == "Cloud-B");
     }
 
@@ -909,13 +914,17 @@ public sealed class DiagnosticsViewModelBehaviorTests
                 DeadLetters: mesDeadLetters),
             new ProductionContextPersistenceDiagnostics(0, null));
 
-    private static DeadLetterRecord CreateDeadLetterRecord(long id, string failedTarget, string? plcCode = null)
+    private static DeadLetterRecord CreateDeadLetterRecord(
+        long id,
+        string failedTarget,
+        string? plcCode = null,
+        string? deviceName = null)
         => new()
         {
             Id = id,
             ProcessType = "TestPlugin",
             PlcCode = plcCode ?? string.Empty,
-            DeviceName = plcCode is null ? string.Empty : $"展示名-{plcCode}",
+            DeviceName = deviceName ?? (plcCode is null ? string.Empty : $"展示名-{plcCode}"),
             TaskKey = plcCode is null ? string.Empty : "Task.Upload",
             CellDataJson = "{\"trayCode\":\"TRAY-10\"}",
             FailedTarget = failedTarget,

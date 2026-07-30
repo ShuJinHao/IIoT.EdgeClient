@@ -95,4 +95,20 @@ public sealed class DeviceSelectionContextBehaviorTests
             ["当前名称", "历史名称"],
             selection.SelectedDeviceNameAliases);
     }
+
+    [Fact]
+    public void StableIdentityMapping_WhenAliasEqualsAnotherCurrentPlcCode_ShouldExcludeAlias()
+    {
+        var selection = new DeviceSelectionService();
+        selection.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("一号机", "PLC-A"),
+            new PlcDeviceSelectionIdentity("PLC-A", "PLC-B")
+        ]);
+
+        selection.SelectDevice("PLC-A");
+
+        Assert.Equal("PLC-B", selection.SelectedPlcCode);
+        Assert.Empty(selection.SelectedDeviceNameAliases);
+    }
 }
