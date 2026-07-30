@@ -224,7 +224,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
                 _logger.Error(
                     $"[PlcCode={_device.PlcCode}] PLC service 已隔离，扫描任务已停止，"
                     + $"原因码={PlcServiceQuarantinedException.StableReasonCode}，异常类型={ex.GetType().Name}。");
-                break;
+                throw;
             }
             catch (Exception ex) when (
                 PlcOperationFailureClassifier.IsCallerCancellation(ex, ct))

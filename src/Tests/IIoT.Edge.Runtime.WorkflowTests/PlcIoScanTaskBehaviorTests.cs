@@ -1061,6 +1061,54 @@ public sealed class PlcIoScanTaskBehaviorTests
     }
 
     [Fact]
+    public async Task PlcIoScanTask_StartAsync_WhenServiceQuarantines_ShouldPropagateToRuntimeOwner()
+    {
+        var quarantine = new PlcServiceQuarantinedException(
+            nameof(ScriptedPlcService),
+            nameof(ScriptedPlcService.ReadDataAsync),
+            "sensitive quarantine detail");
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+        plcService.ReadOutcomes.Enqueue(quarantine);
+        var dataStore = new PlcDataStore();
+        dataStore.Register(23, readSize: 1, writeSize: 0);
+        var logger = new FakeLogService();
+        var statusStore = new PlcConnectionStatusStore();
+        var connectionStates = new List<bool>();
+        var interaction = new PlcIoScanTask(
+            plcService,
+            dataStore,
+            CreateDevice(23, "PLC-QUARANTINED"),
+            [CreateIoMapping(23, "Read", "D300", 1)],
+            logger,
+            SignalBlockPlanner,
+            statusStore,
+            connectionStateChanged: connectionStates.Add);
+
+        var actual = await Assert.ThrowsAsync<PlcServiceQuarantinedException>(
+            () => interaction.StartAsync(TestContext.Current.CancellationToken));
+
+        Assert.Same(quarantine, actual);
+        Assert.Equal([false, true, false], connectionStates);
+        Assert.Equal(
+            PlcServiceQuarantinedException.StableReasonCode,
+            statusStore.GetSnapshot(23)?.LastError);
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Message.Contains(
+                PlcServiceQuarantinedException.StableReasonCode,
+                StringComparison.Ordinal)
+                && entry.Message.Contains(
+                    nameof(PlcServiceQuarantinedException),
+                    StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            logger.Entries,
+            entry => entry.Message.Contains(
+                "sensitive quarantine detail",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task PlcIoScanTask_StartAsync_WhenProtocolCancelsWithoutRuntimeCancellation_ShouldEnterErrorPath()
     {
         var plcService = new ScriptedPlcService();
