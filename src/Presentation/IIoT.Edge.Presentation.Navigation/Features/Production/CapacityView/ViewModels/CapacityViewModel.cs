@@ -265,7 +265,8 @@ public class CapacityViewModel : NavigationViewModelBase
             IDeviceSelectionService.AllFilterKey,
             StringComparison.OrdinalIgnoreCase)
             ? string.Empty
-            : _deviceSelectionService.SelectedDeviceKey;
+            : _deviceSelectionService.SelectedPlcCode
+              ?? _deviceSelectionService.SelectedDeviceKey;
 
     private void OnDeviceSelectionChanged(object? sender, EventArgs e)
         => ScheduleLoadCurrentData();

@@ -32,12 +32,17 @@ public sealed class CapacityViewModelBehaviorTests
     {
         var facade = new FakeCapacityQueryFacade { IsOnline = true };
         var selectionService = new DeviceSelectionService();
-        selectionService.SelectDevice("PLC-A01");
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("当前显示名称", "PLC-A01")
+        ]);
+        selectionService.SelectDevice("当前显示名称");
         var viewModel = CreateViewModel(facade, selectionService);
 
         await viewModel.OnActivatedAsync();
 
         Assert.Equal("PLC-A01", facade.LastLoadTodayPlcName);
+        Assert.Equal("当前显示名称", selectionService.SelectedDeviceKey);
         Assert.Equal(1, facade.LoadTodayCallCount);
     }
 

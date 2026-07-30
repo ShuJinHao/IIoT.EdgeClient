@@ -120,7 +120,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
     }
 
     [AvaloniaFact]
-    public async Task LoadAll_WhenSharedSelectionMatchesPlcCode_ShouldSelectRenamedDeviceForIoMapping()
+    public async Task LoadAll_WhenSharedSelectionMatchesRealName_ShouldExposeStablePlcCodeForIoMapping()
     {
         var service = new StubHardwareConfigCrudService
         {
@@ -131,7 +131,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
             ]
         };
         var selectionService = new DeviceSelectionService();
-        selectionService.SelectDevice("P1-AP02");
+        selectionService.SelectDevice("改名后的 PLC-02");
         var viewModel = CreateViewModel(service, selectionService);
 
         await viewModel.OnActivatedAsync();

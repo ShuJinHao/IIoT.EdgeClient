@@ -313,7 +313,8 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
 
         ApplySelectedDeviceFromSharedSelection(MonitorViewModelSnapshotApplier.ResolveSelectedDevice(
             snapshots,
-            _deviceSelectionService.SelectedDeviceKey));
+            _deviceSelectionService.SelectedDeviceKey,
+            _deviceSelectionService.SelectedPlcCode));
 
         ApplySelectedSnapshot();
     }
@@ -339,7 +340,8 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
         {
             ApplySelectedDeviceFromSharedSelection(MonitorViewModelSnapshotApplier.ResolveSelectedDevice(
                 _lastSnapshots,
-                _deviceSelectionService.SelectedDeviceKey));
+                _deviceSelectionService.SelectedDeviceKey,
+                _deviceSelectionService.SelectedPlcCode));
             ApplySelectedSnapshot();
             return;
         }
@@ -349,7 +351,8 @@ public class MonitorViewModel : NavigationViewModelBase, IMonitorViewModelCallba
             {
                 ApplySelectedDeviceFromSharedSelection(MonitorViewModelSnapshotApplier.ResolveSelectedDevice(
                     _lastSnapshots,
-                    _deviceSelectionService.SelectedDeviceKey));
+                    _deviceSelectionService.SelectedDeviceKey,
+                    _deviceSelectionService.SelectedPlcCode));
                 ApplySelectedSnapshot();
             },
             DispatcherPriority.Background);

@@ -751,21 +751,14 @@ public class HardwareConfigViewModel : LocalizedCrudPageViewModelBase
             return null;
         }
 
-        var byPlcCode = IoMappingNetworkDevices
+        var byDeviceName = IoMappingNetworkDevices
             .Where(device => string.Equals(
-                device.PlcCode,
+                device.DeviceName,
                 selectedKey,
                 StringComparison.OrdinalIgnoreCase))
             .Take(2)
             .ToArray();
-        if (byPlcCode.Length == 1)
-        {
-            return byPlcCode[0];
-        }
-
-        return IoMappingNetworkDevices.FirstOrDefault(device =>
-            string.IsNullOrWhiteSpace(device.PlcCode)
-            && string.Equals(device.DeviceName, selectedKey, StringComparison.OrdinalIgnoreCase));
+        return byDeviceName.Length == 1 ? byDeviceName[0] : null;
     }
 
     private static string FormatPlcIdentity(string? plcCode, string deviceName)

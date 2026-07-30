@@ -144,7 +144,7 @@ public sealed class EquipmentViewModelBehaviorTests
     }
 
     [AvaloniaFact]
-    public async Task DeviceFilter_WhenDeviceIsRenamed_ShouldKeepStablePlcCodeSelection()
+    public async Task DeviceFilter_WhenDeviceIsRenamed_ShouldKeepRealNameKeyAndResolveStablePlcCode()
     {
         var panelService = new FakeEquipmentPanelService
         {
@@ -157,7 +157,6 @@ public sealed class EquipmentViewModelBehaviorTests
             ]
         };
         var selectionService = new DeviceSelectionService();
-        selectionService.SelectDevice("P1-AP01");
         var viewModel = CreateViewModel(
             [],
             [],
@@ -167,7 +166,13 @@ public sealed class EquipmentViewModelBehaviorTests
         try
         {
             await viewModel.OnActivatedAsync();
-            Assert.Equal("P1-AP01", viewModel.SelectedDeviceFilter?.Key);
+            viewModel.SelectedDeviceFilter = Assert.Single(
+                viewModel.DeviceFilters,
+                static option => option.Key == "旧名称");
+
+            Assert.Equal("旧名称", selectionService.SelectedDeviceKey);
+            Assert.Equal("P1-AP01", selectionService.SelectedPlcCode);
+            Assert.Equal("旧名称", viewModel.SelectedDeviceFilter?.Key);
             Assert.Equal("P1-AP01 · 旧名称", viewModel.SelectedDeviceFilter?.DisplayName);
 
             panelService.HardwareSnapshots =
@@ -180,8 +185,16 @@ public sealed class EquipmentViewModelBehaviorTests
 
             await viewModel.OnActivatedAsync();
 
-            Assert.Equal("P1-AP01", selectionService.SelectedDeviceKey);
-            Assert.Equal("P1-AP01", viewModel.SelectedDeviceFilter?.Key);
+            Assert.Equal("旧名称", selectionService.SelectedDeviceKey);
+            Assert.Null(selectionService.SelectedPlcCode);
+
+            viewModel.SelectedDeviceFilter = Assert.Single(
+                viewModel.DeviceFilters,
+                static option => option.Key == "新名称");
+
+            Assert.Equal("新名称", selectionService.SelectedDeviceKey);
+            Assert.Equal("P1-AP01", selectionService.SelectedPlcCode);
+            Assert.Equal("新名称", viewModel.SelectedDeviceFilter?.Key);
             Assert.Equal("P1-AP01 · 新名称", viewModel.SelectedDeviceFilter?.DisplayName);
         }
         finally

@@ -56,10 +56,14 @@ public sealed class MonitorViewModelBehaviorTests
     }
 
     [Fact]
-    public async Task OnActivatedAsync_WhenSharedSelectionUsesPlcCode_ShouldResolveCurrentDisplayName()
+    public async Task OnActivatedAsync_WhenSharedSelectionUsesRealName_ShouldRetainStablePlcIdentity()
     {
         var selectionService = new DeviceSelectionService();
-        selectionService.SelectDevice("CODE-2");
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("改名后的显示名", "CODE-2")
+        ]);
+        selectionService.SelectDevice("改名后的显示名");
         var viewModel = CreateViewModel(
             selectionService,
             [
@@ -73,6 +77,8 @@ public sealed class MonitorViewModelBehaviorTests
         Assert.Equal("改名后的显示名", viewModel.SelectedDevice);
         Assert.Equal("CODE-2 · 改名后的显示名", viewModel.SelectedDeviceDisplayName);
         Assert.Equal("stable", Assert.Single(viewModel.DeviceDataRows).Value);
+        Assert.Equal("改名后的显示名", selectionService.SelectedDeviceKey);
+        Assert.Equal("CODE-2", selectionService.SelectedPlcCode);
     }
 
     [Fact]

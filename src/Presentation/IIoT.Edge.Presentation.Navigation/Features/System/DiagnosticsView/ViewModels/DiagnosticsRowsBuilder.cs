@@ -36,7 +36,8 @@ internal sealed class DiagnosticsRowsBuilder(
         var cloudDeadLetters = BuildDeadLetters(DataPipelineRetryChannel.Cloud, syncDiagnostics.Cloud.DeadLetters?.LatestRecords);
         var mesDeadLetters = BuildDeadLetters(DataPipelineRetryChannel.Mes, syncDiagnostics.Mes.DeadLetters?.LatestRecords);
         var issues = BuildIssues(report);
-        var visibleIssueCount = report.Issues.Count(x => ShouldIncludeDeviceScopedRow(x.PlcCode));
+        var visibleIssueCount = report.Issues.Count(x =>
+            ShouldIncludeDeviceScopedRow(x.PlcCode, x.DeviceName));
 
         return new DiagnosticsRowsSnapshot(
             BuildModuleRegistrations(report, moduleNameMap),
@@ -80,7 +81,7 @@ internal sealed class DiagnosticsRowsBuilder(
 
     private IReadOnlyList<DeviceModuleBindingRow> BuildDeviceBindings(StartupDiagnosticsReport report)
         => report.DeviceBindings
-            .Where(x => ShouldIncludeDeviceScopedRow(x.PlcCode))
+            .Where(x => ShouldIncludeDeviceScopedRow(x.PlcCode, x.DeviceName))
             .Select(x => new DeviceModuleBindingRow(
                 FormatPlcIdentity(x.PlcCode, x.DeviceName),
                 DiagnosticsTextNormalizer.Normalize(x.ModuleId),
@@ -100,7 +101,7 @@ internal sealed class DiagnosticsRowsBuilder(
             .GroupBy(x => NormalizeModuleId(x.ModuleId), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
         var bindings = report.DeviceBindings
-            .Where(x => ShouldIncludeDeviceScopedRow(x.PlcCode))
+            .Where(x => ShouldIncludeDeviceScopedRow(x.PlcCode, x.DeviceName))
             .GroupBy(x => NormalizeModuleId(x.ModuleId), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.ToArray(), StringComparer.OrdinalIgnoreCase);
         var moduleIds = pluginStates.Keys
@@ -154,7 +155,7 @@ internal sealed class DiagnosticsRowsBuilder(
     private IReadOnlyList<StartupDiagnosticIssueRow> BuildIssues(StartupDiagnosticsReport report)
     {
         var issueRows = report.Issues
-            .Where(x => ShouldIncludeDeviceScopedRow(x.PlcCode))
+            .Where(x => ShouldIncludeDeviceScopedRow(x.PlcCode, x.DeviceName))
             .Select(x => new StartupDiagnosticIssueCandidate(
                 NormalizeIssueMessage(DiagnosticsTextNormalizer.Normalize(x.Message)),
                 EdgeVisualStatus.Error,
@@ -201,7 +202,7 @@ internal sealed class DiagnosticsRowsBuilder(
         EdgeVisualStatus Status,
         string LevelText);
 
-    private bool ShouldIncludeDeviceScopedRow(string? plcCode)
+    private bool ShouldIncludeDeviceScopedRow(string? plcCode, string? deviceName)
     {
         var selectedKey = deviceSelectionService.SelectedDeviceKey;
         if (string.Equals(selectedKey, IDeviceSelectionService.AllFilterKey, StringComparison.OrdinalIgnoreCase))
@@ -209,18 +210,22 @@ internal sealed class DiagnosticsRowsBuilder(
             return true;
         }
 
-        if (string.IsNullOrWhiteSpace(plcCode))
+        if (string.IsNullOrWhiteSpace(plcCode)
+            && string.IsNullOrWhiteSpace(deviceName))
         {
             return true;
         }
 
-        return string.Equals(plcCode.Trim(), selectedKey, StringComparison.OrdinalIgnoreCase);
+        var selectedPlcCode = deviceSelectionService.SelectedPlcCode;
+        return !string.IsNullOrWhiteSpace(selectedPlcCode)
+            ? string.Equals(plcCode?.Trim(), selectedPlcCode, StringComparison.OrdinalIgnoreCase)
+            : string.Equals(deviceName?.Trim(), selectedKey, StringComparison.OrdinalIgnoreCase);
     }
 
     private IReadOnlyList<MesChannelDiagnosticsRow> BuildMesUploadDiagnostics(
         EdgeSyncDiagnosticsSnapshot syncDiagnostics)
         => syncDiagnostics.Mes.Channels
-            .Where(x => ShouldIncludeDeviceScopedRow(x.PlcCode))
+            .Where(x => ShouldIncludeDeviceScopedRow(x.PlcCode, x.DeviceName))
             .Select(x => new MesChannelDiagnosticsRow(
                 displayNameResolver.ResolveProcessDisplayName(x.ProcessType, x.ProcessDisplayName),
                 FormatPlcIdentity(x.PlcCode, x.DeviceName),
@@ -433,12 +438,16 @@ internal sealed class DiagnosticsRowsBuilder(
             return true;
         }
 
-        if (string.IsNullOrWhiteSpace(record.PlcCode))
+        if (string.IsNullOrWhiteSpace(record.PlcCode)
+            && string.IsNullOrWhiteSpace(record.DeviceName))
         {
             return true;
         }
 
-        return string.Equals(record.PlcCode.Trim(), selectedKey, StringComparison.OrdinalIgnoreCase);
+        var selectedPlcCode = deviceSelectionService.SelectedPlcCode;
+        return !string.IsNullOrWhiteSpace(selectedPlcCode)
+            ? string.Equals(record.PlcCode.Trim(), selectedPlcCode, StringComparison.OrdinalIgnoreCase)
+            : string.Equals(record.DeviceName.Trim(), selectedKey, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string FormatPlcIdentity(string? plcCode, string? deviceName)

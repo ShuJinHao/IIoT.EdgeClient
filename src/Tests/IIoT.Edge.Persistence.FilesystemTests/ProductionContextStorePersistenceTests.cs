@@ -3,6 +3,7 @@ using IIoT.Edge.Host.DataPipeline.Context;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 using IIoT.Edge.Module.Contracts.Runtime;
 using IIoT.Edge.Module.Contracts.Identity;
+using System.Text.Json;
 
 namespace IIoT.Edge.Persistence.FilesystemTests;
 
@@ -371,6 +372,62 @@ public sealed class ProductionContextStorePersistenceTests
             Assert.True(migrated.IsSuccess);
             Assert.True(migrated.Context!.HasCell("BC-1"));
             Assert.Equal(31, migrated.Context.NetworkDeviceId);
+            Assert.Empty(restored.GetPersistenceDiagnostics().IdentityBlocks);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void LoadLegacyContext_WithMutableCellDeviceCode_ShouldRemainPendingUntilAuthorityRejectsIt()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-context-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var logger = new FakeLogService();
+            var source = new ProductionContextStore(logger, CreateCellDataTypeRegistry(), tempDir);
+            var legacy = source.GetOrCreate("旧显示名称");
+            legacy.NetworkDeviceId = 32;
+            legacy.AddCell("BC-1", new NamedCellData
+            {
+                Label = "BC-1",
+                DeviceCode = "旧显示名称"
+            });
+            source.SaveToFile();
+
+            var restored = new ProductionContextStore(logger, CreateCellDataTypeRegistry(), tempDir);
+            restored.LoadFromFile();
+
+            Assert.DoesNotContain(
+                restored.GetAll(),
+                context => string.Equals(
+                    context.PlcCode,
+                    "旧显示名称",
+                    StringComparison.OrdinalIgnoreCase));
+
+            var blocked = restored.GetOrCreate(
+                new PlcIdentity("PLC-STABLE-32", 32, "当前显示名称"));
+
+            Assert.False(blocked.IsSuccess);
+            Assert.Equal(
+                PlcProductionContextResolutionOutcome.MigrationBlocked,
+                blocked.Outcome);
+            Assert.Contains(
+                restored.GetPersistenceDiagnostics().IdentityBlocks,
+                issue => issue.DiagnosticCode == "production_context_plc_code_conflict");
+
+            restored.SaveToFile();
+            var persisted = File.ReadAllText(Path.Combine(tempDir, "production_context.json"));
+            using var document = JsonDocument.Parse(persisted);
+            var preserved = Assert.Single(document.RootElement.EnumerateArray());
+            Assert.Equal("旧显示名称", preserved.GetProperty("deviceName").GetString());
+            Assert.Equal(string.Empty, preserved.GetProperty("plcCode").GetString());
+            Assert.DoesNotContain("PLC-STABLE-32", persisted, StringComparison.Ordinal);
         }
         finally
         {

@@ -122,10 +122,15 @@ public sealed class DashboardPreviewRuntimeViewModelTests
     }
 
     [Fact]
-    public void PlcStatusTableItems_WhenDisplayNameCollidesWithSelectedPlcCode_ShouldNotCrossMatch()
+    public void PlcStatusTableItems_WhenDisplayNameCollidesWithResolvedPlcCode_ShouldNotCrossMatch()
     {
         var selectionService = new DeviceSelectionService();
-        selectionService.SelectDevice("P1-AP01");
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("当前一号机", "P1-AP01"),
+            new PlcDeviceSelectionIdentity("P1-AP01", "P1-AP02")
+        ]);
+        selectionService.SelectDevice("当前一号机");
         var languageService = new TestAppLanguageService();
         var viewModel = new DashboardPreviewRuntimeViewModel(
             new DashboardViewModel(new TestEquipmentPanelService(), languageService),
@@ -157,6 +162,7 @@ public sealed class DashboardPreviewRuntimeViewModelTests
 
         var item = Assert.Single(viewModel.PlcStatusTableItems);
         Assert.Equal("P1-AP01 · 当前一号机", item.DeviceName);
+        Assert.Equal("当前一号机", selectionService.SelectedDeviceKey);
     }
 
     [Fact]

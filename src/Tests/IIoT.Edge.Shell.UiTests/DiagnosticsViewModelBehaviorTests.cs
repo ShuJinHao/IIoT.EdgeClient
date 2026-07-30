@@ -374,7 +374,12 @@ public sealed class DiagnosticsViewModelBehaviorTests
                     new StartupDiagnosticIssue("GLOBAL", "插件配置缺失", "ModuleA")
             ]));
         var selectionService = new DeviceSelectionService();
-        selectionService.SelectDevice("PLC-A01");
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("一号机", "PLC-A01"),
+            new PlcDeviceSelectionIdentity("二号机", "PLC-A02")
+        ]);
+        selectionService.SelectDevice("一号机");
         var viewModel = CreateViewModel(
             startupStore,
             new FakeEdgeSyncDiagnosticsQuery(),
@@ -396,7 +401,12 @@ public sealed class DiagnosticsViewModelBehaviorTests
     public async Task DiagnosticsViewModel_WhenDeviceSelected_ShouldFilterAttributableDeadLettersAndKeepGlobalChannels()
     {
         var selectionService = new DeviceSelectionService();
-        selectionService.SelectDevice("PLC-A01");
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("展示名-PLC-A01", "PLC-A01"),
+            new PlcDeviceSelectionIdentity("展示名-PLC-A02", "PLC-A02")
+        ]);
+        selectionService.SelectDevice("展示名-PLC-A01");
         var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
         {
             Current = CreateReadySyncSnapshot(

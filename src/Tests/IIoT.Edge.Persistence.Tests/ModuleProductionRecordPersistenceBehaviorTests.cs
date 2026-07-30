@@ -1,6 +1,11 @@
+using System.Linq.Expressions;
+using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
+using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Contracts.Production;
+using IIoT.Edge.SharedKernel.Repository;
+using IIoT.Edge.SharedKernel.Specification;
 using Microsoft.Data.Sqlite;
 using Dapper;
 
@@ -272,10 +277,58 @@ public sealed class ModuleProductionRecordPersistenceBehaviorTests
         }
     }
 
-    private static ModuleProductionRecordPersistence CreateStore(string tempDirectory)
+    [Fact]
+    public async Task Query_WhenDeviceWasRenamed_ShouldResolveDisplaySelectionToStablePlcCode()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var device = NetworkDeviceEntity.Create(
+                    "当前显示名称",
+                    DeviceType.PLC,
+                    "127.0.0.1",
+                    6001,
+                    "P1-AP01")
+                .WithId(8);
+            var store = CreateStore(tempDirectory, [device]);
+            await store.AddAsync(
+                CreateEntry(
+                    "AP",
+                    "RENAMED-DEVICE",
+                    "P1-AP01",
+                    "旧显示名称",
+                    "AP.ClipScan.MG1",
+                    "MG1",
+                    "RENAMED-CLIP",
+                    DayStartUtc.AddMinutes(2),
+                    quantity: 3),
+                TestContext.Current.CancellationToken);
+
+            var rows = await store.QueryAsync(
+                new ModuleProductionRecordQuery(
+                    "AP",
+                    DayStartUtc,
+                    DayStartUtc.AddDays(1),
+                    "当前显示名称"),
+                TestContext.Current.CancellationToken);
+
+            var row = Assert.Single(rows);
+            Assert.Equal("P1-AP01", row.PlcCode);
+            Assert.Equal("旧显示名称", row.DeviceName);
+        }
+        finally
+        {
+            DeleteTempDirectory(tempDirectory);
+        }
+    }
+
+    private static ModuleProductionRecordPersistence CreateStore(
+        string tempDirectory,
+        IReadOnlyCollection<NetworkDeviceEntity>? devices = null)
         => new(
             new SqliteConnectionFactory(tempDirectory),
-            new FakeLogService());
+            new FakeLogService(),
+            devices is null ? null : new FakeNetworkDeviceReadRepository(devices));
 
     private static ModuleProductionRecordEntry CreateEntry(
         string moduleId,
@@ -325,5 +378,58 @@ public sealed class ModuleProductionRecordPersistenceBehaviorTests
         {
             Directory.Delete(path, recursive: true);
         }
+    }
+
+    private sealed class FakeNetworkDeviceReadRepository(
+        IReadOnlyCollection<NetworkDeviceEntity> devices)
+        : IReadRepository<NetworkDeviceEntity>
+    {
+        public Task<List<NetworkDeviceEntity>> GetListAsync(
+            Expression<Func<NetworkDeviceEntity, bool>> expression,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(devices.Where(expression.Compile()).ToList());
+
+        public Task<NetworkDeviceEntity?> GetByIdAsync<TKey>(
+            TKey id,
+            CancellationToken cancellationToken = default)
+            where TKey : notnull
+            => throw new NotSupportedException();
+
+        public Task<NetworkDeviceEntity?> GetAsync(
+            Expression<Func<NetworkDeviceEntity, bool>> expression,
+            Expression<Func<NetworkDeviceEntity, object>>[]? includes = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<List<NetworkDeviceEntity>> GetListAsync(
+            Expression<Func<NetworkDeviceEntity, bool>> expression,
+            Expression<Func<NetworkDeviceEntity, object>>[]? includes = null,
+            CancellationToken cancellationToken = default)
+            => GetListAsync(expression, cancellationToken);
+
+        public Task<List<NetworkDeviceEntity>> GetListAsync(
+            ISpecification<NetworkDeviceEntity>? specification = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<NetworkDeviceEntity?> GetSingleOrDefaultAsync(
+            ISpecification<NetworkDeviceEntity>? specification = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<int> GetCountAsync(
+            Expression<Func<NetworkDeviceEntity, bool>> expression,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<int> CountAsync(
+            ISpecification<NetworkDeviceEntity>? specification = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<bool> AnyAsync(
+            ISpecification<NetworkDeviceEntity>? specification = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 }

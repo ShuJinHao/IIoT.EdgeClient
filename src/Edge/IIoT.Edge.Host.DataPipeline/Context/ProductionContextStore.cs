@@ -468,11 +468,6 @@ public class ProductionContextStore : IProductionContextStore, IPlcProductionCon
     {
         var plcCode = context.PlcCode?.Trim() ?? string.Empty;
         var embeddedCodes = ResolveEmbeddedPlcCodes(context);
-        if (string.IsNullOrWhiteSpace(plcCode) && embeddedCodes.Count == 1)
-        {
-            plcCode = embeddedCodes[0];
-        }
-
         if (!string.IsNullOrWhiteSpace(plcCode)
             && embeddedCodes.All(code =>
                 string.Equals(code, plcCode, StringComparison.OrdinalIgnoreCase))
@@ -508,8 +503,13 @@ public class ProductionContextStore : IProductionContextStore, IPlcProductionCon
             : embeddedCodes.Count > 1
                 ? $"历史运行上下文包含多个 CellData.DeviceCode：{string.Join(",", embeddedCodes)}。"
                 : "历史运行上下文缺少 PlcCode，等待按正数 NetworkDeviceId 或唯一 CellData.DeviceCode 迁移。";
+        var diagnosticPlcCode = !string.IsNullOrWhiteSpace(plcCode)
+            ? plcCode
+            : embeddedCodes.Count == 1
+                ? embeddedCodes[0]
+                : string.Empty;
         AddIdentityBlockLocked(new PlcProductionContextBlockDiagnostic(
-            plcCode,
+            diagnosticPlcCode,
             context.NetworkDeviceId > 0 ? context.NetworkDeviceId : null,
             context.DeviceName,
             code,

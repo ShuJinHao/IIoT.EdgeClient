@@ -35,10 +35,10 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
     }
 
     [Fact]
-    public async Task OnActivatedAsync_WhenSharedSelectionMatchesPlcCode_ShouldSelectRenamedDevice()
+    public async Task OnActivatedAsync_WhenSharedSelectionMatchesRealName_ShouldExposeStablePlcCode()
     {
         var selectionService = new DeviceSelectionService();
-        selectionService.SelectDevice("P1-AP02");
+        selectionService.SelectDevice("改名后的 PLC-A02");
         var viewModel = CreateViewModel(
             new FakePlcTaskBindingService(
             [
@@ -52,7 +52,7 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
 
         Assert.Equal("改名后的 PLC-A02", viewModel.SelectedDevice?.DeviceName);
         Assert.Equal("P1-AP02", viewModel.SelectedDevice?.PlcCode);
-        Assert.Equal("P1-AP02", selectionService.SelectedDeviceKey);
+        Assert.Equal("改名后的 PLC-A02", selectionService.SelectedDeviceKey);
     }
 
     [Fact]

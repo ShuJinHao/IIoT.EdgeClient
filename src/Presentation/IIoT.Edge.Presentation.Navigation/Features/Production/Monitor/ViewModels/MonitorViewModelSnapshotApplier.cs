@@ -7,7 +7,8 @@ internal static class MonitorViewModelSnapshotApplier
 {
     public static string? ResolveSelectedDevice(
         IReadOnlyList<DeviceMonitorSnapshot> snapshots,
-        string? selectedDevice)
+        string? selectedDevice,
+        string? selectedPlcCode = null)
     {
         if (string.IsNullOrWhiteSpace(selectedDevice)
             || string.Equals(selectedDevice, IDeviceSelectionService.AllFilterKey, StringComparison.OrdinalIgnoreCase))
@@ -16,17 +17,34 @@ internal static class MonitorViewModelSnapshotApplier
         }
 
         var selectedKey = selectedDevice.Trim();
-        var byPlcCode = snapshots
+        var byDeviceName = snapshots
             .Where(snapshot => string.Equals(
-                snapshot.PlcCode,
+                snapshot.DeviceName,
                 selectedKey,
-                StringComparison.OrdinalIgnoreCase))
+                StringComparison.Ordinal))
             .Take(2)
             .ToArray();
+        if (byDeviceName.Length == 1)
+        {
+            return byDeviceName[0].DeviceName;
+        }
 
-        return byPlcCode.Length == 1
-            ? byPlcCode[0].DeviceName
-            : selectedKey;
+        if (!string.IsNullOrWhiteSpace(selectedPlcCode))
+        {
+            var byPlcCode = snapshots
+                .Where(snapshot => string.Equals(
+                    snapshot.PlcCode,
+                    selectedPlcCode.Trim(),
+                    StringComparison.OrdinalIgnoreCase))
+                .Take(2)
+                .ToArray();
+            if (byPlcCode.Length == 1)
+            {
+                return byPlcCode[0].DeviceName;
+            }
+        }
+
+        return selectedKey;
     }
 
     public static DeviceMonitorSnapshot? FindSelectedSnapshot(
@@ -39,18 +57,6 @@ internal static class MonitorViewModelSnapshotApplier
         }
 
         var selectedKey = selectedDevice.Trim();
-        var byPlcCode = snapshots
-            .Where(snapshot => string.Equals(
-                snapshot.PlcCode,
-                selectedKey,
-                StringComparison.OrdinalIgnoreCase))
-            .Take(2)
-            .ToArray();
-        if (byPlcCode.Length == 1)
-        {
-            return byPlcCode[0];
-        }
-
         var byDeviceName = snapshots
             .Where(snapshot => string.Equals(
                 snapshot.DeviceName,

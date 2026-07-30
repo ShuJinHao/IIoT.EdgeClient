@@ -2,15 +2,19 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Dapper;
+using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
+using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Production;
+using IIoT.Edge.SharedKernel.Repository;
 
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 
 public sealed partial class ModuleProductionRecordPersistence(
     SqliteConnectionFactory connectionFactory,
-    ILogService logger)
+    ILogService logger,
+    IReadRepository<NetworkDeviceEntity>? networkDevices = null)
     : IModuleProductionRecordPersistence
 {
     private const string AllDevicesKey = "__all__";
@@ -116,6 +120,13 @@ public sealed partial class ModuleProductionRecordPersistence(
         var rangeEndUtc = EnsureUtc(query.RangeEndUtc);
         ValidateRange(rangeStartUtc, rangeEndUtc);
         await EnsureInitializedAsync(moduleId, cancellationToken).ConfigureAwait(false);
+        var selection = await ResolveSelectionAsync(
+            query.SelectedDeviceKey,
+            cancellationToken).ConfigureAwait(false);
+        if (!selection.IsResolved)
+        {
+            return [];
+        }
 
         try
         {
@@ -157,7 +168,7 @@ public sealed partial class ModuleProductionRecordPersistence(
                     ModuleId = moduleId,
                     RangeStartUtc = FormatUtc(rangeStartUtc),
                     RangeEndUtc = FormatUtc(rangeEndUtc),
-                    SelectedDeviceKey = NormalizeSelection(query.SelectedDeviceKey),
+                    SelectedDeviceKey = selection.Key,
                     AllDevicesKey,
                     Limit = Math.Clamp(query.Limit, 1, MaximumRows)
                 },
@@ -184,6 +195,13 @@ public sealed partial class ModuleProductionRecordPersistence(
         var recentWindowStartUtc = EnsureUtc(query.RecentWindowStartUtc);
         ValidateRange(rangeStartUtc, rangeEndUtc);
         await EnsureInitializedAsync(moduleId, cancellationToken).ConfigureAwait(false);
+        var selection = await ResolveSelectionAsync(
+            query.SelectedDeviceKey,
+            cancellationToken).ConfigureAwait(false);
+        if (!selection.IsResolved)
+        {
+            return new ModuleProductionRecordSummary(0, 0, 0, 0, 0, 0, string.Empty);
+        }
 
         try
         {
@@ -194,7 +212,7 @@ public sealed partial class ModuleProductionRecordPersistence(
                 RangeStartUtc = FormatUtc(rangeStartUtc),
                 RangeEndUtc = FormatUtc(rangeEndUtc),
                 RecentWindowStartUtc = FormatUtc(recentWindowStartUtc),
-                SelectedDeviceKey = NormalizeSelection(query.SelectedDeviceKey),
+                SelectedDeviceKey = selection.Key,
                 AllDevicesKey
             };
             var summaryCommand = new CommandDefinition(
@@ -410,6 +428,44 @@ public sealed partial class ModuleProductionRecordPersistence(
             ? AllDevicesKey
             : selectedDeviceKey.Trim();
 
+    private async Task<SelectionResolution> ResolveSelectionAsync(
+        string? selectedDeviceKey,
+        CancellationToken cancellationToken)
+    {
+        var normalized = NormalizeSelection(selectedDeviceKey);
+        if (string.Equals(normalized, AllDevicesKey, StringComparison.Ordinal)
+            || networkDevices is null)
+        {
+            return SelectionResolution.Success(normalized);
+        }
+
+        var devices = await networkDevices.GetListAsync(
+            static device => device.DeviceType == DeviceType.PLC,
+            cancellationToken).ConfigureAwait(false);
+        var nameMatches = devices
+            .Where(device => string.Equals(
+                device.DeviceName,
+                normalized,
+                StringComparison.OrdinalIgnoreCase))
+            .Take(2)
+            .ToArray();
+        if (nameMatches.Length == 1 && !string.IsNullOrWhiteSpace(nameMatches[0].PlcCode))
+        {
+            return SelectionResolution.Success(nameMatches[0].PlcCode.Trim());
+        }
+
+        var codeMatches = devices
+            .Where(device => string.Equals(
+                device.PlcCode,
+                normalized,
+                StringComparison.OrdinalIgnoreCase))
+            .Take(2)
+            .ToArray();
+        return codeMatches.Length == 1
+            ? SelectionResolution.Success(codeMatches[0].PlcCode.Trim())
+            : SelectionResolution.Blocked(normalized);
+    }
+
     private static string FormatUtc(DateTime value)
         => EnsureUtc(value).ToString("O", CultureInfo.InvariantCulture);
 
@@ -451,6 +507,13 @@ public sealed partial class ModuleProductionRecordPersistence(
         public string QueueCreatedAtUtc { get; init; } = string.Empty;
         public string QueueProcessedAtUtc { get; init; } = string.Empty;
         public int IsOk { get; init; }
+    }
+
+    private sealed record SelectionResolution(string Key, bool IsResolved)
+    {
+        public static SelectionResolution Success(string key) => new(key, true);
+
+        public static SelectionResolution Blocked(string key) => new(key, false);
     }
 
     private sealed class TableColumnInfo

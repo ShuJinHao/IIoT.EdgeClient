@@ -23,4 +23,35 @@ public sealed class DeviceSelectionContextBehaviorTests
         Assert.Equal("正极模切07", readOnly.SelectedDeviceKey);
         Assert.False(readOnly.IsAllSelected);
     }
+
+    [Fact]
+    public void StableIdentityMapping_ShouldKeepPublicSelectionKeyAsRealDeviceName()
+    {
+        var selection = new DeviceSelectionService();
+        selection.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("当前显示名称", "P1-AP01")
+        ]);
+
+        selection.SelectDevice("当前显示名称");
+
+        Assert.Equal("当前显示名称", selection.SelectedDeviceKey);
+        Assert.Equal("P1-AP01", selection.SelectedPlcCode);
+    }
+
+    [Fact]
+    public void StableIdentityMapping_WhenPlcCodeIsDuplicated_ShouldFailClosed()
+    {
+        var selection = new DeviceSelectionService();
+        selection.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("一号机", "PLC-DUP"),
+            new PlcDeviceSelectionIdentity("二号机", "PLC-DUP")
+        ]);
+
+        selection.SelectDevice("一号机");
+
+        Assert.Equal("一号机", selection.SelectedDeviceKey);
+        Assert.Null(selection.SelectedPlcCode);
+    }
 }

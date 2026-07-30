@@ -230,21 +230,14 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
             return null;
         }
 
-        var byPlcCode = Devices
+        var byDeviceName = Devices
             .Where(device => string.Equals(
-                device.PlcCode,
+                device.DeviceName,
                 selectedKey,
                 StringComparison.OrdinalIgnoreCase))
             .Take(2)
             .ToArray();
-        if (byPlcCode.Length == 1)
-        {
-            return byPlcCode[0];
-        }
-
-        return Devices.FirstOrDefault(device =>
-            string.IsNullOrWhiteSpace(device.PlcCode)
-            && string.Equals(device.DeviceName, selectedKey, StringComparison.OrdinalIgnoreCase));
+        return byDeviceName.Length == 1 ? byDeviceName[0] : null;
     }
 
     private static string FormatPlcIdentity(string? plcCode, string deviceName)

@@ -34,7 +34,19 @@ public sealed class DataPipelineIdentityMigration(
             cancellationToken).ConfigureAwait(false);
         var deviceById = devices
             .Where(static device => device.Id > 0)
-            .ToDictionary(static device => device.Id);
+            .GroupBy(static device => device.Id)
+            .Where(static group => group.Take(2).Count() == 1)
+            .ToDictionary(static group => group.Key, static group => group.First());
+        var deviceByPlcCode = devices
+            .Where(static device => !string.IsNullOrWhiteSpace(device.PlcCode))
+            .GroupBy(
+                static device => device.PlcCode.Trim(),
+                StringComparer.OrdinalIgnoreCase)
+            .Where(static group => group.Take(2).Count() == 1)
+            .ToDictionary(
+                static group => group.Key,
+                static group => group.First(),
+                StringComparer.OrdinalIgnoreCase);
         var migratedCount = 0;
         var issues = new List<DataPipelineIdentityMigrationIssue>();
 
@@ -63,7 +75,7 @@ public sealed class DataPipelineIdentityMigration(
                 foreach (var row in rows)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var resolution = Resolve(row, deviceById);
+                    var resolution = Resolve(row, deviceById, deviceByPlcCode);
                     if (!resolution.IsSuccess)
                     {
                         issues.Add(CreateIssue(target, row, resolution));
@@ -116,7 +128,8 @@ public sealed class DataPipelineIdentityMigration(
 
     private static IdentityResolution Resolve(
         LegacyIdentityRow row,
-        IReadOnlyDictionary<int, NetworkDeviceEntity> deviceById)
+        IReadOnlyDictionary<int, NetworkDeviceEntity> deviceById,
+        IReadOnlyDictionary<string, NetworkDeviceEntity> deviceByPlcCode)
     {
         if (row.IdempotencyKeyVersion is not (1 or 2))
         {
@@ -151,7 +164,15 @@ public sealed class DataPipelineIdentityMigration(
                     + $"映射的 PlcCode={mappedDevice.PlcCode} 冲突。");
             }
 
-            return IdentityResolution.Success(cellDataDeviceCode);
+            if (!deviceByPlcCode.TryGetValue(cellDataDeviceCode, out var codeMappedDevice))
+            {
+                return IdentityResolution.Blocked(
+                    "data_pipeline_cell_device_code_unverified",
+                    $"CellData.DeviceCode={cellDataDeviceCode} 无法唯一匹配当前权威 PLC；"
+                    + "已保留原记录，禁止把旧显示名猜测为 PlcCode。");
+            }
+
+            return IdentityResolution.Success(codeMappedDevice.PlcCode);
         }
 
         if (mappedDevice is not null)

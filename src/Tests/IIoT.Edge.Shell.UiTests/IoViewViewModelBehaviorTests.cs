@@ -67,18 +67,19 @@ public sealed class IoViewViewModelBehaviorTests
     }
 
     [AvaloniaFact]
-    public async Task LoadDevicesAsync_WhenSharedSelectionMatchesPlcCode_ShouldSelectRenamedPlc()
+    public async Task LoadDevicesAsync_WhenSharedSelectionMatchesRealName_ShouldExposeStablePlcCode()
     {
         var deviceA = CreateDevice(8, "PLC-A", "TestProcess");
         var deviceB = CreateDevice(9, "改名后的 PLC-B", "TestProcess", plcCode: "P1-CP02");
         var selectionService = new DeviceSelectionService();
-        selectionService.SelectDevice(deviceB.PlcCode);
+        selectionService.SelectDevice(deviceB.DeviceName);
         var viewModel = CreateViewModel([deviceA, deviceB], deviceSelectionService: selectionService);
 
         await viewModel.LoadDevicesAsync();
 
         Assert.Equal(deviceB.DeviceName, viewModel.SelectedDevice?.DeviceName);
-        Assert.Equal("P1-CP02", selectionService.SelectedDeviceKey);
+        Assert.Equal("P1-CP02", viewModel.SelectedDevice?.PlcCode);
+        Assert.Equal(deviceB.DeviceName, selectionService.SelectedDeviceKey);
     }
 
     [AvaloniaFact]

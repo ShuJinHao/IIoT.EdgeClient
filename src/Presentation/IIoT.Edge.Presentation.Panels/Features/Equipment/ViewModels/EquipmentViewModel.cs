@@ -251,14 +251,20 @@ public class EquipmentViewModel : PresentationViewModelBase
     private void SyncDeviceSelectionOptions(IReadOnlyCollection<HardwareSnapshot> snapshots)
     {
         var preferredKey = _deviceSelectionService.SelectedDeviceKey;
+        var plcSnapshots = snapshots
+            .Where(static snapshot =>
+                string.Equals(snapshot.DeviceType, "PLC", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        _deviceSelectionService.UpdatePlcIdentities(
+            plcSnapshots.Select(static snapshot =>
+                new PlcDeviceSelectionIdentity(snapshot.Name, snapshot.PlcCode)));
         var options = new List<DeviceSelectionOption>
         {
             CreateAllDeviceOption()
         };
 
         options.AddRange(
-            snapshots
-                .Where(static snapshot => string.Equals(snapshot.DeviceType, "PLC", StringComparison.OrdinalIgnoreCase))
+            plcSnapshots
                 .Select(static snapshot => CreateDeviceSelectionOption(snapshot))
                 .Where(static option => option is not null)
                 .Select(static option => option!)
@@ -281,18 +287,16 @@ public class EquipmentViewModel : PresentationViewModelBase
     {
         var deviceName = snapshot.Name?.Trim() ?? string.Empty;
         var plcCode = snapshot.PlcCode?.Trim() ?? string.Empty;
-        var key = !string.IsNullOrWhiteSpace(plcCode) ? plcCode : deviceName;
-        if (string.IsNullOrWhiteSpace(key))
+        if (string.IsNullOrWhiteSpace(deviceName))
         {
             return null;
         }
 
         var displayName = string.IsNullOrWhiteSpace(plcCode)
-                          || string.IsNullOrWhiteSpace(deviceName)
                           || string.Equals(plcCode, deviceName, StringComparison.OrdinalIgnoreCase)
-            ? key
+            ? deviceName
             : $"{plcCode} · {deviceName}";
-        return new DeviceSelectionOption(key, displayName);
+        return new DeviceSelectionOption(deviceName, displayName);
     }
 
     private DeviceSelectionOption CreateAllDeviceOption()

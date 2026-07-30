@@ -98,6 +98,108 @@ public sealed class DataPipelineIdentityMigrationBehaviorTests
     }
 
     [Fact]
+    public async Task MigrateAsync_CellDeviceCodeWithoutNetworkId_ShouldRequireUniqueAuthoritativePlcMatch()
+    {
+        var tempDir = Path.Combine(
+            Path.GetTempPath(),
+            "edge-data-pipeline-identity-tests",
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var logger = new FakeLogService();
+            var connectionFactory = new SqliteConnectionFactory(tempDir);
+            await InitializeAllIdentityTablesAsync(connectionFactory, logger);
+            var stable = NetworkDeviceEntity.Create(
+                    "当前显示名",
+                    DeviceType.PLC,
+                    "127.0.0.1",
+                    6001,
+                    "PLC-STABLE")
+                .WithId(1);
+            var duplicateOne = NetworkDeviceEntity.Create(
+                    "重复一",
+                    DeviceType.PLC,
+                    "127.0.0.1",
+                    6002,
+                    "PLC-DUP")
+                .WithId(2);
+            var duplicateTwo = NetworkDeviceEntity.Create(
+                    "重复二",
+                    DeviceType.PLC,
+                    "127.0.0.1",
+                    6003,
+                    "PLC-DUP")
+                .WithId(3);
+            using (var connection = connectionFactory.Create("pipeline_cloud"))
+            {
+                await InsertLegacyRetryAsync(
+                    connection,
+                    "verified-code",
+                    """{"deviceCode":"PLC-STABLE"}""",
+                    null,
+                    "旧显示名");
+                await InsertLegacyRetryAsync(
+                    connection,
+                    "mutable-name",
+                    """{"deviceCode":"旧显示名"}""",
+                    null,
+                    "旧显示名");
+                await InsertLegacyRetryAsync(
+                    connection,
+                    "duplicate-code",
+                    """{"deviceCode":"PLC-DUP"}""",
+                    null,
+                    "任意显示名");
+            }
+
+            var migration = new DataPipelineIdentityMigration(
+                connectionFactory,
+                new FakeNetworkDeviceReadRepository([stable, duplicateOne, duplicateTwo]),
+                logger);
+            var result = await migration.MigrateAsync(TestContext.Current.CancellationToken);
+
+            Assert.Equal(1, result.MigratedRecordCount);
+            Assert.Collection(
+                result.Issues.OrderBy(static issue => issue.TaskKey),
+                issue =>
+                {
+                    Assert.Equal("duplicate-code", issue.TaskKey);
+                    Assert.Equal(
+                        "data_pipeline_cell_device_code_unverified",
+                        issue.DiagnosticCode);
+                },
+                issue =>
+                {
+                    Assert.Equal("mutable-name", issue.TaskKey);
+                    Assert.Equal(
+                        "data_pipeline_cell_device_code_unverified",
+                        issue.DiagnosticCode);
+                });
+
+            using var readConnection = connectionFactory.Create("pipeline_cloud");
+            var rows = (await readConnection.QueryAsync<IdentityRow>(
+                """
+                SELECT TaskKey, PlcCode, IdempotencyKeyVersion
+                FROM failed_cloud_records
+                ORDER BY Id ASC
+                """)).ToArray();
+            Assert.Equal("PLC-STABLE", rows[0].PlcCode);
+            Assert.Equal(string.Empty, rows[1].PlcCode);
+            Assert.Equal(string.Empty, rows[2].PlcCode);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task MigrateAsync_ShouldBackfillAllSixDurableIdentityTablesAsV1()
     {
         var tempDir = Path.Combine(

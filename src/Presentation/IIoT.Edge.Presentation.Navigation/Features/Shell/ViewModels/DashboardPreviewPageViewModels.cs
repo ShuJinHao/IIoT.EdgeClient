@@ -323,6 +323,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         _lastPlcSnapshots = plcSnapshots;
 
         var selectedKey = _deviceSelectionService.SelectedDeviceKey;
+        var selectedPlcCode = _deviceSelectionService.SelectedPlcCode;
         var isAllSelected = string.Equals(
             selectedKey,
             IDeviceSelectionService.AllFilterKey,
@@ -330,9 +331,16 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         var projections = BuildPlcStatusProjections(configuredPlcs, plcSnapshots)
             .Where(snapshot =>
                 isAllSelected
-                || string.Equals(snapshot.PlcCode, selectedKey, StringComparison.OrdinalIgnoreCase)
-                || (string.IsNullOrWhiteSpace(snapshot.PlcCode)
-                    && string.Equals(snapshot.DeviceName, selectedKey, StringComparison.OrdinalIgnoreCase)))
+                || (!string.IsNullOrWhiteSpace(selectedPlcCode)
+                    && string.Equals(
+                        snapshot.PlcCode,
+                        selectedPlcCode,
+                        StringComparison.OrdinalIgnoreCase))
+                || (string.IsNullOrWhiteSpace(selectedPlcCode)
+                    && string.Equals(
+                        snapshot.DeviceName,
+                        selectedKey,
+                        StringComparison.OrdinalIgnoreCase)))
             .ToArray();
         var averagePlcLatency = ResolveAverageLatency(projections);
 
