@@ -101,6 +101,29 @@ public sealed class DeviceSelectionContextBehaviorTests
     }
 
     [Fact]
+    public void StableIdentityMapping_WhenHistoricalNameIsReusedByAnotherPlc_ShouldExcludeAmbiguousAlias()
+    {
+        var selection = new DeviceSelectionService();
+        selection.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("复用名称", "P1-AP01")
+        ]);
+        selection.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("一号机新名称", "P1-AP01")
+        ]);
+
+        selection.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("复用名称", "P1-AP02")
+        ]);
+        selection.SelectDevice("复用名称");
+
+        Assert.Equal("P1-AP02", selection.SelectedPlcCode);
+        Assert.Empty(selection.SelectedDeviceNameAliases);
+    }
+
+    [Fact]
     public void StableIdentityMapping_ShouldLoadPersistedVerifiedAliases()
     {
         var aliases = new InMemoryPlcIdentityAliasRegistry();
