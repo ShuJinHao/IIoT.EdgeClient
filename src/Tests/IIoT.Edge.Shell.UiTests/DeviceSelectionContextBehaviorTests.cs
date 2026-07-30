@@ -1,4 +1,5 @@
 using IIoT.Edge.Module.Contracts.UI;
+using IIoT.Edge.Application.Common.Identity;
 using IIoT.Edge.Presentation.Panels;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using Microsoft.Extensions.DependencyInjection;
@@ -53,5 +54,45 @@ public sealed class DeviceSelectionContextBehaviorTests
 
         Assert.Equal("一号机", selection.SelectedDeviceKey);
         Assert.Null(selection.SelectedPlcCode);
+    }
+
+    [Fact]
+    public void StableIdentityMapping_WhenDeviceIsRenamed_ShouldKeepStableSelectionAndVerifiedAliases()
+    {
+        var selection = new DeviceSelectionService();
+        selection.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("旧名称", "P1-AP01")
+        ]);
+        selection.SelectDevice("旧名称");
+
+        selection.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("新名称", "P1-AP01")
+        ]);
+
+        Assert.Equal("旧名称", selection.SelectedDeviceKey);
+        Assert.Equal("P1-AP01", selection.SelectedPlcCode);
+        Assert.Equal(
+            ["新名称", "旧名称"],
+            selection.SelectedDeviceNameAliases);
+    }
+
+    [Fact]
+    public void StableIdentityMapping_ShouldLoadPersistedVerifiedAliases()
+    {
+        var aliases = new InMemoryPlcIdentityAliasRegistry();
+        aliases.ObserveVerifiedAlias("P1-AP01", "历史名称");
+        var selection = new DeviceSelectionService(aliases);
+
+        selection.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("当前名称", "P1-AP01")
+        ]);
+        selection.SelectDevice("当前名称");
+
+        Assert.Equal(
+            ["当前名称", "历史名称"],
+            selection.SelectedDeviceNameAliases);
     }
 }

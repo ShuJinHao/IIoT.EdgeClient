@@ -8,6 +8,7 @@ using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
+using IIoT.Edge.Application.Common.Identity;
 
 namespace IIoT.Edge.Infrastructure.Integration.Capacity;
 
@@ -25,6 +26,7 @@ public class CapacitySyncTask : ICapacitySyncTask
     private readonly ILogService _logger;
     private readonly ShiftConfig _shiftConfig;
     private readonly ICloudUploadDiagnosticsStore _diagnosticsStore;
+    private readonly IPlcIdentityAliasRegistry _identityAliasRegistry;
     private readonly object _lifecycleLock = new();
     private readonly SemaphoreSlim _syncGate = new(1, 1);
     private CancellationTokenSource? _cts;
@@ -40,7 +42,8 @@ public class CapacitySyncTask : ICapacitySyncTask
         ICapacityBufferStore bufferStore,
         ILogService logger,
         ShiftConfig shiftConfig,
-        ICloudUploadDiagnosticsStore diagnosticsStore)
+        ICloudUploadDiagnosticsStore diagnosticsStore,
+        IPlcIdentityAliasRegistry? identityAliasRegistry = null)
     {
         _cloudHttp = cloudHttp;
         _endpointProvider = endpointProvider;
@@ -51,6 +54,8 @@ public class CapacitySyncTask : ICapacitySyncTask
         _logger = logger;
         _shiftConfig = shiftConfig;
         _diagnosticsStore = diagnosticsStore;
+        _identityAliasRegistry =
+            identityAliasRegistry ?? new InMemoryPlcIdentityAliasRegistry();
     }
 
     public Task StartAsync(CancellationToken ct)
@@ -262,6 +267,21 @@ public class CapacitySyncTask : ICapacitySyncTask
                 {
                     foreach (var summary in claimedBatch.Summaries)
                     {
+                        if (!TryResolveBufferedPlcIdentity(
+                                summary.PlcName,
+                                out var plcCode,
+                                out var deviceName,
+                                out var identityDiagnostic))
+                        {
+                            await _bufferStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
+                            claimReleased = true;
+                            _logger.Error(
+                                $"[PlcCode=未解析][TaskKey=Capacity.Hourly][SignalKey=不适用] "
+                                + $"产能补传记录身份无法唯一解析，原始 PlcName={summary.PlcName}，"
+                                + $"诊断={identityDiagnostic}；原记录已保留，未上传、移动或删除。");
+                            return false;
+                        }
+
                         var result = await PostCapacityAsync(
                             deviceId,
                             summary.Date,
@@ -271,8 +291,8 @@ public class CapacitySyncTask : ICapacitySyncTask
                             summary.Total,
                             summary.OkCount,
                             summary.NgCount,
-                            summary.PlcName,
-                            deviceName: null).ConfigureAwait(false);
+                            plcCode,
+                            deviceName).ConfigureAwait(false);
                         if (!result.IsSuccess)
                         {
                             await _bufferStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
@@ -356,6 +376,48 @@ public class CapacitySyncTask : ICapacitySyncTask
         }
 
         deviceId = device.DeviceId;
+        return true;
+    }
+
+    private bool TryResolveBufferedPlcIdentity(
+        string persistedIdentity,
+        out string plcCode,
+        out string? deviceName,
+        out string diagnostic)
+    {
+        plcCode = string.Empty;
+        deviceName = null;
+        diagnostic = "capacity_buffer_plc_identity_unresolved";
+        var normalizedIdentity = persistedIdentity?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(normalizedIdentity))
+        {
+            return false;
+        }
+
+        var matches = _contextStore.GetAll()
+            .Where(context => !string.IsNullOrWhiteSpace(context.PlcCode))
+            .Where(context =>
+                string.Equals(
+                    context.PlcCode,
+                    normalizedIdentity,
+                    StringComparison.OrdinalIgnoreCase)
+                || _identityAliasRegistry
+                    .GetVerifiedAliases(context.PlcCode)
+                    .Contains(normalizedIdentity, StringComparer.OrdinalIgnoreCase))
+            .GroupBy(static context => context.PlcCode, StringComparer.OrdinalIgnoreCase)
+            .Take(2)
+            .Select(static group => group.First())
+            .ToArray();
+        if (matches.Length != 1)
+        {
+            diagnostic = matches.Length == 0
+                ? "capacity_buffer_plc_identity_unresolved"
+                : "capacity_buffer_plc_identity_ambiguous";
+            return false;
+        }
+
+        plcCode = matches[0].PlcCode.Trim();
+        deviceName = matches[0].DeviceName;
         return true;
     }
 

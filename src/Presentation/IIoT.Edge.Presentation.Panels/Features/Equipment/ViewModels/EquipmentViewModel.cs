@@ -258,6 +258,7 @@ public class EquipmentViewModel : PresentationViewModelBase
         _deviceSelectionService.UpdatePlcIdentities(
             plcSnapshots.Select(static snapshot =>
                 new PlcDeviceSelectionIdentity(snapshot.Name, snapshot.PlcCode)));
+        var preferredPlcCode = _deviceSelectionService.SelectedPlcCode;
         var options = new List<DeviceSelectionOption>
         {
             CreateAllDeviceOption()
@@ -274,13 +275,18 @@ public class EquipmentViewModel : PresentationViewModelBase
                 .OrderBy(static option => option.DisplayName, StringComparer.OrdinalIgnoreCase));
 
         if (!string.Equals(preferredKey, IDeviceSelectionService.AllFilterKey, StringComparison.OrdinalIgnoreCase)
-            && options.All(option => !string.Equals(option.Key, preferredKey, StringComparison.OrdinalIgnoreCase)))
+            && options.All(option => !string.Equals(option.Key, preferredKey, StringComparison.OrdinalIgnoreCase))
+            && (string.IsNullOrWhiteSpace(preferredPlcCode)
+                || options.All(option => !string.Equals(
+                    option.PlcCode,
+                    preferredPlcCode,
+                    StringComparison.OrdinalIgnoreCase))))
         {
             options.Add(new DeviceSelectionOption(preferredKey, preferredKey));
         }
 
         ReplaceItems(DeviceFilters, options);
-        ApplySelectedDevice(preferredKey);
+        ApplySelectedDevice(preferredKey, preferredPlcCode);
     }
 
     private static DeviceSelectionOption? CreateDeviceSelectionOption(HardwareSnapshot snapshot)
@@ -296,7 +302,10 @@ public class EquipmentViewModel : PresentationViewModelBase
                           || string.Equals(plcCode, deviceName, StringComparison.OrdinalIgnoreCase)
             ? deviceName
             : $"{plcCode} · {deviceName}";
-        return new DeviceSelectionOption(deviceName, displayName);
+        return new DeviceSelectionOption(deviceName, displayName)
+        {
+            PlcCode = plcCode
+        };
     }
 
     private DeviceSelectionOption CreateAllDeviceOption()
@@ -306,12 +315,20 @@ public class EquipmentViewModel : PresentationViewModelBase
 
     private void OnSharedDeviceSelectionChanged(object? sender, EventArgs e)
         => AvaloniaDispatcher.UIThread.Post(
-            () => ApplySelectedDevice(_deviceSelectionService.SelectedDeviceKey));
+            () => ApplySelectedDevice(
+                _deviceSelectionService.SelectedDeviceKey,
+                _deviceSelectionService.SelectedPlcCode));
 
-    private void ApplySelectedDevice(string selectedKey)
+    private void ApplySelectedDevice(string selectedKey, string? selectedPlcCode = null)
     {
         var option = DeviceFilters.FirstOrDefault(filter =>
                 string.Equals(filter.Key, selectedKey, StringComparison.OrdinalIgnoreCase))
+            ?? DeviceFilters.FirstOrDefault(filter =>
+                !string.IsNullOrWhiteSpace(selectedPlcCode)
+                && string.Equals(
+                    filter.PlcCode,
+                    selectedPlcCode,
+                    StringComparison.OrdinalIgnoreCase))
             ?? DeviceFilters.FirstOrDefault();
 
         _isApplyingDeviceSelection = true;

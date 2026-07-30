@@ -42,8 +42,36 @@ public sealed class CapacityViewModelBehaviorTests
         await viewModel.OnActivatedAsync();
 
         Assert.Equal("PLC-A01", facade.LastLoadTodayPlcName);
+        Assert.Equal(
+            ["PLC-A01", "当前显示名称"],
+            facade.LastLoadTodayQueryKeys);
         Assert.Equal("当前显示名称", selectionService.SelectedDeviceKey);
         Assert.Equal(1, facade.LoadTodayCallCount);
+    }
+
+    [AvaloniaFact]
+    public async Task OnActivatedAsync_WhenSelectedDeviceWasRenamed_ShouldQueryStableAndVerifiedLegacyAliases()
+    {
+        var facade = new FakeCapacityQueryFacade { IsOnline = true };
+        var selectionService = new DeviceSelectionService();
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("旧名称", "PLC-A01")
+        ]);
+        selectionService.SelectDevice("旧名称");
+        selectionService.UpdatePlcIdentities(
+        [
+            new PlcDeviceSelectionIdentity("新名称", "PLC-A01")
+        ]);
+        var viewModel = CreateViewModel(facade, selectionService);
+
+        await viewModel.OnActivatedAsync();
+
+        Assert.Equal(
+            ["PLC-A01", "新名称", "旧名称"],
+            facade.LastLoadTodayQueryKeys);
+        Assert.Equal("旧名称", selectionService.SelectedDeviceKey);
+        Assert.Equal("PLC-A01", selectionService.SelectedPlcCode);
     }
 
     [AvaloniaFact]
@@ -322,6 +350,8 @@ public sealed class CapacityViewModelBehaviorTests
 
         public string? LastLoadTodayPlcName { get; private set; }
 
+        public IReadOnlyList<string> LastLoadTodayQueryKeys { get; private set; } = [];
+
         public CapacityViewResult LoadTodayResult { get; set; } = CapacityViewResult.Empty();
 
         public Func<string, Task<CapacityViewResult>>? LoadTodayHandler { get; init; }
@@ -333,6 +363,16 @@ public sealed class CapacityViewModelBehaviorTests
             LoadTodayCallCount++;
             LastLoadTodayPlcName = plcName;
             return LoadTodayHandler?.Invoke(plcName) ?? Task.FromResult(LoadTodayResult);
+        }
+
+        public Task<CapacityViewResult> LoadTodayAsync(
+            CapacityPlcQueryScope scope,
+            CancellationToken cancellationToken = default)
+        {
+            LastLoadTodayQueryKeys = scope.GetQueryKeys();
+            return LoadTodayAsync(
+                LastLoadTodayQueryKeys.FirstOrDefault() ?? string.Empty,
+                cancellationToken);
         }
 
         public Task<CapacityViewResult> QueryHistoryAsync(

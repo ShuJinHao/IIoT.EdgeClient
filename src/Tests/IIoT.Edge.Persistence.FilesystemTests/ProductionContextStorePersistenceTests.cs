@@ -316,6 +316,45 @@ public sealed class ProductionContextStorePersistenceTests
     }
 
     [Fact]
+    public void StableIdentity_WhenDeviceIsRenamed_ShouldPersistVerifiedCapacityAliases()
+    {
+        var tempDir = Path.Combine(
+            Path.GetTempPath(),
+            "edge-context-tests",
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var logger = new FakeLogService();
+            var aliases = new PersistentPlcIdentityAliasRegistry(tempDir, logger);
+            var store = new ProductionContextStore(
+                logger,
+                Array.Empty<IProductionContextFactory>(),
+                CreateCellDataTypeRegistry(),
+                new ProductionContextPersistenceFileSystem(),
+                tempDir,
+                identityAliasRegistry: aliases);
+
+            Assert.True(store.GetOrCreate(
+                new PlcIdentity("PLC-STABLE-ALIAS", 8, "改名前")).IsSuccess);
+            Assert.True(store.GetOrCreate(
+                new PlcIdentity("PLC-STABLE-ALIAS", 8, "改名后")).IsSuccess);
+
+            var restoredAliases = new PersistentPlcIdentityAliasRegistry(
+                tempDir,
+                logger);
+            Assert.Equal(
+                ["改名前", "改名后"],
+                restoredAliases.GetVerifiedAliases("PLC-STABLE-ALIAS"));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void LoadLegacyContext_WithPositiveNetworkDeviceId_ShouldMigrateWithoutDeviceNameGuessing()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "edge-context-tests", Guid.NewGuid().ToString("N"));

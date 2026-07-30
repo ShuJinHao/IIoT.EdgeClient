@@ -224,9 +224,9 @@ public class CapacityViewModel : NavigationViewModelBase
             return;
         }
 
-        var selectedDeviceName = ResolveSelectedDeviceName();
+        var queryScope = ResolveSelectedQueryScope();
         var result = await _capacityQueryFacade
-            .LoadTodayAsync(selectedDeviceName)
+            .LoadTodayAsync(queryScope)
             .ConfigureAwait(false);
         await Dispatcher.UIThread.InvokeAsync(() => ApplyResult(result));
     }
@@ -248,25 +248,26 @@ public class CapacityViewModel : NavigationViewModelBase
 
         var selectedQueryMode = SelectedQueryMode;
         var queryDate = QueryDate;
-        var selectedDeviceName = ResolveSelectedDeviceName();
+        var queryScope = ResolveSelectedQueryScope();
         var result = await _capacityQueryFacade
             .QueryHistoryAsync(
                 selectedQueryMode,
                 queryDate,
-                selectedDeviceName)
+                queryScope)
             .ConfigureAwait(false);
 
         await Dispatcher.UIThread.InvokeAsync(() => ApplyResult(result));
     }
 
-    private string ResolveSelectedDeviceName()
+    private CapacityPlcQueryScope ResolveSelectedQueryScope()
         => string.Equals(
             _deviceSelectionService.SelectedDeviceKey,
             IDeviceSelectionService.AllFilterKey,
             StringComparison.OrdinalIgnoreCase)
-            ? string.Empty
-            : _deviceSelectionService.SelectedPlcCode
-              ?? _deviceSelectionService.SelectedDeviceKey;
+            ? CapacityPlcQueryScope.Aggregate
+            : CapacityPlcQueryScope.ForPlc(
+                _deviceSelectionService.SelectedPlcCode,
+                _deviceSelectionService.SelectedDeviceNameAliases);
 
     private void OnDeviceSelectionChanged(object? sender, EventArgs e)
         => ScheduleLoadCurrentData();

@@ -13,6 +13,7 @@ using IIoT.Edge.Host.DataPipeline.Services;
 using IIoT.Edge.Host.DataPipeline.Tasks;
 using IIoT.Edge.Module.Sdk.Signals;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
+using IIoT.Edge.Application.Common.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -28,6 +29,10 @@ public static class DependencyInjection
         services.TryAddSingleton<IProductionContextCorruptFileQuarantine, ProductionContextCorruptFileQuarantine>();
         services.TryAddSingleton<IProductionContextRuntimeStateCopier, ProductionContextRuntimeStateCopier>();
         services.TryAddSingleton<IProductionContextSignalBindingStore, ProductionContextSignalBindingStore>();
+        services.TryAddSingleton<IPlcIdentityAliasRegistry>(sp =>
+            new PersistentPlcIdentityAliasRegistry(
+                runtimePaths.ContextDirectory,
+                sp.GetRequiredService<ILogService>()));
         services.AddSingleton(sp =>
             new ProductionContextStore(
                 sp.GetRequiredService<ILogService>(),
@@ -36,7 +41,8 @@ public static class DependencyInjection
                 new ProductionContextPersistenceFileSystem(),
                 runtimePaths.ContextDirectory,
                 sp.GetRequiredService<IProductionContextCorruptFileQuarantine>(),
-                sp.GetRequiredService<IProductionContextRuntimeStateCopier>()));
+                sp.GetRequiredService<IProductionContextRuntimeStateCopier>(),
+                sp.GetRequiredService<IPlcIdentityAliasRegistry>()));
         services.AddSingleton<IProductionContextStore>(sp => sp.GetRequiredService<ProductionContextStore>());
         services.AddSingleton<IPlcProductionContextStore>(sp => sp.GetRequiredService<ProductionContextStore>());
         services.AddSingleton<ITodayCapacityStore, TodayCapacityStore>();

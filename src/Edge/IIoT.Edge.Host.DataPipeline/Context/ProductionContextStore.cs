@@ -3,6 +3,7 @@ using IIoT.Edge.Module.Contracts.Context;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 using IIoT.Edge.Module.Contracts.Identity;
+using IIoT.Edge.Application.Common.Identity;
 using System.Text.Json;
 
 namespace IIoT.Edge.Host.DataPipeline.Context;
@@ -21,6 +22,7 @@ public class ProductionContextStore : IProductionContextStore, IPlcProductionCon
     private readonly IProductionContextPersistenceFileSystem _fileSystem;
     private readonly IProductionContextCorruptFileQuarantine _corruptFileQuarantine;
     private readonly IProductionContextRuntimeStateCopier _stateCopier;
+    private readonly IPlcIdentityAliasRegistry _identityAliasRegistry;
     private readonly ILogService _logger;
     private readonly string _persistPath;
     private readonly JsonSerializerOptions _jsonOptions;
@@ -60,7 +62,8 @@ public class ProductionContextStore : IProductionContextStore, IPlcProductionCon
         IProductionContextPersistenceFileSystem fileSystem,
         string? persistDirectory = null,
         IProductionContextCorruptFileQuarantine? corruptFileQuarantine = null,
-        IProductionContextRuntimeStateCopier? stateCopier = null)
+        IProductionContextRuntimeStateCopier? stateCopier = null,
+        IPlcIdentityAliasRegistry? identityAliasRegistry = null)
     {
         ArgumentNullException.ThrowIfNull(fileSystem);
         ArgumentNullException.ThrowIfNull(cellDataTypeRegistry);
@@ -69,6 +72,7 @@ public class ProductionContextStore : IProductionContextStore, IPlcProductionCon
         _fileSystem = fileSystem;
         _corruptFileQuarantine = corruptFileQuarantine ?? new ProductionContextCorruptFileQuarantine(logger);
         _stateCopier = stateCopier ?? new ProductionContextRuntimeStateCopier();
+        _identityAliasRegistry = identityAliasRegistry ?? new InMemoryPlcIdentityAliasRegistry();
         _jsonOptions = CreateJsonOptions(cellDataTypeRegistry);
         _contextFactories = (contextFactories ?? Array.Empty<IProductionContextFactory>())
             .Where(static x => !string.IsNullOrWhiteSpace(x.ModuleId))
@@ -187,10 +191,12 @@ public class ProductionContextStore : IProductionContextStore, IPlcProductionCon
                         $"PlcCode={plcCode} 同时匹配到已解析上下文和 {candidates.Length} 条历史上下文，已失败关闭。");
                 }
 
+                ObserveVerifiedAlias(existing.PlcCode, existing.DeviceName);
                 existing = UpgradeContextIfRequired(existing, moduleId, plcCode);
                 existing.PlcCode = plcCode;
                 existing.NetworkDeviceId = identity.NetworkDeviceId;
                 existing.DeviceName = deviceName;
+                ObserveVerifiedAlias(plcCode, deviceName);
                 _contexts[plcCode] = existing;
                 RemoveIdentityBlockLocked(plcCode, identity.NetworkDeviceId);
                 RefreshPersistenceDiagnosticsLocked();
@@ -227,10 +233,12 @@ public class ProductionContextStore : IProductionContextStore, IPlcProductionCon
 
                 _pendingMigrationContexts.Remove(candidate);
                 RemoveCompatibilityContextReferencesLocked(candidate);
+                ObserveVerifiedAlias(plcCode, candidate.DeviceName);
                 candidate = UpgradeContextIfRequired(candidate, moduleId, plcCode);
                 candidate.PlcCode = plcCode;
                 candidate.NetworkDeviceId = identity.NetworkDeviceId;
                 candidate.DeviceName = deviceName;
+                ObserveVerifiedAlias(plcCode, deviceName);
                 _contexts[plcCode] = candidate;
                 RemoveIdentityBlockLocked(plcCode, identity.NetworkDeviceId);
                 RefreshPersistenceDiagnosticsLocked();
@@ -245,6 +253,7 @@ public class ProductionContextStore : IProductionContextStore, IPlcProductionCon
             context.PlcCode = plcCode;
             context.NetworkDeviceId = identity.NetworkDeviceId;
             context.DeviceName = deviceName;
+            ObserveVerifiedAlias(plcCode, deviceName);
             _contexts[plcCode] = context;
             RemoveIdentityBlockLocked(plcCode, identity.NetworkDeviceId);
             RefreshPersistenceDiagnosticsLocked();
@@ -474,6 +483,7 @@ public class ProductionContextStore : IProductionContextStore, IPlcProductionCon
             && !_contexts.ContainsKey(plcCode))
         {
             context.PlcCode = plcCode;
+            ObserveVerifiedAlias(plcCode, context.DeviceName);
             _contexts[plcCode] = context;
             return;
         }
@@ -561,6 +571,17 @@ public class ProductionContextStore : IProductionContextStore, IPlcProductionCon
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(static code => code, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+
+    private void ObserveVerifiedAlias(string? plcCode, string? deviceName)
+    {
+        if (string.IsNullOrWhiteSpace(plcCode)
+            || string.IsNullOrWhiteSpace(deviceName))
+        {
+            return;
+        }
+
+        _identityAliasRegistry.ObserveVerifiedAlias(plcCode, deviceName);
+    }
 
     private PlcProductionContextResolution Block(
         PlcProductionContextResolutionOutcome outcome,

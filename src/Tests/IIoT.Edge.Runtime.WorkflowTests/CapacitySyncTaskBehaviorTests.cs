@@ -3,6 +3,7 @@ using IIoT.Edge.Module.Contracts.Config;
 using IIoT.Edge.Infrastructure.Integration.Capacity;
 using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
 using IIoT.Edge.Module.Contracts.Identity;
+using IIoT.Edge.Application.Common.Identity;
 using System.Text.Json;
 using DeviceSession = IIoT.Edge.Module.Contracts.Device.DeviceSession;
 using NetworkState = IIoT.Edge.Module.Contracts.Device.NetworkState;
@@ -306,6 +307,96 @@ public sealed class CapacitySyncTaskBehaviorTests
     }
 
     [Fact]
+    public async Task RetryBuffer_WhenLegacyDeviceNameWasVerified_ShouldUploadStablePlcCode()
+    {
+        var cloudHttp = new FakeCloudHttpClient();
+        var deviceService = new FakeDeviceService();
+        deviceService.SetOnline(new DeviceSession
+        {
+            DeviceId = Guid.NewGuid(),
+            DeviceName = "Host",
+            ClientCode = "CLIENT-01",
+            ProcessId = Guid.NewGuid()
+        });
+        var bufferStore = new FakeCapacityBufferStore();
+        bufferStore.HourlySummaries.Add(new BufferHourlySummaryDto
+        {
+            Date = "2026-07-30",
+            Hour = 8,
+            MinuteBucket = 0,
+            ShiftCode = "D",
+            Total = 2,
+            OkCount = 2,
+            PlcName = "改名前"
+        });
+        var contexts = new FakeProductionContextStore();
+        contexts.GetOrCreate(new PlcIdentity("P1-AP01", 7, "改名后"));
+        var aliases = new InMemoryPlcIdentityAliasRegistry();
+        aliases.ObserveVerifiedAlias("P1-AP01", "改名前");
+        aliases.ObserveVerifiedAlias("P1-AP01", "改名后");
+        var task = CreateTask(
+            cloudHttp,
+            deviceService,
+            bufferStore,
+            new FakeLogService(),
+            contexts,
+            aliases);
+
+        var result = await task.RetryBufferAsync();
+
+        Assert.True(result);
+        var payload = ParsePayload(Assert.Single(cloudHttp.PostPayloads));
+        Assert.Equal("P1-AP01", payload.GetProperty("plcName").GetString());
+        Assert.Empty(bufferStore.HourlySummaries);
+    }
+
+    [Fact]
+    public async Task RetryBuffer_WhenLegacyIdentityIsUnresolved_ShouldPreserveOriginalRows()
+    {
+        var cloudHttp = new FakeCloudHttpClient();
+        var deviceService = new FakeDeviceService();
+        deviceService.SetOnline(new DeviceSession
+        {
+            DeviceId = Guid.NewGuid(),
+            DeviceName = "Host",
+            ClientCode = "CLIENT-01",
+            ProcessId = Guid.NewGuid()
+        });
+        var bufferStore = new FakeCapacityBufferStore();
+        bufferStore.HourlySummaries.Add(new BufferHourlySummaryDto
+        {
+            Date = "2026-07-30",
+            Hour = 8,
+            MinuteBucket = 0,
+            ShiftCode = "D",
+            Total = 2,
+            OkCount = 2,
+            PlcName = "无法确认的旧名称"
+        });
+        var logger = new FakeLogService();
+        var task = CreateTask(
+            cloudHttp,
+            deviceService,
+            bufferStore,
+            logger,
+            new FakeProductionContextStore(),
+            new InMemoryPlcIdentityAliasRegistry());
+
+        var result = await task.RetryBufferAsync();
+
+        Assert.False(result);
+        Assert.Equal(0, cloudHttp.PostCallCount);
+        Assert.Single(bufferStore.HourlySummaries);
+        Assert.Single(bufferStore.ReleasedClaimTokens);
+        Assert.Empty(bufferStore.DeletedSummaries);
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Message.Contains(
+                "原记录已保留，未上传、移动或删除",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task StartAsync_WhenCloudSyncIntervalConfigured_ShouldUseConfiguredLoopInterval()
     {
         var cloudHttp = new FakeCloudHttpClient();
@@ -367,8 +458,25 @@ public sealed class CapacitySyncTaskBehaviorTests
         FakeCloudHttpClient cloudHttp,
         FakeDeviceService deviceService,
         FakeCapacityBufferStore bufferStore,
-        FakeLogService logger)
+        FakeLogService logger,
+        FakeProductionContextStore? contextStore = null,
+        IPlcIdentityAliasRegistry? identityAliasRegistry = null)
     {
+        var seedContextsFromBuffer = contextStore is null;
+        contextStore ??= new FakeProductionContextStore();
+        if (seedContextsFromBuffer)
+        {
+            var nextDeviceId = 1;
+            foreach (var plcCode in bufferStore.HourlySummaries
+                         .Select(static summary => summary.PlcName)
+                         .Where(static value => !string.IsNullOrWhiteSpace(value))
+                         .Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                contextStore.GetOrCreate(
+                    new PlcIdentity(plcCode, nextDeviceId++, plcCode));
+            }
+        }
+
         return new CapacitySyncTask(
             cloudHttp,
             new FakeCloudApiEndpointProvider(),
@@ -377,7 +485,7 @@ public sealed class CapacitySyncTaskBehaviorTests
             {
                 Current = SystemRuntimeConfigSnapshot.Default
             },
-            new FakeProductionContextStore(),
+            contextStore,
             bufferStore,
             logger,
             new ShiftConfig
@@ -385,7 +493,8 @@ public sealed class CapacitySyncTaskBehaviorTests
                 DayStart = "08:00",
                 DayEnd = "20:00"
             },
-            new FakeCloudDiagnosticsStore());
+            new FakeCloudDiagnosticsStore(),
+            identityAliasRegistry);
     }
 
     private static JsonElement ParsePayload(object payload)

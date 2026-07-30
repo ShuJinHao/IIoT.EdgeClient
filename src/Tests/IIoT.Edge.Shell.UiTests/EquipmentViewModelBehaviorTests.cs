@@ -186,16 +186,15 @@ public sealed class EquipmentViewModelBehaviorTests
             await viewModel.OnActivatedAsync();
 
             Assert.Equal("旧名称", selectionService.SelectedDeviceKey);
-            Assert.Null(selectionService.SelectedPlcCode);
-
-            viewModel.SelectedDeviceFilter = Assert.Single(
-                viewModel.DeviceFilters,
-                static option => option.Key == "新名称");
-
-            Assert.Equal("新名称", selectionService.SelectedDeviceKey);
             Assert.Equal("P1-AP01", selectionService.SelectedPlcCode);
             Assert.Equal("新名称", viewModel.SelectedDeviceFilter?.Key);
             Assert.Equal("P1-AP01 · 新名称", viewModel.SelectedDeviceFilter?.DisplayName);
+            Assert.DoesNotContain(
+                viewModel.DeviceFilters,
+                static option => option.Key == "旧名称");
+            Assert.Equal(
+                ["新名称", "旧名称"],
+                selectionService.SelectedDeviceNameAliases);
         }
         finally
         {
