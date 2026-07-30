@@ -79,25 +79,33 @@ internal sealed class PersistentPlcIdentityAliasRegistry : IPlcIdentityAliasRegi
 
         try
         {
-            var persisted = JsonSerializer.Deserialize<Dictionary<string, string[]>>(
+            var persisted = JsonSerializer.Deserialize<Dictionary<string, string[]?>>(
                 File.ReadAllText(_persistPath));
             if (persisted is null)
             {
-                return;
+                throw new JsonException($"{PersistFileName} 根节点不能为 null。");
             }
 
+            var loadedAliases = new Dictionary<string, HashSet<string>>(
+                StringComparer.OrdinalIgnoreCase);
             foreach (var pair in persisted)
             {
                 var plcCode = pair.Key?.Trim() ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(plcCode))
+                if (string.IsNullOrWhiteSpace(plcCode) || pair.Value is null)
                 {
-                    continue;
+                    throw new JsonException(
+                        $"{PersistFileName} 包含空 PlcCode 或 null 别名数组。");
                 }
 
-                _aliasesByPlcCode[plcCode] = pair.Value
+                loadedAliases[plcCode] = pair.Value
                     .Select(static alias => alias?.Trim() ?? string.Empty)
                     .Where(static alias => !string.IsNullOrWhiteSpace(alias))
                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            }
+
+            foreach (var pair in loadedAliases)
+            {
+                _aliasesByPlcCode[pair.Key] = pair.Value;
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)

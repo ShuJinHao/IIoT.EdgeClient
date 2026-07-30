@@ -41,4 +41,42 @@ public sealed class PlcIdentityAliasRegistryPersistenceTests
             Directory.Delete(directory, recursive: true);
         }
     }
+
+    [Fact]
+    public void StructurallyInvalidAliasFile_ShouldRemainUnusedAndNotBlockConstruction()
+    {
+        var directory = Path.Combine(
+            Path.GetTempPath(),
+            $"iiot-edge-plc-alias-invalid-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "plc_identity_aliases.json");
+
+        try
+        {
+            File.WriteAllText(
+                path,
+                """
+                {
+                  "P1-AP00": ["历史名称"],
+                  "P1-AP01": null
+                }
+                """);
+            var logger = new FakeLogService();
+
+            var registry = new PersistentPlcIdentityAliasRegistry(directory, logger);
+
+            Assert.Empty(registry.GetVerifiedAliases("P1-AP00"));
+            Assert.Empty(registry.GetVerifiedAliases("P1-AP01"));
+            Assert.True(File.Exists(path));
+            Assert.Contains(
+                logger.Entries,
+                entry => entry.Level == "Warn"
+                         && entry.Message.Contains("原文件已保留", StringComparison.Ordinal)
+                         && entry.Message.Contains("不会用于归属", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
 }

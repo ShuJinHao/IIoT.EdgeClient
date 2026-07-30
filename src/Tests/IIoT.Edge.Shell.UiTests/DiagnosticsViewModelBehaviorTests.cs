@@ -371,7 +371,12 @@ public sealed class DiagnosticsViewModelBehaviorTests
                         TaskKey = "Task.Upload",
                         SignalKey = "Signal.B"
                     },
-                    new StartupDiagnosticIssue("GLOBAL", "插件配置缺失", "ModuleA")
+                    new StartupDiagnosticIssue("GLOBAL", "插件配置缺失", "ModuleA"),
+                    new StartupDiagnosticIssue(
+                        "PLC_IDENTITY_UNRESOLVED",
+                        "旧身份待确认",
+                        "ModuleA",
+                        "旧显示名")
             ]));
         var selectionService = new DeviceSelectionService();
         selectionService.UpdatePlcIdentities(
@@ -390,11 +395,12 @@ public sealed class DiagnosticsViewModelBehaviorTests
 
         var binding = Assert.Single(viewModel.DeviceBindings);
         Assert.Equal("PLC-A01 · 一号机", binding.DeviceName);
-        Assert.Equal(2, viewModel.Issues.Count);
+        Assert.Equal(3, viewModel.Issues.Count);
         Assert.Contains(viewModel.Issues, row => row.Message == "PLC-A01 地址缺失");
         Assert.Contains(viewModel.Issues, row => row.Message == "插件配置缺失");
+        Assert.Contains(viewModel.Issues, row => row.Message == "旧身份待确认");
         Assert.DoesNotContain(viewModel.Issues, row => row.Message == "PLC-A02 地址缺失");
-        Assert.Equal(2, viewModel.TotalIssueCount);
+        Assert.Equal(3, viewModel.TotalIssueCount);
     }
 
     [AvaloniaFact]
