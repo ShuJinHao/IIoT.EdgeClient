@@ -80,7 +80,7 @@ public sealed class PlcLifecycleCoordinator
                 .ConfigureAwait(false);
             if (device is null)
             {
-                _logger.Warn($"[DeviceId={networkDeviceId}] 重载跳过：未找到设备。");
+                _logger.Warn($"[{ResolveLogIdentity(networkDeviceId)}] 重载跳过：未找到设备。");
                 return;
             }
 
@@ -134,11 +134,11 @@ public sealed class PlcLifecycleCoordinator
             var stopped = await StopDeviceCoreAsync(networkDeviceId, ct).ConfigureAwait(false);
             if (stopped)
             {
-                _logger.Info($"[DeviceId={networkDeviceId}] 停止完成。");
+                _logger.Info($"[{ResolveLogIdentity(networkDeviceId)}] 停止完成。");
             }
             else
             {
-                _logger.Warn($"[DeviceId={networkDeviceId}] PLC runtime 未在硬上限内退出，已隔离但未阻断客户端。");
+                _logger.Warn($"[{ResolveLogIdentity(networkDeviceId)}] PLC runtime 未在硬上限内退出，已隔离但未阻断客户端。");
             }
         }
         finally
@@ -174,7 +174,7 @@ public sealed class PlcLifecycleCoordinator
                 catch (Exception ex)
                 {
                     (failures ??= []).Add(ex);
-                    _logger.Error($"[PLC] 停止 DeviceId={deviceId} 失败：{ex.Message}");
+                    _logger.Error($"[{ResolveLogIdentity(deviceId)}] 停止失败：{ex.Message}");
                 }
             }
 
@@ -496,6 +496,19 @@ public sealed class PlcLifecycleCoordinator
     private void RequestShutdown()
     {
         Interlocked.Exchange(ref _shutdownRequested, 1);
+    }
+
+    private string ResolveLogIdentity(int networkDeviceId)
+    {
+        var plcCode = _runtimeRegistry.GetRuntime(networkDeviceId)?.PlcCode;
+        if (string.IsNullOrWhiteSpace(plcCode))
+        {
+            plcCode = _statusStore.GetSnapshot(networkDeviceId)?.PlcCode;
+        }
+
+        return string.IsNullOrWhiteSpace(plcCode)
+            ? $"DeviceId={networkDeviceId}"
+            : $"PlcCode={plcCode.Trim()}";
     }
 
     private bool IsShutdownRequested => Volatile.Read(ref _shutdownRequested) != 0;
