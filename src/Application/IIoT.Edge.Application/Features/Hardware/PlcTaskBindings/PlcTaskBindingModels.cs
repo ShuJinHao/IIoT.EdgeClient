@@ -1,4 +1,5 @@
 using IIoT.Edge.Module.Contracts.Modules;
+using IIoT.Edge.Application.Common.Plc;
 
 namespace IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 
@@ -22,7 +23,61 @@ public sealed record PlcTaskBindingItemDto(
     bool CanRun,
     string UnavailableReason,
     IReadOnlyList<TaskRequiredSignal> MissingRequiredSignals,
-    bool IsSupportedByCurrentPlc);
+    bool IsSupportedByCurrentPlc,
+    DateTimeOffset? ConfigurationStateChangedAtUtc = null,
+    PlcTaskRuntimeState? RuntimeState = null,
+    DateTimeOffset? RuntimeStateChangedAtUtc = null,
+    string? RuntimeErrorCode = null,
+    string? RuntimeExceptionType = null);
+
+public enum PlcTaskBindingDisplayState
+{
+    BindingMissing,
+    Disabled,
+    ConfigurationInvalid,
+    WaitingForRuntime,
+    WaitingForConnection,
+    Starting,
+    Running,
+    Stopping,
+    Faulted
+}
+
+public static class PlcTaskBindingDisplayStateResolver
+{
+    public static PlcTaskBindingDisplayState Resolve(
+        bool hasSavedBinding,
+        bool isDeviceEnabled,
+        bool isTaskEnabled,
+        bool canRun,
+        PlcTaskRuntimeState? runtimeState)
+    {
+        if (!hasSavedBinding)
+        {
+            return PlcTaskBindingDisplayState.BindingMissing;
+        }
+
+        if (!isDeviceEnabled || !isTaskEnabled)
+        {
+            return PlcTaskBindingDisplayState.Disabled;
+        }
+
+        if (!canRun)
+        {
+            return PlcTaskBindingDisplayState.ConfigurationInvalid;
+        }
+
+        return runtimeState switch
+        {
+            PlcTaskRuntimeState.WaitingForConnection => PlcTaskBindingDisplayState.WaitingForConnection,
+            PlcTaskRuntimeState.Starting => PlcTaskBindingDisplayState.Starting,
+            PlcTaskRuntimeState.Running => PlcTaskBindingDisplayState.Running,
+            PlcTaskRuntimeState.Stopping => PlcTaskBindingDisplayState.Stopping,
+            PlcTaskRuntimeState.Faulted => PlcTaskBindingDisplayState.Faulted,
+            _ => PlcTaskBindingDisplayState.WaitingForRuntime
+        };
+    }
+}
 
 public sealed record PlcTaskBindingValidationResult(
     bool IsValid,

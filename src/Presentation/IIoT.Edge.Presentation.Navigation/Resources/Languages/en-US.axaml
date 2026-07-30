@@ -710,6 +710,7 @@
     <sys:String x:Key="Navigation_Column_TaskType">Task Type</sys:String>
     <sys:String x:Key="Navigation_Column_TaskBindingSource">Binding Source</sys:String>
     <sys:String x:Key="Navigation_Column_TaskAvailability">Availability</sys:String>
+    <sys:String x:Key="Navigation_Column_RuntimeStatus">Runtime status</sys:String>
     <sys:String x:Key="Navigation_Column_Note">Note</sys:String>
     <sys:String x:Key="Navigation_Column_RequiredSignals">Required Signals</sys:String>
     <sys:String x:Key="Navigation_Column_TaskKey">Task Key</sys:String>

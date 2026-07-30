@@ -146,7 +146,8 @@ public sealed class PlcConnectionStatusStore
         int networkDeviceId,
         string plcCode,
         string deviceName,
-        string error)
+        string error,
+        bool preserveTransportConnection = false)
     {
         lock (_stateLock)
         {
@@ -156,12 +157,18 @@ public sealed class PlcConnectionStatusStore
             {
                 PlcCode = ResolvePlcCode(plcCode, existing.PlcCode),
                 DeviceName = deviceName,
-                IsConnected = false,
+                IsConnected = preserveTransportConnection && existing.IsConnected,
                 ConnectionState = PlcConnectionState.Faulted,
                 LastFailureAtUtc = now,
-                StateChangedAtUtc = ResolveStateChangedAt(existing, PlcConnectionState.Faulted, false, now),
+                StateChangedAtUtc = ResolveStateChangedAt(
+                    existing,
+                    PlcConnectionState.Faulted,
+                    preserveTransportConnection && existing.IsConnected,
+                    now),
                 LastError = error,
-                LatencyMs = null
+                LatencyMs = preserveTransportConnection && existing.IsConnected
+                    ? existing.LatencyMs
+                    : null
             };
         }
     }

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Module.Contracts.Plc.Store;
+using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.Application.Modules.Hardware;
@@ -130,17 +131,26 @@ public sealed class PlcDataReadScanTask : IPlcTask
                     _device.Id,
                     _device.PlcCode,
                     _device.DeviceName,
-                    ex.Message);
+                    PlcServiceQuarantinedException.StableReasonCode);
                 _connectionStateChanged?.Invoke(false);
-                _logger.Error($"[PlcCode={_device.PlcCode}][采集] PLC service 已隔离，只读任务已停止：{ex.Message}");
+                _logger.Error(
+                    $"[PlcCode={_device.PlcCode}][采集] PLC service 已隔离，只读任务已停止，"
+                    + $"原因码={PlcServiceQuarantinedException.StableReasonCode}，异常类型={ex.GetType().Name}。");
                 break;
+            }
+            catch (Exception ex) when (
+                PlcOperationFailureClassifier.IsCallerCancellation(ex, ct))
+            {
+                throw;
             }
             catch (Exception ex)
             {
+                var failure = PlcOperationFailureClassifier.Classify(ex);
                 _retryCount++;
                 if (ShouldLogDisconnect())
                 {
-                    _logger.Error($"[PlcCode={_device.PlcCode}] PLC 只读数据扫描异常：{ex.Message}");
+                    _logger.Error(
+                        $"[PlcCode={_device.PlcCode}] PLC 只读数据扫描异常，{failure.SafeDiagnostic}。");
                 }
 
                 await Task.Delay(GetBackoffDelay(), ct).ConfigureAwait(false);
@@ -167,7 +177,7 @@ public sealed class PlcDataReadScanTask : IPlcTask
                     block,
                     batchId,
                     attemptedAtUtc,
-                    remainingFailureReason ?? "PLC transport 当前不可用，未发起本 block 读取。");
+                    remainingFailureReason ?? PlcTaskRuntimeErrorCodes.TransportDisconnected);
                 continue;
             }
 
@@ -203,9 +213,15 @@ public sealed class PlcDataReadScanTask : IPlcTask
             {
                 throw;
             }
+            catch (Exception ex) when (
+                PlcOperationFailureClassifier.IsCallerCancellation(ex, cancellationToken))
+            {
+                throw;
+            }
             catch (Exception ex)
             {
-                var failureReason = FormatException(ex);
+                var failure = PlcOperationFailureClassifier.Classify(ex);
+                var failureReason = failure.ReasonCode;
                 StageFailedBlock(
                     stagedUpdates,
                     block,
@@ -213,18 +229,15 @@ public sealed class PlcDataReadScanTask : IPlcTask
                     attemptedAtUtc,
                     failureReason);
 
-                var isTransportFailure = PlcOperationFailureClassifier.IsTransportFailure(ex);
-                LogBlockFailure(block, ex, isTransportFailure);
-                if (isTransportFailure)
+                LogBlockFailure(block, failure);
+                if (failure.DisconnectsTransport)
                 {
-                    remainingFailureReason =
-                        $"前序 block 已发生明确 transport 故障：{failureReason}";
-                    await HandleTransportFailureAsync(block, ex).ConfigureAwait(false);
+                    remainingFailureReason = PlcTaskRuntimeErrorCodes.TransportDisconnected;
+                    await HandleTransportFailureAsync(block, failure).ConfigureAwait(false);
                 }
                 else if (!_plcService.IsConnected)
                 {
-                    remainingFailureReason =
-                        $"前序 block 失败后 PLC service 暂不可用：{failureReason}";
+                    remainingFailureReason = failure.ReasonCode;
                 }
             }
         }
@@ -240,11 +253,12 @@ public sealed class PlcDataReadScanTask : IPlcTask
 
     private void LogBlockFailure(
         PlcSignalBlock block,
-        Exception exception,
-        bool isTransportFailure)
+        PlcOperationFailure failure)
     {
         var message =
-            $"PLC 只读 block 失败，地址={block.StartAddress}，长度={block.WordCount}，信号={FormatBlockSignals(block)}，失败类型={(isTransportFailure ? "Transport" : "Request")}，原因={FormatException(exception)}；受影响信号已发布默认值与失败质量，未执行单信号重读。";
+            $"PLC 只读 block 失败，地址={block.StartAddress}，长度={block.WordCount}，"
+            + $"信号={FormatBlockSignals(block)}，{failure.SafeDiagnostic}；"
+            + "受影响信号已发布默认值与失败质量，未执行单信号重读。";
 
         if (ShouldLogDisconnect())
         {
@@ -254,10 +268,10 @@ public sealed class PlcDataReadScanTask : IPlcTask
 
     private async Task HandleTransportFailureAsync(
         PlcSignalBlock block,
-        Exception exception)
+        PlcOperationFailure failure)
     {
         var message =
-            $"PLC transport 故障，操作=Read，地址={block.StartAddress}，长度={block.WordCount}，原因={FormatException(exception)}。";
+            $"{failure.ReasonCode}: 操作=Read，地址={block.StartAddress}，长度={block.WordCount}。";
         _statusStore?.MarkDisconnected(
             _device.Id,
             _device.PlcCode,
@@ -280,8 +294,10 @@ public sealed class PlcDataReadScanTask : IPlcTask
         }
         catch (Exception disconnectException)
         {
+            var disconnectFailure = PlcOperationFailureClassifier.Classify(disconnectException);
             _logger.Error(
-                $"[PlcCode={_device.PlcCode}][采集] transport 故障后的连接释放失败：{FormatException(disconnectException)}");
+                $"[PlcCode={_device.PlcCode}][采集] transport 故障后的连接释放失败，"
+                + $"{disconnectFailure.SafeDiagnostic}。");
         }
     }
 
@@ -371,23 +387,6 @@ public sealed class PlcDataReadScanTask : IPlcTask
             "、",
             block.Items.Select(static item =>
                 $"{item.Mapping.SignalKey}@{item.Mapping.PlcAddress}[{Math.Max(1, item.Mapping.AddressCount)}]"));
-
-    private static string FormatException(Exception exception)
-    {
-        var messages = new List<string>();
-        for (var current = exception; current is not null && messages.Count < 4; current = current.InnerException)
-        {
-            if (!string.IsNullOrWhiteSpace(current.Message)
-                && !messages.Contains(current.Message, StringComparer.Ordinal))
-            {
-                messages.Add(current.Message);
-            }
-        }
-
-        return messages.Count == 0
-            ? exception.GetType().Name
-            : string.Join(" -> ", messages);
-    }
 
     private static int ToLatencyMs(long elapsedMilliseconds)
         => (int)Math.Min(int.MaxValue, Math.Max(0, elapsedMilliseconds));

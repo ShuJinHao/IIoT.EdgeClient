@@ -65,6 +65,16 @@ public sealed class PlcRuntimeRegistry
         }
     }
 
+    internal PlcRuntimeTaskPlan? RemoveTaskPlan(int networkDeviceId)
+    {
+        lock (_stateLock)
+        {
+            return _taskPlans.Remove(networkDeviceId, out var plan)
+                ? plan
+                : null;
+        }
+    }
+
     public bool ContainsRuntime(int deviceId)
     {
         lock (_stateLock)

@@ -80,6 +80,11 @@ public static class DependencyInjection
         services.AddSingleton<
             IPlcRuntimeConfigurationMutationGate,
             PlcRuntimeConfigurationMutationGate>();
+        services.AddSingleton<PlcTaskRuntimeStatusStore>();
+        services.AddSingleton<IPlcTaskRuntimeStatusReader>(
+            sp => sp.GetRequiredService<PlcTaskRuntimeStatusStore>());
+        services.AddSingleton<IPlcTaskRuntimeStatusWriter>(
+            sp => sp.GetRequiredService<PlcTaskRuntimeStatusStore>());
         services.AddSingleton<IPlcTaskBindingTransactionService, UnavailablePlcTaskBindingTransactionService>();
         services.AddSingleton<IPlcRuntimeApplyService, NoopPlcRuntimeApplyService>();
         services.AddTransient<IRecipeViewCrudService, RecipeViewCrudService>();
