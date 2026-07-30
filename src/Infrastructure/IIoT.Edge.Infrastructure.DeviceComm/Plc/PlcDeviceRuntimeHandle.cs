@@ -272,12 +272,8 @@ public sealed class PlcDeviceRuntimeHandle
             var failure = PlcOperationFailureClassifier.Classify(ex);
             if (failure.DisconnectsTransport)
             {
-                ConnectionSignal.Report(false);
-                StatusStore.MarkDisconnected(
-                    DeviceId,
-                    PlcCode,
-                    DeviceName,
-                    failure.ReasonCode);
+                await HandleObservedTransportFailureAsync(failure)
+                    .ConfigureAwait(false);
             }
             else
             {
@@ -327,20 +323,34 @@ public sealed class PlcDeviceRuntimeHandle
                         }
                         catch (Exception ex)
                         {
+                            var failure = PlcOperationFailureClassifier.Classify(ex);
                             Interlocked.Exchange(ref _connected, 0);
-                            StatusStore.MarkRuntimeFault(
-                                DeviceId,
-                                PlcCode,
-                                DeviceName,
-                                PlcTaskRuntimeErrorCodes.PeriodicReadFault,
-                                preserveTransportConnection: true);
-                            SetAllTaskStates(
-                                PlcTaskRuntimeState.Faulted,
-                                PlcTaskRuntimeErrorCodes.PeriodicReadFault,
-                                ex.GetType().Name);
-                            Logger.Error(
-                                $"[PlcCode={PlcCode}] 周期读取任务启动失败，业务任务保持暂停，"
-                                + $"原因码={PlcTaskRuntimeErrorCodes.PeriodicReadFault}，异常类型={ex.GetType().Name}。");
+                            if (failure.DisconnectsTransport)
+                            {
+                                await HandleObservedTransportFailureAsync(failure)
+                                    .ConfigureAwait(false);
+                                Logger.Error(
+                                    $"[PlcCode={PlcCode}] 周期读取任务启动遇到 transport 断联，"
+                                    + $"业务任务保持暂停，{failure.SafeDiagnostic}。");
+                            }
+                            else
+                            {
+                                StatusStore.MarkRuntimeFault(
+                                    DeviceId,
+                                    PlcCode,
+                                    DeviceName,
+                                    PlcTaskRuntimeErrorCodes.PeriodicReadFault,
+                                    preserveTransportConnection: true);
+                                SetAllTaskStates(
+                                    PlcTaskRuntimeState.Faulted,
+                                    PlcTaskRuntimeErrorCodes.PeriodicReadFault,
+                                    failure.ExceptionType);
+                                Logger.Error(
+                                    $"[PlcCode={PlcCode}] 周期读取任务启动失败，业务任务保持暂停，"
+                                    + $"原因码={PlcTaskRuntimeErrorCodes.PeriodicReadFault}，"
+                                    + $"异常类型={failure.ExceptionType}。");
+                            }
+
                             continue;
                         }
 
@@ -362,6 +372,14 @@ public sealed class PlcDeviceRuntimeHandle
                             catch (Exception ex)
                             {
                                 var failure = PlcOperationFailureClassifier.Classify(ex);
+                                if (failure.DisconnectsTransport)
+                                {
+                                    Logger.Error(
+                                        $"[PlcCode={PlcCode}] 业务任务 {taskKey} 启动遇到 transport 断联，"
+                                        + $"已触发连接释放和全部依赖任务暂停，{failure.SafeDiagnostic}。");
+                                    break;
+                                }
+
                                 var safeDetail = ex is TimeoutException
                                     ? $"启动握手超过 {StartupTimeout.TotalSeconds:0} 秒，"
                                     : string.Empty;
@@ -612,6 +630,12 @@ public sealed class PlcDeviceRuntimeHandle
                     cleanupFailure);
             }
 
+            if (!callerCancellation && failure.DisconnectsTransport)
+            {
+                await HandleObservedTransportFailureAsync(failure)
+                    .ConfigureAwait(false);
+            }
+
             System.Runtime.ExceptionServices.ExceptionDispatchInfo
                 .Capture(startFailure)
                 .Throw();
@@ -660,9 +684,59 @@ public sealed class PlcDeviceRuntimeHandle
                 PlcTaskRuntimeState.Faulted,
                 failure.ReasonCode,
                 failure.ExceptionType);
+            if (failure.DisconnectsTransport)
+            {
+                Logger.Error(
+                    $"[PlcCode={PlcCode}] 业务任务 {slot.TaskKey} 执行遇到 transport 断联，"
+                    + $"已触发连接释放和全部依赖任务暂停，{failure.SafeDiagnostic}。");
+                await HandleObservedTransportFailureAsync(failure).ConfigureAwait(false);
+                return;
+            }
+
             Logger.Error(
                 $"[PlcCode={PlcCode}] 业务任务 {slot.TaskKey} 执行故障，"
                 + $"已仅隔离该 TaskKey，{failure.SafeDiagnostic}。");
+        }
+    }
+
+    private async Task HandleObservedTransportFailureAsync(
+        PlcOperationFailure failure)
+    {
+        Interlocked.Exchange(ref _connected, 0);
+        StatusStore.MarkDisconnected(
+            DeviceId,
+            PlcCode,
+            DeviceName,
+            failure.ReasonCode);
+        ConnectionSignal.Report(false);
+
+        try
+        {
+            await PlcService.DisconnectAsync(CancellationToken.None)
+                .ConfigureAwait(false);
+        }
+        catch (PlcServiceQuarantinedException ex)
+        {
+            StatusStore.MarkRuntimeFault(
+                DeviceId,
+                PlcCode,
+                DeviceName,
+                PlcServiceQuarantinedException.StableReasonCode);
+            SetAllTaskStates(
+                PlcTaskRuntimeState.Faulted,
+                PlcTaskRuntimeErrorCodes.RuntimeQuarantined,
+                ex.GetType().Name);
+            Logger.Error(
+                $"[PlcCode={PlcCode}] transport 断联后的连接释放进入隔离，"
+                + $"原因码={PlcServiceQuarantinedException.StableReasonCode}，"
+                + $"异常类型={ex.GetType().Name}。");
+        }
+        catch (Exception ex)
+        {
+            var disconnectFailure = PlcOperationFailureClassifier.Classify(ex);
+            Logger.Error(
+                $"[PlcCode={PlcCode}] transport 断联后的连接释放失败，"
+                + $"{disconnectFailure.SafeDiagnostic}；连接监督保持断联并等待重试。");
         }
     }
 
@@ -702,6 +776,16 @@ public sealed class PlcDeviceRuntimeHandle
             }
 
             var failure = PlcOperationFailureClassifier.Classify(ex);
+            if (failure.DisconnectsTransport)
+            {
+                Logger.Error(
+                    $"[PlcCode={PlcCode}] 周期读取任务执行遇到 transport 断联，"
+                    + $"已触发连接释放和依赖任务暂停，{failure.SafeDiagnostic}。");
+                await HandleObservedTransportFailureAsync(failure)
+                    .ConfigureAwait(false);
+                return;
+            }
+
             StatusStore.MarkRuntimeFault(
                 DeviceId,
                 PlcCode,

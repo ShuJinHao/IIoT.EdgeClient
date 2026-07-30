@@ -24,6 +24,7 @@ public sealed record PlcTaskBindingItemDto(
     string UnavailableReason,
     IReadOnlyList<TaskRequiredSignal> MissingRequiredSignals,
     bool IsSupportedByCurrentPlc,
+    DateTimeOffset? ConfigurationStateChangedAtUtc = null,
     PlcTaskRuntimeState? RuntimeState = null,
     DateTimeOffset? RuntimeStateChangedAtUtc = null,
     string? RuntimeErrorCode = null,

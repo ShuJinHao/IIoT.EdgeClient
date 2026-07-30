@@ -409,7 +409,7 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
     private bool _enabled;
     private readonly bool _isDeviceEnabled;
     private PlcTaskRuntimeState? _runtimeState;
-    private DateTimeOffset? _runtimeStateChangedAtUtc;
+    private DateTimeOffset _displayStateChangedAtUtc;
     private string? _runtimeErrorCode;
     private string? _runtimeExceptionType;
 
@@ -420,7 +420,6 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
         _enabled = dto.Enabled;
         _isDeviceEnabled = isDeviceEnabled;
         _runtimeState = dto.RuntimeState;
-        _runtimeStateChangedAtUtc = dto.RuntimeStateChangedAtUtc;
         _runtimeErrorCode = dto.RuntimeErrorCode;
         _runtimeExceptionType = dto.RuntimeExceptionType;
         OriginalEnabled = dto.Enabled;
@@ -435,6 +434,13 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
         MissingRequiredSignalsText = dto.MissingRequiredSignals.Count == 0
             ? string.Empty
             : string.Join("；", dto.MissingRequiredSignals.Select(static x => $"{x.SignalKey}/{FormatDirection(x.Direction)}"));
+        var initialDisplayState = ResolveDisplayState();
+        _displayStateChangedAtUtc = IsRuntimeDisplayState(initialDisplayState)
+            ? dto.RuntimeStateChangedAtUtc
+              ?? dto.ConfigurationStateChangedAtUtc
+              ?? DateTimeOffset.UtcNow
+            : dto.ConfigurationStateChangedAtUtc
+              ?? DateTimeOffset.UtcNow;
     }
 
     public string Key { get; }
@@ -459,8 +465,6 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
 
             _enabled = value;
             OnPropertyChanged();
-            OnPropertyChanged(nameof(RuntimeStatusText));
-            OnPropertyChanged(nameof(NoteText));
         }
     }
 
@@ -488,7 +492,7 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
 
     public PlcTaskRuntimeState? RuntimeState => _runtimeState;
 
-    public DateTimeOffset? RuntimeStateChangedAtUtc => _runtimeStateChangedAtUtc;
+    public DateTimeOffset? RuntimeStateChangedAtUtc => _displayStateChangedAtUtc;
 
     public string? RuntimeErrorCode => _runtimeErrorCode;
 
@@ -498,12 +502,7 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
     {
         get
         {
-            return PlcTaskBindingDisplayStateResolver.Resolve(
-                HasSavedBinding,
-                _isDeviceEnabled,
-                Enabled,
-                CanRun,
-                _runtimeState) switch
+            return ResolveDisplayState() switch
             {
                 PlcTaskBindingDisplayState.BindingMissing => "绑定缺失",
                 PlcTaskBindingDisplayState.Disabled => "已禁用",
@@ -529,9 +528,7 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
                     _runtimeState == PlcTaskRuntimeState.Faulted
                         ? FormatRuntimeFailure(_runtimeErrorCode, _runtimeExceptionType)
                         : null,
-                    _runtimeStateChangedAtUtc.HasValue
-                        ? $"状态时间={_runtimeStateChangedAtUtc.Value:yyyy-MM-dd HH:mm:ss} UTC"
-                        : null
+                    $"状态时间={_displayStateChangedAtUtc:yyyy-MM-dd HH:mm:ss} UTC"
                 }
                 .Where(static x => !string.IsNullOrWhiteSpace(x));
 
@@ -542,10 +539,22 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
 
     public void ApplyRuntimeSnapshot(PlcTaskRuntimeSnapshot? snapshot)
     {
+        var previousDisplayState = ResolveDisplayState();
         _runtimeState = snapshot?.State;
-        _runtimeStateChangedAtUtc = snapshot?.StateChangedAtUtc;
         _runtimeErrorCode = snapshot?.ErrorCode;
         _runtimeExceptionType = snapshot?.ExceptionType;
+        var nextDisplayState = ResolveDisplayState();
+        if (nextDisplayState != previousDisplayState)
+        {
+            _displayStateChangedAtUtc = snapshot?.StateChangedAtUtc
+                ?? DateTimeOffset.UtcNow;
+        }
+        else if (IsRuntimeDisplayState(nextDisplayState)
+                 && snapshot is not null)
+        {
+            _displayStateChangedAtUtc = snapshot.StateChangedAtUtc;
+        }
+
         OnPropertyChanged(nameof(RuntimeState));
         OnPropertyChanged(nameof(RuntimeStateChangedAtUtc));
         OnPropertyChanged(nameof(RuntimeErrorCode));
@@ -553,6 +562,22 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
         OnPropertyChanged(nameof(RuntimeStatusText));
         OnPropertyChanged(nameof(NoteText));
     }
+
+    private PlcTaskBindingDisplayState ResolveDisplayState()
+        => PlcTaskBindingDisplayStateResolver.Resolve(
+            HasSavedBinding,
+            _isDeviceEnabled,
+            OriginalEnabled,
+            CanRun,
+            _runtimeState);
+
+    private static bool IsRuntimeDisplayState(PlcTaskBindingDisplayState state)
+        => state is PlcTaskBindingDisplayState.WaitingForRuntime
+            or PlcTaskBindingDisplayState.WaitingForConnection
+            or PlcTaskBindingDisplayState.Starting
+            or PlcTaskBindingDisplayState.Running
+            or PlcTaskBindingDisplayState.Stopping
+            or PlcTaskBindingDisplayState.Faulted;
 
     private static string FormatRuntimeFailure(
         string? errorCode,

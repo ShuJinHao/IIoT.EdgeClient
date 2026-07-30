@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Net.Sockets;
 using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
@@ -486,13 +487,18 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             TestContext.Current.CancellationToken);
 
         runtime.ConnectionSignal.Report(false);
+        await Task.WhenAll(
+            stalledStop.Stops.WaitForAtLeastAsync(
+                1,
+                TestContext.Current.CancellationToken),
+            healthy.Stops.WaitForAtLeastAsync(
+                1,
+                TestContext.Current.CancellationToken));
         await timeProvider.ScheduledTimeouts.WaitForAtLeastAsync(
             1,
             TestContext.Current.CancellationToken);
         timeProvider.Advance(TimeSpan.FromSeconds(5));
-        await Task.WhenAll(
-            boundedFailure,
-            healthy.Stops.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+        await boundedFailure;
 
         Assert.Equal(1, stalledStop.Stops.Count);
         Assert.Contains(
@@ -728,6 +734,71 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
     }
 
     [Fact]
+    public async Task BusinessExecutionSocketFault_ShouldDisconnectTransportAndPauseAllDependentTasks()
+    {
+        var faulting = new FaultingAfterStartupBusinessTask("Task.MG1");
+        var healthy = new ControlledBusinessTask("Task.MG2");
+        var plcService = new RecordingConnectedPlcService();
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            new ControlledLoopTask("PeriodicRead"),
+            plcService: plcService);
+        var plan = CreatePlan(
+            runtime,
+            ("Task.MG1", (_, _) => faulting),
+            ("Task.MG2", (_, _) => healthy));
+        await runtime.ApplyTaskPlanAsync(
+            plan,
+            TestContext.Current.CancellationToken);
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await Task.WhenAll(
+            faulting.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
+            healthy.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+        await runtime.ApplyTaskPlanAsync(
+            plan,
+            TestContext.Current.CancellationToken);
+
+        faulting.FailExecution(
+            new AggregateException(
+                new IOException(
+                    "wrapped transport failure",
+                    new SocketException())));
+
+        await Task.WhenAll(
+            plcService.Disconnects.WaitForAtLeastAsync(
+                1,
+                TestContext.Current.CancellationToken),
+            healthy.Stops.WaitForAtLeastAsync(
+                1,
+                TestContext.Current.CancellationToken),
+            runtime.WaitForTaskStateAsync(
+                "Task.MG1",
+                PlcTaskRuntimeState.WaitingForConnection,
+                TestContext.Current.CancellationToken),
+            runtime.WaitForTaskStateAsync(
+                "Task.MG2",
+                PlcTaskRuntimeState.WaitingForConnection,
+                TestContext.Current.CancellationToken));
+
+        Assert.False(runtime.Runtime.IsConnected);
+        Assert.False(plcService.IsConnected);
+        Assert.Equal(1, plcService.Disconnects.Count);
+        Assert.Equal(1, healthy.Starts.Count);
+        Assert.Equal(1, healthy.Stops.Count);
+        Assert.Contains(
+            runtime.LoggerEntries,
+            entry => entry.Level == "Error"
+                     && entry.Message.Contains(
+                         PlcTaskRuntimeErrorCodes.TransportDisconnected,
+                         StringComparison.Ordinal)
+                     && entry.Message.Contains("全部依赖任务暂停", StringComparison.Ordinal)
+                     && !entry.Message.Contains("wrapped transport failure", StringComparison.Ordinal));
+
+        await CleanupAsync(runtime);
+    }
+
+    [Fact]
     public async Task ApplyPlan_WhenUnchangedTaskHasFaulted_ShouldOnlyStartNewTaskKey()
     {
         var faulting = new FaultingAfterStartupBusinessTask("Task.MG1");
@@ -940,7 +1011,8 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         ControlledLoopTask periodicRead,
         string deviceName = "PLC-A",
         int deviceId = 1,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IPlcService? plcService = null)
     {
         var logger = new ConcurrentLogService();
         var taskStatuses = new PlcTaskRuntimeStatusStore();
@@ -952,7 +1024,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
                 DeviceId = deviceId,
                 PlcCode = deviceName,
                 DeviceName = deviceName,
-                PlcService = new InertPlcService(),
+                PlcService = plcService ?? new InertPlcService(),
                 Buffer = new PlcBuffer(0, 0),
                 Context = new ProductionContext
                 {
@@ -1165,13 +1237,17 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
     {
         private readonly TaskCompletionSource _failExecution =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private Exception? _executionFailure;
 
         public string TaskName { get; } = taskName;
 
         public AsyncCounter Starts { get; } = new();
 
-        public void FailExecution()
-            => _failExecution.TrySetResult();
+        public void FailExecution(Exception? exception = null)
+        {
+            _executionFailure = exception;
+            _failExecution.TrySetResult();
+        }
 
         public Task StartAsync(CancellationToken ct)
             => StartWithStartup(ct).Execution;
@@ -1187,7 +1263,8 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         private async Task RunAsync(CancellationToken cancellationToken)
         {
             await _failExecution.Task.WaitAsync(cancellationToken);
-            throw new InvalidOperationException($"{TaskName} execution failed.");
+            throw _executionFailure
+                  ?? new InvalidOperationException($"{TaskName} execution failed.");
         }
     }
 
@@ -1448,6 +1525,25 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             };
             _entries.Enqueue(entry);
             EntryAdded?.Invoke(entry);
+        }
+    }
+
+    private sealed class RecordingConnectedPlcService : PlcServiceTestDouble
+    {
+        public RecordingConnectedPlcService()
+        {
+            IsConnected = true;
+        }
+
+        public AsyncCounter Disconnects { get; } = new();
+
+        public override Task DisconnectAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Disconnects.Increment();
+            IsConnected = false;
+            return Task.CompletedTask;
         }
     }
 

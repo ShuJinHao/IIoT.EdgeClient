@@ -29,6 +29,7 @@ public sealed class PlcTaskBindingService(
         }
 
         var candidates = factory.GetTaskCandidates();
+        var observedAtUtc = DateTimeOffset.UtcNow;
         var devices = await networkDevices.GetListAsync(
             x => x.DeviceType == DeviceType.PLC,
             cancellationToken).ConfigureAwait(false);
@@ -47,7 +48,9 @@ public sealed class PlcTaskBindingService(
                     rowByKey,
                     signalBindings,
                     device.DeviceModel,
-                    device.PlcCode))
+                    device.PlcCode,
+                    device.IsEnabled,
+                    observedAtUtc))
                 .ToArray();
 
             results.Add(new PlcTaskBindingDeviceDto(
@@ -368,7 +371,9 @@ public sealed class PlcTaskBindingService(
         IReadOnlyDictionary<string, PlcTaskBindingEntity> rowByKey,
         IReadOnlyCollection<ModuleIoSnapshot> signalBindings,
         string? deviceModel,
-        string plcCode)
+        string plcCode,
+        bool isDeviceEnabled,
+        DateTimeOffset observedAtUtc)
     {
         var hasSavedBinding = rowByKey.ContainsKey(candidate.Key);
         var configuredEnabled = rowByKey.TryGetValue(candidate.Key, out var configuredRow)
@@ -388,10 +393,34 @@ public sealed class PlcTaskBindingService(
             availability.UnavailableReason,
             availability.MissingRequiredSignals,
             availability.IsSupportedByCurrentPlc,
+            ResolveConfigurationStateChangedAt(
+                hasSavedBinding,
+                isDeviceEnabled,
+                configuredEnabled,
+                configuredRow,
+                observedAtUtc),
             runtime?.State,
             runtime?.StateChangedAtUtc,
             runtime?.ErrorCode,
             runtime?.ExceptionType);
+    }
+
+    private static DateTimeOffset ResolveConfigurationStateChangedAt(
+        bool hasSavedBinding,
+        bool isDeviceEnabled,
+        bool configuredEnabled,
+        PlcTaskBindingEntity? configuredRow,
+        DateTimeOffset observedAtUtc)
+    {
+        if (hasSavedBinding
+            && isDeviceEnabled
+            && !configuredEnabled
+            && configuredRow is not null)
+        {
+            return configuredRow.UpdatedAt;
+        }
+
+        return observedAtUtc;
     }
 
     private static bool ResolveEnabled(

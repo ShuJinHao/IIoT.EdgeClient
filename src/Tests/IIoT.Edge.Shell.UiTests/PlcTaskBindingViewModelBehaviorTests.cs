@@ -220,6 +220,98 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
     }
 
     [Fact]
+    public async Task UnsavedEnabledDraft_ShouldNotReplacePersistedRuntimeStatus()
+    {
+        var selectionService = new DeviceSelectionService();
+        selectionService.SelectDevice("PLC-A01");
+        var runtimeStatuses = new PlcTaskRuntimeStatusStore();
+        runtimeStatuses.SetState(
+            "P1-AP01",
+            "Task.Upload",
+            PlcTaskRuntimeState.Running);
+        var viewModel = CreateViewModel(
+            new FakePlcTaskBindingService(
+            [
+                CreateDevice(1, "PLC-A01", "P1-AP01")
+            ]),
+            selectionService,
+            runtimeStatusReader: runtimeStatuses);
+        await viewModel.OnActivatedAsync();
+        var task = Assert.Single(Assert.Single(viewModel.Devices).Tasks);
+        var persistedStateTime = task.RuntimeStateChangedAtUtc;
+
+        task.Enabled = false;
+
+        Assert.False(task.Enabled);
+        Assert.True(task.OriginalEnabled);
+        Assert.Equal("运行中", task.RuntimeStatusText);
+        Assert.Equal(persistedStateTime, task.RuntimeStateChangedAtUtc);
+        await viewModel.OnDeactivatedAsync();
+    }
+
+    [Theory]
+    [InlineData(false, true, true, "绑定缺失")]
+    [InlineData(true, false, true, "已禁用")]
+    [InlineData(true, true, false, "配置无效")]
+    public void ConfigurationDerivedStatus_ShouldExposeItsStateTime(
+        bool hasSavedBinding,
+        bool enabled,
+        bool canRun,
+        string expectedStatus)
+    {
+        var configurationStateChangedAtUtc =
+            DateTimeOffset.UnixEpoch.AddHours(9);
+        var task = new PlcTaskBindingTaskVm(
+            new PlcTaskBindingItemDto(
+                "Task.Upload",
+                "上传任务",
+                enabled,
+                hasSavedBinding,
+                IsHeartbeatLike: false,
+                RequiredSignals: [],
+                CanRun: canRun,
+                UnavailableReason: canRun ? string.Empty : "缺少 IO 信号。",
+                MissingRequiredSignals: [],
+                IsSupportedByCurrentPlc: true,
+                ConfigurationStateChangedAtUtc: configurationStateChangedAtUtc),
+            isDeviceEnabled: true);
+
+        Assert.Equal(expectedStatus, task.RuntimeStatusText);
+        Assert.Equal(
+            configurationStateChangedAtUtc,
+            task.RuntimeStateChangedAtUtc);
+        Assert.Contains(
+            "状态时间=1970-01-01 09:00:00 UTC",
+            task.NoteText,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UnsavedEnableOfPersistedDisabledTask_ShouldRemainDisplayedAsDisabled()
+    {
+        var task = new PlcTaskBindingTaskVm(
+            new PlcTaskBindingItemDto(
+                "Task.Upload",
+                "上传任务",
+                Enabled: false,
+                HasSavedBinding: true,
+                IsHeartbeatLike: false,
+                RequiredSignals: [],
+                CanRun: true,
+                UnavailableReason: string.Empty,
+                MissingRequiredSignals: [],
+                IsSupportedByCurrentPlc: true),
+            isDeviceEnabled: true);
+
+        task.Enabled = true;
+
+        Assert.True(task.Enabled);
+        Assert.False(task.OriginalEnabled);
+        Assert.Equal("已禁用", task.RuntimeStatusText);
+        Assert.NotNull(task.RuntimeStateChangedAtUtc);
+    }
+
+    [Fact]
     public async Task OnDeactivatedAsync_ShouldUnsubscribeRuntimeStatusChanges()
     {
         var selectionService = new DeviceSelectionService();
