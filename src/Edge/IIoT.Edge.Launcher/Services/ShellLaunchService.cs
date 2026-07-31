@@ -16,6 +16,7 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
     private readonly ILauncherUpdateOperationGate _updateOperationGate;
     private readonly IEdgeUpdateTransactionRecovery _updateTransactionRecovery;
     private readonly ILauncherEnabledPluginSelectionSource? _selectionSource;
+    private readonly ILauncherPluginActivationSource? _activationSource;
     private readonly Action<Process> _terminateProcess;
     private readonly Func<CancellationToken, Task> _readinessDeadline;
     private readonly CancellationTokenSource _disposeCts = new();
@@ -28,7 +29,8 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
         IShellInstanceProbe instanceProbe,
         ILauncherUpdateOperationGate updateOperationGate,
         IEdgeUpdateTransactionRecovery updateTransactionRecovery,
-        ILauncherEnabledPluginSelectionSource? selectionSource = null)
+        ILauncherEnabledPluginSelectionSource? selectionSource = null,
+        ILauncherPluginActivationSource? activationSource = null)
         : this(
             processStarter,
             instanceIdResolver,
@@ -37,7 +39,8 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
             updateTransactionRecovery,
             TryTerminate,
             readinessDeadline: null,
-            selectionSource: selectionSource)
+            selectionSource: selectionSource,
+            activationSource: activationSource)
     {
     }
 
@@ -49,7 +52,8 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
         IEdgeUpdateTransactionRecovery updateTransactionRecovery,
         Action<Process> terminateProcess,
         Func<CancellationToken, Task>? readinessDeadline = null,
-        ILauncherEnabledPluginSelectionSource? selectionSource = null)
+        ILauncherEnabledPluginSelectionSource? selectionSource = null,
+        ILauncherPluginActivationSource? activationSource = null)
     {
         _processStarter = processStarter ?? throw new ArgumentNullException(nameof(processStarter));
         _instanceIdResolver = instanceIdResolver ?? throw new ArgumentNullException(nameof(instanceIdResolver));
@@ -57,6 +61,7 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
         _updateOperationGate = updateOperationGate ?? throw new ArgumentNullException(nameof(updateOperationGate));
         _updateTransactionRecovery = updateTransactionRecovery ?? throw new ArgumentNullException(nameof(updateTransactionRecovery));
         _selectionSource = selectionSource;
+        _activationSource = activationSource;
         _terminateProcess = terminateProcess
             ?? throw new ArgumentNullException(nameof(terminateProcess));
         _readinessDeadline = readinessDeadline
@@ -274,10 +279,62 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
             .ToArray();
         if (!selection.ManifestIsValid || missingSelections.Length > 0)
         {
-            throw new InvalidOperationException(
-                $"客户端启动已阻断：{profile.DisplayName} 不在当前启用工序清单中。");
+            throw CreateProfileSelectionChangedException(profile);
+        }
+
+        var activationModuleId = profile.ActivationModuleId.Trim();
+        var activationPluginDirectory = profile.ActivationPluginDirectory.Trim();
+        var hasActivationModule = activationModuleId.Length > 0;
+        var hasActivationDirectory = activationPluginDirectory.Length > 0;
+        var activationSource = _activationSource;
+        if (!hasActivationModule && !hasActivationDirectory)
+        {
+            return;
+        }
+
+        if (!hasActivationModule
+            || !hasActivationDirectory
+            || !expectedModuleIds.Contains(
+                activationModuleId,
+                StringComparer.OrdinalIgnoreCase)
+            || !selection.TryGetByPluginDirectory(
+                activationPluginDirectory,
+                out var selectedPlugin)
+            || !string.Equals(
+                selectedPlugin.ModuleId,
+                activationModuleId,
+                StringComparison.OrdinalIgnoreCase)
+            || activationSource is null)
+        {
+            throw CreateProfileSelectionChangedException(profile);
+        }
+
+        var activationStillExists = activationSource.LoadActivations().Any(activation =>
+            string.Equals(
+                activation.ModuleId,
+                activationModuleId,
+                StringComparison.OrdinalIgnoreCase)
+            && string.Equals(
+                activation.ProfileId,
+                profile.ProfileId,
+                StringComparison.OrdinalIgnoreCase)
+            && string.Equals(
+                activation.ProfileId,
+                profile.MachineProfile,
+                StringComparison.OrdinalIgnoreCase)
+            && LauncherEnabledPluginSelection.PluginDirectoryComparer.Equals(
+                activation.PluginDirectory,
+                activationPluginDirectory));
+        if (!activationStillExists)
+        {
+            throw CreateProfileSelectionChangedException(profile);
         }
     }
+
+    private static InvalidOperationException CreateProfileSelectionChangedException(
+        LauncherProfileDefinition profile)
+        => new(
+            $"客户端启动已阻断：{profile.DisplayName} 不在当前启用工序清单中。");
 
     public void Dispose()
     {

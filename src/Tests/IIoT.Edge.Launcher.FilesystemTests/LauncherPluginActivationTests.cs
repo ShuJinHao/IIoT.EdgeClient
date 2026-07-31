@@ -43,6 +43,10 @@ public sealed class LauncherPluginActivationTests
                     profile => profile.ProfileId == "DieCuttingCathodeLine");
                 Assert.Equal(["AP"], apProfile.ExpectedModuleIds);
                 Assert.Equal(["CP"], cpProfile.ExpectedModuleIds);
+                Assert.Equal("AP", apProfile.ActivationModuleId);
+                Assert.Equal("AP", apProfile.ActivationPluginDirectory);
+                Assert.Equal("CP", cpProfile.ActivationModuleId);
+                Assert.Equal("CP", cpProfile.ActivationPluginDirectory);
                 AssertMachineConfig(hostDirectory, "DieCuttingAnodeLine", "AP");
                 AssertMachineConfig(hostDirectory, "DieCuttingCathodeLine", "CP");
             });

@@ -14,7 +14,10 @@ public sealed record LauncherPluginActivation(
     string ModuleId,
     string ProfileId,
     string LauncherProfilePath,
-    string MachineConfigPath);
+    string MachineConfigPath)
+{
+    public string PluginDirectory { get; init; } = string.Empty;
+}
 
 public sealed class LauncherPluginActivationSource : ILauncherPluginActivationSource
 {
@@ -218,7 +221,10 @@ public sealed class LauncherPluginActivationSource : ILauncherPluginActivationSo
                 pluginModuleId,
                 profileId,
                 launcherProfilePath,
-                machineConfigPath);
+                machineConfigPath)
+            {
+                PluginDirectory = selectedPlugin.PluginDirectory
+            };
             ValidateActivationFiles(activation);
             result.Add(activation);
         }

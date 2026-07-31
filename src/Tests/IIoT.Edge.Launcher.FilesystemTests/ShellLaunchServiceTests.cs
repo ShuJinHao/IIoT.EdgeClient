@@ -1004,6 +1004,174 @@ public sealed class ShellLaunchServiceTests
     }
 
     [Fact]
+    public async Task Launch_WhenSameModuleMovesToAnotherPluginDirectory_ShouldRejectStaleProfile()
+    {
+        var starter = new SpyProcessStarter();
+        var selection = new FixedEnabledPluginSelectionSource(
+        [
+            new LauncherEnabledPluginSelectionItem("AP", "ap-new")
+        ]);
+        var activations = new StubPluginActivationSource(
+        [
+            new LauncherPluginActivation(
+                "AP",
+                "DieCuttingAnodeLine",
+                "new-profile.json",
+                "new-machine.json")
+            {
+                PluginDirectory = "ap-new"
+            }
+        ]);
+        using var service = new ShellLaunchService(
+            starter,
+            new FakeShellInstanceIdResolver(),
+            new FakeShellInstanceProbe(),
+            new TestLauncherUpdateOperationGate(),
+            UnblockedUpdateTransactionRecovery.Instance,
+            selection,
+            activations);
+        var staleProfile = new LauncherProfileDefinition(
+            "DieCuttingAnodeLine",
+            "负极模切",
+            "stale AP profile",
+            null,
+            "DieCuttingAnodeLine",
+            Path.Combine(Path.GetTempPath(), "IIoT.Edge.Shell"),
+            "ChartBar",
+            "#2563EB")
+        {
+            ExpectedModuleIds = ["AP"],
+            ActivationModuleId = "AP",
+            ActivationPluginDirectory = "ap-old"
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.LaunchAsync(
+                staleProfile,
+                TestContext.Current.CancellationToken));
+
+        Assert.Contains("不在当前启用工序清单", exception.Message, StringComparison.Ordinal);
+        Assert.Null(starter.StartInfo);
+        Assert.Equal(0, activations.LoadCount);
+    }
+
+    [Fact]
+    public async Task Launch_WhenCurrentDirectoryNoLongerContributesProfile_ShouldRejectStaleProfile()
+    {
+        var starter = new SpyProcessStarter();
+        var selection = new FixedEnabledPluginSelectionSource(
+        [
+            new LauncherEnabledPluginSelectionItem("AP", "ap-current")
+        ]);
+        var activations = new StubPluginActivationSource(
+        [
+            new LauncherPluginActivation(
+                "AP",
+                "ReplacementProfile",
+                "replacement-profile.json",
+                "replacement-machine.json")
+            {
+                PluginDirectory = "ap-current"
+            }
+        ]);
+        using var service = new ShellLaunchService(
+            starter,
+            new FakeShellInstanceIdResolver(),
+            new FakeShellInstanceProbe(),
+            new TestLauncherUpdateOperationGate(),
+            UnblockedUpdateTransactionRecovery.Instance,
+            selection,
+            activations);
+        var staleProfile = new LauncherProfileDefinition(
+            "DieCuttingAnodeLine",
+            "负极模切",
+            "stale AP profile",
+            null,
+            "DieCuttingAnodeLine",
+            Path.Combine(Path.GetTempPath(), "IIoT.Edge.Shell"),
+            "ChartBar",
+            "#2563EB")
+        {
+            ExpectedModuleIds = ["AP"],
+            ActivationModuleId = "AP",
+            ActivationPluginDirectory = "ap-current"
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.LaunchAsync(
+                staleProfile,
+                TestContext.Current.CancellationToken));
+
+        Assert.Contains("不在当前启用工序清单", exception.Message, StringComparison.Ordinal);
+        Assert.Null(starter.StartInfo);
+        Assert.Equal(1, activations.LoadCount);
+    }
+
+    [Fact]
+    public async Task Launch_WhenActivationIdentityIsStillCurrent_ShouldStartProfile()
+    {
+        var tempDirectory = Path.Combine(
+            Path.GetTempPath(),
+            $"edge-current-activation-{Guid.NewGuid():N}");
+        var configuredPath = Path.Combine(tempDirectory, "IIoT.Edge.Shell");
+        Directory.CreateDirectory(tempDirectory);
+        File.WriteAllBytes(configuredPath + ".dll", []);
+        var starter = new SpyProcessStarter(activeModuleIds: ["AP"]);
+        var selection = new FixedEnabledPluginSelectionSource(
+        [
+            new LauncherEnabledPluginSelectionItem("AP", "ap-current")
+        ]);
+        var activations = new StubPluginActivationSource(
+        [
+            new LauncherPluginActivation(
+                "AP",
+                "DieCuttingAnodeLine",
+                "current-profile.json",
+                "current-machine.json")
+            {
+                PluginDirectory = "ap-current"
+            }
+        ]);
+        using var service = new ShellLaunchService(
+            starter,
+            new FakeShellInstanceIdResolver(),
+            new FakeShellInstanceProbe(),
+            new TestLauncherUpdateOperationGate(),
+            UnblockedUpdateTransactionRecovery.Instance,
+            selection,
+            activations);
+        var profile = new LauncherProfileDefinition(
+            "DieCuttingAnodeLine",
+            "负极模切",
+            "current AP profile",
+            null,
+            "DieCuttingAnodeLine",
+            configuredPath,
+            "ChartBar",
+            "#2563EB")
+        {
+            ExpectedModuleIds = ["AP"],
+            ActivationModuleId = "AP",
+            ActivationPluginDirectory = "ap-current"
+        };
+
+        try
+        {
+            var result = await service.LaunchAsync(
+                profile,
+                TestContext.Current.CancellationToken);
+
+            Assert.False(result.ReadyWithDiagnostics);
+            Assert.NotNull(starter.StartInfo);
+            Assert.Equal(1, activations.LoadCount);
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Launch_WhenChildNeverSignalsReady_ShouldCancelAndReleaseLaunchGate()
     {
         var baseDirectory = Path.Combine(
@@ -1143,7 +1311,9 @@ public sealed class ShellLaunchServiceTests
             updateOperationGate ?? new TestLauncherUpdateOperationGate(),
             updateTransactionRecovery ?? UnblockedUpdateTransactionRecovery.Instance);
 
-    private sealed class SpyProcessStarter(bool signalReady = true) : IProcessStarter
+    private sealed class SpyProcessStarter(
+        bool signalReady = true,
+        IReadOnlyList<string>? activeModuleIds = null) : IProcessStarter
     {
         public ProcessStartInfo? StartInfo { get; private set; }
 
@@ -1164,7 +1334,7 @@ public sealed class ShellLaunchServiceTests
                         EdgeClientUpdateCoordination.ShellLaunchOutcomeSchemaVersion,
                         EdgeClientShellLaunchStatuses.Ready,
                         machineProfile,
-                        [],
+                        activeModuleIds ?? [],
                         null)
                     {
                         ProcessId = process.Id
@@ -1330,6 +1500,29 @@ public sealed class ShellLaunchServiceTests
                         moduleId,
                         moduleId))
                     .ToArray());
+        }
+    }
+
+    private sealed class FixedEnabledPluginSelectionSource(
+        IReadOnlyList<LauncherEnabledPluginSelectionItem> plugins)
+        : ILauncherEnabledPluginSelectionSource
+    {
+        public LauncherEnabledPluginSelection Load()
+            => new(true, plugins);
+    }
+
+    private sealed class StubPluginActivationSource(
+        IReadOnlyList<LauncherPluginActivation> activations)
+        : ILauncherPluginActivationSource
+    {
+        private int _loadCount;
+
+        public int LoadCount => Volatile.Read(ref _loadCount);
+
+        public IReadOnlyList<LauncherPluginActivation> LoadActivations()
+        {
+            Interlocked.Increment(ref _loadCount);
+            return activations;
         }
     }
 

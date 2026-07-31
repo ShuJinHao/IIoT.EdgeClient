@@ -76,7 +76,9 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
                     contributedEntries[0],
                     executablePathOverride: hostRuntime.ExecutablePath) with
                 {
-                    ExpectedModuleIds = [activation.ModuleId]
+                    ExpectedModuleIds = [activation.ModuleId],
+                    ActivationModuleId = activation.ModuleId,
+                    ActivationPluginDirectory = activation.PluginDirectory
                 };
                 if (!profileIds.Add(profile.ProfileId))
                 {
