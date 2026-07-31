@@ -9,8 +9,6 @@ public interface IDiagnosticsDeadLetterOperator
     bool CanOperate(DeadLetterRow? row);
 
     Task<DiagnosticsDeadLetterOperationResult> RequeueAsync(DeadLetterRow row);
-
-    Task<DiagnosticsDeadLetterOperationResult> DeleteAsync(DeadLetterRow row);
 }
 
 internal sealed class DiagnosticsDeadLetterOperator(
@@ -33,14 +31,4 @@ internal sealed class DiagnosticsDeadLetterOperator(
         return new DiagnosticsDeadLetterOperationResult(result.IsSuccess, result.Message);
     }
 
-    public async Task<DiagnosticsDeadLetterOperationResult> DeleteAsync(DeadLetterRow row)
-    {
-        if (deadLetterMaintenanceService is null)
-        {
-            return new DiagnosticsDeadLetterOperationResult(false, ServiceNotRegisteredMessage);
-        }
-
-        var result = await deadLetterMaintenanceService.DeleteAsync(row.Channel, row.Id);
-        return new DiagnosticsDeadLetterOperationResult(result.IsSuccess, result.Message);
-    }
 }

@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
 using IIoT.Edge.Module.Contracts.Modules;
@@ -709,7 +710,7 @@ public sealed class ProcessQueueTaskBehaviorTests
             var retry = Assert.Single(targetRetryStore.PendingRecords);
             Assert.Equal(channel, retry.Channel);
             Assert.Equal(channel, retry.FailedTarget);
-            Assert.Contains("provider cancelled itself", retry.ErrorMessage, StringComparison.Ordinal);
+            Assert.Equal("consumer_exception_OperationCanceledException", retry.ErrorMessage);
             Assert.Empty(otherRetryStore.PendingRecords);
             Assert.Empty(cloudFallbackStore.Records);
             Assert.Empty(mesFallbackStore.Records);
@@ -940,7 +941,10 @@ public sealed class ProcessQueueTaskBehaviorTests
         Assert.Single(cloudRetryStore.PendingRecords);
         Assert.Equal("Cloud", cloudRetryStore.PendingRecords[0].FailedTarget);
         Assert.Empty(mesRetryStore.PendingRecords);
-        Assert.Contains(logger.Entries, x => x.Message.Contains("非关键消费者", StringComparison.Ordinal));
+        Assert.Contains(
+            logger.Entries,
+            x => x.Message.Contains("本地消费者=UI", StringComparison.Ordinal)
+                 && x.Message.Contains("结果=Failed", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1195,7 +1199,7 @@ public sealed class ProcessQueueTaskBehaviorTests
         {
             Assert.Equal("MES", retry.Channel);
             Assert.Equal("MES", retry.FailedTarget);
-            Assert.Equal("目标出口队列已满。", retry.ErrorMessage);
+            Assert.Equal("durable_outlet_queue_full", retry.ErrorMessage);
             AssertStoredContext(retry);
         });
         Assert.Empty(cloudRetryStore.PendingRecords);
@@ -1243,7 +1247,7 @@ public sealed class ProcessQueueTaskBehaviorTests
         await task.ExecuteOnceAsync();
 
         var retry = Assert.Single(cloudRetryStore.PendingRecords);
-        Assert.Equal("处理超时。", retry.ErrorMessage);
+        Assert.Equal("consumer_timeout", retry.ErrorMessage);
     }
 
     [Fact]
@@ -1288,7 +1292,10 @@ public sealed class ProcessQueueTaskBehaviorTests
         var fallback = Assert.Single(fallbackStore.Records);
         Assert.Equal("Cloud", fallback.FailedTarget);
         AssertStoredContext(fallback);
-        Assert.Contains(logger.Entries, x => x.Message.Contains("云端 兜底缓存", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x =>
+            x.Message.Contains("结果=DurableFallbackHandoff", StringComparison.Ordinal)
+            && x.Message.Contains("尚未上传成功", StringComparison.Ordinal)
+            && x.Message.Contains("[TaskKey=", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1996,7 +2003,10 @@ public sealed class ProcessQueueTaskBehaviorTests
         var fallback = Assert.Single(mesFallbackStore.Records);
         Assert.Equal("MES", fallback.FailedTarget);
         AssertStoredContext(fallback);
-        Assert.Contains(logger.Entries, x => x.Message.Contains("MES 兜底缓存", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, x =>
+            x.Message.Contains("结果=DurableFallbackHandoff", StringComparison.Ordinal)
+            && x.Message.Contains("尚未上传成功", StringComparison.Ordinal)
+            && x.Message.Contains("[TaskKey=", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -2037,6 +2047,100 @@ public sealed class ProcessQueueTaskBehaviorTests
 
         Assert.Equal(3, cloudConsumer.ProcessCallCount);
         Assert.Equal(0, pipeline.PendingCount);
+    }
+
+    [Fact]
+    public async Task DurableIngress_ShouldResumeOnlyIncompleteConsumersWithoutRepeatingCompletedOutlet()
+    {
+        var ingressStore = new FakeDataPipelineIngressStore();
+        var pipeline = new DataPipelineService(
+            new FakeIngressOverflowPersistence(),
+            new FakeLogService(),
+            ingressStore);
+        var record = CreateTestPluginRecord(
+            "TestPlugin.DurableIngress",
+            DataPipelineUploadTargets.Cloud);
+        await pipeline.EnqueueAsync(record, TestContext.Current.CancellationToken);
+
+        var localA = new FakeCellDataConsumer("Capacity", 10, retryChannel: null, result: true);
+        var allowLocalB = false;
+        var localB = new FakeCellDataConsumer(
+            "Excel",
+            20,
+            retryChannel: null,
+            result: false,
+            processAsync: (_, _) => Task.FromResult(allowLocalB));
+        var cloud = new FakeCellDataConsumer(
+            "Cloud",
+            30,
+            "Cloud",
+            result: true,
+            failureMode: ConsumerFailureMode.Durable);
+        var task = CreateDurableIngressTask(
+            pipeline,
+            ingressStore,
+            [localA, localB, cloud]);
+
+        await task.ExecuteOnceAsync();
+
+        Assert.Single(ingressStore.PendingCompletionIds);
+        Assert.Equal(1, localA.ProcessCallCount);
+        Assert.Equal(1, localB.ProcessCallCount);
+        Assert.Equal(1, cloud.ProcessCallCount);
+
+        allowLocalB = true;
+        await task.ExecuteOnceAsync();
+
+        Assert.Empty(ingressStore.PendingCompletionIds);
+        Assert.Equal(1, localA.ProcessCallCount);
+        Assert.Equal(2, localB.ProcessCallCount);
+        Assert.Equal(1, cloud.ProcessCallCount);
+    }
+
+    [Fact]
+    public async Task DurableIngress_AfterRestartWithoutMemoryNotification_ShouldReplayFullPendingChain()
+    {
+        var ingressStore = new FakeDataPipelineIngressStore();
+        var record = CreateTestPluginRecord(
+            "TestPlugin.RestartReplay",
+            DataPipelineUploadTargets.None);
+        await ingressStore.AcceptAsync(record, TestContext.Current.CancellationToken);
+        var localConsumer = new FakeCellDataConsumer(
+            "ProductionEvent",
+            10,
+            retryChannel: null,
+            result: true);
+        var task = CreateDurableIngressTask(
+            new FakeDataPipelineService(),
+            ingressStore,
+            [localConsumer]);
+
+        await task.ExecuteOnceAsync();
+
+        Assert.Equal(1, localConsumer.ProcessCallCount);
+        Assert.Empty(ingressStore.PendingCompletionIds);
+    }
+
+    private static TestableProcessQueueTask CreateDurableIngressTask(
+        IDataPipelineService pipeline,
+        IDataPipelineIngressStore ingressStore,
+        IEnumerable<ICellDataConsumer> consumers)
+    {
+        var logger = new FakeLogService();
+        var cloudRetry = new FakeFailedRecordStore();
+        var mesRetry = new FakeFailedRecordStore();
+        return new TestableProcessQueueTask(
+            logger,
+            pipeline,
+            consumers,
+            cloudRetry,
+            mesRetry,
+            new FakeCloudFallbackBufferStore(),
+            new FakeMesFallbackBufferStore(),
+            new FakeCloudDeadLetterStore(),
+            new FakeMesDeadLetterStore(),
+            new FakeCriticalPersistenceFallbackWriter(),
+            ingressStore: ingressStore);
     }
 
     private static CellCompletedRecord CreateRecord()
@@ -2254,7 +2358,8 @@ public sealed class ProcessQueueTaskBehaviorTests
         FakeCriticalPersistenceFallbackWriter criticalWriter,
         DataPipelineCapacityGuard? capacityGuard = null,
         DataPipelineRuntimeOptions? runtimeOptions = null,
-        TimeProvider? shutdownTimeProvider = null)
+        TimeProvider? shutdownTimeProvider = null,
+        IDataPipelineIngressStore? ingressStore = null)
         : ProcessQueueTask(
             logger,
             pipelineService,
@@ -2272,7 +2377,8 @@ public sealed class ProcessQueueTaskBehaviorTests
                 capacityGuard),
             new DefaultDataPipelineConsumerInvoker(),
             runtimeOptions,
-            shutdownTimeProvider)
+            shutdownTimeProvider,
+            ingressStore)
     {
         public async Task ExecuteOnceAsync()
         {

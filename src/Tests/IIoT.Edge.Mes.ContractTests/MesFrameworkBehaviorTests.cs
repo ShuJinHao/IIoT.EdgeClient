@@ -43,15 +43,16 @@ public sealed class MesFrameworkBehaviorTests
     {
         var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
         var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
+        var logger = new FakeLogService();
         var consumer = new MesConsumer(
             CreateReadyMesGate(),
             [uploader],
             CreateMesRegistry(),
             diagnosticsStore,
-            new FakeLogService());
+            logger);
 
         var success = await consumer.ProcessAsync(
-            CreateRecord(TestProcessCellData.ProcessTypeKey),
+            CreateTraceableRecord("MES-BC-SUCCESS"),
             TestContext.Current.CancellationToken);
 
         Assert.True(success);
@@ -61,6 +62,12 @@ public sealed class MesFrameworkBehaviorTests
         Assert.Equal("Success", diagnostics!.LastResult);
         Assert.NotNull(diagnostics.LastSuccessAt);
         Assert.Null(diagnostics.LastFailureReason);
+        Assert.Contains(logger.Entries, entry =>
+            entry.Level == "Info"
+            && entry.Message.Contains("[CorrelationId=", StringComparison.Ordinal)
+            && entry.Message.Contains("[TaskKey=TestModule.Realtime]", StringComparison.Ordinal)
+            && entry.Message.Contains("[BusinessId=MES-BC-SUCCESS]", StringComparison.Ordinal)
+            && entry.Message.Contains("结果=Uploaded", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -191,17 +198,18 @@ public sealed class MesFrameworkBehaviorTests
     public async Task MesConsumer_WhenUploaderReturnsInvalidContext_ShouldReturnFalseForRetry()
     {
         var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
-        uploader.EnqueueResult(MesCallResult.InvalidContext("必选 MES 场景出料未配置路径。"));
+        uploader.EnqueueResult(MesCallResult.InvalidContext("token=secret-sensitive-value"));
         var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
+        var logger = new FakeLogService();
         var consumer = new MesConsumer(
             CreateReadyMesGate(),
             [uploader],
             CreateMesRegistry(),
             diagnosticsStore,
-            new FakeLogService());
+            logger);
 
         var success = await consumer.ProcessAsync(
-            CreateRecord(TestProcessCellData.ProcessTypeKey),
+            CreateTraceableRecord("MES-BC-FAIL"),
             TestContext.Current.CancellationToken);
 
         Assert.False(success);
@@ -209,7 +217,13 @@ public sealed class MesFrameworkBehaviorTests
         var diagnostics = diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey);
         Assert.NotNull(diagnostics);
         Assert.Equal("Failed", diagnostics!.LastResult);
-        Assert.Equal("必选 MES 场景出料未配置路径。", diagnostics.LastFailureReason);
+        Assert.Equal("mes_upload_InvalidContext", diagnostics.LastFailureReason);
+        Assert.Contains(logger.Entries, entry =>
+            entry.Level == "Error"
+            && entry.Message.Contains("[BusinessId=MES-BC-FAIL]", StringComparison.Ordinal)
+            && entry.Message.Contains("原因码=mes_upload_InvalidContext", StringComparison.Ordinal));
+        Assert.DoesNotContain(logger.Entries, entry =>
+            entry.Message.Contains("secret-sensitive-value", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -590,6 +604,25 @@ public sealed class MesFrameworkBehaviorTests
             }
         };
     }
+
+    private static CellCompletedRecord CreateTraceableRecord(string barcode)
+        => new()
+        {
+            PlcCode = "PLC-MES-01",
+            NetworkDeviceId = 1,
+            DeviceName = "MES 现场 PLC",
+            ModuleId = "TestModule",
+            TaskKey = "TestModule.Realtime",
+            CellData = new TestProcessCellData
+            {
+                Barcode = barcode,
+                WorkOrderNo = "MES-WO-TRACE",
+                DeviceCode = "PLC-MES-01",
+                DeviceName = "MES 现场 PLC",
+                PlcDeviceId = 1,
+                UploadTargets = DataPipelineUploadTargets.Mes
+            }
+        };
 
     private sealed class FakeMesEndpointProvider : IMesEndpointProvider
     {

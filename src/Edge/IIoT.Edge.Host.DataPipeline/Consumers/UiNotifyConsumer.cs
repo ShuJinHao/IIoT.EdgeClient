@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.DataPipeline.Consumers;
@@ -42,8 +43,12 @@ public class UiNotifyConsumer : IUiNotifyConsumer
         }
         catch (Exception ex)
         {
-            _logger.Error($"[UI] 通知发布失败，{record.CellData.DisplayLabel}，{ex.Message}");
-            return true; // 界面通知失败不阻塞主流程，也不进入补传
+            _logger.Error(
+                $"[CorrelationId={DataPipelineCompletionIdentity.Create(record)}]" +
+                $"[PlcCode={record.ResolvePlcCode()}][TaskKey={record.TaskKey}]" +
+                $"[UI] 业务标识={record.CellData.DisplayLabel}，结果=Failed，" +
+                $"原因码=UiNotificationFailed，异常类型={ex.GetType().Name}。");
+            return false;
         }
     }
 }

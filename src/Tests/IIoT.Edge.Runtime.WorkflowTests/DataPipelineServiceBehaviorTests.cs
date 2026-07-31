@@ -1,10 +1,39 @@
 using IIoT.Edge.Module.Contracts.DataPipeline;
+using IIoT.Edge.Module.Contracts.Config;
+using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Application.Common.DataPipeline;
+using IIoT.Edge.Host.DataPipeline;
 using IIoT.Edge.Host.DataPipeline.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace IIoT.Edge.Runtime.WorkflowTests;
 
 public sealed class DataPipelineServiceBehaviorTests
 {
+    [Fact]
+    public void AddEdgeRuntime_ShouldRequireDurableIngressAndExposeNoLegacyOverflowImplementation()
+    {
+        var paths = CreateRuntimePaths();
+        var missingIngressServices = new ServiceCollection();
+        missingIngressServices.AddSingleton<ILogService>(new FakeLogService());
+        missingIngressServices.AddEdgeRuntime(paths);
+        using (var missingIngressProvider = missingIngressServices.BuildServiceProvider())
+        {
+            Assert.Null(missingIngressProvider.GetService<IIngressOverflowPersistence>());
+            Assert.Throws<InvalidOperationException>(
+                () => missingIngressProvider.GetRequiredService<DataPipelineService>());
+        }
+
+        var services = new ServiceCollection();
+        services.AddSingleton<ILogService>(new FakeLogService());
+        services.AddSingleton<IDataPipelineIngressStore>(new FakeDataPipelineIngressStore());
+        services.AddEdgeRuntime(paths);
+        using var provider = services.BuildServiceProvider();
+
+        Assert.NotNull(provider.GetRequiredService<DataPipelineService>());
+        Assert.Null(provider.GetService<IIngressOverflowPersistence>());
+    }
+
     [Fact]
     public async Task EnqueueAsync_WhenPlcContextMissing_ShouldRejectRecord()
     {
@@ -128,6 +157,95 @@ public sealed class DataPipelineServiceBehaviorTests
         Assert.Equal(CloudIdempotencyKeyVersion.PlcStableV2, queued.IdempotencyKeyVersion);
     }
 
+    [Fact]
+    public async Task EnqueueAsync_WithDurableIngress_ShouldPersistBeforePublishingNotification()
+    {
+        var ingress = new FakeDataPipelineIngressStore();
+        var overflow = new FakeIngressOverflowPersistence();
+        var pipeline = new DataPipelineService(overflow, new FakeLogService(), ingress);
+        var record = CreateRecord("BC-DURABLE");
+
+        var result = await pipeline.EnqueueAsync(record, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsDurablyAccepted);
+        Assert.Equal(1, ingress.AcceptCallCount);
+        Assert.Single(ingress.PendingCompletionIds);
+        Assert.Empty(overflow.Records);
+        Assert.True(pipeline.TryDequeue(out var queued));
+        Assert.Equal("BC-DURABLE", Assert.IsType<TestProcessCellData>(queued!.CellData).Barcode);
+    }
+
+    [Fact]
+    public async Task EnqueueAsync_WhenMemoryNotificationQueueIsFull_ShouldKeepEveryEnvelopeInDurableIngress()
+    {
+        var ingress = new FakeDataPipelineIngressStore();
+        var overflow = new FakeIngressOverflowPersistence();
+        var pipeline = new DataPipelineService(overflow, new FakeLogService(), ingress);
+        DataPipelineEnqueueResult? last = null;
+
+        for (var index = 0; index <= 5000; index++)
+        {
+            last = await pipeline.EnqueueAsync(
+                CreateRecord($"BC-DURABLE-{index:D4}"),
+                TestContext.Current.CancellationToken);
+        }
+
+        Assert.NotNull(last);
+        Assert.True(last.WasOverflow);
+        Assert.True(last.IsDurablyAccepted);
+        Assert.Equal(5001, ingress.PendingCompletionIds.Count);
+        Assert.Equal(5000, pipeline.PendingCount);
+        Assert.Equal(1, pipeline.OverflowCount);
+        Assert.Equal(1, pipeline.SpillCount);
+        Assert.Empty(overflow.Records);
+    }
+
+    [Fact]
+    public async Task EnqueueAsync_WhenDurableIngressFails_ShouldRejectWithoutPublishingNotification()
+    {
+        var ingress = new FakeDataPipelineIngressStore
+        {
+            AcceptException = new InvalidOperationException("storage unavailable")
+        };
+        var pipeline = new DataPipelineService(
+            new FakeIngressOverflowPersistence(),
+            new FakeLogService(),
+            ingress);
+
+        var result = await pipeline.EnqueueAsync(
+            CreateRecord("BC-REJECT"),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsDurablyAccepted);
+        Assert.Equal("durable_ingress_unavailable", result.ReasonCode);
+        Assert.False(pipeline.TryDequeue(out _));
+    }
+
+    [Fact]
+    public async Task EnqueueAsync_WhenCompletedFactIsSubmittedAgain_ShouldNotPublishDuplicateNotification()
+    {
+        var ingress = new FakeDataPipelineIngressStore();
+        var pipeline = new DataPipelineService(
+            new FakeIngressOverflowPersistence(),
+            new FakeLogService(),
+            ingress);
+        var record = CreateRecord("BC-IDEMPOTENT");
+
+        await pipeline.EnqueueAsync(record, TestContext.Current.CancellationToken);
+        Assert.True(pipeline.TryDequeue(out _));
+        var completionId = Assert.Single(ingress.PendingCompletionIds);
+        Assert.True(await ingress.CompleteIfAllConsumersFinishedAsync(
+            completionId,
+            [],
+            TestContext.Current.CancellationToken));
+
+        var duplicate = await pipeline.EnqueueAsync(record, TestContext.Current.CancellationToken);
+
+        Assert.True(duplicate.IsDurablyAccepted);
+        Assert.False(pipeline.TryDequeue(out _));
+        Assert.Empty(ingress.PendingCompletionIds);
+    }
+
     private static CellCompletedRecord CreateRecord(string barcode)
         => new()
         {
@@ -146,4 +264,22 @@ public sealed class DataPipelineServiceBehaviorTests
                 CompletedTime = DateTime.UtcNow
             }
         };
+
+    private static EdgeRuntimePaths CreateRuntimePaths()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "edge-data-pipeline-di");
+        return new EdgeRuntimePaths(
+            root,
+            "test",
+            root,
+            Path.Combine(root, "db"),
+            Path.Combine(root, "context"),
+            Path.Combine(root, "recipe"),
+            Path.Combine(root, "excel"),
+            Path.Combine(root, "diagnostics"),
+            Path.Combine(root, "logs"),
+            Path.Combine(root, "device-cache.json"),
+            Path.Combine(root, "crash.log"),
+            Path.Combine(root, "crash-fallback.log"));
+    }
 }

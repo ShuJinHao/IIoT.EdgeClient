@@ -516,12 +516,8 @@
     <sys:String x:Key="Navigation_Diagnostics_BackgroundRepair">已启用自动恢复；持续故障时查看诊断日志。</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_ConfirmRequeueTitle">确认重新入队</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_ConfirmRequeueMessageFormat">即将把{0}死信记录重新写入对应 retry 队列。ID：{1}；工序：{2}；目标：{3}。成功后该记录会从死信表移除，后续由正常补传任务处理。是否继续？</sys:String>
-    <sys:String x:Key="Navigation_Diagnostics_ConfirmDeleteTitle">确认删除死信</sys:String>
-    <sys:String x:Key="Navigation_Diagnostics_ConfirmDeleteMessageFormat">即将删除{0}死信记录。ID：{1}；工序：{2}；目标：{3}。删除只会移除本地死信记录，不会补传，且不可恢复。是否继续？</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_RequeueCanceled">已取消死信重新入队。</sys:String>
-    <sys:String x:Key="Navigation_Diagnostics_DeleteCanceled">已取消死信删除。</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_RequeueFailedFormat">死信重新入队失败：{0}</sys:String>
-    <sys:String x:Key="Navigation_Diagnostics_DeleteFailedFormat">死信删除失败：{0}</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_AdminRequired">当前账号不是本地管理员，不能执行死信运维操作。</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_Context">生产上下文诊断</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_ContextCorruptCount">损坏文件数</sys:String>

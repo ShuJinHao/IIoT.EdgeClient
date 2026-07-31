@@ -230,7 +230,7 @@ public sealed class RetryTaskBehaviorTests
     }
 
     [Fact]
-    public async Task RetryFailure_WhenExceedMaxRetry_ShouldStopWithMaxValue()
+    public async Task RetryFailure_OnTwentiethFailure_ShouldAtomicallyMoveToDeadLetter()
     {
         var logger = new FakeLogService();
         var failedStore = new FakeFailedRecordStore();
@@ -252,7 +252,7 @@ public sealed class RetryTaskBehaviorTests
             CellDataJson = SerializeCellData(new TestCellData { Barcode = "BC-MAX" }),
             FailedTarget = "Cloud",
             ErrorMessage = "seed",
-            RetryCount = 20,
+            RetryCount = 19,
             NextRetryTime = DateTime.UtcNow.AddMinutes(-1),
             CreatedAt = DateTime.UtcNow
         });
@@ -272,14 +272,15 @@ public sealed class RetryTaskBehaviorTests
 
         await task.ExecuteOnceAsync();
 
-        Assert.True(failedStore.Updates.TryGetValue(recordId, out var update));
-        Assert.Equal(21, update!.RetryCount);
-        Assert.Equal(DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc), update.NextRetryTime);
-        Assert.Equal(DateTimeKind.Utc, update.NextRetryTime.Kind);
+        Assert.False(failedStore.Updates.ContainsKey(recordId));
+        var exhausted = Assert.Single(failedStore.ExhaustedRecords);
+        Assert.Equal(recordId, exhausted.Record.Id);
+        Assert.Equal(20, exhausted.RetryCount);
+        Assert.DoesNotContain(failedStore.PendingRecords, record => record.Id == recordId);
     }
 
     [Fact]
-    public async Task CloudChannel_ShouldCleanupExpiredAbandonedRecordsOnlyOncePerUtcDay()
+    public async Task CloudChannel_ShouldNeverRunAgeBasedHardDelete()
     {
         var failedStore = new FakeFailedRecordStore();
         var deviceService = new FakeDeviceService();
@@ -304,9 +305,8 @@ public sealed class RetryTaskBehaviorTests
         await task.ExecuteOnceAsync();
         await task.ExecuteOnceAsync();
 
-        Assert.Equal(1, failedStore.DeleteExpiredAbandonedCallCount);
-        Assert.NotNull(failedStore.LastDeleteExpiredOlderThanUtc);
-        Assert.Equal(DateTimeKind.Utc, failedStore.LastDeleteExpiredOlderThanUtc!.Value.Kind);
+        Assert.Equal(0, failedStore.DeleteExpiredAbandonedCallCount);
+        Assert.Null(failedStore.LastDeleteExpiredOlderThanUtc);
     }
 
     [Fact]
@@ -421,6 +421,7 @@ public sealed class RetryTaskBehaviorTests
                     logger,
                     failedStore,
                     cloudDeadLetterStore,
+                    failedStore,
                     fallbackWriter,
                     cloudConsumer,
                     cloudBatchConsumer,

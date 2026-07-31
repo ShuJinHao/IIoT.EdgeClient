@@ -160,7 +160,9 @@ public sealed class DataPipelineCascadingPersistenceWriter
         {
             retryFailure = ex;
             WriteLogBestEffort(logger =>
-                logger.Error($"[PlcCode={record.ResolvePlcCode()}][{operations.LogPrefix}] 补传容量检查失败：{ex.Message}"));
+                logger.Error(
+                    $"{DataPipelineLogContext.Format(record)}[{operations.LogPrefix}] " +
+                    $"阶段=RetryCapacityCheck，结果=Failed，异常类型={ex.GetType().Name}。"));
         }
 
         if (retryFailure is null)
@@ -191,13 +193,17 @@ public sealed class DataPipelineCascadingPersistenceWriter
             {
                 retryFailure = ex;
                 WriteLogBestEffort(logger =>
-                    logger.Error($"[PlcCode={record.ResolvePlcCode()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 写入补传队列失败：{ex.Message}"));
+                    logger.Error(
+                        $"{DataPipelineLogContext.Format(record)}[{operations.LogPrefix}] " +
+                        $"阶段=RetryPersist，结果=Failed，异常类型={ex.GetType().Name}。"));
             }
 
             if (retryFailure is null)
             {
                 WriteLogBestEffort(logger =>
-                    logger.Error($"[PlcCode={record.ResolvePlcCode()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 已写入 {operations.DisplayName} 补传队列。"));
+                    logger.Info(
+                        $"{DataPipelineLogContext.Format(record)}[{operations.LogPrefix}] " +
+                        $"结果=DurableRetryHandoff，说明=已本地落盘，尚未上传成功。"));
                 return true;
             }
         }
@@ -218,7 +224,10 @@ public sealed class DataPipelineCascadingPersistenceWriter
         catch (Exception fallbackGuardEx)
         {
             WriteLogBestEffort(logger =>
-                logger.Error($"[PlcCode={record.ResolvePlcCode()}][{operations.LogPrefix}] 兜底容量检查失败：{fallbackGuardEx.Message}"));
+                logger.Error(
+                    $"{DataPipelineLogContext.Format(record)}[{operations.LogPrefix}] " +
+                    $"阶段=FallbackCapacityCheck，结果=Failed，" +
+                    $"异常类型={fallbackGuardEx.GetType().Name}。"));
             return await TryPersistDeadLetterAsync(
                 record,
                 failedTarget,
@@ -268,7 +277,9 @@ public sealed class DataPipelineCascadingPersistenceWriter
         }
 
         WriteLogBestEffort(logger =>
-            logger.Error($"[PlcCode={record.ResolvePlcCode()}][{operations.LogPrefix}] 补传队列不可用，{record.CellData.DisplayLabel} 已写入 {operations.DisplayName} 兜底缓存。"));
+            logger.Warn(
+                $"{DataPipelineLogContext.Format(record)}[{operations.LogPrefix}] " +
+                $"结果=DurableFallbackHandoff，说明=已本地落盘，尚未上传成功。"));
         return true;
     }
 
@@ -317,7 +328,9 @@ public sealed class DataPipelineCascadingPersistenceWriter
         }
 
         WriteLogBestEffort(logger =>
-            logger.Fatal($"[PlcCode={record.ResolvePlcCode()}][{operations.LogPrefix}] {record.CellData.DisplayLabel} 已进入 {operations.DisplayName} 死信。"));
+            logger.Fatal(
+                $"{DataPipelineLogContext.Format(record)}[{operations.LogPrefix}] " +
+                $"结果=DurableDeadLetter，阶段={stage}，尚未上传成功。"));
         return true;
     }
 

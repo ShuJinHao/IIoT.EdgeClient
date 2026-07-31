@@ -112,7 +112,7 @@
                                 <controls:EdgeTextColumn Binding="{Binding FailureStage}" Header="{DynamicResource Navigation_Column_Stage}" MinWidth="130" Width="130" />
                                 <controls:EdgeTextColumn Binding="{Binding FailureReason}" Header="{DynamicResource Navigation_Column_FailureReason}" MinWidth="300" Width="2*" />
                                 <controls:EdgeTextColumn Binding="{Binding CreatedAt}" Header="{DynamicResource Navigation_Column_Time}" MinWidth="150" Width="150" />
-                                <controls:EdgeActionColumn Header="{DynamicResource Navigation_Column_Action}" MinWidth="170" Width="170">
+                                <controls:EdgeActionColumn Header="{DynamicResource Navigation_Column_Action}" MinWidth="96" Width="96">
                                     <controls:EdgeActionColumn.CellTemplate>
                                         <DataTemplate>
                                             <StackPanel
@@ -126,14 +126,6 @@
                                                     Content="{DynamicResource Navigation_Button_Requeue}"
                                                     Icon="{StaticResource Edge.Icon.Refresh}"
                                                     Kind="Primary"
-                                                    Role="Cell"
-                                                    Size="Compact" />
-                                                <controls:EdgeActionButton
-                                                    Command="{Binding $parent[UserControl].DataContext.DeleteDeadLetterCommand}"
-                                                    CommandParameter="{Binding}"
-                                                    Content="{DynamicResource Navigation_Button_Delete}"
-                                                    Icon="{StaticResource Edge.Icon.Delete}"
-                                                    Kind="Danger"
                                                     Role="Cell"
                                                     Size="Compact" />
                                             </StackPanel>
@@ -171,7 +163,7 @@
                                 <controls:EdgeTextColumn Binding="{Binding FailureStage}" Header="{DynamicResource Navigation_Column_Stage}" MinWidth="130" Width="130" />
                                 <controls:EdgeTextColumn Binding="{Binding FailureReason}" Header="{DynamicResource Navigation_Column_FailureReason}" MinWidth="300" Width="2*" />
                                 <controls:EdgeTextColumn Binding="{Binding CreatedAt}" Header="{DynamicResource Navigation_Column_Time}" MinWidth="150" Width="150" />
-                                <controls:EdgeActionColumn Header="{DynamicResource Navigation_Column_Action}" MinWidth="170" Width="170">
+                                <controls:EdgeActionColumn Header="{DynamicResource Navigation_Column_Action}" MinWidth="96" Width="96">
                                     <controls:EdgeActionColumn.CellTemplate>
                                         <DataTemplate>
                                             <StackPanel
@@ -185,14 +177,6 @@
                                                     Content="{DynamicResource Navigation_Button_Requeue}"
                                                     Icon="{StaticResource Edge.Icon.Refresh}"
                                                     Kind="Primary"
-                                                    Role="Cell"
-                                                    Size="Compact" />
-                                                <controls:EdgeActionButton
-                                                    Command="{Binding $parent[UserControl].DataContext.DeleteDeadLetterCommand}"
-                                                    CommandParameter="{Binding}"
-                                                    Content="{DynamicResource Navigation_Button_Delete}"
-                                                    Icon="{StaticResource Edge.Icon.Delete}"
-                                                    Kind="Danger"
                                                     Role="Cell"
                                                     Size="Compact" />
                                             </StackPanel>

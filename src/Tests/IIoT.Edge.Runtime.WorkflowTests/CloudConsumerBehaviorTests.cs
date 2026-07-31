@@ -17,6 +17,7 @@ public sealed class CloudConsumerBehaviorTests
     {
         var cloudHttp = new FakeCloudHttpClient();
         var diagnostics = new FakeCloudDiagnosticsStore();
+        var logger = new FakeLogService();
         var consumer = new CloudConsumer(
             CreateOnlineDeviceService(),
             new FixedCloudExecutionPolicy(false),
@@ -24,7 +25,7 @@ public sealed class CloudConsumerBehaviorTests
             new StandardPassStationCloudUploader(new FakeCloudApiEndpointProvider(), cloudHttp),
             CreateCloudRegistry(),
             diagnostics,
-            new FakeLogService());
+            logger);
 
         var result = await consumer.ProcessWithResultAsync(new CellCompletedRecord
         {
@@ -83,6 +84,7 @@ public sealed class CloudConsumerBehaviorTests
     {
         var cloudHttp = new FakeCloudHttpClient();
         var diagnostics = new FakeCloudDiagnosticsStore();
+        var logger = new FakeLogService();
         var consumer = new CloudConsumer(
             CreateOnlineDeviceService(),
             new FixedCloudExecutionPolicy(true),
@@ -90,7 +92,7 @@ public sealed class CloudConsumerBehaviorTests
             new StandardPassStationCloudUploader(new FakeCloudApiEndpointProvider(), cloudHttp),
             CreateCloudRegistry(),
             diagnostics,
-            new FakeLogService());
+            logger);
         var completedTime = new DateTime(2026, 6, 5, 8, 30, 0, DateTimeKind.Utc);
 
         var result = await consumer.ProcessWithResultAsync(new CellCompletedRecord
@@ -126,6 +128,12 @@ public sealed class CloudConsumerBehaviorTests
         Assert.Equal(completedTime, item.CompletedTime);
         Assert.Equal("BAR-CLOUD-STANDARD", item.Payload.GetProperty("barcode").GetString());
         Assert.Equal("待上传", item.Payload.GetProperty("runtimeStatus").GetString());
+        Assert.Contains(logger.Entries, entry =>
+            entry.Level == "Info"
+            && entry.Message.Contains("[CorrelationId=", StringComparison.Ordinal)
+            && entry.Message.Contains("[TaskKey=TestPlugin.RealtimeSampleUpload]", StringComparison.Ordinal)
+            && entry.Message.Contains("[BusinessId=BAR-CLOUD-STANDARD]", StringComparison.Ordinal)
+            && entry.Message.Contains("结果=Uploaded", StringComparison.Ordinal));
     }
 
     [Theory]

@@ -22,7 +22,6 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
     private readonly IDiagnosticsInitialSummaryFactory _initialSummaryFactory;
     private readonly IDiagnosticsRefreshCoordinator _refreshCoordinator;
     private readonly AsyncCommand<DeadLetterRow> _requeueDeadLetterCommand;
-    private readonly AsyncCommand<DeadLetterRow> _deleteDeadLetterCommand;
     private readonly Avalonia.Threading.DispatcherTimer _refreshTimer;
     private readonly DiagnosticsSummaryState _summaryState = new();
     private readonly IDiagnosticsTabController _tabController;
@@ -76,9 +75,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
         _permissionObserver = collaborators.PermissionObserver;
 
         _requeueDeadLetterCommand = new AsyncCommand<DeadLetterRow>(RequeueDeadLetterAsync, CanOperateDeadLetter);
-        _deleteDeadLetterCommand = new AsyncCommand<DeadLetterRow>(DeleteDeadLetterAsync, CanOperateDeadLetter);
         RequeueDeadLetterCommand = _requeueDeadLetterCommand;
-        DeleteDeadLetterCommand = _deleteDeadLetterCommand;
         ToggleModuleReadinessCommand = new BaseCommand(_ => ToggleModuleReadiness());
         _refreshTimer = new Avalonia.Threading.DispatcherTimer
         {
@@ -119,7 +116,6 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
     public ObservableCollection<DeadLetterRow> MesDeadLetters { get; } = [];
 
     public ICommand RequeueDeadLetterCommand { get; }
-    public ICommand DeleteDeadLetterCommand { get; }
     public ICommand ToggleModuleReadinessCommand { get; }
 
     public bool CanOperateDeadLetters => _permissionObserver.CanOperateDeadLetters;
@@ -331,14 +327,10 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
     private Task RequeueDeadLetterAsync(DeadLetterRow row)
         => _deadLetterWorkflow.RequeueAsync(row);
 
-    private Task DeleteDeadLetterAsync(DeadLetterRow row)
-        => _deadLetterWorkflow.DeleteAsync(row);
-
     private void RefreshPermissionState()
     {
         OnPropertyChanged(nameof(CanOperateDeadLetters));
         _requeueDeadLetterCommand.RaiseCanExecuteChanged();
-        _deleteDeadLetterCommand.RaiseCanExecuteChanged();
     }
 
     bool IDiagnosticsViewModelCallback.CanOperateDeadLetters

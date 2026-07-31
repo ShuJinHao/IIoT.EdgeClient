@@ -14,6 +14,7 @@ using IIoT.Edge.Host.DataPipeline.Tasks;
 using IIoT.Edge.Module.Sdk.Signals;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 using IIoT.Edge.Application.Common.Identity;
+using IIoT.Edge.Application.Common.DataPipeline;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -56,7 +57,6 @@ public static class DependencyInjection
     {
         services.AddSingleton<DataPipelineCapacityGuard>();
         services.AddSingleton<DataPipelineCascadingPersistenceWriter>();
-        services.AddSingleton<IIngressOverflowPersistence, IngressOverflowPersistence>();
         services.AddSingleton<IRetryBackoffStrategy, DefaultRetryBackoffStrategy>();
         services.AddSingleton<IDataPipelineDeadLetterWriter, DataPipelineDeadLetterWriter>();
         services.AddSingleton<IDataPipelineConsumerInvoker, DefaultDataPipelineConsumerInvoker>();
@@ -66,7 +66,9 @@ public static class DependencyInjection
         services.AddSingleton<IMesFallbackRecoveryService, MesFallbackRecoveryService>();
         services.AddSingleton<IMesRetryRecordProcessor, MesRetryRecordProcessor>();
         services.AddSingleton<IMesRetryHousekeepingService, MesRetryHousekeepingService>();
-        services.AddSingleton<DataPipelineService>();
+        services.AddSingleton(sp => new DataPipelineService(
+            sp.GetRequiredService<ILogService>(),
+            sp.GetRequiredService<IDataPipelineIngressStore>()));
         services.AddSingleton<IDataPipelineService>(sp => sp.GetRequiredService<DataPipelineService>());
 
         services.AddSingleton<ICellDataConsumer>(sp => sp.GetRequiredService<ICapacityConsumer>());

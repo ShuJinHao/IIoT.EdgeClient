@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.Logging;
 using System.Threading.Channels;
@@ -9,7 +10,8 @@ public class DataPipelineService : IDataPipelineService
     private const int QueueCapacity = 5000;
 
     private readonly Channel<CellCompletedRecord> _queue;
-    private readonly IIngressOverflowPersistence _overflowPersistence;
+    private readonly IIngressOverflowPersistence? _legacyOverflowPersistence;
+    private readonly IDataPipelineIngressStore? _ingressStore;
     private readonly ILogService _logger;
     private int _pendingCount;
     private int _overflowCount;
@@ -18,6 +20,21 @@ public class DataPipelineService : IDataPipelineService
     public DataPipelineService(
         IIngressOverflowPersistence overflowPersistence,
         ILogService logger)
+        : this(overflowPersistence, logger, ingressStore: null)
+    {
+    }
+
+    public DataPipelineService(
+        ILogService logger,
+        IDataPipelineIngressStore ingressStore)
+        : this(overflowPersistence: null, logger, ingressStore)
+    {
+    }
+
+    public DataPipelineService(
+        IIngressOverflowPersistence? overflowPersistence,
+        ILogService logger,
+        IDataPipelineIngressStore? ingressStore)
     {
         _queue = Channel.CreateBounded<CellCompletedRecord>(new BoundedChannelOptions(QueueCapacity)
         {
@@ -26,7 +43,8 @@ public class DataPipelineService : IDataPipelineService
             SingleReader = true,
             SingleWriter = false
         });
-        _overflowPersistence = overflowPersistence;
+        _legacyOverflowPersistence = overflowPersistence;
+        _ingressStore = ingressStore;
         _logger = logger;
     }
 
@@ -88,6 +106,11 @@ public class DataPipelineService : IDataPipelineService
         record.NetworkDeviceId = record.ResolveNetworkDeviceId();
         record.IdempotencyKeyVersion = CloudIdempotencyKeyVersion.PlcStableV2;
 
+        if (_ingressStore is not null)
+        {
+            return await AcceptDurableIngressAsync(record, cancellationToken).ConfigureAwait(false);
+        }
+
         if (_queue.Writer.TryWrite(record))
         {
             Interlocked.Increment(ref _pendingCount);
@@ -101,15 +124,19 @@ public class DataPipelineService : IDataPipelineService
             };
 
             _logger.Info(
-                $"[PlcCode={record.PlcCode}][数据管道] 工序={cellData.ProcessType} 已入队，结果={result}，待处理={PendingCount}。");
+                $"{DataPipelineLogContext.Format(record)}[数据管道] " +
+                $"结果=MemoryAccepted，业务结果={result}，待处理={PendingCount}。");
             return DataPipelineEnqueueResult.Accepted();
         }
 
         Interlocked.Increment(ref _overflowCount);
         _logger.Warn(
-            $"[数据管道] 队列已满，准备写入溢出补偿。工序={record.CellData.ProcessType}，待处理={PendingCount}，容量={QueueCapacity}");
+            $"{DataPipelineLogContext.Format(record)}[数据管道] " +
+            $"结果=MemoryQueueFull，待处理={PendingCount}，容量={QueueCapacity}。");
 
-        var overflowResult = await _overflowPersistence
+        var overflowResult = await (_legacyOverflowPersistence
+                ?? throw new InvalidOperationException(
+                    "非 durable 入口模式缺少 Host API 2.0.x 兼容溢出存储。"))
             .PersistOverflowAsync(record, cancellationToken)
             .ConfigureAwait(false);
 
@@ -119,6 +146,55 @@ public class DataPipelineService : IDataPipelineService
         }
 
         return overflowResult;
+    }
+
+    private async ValueTask<DataPipelineEnqueueResult> AcceptDurableIngressAsync(
+        CellCompletedRecord record,
+        CancellationToken cancellationToken)
+    {
+        DataPipelineIngressAcceptance acceptance;
+        try
+        {
+            acceptance = await _ingressStore!
+                .AcceptAsync(record, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(
+                $"{DataPipelineLogContext.Format(record)}[数据管道] " +
+                $"结果=Rejected，原因码=DurableIngressUnavailable，" +
+                $"异常类型={ex.GetType().Name}。");
+            return DataPipelineEnqueueResult.Rejected("durable_ingress_unavailable");
+        }
+
+        if (acceptance.AlreadyCompleted)
+        {
+            _logger.Info(
+                $"{DataPipelineLogContext.Format(record)}[数据管道] " +
+                "结果=AlreadyCompleted，本次幂等接受且不重复消费。");
+            return DataPipelineEnqueueResult.Accepted();
+        }
+
+        if (_queue.Writer.TryWrite(acceptance.Record))
+        {
+            Interlocked.Increment(ref _pendingCount);
+            _logger.Info(
+                $"{DataPipelineLogContext.Format(record)}[数据管道] " +
+                $"结果=DurableIngressAccepted，已通知主队列，待处理={PendingCount}。");
+            return DataPipelineEnqueueResult.Accepted();
+        }
+
+        Interlocked.Increment(ref _overflowCount);
+        Interlocked.Increment(ref _spillCount);
+        _logger.Warn(
+            $"{DataPipelineLogContext.Format(record)}[数据管道] " +
+            "结果=DurableIngressAccepted，内存通知队列已满，将由恢复器重放。");
+        return DataPipelineEnqueueResult.OverflowPersisted(1, 0);
     }
 
     private static string[] ResolveMissingPlcContext(CellCompletedRecord record)

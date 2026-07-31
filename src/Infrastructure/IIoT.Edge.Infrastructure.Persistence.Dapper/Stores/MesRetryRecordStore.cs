@@ -14,7 +14,8 @@ namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 public sealed class MesRetryRecordStore :
     RetryRecordStoreBase,
     IMesRetryRecordStore,
-    IMesDeadLetterRequeueStore
+    IMesDeadLetterRequeueStore,
+    IMesRetryDeadLetterTransitionStore
 {
     /// <summary>
     /// MES 使用独立 SQLite 数据库文件，避免和 Cloud 补偿链路混库。
@@ -32,6 +33,7 @@ public sealed class MesRetryRecordStore :
     /// 领取锁表，防止多个任务实例重复补传同一条 MES 记录。
     /// </summary>
     protected override string ClaimTableName => "failed_mes_record_claims";
+    protected override string DeadLetterTableName => "dead_mes_records";
 
     protected override string CreateTableSql => @"
         CREATE TABLE IF NOT EXISTS failed_mes_records (
@@ -71,6 +73,25 @@ public sealed class MesRetryRecordStore :
     {
     }
 
-    public Task SaveRequeuedAsync(DeadLetterRecord record)
-        => SaveRequeuedCoreAsync(record);
+    public Task RequeueAndRemoveAsync(
+        long deadLetterId,
+        string operatorId,
+        string businessIdentifier,
+        CancellationToken cancellationToken = default)
+        => RequeueAndRemoveDeadLetterCoreAsync(
+            deadLetterId,
+            operatorId,
+            businessIdentifier,
+            cancellationToken);
+
+    public Task MoveExhaustedRetryToDeadLetterAsync(
+        FailedCellRecord sourceRecord,
+        int finalRetryCount,
+        string failureReason,
+        CancellationToken cancellationToken = default)
+        => MoveExhaustedRetryToDeadLetterCoreAsync(
+            sourceRecord,
+            finalRetryCount,
+            failureReason,
+            cancellationToken);
 }

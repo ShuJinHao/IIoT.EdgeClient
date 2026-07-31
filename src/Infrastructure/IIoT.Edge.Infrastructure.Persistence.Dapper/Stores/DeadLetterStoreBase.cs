@@ -92,14 +92,9 @@ public abstract class DeadLetterStoreBase : DapperRepositoryBase<DeadLetterRecor
             new { Count = Math.Clamp(count, 1, 100) }).ConfigureAwait(false);
     }
 
-    public async Task DeleteAsync(long id)
-    {
-        var affectedRows = await DeleteByIdAsync(id).ConfigureAwait(false);
-        if (affectedRows <= 0)
-        {
-            throw new InvalidOperationException($"未找到要删除的死信记录：{TableName}/{id}。");
-        }
-    }
+    public Task DeleteAsync(long id)
+        => throw new NotSupportedException(
+            "未成功死信禁止人工硬删除；只能通过本通道原子重入队转移。");
 
     protected override Task AfterInitializeTableAsync(IDbConnection connection)
         => EnsureDataPipelineContextColumnsAsync(connection, TableName);

@@ -333,7 +333,9 @@ public sealed class FakeFailedRecordStore :
     ICloudRetryRecordStore,
     IMesRetryRecordStore,
     ICloudDeadLetterRequeueStore,
-    IMesDeadLetterRequeueStore
+    IMesDeadLetterRequeueStore,
+    ICloudRetryDeadLetterTransitionStore,
+    IMesRetryDeadLetterTransitionStore
 {
     private readonly Dictionary<string, List<long>> _claims = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<long> _claimedRecordIds = new();
@@ -351,6 +353,10 @@ public sealed class FakeFailedRecordStore :
     public int ClaimCallCount { get; private set; }
     public int ReleaseClaimCallCount { get; private set; }
     public Exception? SaveException { get; set; }
+    public Exception? TransitionException { get; set; }
+    public Func<long, DeadLetterRecord?>? RequeueSourceResolver { get; set; }
+    public Action<long>? RequeueSourceRemover { get; set; }
+    public List<(FailedCellRecord Record, int RetryCount, string FailureReason)> ExhaustedRecords { get; } = new();
     public Exception? CloudCountException { get; set; }
     public Exception? MesCountException { get; set; }
     public TaskCompletionSource? CloudCountStarted { get; set; }
@@ -434,8 +440,15 @@ public sealed class FakeFailedRecordStore :
         return Task.CompletedTask;
     }
 
-    public Task SaveRequeuedAsync(DeadLetterRecord record)
+    public Task RequeueAndRemoveAsync(
+        long deadLetterId,
+        string operatorId,
+        string businessIdentifier,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        var record = RequeueSourceResolver?.Invoke(deadLetterId)
+            ?? throw new InvalidOperationException($"Missing fake dead-letter source {deadLetterId}.");
         SaveCallCount++;
         if (SaveException is not null)
         {
@@ -462,6 +475,35 @@ public sealed class FakeFailedRecordStore :
             TraceBatchNumber = record.TraceBatchNumber,
             IdempotencyKeyVersion = record.IdempotencyKeyVersion
         });
+
+        try
+        {
+            RequeueSourceRemover?.Invoke(deadLetterId);
+        }
+        catch
+        {
+            PendingRecords.RemoveAt(PendingRecords.Count - 1);
+            throw;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task MoveExhaustedRetryToDeadLetterAsync(
+        FailedCellRecord sourceRecord,
+        int finalRetryCount,
+        string failureReason,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (TransitionException is not null)
+        {
+            throw TransitionException;
+        }
+
+        ExhaustedRecords.Add((sourceRecord, finalRetryCount, failureReason));
+        PendingRecords.RemoveAll(record => record.Id == sourceRecord.Id);
+        _claimedRecordIds.Remove(sourceRecord.Id);
         return Task.CompletedTask;
     }
 
@@ -1107,6 +1149,113 @@ public sealed class FakeIngressOverflowPersistence : IIngressOverflowPersistence
     {
         Records.Add(record);
         return ValueTask.FromResult(Result);
+    }
+}
+
+public sealed class FakeDataPipelineIngressStore : IDataPipelineIngressStore
+{
+    private readonly Dictionary<string, (CellCompletedRecord Record, HashSet<string> Completed)> _records =
+        new(StringComparer.Ordinal);
+    private readonly HashSet<string> _completedFacts = new(StringComparer.Ordinal);
+
+    public Exception? AcceptException { get; set; }
+    public Exception? MarkException { get; set; }
+    public Exception? CompleteException { get; set; }
+    public int AcceptCallCount { get; private set; }
+    public int PendingQueryCallCount { get; private set; }
+
+    public IReadOnlyCollection<string> PendingCompletionIds => _records.Keys.ToArray();
+
+    public Task<DataPipelineIngressAcceptance> AcceptAsync(
+        CellCompletedRecord record,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        AcceptCallCount++;
+        if (AcceptException is not null)
+        {
+            throw AcceptException;
+        }
+
+        var completionId = DataPipelineCompletionIdentity.Create(record);
+        if (_completedFacts.Contains(completionId))
+        {
+            return Task.FromResult(new DataPipelineIngressAcceptance(completionId, record, true));
+        }
+
+        if (!_records.TryGetValue(completionId, out var entry))
+        {
+            entry = (record, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            _records[completionId] = entry;
+        }
+
+        return Task.FromResult(new DataPipelineIngressAcceptance(completionId, entry.Record, false));
+    }
+
+    public Task<DataPipelineIngressRecord?> GetAsync(
+        string completionId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(_records.TryGetValue(completionId, out var entry)
+            ? new DataPipelineIngressRecord(completionId, entry.Record, entry.Completed)
+            : null);
+    }
+
+    public Task<IReadOnlyList<DataPipelineIngressRecord>> GetPendingAsync(
+        int batchSize,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        PendingQueryCallCount++;
+        return Task.FromResult<IReadOnlyList<DataPipelineIngressRecord>>(_records
+            .Take(batchSize)
+            .Select(entry => new DataPipelineIngressRecord(
+                entry.Key,
+                entry.Value.Record,
+                entry.Value.Completed))
+            .ToArray());
+    }
+
+    public Task MarkConsumerCompletedAsync(
+        string completionId,
+        string consumerKey,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (MarkException is not null)
+        {
+            throw MarkException;
+        }
+
+        if (_records.TryGetValue(completionId, out var entry))
+        {
+            entry.Completed.Add(consumerKey);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<bool> CompleteIfAllConsumersFinishedAsync(
+        string completionId,
+        IReadOnlyCollection<string> requiredConsumerKeys,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (CompleteException is not null)
+        {
+            throw CompleteException;
+        }
+
+        if (!_records.TryGetValue(completionId, out var entry)
+            || requiredConsumerKeys.Any(key => !entry.Completed.Contains(key)))
+        {
+            return Task.FromResult(false);
+        }
+
+        _records.Remove(completionId);
+        _completedFacts.Add(completionId);
+        return Task.FromResult(true);
     }
 }
 

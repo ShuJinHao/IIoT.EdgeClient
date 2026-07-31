@@ -88,8 +88,12 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
             var blockedResult = CloudCallResult.Failure(
                 CloudCallOutcome.SkippedUploadNotReady,
                 reasonCode);
-            _logger.Warn(
-                $"[PlcCode={UploadDiagnosticsContextFactory.ResolveLogPlcCode(deviceStatusRecords)}][云端] PLC 设备状态专用接口未就绪，{deviceStatusRecords.Count} 条设备状态记录保持待传。");
+            LogEach(
+                deviceStatusRecords,
+                "Blocked",
+                reasonCode,
+                "PLC 设备状态专用接口未就绪，记录保持待传。",
+                isError: false);
             _diagnosticsStore.RecordBlocked(
                 deviceStatusRecords[0].CellData.ProcessType,
                 reasonCode,
@@ -111,6 +115,12 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
                     reasonCode,
                     "当前 profile 的 Cloud 通信已关闭。",
                     UploadDiagnosticsContextFactory.CreateCloudContext(group));
+                LogEach(
+                    group,
+                    "Blocked",
+                    reasonCode,
+                    "Cloud 数据面已关闭，记录保持待传。",
+                    isError: false);
                 return disabledResult;
             }
 
@@ -120,8 +130,12 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
                 var missingUploaderResult = CloudCallResult.Failure(
                     CloudCallOutcome.SkippedUploadNotReady,
                     reasonCode);
-                _logger.Warn(
-                    $"[PlcCode={UploadDiagnosticsContextFactory.ResolveLogPlcCode(group)}][云端] 工序 {group.Key} 未注册 Cloud 上传器，{group.Count()} 条记录转入补传队列。");
+                LogEach(
+                    group,
+                    "Blocked",
+                    reasonCode,
+                    "未注册 Cloud 上传器，将交接到 Cloud 持久补偿链。",
+                    isError: false);
                 _diagnosticsStore.RecordBlocked(
                     group.Key,
                     reasonCode,
@@ -133,12 +147,15 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
             var gate = _uploadGate.GetSnapshot();
             if (!gate.CanUpload)
             {
-                var blockedPlcCode = UploadDiagnosticsContextFactory.ResolveLogPlcCode(group);
                 var blockedResult = CloudCallResult.Failure(
                     CloudCallOutcome.SkippedUploadNotReady,
                     gate.ReasonCode);
-                _logger.Warn(
-                    $"[PlcCode={blockedPlcCode}][云端] 上传门控已阻塞（{gate.ReasonCode}），{group.Count()} 条记录转入补传队列。");
+                LogEach(
+                    group,
+                    "Blocked",
+                    "cloud_upload_gate_blocked",
+                    "Cloud 上传门控未就绪，将交接到 Cloud 持久补偿链。",
+                    isError: false);
                 _diagnosticsStore.RecordBlocked(
                     group.Key,
                     gate.ReasonCode,
@@ -153,11 +170,15 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
                 var device = ResolveUploadDevice(groupRecords, _deviceService.CurrentDevice);
                 if (device is null)
                 {
-                    var unidentifiedPlcCode = UploadDiagnosticsContextFactory.ResolveLogPlcCode(groupRecords);
                     var unidentifiedResult = CloudCallResult.Failure(
                         CloudCallOutcome.SkippedUploadNotReady,
                         EdgeUploadBlockReason.DeviceUnidentified.ToReasonCode());
-                    _logger.Warn($"[PlcCode={unidentifiedPlcCode}][云端] 设备尚未识别，记录转入补传队列。");
+                    LogEach(
+                        groupRecords,
+                        "Blocked",
+                        EdgeUploadBlockReason.DeviceUnidentified.ToReasonCode(),
+                        "Cloud 设备身份尚未识别，将交接到 Cloud 持久补偿链。",
+                        isError: false);
                     _diagnosticsStore.RecordBlocked(
                         group.Key,
                         EdgeUploadBlockReason.DeviceUnidentified.ToReasonCode(),
@@ -167,14 +188,27 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
                 }
 
                 var context = new ProcessUploadContext(device);
-                var result = registration.UploadMode == ProcessUploadMode.Batch
-                    ? await _standardUploader.UploadAsync(context, group.Key, groupRecords, cancellationToken).ConfigureAwait(false)
-                    : await UploadOneByOneAsync(context, group.Key, groupRecords, cancellationToken).ConfigureAwait(false);
+                CloudCallResult result;
+                if (registration.UploadMode == ProcessUploadMode.Batch)
+                {
+                    result = await _standardUploader
+                        .UploadAsync(context, group.Key, groupRecords, cancellationToken)
+                        .ConfigureAwait(false);
+                    LogCloudResult(groupRecords, result);
+                }
+                else
+                {
+                    result = await UploadOneByOneAsync(
+                            context,
+                            group.Key,
+                            groupRecords,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                }
+
                 _diagnosticsStore.RecordResult(group.Key, result, UploadDiagnosticsContextFactory.CreateCloudContext(groupRecords));
                 if (!result.IsSuccess)
                 {
-                    _logger.Error(
-                        $"[PlcCode={UploadDiagnosticsContextFactory.ResolveLogPlcCode(groupRecords)}][云端] 工序 {group.Key} 上传失败，数量：{groupRecords.Count}，结果：{result.Outcome}，原因：{result.ReasonCode}。");
                     return result;
                 }
             }
@@ -198,6 +232,8 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
                     cancellationToken)
                 .ConfigureAwait(false);
 
+            LogCloudResult([record], result);
+
             if (!result.IsSuccess)
             {
                 return result;
@@ -205,6 +241,58 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
         }
 
         return CloudCallResult.Success();
+    }
+
+    private void LogCloudResult(
+        IReadOnlyList<CellCompletedRecord> records,
+        CloudCallResult result)
+    {
+        if (result.IsSuccess)
+        {
+            LogEach(
+                records,
+                "Uploaded",
+                reasonCode: null,
+                "Cloud 接口已返回正式成功结果。",
+                isError: false);
+            return;
+        }
+
+        LogEach(
+            records,
+            "Failed",
+            UploadTraceLogFormatter.ReasonCode("cloud_upload", result.Outcome),
+            "Cloud 接收未成功，将交接到 Cloud 持久补偿链。",
+            isError: true);
+    }
+
+    private void LogEach(
+        IEnumerable<CellCompletedRecord> records,
+        string result,
+        string? reasonCode,
+        string message,
+        bool isError)
+    {
+        foreach (var record in records)
+        {
+            var entry =
+                $"{UploadTraceLogFormatter.Format(record, "Cloud")}[云端直传] " +
+                $"结果={result}" +
+                (string.IsNullOrWhiteSpace(reasonCode) ? string.Empty : $"，原因码={reasonCode}") +
+                $"；{message}";
+            if (isError)
+            {
+                _logger.Error(entry);
+            }
+            else if (string.Equals(result, "Uploaded", StringComparison.Ordinal))
+            {
+                _logger.Info(entry);
+            }
+            else
+            {
+                _logger.Warn(entry);
+            }
+        }
     }
 
     private static DeviceSession? ResolveUploadDevice(

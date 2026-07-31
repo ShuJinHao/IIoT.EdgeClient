@@ -10,12 +10,12 @@ namespace IIoT.Edge.Host.DataPipeline.Services;
 internal abstract class RetryRecordProcessorBase<TRuntimeState> : RetryDeadLetterServiceBase
     where TRuntimeState : struct, Enum
 {
-    private static readonly DateTime AbandonedRetryTimeUtc = DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc);
-
     private readonly IRetryBackoffStrategy _retryBackoffStrategy;
     private readonly IRetryDiagnosticsStore<TRuntimeState>? _diagnosticsStore;
     private readonly TRuntimeState _backoffState;
     private readonly int _maxRetryCount;
+    private readonly Func<FailedCellRecord, int, string, CancellationToken, Task>
+        _moveExhaustedRetryToDeadLetterAsync;
 
     protected RetryRecordProcessorBase(
         ILogService logger,
@@ -26,6 +26,7 @@ internal abstract class RetryRecordProcessorBase<TRuntimeState> : RetryDeadLette
         IDataPipelineDeadLetterWriter deadLetterWriter,
         ICellDataJsonSerializer cellDataJsonSerializer,
         DataPipelineDeadLetterChannel deadLetterChannel,
+        Func<FailedCellRecord, int, string, CancellationToken, Task> moveExhaustedRetryToDeadLetterAsync,
         int maxRetryCount,
         IRetryDiagnosticsStore<TRuntimeState>? diagnosticsStore = null,
         TRuntimeState backoffState = default)
@@ -42,6 +43,7 @@ internal abstract class RetryRecordProcessorBase<TRuntimeState> : RetryDeadLette
         _diagnosticsStore = diagnosticsStore;
         _backoffState = backoffState;
         _maxRetryCount = maxRetryCount;
+        _moveExhaustedRetryToDeadLetterAsync = moveExhaustedRetryToDeadLetterAsync;
     }
 
     protected IRetryRecordStore RetryStore { get; }
@@ -86,16 +88,28 @@ internal abstract class RetryRecordProcessorBase<TRuntimeState> : RetryDeadLette
         var newRetryCount = record.RetryCount + 1;
         _diagnosticsStore?.SetRuntimeState(_backoffState);
 
-        if (newRetryCount > _maxRetryCount)
+        if (newRetryCount >= _maxRetryCount)
         {
-            Logger.Warn($"[PlcCode={record.PlcCode}][{DeadLetterChannelMetadata.LogPrefix}] {record.ProcessType} 已达到最大补传次数 {_maxRetryCount}，自动补传停止。");
-            await RetryStore.UpdateRetryAsync(record.Id, newRetryCount, errorMessage, AbandonedRetryTimeUtc).ConfigureAwait(false);
+            await _moveExhaustedRetryToDeadLetterAsync(
+                    record,
+                    newRetryCount,
+                    errorMessage,
+                    cancellationToken)
+                .ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
+            Logger.Warn(
+                $"{DataPipelineLogContext.Format(record)}" +
+                $"[{DeadLetterChannelMetadata.LogPrefix}] 工序={record.ProcessType}，记录={record.Id}，" +
+                $"结果=DurableDeadLetter，重试次数={newRetryCount}，尚未上传成功。");
             return;
         }
 
         var nextRetryTime = DateTime.UtcNow.Add(_retryBackoffStrategy.Calculate(newRetryCount));
         await RetryStore.UpdateRetryAsync(record.Id, newRetryCount, errorMessage, nextRetryTime).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
+        Logger.Warn(
+            $"{DataPipelineLogContext.Format(record)}" +
+            $"[{DeadLetterChannelMetadata.LogPrefix}] 结果=RetryScheduled，" +
+            $"重试次数={newRetryCount}，下次时间Utc={nextRetryTime:O}。");
     }
 }
