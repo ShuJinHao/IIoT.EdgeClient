@@ -341,11 +341,21 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             TestContext.Current.CancellationToken);
 
         runtime.Start();
+        var mg1InitiallyRunning = runtime.WaitForTaskStateAsync(
+            "Task.MG1",
+            PlcTaskRuntimeState.Running,
+            TestContext.Current.CancellationToken);
+        var mg2InitiallyRunning = runtime.WaitForTaskStateAsync(
+            "Task.MG2",
+            PlcTaskRuntimeState.Running,
+            TestContext.Current.CancellationToken);
         runtime.ConnectionSignal.Report(true);
         await Task.WhenAll(
             periodicRead.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
             mg1.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
-            mg2.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+            mg2.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
+            mg1InitiallyRunning,
+            mg2InitiallyRunning);
         Assert.Equal(
             PlcTaskRuntimeState.Running,
             runtime.GetTaskStatus("Task.MG1")?.State);
