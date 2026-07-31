@@ -58,6 +58,49 @@ public sealed class LauncherPluginActivationTests
     }
 
     [Fact]
+    public void Reconciler_WithApAndCpOnSameMachine_ShouldFillBothModuleSeedSelectionsWithoutOverwrite()
+    {
+        var tempDirectory = CreateTempDirectory();
+        var dataRoot = Path.Combine(tempDirectory, "program-data");
+        try
+        {
+            var launcherDirectory = Path.Combine(tempDirectory, "install", "current", "launcher");
+            var hostDirectory = Path.Combine(tempDirectory, "install", "current", "host");
+            Directory.CreateDirectory(launcherDirectory);
+            Directory.CreateDirectory(hostDirectory);
+            WriteBaseCatalog(launcherDirectory);
+            WriteActivation(launcherDirectory, "AP", "DieCuttingCombined", "负极模切");
+            WriteActivation(launcherDirectory, "CP", "DieCuttingCombined", "正极模切");
+
+            WithDataRoot(dataRoot, () =>
+            {
+                WriteEnabledSelection(launcherDirectory, "AP", "CP");
+                var source = new LauncherPluginActivationSource(launcherDirectory);
+
+                new LauncherPluginActivationReconciler(launcherDirectory, source).Reconcile();
+
+                var path = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(
+                    "DieCuttingCombined",
+                    hostDirectory);
+                using var document = JsonDocument.Parse(File.ReadAllText(path));
+                var modules = document.RootElement.GetProperty("Modules");
+                Assert.Equal(
+                    ["AP", "CP"],
+                    modules.GetProperty("Enabled")
+                        .EnumerateArray()
+                        .Select(static item => item.GetString()!)
+                        .ToArray());
+                AssertModuleSeed(modules, "AP");
+                AssertModuleSeed(modules, "CP");
+            });
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
     public void CatalogAndReconciler_WithVelopackCurrentLayout_ShouldUsePackagedHostForEveryActivation()
     {
         var tempDirectory = CreateTempDirectory();
@@ -219,6 +262,7 @@ public sealed class LauncherPluginActivationTests
                 Assert.Equal(
                     "AP",
                     Assert.Single(root.GetProperty("Modules").GetProperty("Enabled").EnumerateArray()).GetString());
+                AssertModuleSeed(root.GetProperty("Modules"), "AP");
                 Assert.True(root.TryGetProperty("Shell", out _));
             });
         }
@@ -708,6 +752,16 @@ public sealed class LauncherPluginActivationTests
             Assert.Single(
                     document.RootElement.GetProperty("Modules").GetProperty("Enabled").EnumerateArray())
                 .GetString());
+        AssertModuleSeed(document.RootElement.GetProperty("Modules"), moduleId);
+    }
+
+    private static void AssertModuleSeed(JsonElement modules, string moduleId)
+    {
+        var moduleSeed = modules
+            .GetProperty(moduleId)
+            .GetProperty("ModuleSeed");
+        Assert.Equal(1, moduleSeed.GetProperty("Version").GetInt32());
+        Assert.Equal("Production", moduleSeed.GetProperty("Environment").GetString());
     }
 
     private static void WriteBaseCatalog(
@@ -786,7 +840,12 @@ public sealed class LauncherPluginActivationTests
               "CloudApi": { "ClientCode": "{{clientCode}}", "BootstrapSecret": "" },
               "Modules": {
                 "Enabled": [ "{{moduleId}}" ],
-                "{{moduleId}}": {}
+                "{{moduleId}}": {
+                  "ModuleSeed": {
+                    "Version": 1,
+                    "Environment": "Production"
+                  }
+                }
               }
             }
             """);

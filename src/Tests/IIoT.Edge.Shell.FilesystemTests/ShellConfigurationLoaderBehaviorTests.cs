@@ -208,7 +208,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
     }
 
     [Fact]
-    public void Load_WhenPluginDefaultAndAppSettingsProvideSameModuleKey_ShouldPreferAppSettings()
+    public void Load_WhenLegacyPluginRuntimeConfigExists_ShouldNeverOverrideAppSettings()
     {
         var tempDirectory = CreateTempDirectory();
         try
@@ -258,7 +258,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
     }
 
     [Fact]
-    public void Load_WhenPluginDefaultIsAtPublishedModuleRoot_ShouldApplyPluginDefaults()
+    public void Load_WhenLegacyPluginRuntimeConfigIsAtPublishedModuleRoot_ShouldIgnoreIt()
     {
         var tempDirectory = CreateTempDirectory();
         try
@@ -269,7 +269,13 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                 """
                 {
                   "Modules": {
-                    "Enabled": [ "TestPlugin" ]
+                    "Enabled": [ "TestPlugin" ],
+                    "TestPlugin": {
+                      "ModuleSeed": {
+                        "Version": 1,
+                        "Environment": "Production"
+                      }
+                    }
                   }
                 }
                 """);
@@ -294,7 +300,11 @@ public sealed class ShellConfigurationLoaderBehaviorTests
 
             var result = new ShellConfigurationLoader().Load(hostDirectory);
 
-            Assert.Equal("50", result.Configuration["Modules:TestPlugin:Module:Runtime:EventLoopIntervalMs"]);
+            Assert.Null(result.Configuration["Modules:TestPlugin:Module:Runtime:EventLoopIntervalMs"]);
+            Assert.Equal(
+                "False",
+                result.Configuration["Modules:TestPlugin:Capabilities:RequiresProductionPlan"]);
+            Assert.Contains(result.Issues, issue => issue.Code == "PLUGIN_RUNTIME_CONFIG_IGNORED");
         }
         finally
         {
@@ -303,7 +313,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
     }
 
     [Fact]
-    public void Load_WhenMultiplePluginRootsAreConfigured_ShouldApplyLaterDefaultsAfterEarlierDefaults()
+    public void Load_WhenModuleSeedSelectionDoesNotMatchManifest_ShouldKeepShellConfigurationAndReportDiagnostic()
     {
         var tempDirectory = CreateTempDirectory();
         try
@@ -315,7 +325,53 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                 {
                   "Modules": {
                     "Enabled": [ "TestPlugin" ],
-                    "PluginRoots": [ "../plugins-a", "../plugins-b" ]
+                    "TestPlugin": {
+                      "ModuleSeed": {
+                        "Version": 2,
+                        "Environment": "Staging"
+                      }
+                    }
+                  }
+                }
+                """);
+            WriteValidPluginEnvelope(
+                Path.Combine(tempDirectory, "plugins", "TestPlugin"),
+                "TestPlugin");
+
+            var result = new ShellConfigurationLoader().Load(hostDirectory);
+
+            Assert.NotNull(result.Configuration);
+            Assert.Contains(
+                result.Issues,
+                issue => issue.Code == "PLUGIN_MODULE_SEED_SELECTION_INVALID"
+                         && issue.ModuleId == "TestPlugin");
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void Load_WhenMultiplePluginRootsContainLegacyRuntimeConfig_ShouldIgnoreEveryCopy()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            WriteText(
+                Path.Combine(hostDirectory, "appsettings.json"),
+                """
+                {
+                  "Modules": {
+                    "Enabled": [ "TestPlugin" ],
+                    "PluginRoots": [ "../plugins-a", "../plugins-b" ],
+                    "TestPlugin": {
+                      "ModuleSeed": {
+                        "Version": 1,
+                        "Environment": "Production"
+                      }
+                    }
                   }
                 }
                 """);
@@ -355,7 +411,10 @@ public sealed class ShellConfigurationLoaderBehaviorTests
 
             var result = new ShellConfigurationLoader().Load(hostDirectory);
 
-            Assert.Equal("75", result.Configuration["Modules:TestPlugin:Module:Runtime:EventLoopIntervalMs"]);
+            Assert.Null(result.Configuration["Modules:TestPlugin:Module:Runtime:EventLoopIntervalMs"]);
+            Assert.Contains(
+                result.Issues,
+                issue => issue.Code == "PLUGIN_MODULE_CONFIGURATION_OWNER_DUPLICATE");
         }
         finally
         {
@@ -364,7 +423,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
     }
 
     [Fact]
-    public void Load_WhenVelopackCurrentHostUsesDefaultPluginRoot_ShouldLoadDefaultsFromInstallRootPlugins()
+    public void Load_WhenVelopackCurrentHostContainsLegacyRuntimeConfig_ShouldIgnoreIt()
     {
         var tempDirectory = CreateTempDirectory();
         try
@@ -376,7 +435,13 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                 {
                   "Modules": {
                     "Enabled": [ "TestPlugin" ],
-                    "PluginRoots": [ "../plugins" ]
+                    "PluginRoots": [ "../plugins" ],
+                    "TestPlugin": {
+                      "ModuleSeed": {
+                        "Version": 1,
+                        "Environment": "Production"
+                      }
+                    }
                   }
                 }
                 """);
@@ -401,7 +466,8 @@ public sealed class ShellConfigurationLoaderBehaviorTests
 
             var result = new ShellConfigurationLoader().Load(hostDirectory);
 
-            Assert.Equal("125", result.Configuration["Modules:TestPlugin:Module:Runtime:EventLoopIntervalMs"]);
+            Assert.Null(result.Configuration["Modules:TestPlugin:Module:Runtime:EventLoopIntervalMs"]);
+            Assert.Contains(result.Issues, issue => issue.Code == "PLUGIN_RUNTIME_CONFIG_IGNORED");
         }
         finally
         {
@@ -483,7 +549,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
     }
 
     [Fact]
-    public void Load_WhenEnabledPluginDefaultContainsHostKeys_ShouldLoadOnlyOwnModuleSubtree()
+    public void Load_WhenLegacyPluginRuntimeConfigContainsHostKeys_ShouldIgnoreEveryKey()
     {
         var tempDirectory = CreateTempDirectory();
         try
@@ -495,7 +561,13 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                 {
                   "InstanceId": "SafeInstance",
                   "Modules": {
-                    "Enabled": [ "TestPlugin" ]
+                    "Enabled": [ "TestPlugin" ],
+                    "TestPlugin": {
+                      "ModuleSeed": {
+                        "Version": 1,
+                        "Environment": "Production"
+                      }
+                    }
                   }
                 }
                 """);
@@ -531,8 +603,8 @@ public sealed class ShellConfigurationLoaderBehaviorTests
             Assert.Null(result.Configuration["CloudApi:ClientCode"]);
             Assert.Equal("TestPlugin", result.Configuration["Modules:Enabled:0"]);
             Assert.Null(result.Configuration["Modules:OtherPlugin:Injected"]);
-            Assert.Equal("88", result.Configuration["Modules:TestPlugin:Module:Runtime:EventLoopIntervalMs"]);
-            Assert.Contains(result.Issues, issue => issue.Code == "PLUGIN_DEFAULT_SCOPE_REJECTED");
+            Assert.Null(result.Configuration["Modules:TestPlugin:Module:Runtime:EventLoopIntervalMs"]);
+            Assert.Contains(result.Issues, issue => issue.Code == "PLUGIN_RUNTIME_CONFIG_IGNORED");
         }
         finally
         {
@@ -552,7 +624,19 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                 """
                 {
                   "Modules": {
-                    "Enabled": [ "EnabledPlugin", "InvalidPlugin" ]
+                    "Enabled": [ "EnabledPlugin", "InvalidPlugin" ],
+                    "EnabledPlugin": {
+                      "ModuleSeed": {
+                        "Version": 1,
+                        "Environment": "Production"
+                      }
+                    },
+                    "InvalidPlugin": {
+                      "ModuleSeed": {
+                        "Version": 1,
+                        "Environment": "Production"
+                      }
+                    }
                   }
                 }
                 """);
@@ -593,10 +677,11 @@ public sealed class ShellConfigurationLoaderBehaviorTests
 
             var result = new ShellConfigurationLoader().Load(hostDirectory);
 
-            Assert.Equal("enabled", result.Configuration["Modules:EnabledPlugin:Value"]);
+            Assert.Null(result.Configuration["Modules:EnabledPlugin:Value"]);
             Assert.Null(result.Configuration["Modules:DisabledPlugin:Value"]);
             Assert.Null(result.Configuration["Modules:InvalidPlugin:Value"]);
             Assert.Contains(result.Issues, issue => issue.Code == "PLUGIN_MANIFEST_INVALID");
+            Assert.Contains(result.Issues, issue => issue.Code == "PLUGIN_RUNTIME_CONFIG_IGNORED");
         }
         finally
         {
@@ -700,6 +785,7 @@ public sealed class ShellConfigurationLoaderBehaviorTests
     {
         Directory.CreateDirectory(pluginDirectory);
         WriteText(Path.Combine(pluginDirectory, $"{moduleId}.dll"), "staged-test-assembly");
+        var schemaFileName = $"{moduleId.ToLowerInvariant()}.module.schema.json";
         WriteText(
             Path.Combine(pluginDirectory, "plugin.json"),
             $$"""
@@ -713,7 +799,42 @@ public sealed class ShellConfigurationLoaderBehaviorTests
               "entryAssembly": "{{moduleId}}.dll",
               "entryType": "{{moduleId}}.DependencyInjection",
               "supportedProcessType": "{{moduleId}}",
+              "configurationSchema": "Config/{{schemaFileName}}",
+              "moduleSeed": {
+                "schemaVersion": 1,
+                "currentVersion": 1,
+                "supportedEnvironments": [ "Production" ],
+                "newDevicesEnabled": false,
+                "missingTaskBindingsEnabled": true,
+                "resetBeforeImport": false
+              },
+              "capabilities": {
+                "requiresProductionPlan": false
+              },
               "dependencies": []
+            }
+            """);
+        WriteText(
+            Path.Combine(pluginDirectory, "Config", schemaFileName),
+            $$"""
+            {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "x-moduleId": "{{moduleId}}",
+              "required": [ "ModuleSeed" ],
+              "properties": {
+                "ModuleSeed": {
+                  "type": "object",
+                  "properties": {
+                    "Version": { "const": 1 },
+                    "Environment": { "const": "Production" }
+                  }
+                },
+                "DeviceSeed": {
+                  "type": "object",
+                  "deprecated": true
+                }
+              }
             }
             """);
     }

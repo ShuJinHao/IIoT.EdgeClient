@@ -8,5 +8,17 @@
   "entryAssembly": "IIoT.Edge.TestPlugin.dll",
   "entryType": "IIoT.Edge.TestPlugin.DependencyInjection",
   "supportedProcessType": "TestPlugin",
+  "configurationSchema": "Config/testplugin.module.schema.json",
+  "moduleSeed": {
+    "schemaVersion": 1,
+    "currentVersion": 1,
+    "supportedEnvironments": [ "Production" ],
+    "newDevicesEnabled": false,
+    "missingTaskBindingsEnabled": true,
+    "resetBeforeImport": false
+  },
+  "capabilities": {
+    "requiresProductionPlan": false
+  },
   "dependencies": []
 }

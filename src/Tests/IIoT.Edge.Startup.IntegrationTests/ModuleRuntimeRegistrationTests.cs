@@ -135,6 +135,65 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
+    public async Task ModuleSeedInitializer_WhenOneContributorFails_ShouldContinueAndReturnSafeModuleDiagnostic()
+    {
+        var logger = new SpyLogService();
+        var failed = new ProbeModuleSeedContributor(
+            "AP",
+            new IOException("sensitive seed store path"));
+        var healthy = new ProbeModuleSeedContributor("CP");
+        var initializer = new ModuleSeedInitializer(logger, [failed, healthy]);
+
+        var issues = await initializer.ApplyConfigurationAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, failed.ConfigurationCallCount);
+        Assert.Equal(1, healthy.ConfigurationCallCount);
+        var issue = Assert.Single(issues);
+        Assert.Equal("MODULE_SEED_APPLY_FAILED", issue.Code);
+        Assert.Equal("AP", issue.ModuleId);
+        Assert.Contains(nameof(IOException), issue.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("sensitive", issue.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            logger.Entries,
+            entry => entry.Message.Contains("sensitive", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task StartupMesConfigurationValidator_WhenMesIsEnabledAndRequiredRolesAreMissing_ShouldReportOnlyModuleDiagnostic()
+    {
+        var module = new DiagnosticProcessModule(
+            "AP",
+            "AP",
+            requiresCloud: true,
+            requiresMes: true);
+        var (_, context) = CreateRegistrationValidatorContext(
+            module,
+            registerMesUploader: true);
+        var roleProvider = new FixedModuleParamRoleProvider(new Dictionary<ModuleParamRole, string>
+        {
+            [ModuleParamRole.MesEnabled] = "true",
+            [ModuleParamRole.MesBaseUrl] = "",
+            [ModuleParamRole.MesSignToken] = "",
+            [ModuleParamRole.StationNo] = "",
+            [ModuleParamRole.MesUpperComputerNo] = "P1-APUC",
+            [ModuleParamRole.MesOperationCode] = "AP"
+        });
+        var issues = new List<StartupDiagnosticIssue>();
+
+        await new StartupMesConfigurationValidator(roleProvider)
+            .ValidateAsync(context, issues, TestContext.Current.CancellationToken);
+
+        var issue = Assert.Single(issues);
+        Assert.Equal("MES_CONFIGURATION_INCOMPLETE", issue.Code);
+        Assert.Equal("AP", issue.ModuleId);
+        Assert.Contains("服务地址", issue.Message, StringComparison.Ordinal);
+        Assert.Contains("签名令牌", issue.Message, StringComparison.Ordinal);
+        Assert.Contains("工站编号", issue.Message, StringComparison.Ordinal);
+        Assert.Contains("Shell 与 PLC 基础运行继续", issue.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ConfiguredCatalog_WhenNoModulesSectionExists_ShouldNotEnableDiscoveredModules()
     {
         var pluginRoot = CreatePluginRuntimeRootFor("TestPlugin");
@@ -199,7 +258,7 @@ public sealed class ModuleRuntimeRegistrationTests
             AssertStagedModuleLayout(
                 pluginRoot,
                 "TestPlugin",
-                "test-plugin.module.json",
+                "testplugin.module.schema.json",
                 "IIoT.Edge.TestPlugin.dll");
 
             var discovery = DiscoverTestPlugins(pluginRoot);
@@ -227,6 +286,10 @@ public sealed class ModuleRuntimeRegistrationTests
         Assert.True(File.Exists(Path.Combine(runtimeDirectory, entryAssemblyName)));
         Assert.True(File.Exists(Path.Combine(runtimeDirectory, "Config", configFileName)));
         Assert.Empty(Directory.GetFiles(runtimeDirectory, "*.module.json", SearchOption.TopDirectoryOnly));
+        Assert.Empty(Directory.GetFiles(
+            Path.Combine(runtimeDirectory, "Config"),
+            "*.module.json",
+            SearchOption.TopDirectoryOnly));
         Assert.Empty(Directory.GetFiles(runtimeDirectory, "*.axaml", SearchOption.TopDirectoryOnly));
 
         if (hasLanguageResources)
@@ -1246,7 +1309,7 @@ public sealed class ModuleRuntimeRegistrationTests
             var logger = new SpyLogService();
             var initializer = new AppStartupInitializer(
                 provider,
-                new NoopDevelopmentSampleInitializer(),
+                new NoopModuleSeedInitializer(),
                 new NoopCloudSystemSwitchMigration(),
                 new NoopConfigSchemaReconciler(),
                 logger);
@@ -1319,7 +1382,6 @@ public sealed class ModuleRuntimeRegistrationTests
     private static IConfiguration CreateConfiguration(
         string[]? enabledModules = null,
         string environmentName = "Production",
-        bool developmentSamplesEnabled = false,
         string? clientCode = "CLIENT-01",
         string? bootstrapSecret = "bootstrap-secret",
         string? omittedCloudPathKey = null,
@@ -1344,10 +1406,7 @@ public sealed class ModuleRuntimeRegistrationTests
             ["CloudApi:Paths:ClientVersionReport"] = "/api/v1/edge/client-releases/version-reports",
             ["CloudApi:Paths:RuntimeHeartbeat"] = "/api/v1/edge/runtime-heartbeats",
             ["CloudApi:Paths:EdgeHostPlcRuntimeStates"] = "/api/v1/edge/edge-hosts/plc-runtime-states",
-            ["Shell:Environment"] = environmentName,
-            ["DevelopmentSamples:Enabled"] = developmentSamplesEnabled.ToString(),
-            ["DevelopmentSamples:SampleBarcode"] = "ST-DEV-0001",
-            ["DevelopmentSamples:SampleLayerCount"] = "12"
+            ["Shell:Environment"] = environmentName
         };
 
         if (clientCode is not null)
@@ -1624,7 +1683,6 @@ public sealed class ModuleRuntimeRegistrationTests
             string[] enabledModules,
             string[] deviceModuleIds,
             string environmentName = "Production",
-            bool developmentSamplesEnabled = false,
             string? clientCode = "CLIENT-01",
             string? bootstrapSecret = "bootstrap-secret",
             string? omittedCloudPathKey = null,
@@ -1646,7 +1704,6 @@ public sealed class ModuleRuntimeRegistrationTests
             var configuration = CreateConfiguration(
                 enabledModules: enabledModules,
                 environmentName: environmentName,
-                developmentSamplesEnabled: developmentSamplesEnabled,
                 clientCode: clientCode,
                 bootstrapSecret: bootstrapSecret,
                 omittedCloudPathKey: omittedCloudPathKey,
@@ -1726,7 +1783,7 @@ public sealed class ModuleRuntimeRegistrationTests
                     moduleParamRegistry));
             }
 
-            services.AddSingleton<IDevelopmentSampleInitializer, DevelopmentSampleInitializer>();
+            services.AddSingleton<IModuleSeedInitializer, ModuleSeedInitializer>();
             services.AddSingleton<IStartupDiagnosticsStore, StartupDiagnosticsStore>();
 
             var serviceProvider = services.BuildServiceProvider();
@@ -1738,7 +1795,7 @@ public sealed class ModuleRuntimeRegistrationTests
             await SeedDevicesAsync(serviceProvider, deviceModuleIds).ConfigureAwait(false);
 
             var diagnosticsStore = serviceProvider.GetRequiredService<IStartupDiagnosticsStore>();
-            var developmentSampleInitializer = serviceProvider.GetRequiredService<IDevelopmentSampleInitializer>();
+            var moduleSeedInitializer = serviceProvider.GetRequiredService<IModuleSeedInitializer>();
             var networkDevices = serviceProvider.GetRequiredService<IReadRepository<NetworkDeviceEntity>>();
             var ioMappings = serviceProvider.GetRequiredService<IReadRepository<IoMappingEntity>>();
             var configurationProfileBuilder = new StartupConfigurationProfileBuilder(configuration, runtimePaths);
@@ -1784,7 +1841,7 @@ public sealed class ModuleRuntimeRegistrationTests
             var manager = new AppLifecycleManager(
                 new AppStartupInitializer(
                     serviceProvider,
-                    developmentSampleInitializer,
+                    moduleSeedInitializer,
                     new NoopCloudSystemSwitchMigration(),
                     new NoopConfigSchemaReconciler(),
                     logger),
@@ -1802,7 +1859,7 @@ public sealed class ModuleRuntimeRegistrationTests
                 new AppRuntimeStateCoordinator(
                     contextStore,
                     recipeService,
-                    developmentSampleInitializer,
+                    moduleSeedInitializer,
                     logger),
                 backgroundCoordinator,
                 logger);
@@ -2222,13 +2279,121 @@ public sealed class ModuleRuntimeRegistrationTests
             => Task.CompletedTask;
     }
 
-    private sealed class NoopDevelopmentSampleInitializer : IDevelopmentSampleInitializer
+    private sealed class NoopModuleSeedInitializer : IModuleSeedInitializer
     {
-        public Task EnsureConfigurationSamplesAsync(CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
+        public Task<IReadOnlyList<StartupDiagnosticIssue>> ApplyConfigurationAsync(
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<StartupDiagnosticIssue>>([]);
 
-        public Task EnsureRuntimeSamplesAsync(CancellationToken cancellationToken = default)
+        public Task<IReadOnlyList<StartupDiagnosticIssue>> RestoreRuntimeStateAsync(
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<StartupDiagnosticIssue>>([]);
+    }
+
+    private sealed class ProbeModuleSeedContributor(
+        string moduleId,
+        Exception? configurationFailure = null) : IDevelopmentSampleContributor
+    {
+        public string ModuleId { get; } = moduleId;
+
+        public int ConfigurationCallCount { get; private set; }
+
+        public Task EnsureConfigurationSamplesAsync(
+            CancellationToken cancellationToken = default)
+        {
+            ConfigurationCallCount++;
+            return configurationFailure is null
+                ? Task.CompletedTask
+                : Task.FromException(configurationFailure);
+        }
+
+        public Task EnsureRuntimeSamplesAsync(
+            CancellationToken cancellationToken = default)
             => Task.CompletedTask;
+    }
+
+    private sealed class FixedModuleParamRoleProvider(
+        IReadOnlyDictionary<ModuleParamRole, string> values) : IModuleParamRoleProvider
+    {
+        public Task<ModuleParamRoleValue?> GetAsync(
+            string moduleId,
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            CancellationToken cancellationToken = default)
+        {
+            values.TryGetValue(role, out var value);
+            return Task.FromResult<ModuleParamRoleValue?>(
+                value is null
+                    ? null
+                    : new ModuleParamRoleValue(
+                        moduleId,
+                        category,
+                        role,
+                        role == ModuleParamRole.MesEnabled
+                            ? ParamValueKind.Bool
+                            : ParamValueKind.String,
+                        role.ToString(),
+                        $"ModuleParams:{moduleId}:Mes:{role}",
+                        value,
+                        null));
+        }
+
+        public async Task<IReadOnlyList<ModuleParamRoleValue>> GetAllAsync(
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            IReadOnlyCollection<string>? moduleIds = null,
+            CancellationToken cancellationToken = default)
+        {
+            var result = new List<ModuleParamRoleValue>();
+            foreach (var moduleId in moduleIds ?? ["AP"])
+            {
+                if (await GetAsync(moduleId, category, role, cancellationToken) is { } value)
+                {
+                    result.Add(value);
+                }
+            }
+
+            return result;
+        }
+
+        public async Task<string?> GetStringAsync(
+            string moduleId,
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            string? defaultValue = null,
+            CancellationToken cancellationToken = default)
+            => (await GetAsync(moduleId, category, role, cancellationToken))?.Value
+               ?? defaultValue;
+
+        public async Task<string?> FirstStringAsync(
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            IReadOnlyCollection<string>? moduleIds = null,
+            CancellationToken cancellationToken = default)
+            => (await GetAllAsync(category, role, moduleIds, cancellationToken))
+                .Select(static value => value.Value)
+                .FirstOrDefault();
+
+        public async Task<bool> GetBoolAsync(
+            string moduleId,
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            bool defaultValue = false,
+            CancellationToken cancellationToken = default)
+            => await GetAsync(moduleId, category, role, cancellationToken) is { Value: var value }
+                ? bool.TryParse(value, out var parsed) && parsed
+                : defaultValue;
+
+        public async Task<bool> AnyBoolAsync(
+            ModuleParamCategory category,
+            ModuleParamRole role,
+            IReadOnlyCollection<string>? moduleIds = null,
+            bool defaultValue = false,
+            CancellationToken cancellationToken = default)
+            => (await GetAllAsync(category, role, moduleIds, cancellationToken))
+                .Any(static value =>
+                    bool.TryParse(value.Value, out var parsed) && parsed)
+               || defaultValue && !values.ContainsKey(role);
     }
 
     private sealed class NoopCloudSystemSwitchMigration : ICloudSystemSwitchMigration

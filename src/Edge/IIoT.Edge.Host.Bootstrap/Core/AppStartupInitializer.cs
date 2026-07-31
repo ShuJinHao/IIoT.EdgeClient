@@ -18,20 +18,20 @@ public interface IAppStartupInitializer
 public sealed class AppStartupInitializer : IAppStartupInitializer
 {
     private readonly IServiceProvider _serviceProvider;
-    private readonly IDevelopmentSampleInitializer _developmentSampleInitializer;
+    private readonly IModuleSeedInitializer _moduleSeedInitializer;
     private readonly ICloudSystemSwitchMigration _cloudSystemSwitchMigration;
     private readonly IConfigSchemaReconciler _configSchemaReconciler;
     private readonly ILogService _logger;
 
     public AppStartupInitializer(
         IServiceProvider serviceProvider,
-        IDevelopmentSampleInitializer developmentSampleInitializer,
+        IModuleSeedInitializer moduleSeedInitializer,
         ICloudSystemSwitchMigration cloudSystemSwitchMigration,
         IConfigSchemaReconciler configSchemaReconciler,
         ILogService logger)
     {
         _serviceProvider = serviceProvider;
-        _developmentSampleInitializer = developmentSampleInitializer;
+        _moduleSeedInitializer = moduleSeedInitializer;
         _cloudSystemSwitchMigration = cloudSystemSwitchMigration;
         _configSchemaReconciler = configSchemaReconciler;
         _logger = logger;
@@ -73,10 +73,9 @@ public sealed class AppStartupInitializer : IAppStartupInitializer
 
         await MigrateDataPipelineIdentityAsync(issues, cancellationToken).ConfigureAwait(false);
 
-        await RunNonBlockingInitializerStepAsync(
-            "开发样例配置初始化",
-            () => _developmentSampleInitializer.EnsureConfigurationSamplesAsync(cancellationToken),
-            cancellationToken).ConfigureAwait(false);
+        issues.AddRange(await _moduleSeedInitializer
+            .ApplyConfigurationAsync(cancellationToken)
+            .ConfigureAwait(false));
 
         if (await TryMigrateCloudSystemSwitchAsync(cancellationToken).ConfigureAwait(false))
         {
