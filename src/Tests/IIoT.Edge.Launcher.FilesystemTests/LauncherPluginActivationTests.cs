@@ -427,6 +427,37 @@ public sealed class LauncherPluginActivationTests
         Assert.Equal(OperatingSystem.IsWindows(), matched);
     }
 
+    [Theory]
+    [InlineData("AP ")]
+    [InlineData(" AP")]
+    [InlineData("AP\t")]
+    public void Activation_WhenSelectedDirectoryHasSurroundingWhitespace_ShouldFailClosed(
+        string pluginDirectory)
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var launcherDirectory = Path.Combine(tempDirectory, "install", "current", "launcher");
+            Directory.CreateDirectory(launcherDirectory);
+            WriteActivation(launcherDirectory, "AP", "DieCuttingAnodeLine", "负极模切");
+            WriteEnabledSelectionEntries(launcherDirectory, ("AP", pluginDirectory));
+            var diagnostics = new LauncherStartupDiagnosticStore();
+            var selection = new LauncherEnabledPluginSelectionSource(launcherDirectory, diagnostics);
+            var source = new LauncherPluginActivationSource(launcherDirectory, selection, diagnostics);
+
+            var activations = source.LoadActivations();
+
+            Assert.Empty(activations);
+            Assert.Contains(
+                diagnostics.Snapshot,
+                item => item.ReasonCode == "LAUNCHER_PLUGIN_SELECTION_INVALID");
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
     [Fact]
     public void Activation_WhenReferenceEscapesIntoCaseVariantDirectory_ShouldFollowPlatformPathCaseRules()
     {

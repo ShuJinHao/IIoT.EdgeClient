@@ -99,7 +99,7 @@ public sealed class LauncherEnabledPluginSelectionSource(
                     ? ReadString(entry, "moduleId")
                     : null;
                 var pluginDirectory = entry.ValueKind == JsonValueKind.Object
-                    ? ReadString(entry, "pluginDirectory")
+                    ? ReadRawString(entry, "pluginDirectory")
                     : null;
                 if (!IsValidToken(moduleId)
                     || !IsSafePluginDirectory(pluginDirectory)
@@ -159,6 +159,12 @@ public sealed class LauncherEnabledPluginSelectionSource(
             ? value.GetString()?.Trim()
             : null;
 
+    private static string? ReadRawString(JsonElement element, string propertyName)
+        => TryGetProperty(element, propertyName, out var value)
+           && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
     private static bool IsValidToken(string? value)
         => !string.IsNullOrWhiteSpace(value)
            && value.Length <= 256
@@ -172,10 +178,10 @@ public sealed class LauncherEnabledPluginSelectionSource(
         }
 
         return value is not "." and not ".."
+               && string.Equals(value, value!.Trim(), StringComparison.Ordinal)
                && !value!.Contains('/')
                && !value.Contains('\\')
                && value.IndexOfAny(['<', '>', ':', '"', '|', '?', '*']) < 0
-               && !value.EndsWith(' ')
                && !value.EndsWith('.');
     }
 
