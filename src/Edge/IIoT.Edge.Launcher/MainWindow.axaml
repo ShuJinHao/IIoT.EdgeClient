@@ -245,10 +245,17 @@
                                         Classes="launcher-notice-icon"
                                         Data="{StaticResource Edge.Icon.Info}" />
                                 </edge:EdgeNoticeBar.Icon>
-                                <TextBlock
-                                    Classes="edge-notice-message"
-                                    Text="{DynamicResource Launcher_Login_BoundaryNote}"
-                                    TextWrapping="Wrap" />
+                                <StackPanel Spacing="6">
+                                    <TextBlock
+                                        Classes="edge-notice-message"
+                                        Text="{DynamicResource Launcher_Login_BoundaryNote}"
+                                        TextWrapping="Wrap" />
+                                    <TextBlock
+                                        Classes="edge-notice-message"
+                                        IsVisible="{Binding HasStartupDiagnostics}"
+                                        Text="{Binding StartupDiagnosticsText}"
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
                             </edge:EdgeNoticeBar>
                         </Grid>
                     </edge:EdgeCard>
@@ -355,7 +362,7 @@
                 <Grid
                     x:Name="SelectionPageRoot"
                     IsVisible="False"
-                    RowDefinitions="Auto,Auto,*"
+                    RowDefinitions="Auto,Auto,Auto,*"
                     RowSpacing="14">
                     <edge:EdgeCard
                         PaddingMode="Compact"
@@ -395,9 +402,25 @@
                         </Grid>
                     </edge:EdgeCard>
 
+                    <edge:EdgeNoticeBar
+                        x:Name="SelectionStartupDiagnosticsNotice"
+                        Grid.Row="1"
+                        IsVisible="{Binding HasStartupDiagnostics}"
+                        Status="Warning">
+                        <edge:EdgeNoticeBar.Icon>
+                            <PathIcon
+                                Classes="launcher-notice-icon"
+                                Data="{StaticResource Edge.Icon.Info}" />
+                        </edge:EdgeNoticeBar.Icon>
+                        <TextBlock
+                            Classes="edge-notice-message"
+                            Text="{Binding StartupDiagnosticsText}"
+                            TextWrapping="Wrap" />
+                    </edge:EdgeNoticeBar>
+
                     <edge:EdgeCard
                         x:Name="UpdateCenterPanelRoot"
-                        Grid.Row="1"
+                        Grid.Row="2"
                         PaddingMode="Compact"
                         Surface="Card">
                         <Grid RowDefinitions="Auto,Auto,Auto,Auto,*" RowSpacing="10">
@@ -587,7 +610,7 @@
                     </edge:EdgeCard>
 
                     <edge:EdgeScrollHost
-                        Grid.Row="2"
+                        Grid.Row="3"
                         HorizontalScrollBarVisibility="Disabled"
                         VerticalScrollBarVisibility="Auto">
                         <ItemsControl ItemsSource="{Binding Profiles}">

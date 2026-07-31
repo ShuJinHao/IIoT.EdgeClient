@@ -749,7 +749,8 @@ public sealed class ShellLaunchServiceTests
                     profile,
                     TestContext.Current.CancellationToken));
 
-            Assert.Contains("AP 插件未能加载", exception.Message, StringComparison.Ordinal);
+            Assert.Contains("受控启动失败", exception.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain("AP 插件未能加载", exception.Message, StringComparison.Ordinal);
             Assert.False(terminated);
             Assert.True(service.HasAnyRunningShellProcess());
             Assert.Null(gate.TryAcquireUpdate());
@@ -822,6 +823,150 @@ public sealed class ShellLaunchServiceTests
                 Directory.Delete(root, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public async Task Launch_WhenReadySignalBelongsToAnotherProcess_ShouldTerminateAndReject()
+    {
+        var baseDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "edge-launcher-shell-identity-tests",
+            Guid.NewGuid().ToString("N"),
+            "launcher");
+        var configuredPath = Path.Combine(baseDirectory, "runtime", "IIoT.Edge.Shell");
+        Directory.CreateDirectory(Path.GetDirectoryName(configuredPath)!);
+        File.WriteAllText(configuredPath + ".dll", string.Empty);
+        using var starter = new ReadyShellProcessStarter(
+            baseDirectory,
+            activeModuleIds: ["AP"],
+            processIdDelta: 1);
+        var terminated = false;
+        using var service = new ShellLaunchService(
+            starter,
+            new FakeShellInstanceIdResolver(),
+            new FakeShellInstanceProbe(),
+            new FileLauncherUpdateOperationGate(baseDirectory),
+            UnblockedUpdateTransactionRecovery.Instance,
+            terminateProcess: _ => terminated = true);
+        var profile = new LauncherProfileDefinition(
+            "DieCuttingAnodeLine",
+            "负极模切",
+            "AP profile",
+            null,
+            "DieCuttingAnodeLine",
+            configuredPath,
+            "ChartBar",
+            "#2563EB")
+        {
+            ExpectedModuleIds = ["AP"]
+        };
+
+        try
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.LaunchAsync(profile, TestContext.Current.CancellationToken));
+
+            Assert.Contains("不匹配的进程身份", exception.Message, StringComparison.Ordinal);
+            Assert.True(terminated);
+            Assert.False(service.HasAnyRunningShellProcess());
+        }
+        finally
+        {
+            starter.ReleaseShellPresence();
+            var root = Directory.GetParent(baseDirectory)?.FullName;
+            if (!string.IsNullOrWhiteSpace(root) && Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Launch_WhenShellIsReadyWithDiagnostics_ShouldReturnStableDiagnosticResult()
+    {
+        var baseDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "edge-launcher-shell-diagnostic-tests",
+            Guid.NewGuid().ToString("N"),
+            "launcher");
+        var configuredPath = Path.Combine(baseDirectory, "runtime", "IIoT.Edge.Shell");
+        Directory.CreateDirectory(Path.GetDirectoryName(configuredPath)!);
+        File.WriteAllText(configuredPath + ".dll", string.Empty);
+        var expectedDiagnostic = new EdgeClientShellLaunchDiagnostic(
+            "STARTUP_MES_RETRY_TASK_FAILED",
+            "System.Diagnostics",
+            "AP");
+        using var starter = new ReadyShellProcessStarter(
+            baseDirectory,
+            status: EdgeClientShellLaunchStatuses.ReadyWithDiagnostics,
+            activeModuleIds: ["AP"],
+            diagnostics: [expectedDiagnostic]);
+        using var service = CreateService(
+            starter,
+            updateOperationGate: new FileLauncherUpdateOperationGate(baseDirectory));
+        var profile = new LauncherProfileDefinition(
+            "DieCuttingAnodeLine",
+            "负极模切",
+            "AP profile",
+            null,
+            "DieCuttingAnodeLine",
+            configuredPath,
+            "ChartBar",
+            "#2563EB")
+        {
+            ExpectedModuleIds = ["AP"]
+        };
+
+        try
+        {
+            var result = await service.LaunchAsync(
+                profile,
+                TestContext.Current.CancellationToken);
+
+            Assert.True(result.ReadyWithDiagnostics);
+            Assert.Equal(expectedDiagnostic, Assert.Single(result.Diagnostics));
+            Assert.True(service.IsProfileRunning(profile));
+        }
+        finally
+        {
+            starter.ReleaseShellPresence();
+            var root = Directory.GetParent(baseDirectory)?.FullName;
+            if (!string.IsNullOrWhiteSpace(root) && Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Launch_WhenExpectedModuleIsNotSelected_ShouldFailBeforeProcessStart()
+    {
+        var starter = new SpyProcessStarter();
+        using var service = new ShellLaunchService(
+            starter,
+            new FakeShellInstanceIdResolver(),
+            new FakeShellInstanceProbe(),
+            new TestLauncherUpdateOperationGate(),
+            UnblockedUpdateTransactionRecovery.Instance,
+            new StubEnabledPluginSelectionSource(true, ["CP"]));
+        var profile = new LauncherProfileDefinition(
+            "DieCuttingAnodeLine",
+            "负极模切",
+            "AP profile",
+            null,
+            "DieCuttingAnodeLine",
+            Path.Combine(Path.GetTempPath(), "IIoT.Edge.Shell"),
+            "ChartBar",
+            "#2563EB")
+        {
+            ExpectedModuleIds = ["AP"]
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.LaunchAsync(profile, TestContext.Current.CancellationToken));
+
+        Assert.Contains("不在当前启用工序清单", exception.Message, StringComparison.Ordinal);
+        Assert.Null(starter.StartInfo);
     }
 
     [Fact]
@@ -971,6 +1116,7 @@ public sealed class ShellLaunchServiceTests
         public Process? Start(ProcessStartInfo startInfo)
         {
             StartInfo = startInfo;
+            var process = Process.GetCurrentProcess();
             var readyPath = startInfo.EnvironmentVariables[
                 EdgeClientUpdateCoordination.ShellLaunchReadyEnvironmentVariable];
             var machineProfile = startInfo.EnvironmentVariables["Shell__MachineProfile"];
@@ -985,10 +1131,13 @@ public sealed class ShellLaunchServiceTests
                         EdgeClientShellLaunchStatuses.Ready,
                         machineProfile,
                         [],
-                        null)));
+                        null)
+                    {
+                        ProcessId = process.Id
+                    }));
             }
 
-            return Process.GetCurrentProcess();
+            return process;
         }
     }
 
@@ -997,7 +1146,9 @@ public sealed class ShellLaunchServiceTests
         string status = EdgeClientShellLaunchStatuses.Ready,
         IReadOnlyList<string>? activeModuleIds = null,
         string? machineProfileOverride = null,
-        string? message = null) : IProcessStarter, IDisposable
+        string? message = null,
+        int processIdDelta = 0,
+        IReadOnlyList<EdgeClientShellLaunchDiagnostic>? diagnostics = null) : IProcessStarter, IDisposable
     {
         private IDisposable? _shellPresence;
 
@@ -1008,6 +1159,7 @@ public sealed class ShellLaunchServiceTests
         public Process? Start(ProcessStartInfo startInfo)
         {
             StartInfo = startInfo;
+            var process = Process.GetCurrentProcess();
             _shellPresence =
                 EdgeClientUpdateCoordination.TryAcquireShellPresence(
                     baseDirectory);
@@ -1029,10 +1181,14 @@ public sealed class ShellLaunchServiceTests
                         activeModuleIds ?? [],
                         status == EdgeClientShellLaunchStatuses.Failed
                             ? message ?? "启动诊断失败。"
-                            : null),
+                            : null)
+                    {
+                        ProcessId = process.Id + processIdDelta,
+                        Diagnostics = diagnostics ?? []
+                    },
                     baseDirectory);
             Assert.True(SignaledReady);
-            return Process.GetCurrentProcess();
+            return process;
         }
 
         public void ReleaseShellPresence()
@@ -1048,6 +1204,7 @@ public sealed class ShellLaunchServiceTests
         private IDisposable? _shellPresence;
         private string? _machineProfile;
         private string? _readyPath;
+        private int _processId;
 
         public Process? Start(ProcessStartInfo startInfo)
         {
@@ -1061,7 +1218,9 @@ public sealed class ShellLaunchServiceTests
                 "Shell__MachineProfile"];
             Assert.False(string.IsNullOrWhiteSpace(_readyPath));
             Assert.False(string.IsNullOrWhiteSpace(_machineProfile));
-            return Process.GetCurrentProcess();
+            var process = Process.GetCurrentProcess();
+            _processId = process.Id;
+            return process;
         }
 
         public void SignalReady()
@@ -1074,7 +1233,10 @@ public sealed class ShellLaunchServiceTests
                         EdgeClientShellLaunchStatuses.Ready,
                         _machineProfile!,
                         activeModuleIds,
-                        Message: null),
+                        Message: null)
+                    {
+                        ProcessId = _processId
+                    },
                     baseDirectory));
         }
 
@@ -1096,6 +1258,15 @@ public sealed class ShellLaunchServiceTests
             => _mappings.TryGetValue(profile.MachineProfile, out var instanceId)
                 ? instanceId
                 : null;
+    }
+
+    private sealed class StubEnabledPluginSelectionSource(
+        bool manifestIsValid,
+        IReadOnlyList<string> moduleIds)
+        : ILauncherEnabledPluginSelectionSource
+    {
+        public LauncherEnabledPluginSelection Load()
+            => new(manifestIsValid, moduleIds);
     }
 
     private sealed class FakeShellInstanceProbe(params string[] runningInstanceIds) : IShellInstanceProbe

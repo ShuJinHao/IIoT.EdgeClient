@@ -1,4 +1,5 @@
 using IIoT.Edge.Shell.Core;
+using IIoT.Edge.Module.Contracts.Diagnostics;
 using IIoT.Edge.SharedKernel.Configuration;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -260,6 +261,8 @@ public sealed class StartupExceptionAllowlistSourceGuardTests
             "ShellModuleLaunchReadiness.Evaluate(";
         const string signalReady =
             "EdgeClientUpdateCoordination.TrySignalShellLaunchReady(";
+        const string signalReadyWithDiagnostics =
+            "EdgeClientUpdateCoordination.TrySignalShellLaunchReadyWithDiagnostics(";
 
         var acquirePresenceIndex = source.IndexOf(
             acquirePresence,
@@ -279,6 +282,9 @@ public sealed class StartupExceptionAllowlistSourceGuardTests
         var signalIndex = source.IndexOf(
             signalReady,
             StringComparison.Ordinal);
+        var diagnosticSignalIndex = source.IndexOf(
+            signalReadyWithDiagnostics,
+            StringComparison.Ordinal);
 
         Assert.True(acquirePresenceIndex >= 0);
         Assert.True(loadConfigurationIndex > acquirePresenceIndex);
@@ -286,9 +292,30 @@ public sealed class StartupExceptionAllowlistSourceGuardTests
         Assert.True(showIndex > failureGuardIndex);
         Assert.True(moduleValidationIndex > showIndex);
         Assert.True(signalIndex > moduleValidationIndex);
+        Assert.True(diagnosticSignalIndex > moduleValidationIndex);
         Assert.Equal(
             signalIndex,
             source.LastIndexOf(signalReady, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ShellLaunchDiagnostics_ShouldExposeOnlyStableCodeModuleAndRepairTarget()
+    {
+        const string sensitiveMessage = "connection string and local path";
+
+        var diagnostics = IIoT.Edge.Shell.App.BuildShellLaunchDiagnostics(
+        [
+            new StartupDiagnosticIssue(
+                "STARTUP_CLOUD_RETRY_TASK_FAILED",
+                sensitiveMessage,
+                "AP")
+        ]);
+
+        var diagnostic = Assert.Single(diagnostics);
+        Assert.Equal("STARTUP_CLOUD_RETRY_TASK_FAILED", diagnostic.ReasonCode);
+        Assert.Equal("AP", diagnostic.ModuleId);
+        Assert.Equal("System.Diagnostics", diagnostic.RepairTarget);
+        Assert.DoesNotContain(sensitiveMessage, diagnostic.ToString(), StringComparison.Ordinal);
     }
 
     private static string FindRepositoryRoot()

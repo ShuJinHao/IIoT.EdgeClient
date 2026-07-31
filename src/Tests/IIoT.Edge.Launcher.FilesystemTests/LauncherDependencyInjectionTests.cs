@@ -6,7 +6,9 @@ using IIoT.Edge.Infrastructure.Update.Packages;
 using IIoT.Edge.Launcher;
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.Launcher.Services;
+using IIoT.Edge.UI.Shared.Localization;
 using Microsoft.Extensions.DependencyInjection;
+using System.Globalization;
 using System.Reflection;
 using Xunit;
 
@@ -493,11 +495,22 @@ public sealed class LauncherDependencyInjectionTests
                 new FileLauncherUpdateOperationGate(baseDirectory));
             var startupActions = new GateObservingStartupActions(
                 new FileLauncherUpdateOperationGate(baseDirectory));
+            var diagnostics = new LauncherStartupDiagnosticStore();
             var services = new ServiceCollection()
                 .AddSingleton<ILauncherUpdateOperationGate>(gate)
                 .AddSingleton<IEdgeUpdateTransactionRecovery>(recovery)
                 .AddSingleton<ILauncherPluginActivationReconciler>(startupActions)
-                .AddSingleton<ILauncherDeviceBindingImporter>(startupActions);
+                .AddSingleton<ILauncherDeviceBindingImporter>(startupActions)
+                .AddSingleton<ILauncherStartupCoordinator>(provider =>
+                    new LauncherStartupCoordinator(
+                        null!,
+                        null!,
+                        null!,
+                        provider.GetRequiredService<ILauncherUpdateOperationGate>(),
+                        provider.GetRequiredService<IEdgeUpdateTransactionRecovery>(),
+                        provider.GetRequiredService<ILauncherPluginActivationReconciler>(),
+                        provider.GetRequiredService<ILauncherDeviceBindingImporter>(),
+                        diagnostics));
             using var provider = services.BuildServiceProvider();
 
             var ready = App.TryCompleteUpdateStartup(provider);
@@ -533,16 +546,83 @@ public sealed class LauncherDependencyInjectionTests
             using var heldLease = gateOwner.TryAcquire();
             Assert.NotNull(heldLease);
             var recovery = new GateObservingRecovery(gateOwner);
+            var diagnostics = new LauncherStartupDiagnosticStore();
             var services = new ServiceCollection()
                 .AddSingleton<ILauncherUpdateOperationGate>(
                     new FileLauncherUpdateOperationGate(baseDirectory))
-                .AddSingleton<IEdgeUpdateTransactionRecovery>(recovery);
+                .AddSingleton<IEdgeUpdateTransactionRecovery>(recovery)
+                .AddSingleton<ILauncherStartupCoordinator>(provider =>
+                    new LauncherStartupCoordinator(
+                        null!,
+                        null!,
+                        null!,
+                        provider.GetRequiredService<ILauncherUpdateOperationGate>(),
+                        provider.GetRequiredService<IEdgeUpdateTransactionRecovery>(),
+                        null!,
+                        null!,
+                        diagnostics));
             using var provider = services.BuildServiceProvider();
 
             var ready = App.TryCompleteUpdateStartup(provider);
 
             Assert.False(ready);
             Assert.False(recovery.WasCalled);
+        }
+        finally
+        {
+            if (Directory.Exists(baseDirectory))
+            {
+                Directory.Delete(baseDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void StartupCoordinator_WhenLocalStepsFail_ShouldContinueAndPublishSafeDiagnostics()
+    {
+        var baseDirectory = Path.Combine(
+            Path.GetTempPath(),
+            $"iiot-launcher-local-startup-test-{Guid.NewGuid():N}");
+        const string sensitiveMessage = "account path and secret must not leak";
+        try
+        {
+            var diagnostics = new LauncherStartupDiagnosticStore();
+            var language = new RecordingLanguageService();
+            var account = new ThrowingAccountInitializer(sensitiveMessage);
+            var update = new RecordingUpdateConfigInitializer();
+            var gate = new FileLauncherUpdateOperationGate(baseDirectory);
+            var recovery = new GateObservingRecovery(gate);
+            var activation = new ThrowingActivationReconciler(sensitiveMessage);
+            var binding = new RecordingBindingImporter();
+            var coordinator = new LauncherStartupCoordinator(
+                language,
+                account,
+                update,
+                gate,
+                recovery,
+                activation,
+                binding,
+                diagnostics);
+
+            coordinator.PrepareLocalization();
+            coordinator.Initialize();
+
+            Assert.Equal(1, language.InitializeCallCount);
+            Assert.Equal(1, update.EnsureCallCount);
+            Assert.True(recovery.WasCalled);
+            Assert.Equal(1, activation.ReconcileCallCount);
+            Assert.Equal(1, binding.ApplyCallCount);
+            Assert.Contains(
+                diagnostics.Snapshot,
+                item => item.ReasonCode == "LAUNCHER_ACCOUNT_CATALOG_INITIALIZATION_FAILED"
+                        && item.ExceptionType == nameof(InvalidOperationException));
+            Assert.Contains(
+                diagnostics.Snapshot,
+                item => item.ReasonCode == "LAUNCHER_PLUGIN_ACTIVATION_RECONCILIATION_FAILED"
+                        && item.ExceptionType == nameof(InvalidOperationException));
+            Assert.DoesNotContain(
+                diagnostics.Snapshot,
+                item => item.ToString().Contains(sensitiveMessage, StringComparison.Ordinal));
         }
         finally
         {
@@ -625,5 +705,56 @@ public sealed class LauncherDependencyInjectionTests
             using var competingLease = observingGate.TryAcquire();
             ObservedGateHeld &= competingLease is null;
         }
+    }
+
+    private sealed class RecordingLanguageService : IAppLanguageService
+    {
+        private static readonly LanguageOption Language = new(
+            CultureInfo.GetCultureInfo("zh-CN"),
+            "中文");
+
+        public int InitializeCallCount { get; private set; }
+        public CultureInfo Current => Language.Culture;
+        public LanguageOption CurrentOption => Language;
+        public IReadOnlyList<LanguageOption> SupportedLanguages => [Language];
+        public event EventHandler? LanguageChanged;
+
+        public void Initialize() => InitializeCallCount++;
+        public void Change(CultureInfo culture) => LanguageChanged?.Invoke(this, EventArgs.Empty);
+        public string GetString(string key, string fallback = "") => fallback;
+        public string Format(string key, string fallback, params object[] args)
+            => string.Format(CultureInfo.InvariantCulture, fallback, args);
+    }
+
+    private sealed class ThrowingAccountInitializer(string message)
+        : ILauncherAccountCatalogInitializer
+    {
+        public void EnsureCatalogExists() => throw new InvalidOperationException(message);
+    }
+
+    private sealed class RecordingUpdateConfigInitializer : IEdgeUpdateConfigInitializer
+    {
+        public int EnsureCallCount { get; private set; }
+        public void EnsureConfigExists() => EnsureCallCount++;
+        public bool TrySyncUpdateSource(string updateSource) => false;
+    }
+
+    private sealed class ThrowingActivationReconciler(string message)
+        : ILauncherPluginActivationReconciler
+    {
+        public int ReconcileCallCount { get; private set; }
+        public void Reconcile()
+        {
+            ReconcileCallCount++;
+            throw new InvalidOperationException(message);
+        }
+
+        public bool IsReady(LauncherPluginActivation activation) => false;
+    }
+
+    private sealed class RecordingBindingImporter : ILauncherDeviceBindingImporter
+    {
+        public int ApplyCallCount { get; private set; }
+        public void ApplyPendingBindings() => ApplyCallCount++;
     }
 }

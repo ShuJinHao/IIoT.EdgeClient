@@ -21,7 +21,7 @@ public sealed class BackgroundServiceStartException(
     private static string BuildMessage(IReadOnlyList<BackgroundServiceStartFailure> failures)
         => failures.Count == 0
             ? "后台服务启动失败。"
-            : $"后台服务启动失败：{string.Join("；", failures.Select(static failure => $"{failure.ServiceName}（{failure.Exception.Message}）"))}";
+            : $"后台服务启动失败：{string.Join("；", failures.Select(static failure => $"{failure.ServiceName}（{failure.Exception.GetType().Name}）"))}";
 }
 
 public sealed record BackgroundServiceStopFailure(
@@ -40,7 +40,7 @@ public sealed class BackgroundServiceStopException(
     private static string BuildMessage(IReadOnlyList<BackgroundServiceStopFailure> failures)
         => failures.Count == 0
             ? "后台服务停止失败。"
-            : $"后台服务停止失败：{string.Join("；", failures.Select(static failure => $"{failure.ServiceName}（{failure.Exception.Message}）"))}";
+            : $"后台服务停止失败：{string.Join("；", failures.Select(static failure => $"{failure.ServiceName}（{failure.Exception.GetType().Name}）"))}";
 }
 
 public sealed class BackgroundServiceCoordinatorOptions
@@ -108,7 +108,7 @@ public sealed class BackgroundServiceCoordinator : IBackgroundServiceCoordinator
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error($"[后台服务] 启动 {service.ServiceName} 失败：{ex.Message}");
+                    _logger.Error($"[后台服务] 启动 {service.ServiceName} 失败（{ex.GetType().Name}）。");
                     var cleanupFailure = await TryStopServiceAsync(service, CancellationToken.None)
                         .ConfigureAwait(false);
                     if (cleanupFailure is not null)
@@ -222,12 +222,12 @@ public sealed class BackgroundServiceCoordinator : IBackgroundServiceCoordinator
             ObserveLateStop(service, stopTask);
             var exception = new TimeoutException(
                 $"后台服务 {service.ServiceName} 未在 {_options.StopTimeout} 内停止。");
-            _logger.Error($"[后台服务] 停止 {service.ServiceName} 失败：{exception.Message}");
+            _logger.Error($"[后台服务] 停止 {service.ServiceName} 失败（{exception.GetType().Name}）。");
             return exception;
         }
         catch (Exception ex)
         {
-            _logger.Error($"[后台服务] 停止 {service.ServiceName} 失败：{ex.Message}");
+            _logger.Error($"[后台服务] 停止 {service.ServiceName} 失败（{ex.GetType().Name}）。");
             return ex;
         }
     }
@@ -240,7 +240,7 @@ public sealed class BackgroundServiceCoordinator : IBackgroundServiceCoordinator
         }
         catch (Exception ex)
         {
-            _logger.Error($"[后台服务] 启动取消后清理失败：{ex.Message}");
+            _logger.Error($"[后台服务] 启动取消后清理失败（{ex.GetType().Name}）。");
         }
     }
 
@@ -258,7 +258,7 @@ public sealed class BackgroundServiceCoordinator : IBackgroundServiceCoordinator
         }
         catch (Exception ex)
         {
-            _logger.Error($"[后台服务] {service.ServiceName} 超时后的停止任务最终失败：{ex.Message}");
+            _logger.Error($"[后台服务] {service.ServiceName} 超时后的停止任务最终失败（{ex.GetType().Name}）。");
         }
     }
 
@@ -278,7 +278,7 @@ public sealed class BackgroundServiceCoordinator : IBackgroundServiceCoordinator
         var failure = await TryStopServiceAsync(service, CancellationToken.None).ConfigureAwait(false);
         if (failure is not null)
         {
-            _logger.Error($"[后台服务] 超时后迟到启动的 {service.ServiceName} 未能停止：{failure.Message}");
+            _logger.Error($"[后台服务] 超时后迟到启动的 {service.ServiceName} 未能停止（{failure.GetType().Name}）。");
         }
     }
 

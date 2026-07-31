@@ -69,11 +69,44 @@ public sealed class BackgroundServiceCoordinatorBehaviorTests
         Assert.Equal(1, faulting.StopCallCount);
     }
 
+    [Fact]
+    public async Task StartAsync_WhenOneDataPipelineTaskFails_ShouldStillStartOtherTwoIndependently()
+    {
+        const string sensitiveMessage = "local path and token must not leak";
+        var processQueue = new DeadlineManagedService(
+            "ProcessQueueTask",
+            start: () => Task.FromException(new InvalidOperationException(sensitiveMessage)));
+        var cloudRetry = new DeadlineManagedService("CloudRetryTask");
+        var mesRetry = new DeadlineManagedService("MesRetryTask");
+        var logger = new FakeLogService();
+        var coordinator = new BackgroundServiceCoordinator(
+            [processQueue, cloudRetry, mesRetry],
+            logger);
+
+        var exception = await Assert.ThrowsAsync<BackgroundServiceStartException>(
+            () => coordinator.StartAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal("ProcessQueueTask", Assert.Single(exception.Failures).ServiceName);
+        Assert.Equal(1, processQueue.StartCallCount);
+        Assert.Equal(1, cloudRetry.StartCallCount);
+        Assert.Equal(1, mesRetry.StartCallCount);
+        Assert.Equal(1, processQueue.StopCallCount);
+        Assert.DoesNotContain(sensitiveMessage, exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            logger.Entries,
+            entry => entry.Message.Contains(sensitiveMessage, StringComparison.Ordinal));
+
+        await coordinator.StopAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(1, cloudRetry.StopCallCount);
+        Assert.Equal(1, mesRetry.StopCallCount);
+    }
+
     private sealed class DeadlineManagedService : IManagedBackgroundService
     {
         private readonly bool _completeStartWhenStopped;
         private readonly ICollection<string>? _stopOrder;
         private readonly Func<Task>? _stop;
+        private readonly Func<Task>? _start;
         private readonly TaskCompletionSource _startRelease =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _lateStopCompleted =
@@ -85,13 +118,15 @@ public sealed class BackgroundServiceCoordinatorBehaviorTests
             string serviceName,
             bool completeStartWhenStopped = false,
             ICollection<string>? stopOrder = null,
-            Func<Task>? stop = null)
+            Func<Task>? stop = null,
+            Func<Task>? start = null)
         {
             ServiceName = serviceName;
             _completeStartWhenStopped = completeStartWhenStopped;
             _stopOrder = stopOrder;
             _stop = stop;
-            if (!completeStartWhenStopped)
+            _start = start;
+            if (!completeStartWhenStopped && start is null)
                 _startRelease.TrySetResult();
         }
 
@@ -103,6 +138,12 @@ public sealed class BackgroundServiceCoordinatorBehaviorTests
         public async Task StartAsync(CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref _startCallCount);
+            if (_start is not null)
+            {
+                await _start().WaitAsync(cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
             await _startRelease.Task.ConfigureAwait(false);
         }
 

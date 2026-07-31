@@ -24,6 +24,7 @@ public sealed class LauncherPluginActivationTests
 
             WithDataRoot(dataRoot, () =>
             {
+                WriteEnabledSelection(launcherDirectory, "AP", "CP");
                 var source = new LauncherPluginActivationSource(launcherDirectory);
                 var reconciler = new LauncherPluginActivationReconciler(launcherDirectory, source);
                 reconciler.Reconcile();
@@ -67,6 +68,7 @@ public sealed class LauncherPluginActivationTests
             WriteBaseCatalog(launcherDirectory, "host/IIoT.Edge.Shell");
             WriteActivation(launcherDirectory, "AP", "DieCuttingAnodeLine", "负极模切");
             WriteActivation(launcherDirectory, "CP", "DieCuttingCathodeLine", "正极模切");
+            WriteEnabledSelection(launcherDirectory, "AP", "CP");
 
             var source = new LauncherPluginActivationSource(launcherDirectory);
             var reconciler = new LauncherPluginActivationReconciler(launcherDirectory, source);
@@ -120,6 +122,7 @@ public sealed class LauncherPluginActivationTests
                 "负极模切",
                 clientCode: "SHOULD-NOT-BE-PACKAGED");
             WriteActivation(launcherDirectory, "CP", "DieCuttingCathodeLine", "正极模切");
+            WriteEnabledSelection(launcherDirectory, "AP", "CP");
 
             var profiles = new LauncherProfileCatalog(launcherDirectory).LoadProfiles();
 
@@ -143,6 +146,7 @@ public sealed class LauncherPluginActivationTests
             Directory.CreateDirectory(launcherDirectory);
             WriteBaseCatalog(launcherDirectory);
             WriteActivation(launcherDirectory, "AP", "DieCuttingAnodeLine", "负极模切");
+            WriteEnabledSelection(launcherDirectory, "AP");
             var machinePath = Path.Combine(
                 EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(launcherDirectory),
                 "AP",
@@ -183,6 +187,7 @@ public sealed class LauncherPluginActivationTests
 
             WithDataRoot(dataRoot, () =>
             {
+                WriteEnabledSelection(launcherDirectory, "AP");
                 var externalPath = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(
                     "DieCuttingAnodeLine",
                     hostDirectory);
@@ -235,6 +240,7 @@ public sealed class LauncherPluginActivationTests
 
             WithDataRoot(dataRoot, () =>
             {
+                WriteEnabledSelection(launcherDirectory, "AP");
                 WriteText(
                     EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(
                         "DieCuttingAnodeLine",
@@ -253,6 +259,111 @@ public sealed class LauncherPluginActivationTests
 
                 Assert.Equal("Default", profile.ProfileId);
             });
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void Catalog_WhenEnabledSelectionIsMissing_ShouldFailClosedAndPublishDiagnostic()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var launcherDirectory = Path.Combine(tempDirectory, "install", "current", "launcher");
+            Directory.CreateDirectory(launcherDirectory);
+            WriteBaseCatalog(launcherDirectory);
+            WriteActivation(launcherDirectory, "AP", "DieCuttingAnodeLine", "负极模切");
+            var diagnostics = new LauncherStartupDiagnosticStore();
+            var selection = new LauncherEnabledPluginSelectionSource(launcherDirectory, diagnostics);
+            var source = new LauncherPluginActivationSource(launcherDirectory, selection, diagnostics);
+
+            var profiles = new LauncherProfileCatalog(
+                    launcherDirectory,
+                    activationSource: source)
+                .LoadProfiles();
+
+            Assert.Equal("Default", Assert.Single(profiles).ProfileId);
+            Assert.Contains(
+                diagnostics.Snapshot,
+                item => item.ReasonCode == "LAUNCHER_PLUGIN_SELECTION_MISSING");
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void Catalog_WhenEnabledSelectionIsCorrupt_ShouldFailClosedWithoutUsingPluginDirectory()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var launcherDirectory = Path.Combine(tempDirectory, "install", "current", "launcher");
+            Directory.CreateDirectory(launcherDirectory);
+            WriteBaseCatalog(launcherDirectory);
+            WriteActivation(launcherDirectory, "AP", "DieCuttingAnodeLine", "负极模切");
+            WriteText(
+                Path.Combine(
+                    EdgeClientProgramDataPaths.ResolveLauncherDirectory(launcherDirectory),
+                    LauncherEnabledPluginSelectionSource.EnabledPluginsFileName),
+                "{ corrupt");
+            var diagnostics = new LauncherStartupDiagnosticStore();
+            var selection = new LauncherEnabledPluginSelectionSource(launcherDirectory, diagnostics);
+            var source = new LauncherPluginActivationSource(launcherDirectory, selection, diagnostics);
+
+            var profiles = new LauncherProfileCatalog(
+                    launcherDirectory,
+                    activationSource: source)
+                .LoadProfiles();
+
+            Assert.Equal("Default", Assert.Single(profiles).ProfileId);
+            Assert.Contains(
+                diagnostics.Snapshot,
+                item => item.ReasonCode == "LAUNCHER_PLUGIN_SELECTION_UNREADABLE"
+                        && item.ExceptionType?.Contains("Json", StringComparison.Ordinal) == true);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void Reconciler_WhenPluginDirectoryIsNotSelected_ShouldNotExposeOrMaterializeIt()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var launcherDirectory = Path.Combine(tempDirectory, "install", "current", "launcher");
+            var hostDirectory = Path.Combine(tempDirectory, "install", "current", "host");
+            Directory.CreateDirectory(launcherDirectory);
+            Directory.CreateDirectory(hostDirectory);
+            WriteBaseCatalog(launcherDirectory);
+            WriteActivation(launcherDirectory, "AP", "DieCuttingAnodeLine", "负极模切");
+            WriteActivation(launcherDirectory, "CP", "DieCuttingCathodeLine", "正极模切");
+            WriteEnabledSelection(launcherDirectory, "AP");
+            var source = new LauncherPluginActivationSource(launcherDirectory);
+            var reconciler = new LauncherPluginActivationReconciler(launcherDirectory, source);
+
+            reconciler.Reconcile();
+            var profiles = new LauncherProfileCatalog(
+                    launcherDirectory,
+                    activationSource: source,
+                    activationReconciler: reconciler)
+                .LoadProfiles();
+
+            Assert.Contains(profiles, profile => profile.ProfileId == "DieCuttingAnodeLine");
+            Assert.DoesNotContain(profiles, profile => profile.ProfileId == "DieCuttingCathodeLine");
+            Assert.True(File.Exists(EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(
+                "DieCuttingAnodeLine",
+                hostDirectory)));
+            Assert.False(File.Exists(EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(
+                "DieCuttingCathodeLine",
+                hostDirectory)));
         }
         finally
         {
@@ -366,6 +477,18 @@ public sealed class LauncherPluginActivationTests
         Directory.CreateDirectory(path);
         return path;
     }
+
+    private static void WriteEnabledSelection(
+        string launcherDirectory,
+        params string[] moduleIds)
+        => WriteText(
+            Path.Combine(
+                EdgeClientProgramDataPaths.ResolveLauncherDirectory(launcherDirectory),
+                LauncherEnabledPluginSelectionSource.EnabledPluginsFileName),
+            JsonSerializer.Serialize(new
+            {
+                plugins = moduleIds.Select(static moduleId => new { moduleId }).ToArray()
+            }));
 
     private static void DeleteDirectory(string path)
     {

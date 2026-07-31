@@ -28,18 +28,21 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
     private readonly ILauncherProfileCatalog _profileCatalog;
     private readonly IEdgeProfileModuleConfigurationStore _moduleConfiguration;
     private readonly ILauncherUpdateTargetFactory _targetFactory;
+    private readonly ILauncherStartupDiagnosticWriter? _startupDiagnostics;
 
     public LauncherDeviceBindingImporter(
         string baseDirectory,
         ILauncherProfileCatalog profileCatalog,
         IEdgeProfileModuleConfigurationStore moduleConfiguration,
-        ILauncherUpdateTargetFactory targetFactory)
+        ILauncherUpdateTargetFactory targetFactory,
+        ILauncherStartupDiagnosticWriter? startupDiagnostics = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
         _baseDirectory = baseDirectory;
         _profileCatalog = profileCatalog ?? throw new ArgumentNullException(nameof(profileCatalog));
         _moduleConfiguration = moduleConfiguration ?? throw new ArgumentNullException(nameof(moduleConfiguration));
         _targetFactory = targetFactory ?? throw new ArgumentNullException(nameof(targetFactory));
+        _startupDiagnostics = startupDiagnostics;
     }
 
     public void ApplyPendingBindings()
@@ -49,12 +52,17 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
             var bindingPath = ResolvePendingBindingPath();
             if (bindingPath is null)
             {
+                ReplaceBindingDiagnostics([]);
                 return;
             }
 
             var bindings = ParseBindings(bindingPath, out var baseUrl);
             if (bindings.Count == 0)
             {
+                ReplaceBindingDiagnostics(
+                [
+                    CreateBindingDiagnostic("LAUNCHER_DEVICE_BINDING_INVALID")
+                ]);
                 return;
             }
 
@@ -74,10 +82,22 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
             }
 
             FinalizeAppliedBindings(bindingPath, applied, unresolved, baseUrl);
+            ReplaceBindingDiagnostics(
+                unresolved
+                    .Select(binding => CreateBindingDiagnostic(
+                        "LAUNCHER_DEVICE_BINDING_PENDING",
+                        binding.ModuleId))
+                    .ToArray());
         }
         catch (Exception ex) when (IsRecoverable(ex))
         {
             // 非阻断：可恢复的绑定文件或文件系统问题保留原 pending，等待修复后重试。
+            ReplaceBindingDiagnostics(
+            [
+                CreateBindingDiagnostic(
+                    "LAUNCHER_DEVICE_BINDING_IMPORT_FAILED",
+                    exceptionType: ex.GetType().Name)
+            ]);
         }
     }
 
@@ -230,58 +250,66 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
             return;
         }
 
-        try
+        var launcherDirectory = EdgeClientProgramDataPaths.ResolveLauncherDirectory(_baseDirectory);
+        Directory.CreateDirectory(launcherDirectory);
+
+        var summary = new JsonObject
         {
-            var launcherDirectory = EdgeClientProgramDataPaths.ResolveLauncherDirectory(_baseDirectory);
-            Directory.CreateDirectory(launcherDirectory);
+            ["appliedAtUtc"] = DateTime.UtcNow.ToString("O"),
+            ["baseUrl"] = baseUrl,
+            ["bindings"] = new JsonArray(
+                applied.Select(binding => (JsonNode?)new JsonObject
+                {
+                    ["moduleId"] = binding.ModuleId,
+                    ["clientCode"] = binding.ClientCode,
+                }).ToArray()),
+        };
 
-            var summary = new JsonObject
-            {
-                ["appliedAtUtc"] = DateTime.UtcNow.ToString("O"),
-                ["baseUrl"] = baseUrl,
-                ["bindings"] = new JsonArray(
-                    applied.Select(binding => (JsonNode?)new JsonObject
-                    {
-                        ["moduleId"] = binding.ModuleId,
-                        ["clientCode"] = binding.ClientCode,
-                    }).ToArray()),
-            };
+        var summaryPath = Path.Combine(
+            launcherDirectory,
+            $"iiot-binding.applied.{DateTime.UtcNow:yyyyMMddHHmmssfff}.json");
+        File.WriteAllText(
+            summaryPath,
+            summary.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
-            var summaryPath = Path.Combine(
-                launcherDirectory,
-                $"iiot-binding.applied.{DateTime.UtcNow:yyyyMMddHHmmssfff}.json");
-            File.WriteAllText(
-                summaryPath,
-                summary.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
-                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-
-            if (unresolved.Count == 0)
-            {
-                File.Delete(bindingPath);
-                return;
-            }
-
-            var pending = new JsonObject
-            {
-                ["schemaVersion"] = 1,
-                ["baseUrl"] = baseUrl,
-                ["bindings"] = new JsonArray(
-                    unresolved.Select(binding => (JsonNode?)new JsonObject
-                    {
-                        ["moduleId"] = binding.ModuleId,
-                        ["clientCode"] = binding.ClientCode,
-                        ["bootstrapSecret"] = binding.BootstrapSecret,
-                    }).ToArray()),
-            };
-            WritePendingBindingsAtomically(bindingPath, pending);
-        }
-        catch (IOException)
+        if (unresolved.Count == 0)
         {
+            File.Delete(bindingPath);
+            return;
         }
-        catch (UnauthorizedAccessException)
+
+        var pending = new JsonObject
         {
-        }
+            ["schemaVersion"] = 1,
+            ["baseUrl"] = baseUrl,
+            ["bindings"] = new JsonArray(
+                unresolved.Select(binding => (JsonNode?)new JsonObject
+                {
+                    ["moduleId"] = binding.ModuleId,
+                    ["clientCode"] = binding.ClientCode,
+                    ["bootstrapSecret"] = binding.BootstrapSecret,
+                }).ToArray()),
+        };
+        WritePendingBindingsAtomically(bindingPath, pending);
     }
+
+    private void ReplaceBindingDiagnostics(
+        IReadOnlyCollection<LauncherStartupDiagnostic> values)
+        => _startupDiagnostics?.ReplaceArea(
+            LauncherStartupDiagnosticAreas.DeviceBinding,
+            values);
+
+    private static LauncherStartupDiagnostic CreateBindingDiagnostic(
+        string reasonCode,
+        string? subject = null,
+        string? exceptionType = null)
+        => new(
+            LauncherStartupDiagnosticAreas.DeviceBinding,
+            reasonCode,
+            LauncherStartupDiagnosticRepairTargets.DeviceBinding,
+            subject,
+            exceptionType);
 
     private static void WritePendingBindingsAtomically(string bindingPath, JsonObject pending)
         => WriteJsonAtomically(bindingPath, pending);

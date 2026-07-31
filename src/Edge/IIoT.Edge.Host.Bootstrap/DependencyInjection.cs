@@ -190,15 +190,18 @@ public static class DependencyInjection
         AddLongRunningManagedBackgroundTask(
             services,
             sp => sp.GetRequiredService<EdgeHostPlcRuntimeStateReportTask>());
-        AddLongRunningManagedBackgroundTaskGroup(
+        AddLongRunningManagedBackgroundTask(
             services,
-            "Host.DataPipeline",
-            sp =>
-            [
-                sp.GetRequiredService<ProcessQueueTask>(),
-                sp.GetRequiredService<CloudRetryTask>(),
-                sp.GetRequiredService<MesRetryTask>()
-            ]);
+            sp => sp.GetRequiredService<ProcessQueueTask>(),
+            trackRuntimeStatus: true);
+        AddLongRunningManagedBackgroundTask(
+            services,
+            sp => sp.GetRequiredService<CloudRetryTask>(),
+            trackRuntimeStatus: true);
+        AddLongRunningManagedBackgroundTask(
+            services,
+            sp => sp.GetRequiredService<MesRetryTask>(),
+            trackRuntimeStatus: true);
         AddManagedBackgroundService(services, "Cloud.CapacitySync",
             (sp, ct) => sp.GetRequiredService<ICapacitySyncTask>().StartAsync(ct),
             (sp, _) => sp.GetRequiredService<ICapacitySyncTask>().StopAsync());
@@ -256,19 +259,17 @@ public static class DependencyInjection
                 ct => startAsync(sp, ct),
                 stopAsync is null ? null : ct => stopAsync(sp, ct)));
 
-    private static void AddLongRunningManagedBackgroundTask(IServiceCollection services, Func<IServiceProvider, IBackgroundTask> taskFactory)
+    private static void AddLongRunningManagedBackgroundTask(
+        IServiceCollection services,
+        Func<IServiceProvider, IBackgroundTask> taskFactory,
+        bool trackRuntimeStatus = false)
         => services.AddSingleton<IManagedBackgroundService>(sp =>
             new LongRunningBackgroundTaskService(
                 taskFactory(sp),
-                sp.GetRequiredService<ILogService>()));
-
-    private static void AddLongRunningManagedBackgroundTaskGroup(IServiceCollection services, string serviceName,
-        Func<IServiceProvider, IEnumerable<IBackgroundTask>> taskFactory)
-        => services.AddSingleton<IManagedBackgroundService>(sp =>
-            new LongRunningBackgroundTaskGroupService(
-                serviceName,
-                taskFactory(sp),
-                sp.GetRequiredService<ILogService>()));
+                sp.GetRequiredService<ILogService>(),
+                trackRuntimeStatus
+                    ? sp.GetRequiredService<IBackgroundServiceRuntimeStatusWriter>()
+                    : null));
 
     private static string? FirstNonEmpty(params string?[] values)
         => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();

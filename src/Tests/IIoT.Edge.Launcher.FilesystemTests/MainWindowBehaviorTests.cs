@@ -57,7 +57,8 @@ public sealed class MainWindowBehaviorTests
         Assert.Contains("Icon=\"{StaticResource Edge.Icon.Refresh}\"", axaml, StringComparison.Ordinal);
         Assert.DoesNotContain("MaxHeight=\"260\"", axaml, StringComparison.Ordinal);
         Assert.Contains("ViewportMaxHeight=\"150\"", axaml, StringComparison.Ordinal);
-        Assert.Contains("RowDefinitions=\"Auto,Auto,*\"", axaml, StringComparison.Ordinal);
+        Assert.Contains("RowDefinitions=\"Auto,Auto,Auto,*\"", axaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding StartupDiagnosticsText}\"", axaml, StringComparison.Ordinal);
         Assert.Contains("<edge:EdgeActionColumn", axaml, StringComparison.Ordinal);
         Assert.DoesNotContain("RowDefinitions=\"Auto,2*,3*\"", axaml, StringComparison.Ordinal);
     }

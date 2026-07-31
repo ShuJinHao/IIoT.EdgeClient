@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security;
 using System.Text.Json;
 using IIoT.Edge.SharedKernel.Configuration;
 
@@ -15,58 +16,131 @@ public sealed record LauncherPluginActivation(
     string LauncherProfilePath,
     string MachineConfigPath);
 
-public sealed class LauncherPluginActivationSource(string baseDirectory) : ILauncherPluginActivationSource
+public sealed class LauncherPluginActivationSource : ILauncherPluginActivationSource
 {
     private const string PluginManifestFileName = "plugin.json";
     private const string ActivationDirectoryName = "activation";
     private const string ActivationManifestFileName = "manifest.json";
+    private readonly string _baseDirectory;
+    private readonly ILauncherEnabledPluginSelectionSource _selectionSource;
+    private readonly ILauncherStartupDiagnosticWriter? _diagnostics;
+
+    public LauncherPluginActivationSource(
+        string baseDirectory,
+        ILauncherEnabledPluginSelectionSource? selectionSource = null,
+        ILauncherStartupDiagnosticWriter? diagnostics = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
+        _baseDirectory = baseDirectory;
+        _diagnostics = diagnostics;
+        _selectionSource = selectionSource
+            ?? new LauncherEnabledPluginSelectionSource(baseDirectory, diagnostics);
+    }
 
     public IReadOnlyList<LauncherPluginActivation> LoadActivations()
     {
-        var pluginsRoot = EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(baseDirectory);
+        var selection = _selectionSource.Load();
+        if (selection.ModuleIds.Count == 0)
+        {
+            _diagnostics?.ReplaceArea(
+                LauncherStartupDiagnosticAreas.PluginActivationDiscovery,
+                []);
+            return [];
+        }
+
+        var pluginsRoot = EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(_baseDirectory);
         if (!Directory.Exists(pluginsRoot))
         {
+            ReplaceDiscoveryDiagnostics(
+            [
+                CreateDiagnostic(
+                    "LAUNCHER_PLUGIN_ROOT_MISSING",
+                    subject: null,
+                    exceptionType: null)
+            ]);
             return [];
         }
 
         var activations = new List<LauncherPluginActivation>();
-        foreach (var pluginDirectory in Directory
-                     .EnumerateDirectories(pluginsRoot)
-                     .Where(static path => !IsTransientDirectory(path))
-                     .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase))
+        var discoveryDiagnostics = new List<LauncherStartupDiagnostic>();
+        string[] pluginDirectories;
+        try
+        {
+            pluginDirectories = Directory
+                .EnumerateDirectories(pluginsRoot)
+                .Where(static path => !IsTransientDirectory(path))
+                .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+        catch (Exception ex) when (ex is IOException
+                                       or UnauthorizedAccessException
+                                       or SecurityException
+                                       or ArgumentException
+                                       or NotSupportedException)
+        {
+            ReplaceDiscoveryDiagnostics(
+            [
+                CreateDiagnostic(
+                    "LAUNCHER_PLUGIN_ROOT_ENUMERATION_FAILED",
+                    subject: null,
+                    exceptionType: ex.GetType().Name)
+            ]);
+            return [];
+        }
+
+        foreach (var pluginDirectory in pluginDirectories)
         {
             try
             {
-                activations.AddRange(LoadPluginActivations(pluginDirectory));
+                activations.AddRange(LoadPluginActivations(pluginDirectory, selection));
             }
             catch (Exception ex) when (ex is IOException
                                            or UnauthorizedAccessException
+                                           or SecurityException
                                            or JsonException
                                            or InvalidOperationException
-                                           or ArgumentException)
+                                           or ArgumentException
+                                           or NotSupportedException)
             {
+                var subject = Path.GetFileName(pluginDirectory);
                 Trace.TraceWarning(
                     "忽略无效插件 activation：{0} ({1})",
-                    Path.GetFileName(pluginDirectory),
+                    subject,
                     ex.GetType().Name);
+                discoveryDiagnostics.Add(CreateDiagnostic(
+                    "LAUNCHER_PLUGIN_ACTIVATION_INVALID",
+                    subject,
+                    ex.GetType().Name));
             }
         }
 
+        ReplaceDiscoveryDiagnostics(discoveryDiagnostics);
         return activations;
     }
 
-    private static IReadOnlyList<LauncherPluginActivation> LoadPluginActivations(string pluginDirectory)
+    private static IReadOnlyList<LauncherPluginActivation> LoadPluginActivations(
+        string pluginDirectory,
+        LauncherEnabledPluginSelection selection)
     {
         var pluginManifestPath = Path.Combine(pluginDirectory, PluginManifestFileName);
-        var activationRoot = Path.Combine(pluginDirectory, ActivationDirectoryName);
-        var activationManifestPath = Path.Combine(activationRoot, ActivationManifestFileName);
-        if (!File.Exists(pluginManifestPath) || !File.Exists(activationManifestPath))
+        if (!File.Exists(pluginManifestPath))
         {
             return [];
         }
 
         using var pluginDocument = JsonDocument.Parse(File.ReadAllText(pluginManifestPath));
         var pluginModuleId = ReadRequiredString(pluginDocument.RootElement, "moduleId");
+        if (!selection.Contains(pluginModuleId))
+        {
+            return [];
+        }
+
+        var activationRoot = Path.Combine(pluginDirectory, ActivationDirectoryName);
+        var activationManifestPath = Path.Combine(activationRoot, ActivationManifestFileName);
+        if (!File.Exists(activationManifestPath))
+        {
+            return [];
+        }
 
         using var activationDocument = JsonDocument.Parse(File.ReadAllText(activationManifestPath));
         var root = activationDocument.RootElement;
@@ -121,6 +195,23 @@ public sealed class LauncherPluginActivationSource(string baseDirectory) : ILaun
 
         return result;
     }
+
+    private void ReplaceDiscoveryDiagnostics(
+        IReadOnlyCollection<LauncherStartupDiagnostic> values)
+        => _diagnostics?.ReplaceArea(
+            LauncherStartupDiagnosticAreas.PluginActivationDiscovery,
+            values);
+
+    private static LauncherStartupDiagnostic CreateDiagnostic(
+        string reasonCode,
+        string? subject,
+        string? exceptionType)
+        => new(
+            LauncherStartupDiagnosticAreas.PluginActivationDiscovery,
+            reasonCode,
+            LauncherStartupDiagnosticRepairTargets.PluginActivation,
+            subject,
+            exceptionType);
 
     internal static void ValidateActivationFiles(LauncherPluginActivation activation)
     {

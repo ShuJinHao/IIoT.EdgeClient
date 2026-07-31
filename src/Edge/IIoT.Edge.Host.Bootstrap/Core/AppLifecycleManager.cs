@@ -126,7 +126,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
         }
         catch (Exception ex)
         {
-            _logger.Error($"[生命周期] 启动失败：{ex.Message}");
+            _logger.Error($"[生命周期] 启动失败（{ex.GetType().Name}）。");
             return AppStartupResult.Failure("应用启动失败，详细信息已写入诊断日志。");
         }
     }
@@ -151,7 +151,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             catch (Exception ex)
             {
                 (failures ??= []).Add(ex);
-                _logger.Error($"[生命周期] 后台服务停止失败：{ex.Message}");
+                _logger.Error($"[生命周期] 后台服务停止失败（{ex.GetType().Name}）。");
             }
 
             try
@@ -161,7 +161,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             catch (Exception ex)
             {
                 (failures ??= []).Add(ex);
-                _logger.Error($"[生命周期] 最终运行时状态保存失败：{ex.Message}");
+                _logger.Error($"[生命周期] 最终运行时状态保存失败（{ex.GetType().Name}）。");
             }
 
             _state = backgroundStopped ? AppLifecycleState.Stopped : AppLifecycleState.Started;
@@ -205,7 +205,7 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
         }
         catch (Exception ex)
         {
-            _logger.Warn($"[生命周期] 启动诊断生成失败，已跳过诊断并继续启动：{ex.Message}");
+            _logger.Warn($"[生命周期] 启动诊断生成失败，已跳过诊断并继续启动（{ex.GetType().Name}）。");
         }
     }
 
@@ -234,17 +234,17 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
                     var serviceFailure = new BackgroundServiceStartException([failure]);
                     issues.Add(StartupDiagnosticIssueFactory.Create(
                         failureCodeResolver(serviceFailure),
-                        $"{stepName}失败，已按非阻断处理：{failure.ServiceName}（{failure.Exception.Message}）"));
+                        $"{stepName}失败，已按非阻断处理：{failure.ServiceName}（{failure.Exception.GetType().Name}）。"));
                 }
             }
             else
             {
                 issues.Add(StartupDiagnosticIssueFactory.Create(
                     failureCodeResolver(ex),
-                    $"{stepName}失败，已按非阻断处理：{ex.Message}"));
+                    $"{stepName}失败，已按非阻断处理（{ex.GetType().Name}）。"));
             }
 
-            _logger.Warn($"[生命周期] {stepName}失败，已按非阻断处理：{ex.Message}");
+            _logger.Warn($"[生命周期] {stepName}失败，已按非阻断处理（{ex.GetType().Name}）。");
         }
     }
 
@@ -270,6 +270,30 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
         if (exception is not BackgroundServiceStartException backgroundFailure)
         {
             return "STARTUP_BACKGROUND_SERVICE_FAILED";
+        }
+
+        if (string.Equals(
+                backgroundFailure.ServiceName,
+                "ProcessQueueTask",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return "STARTUP_PROCESS_QUEUE_TASK_FAILED";
+        }
+
+        if (string.Equals(
+                backgroundFailure.ServiceName,
+                "CloudRetryTask",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return "STARTUP_CLOUD_RETRY_TASK_FAILED";
+        }
+
+        if (string.Equals(
+                backgroundFailure.ServiceName,
+                "MesRetryTask",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return "STARTUP_MES_RETRY_TASK_FAILED";
         }
 
         if (backgroundFailure.ServiceName.StartsWith("PLC.", StringComparison.OrdinalIgnoreCase))
