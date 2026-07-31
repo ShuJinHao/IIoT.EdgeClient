@@ -27,6 +27,37 @@ namespace IIoT.Edge.Runtime.WorkflowTests;
 public sealed class PlcTaskBindingBehaviorTests
 {
     [Fact]
+    public async Task GetModuleDeviceBindings_ShouldProjectLastSuccessfulRuntimeHandshake()
+    {
+        var runtimeStatuses = new PlcTaskRuntimeStatusStore();
+        var harness = CreateService(
+            defaultEnableAllTasks: null,
+            runtimeStatuses: runtimeStatuses);
+        var device = harness.NetworkDevices.Add(
+            CreateLifecyclePlc("PLC-A", 6000, plcCode: "P1-AP01"));
+        harness.Bindings.Add(PlcTaskBindingEntity.Create(
+            device.Id,
+            "Task.B",
+            enabled: true,
+            DateTimeOffset.UtcNow));
+        runtimeStatuses.SetState(
+            device.PlcCode,
+            "Task.B",
+            PlcTaskRuntimeState.Running);
+        var expected = runtimeStatuses
+            .GetSnapshot(device.PlcCode, "Task.B")!
+            .LastSuccessfulAtUtc;
+
+        var devices = await harness.Service.GetModuleDeviceBindingsAsync(
+            "TestModule",
+            TestContext.Current.CancellationToken);
+
+        var task = Assert.Single(devices).Tasks.Single(item => item.Key == "Task.B");
+        Assert.Equal(PlcTaskRuntimeState.Running, task.RuntimeState);
+        Assert.Equal(expected, task.LastSuccessfulAtUtc);
+    }
+
+    [Fact]
     public async Task GetEnabledTaskKeys_WhenGlobalDefaultEnabled_ShouldStillDisableMissingRows()
     {
         var service = CreateService(defaultEnableAllTasks: true);
@@ -389,9 +420,11 @@ public sealed class PlcTaskBindingBehaviorTests
                 plcA.PlcCode,
                 plcA.DeviceName,
                 [
-                    new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
+                    new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
                         "Business.PLC-A",
-                        (buffer, context) => CreateBusinessTask(buffer, context, plcAFactoryCalled))
+                        new PlcRuntimeTaskPlanEntry(
+                            (buffer, context) => CreateBusinessTask(buffer, context, plcAFactoryCalled),
+                            requiresPeriodicRead: true))
                 ]),
             TestContext.Current.CancellationToken);
         var runtimeB = await runtimeBuilder.BuildAsync(
@@ -401,9 +434,11 @@ public sealed class PlcTaskBindingBehaviorTests
                 plcB.PlcCode,
                 plcB.DeviceName,
                 [
-                    new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
+                    new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
                         "Business.PLC-B",
-                        (buffer, context) => CreateBusinessTask(buffer, context, plcBFactoryCalled))
+                        new PlcRuntimeTaskPlanEntry(
+                            (buffer, context) => CreateBusinessTask(buffer, context, plcBFactoryCalled),
+                            requiresPeriodicRead: true))
                 ]),
             TestContext.Current.CancellationToken);
 
@@ -476,9 +511,11 @@ public sealed class PlcTaskBindingBehaviorTests
             device.PlcCode,
             device.DeviceName,
             [
-                new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
+                new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
                     "Task.Blocked",
-                    (_, _) => new NoopPlcTask("Task.Blocked"))
+                    new PlcRuntimeTaskPlanEntry(
+                        (_, _) => new NoopPlcTask("Task.Blocked"),
+                        requiresPeriodicRead: true))
             ]);
 
         var runtime = await runtimeBuilder.BuildAsync(
@@ -599,9 +636,11 @@ public sealed class PlcTaskBindingBehaviorTests
             device.PlcCode,
             device.DeviceName,
             [
-                new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
+                new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
                     "Task.MG1",
-                    (_, _) => new NoopPlcTask("Task.MG1"))
+                    new PlcRuntimeTaskPlanEntry(
+                        (_, _) => new NoopPlcTask("Task.MG1"),
+                        requiresPeriodicRead: true))
             ]);
 
         var initialize = coordinator.InitializeAsync(TestContext.Current.CancellationToken);
@@ -666,9 +705,11 @@ public sealed class PlcTaskBindingBehaviorTests
             device.PlcCode,
             device.DeviceName,
             [
-                new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
+                new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
                     "Task.MG1",
-                    (_, _) => new NoopPlcTask("Task.MG1"))
+                    new PlcRuntimeTaskPlanEntry(
+                        (_, _) => new NoopPlcTask("Task.MG1"),
+                        requiresPeriodicRead: true))
             ]);
 
         var stop = coordinator.StopDeviceAsync(
@@ -1009,9 +1050,11 @@ public sealed class PlcTaskBindingBehaviorTests
             device.PlcCode,
             device.DeviceName,
             [
-                new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
+                new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
                     "Task.MG1",
-                    (_, _) => new NoopPlcTask("Task.MG1"))
+                    new PlcRuntimeTaskPlanEntry(
+                        (_, _) => new NoopPlcTask("Task.MG1"),
+                        requiresPeriodicRead: true))
             ]);
         await runtime.ApplyTaskPlanAsync(
             taskPlan,
@@ -1071,9 +1114,11 @@ public sealed class PlcTaskBindingBehaviorTests
             device.PlcCode,
             device.DeviceName,
             [
-                new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
+                new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
                     "Task.MG1",
-                    (_, _) => new NoopPlcTask("Task.MG1"))
+                    new PlcRuntimeTaskPlanEntry(
+                        (_, _) => new NoopPlcTask("Task.MG1"),
+                        requiresPeriodicRead: true))
             ]);
         await runtime.ApplyTaskPlanAsync(
             taskPlan,
@@ -1110,9 +1155,11 @@ public sealed class PlcTaskBindingBehaviorTests
             "PLC-DELETED",
             "已删除 PLC",
             [
-                new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
+                new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
                     "Task.MG1",
-                    (_, _) => new NoopPlcTask("Task.MG1"))
+                    new PlcRuntimeTaskPlanEntry(
+                        (_, _) => new NoopPlcTask("Task.MG1"),
+                        requiresPeriodicRead: true))
             ]);
         runtimeRegistry.RegisterTaskPlan(plan);
         taskStatuses.SetState(
@@ -1288,7 +1335,8 @@ public sealed class PlcTaskBindingBehaviorTests
 
     private static BindingServiceHarness CreateService(
         bool? defaultEnableAllTasks,
-        bool seedIoMappings = true)
+        bool seedIoMappings = true,
+        IPlcTaskRuntimeStatusReader? runtimeStatuses = null)
     {
         _ = defaultEnableAllTasks;
         var runtimeRegistry = new FakeStationRuntimeRegistry(new FakeStationRuntimeFactory());
@@ -1306,7 +1354,8 @@ public sealed class PlcTaskBindingBehaviorTests
             networkDevices,
             ioMappings,
             bindings,
-            new TestEdgeUnitOfWorkFactory(bindings));
+            new TestEdgeUnitOfWorkFactory(bindings),
+            runtimeStatuses);
 
         return new BindingServiceHarness(service, networkDevices, ioMappings, bindings, logger);
     }

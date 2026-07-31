@@ -15,6 +15,7 @@ public sealed record PlcTaskRuntimeSnapshot(
     string TaskKey,
     PlcTaskRuntimeState State,
     DateTimeOffset StateChangedAtUtc,
+    DateTimeOffset? LastSuccessfulAtUtc,
     string? ErrorCode,
     string? ExceptionType);
 
@@ -147,11 +148,15 @@ public sealed class PlcTaskRuntimeStatusStore(TimeProvider? timeProvider = null)
                 return;
             }
 
+            var now = _timeProvider.GetUtcNow();
             snapshot = new PlcTaskRuntimeSnapshot(
                 existing?.PlcCode ?? normalizedPlcCode,
                 existing?.TaskKey ?? normalizedTaskKey,
                 state,
-                _timeProvider.GetUtcNow(),
+                now,
+                state == PlcTaskRuntimeState.Running
+                    ? now
+                    : existing?.LastSuccessfulAtUtc,
                 normalizedErrorCode,
                 normalizedExceptionType);
             tasks[normalizedTaskKey] = snapshot;

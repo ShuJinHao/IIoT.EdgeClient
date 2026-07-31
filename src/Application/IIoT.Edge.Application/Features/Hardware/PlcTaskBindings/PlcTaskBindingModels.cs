@@ -27,6 +27,7 @@ public sealed record PlcTaskBindingItemDto(
     DateTimeOffset? ConfigurationStateChangedAtUtc = null,
     PlcTaskRuntimeState? RuntimeState = null,
     DateTimeOffset? RuntimeStateChangedAtUtc = null,
+    DateTimeOffset? LastSuccessfulAtUtc = null,
     string? RuntimeErrorCode = null,
     string? RuntimeExceptionType = null);
 

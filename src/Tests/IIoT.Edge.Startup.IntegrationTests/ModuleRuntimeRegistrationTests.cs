@@ -51,6 +51,63 @@ namespace IIoT.Edge.Startup.IntegrationTests;
 public sealed class ModuleRuntimeRegistrationTests
 {
     [Fact]
+    public void PlcRuntimeTaskBinder_ShouldDerivePeriodicReadDependencyFromDeclaredSignalsOwnedByPeriodicReader()
+    {
+        var periodicReadTask = new TaskCandidate(
+            "Task.Read",
+            "读任务",
+            [
+                new TaskRequiredSignal("Signal.Write", "Write"),
+                new TaskRequiredSignal("Signal.Read", "read")
+            ]);
+        var interactionReadTask = new TaskCandidate(
+            "Task.Interaction",
+            "交互读任务",
+            [new TaskRequiredSignal("Signal.Interaction.Read", "Read")]);
+        var writeOnlyTask = new TaskCandidate(
+            "Task.Write",
+            "写任务",
+            [new TaskRequiredSignal("Signal.Write", "Write")]);
+        ModuleIoSnapshot[] signalBindings =
+        [
+            new(
+                "Signal.Read",
+                "D100",
+                1,
+                IoMappingOptionCatalog.DataTypeInt16,
+                IoMappingOptionCatalog.DirectionRead,
+                1,
+                IoMappingOptionCatalog.CategorySingleRead),
+            new(
+                "Signal.Interaction.Read",
+                "D200",
+                1,
+                IoMappingOptionCatalog.DataTypeInt16,
+                IoMappingOptionCatalog.DirectionRead,
+                2,
+                IoMappingOptionCatalog.CategoryInteraction),
+            new(
+                "Signal.Write",
+                "D300",
+                1,
+                IoMappingOptionCatalog.DataTypeInt16,
+                IoMappingOptionCatalog.DirectionWrite,
+                3,
+                IoMappingOptionCatalog.CategorySingleWrite)
+        ];
+
+        Assert.True(PlcRuntimeTaskBinder.CandidateRequiresPeriodicRead(
+            periodicReadTask,
+            signalBindings));
+        Assert.False(PlcRuntimeTaskBinder.CandidateRequiresPeriodicRead(
+            interactionReadTask,
+            signalBindings));
+        Assert.False(PlcRuntimeTaskBinder.CandidateRequiresPeriodicRead(
+            writeOnlyTask,
+            signalBindings));
+    }
+
+    [Fact]
     public void StartupModuleRegistrationValidator_WhenModuleIsMesOnly_ShouldNotRequireCloudUploader()
     {
         var module = new DiagnosticProcessModule("MesOnlyModule", "MesOnlyProcess", requiresCloud: false, requiresMes: true);
