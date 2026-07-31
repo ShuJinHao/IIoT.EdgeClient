@@ -427,6 +427,64 @@ public sealed class LauncherPluginActivationTests
         Assert.Equal(OperatingSystem.IsWindows(), matched);
     }
 
+    [Fact]
+    public void Activation_WhenReferenceEscapesIntoCaseVariantDirectory_ShouldFollowPlatformPathCaseRules()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var launcherDirectory = Path.Combine(tempDirectory, "install", "current", "launcher");
+            Directory.CreateDirectory(launcherDirectory);
+            WriteActivation(launcherDirectory, "AP", "DieCuttingAnodeLine", "负极模切");
+            WriteEnabledSelection(launcherDirectory, "AP");
+
+            var pluginsRoot = EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(launcherDirectory);
+            var selectedActivationRoot = Path.Combine(pluginsRoot, "AP", "activation");
+            var caseVariantActivationRoot = Path.Combine(pluginsRoot, "ap", "activation");
+            var launcherFileName = "launcher.profiles.AP.json";
+            var machineFileName = "appsettings.machine.DieCuttingAnodeLine.json";
+            WriteText(
+                Path.Combine(caseVariantActivationRoot, "launcher", launcherFileName),
+                File.ReadAllText(Path.Combine(selectedActivationRoot, "launcher", launcherFileName)));
+            WriteText(
+                Path.Combine(caseVariantActivationRoot, "machine", machineFileName),
+                File.ReadAllText(Path.Combine(selectedActivationRoot, "machine", machineFileName)));
+            WriteText(
+                Path.Combine(selectedActivationRoot, "manifest.json"),
+                $$"""
+                {
+                  "schemaVersion": 1,
+                  "moduleId": "AP",
+                  "profiles": [
+                    {
+                      "profileId": "DieCuttingAnodeLine",
+                      "launcherProfile": "../../ap/activation/launcher/{{launcherFileName}}",
+                      "machineConfig": "../../ap/activation/machine/{{machineFileName}}"
+                    }
+                  ]
+                }
+                """);
+            var diagnostics = new LauncherStartupDiagnosticStore();
+            var selection = new LauncherEnabledPluginSelectionSource(launcherDirectory, diagnostics);
+            var source = new LauncherPluginActivationSource(launcherDirectory, selection, diagnostics);
+
+            var activations = source.LoadActivations();
+
+            Assert.Equal(OperatingSystem.IsWindows() ? 1 : 0, activations.Count);
+            if (!OperatingSystem.IsWindows())
+            {
+                Assert.Contains(
+                    diagnostics.Snapshot,
+                    item => item.ReasonCode == "LAUNCHER_PLUGIN_ACTIVATION_INVALID"
+                            && item.Subject == "AP");
+            }
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
     [Theory]
     [InlineData("MissingDirectory")]
     [InlineData("MissingPluginManifest")]

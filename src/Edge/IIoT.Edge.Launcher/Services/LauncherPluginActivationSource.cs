@@ -351,7 +351,9 @@ public sealed class LauncherPluginActivationSource : ILauncherPluginActivationSo
             relativePath
                 .Replace('\\', Path.DirectorySeparatorChar)
                 .Replace('/', Path.DirectorySeparatorChar)));
-        if (!resolved.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase))
+        if (!resolved.StartsWith(
+                normalizedRoot,
+                LauncherEnabledPluginSelection.PluginDirectoryComparison))
         {
             throw new InvalidOperationException("activation 路径越界。");
         }

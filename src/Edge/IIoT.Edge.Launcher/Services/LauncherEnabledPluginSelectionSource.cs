@@ -12,8 +12,13 @@ public sealed record LauncherEnabledPluginSelection(
     bool ManifestIsValid,
     IReadOnlyList<LauncherEnabledPluginSelectionItem> Plugins)
 {
-    internal static StringComparer PluginDirectoryComparer { get; } =
+    internal static StringComparison PluginDirectoryComparison { get; } =
         OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
+    internal static StringComparer PluginDirectoryComparer { get; } =
+        PluginDirectoryComparison == StringComparison.OrdinalIgnoreCase
             ? StringComparer.OrdinalIgnoreCase
             : StringComparer.Ordinal;
 
