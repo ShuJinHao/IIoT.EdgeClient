@@ -141,16 +141,6 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
 
             _state = AppLifecycleState.Stopping;
             List<Exception>? failures = null;
-            try
-            {
-                await _runtimeStateCoordinator.SaveAsync(cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                (failures ??= []).Add(ex);
-                _logger.Error($"[生命周期] 运行时状态保存失败：{ex.Message}");
-            }
-
             var backgroundStopped = false;
             try
             {
@@ -162,6 +152,16 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             {
                 (failures ??= []).Add(ex);
                 _logger.Error($"[生命周期] 后台服务停止失败：{ex.Message}");
+            }
+
+            try
+            {
+                await _runtimeStateCoordinator.SaveAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                (failures ??= []).Add(ex);
+                _logger.Error($"[生命周期] 最终运行时状态保存失败：{ex.Message}");
             }
 
             _state = backgroundStopped ? AppLifecycleState.Stopped : AppLifecycleState.Started;

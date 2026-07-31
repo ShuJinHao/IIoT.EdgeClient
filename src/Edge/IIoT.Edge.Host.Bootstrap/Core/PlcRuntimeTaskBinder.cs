@@ -182,6 +182,7 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
                 new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
                     capturedTaskKey,
                     new PlcRuntimeTaskPlanEntry(
+                        factory.ModuleId,
                         (buffer, context) =>
                         {
                             _signalBindingStore.Set(context, signalBindings);

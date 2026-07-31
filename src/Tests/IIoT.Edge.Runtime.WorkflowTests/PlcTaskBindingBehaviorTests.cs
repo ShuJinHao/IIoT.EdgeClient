@@ -4,6 +4,7 @@ using IIoT.Edge.Module.Contracts.Context;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Module.Contracts.Plc.Checkpoints;
 using IIoT.Edge.Module.Contracts.Plc.Factory;
 using IIoT.Edge.Module.Contracts.Plc.Signals;
 using IIoT.Edge.Module.Contracts.Plc.Store;
@@ -55,6 +56,62 @@ public sealed class PlcTaskBindingBehaviorTests
         var task = Assert.Single(devices).Tasks.Single(item => item.Key == "Task.B");
         Assert.Equal(PlcTaskRuntimeState.Running, task.RuntimeState);
         Assert.Equal(expected, task.LastSuccessfulAtUtc);
+    }
+
+    [Fact]
+    public async Task GetModuleDeviceBindings_ShouldProjectPerTaskRecoveryAndDelegateExactRevision()
+    {
+        var recovery = new RecordingRecoveryApplicationService();
+        var harness = CreateService(
+            defaultEnableAllTasks: null,
+            taskRecovery: recovery);
+        var device = harness.NetworkDevices.Add(
+            CreateLifecyclePlc("PLC-A", 6000, plcCode: "P1-AP01"));
+        harness.Bindings.Add(PlcTaskBindingEntity.Create(
+            device.Id,
+            "Task.B",
+            enabled: true,
+            DateTimeOffset.UtcNow));
+        recovery.Snapshots["Task.B"] = new PlcTaskRecoverySnapshot(
+            new PlcTaskCheckpointIdentity(
+                "TestModule",
+                device.PlcCode,
+                "Task.B"),
+            slot: "MG2",
+            checkpointMagazineCode: "MAG-OLD",
+            observedMagazineCode: "MAG-NEW",
+            PlcTaskRecoveryState.AwaitingConfirmation,
+            revision: 11,
+            checkpointSavedAtUtc: DateTimeOffset.UnixEpoch,
+            observedAtUtc: DateTimeOffset.UnixEpoch.AddMinutes(1),
+            diagnosticCode: "MagazineMismatch");
+
+        var devices = await harness.Service.GetModuleDeviceBindingsAsync(
+            "TestModule",
+            TestContext.Current.CancellationToken);
+        var task = Assert.Single(devices).Tasks.Single(item => item.Key == "Task.B");
+
+        Assert.Equal(PlcTaskRecoveryState.AwaitingConfirmation, task.RecoveryState);
+        Assert.Equal(11, task.RecoveryRevision);
+        Assert.Equal("MAG-OLD", task.CheckpointMagazineCode);
+        Assert.Equal("MAG-NEW", task.ObservedMagazineCode);
+        Assert.Equal("MagazineMismatch", task.RecoveryDiagnosticCode);
+        Assert.Equal(
+            ["Task.A", "Task.B"],
+            recovery.QueriedTaskKeys.Order(StringComparer.OrdinalIgnoreCase));
+
+        await harness.Service.ConfirmRecoveryAsync(
+            "TestModule",
+            device.PlcCode,
+            "Task.B",
+            expectedRevision: 11,
+            PlcTaskRecoveryConfirmationAction.AuditTerminateIncomplete,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(11, recovery.LastExpectedRevision);
+        Assert.Equal(
+            PlcTaskRecoveryConfirmationAction.AuditTerminateIncomplete,
+            recovery.LastAction);
     }
 
     [Fact]
@@ -423,6 +480,7 @@ public sealed class PlcTaskBindingBehaviorTests
                     new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
                         "Business.PLC-A",
                         new PlcRuntimeTaskPlanEntry(
+                            "TestModule",
                             (buffer, context) => CreateBusinessTask(buffer, context, plcAFactoryCalled),
                             requiresPeriodicRead: true))
                 ]),
@@ -437,6 +495,7 @@ public sealed class PlcTaskBindingBehaviorTests
                     new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
                         "Business.PLC-B",
                         new PlcRuntimeTaskPlanEntry(
+                            "TestModule",
                             (buffer, context) => CreateBusinessTask(buffer, context, plcBFactoryCalled),
                             requiresPeriodicRead: true))
                 ]),
@@ -514,6 +573,7 @@ public sealed class PlcTaskBindingBehaviorTests
                 new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
                     "Task.Blocked",
                     new PlcRuntimeTaskPlanEntry(
+                        "TestModule",
                         (_, _) => new NoopPlcTask("Task.Blocked"),
                         requiresPeriodicRead: true))
             ]);
@@ -639,6 +699,7 @@ public sealed class PlcTaskBindingBehaviorTests
                 new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
                     "Task.MG1",
                     new PlcRuntimeTaskPlanEntry(
+                        "TestModule",
                         (_, _) => new NoopPlcTask("Task.MG1"),
                         requiresPeriodicRead: true))
             ]);
@@ -708,6 +769,7 @@ public sealed class PlcTaskBindingBehaviorTests
                 new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
                     "Task.MG1",
                     new PlcRuntimeTaskPlanEntry(
+                        "TestModule",
                         (_, _) => new NoopPlcTask("Task.MG1"),
                         requiresPeriodicRead: true))
             ]);
@@ -1053,6 +1115,7 @@ public sealed class PlcTaskBindingBehaviorTests
                 new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
                     "Task.MG1",
                     new PlcRuntimeTaskPlanEntry(
+                        "TestModule",
                         (_, _) => new NoopPlcTask("Task.MG1"),
                         requiresPeriodicRead: true))
             ]);
@@ -1117,6 +1180,7 @@ public sealed class PlcTaskBindingBehaviorTests
                 new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
                     "Task.MG1",
                     new PlcRuntimeTaskPlanEntry(
+                        "TestModule",
                         (_, _) => new NoopPlcTask("Task.MG1"),
                         requiresPeriodicRead: true))
             ]);
@@ -1158,6 +1222,7 @@ public sealed class PlcTaskBindingBehaviorTests
                 new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
                     "Task.MG1",
                     new PlcRuntimeTaskPlanEntry(
+                        "TestModule",
                         (_, _) => new NoopPlcTask("Task.MG1"),
                         requiresPeriodicRead: true))
             ]);
@@ -1336,7 +1401,8 @@ public sealed class PlcTaskBindingBehaviorTests
     private static BindingServiceHarness CreateService(
         bool? defaultEnableAllTasks,
         bool seedIoMappings = true,
-        IPlcTaskRuntimeStatusReader? runtimeStatuses = null)
+        IPlcTaskRuntimeStatusReader? runtimeStatuses = null,
+        IPlcTaskRecoveryApplicationService? taskRecovery = null)
     {
         _ = defaultEnableAllTasks;
         var runtimeRegistry = new FakeStationRuntimeRegistry(new FakeStationRuntimeFactory());
@@ -1355,7 +1421,8 @@ public sealed class PlcTaskBindingBehaviorTests
             ioMappings,
             bindings,
             new TestEdgeUnitOfWorkFactory(bindings),
-            runtimeStatuses);
+            runtimeStatuses,
+            taskRecovery);
 
         return new BindingServiceHarness(service, networkDevices, ioMappings, bindings, logger);
     }
@@ -1481,6 +1548,48 @@ public sealed class PlcTaskBindingBehaviorTests
             ProductionContext context,
             IReadOnlySet<string> enabledTaskKeys)
             => [];
+    }
+
+    private sealed class RecordingRecoveryApplicationService
+        : IPlcTaskRecoveryApplicationService
+    {
+        public Dictionary<string, PlcTaskRecoverySnapshot> Snapshots { get; }
+            = new(StringComparer.OrdinalIgnoreCase);
+
+        public ConcurrentQueue<string> QueriedTaskKeys { get; } = [];
+
+        public long? LastExpectedRevision { get; private set; }
+
+        public PlcTaskRecoveryConfirmationAction? LastAction { get; private set; }
+
+        public Task<PlcTaskRecoverySnapshot?> QueryAsync(
+            string moduleId,
+            string plcCode,
+            string taskKey,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            QueriedTaskKeys.Enqueue(taskKey);
+            return Task.FromResult(
+                Snapshots.TryGetValue(taskKey, out var snapshot)
+                    ? snapshot
+                    : null);
+        }
+
+        public Task<PlcTaskRecoveryConfirmationResult> ConfirmAsync(
+            string moduleId,
+            string plcCode,
+            string taskKey,
+            long expectedRevision,
+            PlcTaskRecoveryConfirmationAction action,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            LastExpectedRevision = expectedRevision;
+            LastAction = action;
+            return Task.FromResult(
+                PlcTaskRecoveryConfirmationResult.Succeeded());
+        }
     }
 
     private sealed class FakeLogService : ILogService

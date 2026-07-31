@@ -711,9 +711,36 @@
     <sys:String x:Key="Navigation_Column_TaskBindingSource">绑定来源</sys:String>
     <sys:String x:Key="Navigation_Column_TaskAvailability">可用性</sys:String>
     <sys:String x:Key="Navigation_Column_RuntimeStatus">运行状态</sys:String>
+    <sys:String x:Key="Navigation_Column_CheckpointMagazine">检查点弹夹</sys:String>
+    <sys:String x:Key="Navigation_Column_ObservedMagazine">现场读值</sys:String>
+    <sys:String x:Key="Navigation_Column_RecoveryState">恢复状态</sys:String>
     <sys:String x:Key="Navigation_Column_Note">说明</sys:String>
     <sys:String x:Key="Navigation_Column_RequiredSignals">所需信号</sys:String>
     <sys:String x:Key="Navigation_Column_TaskKey">任务键</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_LocalAdminRequired">只有当前已登录的本地管理员可以确认任务恢复。</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoverySelectionChanged">当前 PLC 选择已变化，请核对最新任务后重试。</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryCanceled">已取消恢复确认。</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryFailed">恢复确认失败。</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryFailedFormat">恢复确认失败，原因码=RecoveryOperationFailed，异常类型={0}。</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryRevisionConflict">现场读值已变化，页面已刷新；请核对最新快照后重新确认。</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryRejectedFormat">恢复确认被拒绝，原因码={0}。</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryResumeSuccess">已确认恢复原检查点。</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryTerminateSuccess">已审计终止旧未完成件；不会生成完工、上传或产量。</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_EmptyMagazineCode">空码</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryState_None">无待恢复检查点</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryState_WaitingForFreshSnapshot">等待新鲜快照</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryState_AwaitingConfirmation">等待本地确认</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryState_WaitingForNextFreshSnapshot">等待下一份新鲜快照</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryState_Unknown">未知恢复状态</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_CheckpointTimeFormat">检查点时间={0:yyyy-MM-dd HH:mm:ss} UTC</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_ObservedTimeFormat">现场读值时间={0:yyyy-MM-dd HH:mm:ss} UTC</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryDiagnosticFormat">原因码={0}</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryAction_Resume">确认恢复</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryAction_AuditTerminate">审计终止</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_ResumeCheckpointConfirmTitle">确认恢复检查点</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_ResumeCheckpointConfirmMessageFormat">PLC“{0}”任务“{1}”的现场读值与检查点弹夹码一致（{2}）。确认后将恢复原检查点继续运行，是否继续？</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_AuditTerminateConfirmTitle">确认审计终止旧未完成件</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_AuditTerminateConfirmMessageFormat">PLC“{0}”任务“{1}”的检查点弹夹码为“{2}”，现场读值为“{3}”。确认后仅审计终止旧未完成件，不生成完工、上传或产量；异码等待下一份新鲜快照，空码继续等待。是否继续？</sys:String>
     <sys:String x:Key="Navigation_Label_InteractionGroup">交互组</sys:String>
     <sys:String x:Key="Navigation_Label_IoCategory">IO 类别</sys:String>
     <sys:String x:Key="Navigation_Label_ReadSignal">读取信号</sys:String>

@@ -440,6 +440,14 @@ public sealed class ModuleRuntimeRegistrationTests
         Assert.DoesNotContain(
             harness.Logger.Entries,
             entry => entry.Message.Contains("关闭前运行时状态已保存", StringComparison.Ordinal));
+        var backgroundStoppedIndex = harness.Logger.Entries.FindIndex(
+            entry => entry.Message.Contains("后台服务已停止", StringComparison.Ordinal));
+        var finalContextSaveFailureIndex = harness.Logger.Entries.FindIndex(
+            entry => entry.Message.Contains("最终运行时状态保存失败", StringComparison.Ordinal));
+        Assert.InRange(backgroundStoppedIndex, 0, int.MaxValue);
+        Assert.True(
+            finalContextSaveFailureIndex > backgroundStoppedIndex,
+            "进程关闭必须先停止任务并保存各自检查点，再最终保存上下文。");
     }
 
     [Fact]

@@ -11,13 +11,18 @@ public delegate IPlcTask PlcRuntimeBusinessTaskFactory(
 public sealed class PlcRuntimeTaskPlanEntry
 {
     public PlcRuntimeTaskPlanEntry(
+        string moduleId,
         PlcRuntimeBusinessTaskFactory factory,
         bool requiresPeriodicRead)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(moduleId);
         ArgumentNullException.ThrowIfNull(factory);
+        ModuleId = moduleId.Trim();
         Factory = factory;
         RequiresPeriodicRead = requiresPeriodicRead;
     }
+
+    public string ModuleId { get; }
 
     public PlcRuntimeBusinessTaskFactory Factory { get; }
 

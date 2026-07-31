@@ -28,9 +28,17 @@ internal sealed class TestAppLanguageService : IAppLanguageService
     }
 
     public string GetString(string key, string fallback = "")
-        => key == "Panels_Filter_AllOrSummary"
-            ? Current.Name == "en-US" ? "All / Summary" : "全部/汇总"
-            : fallback;
+        => (key, Current.Name) switch
+        {
+            ("Panels_Filter_AllOrSummary", "en-US") => "All / Summary",
+            ("Panels_Filter_AllOrSummary", _) => "全部/汇总",
+            ("Navigation_PlcTaskBinding_EmptyMagazineCode", "en-US") => "Empty code",
+            ("Navigation_PlcTaskBinding_RecoveryState_AwaitingConfirmation", "en-US")
+                => "Waiting for local confirmation",
+            ("Navigation_PlcTaskBinding_RecoveryAction_AuditTerminate", "en-US")
+                => "Audit terminate",
+            _ => fallback
+        };
 
     public string Format(string key, string fallback, params object[] args)
         => string.Format(CultureInfo.CurrentCulture, fallback, args);

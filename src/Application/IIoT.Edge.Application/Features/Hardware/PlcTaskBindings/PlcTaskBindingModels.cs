@@ -1,5 +1,6 @@
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Application.Common.Plc;
+using IIoT.Edge.Module.Contracts.Plc.Checkpoints;
 
 namespace IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 
@@ -29,7 +30,14 @@ public sealed record PlcTaskBindingItemDto(
     DateTimeOffset? RuntimeStateChangedAtUtc = null,
     DateTimeOffset? LastSuccessfulAtUtc = null,
     string? RuntimeErrorCode = null,
-    string? RuntimeExceptionType = null);
+    string? RuntimeExceptionType = null,
+    PlcTaskRecoveryState RecoveryState = PlcTaskRecoveryState.None,
+    long RecoveryRevision = 0,
+    string? CheckpointMagazineCode = null,
+    string? ObservedMagazineCode = null,
+    DateTimeOffset? CheckpointSavedAtUtc = null,
+    DateTimeOffset? RecoveryObservedAtUtc = null,
+    string? RecoveryDiagnosticCode = null);
 
 public enum PlcTaskBindingDisplayState
 {

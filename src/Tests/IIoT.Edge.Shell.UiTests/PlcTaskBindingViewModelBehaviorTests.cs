@@ -1,6 +1,7 @@
 using IIoT.Edge.Module.Contracts.Auth;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Module.Contracts.Plc.Checkpoints;
 using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Application.Modules.Hardware;
@@ -8,6 +9,7 @@ using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.PlcTaskBindingView;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
+using System.Globalization;
 using Xunit;
 
 namespace IIoT.Edge.Shell.UiTests;
@@ -405,17 +407,195 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
         await viewModel.OnDeactivatedAsync();
     }
 
+    [Fact]
+    public async Task RecoverySnapshot_ShouldExposeCheckpointObservedValueStateAndAdminAction()
+    {
+        var selectionService = new DeviceSelectionService();
+        selectionService.SelectDevice("PLC-A01");
+        var viewModel = CreateViewModel(
+            new FakePlcTaskBindingService(
+            [
+                CreateRecoveryDevice(
+                    revision: 12,
+                    checkpointMagazineCode: "MAG-OLD",
+                    observedMagazineCode: "MAG-NEW")
+            ]),
+            selectionService);
+
+        await viewModel.OnActivatedAsync();
+        var task = Assert.Single(Assert.Single(viewModel.Devices).Tasks);
+
+        Assert.Equal("MAG-OLD", task.CheckpointMagazineText);
+        Assert.Equal("MAG-NEW", task.ObservedMagazineText);
+        Assert.Contains("等待本地确认", task.RecoverySummaryText, StringComparison.Ordinal);
+        Assert.Contains("原因码=MagazineMismatch", task.RecoverySummaryText, StringComparison.Ordinal);
+        Assert.Equal("审计终止", task.RecoveryActionText);
+        Assert.True(task.CanConfirmRecovery);
+        Assert.True(task.RecoveryCommand.CanExecute(null));
+        await viewModel.OnDeactivatedAsync();
+    }
+
+    [Fact]
+    public async Task RecoveryCommand_WhenObservedCodeMatchesCheckpoint_ShouldConfirmExactRevisionAsResume()
+    {
+        var selectionService = new DeviceSelectionService();
+        selectionService.SelectDevice("PLC-A01");
+        var bindingService = new FakePlcTaskBindingService(
+        [
+            CreateRecoveryDevice(
+                revision: 19,
+                checkpointMagazineCode: "MAG-001",
+                observedMagazineCode: "MAG-001")
+        ]);
+        var confirmation = new FakeConfirmationService();
+        var viewModel = CreateViewModel(
+            bindingService,
+            selectionService,
+            confirmationService: confirmation);
+        await viewModel.OnActivatedAsync();
+        var task = Assert.Single(Assert.Single(viewModel.Devices).Tasks);
+
+        task.RecoveryCommand.Execute(null);
+        await bindingService.WaitForRecoveryConfirmationAsync();
+        await bindingService.WaitForReloadAfterSaveAsync();
+
+        Assert.Equal(1, confirmation.RecoveryCalls);
+        Assert.Equal(19, bindingService.LastRecoveryRevision);
+        Assert.Equal(
+            PlcTaskRecoveryConfirmationAction.ResumeCheckpoint,
+            bindingService.LastRecoveryAction);
+        Assert.Equal("已确认恢复原检查点。", viewModel.StatusMessage);
+        await viewModel.OnDeactivatedAsync();
+    }
+
+    [Fact]
+    public async Task RecoveryCommand_WhenRevisionConflicts_ShouldReloadLatestSnapshotAndRequireReview()
+    {
+        var selectionService = new DeviceSelectionService();
+        selectionService.SelectDevice("PLC-A01");
+        var bindingService = new FakePlcTaskBindingService(
+        [
+            CreateRecoveryDevice(
+                revision: 3,
+                checkpointMagazineCode: "MAG-OLD",
+                observedMagazineCode: "MAG-NEW")
+        ])
+        {
+            ReloadDevices =
+            [
+                CreateRecoveryDevice(
+                    revision: 4,
+                    checkpointMagazineCode: "MAG-OLD",
+                    observedMagazineCode: "MAG-LATEST")
+            ],
+            RecoveryResult = PlcTaskRecoveryConfirmationResult.Rejected(
+                PlcTaskRecoveryConfirmationOutcome.RevisionConflict,
+                "RecoveryRevisionConflict")
+        };
+        var viewModel = CreateViewModel(bindingService, selectionService);
+        await viewModel.OnActivatedAsync();
+
+        Assert.Single(Assert.Single(viewModel.Devices).Tasks)
+            .RecoveryCommand
+            .Execute(null);
+        await bindingService.WaitForRecoveryConfirmationAsync();
+        await bindingService.WaitForReloadAfterSaveAsync();
+
+        var latest = Assert.Single(Assert.Single(viewModel.Devices).Tasks);
+        Assert.Equal(4, latest.RecoveryRevision);
+        Assert.Equal("MAG-LATEST", latest.ObservedMagazineText);
+        Assert.Equal(2, bindingService.GetCalls);
+        Assert.Contains("页面已刷新", viewModel.ErrorMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("已确认", viewModel.StatusMessage, StringComparison.Ordinal);
+        await viewModel.OnDeactivatedAsync();
+    }
+
+    [Fact]
+    public async Task RecoveryCommand_WhenCurrentUserIsNotLocalAdmin_ShouldRemainDisabled()
+    {
+        var selectionService = new DeviceSelectionService();
+        selectionService.SelectDevice("PLC-A01");
+        var bindingService = new FakePlcTaskBindingService(
+        [
+            CreateRecoveryDevice(
+                revision: 1,
+                checkpointMagazineCode: "MAG-OLD",
+                observedMagazineCode: null)
+        ]);
+        var permission = new FakeClientPermissionService();
+        permission.SetLocalAdmin(false);
+        var viewModel = CreateViewModel(
+            bindingService,
+            selectionService,
+            permissionService: permission);
+        await viewModel.OnActivatedAsync();
+        var task = Assert.Single(Assert.Single(viewModel.Devices).Tasks);
+
+        Assert.False(task.HasRecoveryAction);
+        Assert.False(task.CanConfirmRecovery);
+        Assert.False(task.RecoveryCommand.CanExecute(null));
+        task.RecoveryCommand.Execute(null);
+        Assert.Null(bindingService.LastRecoveryRevision);
+        await viewModel.OnDeactivatedAsync();
+    }
+
+    [Fact]
+    public async Task PermissionAndLanguageChanges_ShouldRefreshOnlyCurrentRecoveryRow()
+    {
+        var selectionService = new DeviceSelectionService();
+        selectionService.SelectDevice("PLC-A01");
+        var permission = new FakeClientPermissionService();
+        permission.SetLocalAdmin(false);
+        var language = new TestAppLanguageService();
+        var service = new FakePlcTaskBindingService(
+        [
+            CreateRecoveryDevice(
+                revision: 1,
+                checkpointMagazineCode: "MAG-OLD",
+                observedMagazineCode: null)
+        ]);
+        var viewModel = CreateViewModel(
+            service,
+            selectionService,
+            permissionService: permission,
+            languageService: language);
+        await viewModel.OnActivatedAsync();
+        var task = Assert.Single(Assert.Single(viewModel.Devices).Tasks);
+
+        Assert.False(task.HasRecoveryAction);
+        Assert.Equal("空码", task.ObservedMagazineText);
+        permission.SetLocalAdmin(true);
+        Assert.True(task.HasRecoveryAction);
+        Assert.True(task.RecoveryCommand.CanExecute(null));
+
+        language.Change(CultureInfo.GetCultureInfo("en-US"));
+        Assert.Equal("Empty code", task.ObservedMagazineText);
+        Assert.Contains(
+            "Waiting for local confirmation",
+            task.RecoverySummaryText,
+            StringComparison.Ordinal);
+        Assert.Equal("Audit terminate", task.RecoveryActionText);
+        Assert.Equal(1, service.GetCalls);
+
+        await viewModel.OnDeactivatedAsync();
+        permission.SetLocalAdmin(false);
+        Assert.True(task.HasRecoveryAction);
+    }
+
     private static TestPlcTaskBindingViewModel CreateViewModel(
         IPlcTaskBindingService service,
         IDeviceSelectionService selectionService,
         IPlcTaskBindingTransactionService? transactionService = null,
-        IPlcTaskRuntimeStatusReader? runtimeStatusReader = null)
+        IPlcTaskRuntimeStatusReader? runtimeStatusReader = null,
+        IClientPermissionService? permissionService = null,
+        IPlcTaskBindingConfirmationService? confirmationService = null,
+        TestAppLanguageService? languageService = null)
         => new TestPlcTaskBindingViewModel(
             service,
             transactionService ?? new FakePlcTaskBindingTransactionService(),
-            new FakeClientPermissionService(),
-            new FakeConfirmationService(),
-            new TestAppLanguageService(),
+            permissionService ?? new FakeClientPermissionService(),
+            confirmationService ?? new FakeConfirmationService(),
+            languageService ?? new TestAppLanguageService(),
             selectionService,
             runtimeStatusReader ?? new PlcTaskRuntimeStatusStore(),
             "Test.PlcTaskBinding",
@@ -448,6 +628,40 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
                 ])
             {
                 PlcCode = plcCode ?? deviceName
+            };
+
+    private static PlcTaskBindingDeviceDto CreateRecoveryDevice(
+        long revision,
+        string? checkpointMagazineCode,
+        string? observedMagazineCode)
+        => new(
+                1,
+                "PLC-A01",
+                "TestPlugin",
+                IsDeviceEnabled: true,
+                Tasks:
+                [
+                    new PlcTaskBindingItemDto(
+                        "Task.Upload",
+                        "上传任务",
+                        Enabled: true,
+                        HasSavedBinding: true,
+                        IsHeartbeatLike: false,
+                        RequiredSignals: [],
+                        CanRun: true,
+                        UnavailableReason: string.Empty,
+                        MissingRequiredSignals: [],
+                        IsSupportedByCurrentPlc: true,
+                        RecoveryState: PlcTaskRecoveryState.AwaitingConfirmation,
+                        RecoveryRevision: revision,
+                        CheckpointMagazineCode: checkpointMagazineCode,
+                        ObservedMagazineCode: observedMagazineCode,
+                        CheckpointSavedAtUtc: DateTimeOffset.UnixEpoch,
+                        RecoveryObservedAtUtc: DateTimeOffset.UnixEpoch.AddMinutes(1),
+                        RecoveryDiagnosticCode: "MagazineMismatch")
+                ])
+            {
+                PlcCode = "PLC-A01"
             };
 
     private sealed class TestPlcTaskBindingViewModel(
@@ -508,8 +722,18 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
         IReadOnlyList<PlcTaskBindingDeviceDto> devices) : IPlcTaskBindingService
     {
         private readonly TaskCompletionSource _reloadCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _recoveryCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public int GetCalls { get; private set; }
+
+        public IReadOnlyList<PlcTaskBindingDeviceDto>? ReloadDevices { get; init; }
+
+        public long? LastRecoveryRevision { get; private set; }
+
+        public PlcTaskRecoveryConfirmationAction? LastRecoveryAction { get; private set; }
+
+        public PlcTaskRecoveryConfirmationResult RecoveryResult { get; init; }
+            = PlcTaskRecoveryConfirmationResult.Succeeded();
 
         public Task<IReadOnlyList<PlcTaskBindingDeviceDto>> GetModuleDeviceBindingsAsync(
             string moduleId,
@@ -521,7 +745,10 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
                 _reloadCompletion.TrySetResult();
             }
 
-            return Task.FromResult(devices);
+            return Task.FromResult(
+                GetCalls >= 2 && ReloadDevices is not null
+                    ? ReloadDevices
+                    : devices);
         }
 
         public Task<IReadOnlySet<string>> GetEnabledTaskKeysAsync(
@@ -545,7 +772,24 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
             string? deviceModel = null)
             => PlcTaskBindingValidationResult.Success();
 
+        public Task<PlcTaskRecoveryConfirmationResult> ConfirmRecoveryAsync(
+            string moduleId,
+            string plcCode,
+            string taskKey,
+            long expectedRevision,
+            PlcTaskRecoveryConfirmationAction action,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            LastRecoveryRevision = expectedRevision;
+            LastRecoveryAction = action;
+            _recoveryCompletion.TrySetResult();
+            return Task.FromResult(RecoveryResult);
+        }
+
         public Task WaitForReloadAfterSaveAsync() => _reloadCompletion.Task;
+
+        public Task WaitForRecoveryConfirmationAsync() => _recoveryCompletion.Task;
     }
 
     private sealed class FakePlcTaskBindingTransactionService
@@ -588,20 +832,37 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
 
         public bool CanEditHardware => true;
 
-        public bool IsLocalAdmin => true;
+        public bool IsLocalAdminValue { get; private set; } = true;
 
-        public event Action? PermissionStateChanged
-        {
-            add { }
-            remove { }
-        }
+        public bool IsLocalAdmin => IsLocalAdminValue;
+
+        public event Action? PermissionStateChanged;
 
         public bool HasPermission(string permission) => true;
+
+        public void SetLocalAdmin(bool isLocalAdmin)
+        {
+            IsLocalAdminValue = isLocalAdmin;
+            PermissionStateChanged?.Invoke();
+        }
     }
 
     private sealed class FakeConfirmationService : IPlcTaskBindingConfirmationService
     {
+        public int RecoveryCalls { get; private set; }
+
         public Task<bool> ConfirmDisableHeartbeatAsync(string deviceName, IReadOnlyCollection<string> taskNames)
             => Task.FromResult(true);
+
+        public Task<bool> ConfirmRecoveryAsync(
+            string plcCode,
+            string taskKey,
+            string? checkpointMagazineCode,
+            string? observedMagazineCode,
+            PlcTaskRecoveryConfirmationAction action)
+        {
+            RecoveryCalls++;
+            return Task.FromResult(true);
+        }
     }
 }

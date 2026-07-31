@@ -1,6 +1,7 @@
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Module.Contracts.Hardware;
+using IIoT.Edge.Module.Contracts.Plc.Checkpoints;
 using IIoT.Edge.Module.Sdk.Hardware;
 namespace IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 
@@ -27,4 +28,15 @@ public interface IPlcTaskBindingService
         IReadOnlySet<string> enabledTaskKeys,
         IReadOnlyCollection<ModuleIoSnapshot> signalBindings,
         string? deviceModel = null);
+
+    Task<PlcTaskRecoveryConfirmationResult> ConfirmRecoveryAsync(
+        string moduleId,
+        string plcCode,
+        string taskKey,
+        long expectedRevision,
+        PlcTaskRecoveryConfirmationAction action,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(PlcTaskRecoveryConfirmationResult.Rejected(
+            PlcTaskRecoveryConfirmationOutcome.NotFound,
+            PlcTaskRecoveryDiagnosticCodes.ProviderUnavailable));
 }

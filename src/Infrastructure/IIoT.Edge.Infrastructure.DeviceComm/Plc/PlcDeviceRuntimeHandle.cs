@@ -1,5 +1,6 @@
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Module.Contracts.Plc.Checkpoints;
 using IIoT.Edge.Module.Contracts.Plc.Store;
 using IIoT.Edge.Module.Contracts.Runtime;
 using IIoT.Edge.Module.Contracts.Tasks;
@@ -139,7 +140,8 @@ public sealed class PlcDeviceRuntimeHandle
                             cancellationToken,
                             disposition: previous.WasRunning
                                 ? BusinessTaskStopDisposition.PreserveStopping
-                                : BusinessTaskStopDisposition.PreserveState)
+                                : BusinessTaskStopDisposition.PreserveState,
+                            checkpointSaveReason: PlcTaskCheckpointSaveReason.TaskDisabled)
                         .ConfigureAwait(false);
                 }
 
@@ -975,7 +977,8 @@ public sealed class PlcDeviceRuntimeHandle
     private async Task StopDependentTasksAsync(
         StopDeadline deadline,
         CancellationToken cancellationToken,
-        BusinessTaskStopDisposition businessTaskDisposition)
+        BusinessTaskStopDisposition businessTaskDisposition,
+        PlcTaskCheckpointSaveReason? checkpointSaveReason = null)
     {
         var stopTasks = GetBusinessTaskKeysSnapshot()
             .OrderBy(static key => key, StringComparer.OrdinalIgnoreCase)
@@ -1002,7 +1005,8 @@ public sealed class PlcDeviceRuntimeHandle
                         GetRequiredBusinessTaskSlot(taskKey),
                         cancellationToken,
                         deadline,
-                        businessTaskDisposition)
+                        businessTaskDisposition,
+                        checkpointSaveReason)
                     .ConfigureAwait(false);
                 return null;
             }
@@ -1041,7 +1045,8 @@ public sealed class PlcDeviceRuntimeHandle
         BusinessTaskSlot slot,
         CancellationToken cancellationToken,
         StopDeadline? deadline = null,
-        BusinessTaskStopDisposition disposition = BusinessTaskStopDisposition.Remove)
+        BusinessTaskStopDisposition disposition = BusinessTaskStopDisposition.Remove,
+        PlcTaskCheckpointSaveReason? checkpointSaveReason = null)
     {
         deadline ??= CreateStopDeadline();
         if (disposition != BusinessTaskStopDisposition.PreserveState)
@@ -1054,6 +1059,12 @@ public sealed class PlcDeviceRuntimeHandle
         var stopExecution = slot.StopExecution;
         if (taskCancellation is null && stopExecution is null)
         {
+            await SaveTaskCheckpointIfRequiredAsync(
+                    slot,
+                    checkpointSaveReason,
+                    deadline,
+                    cancellationToken)
+                .ConfigureAwait(false);
             slot.StopFailureReason = null;
             CompleteTaskStop(slot.TaskKey, disposition);
             return;
@@ -1183,8 +1194,87 @@ public sealed class PlcDeviceRuntimeHandle
                 .Throw();
         }
 
+        await SaveTaskCheckpointIfRequiredAsync(
+                slot,
+                checkpointSaveReason,
+                deadline,
+                cancellationToken)
+            .ConfigureAwait(false);
         slot.StopFailureReason = null;
         CompleteTaskStop(slot.TaskKey, disposition);
+    }
+
+    private async Task SaveTaskCheckpointIfRequiredAsync(
+        BusinessTaskSlot slot,
+        PlcTaskCheckpointSaveReason? saveReason,
+        StopDeadline deadline,
+        CancellationToken cancellationToken)
+    {
+        if (saveReason is null
+            || slot.Task is not IPlcTaskCheckpointParticipant participant)
+        {
+            return;
+        }
+
+        var identity = participant.CheckpointIdentity;
+        if (!string.Equals(identity.ModuleId, slot.ModuleId, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(identity.PlcCode, PlcCode, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(identity.TaskKey, slot.TaskKey, StringComparison.OrdinalIgnoreCase))
+        {
+            slot.StopFailureReason = PlcTaskRuntimeErrorCodes.TaskCheckpointSaveFailed;
+            SetTaskState(
+                slot.TaskKey,
+                PlcTaskRuntimeState.Faulted,
+                PlcTaskRuntimeErrorCodes.TaskCheckpointSaveFailed);
+            throw new InvalidOperationException(
+                $"业务任务 {slot.TaskKey} 检查点身份不匹配，"
+                + $"原因码={PlcTaskRuntimeErrorCodes.TaskCheckpointSaveFailed}。");
+        }
+
+        PlcTaskCheckpointSaveResult result;
+        try
+        {
+            result = await participant
+                .SaveCheckpointAsync(saveReason.Value, cancellationToken)
+                .AsTask()
+                .WaitAsync(
+                    deadline.Remaining,
+                    TransitionTimeProvider,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            slot.StopFailureReason = PlcTaskRuntimeErrorCodes.TaskCheckpointSaveFailed;
+            SetTaskState(
+                slot.TaskKey,
+                PlcTaskRuntimeState.Faulted,
+                PlcTaskRuntimeErrorCodes.TaskCheckpointSaveFailed,
+                ex.GetType().Name);
+            throw new InvalidOperationException(
+                $"业务任务 {slot.TaskKey} 检查点保存失败，"
+                + $"原因码={PlcTaskRuntimeErrorCodes.TaskCheckpointSaveFailed}，"
+                + $"异常类型={ex.GetType().Name}。",
+                ex);
+        }
+
+        if (result.IsPersisted)
+        {
+            return;
+        }
+
+        slot.StopFailureReason = PlcTaskRuntimeErrorCodes.TaskCheckpointSaveFailed;
+        SetTaskState(
+            slot.TaskKey,
+            PlcTaskRuntimeState.Faulted,
+            PlcTaskRuntimeErrorCodes.TaskCheckpointSaveFailed);
+        throw new InvalidOperationException(
+            $"业务任务 {slot.TaskKey} 检查点未持久化，"
+            + $"原因码={PlcTaskRuntimeErrorCodes.TaskCheckpointSaveFailed}。");
     }
 
     private async Task StopPeriodicReadTaskAsync(
@@ -1310,7 +1400,8 @@ public sealed class PlcDeviceRuntimeHandle
             await StopDependentTasksAsync(
                     _shutdownStopDeadline,
                     CancellationToken.None,
-                    BusinessTaskStopDisposition.PreserveStopping)
+                    BusinessTaskStopDisposition.PreserveStopping,
+                    PlcTaskCheckpointSaveReason.ProcessShutdown)
                 .ConfigureAwait(false);
         }
         finally
@@ -1490,6 +1581,8 @@ public sealed class PlcDeviceRuntimeHandle
     {
         public string TaskKey { get; } = taskKey;
 
+        public string ModuleId { get; } = entry.ModuleId;
+
         public PlcRuntimeBusinessTaskFactory Factory { get; private set; } = entry.Factory;
 
         public bool RequiresPeriodicRead { get; private set; } = entry.RequiresPeriodicRead;
@@ -1511,6 +1604,12 @@ public sealed class PlcDeviceRuntimeHandle
         public void UpdatePlanEntry(PlcRuntimeTaskPlanEntry next)
         {
             ArgumentNullException.ThrowIfNull(next);
+            if (!string.Equals(ModuleId, next.ModuleId, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"业务任务 {TaskKey} 的 ModuleId 不得在运行时变更。");
+            }
+
             Factory = next.Factory;
             RequiresPeriodicRead = next.RequiresPeriodicRead;
         }

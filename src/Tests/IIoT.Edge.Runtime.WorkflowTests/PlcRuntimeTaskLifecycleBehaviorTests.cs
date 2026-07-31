@@ -5,6 +5,7 @@ using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Module.Contracts.Plc.Checkpoints;
 using IIoT.Edge.Module.Contracts.Runtime;
 using IIoT.Edge.Module.Contracts.Tasks;
 using IIoT.Edge.Testing;
@@ -33,6 +34,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
                 new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
                     "Task.MG1",
                     new PlcRuntimeTaskPlanEntry(
+                        "Module.AP",
                         (_, _) => business,
                         requiresPeriodicRead: true))
             ]);
@@ -48,6 +50,212 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         Assert.Equal(PlcTaskRuntimeState.WaitingForConnection, afterRename!.State);
         Assert.Equal(beforeRename?.StateChangedAtUtc, afterRename.StateChangedAtUtc);
         await CleanupAsync(runtime);
+    }
+
+    [Fact]
+    public async Task ApplyPlan_WhenTaskIsDisabled_ShouldStopBeforePersistingCheckpoint()
+    {
+        var events = new ConcurrentQueue<string>();
+        var business = new RecordingCheckpointBusinessTask(
+            "Task.MG1",
+            "Module.AP",
+            "PLC-A",
+            events);
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            new ControlledLoopTask("PeriodicRead"));
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlan(runtime, ("Task.MG1", (_, _) => business)),
+            TestContext.Current.CancellationToken);
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await business.Starts.WaitForAtLeastAsync(
+            1,
+            TestContext.Current.CancellationToken);
+
+        var result = await runtime.ApplyTaskPlanAsync(
+            PlcRuntimeTaskPlan.Empty(
+                runtime.DeviceId,
+                runtime.PlcCode,
+                runtime.DeviceName),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(PlcRuntimeTaskApplyState.Applied, result.State);
+        Assert.Equal(
+            ["start", "stop", "checkpoint:TaskDisabled"],
+            events);
+        Assert.Null(runtime.GetBusinessTask("Task.MG1"));
+        Assert.Null(runtime.GetTaskStatus("Task.MG1"));
+        await CleanupAsync(runtime);
+    }
+
+    [Fact]
+    public async Task ApplyPlan_WhenCheckpointSaveFails_ShouldFailAndRestartOriginalTask()
+    {
+        var business = new RecordingCheckpointBusinessTask(
+            "Task.MG1",
+            "Module.AP",
+            "PLC-A",
+            new ConcurrentQueue<string>())
+        {
+            SaveResult = PlcTaskCheckpointSaveResult.Failed(
+                currentRevision: 3,
+                diagnosticCode: "CheckpointPersistenceFailed")
+        };
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            new ControlledLoopTask("PeriodicRead"));
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlan(runtime, ("Task.MG1", (_, _) => business)),
+            TestContext.Current.CancellationToken);
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await business.Starts.WaitForAtLeastAsync(
+            1,
+            TestContext.Current.CancellationToken);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            runtime.ApplyTaskPlanAsync(
+                PlcRuntimeTaskPlan.Empty(
+                    runtime.DeviceId,
+                    runtime.PlcCode,
+                    runtime.DeviceName),
+                TestContext.Current.CancellationToken));
+        await business.Starts.WaitForAtLeastAsync(
+            2,
+            TestContext.Current.CancellationToken);
+
+        Assert.Contains(
+            PlcTaskRuntimeErrorCodes.TaskCheckpointSaveFailed,
+            failure.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(1, business.Saves.Count);
+        Assert.Equal(PlcTaskCheckpointSaveReason.TaskDisabled, business.SaveReasons.Single());
+        Assert.Same(business, runtime.GetBusinessTask("Task.MG1"));
+        Assert.Equal(["Task.MG1"], runtime.EnabledTaskKeys);
+        Assert.Equal(
+            PlcTaskRuntimeState.Running,
+            runtime.GetTaskStatus("Task.MG1")?.State);
+
+        business.SaveResult = PlcTaskCheckpointSaveResult.Persisted(4);
+        await CleanupAsync(runtime);
+    }
+
+    [Fact]
+    public async Task ApplyPlan_WhenCheckpointModuleIdentityDoesNotMatch_ShouldFailClosed()
+    {
+        var business = new RecordingCheckpointBusinessTask(
+            "Task.MG1",
+            "Module.CP",
+            "PLC-A",
+            new ConcurrentQueue<string>());
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            new ControlledLoopTask("PeriodicRead"));
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlan(runtime, ("Task.MG1", (_, _) => business)),
+            TestContext.Current.CancellationToken);
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await business.Starts.WaitForAtLeastAsync(
+            1,
+            TestContext.Current.CancellationToken);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            runtime.ApplyTaskPlanAsync(
+                PlcRuntimeTaskPlan.Empty(
+                    runtime.DeviceId,
+                    runtime.PlcCode,
+                    runtime.DeviceName),
+                TestContext.Current.CancellationToken));
+        await business.Starts.WaitForAtLeastAsync(
+            2,
+            TestContext.Current.CancellationToken);
+
+        Assert.Contains(
+            PlcTaskRuntimeErrorCodes.TaskCheckpointSaveFailed,
+            failure.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(0, business.Saves.Count);
+        Assert.Same(business, runtime.GetBusinessTask("Task.MG1"));
+        Assert.Equal(
+            PlcTaskRuntimeState.Running,
+            runtime.GetTaskStatus("Task.MG1")?.State);
+
+        business.SetCheckpointIdentity("Module.AP", runtime.PlcCode);
+        await CleanupAsync(runtime);
+    }
+
+    [Fact]
+    public async Task PeriodicReadPauseAndDisconnect_ShouldNotPersistRecoveryCheckpoint()
+    {
+        var periodicRead = new ControllablePeriodicReadTask("PeriodicRead");
+        var business = new RecordingCheckpointBusinessTask(
+            "Task.MG1",
+            "Module.AP",
+            "PLC-A",
+            new ConcurrentQueue<string>());
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            periodicRead);
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlan(runtime, ("Task.MG1", (_, _) => business)),
+            TestContext.Current.CancellationToken);
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await business.Starts.WaitForAtLeastAsync(
+            1,
+            TestContext.Current.CancellationToken);
+
+        periodicRead.Fail(new InvalidDataException("bad periodic frame"));
+        await runtime.WaitForTaskErrorCodeAsync(
+            "Task.MG1",
+            PlcTaskRuntimeErrorCodes.PeriodicReadFault,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(0, business.Saves.Count);
+
+        runtime.ConnectionSignal.Report(false);
+        await runtime.WaitForTaskStateAsync(
+            "Task.MG1",
+            PlcTaskRuntimeState.WaitingForConnection,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(0, business.Saves.Count);
+
+        await CleanupAsync(runtime);
+    }
+
+    [Fact]
+    public async Task ProcessShutdown_ShouldStopTaskBeforePersistingFinalCheckpoint()
+    {
+        var events = new ConcurrentQueue<string>();
+        var business = new RecordingCheckpointBusinessTask(
+            "Task.MG1",
+            "Module.AP",
+            "PLC-A",
+            events);
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            new ControlledLoopTask("PeriodicRead"));
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlan(runtime, ("Task.MG1", (_, _) => business)),
+            TestContext.Current.CancellationToken);
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await business.Starts.WaitForAtLeastAsync(
+            1,
+            TestContext.Current.CancellationToken);
+
+        await runtime.Runtime.RequestStopAsync();
+        await Task.WhenAll(runtime.GetRunningHandlesSnapshot());
+
+        Assert.Equal(
+            ["start", "stop", "checkpoint:ProcessShutdown"],
+            events);
+        Assert.Equal(
+            PlcTaskCheckpointSaveReason.ProcessShutdown,
+            business.SaveReasons.Single());
+        await runtime.PlcService.DisposeAsync();
+        runtime.Runtime.DisposeCancellation();
     }
 
     [Fact]
@@ -1412,6 +1620,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
                     new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
                         task.TaskKey,
                         new PlcRuntimeTaskPlanEntry(
+                            "Module.AP",
                             task.Factory,
                             task.RequiresPeriodicRead))));
 
@@ -1675,6 +1884,84 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
                 await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+            }
+        }
+    }
+
+    private sealed class RecordingCheckpointBusinessTask(
+        string taskName,
+        string moduleId,
+        string plcCode,
+        ConcurrentQueue<string> events)
+        : IPlcTask, IStartupAwareBackgroundTask, IPlcTaskCheckpointParticipant
+    {
+        public string TaskName { get; } = taskName;
+
+        public PlcTaskCheckpointIdentity CheckpointIdentity { get; private set; }
+            = new(moduleId, plcCode, taskName);
+
+        public AsyncCounter Starts { get; } = new();
+
+        public AsyncCounter Stops { get; } = new();
+
+        public AsyncCounter Saves { get; } = new();
+
+        public ConcurrentQueue<PlcTaskCheckpointSaveReason> SaveReasons { get; }
+            = new();
+
+        public PlcTaskCheckpointSaveResult SaveResult { get; set; }
+            = PlcTaskCheckpointSaveResult.Persisted(1);
+
+        public void SetCheckpointIdentity(string nextModuleId, string nextPlcCode)
+            => CheckpointIdentity = new PlcTaskCheckpointIdentity(
+                nextModuleId,
+                nextPlcCode,
+                TaskName);
+
+        public Task StartAsync(CancellationToken ct)
+            => StartWithStartup(ct).Execution;
+
+        public BackgroundTaskRun StartWithStartup(
+            CancellationToken cancellationToken)
+        {
+            Starts.Increment();
+            events.Enqueue("start");
+            return new BackgroundTaskRun(
+                Task.CompletedTask,
+                RunAsync(cancellationToken));
+        }
+
+        public Task StopAsync(CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            Stops.Increment();
+            events.Enqueue("stop");
+            return Task.CompletedTask;
+        }
+
+        public ValueTask<PlcTaskCheckpointSaveResult> SaveCheckpointAsync(
+            PlcTaskCheckpointSaveReason reason,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Saves.Increment();
+            SaveReasons.Enqueue(reason);
+            events.Enqueue($"checkpoint:{reason}");
+            return ValueTask.FromResult(SaveResult);
+        }
+
+        private static async Task RunAsync(
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                await Task.Delay(
+                    Timeout.InfiniteTimeSpan,
+                    cancellationToken);
+            }
+            catch (OperationCanceledException) when (
+                cancellationToken.IsCancellationRequested)
             {
             }
         }
