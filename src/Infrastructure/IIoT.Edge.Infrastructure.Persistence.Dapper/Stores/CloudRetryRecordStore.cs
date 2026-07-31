@@ -11,12 +11,14 @@ namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 public sealed class CloudRetryRecordStore :
     RetryRecordStoreBase,
     ICloudRetryRecordStore,
-    ICloudDeadLetterRequeueStore
+    ICloudDeadLetterRequeueStore,
+    ICloudRetryDeadLetterTransitionStore
 {
     public override string DbName => "pipeline_cloud";
     protected override string TableName => "failed_cloud_records";
     protected override string ChannelName => "Cloud";
     protected override string ClaimTableName => "failed_cloud_record_claims";
+    protected override string DeadLetterTableName => "dead_cloud_records";
 
     protected override string CreateTableSql => @"
         CREATE TABLE IF NOT EXISTS failed_cloud_records (
@@ -56,6 +58,25 @@ public sealed class CloudRetryRecordStore :
     {
     }
 
-    public Task SaveRequeuedAsync(DeadLetterRecord record)
-        => SaveRequeuedCoreAsync(record);
+    public Task RequeueAndRemoveAsync(
+        long deadLetterId,
+        string operatorId,
+        string businessIdentifier,
+        CancellationToken cancellationToken = default)
+        => RequeueAndRemoveDeadLetterCoreAsync(
+            deadLetterId,
+            operatorId,
+            businessIdentifier,
+            cancellationToken);
+
+    public Task MoveExhaustedRetryToDeadLetterAsync(
+        FailedCellRecord sourceRecord,
+        int finalRetryCount,
+        string failureReason,
+        CancellationToken cancellationToken = default)
+        => MoveExhaustedRetryToDeadLetterCoreAsync(
+            sourceRecord,
+            finalRetryCount,
+            failureReason,
+            cancellationToken);
 }

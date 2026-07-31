@@ -10,8 +10,6 @@ namespace IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
 public interface IDiagnosticsDeadLetterConfirmationService
 {
     Task<bool> ConfirmRequeueAsync(DeadLetterRow row);
-
-    Task<bool> ConfirmDeleteAsync(DeadLetterRow row);
 }
 
 public sealed class DiagnosticsDeadLetterConfirmationService(IAppLanguageService languageService)
@@ -29,22 +27,6 @@ public sealed class DiagnosticsDeadLetterConfirmationService(IAppLanguageService
         var title = languageService.GetString(
             "Navigation_Diagnostics_ConfirmRequeueTitle",
             "确认重新入队");
-
-        return ConfirmAsync(title, message);
-    }
-
-    public Task<bool> ConfirmDeleteAsync(DeadLetterRow row)
-    {
-        var message = languageService.Format(
-            "Navigation_Diagnostics_ConfirmDeleteMessageFormat",
-            "即将删除{0}死信记录。ID：{1}；工序：{2}；目标：{3}。删除只会移除本地死信记录，不会补传，且不可恢复。是否继续？",
-            FormatChannel(row.Channel),
-            row.Id,
-            row.ProcessType,
-            row.FailedTarget);
-        var title = languageService.GetString(
-            "Navigation_Diagnostics_ConfirmDeleteTitle",
-            "确认删除死信");
 
         return ConfirmAsync(title, message);
     }

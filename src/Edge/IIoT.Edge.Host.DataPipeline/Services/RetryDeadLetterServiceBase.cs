@@ -41,7 +41,9 @@ internal abstract class RetryDeadLetterServiceBase
         }
         catch (Exception ex)
         {
-            Logger.Error($"[{DeadLetterChannelMetadata.LogPrefix}] CellData 反序列化失败：{ex.Message}");
+            Logger.Error(
+                $"[{DeadLetterChannelMetadata.LogPrefix}] 结果=DeserializeFailed，" +
+                $"异常类型={ex.GetType().Name}。");
             return null;
         }
     }

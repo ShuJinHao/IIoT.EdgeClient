@@ -45,7 +45,7 @@ public sealed class FailedRecordStoreBehaviorTests
     }
 
     [Fact]
-    public async Task DeleteExpiredAbandonedAsync_ShouldDeleteOnlyExpiredAbandonedRecords()
+    public async Task DeleteExpiredAbandonedAsync_ShouldPreserveAllUnsuccessfulRecords()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "edge-failed-store-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
@@ -84,8 +84,8 @@ public sealed class FailedRecordStoreBehaviorTests
 
             var deleted = await store.DeleteExpiredAbandonedAsync(DateTime.UtcNow.AddDays(-30));
 
-            Assert.Equal(1, deleted);
-            Assert.Equal(0, await CountByFailedTargetAsync(connectionFactory, "Cloud-Old"));
+            Assert.Equal(0, deleted);
+            Assert.Equal(1, await CountByFailedTargetAsync(connectionFactory, "Cloud-Old"));
             Assert.Equal(1, await CountByFailedTargetAsync(connectionFactory, "Cloud-Recent"));
             Assert.Equal(1, await CountByFailedTargetAsync(connectionFactory, "Cloud-Active"));
         }
@@ -436,10 +436,12 @@ public sealed class FailedRecordStoreBehaviorTests
             var serializer = CreateCellDataJsonSerializer();
             var retryStore = new CloudRetryRecordStore(connectionFactory, logger, serializer);
             var fallbackStore = new CloudFallbackBufferStore(connectionFactory, logger, serializer);
+            var deadLetterStore = new CloudDeadLetterStore(connectionFactory, logger);
             using (var connection = connectionFactory.Create(retryStore.DbName))
             {
                 await retryStore.InitializeTableAsync(connection);
                 await fallbackStore.InitializeTableAsync(connection);
+                await deadLetterStore.InitializeTableAsync(connection);
             }
 
             var legacy = CreateRecord("LEGACY-V1");
@@ -449,7 +451,13 @@ public sealed class FailedRecordStoreBehaviorTests
             await fallbackStore.MovePendingToRetryAsync([fallbackId]);
 
             var deadLetter = CreateDeadLetter(legacy, serializer, "Cloud");
-            await retryStore.SaveRequeuedAsync(deadLetter);
+            await deadLetterStore.SaveAsync(deadLetter, TestContext.Current.CancellationToken);
+            var deadLetterId = Assert.Single(await deadLetterStore.GetLatestAsync()).Id;
+            await retryStore.RequeueAndRemoveAsync(
+                deadLetterId,
+                "LOCAL-ADMIN-01",
+                "LEGACY-V1",
+                TestContext.Current.CancellationToken);
 
             using var readConnection = connectionFactory.Create(retryStore.DbName);
             var rows = (await readConnection.QueryAsync<FailedCellRecord>(

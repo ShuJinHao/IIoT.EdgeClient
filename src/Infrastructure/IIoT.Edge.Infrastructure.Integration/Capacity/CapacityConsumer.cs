@@ -1,4 +1,5 @@
-﻿using IIoT.Edge.Module.Contracts.DataPipeline.Consumers;
+﻿using IIoT.Edge.Application.Common.DataPipeline;
+using IIoT.Edge.Module.Contracts.DataPipeline.Consumers;
 using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
 using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.Config;
@@ -79,8 +80,12 @@ public class CapacityConsumer : ICapacityConsumer
         }
         catch (Exception ex)
         {
-            _logger.Error($"[Capacity] 产能统计异常: {ex.Message}");
-            return true;
+            _logger.Error(
+                $"[CorrelationId={DataPipelineCompletionIdentity.Create(record)}]" +
+                $"[PlcCode={record.ResolvePlcCode()}][TaskKey={record.TaskKey}]" +
+                $"[产能] 业务标识={record.CellData.DisplayLabel}，结果=Failed，" +
+                $"原因码=CapacityConsumerFailed，异常类型={ex.GetType().Name}。");
+            return false;
         }
     }
 }

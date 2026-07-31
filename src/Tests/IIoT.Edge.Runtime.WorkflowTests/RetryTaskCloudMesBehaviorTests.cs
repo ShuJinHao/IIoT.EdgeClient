@@ -2041,6 +2041,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
                 logger,
                 retryStore,
                 cloudDeadLetterStore,
+                retryStore,
                 fallbackWriter,
                 cloudConsumer,
                 cloudBatchConsumer,
@@ -2127,6 +2128,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
                 logger,
                 retryStore,
                 mesDeadLetterStore,
+                retryStore,
                 fallbackWriter,
                 mesConsumer,
                 new DefaultRetryBackoffStrategy(),
@@ -2162,9 +2164,6 @@ public sealed class RetryTaskCloudMesBehaviorTests
             typeof(RetryTaskBase<MesRetryRuntimeState, MesRetryProcessResult>)
                 .GetField("_wasUnavailable", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
                 .SetValue(_inner, false);
-            typeof(RetryHousekeepingServiceBase<MesRetryRuntimeState>)
-                .GetField("_lastAbandonedCleanupDateUtc", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
-                .SetValue(_housekeepingService, DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)));
         }
     }
 

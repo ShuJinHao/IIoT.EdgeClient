@@ -19,7 +19,6 @@ public abstract class ProcessUploaderConsumerBase<TUploader, TResult>
     protected ILogService Logger { get; }
 
     protected bool TryResolveUploader(
-        string targetName,
         string processType,
         bool isRegistered,
         out TUploader uploader,
@@ -32,11 +31,6 @@ public abstract class ProcessUploaderConsumerBase<TUploader, TResult>
         }
 
         shouldFail = isRegistered;
-        if (shouldFail)
-        {
-            Logger.Error($"[{targetName}] 工序 {processType} 已注册上传器，但 DI 中未找到实现。");
-        }
-
         return false;
     }
 }

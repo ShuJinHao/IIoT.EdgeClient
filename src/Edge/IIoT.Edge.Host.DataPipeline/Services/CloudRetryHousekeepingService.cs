@@ -23,8 +23,7 @@ internal sealed class CloudRetryHousekeepingService
             DataPipelineRetryChannelMetadata.CreateDeadLetterChannel(DataPipelineRetryChannel.Cloud).LogPrefix,
             "云端上传门控已恢复，弃置记录已重置为可补传。",
             CloudRetryRuntimeState.Idle,
-            CloudRetryRuntimeState.Backoff,
-            TimeSpan.FromDays(30))
+            CloudRetryRuntimeState.Backoff)
     {
         _diagnosticsStore = diagnosticsStore;
     }

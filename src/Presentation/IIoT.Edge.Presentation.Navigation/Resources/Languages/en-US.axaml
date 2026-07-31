@@ -516,12 +516,8 @@
     <sys:String x:Key="Navigation_Diagnostics_BackgroundRepair">Auto-recovery is enabled; if the fault persists, inspect the diagnostics log.</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_ConfirmRequeueTitle">Confirm Requeue</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_ConfirmRequeueMessageFormat">You are about to write the {0} dead-letter record back to its retry queue. ID: {1}; process: {2}; target: {3}. If this succeeds, the dead-letter row will be removed and normal retry processing will handle upload. Continue?</sys:String>
-    <sys:String x:Key="Navigation_Diagnostics_ConfirmDeleteTitle">Confirm Dead Letter Deletion</sys:String>
-    <sys:String x:Key="Navigation_Diagnostics_ConfirmDeleteMessageFormat">You are about to delete the {0} dead-letter record. ID: {1}; process: {2}; target: {3}. Deletion only removes the local dead-letter record, does not upload it, and cannot be undone. Continue?</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_RequeueCanceled">Dead-letter requeue was canceled.</sys:String>
-    <sys:String x:Key="Navigation_Diagnostics_DeleteCanceled">Dead-letter deletion was canceled.</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_RequeueFailedFormat">Dead-letter requeue failed: {0}</sys:String>
-    <sys:String x:Key="Navigation_Diagnostics_DeleteFailedFormat">Dead-letter deletion failed: {0}</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_AdminRequired">The current account is not a local administrator and cannot perform dead-letter operations.</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_Context">Production Context Diagnostics</sys:String>
     <sys:String x:Key="Navigation_Diagnostics_ContextCorruptCount">Corrupt files</sys:String>

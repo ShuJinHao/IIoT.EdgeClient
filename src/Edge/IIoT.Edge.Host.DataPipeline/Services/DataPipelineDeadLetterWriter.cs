@@ -47,10 +47,14 @@ public sealed class DataPipelineDeadLetterWriter : IDataPipelineDeadLetterWriter
             }).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
 
-            var plcCode = string.IsNullOrWhiteSpace(sourceRecord?.PlcCode)
-                ? "未解析"
-                : sourceRecord.PlcCode;
-            logger.Fatal($"[PlcCode={plcCode}][{channel.DeadLetterName}] 工序={processType} 记录 {sourceRecordId} 已进入死信表。");
+            var context = sourceRecord is null
+                ? $"[CorrelationId=DeadLetter:{channel.DeadLetterName}:{sourceRecordId}]" +
+                  "[PlcCode=Unresolved][TaskKey=Unresolved]" +
+                  $"[BusinessId=RetryRecord:{sourceRecordId}]"
+                : DataPipelineLogContext.Format(sourceRecord);
+            logger.Fatal(
+                $"{context}[{channel.DeadLetterName}] 工序={processType}，" +
+                $"结果=DurableDeadLetter，阶段={stage}，尚未上传成功。");
             return true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

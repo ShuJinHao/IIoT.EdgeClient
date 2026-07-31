@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 using IIoT.Edge.Module.Contracts.Logging;
@@ -57,12 +58,19 @@ internal sealed class ExcelConsumer : IExcelConsumer
                 _excelWriter.AppendRow(filePath, columns, rowData);
             }
 
-            _logger.Info($"[Excel] 写入成功，{cellData.DisplayLabel}");
+            _logger.Info(
+                $"[CorrelationId={DataPipelineCompletionIdentity.Create(record)}]" +
+                $"[PlcCode={record.ResolvePlcCode()}][TaskKey={record.TaskKey}]" +
+                $"[Excel] 业务标识={cellData.DisplayLabel}，结果=LocalPersisted。");
             return Task.FromResult(true);
         }
         catch (Exception ex)
         {
-            _logger.Error($"[Excel] 写入失败，{record.CellData.DisplayLabel}，{ex.Message}");
+            _logger.Error(
+                $"[CorrelationId={DataPipelineCompletionIdentity.Create(record)}]" +
+                $"[PlcCode={record.ResolvePlcCode()}][TaskKey={record.TaskKey}]" +
+                $"[Excel] 业务标识={record.CellData.DisplayLabel}，结果=Failed，" +
+                $"原因码=ExcelPersistFailed，异常类型={ex.GetType().Name}。");
             return Task.FromResult(false);
         }
     }

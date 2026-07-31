@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
 using IIoT.Edge.Module.Contracts.Logging;
@@ -5,6 +6,7 @@ using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Module.Sdk.Base;
 using IIoT.Edge.Host.DataPipeline.Services;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
+using System.Collections.Concurrent;
 using System.Threading.Channels;
 
 namespace IIoT.Edge.Host.DataPipeline.Tasks;
@@ -14,6 +16,7 @@ public class ProcessQueueTask : ScheduledTaskBase
     private const int MaxDrainBatchSize = 100;
 
     private readonly IDataPipelineService _pipelineService;
+    private readonly IDataPipelineIngressStore? _ingressStore;
     private readonly List<ICellDataConsumer> _consumers;
     private readonly ICriticalPersistenceFallbackWriter _criticalFallbackWriter;
     private readonly DataPipelineCascadingPersistenceWriter _persistenceWriter;
@@ -35,6 +38,8 @@ public class ProcessQueueTask : ScheduledTaskBase
     private bool _durableWorkersTokenInitialized;
     private int _cloudPendingCount;
     private int _mesPendingCount;
+    private readonly ConcurrentDictionary<string, byte> _inflightIngressConsumers =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public override string TaskName => "ProcessQueueTask";
     protected override int ExecuteInterval => 0;
@@ -56,13 +61,15 @@ public class ProcessQueueTask : ScheduledTaskBase
         DataPipelineCascadingPersistenceWriter persistenceWriter,
         IDataPipelineConsumerInvoker consumerInvoker,
         DataPipelineRuntimeOptions? runtimeOptions = null,
-        TimeProvider? shutdownTimeProvider = null)
+        TimeProvider? shutdownTimeProvider = null,
+        IDataPipelineIngressStore? ingressStore = null)
         : base(logger)
     {
         ArgumentNullException.ThrowIfNull(persistenceWriter);
         ArgumentNullException.ThrowIfNull(consumerInvoker);
 
         _pipelineService = pipelineService;
+        _ingressStore = ingressStore;
         _criticalFallbackWriter = criticalFallbackWriter;
         _consumers = consumers.OrderBy(c => c.Order).ToList();
         _persistenceWriter = persistenceWriter;
@@ -80,6 +87,27 @@ public class ProcessQueueTask : ScheduledTaskBase
     {
         await EnsureDurableWorkersStartedAsync(CurrentCancellationToken).ConfigureAwait(false);
 
+        if (_ingressStore is not null)
+        {
+            // 内存队列只作唤醒通知；业务真值始终从持久入口按接受顺序取回。
+            var notificationCount = 0;
+            while (notificationCount < MaxDrainBatchSize
+                   && _pipelineService.TryDequeue(out _))
+            {
+                notificationCount++;
+            }
+
+            var pending = await _ingressStore
+                .GetPendingAsync(MaxDrainBatchSize, CurrentCancellationToken)
+                .ConfigureAwait(false);
+            foreach (var ingress in pending)
+            {
+                await ProcessIngressAsync(ingress, CurrentCancellationToken).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
         var drainedCount = 0;
         while (drainedCount < MaxDrainBatchSize
                && _pipelineService.TryDequeue(out var record)
@@ -91,20 +119,30 @@ public class ProcessQueueTask : ScheduledTaskBase
     }
 
     protected override async Task WaitForNextIterationAsync(CancellationToken ct)
-        => await _pipelineService.WaitToReadAsync(ct).ConfigureAwait(false);
+    {
+        if (_ingressStore is null)
+        {
+            await _pipelineService.WaitToReadAsync(ct).ConfigureAwait(false);
+            return;
+        }
+
+        var queueReady = _pipelineService.WaitToReadAsync(ct).AsTask();
+        var durableRecoveryPoll = Task.Delay(TimeSpan.FromMilliseconds(500), ct);
+        await Task.WhenAny(queueReady, durableRecoveryPoll).ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested();
+    }
 
     private async Task ProcessOneAsync(CellCompletedRecord record, CancellationToken cancellationToken)
     {
-        var label = record.CellData.DisplayLabel;
-        var plcCode = record.ResolvePlcCode();
         WriteLogBestEffort(() =>
-            Logger.Info($"[PlcCode={plcCode}][数据管道] 工序={record.CellData.ProcessType} 开始处理 {label}。"));
+            Logger.Info(
+                $"{DataPipelineLogContext.Format(record)}[数据管道] 结果=ProcessingStarted。"));
 
         foreach (var consumer in _consumers.Where(consumer => DataPipelineRetryChannelMetadata.ShouldProcess(record, consumer)))
         {
             if (consumer.FailureMode == ConsumerFailureMode.Durable)
             {
-                await DispatchDurableConsumerAsync(record, consumer, cancellationToken).ConfigureAwait(false);
+                await DispatchDurableConsumerAsync(record, consumer, cancellationToken, ingress: null).ConfigureAwait(false);
                 continue;
             }
 
@@ -112,10 +150,72 @@ public class ProcessQueueTask : ScheduledTaskBase
         }
 
         WriteLogBestEffort(() =>
-            Logger.Info($"[PlcCode={plcCode}][数据管道] 工序={record.CellData.ProcessType} {label} 已完成本地处理并投递目标出口。"));
+            Logger.Info(
+                $"{DataPipelineLogContext.Format(record)}[数据管道] " +
+                "结果=ConsumersDispatched，尚不代表外部上传成功。"));
     }
 
-    private async Task ProcessConsumerAsync(
+    private async Task ProcessIngressAsync(
+        DataPipelineIngressRecord ingress,
+        CancellationToken cancellationToken)
+    {
+        var record = ingress.Record;
+        var applicableConsumers = _consumers
+            .Where(consumer => DataPipelineRetryChannelMetadata.ShouldProcess(record, consumer))
+            .ToArray();
+        var requiredConsumerKeys = applicableConsumers
+            .Select(CreateConsumerKey)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (requiredConsumerKeys.Length != applicableConsumers.Length)
+        {
+            throw new InvalidOperationException("数据管道消费者稳定键重复，禁止消费不可区分的回执。");
+        }
+
+        WriteLogBestEffort(() => Logger.Info(
+            $"{DataPipelineLogContext.Format(record)}[数据管道] 结果=RecoveryStarted。"));
+
+        foreach (var consumer in applicableConsumers)
+        {
+            var consumerKey = CreateConsumerKey(consumer);
+            if (ingress.CompletedConsumerKeys.Contains(consumerKey))
+            {
+                continue;
+            }
+
+            var context = new IngressConsumerContext(
+                ingress.CompletionId,
+                consumerKey,
+                requiredConsumerKeys);
+            if (consumer.FailureMode == ConsumerFailureMode.Durable)
+            {
+                await DispatchDurableConsumerAsync(record, consumer, cancellationToken, context)
+                    .ConfigureAwait(false);
+                continue;
+            }
+
+            if (await ProcessConsumerAsync(record, consumer, cancellationToken).ConfigureAwait(false))
+            {
+                await MarkIngressConsumerCompletedAsync(context, record, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        var completed = await _ingressStore!
+            .CompleteIfAllConsumersFinishedAsync(
+                ingress.CompletionId,
+                requiredConsumerKeys,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (completed)
+        {
+            WriteLogBestEffort(() => Logger.Info(
+                $"{DataPipelineLogContext.Format(record)}[数据管道] " +
+                "结果=IngressCompleted，全部必需本地消费与外部持久交接已完成。"));
+        }
+    }
+
+    private async Task<bool> ProcessConsumerAsync(
         CellCompletedRecord record,
         ICellDataConsumer consumer,
         CancellationToken cancellationToken)
@@ -130,8 +230,11 @@ public class ProcessQueueTask : ScheduledTaskBase
                 .ConfigureAwait(false);
             if (!success)
             {
-                await HandleFailureAsync(record, consumer, "消费者返回失败。", cancellationToken).ConfigureAwait(false);
+                return await HandleFailureAsync(record, consumer, "consumer_returned_failure", cancellationToken)
+                    .ConfigureAwait(false);
             }
+
+            return true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -145,10 +248,10 @@ public class ProcessQueueTask : ScheduledTaskBase
                 _criticalFallbackWriter.Write(
                     "DataPipeline.ProcessQueue.InvalidNonRetryableChannel",
                     $"工序 {record.CellData.ProcessType} 的永久失败记录无死信通道：{ex.ReasonCode}。");
-                return;
+                return false;
             }
 
-            await _persistenceWriter.PersistNonRetryableAsync(
+            return await _persistenceWriter.PersistNonRetryableAsync(
                     record,
                     consumer.RetryChannel,
                     consumer.Name,
@@ -159,52 +262,59 @@ public class ProcessQueueTask : ScheduledTaskBase
         }
         catch (Exception ex)
         {
-            await HandleFailureAsync(record, consumer, ResolveFailureMessage(ex), cancellationToken).ConfigureAwait(false);
+            return await HandleFailureAsync(record, consumer, ResolveFailureReason(ex), cancellationToken)
+                .ConfigureAwait(false);
         }
     }
 
-    private async Task HandleFailureAsync(
+    private async Task<bool> HandleFailureAsync(
         CellCompletedRecord record,
         ICellDataConsumer consumer,
         string errorMessage,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var label = record.CellData.DisplayLabel;
-        var plcCode = record.ResolvePlcCode();
-
         if (consumer.FailureMode == ConsumerFailureMode.BestEffort)
         {
             WriteLogBestEffort(() =>
-                Logger.Warn($"[PlcCode={plcCode}][数据管道] 工序={record.CellData.ProcessType} {consumer.Name} 处理 {label} 失败：{errorMessage}（非关键消费者，继续后续链路）。"));
-            return;
+                Logger.Warn(
+                    $"{DataPipelineLogContext.Format(record)}[数据管道] " +
+                    $"本地消费者={consumer.Name}，结果=Failed，" +
+                    $"原因码={errorMessage}；入口回执保留待重试。"));
+            return false;
         }
 
         if (consumer.RetryChannel == DataPipelineRetryChannel.None)
         {
             var details =
-                $"[PlcCode={plcCode}][数据管道] 工序={record.CellData.ProcessType} 关键消费者 {consumer.Name} 处理 {label} 失败，但未配置补偿链路。";
+                $"{DataPipelineLogContext.Format(record)}[数据管道] " +
+                $"关键消费者={consumer.Name}，结果=Failed，" +
+                "原因码=InvalidRetryChannel。";
             WriteLogBestEffort(() => Logger.Error(details));
             _criticalFallbackWriter.Write("DataPipeline.ProcessQueue.InvalidRetryChannel", details);
-            return;
+            return false;
         }
 
         WriteLogBestEffort(() =>
             Logger.Warn(
-                $"[PlcCode={plcCode}][数据管道] 工序={record.CellData.ProcessType} {consumer.Name} 处理 {label} 失败，准备写入 {DataPipelineRetryChannelMetadata.Format(consumer.RetryChannel)} 补偿链路。"));
+                $"{DataPipelineLogContext.Format(record)}[数据管道] " +
+                $"消费者={consumer.Name}，结果=DurableHandoffPending，" +
+                $"目标={DataPipelineRetryChannelMetadata.Format(consumer.RetryChannel)}。"));
 
         var sourceTable = DataPipelineRetryChannelMetadata.TryGetFailedRecordSourceTable(consumer.RetryChannel);
 
         if (string.IsNullOrWhiteSpace(sourceTable))
         {
             var unsupportedDetails =
-                $"[PlcCode={plcCode}][数据管道] 工序={record.CellData.ProcessType} {consumer.Name} 使用了不支持的补偿链路：{DataPipelineRetryChannelMetadata.Format(consumer.RetryChannel)}。";
+                $"{DataPipelineLogContext.Format(record)}[数据管道] " +
+                $"消费者={consumer.Name}，结果=Failed，原因码=UnsupportedRetryChannel，" +
+                $"目标={DataPipelineRetryChannelMetadata.Format(consumer.RetryChannel)}。";
             WriteLogBestEffort(() => Logger.Error(unsupportedDetails));
             _criticalFallbackWriter.Write("DataPipeline.ProcessQueue.UnsupportedRetryChannel", unsupportedDetails);
-            return;
+            return false;
         }
 
-        await _persistenceWriter.PersistAsync(
+        return await _persistenceWriter.PersistAsync(
                 record,
                 consumer.RetryChannel,
                 consumer.Name,
@@ -215,8 +325,38 @@ public class ProcessQueueTask : ScheduledTaskBase
             .ConfigureAwait(false);
     }
 
-    private static string ResolveFailureMessage(Exception ex)
-        => ex is TimeoutException ? "处理超时。" : ex.Message;
+    private static string ResolveFailureReason(Exception ex)
+        => ex is TimeoutException
+            ? "consumer_timeout"
+            : $"consumer_exception_{ex.GetType().Name}";
+
+    private static string CreateConsumerKey(ICellDataConsumer consumer)
+        => DataPipelineCompletionIdentity.CreateConsumerKey(consumer.RetryChannel, consumer.Name);
+
+    private async Task MarkIngressConsumerCompletedAsync(
+        IngressConsumerContext context,
+        CellCompletedRecord record,
+        CancellationToken cancellationToken)
+    {
+        await _ingressStore!
+            .MarkConsumerCompletedAsync(
+                context.CompletionId,
+                context.ConsumerKey,
+                cancellationToken)
+            .ConfigureAwait(false);
+        var completed = await _ingressStore
+            .CompleteIfAllConsumersFinishedAsync(
+                context.CompletionId,
+                context.RequiredConsumerKeys,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (completed)
+        {
+            WriteLogBestEffort(() => Logger.Info(
+                $"{DataPipelineLogContext.Format(record)}[数据管道] " +
+                "结果=IngressCompleted，全部必需本地消费与外部持久交接已完成。"));
+        }
+    }
 
     protected async Task WaitForDurableQueuesIdleAsync(TimeSpan timeout)
     {
@@ -327,13 +467,40 @@ public class ProcessQueueTask : ScheduledTaskBase
     private async Task DispatchDurableConsumerAsync(
         CellCompletedRecord record,
         ICellDataConsumer consumer,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IngressConsumerContext? ingress)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var inflightKey = ingress is null
+            ? null
+            : $"{ingress.CompletionId}|{ingress.ConsumerKey}";
+        if (inflightKey is not null
+            && !_inflightIngressConsumers.TryAdd(inflightKey, 0))
+        {
+            return;
+        }
+
         var writer = ResolveDurableQueueWriter(consumer.RetryChannel);
         if (writer is null)
         {
-            await HandleFailureAsync(record, consumer, "关键消费者未配置有效目标出口队列。", cancellationToken).ConfigureAwait(false);
+            try
+            {
+                var handled = await HandleFailureAsync(
+                        record,
+                        consumer,
+                        "durable_outlet_not_configured",
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                if (handled && ingress is not null)
+                {
+                    await MarkIngressConsumerCompletedAsync(ingress, record, cancellationToken).ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                RemoveInflight(inflightKey);
+            }
+
             return;
         }
 
@@ -349,7 +516,7 @@ public class ProcessQueueTask : ScheduledTaskBase
             else
             {
                 IncrementPending(consumer.RetryChannel);
-                accepted = writer.TryWrite(new DurableConsumerWorkItem(record, consumer));
+                accepted = writer.TryWrite(new DurableConsumerWorkItem(record, consumer, ingress));
                 if (!accepted)
                 {
                     DecrementPending(consumer.RetryChannel);
@@ -363,9 +530,21 @@ public class ProcessQueueTask : ScheduledTaskBase
         }
 
         var failureMessage = workerStopped
-            ? "目标出口后台任务已停止。"
-            : "目标出口队列已满。";
-        await HandleFailureAsync(record, consumer, failureMessage, cancellationToken).ConfigureAwait(false);
+            ? "durable_outlet_worker_stopped"
+            : "durable_outlet_queue_full";
+        try
+        {
+            var handled = await HandleFailureAsync(record, consumer, failureMessage, cancellationToken)
+                .ConfigureAwait(false);
+            if (handled && ingress is not null)
+            {
+                await MarkIngressConsumerCompletedAsync(ingress, record, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            RemoveInflight(inflightKey);
+        }
     }
 
     private bool IsDurableWorkerStopped(DataPipelineRetryChannel channel)
@@ -397,7 +576,13 @@ public class ProcessQueueTask : ScheduledTaskBase
             {
                 try
                 {
-                    await ProcessConsumerAsync(item.Record, item.Consumer, cancellationToken).ConfigureAwait(false);
+                    var handled = await ProcessConsumerAsync(item.Record, item.Consumer, cancellationToken)
+                        .ConfigureAwait(false);
+                    if (handled && item.Ingress is not null)
+                    {
+                        await MarkIngressConsumerCompletedAsync(item.Ingress, item.Record, cancellationToken)
+                            .ConfigureAwait(false);
+                    }
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
@@ -405,6 +590,18 @@ public class ProcessQueueTask : ScheduledTaskBase
                     if (await PersistShutdownWorkItemAsync(channel, item, shutdownDeadline.Token).ConfigureAwait(false) is { } failure)
                     {
                         shutdownFailures.Add(failure);
+                    }
+                    else if (item.Ingress is not null)
+                    {
+                        try
+                        {
+                            await MarkIngressConsumerCompletedAsync(item.Ingress, item.Record, shutdownDeadline.Token)
+                                .ConfigureAwait(false);
+                        }
+                        catch (Exception ex)
+                        {
+                            shutdownFailures.Add(ex);
+                        }
                     }
 
                     throw;
@@ -415,6 +612,9 @@ public class ProcessQueueTask : ScheduledTaskBase
                 }
                 finally
                 {
+                    RemoveInflight(item.Ingress is null
+                        ? null
+                        : $"{item.Ingress.CompletionId}|{item.Ingress.ConsumerKey}");
                     DecrementPending(channel);
                 }
             }
@@ -454,9 +654,27 @@ public class ProcessQueueTask : ScheduledTaskBase
                         {
                             shutdownFailures.Add(failure);
                         }
+                        else if (queuedItem.Ingress is not null)
+                        {
+                            try
+                            {
+                                await MarkIngressConsumerCompletedAsync(
+                                        queuedItem.Ingress,
+                                        queuedItem.Record,
+                                        shutdownDeadline.Token)
+                                    .ConfigureAwait(false);
+                            }
+                            catch (Exception ex)
+                            {
+                                shutdownFailures.Add(ex);
+                            }
+                        }
                     }
                     finally
                     {
+                        RemoveInflight(queuedItem.Ingress is null
+                            ? null
+                            : $"{queuedItem.Ingress.CompletionId}|{queuedItem.Ingress.ConsumerKey}");
                         DecrementPending(channel);
                     }
                 }
@@ -490,7 +708,7 @@ public class ProcessQueueTask : ScheduledTaskBase
 
         try
         {
-            await _persistenceWriter.PersistAsync(
+            var persisted = await _persistenceWriter.PersistAsync(
                     item.Record,
                     channel,
                     item.Consumer.Name,
@@ -499,6 +717,12 @@ public class ProcessQueueTask : ScheduledTaskBase
                     DeadLetterStage.DurableShutdownPersist,
                     cancellationToken: shutdownToken)
                 .ConfigureAwait(false);
+            if (!persisted)
+            {
+                return new InvalidOperationException(
+                    $"{DataPipelineRetryChannelMetadata.Format(channel)} durable shutdown 未能交接到可消费持久链。");
+            }
+
             return null;
         }
         catch (OperationCanceledException ex) when (shutdownToken.IsCancellationRequested)
@@ -563,9 +787,11 @@ public class ProcessQueueTask : ScheduledTaskBase
     {
         var record = item.Record;
         var details =
-            $"[PlcCode={record.ResolvePlcCode()}][数据管道] 工序={record.CellData.ProcessType} " +
+            $"[CorrelationId={DataPipelineCompletionIdentity.Create(record)}][PlcCode={record.ResolvePlcCode()}]" +
+            $"[TaskKey={record.TaskKey}][数据管道] 工序={record.CellData.ProcessType} " +
             $"后台出口={DataPipelineRetryChannelMetadata.Format(channel)} 消费异常，" +
-            $"模块={record.ModuleId ?? "<unknown>"}，任务={record.TaskKey ?? "<unknown>"}：{exception.Message}";
+            $"模块={record.ModuleId ?? "<unknown>"}，业务标识={record.CellData.DisplayLabel}，" +
+            $"结果=Failed，异常类型={exception.GetType().Name}。";
         try
         {
             _criticalFallbackWriter.Write(
@@ -576,7 +802,7 @@ public class ProcessQueueTask : ScheduledTaskBase
         catch (Exception criticalEx)
         {
             WriteLogBestEffort(() =>
-                Logger.Error($"{details}；critical fallback 写入失败：{criticalEx.Message}"));
+                Logger.Error($"{details}；critical fallback 写入失败，异常类型={criticalEx.GetType().Name}。"));
         }
     }
 
@@ -634,9 +860,23 @@ public class ProcessQueueTask : ScheduledTaskBase
         }
     }
 
+    private void RemoveInflight(string? inflightKey)
+    {
+        if (inflightKey is not null)
+        {
+            _inflightIngressConsumers.TryRemove(inflightKey, out _);
+        }
+    }
+
     private sealed record DurableConsumerWorkItem(
         CellCompletedRecord Record,
-        ICellDataConsumer Consumer);
+        ICellDataConsumer Consumer,
+        IngressConsumerContext? Ingress);
+
+    private sealed record IngressConsumerContext(
+        string CompletionId,
+        string ConsumerKey,
+        IReadOnlyCollection<string> RequiredConsumerKeys);
 
     private sealed class DurableShutdownPersistenceException(
         string message,

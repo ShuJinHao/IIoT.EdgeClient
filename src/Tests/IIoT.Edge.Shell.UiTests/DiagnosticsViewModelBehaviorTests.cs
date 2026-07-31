@@ -667,30 +667,6 @@ public sealed class DiagnosticsViewModelBehaviorTests
     }
 
     [AvaloniaFact]
-    public async Task DeleteDeadLetterCommand_WhenConfirmationCanceled_ShouldNotCallOperator()
-    {
-        var confirmation = new FakeDeadLetterConfirmationService
-        {
-            DeleteResult = false
-        };
-        var deadLetterOperator = new FakeDiagnosticsDeadLetterOperator();
-        var viewModel = CreateViewModel(
-            new FakeStartupDiagnosticsStore(),
-            new FakeEdgeSyncDiagnosticsQuery(),
-            new TestAppLanguageService(),
-            deadLetterOperator,
-            confirmation);
-
-        viewModel.DeleteDeadLetterCommand.Execute(CreateDeadLetterRow());
-        await WaitUntilAsync(
-            () => confirmation.DeleteCallCount == 1,
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(0, deadLetterOperator.DeleteCallCount);
-        Assert.Equal("已取消死信删除。", viewModel.StatusMessage);
-    }
-
-    [AvaloniaFact]
     public void DeadLetterCommands_WhenCurrentUserIsNotLocalAdmin_ShouldNotBeExecutable()
     {
         var permissionService = new FakeClientPermissionService(isLocalAdmin: false);
@@ -704,7 +680,6 @@ public sealed class DiagnosticsViewModelBehaviorTests
 
         Assert.False(viewModel.CanOperateDeadLetters);
         Assert.False(viewModel.RequeueDeadLetterCommand.CanExecute(row));
-        Assert.False(viewModel.DeleteDeadLetterCommand.CanExecute(row));
     }
 
     [AvaloniaFact]
@@ -824,14 +799,12 @@ public sealed class DiagnosticsViewModelBehaviorTests
         var row = CreateDeadLetterRow();
 
         Assert.False(viewModel.RequeueDeadLetterCommand.CanExecute(row));
-        Assert.False(viewModel.DeleteDeadLetterCommand.CanExecute(row));
 
         await viewModel.OnActivatedAsync();
         permissionService.SetLocalAdmin(true);
 
         Assert.True(viewModel.CanOperateDeadLetters);
         Assert.True(viewModel.RequeueDeadLetterCommand.CanExecute(row));
-        Assert.True(viewModel.DeleteDeadLetterCommand.CanExecute(row));
         await viewModel.OnDeactivatedAsync();
     }
 
@@ -856,6 +829,29 @@ public sealed class DiagnosticsViewModelBehaviorTests
 
         Assert.Equal("重新入队失败", viewModel.ErrorMessage);
         Assert.False(viewModel.HasStatus);
+    }
+
+    [AvaloniaFact]
+    public async Task RequeueDeadLetterCommand_WhenOperatorThrows_ShouldNotExposeRawExceptionMessage()
+    {
+        const string sensitiveMessage = "bootstrap-secret-must-not-reach-ui";
+        var deadLetterOperator = new FakeDiagnosticsDeadLetterOperator
+        {
+            RequeueException = new InvalidOperationException(sensitiveMessage)
+        };
+        var viewModel = CreateViewModel(
+            new FakeStartupDiagnosticsStore(),
+            new FakeEdgeSyncDiagnosticsQuery(),
+            new TestAppLanguageService(),
+            deadLetterOperator,
+            new FakeDeadLetterConfirmationService());
+
+        viewModel.RequeueDeadLetterCommand.Execute(CreateDeadLetterRow());
+        await WaitUntilAsync(
+            () => viewModel.ErrorMessage.Contains(nameof(InvalidOperationException), StringComparison.Ordinal),
+            TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(sensitiveMessage, viewModel.ErrorMessage, StringComparison.Ordinal);
     }
 
     private static void TryDeleteDirectory(string? directory)
@@ -1030,22 +1026,12 @@ public sealed class DiagnosticsViewModelBehaviorTests
     {
         public bool RequeueResult { get; set; } = true;
 
-        public bool DeleteResult { get; set; } = true;
-
         public int RequeueCallCount { get; private set; }
-
-        public int DeleteCallCount { get; private set; }
 
         public Task<bool> ConfirmRequeueAsync(DeadLetterRow row)
         {
             RequeueCallCount++;
             return Task.FromResult(RequeueResult);
-        }
-
-        public Task<bool> ConfirmDeleteAsync(DeadLetterRow row)
-        {
-            DeleteCallCount++;
-            return Task.FromResult(DeleteResult);
         }
     }
 
@@ -1101,24 +1087,21 @@ public sealed class DiagnosticsViewModelBehaviorTests
     {
         public DiagnosticsDeadLetterOperationResult RequeueResult { get; set; } = new(true, "重新入队成功");
 
-        public DiagnosticsDeadLetterOperationResult DeleteResult { get; set; } = new(true, "删除成功");
+        public Exception? RequeueException { get; set; }
 
         public int RequeueCallCount { get; private set; }
-
-        public int DeleteCallCount { get; private set; }
 
         public bool CanOperate(DeadLetterRow? row) => row is not null;
 
         public Task<DiagnosticsDeadLetterOperationResult> RequeueAsync(DeadLetterRow row)
         {
             RequeueCallCount++;
-            return Task.FromResult(RequeueResult);
-        }
+            if (RequeueException is not null)
+            {
+                return Task.FromException<DiagnosticsDeadLetterOperationResult>(RequeueException);
+            }
 
-        public Task<DiagnosticsDeadLetterOperationResult> DeleteAsync(DeadLetterRow row)
-        {
-            DeleteCallCount++;
-            return Task.FromResult(DeleteResult);
+            return Task.FromResult(RequeueResult);
         }
     }
 

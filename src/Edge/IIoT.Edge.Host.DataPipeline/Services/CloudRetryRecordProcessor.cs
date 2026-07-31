@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Common.DataPipeline;
+using IIoT.Edge.Application.Features.DataPipeline.DeadLetters;
 using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline.Consumers;
 using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
@@ -31,6 +32,7 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
         ILogService logger,
         ICloudRetryRecordStore retryStore,
         ICloudDeadLetterStore deadLetterStore,
+        ICloudRetryDeadLetterTransitionStore retryDeadLetterTransitionStore,
         ICriticalPersistenceFallbackWriter criticalFallbackWriter,
         ICloudConsumer cloudConsumer,
         ICloudBatchConsumer cloudBatchConsumer,
@@ -50,6 +52,7 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
             deadLetterWriter,
             cellDataJsonSerializer,
             DeadLetterChannel,
+            retryDeadLetterTransitionStore.MoveExhaustedRetryToDeadLetterAsync,
             MaxRetryCount,
             diagnosticsStore,
             CloudRetryRuntimeState.Backoff)
@@ -125,8 +128,13 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
         catch (Exception ex)
         {
             await TryReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
-
-            Logger.Error($"[云端补传] 补传批次执行异常：{ex.Message}");
+            foreach (var record in records)
+            {
+                Logger.Error(
+                    $"{DataPipelineLogContext.Format(record)}[云端补传] " +
+                    $"结果=BatchFailed，原因码=RetryBatchException，" +
+                    $"异常类型={ex.GetType().Name}。");
+            }
             return CloudRetryProcessResult.Failed;
         }
     }
@@ -193,20 +201,21 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
                 await HandleRetryFailureAsync(source, "处理超时。", cancellationToken).ConfigureAwait(false);
             }
 
-            Logger.Warn($"[PlcCode={DataPipelineRetryChannelMetadata.ResolveLogPlcCode(validSourceRecords)}][云端补传] {processType} 批量补传超时，数量：{validSourceRecords.Count}。");
             return CloudRetryProcessResult.Continue;
         }
 
         if (result.IsSuccess)
         {
-            foreach (var source in validSourceRecords)
+            for (var index = 0; index < validSourceRecords.Count; index++)
             {
+                var source = validSourceRecords[index];
                 cancellationToken.ThrowIfCancellationRequested();
                 await RetryStore.DeleteAsync(source.Id).ConfigureAwait(false);
                 cancellationToken.ThrowIfCancellationRequested();
+                Logger.Info(
+                    $"{DataPipelineLogContext.Format(source, completedRecords[index].CellData)}" +
+                    "[云端补传] 结果=Uploaded，本地补传记录已删除。");
             }
-
-            Logger.Info($"[PlcCode={DataPipelineRetryChannelMetadata.ResolveLogPlcCode(validSourceRecords)}][云端补传] {processType} 批量补传成功，数量：{validSourceRecords.Count}。");
             return CloudRetryProcessResult.Continue;
         }
 
@@ -214,7 +223,12 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
         {
             cancellationToken.ThrowIfCancellationRequested();
             await ReleaseClaimAndPauseAsync(claimToken).ConfigureAwait(false);
-            Logger.Warn($"[PlcCode={DataPipelineRetryChannelMetadata.ResolveLogPlcCode(validSourceRecords)}][云端补传] {processType} 批量补传已暂停，结果：{result.Outcome}，原因：{result.ReasonCode}。");
+            for (var index = 0; index < validSourceRecords.Count; index++)
+            {
+                Logger.Warn(
+                    $"{DataPipelineLogContext.Format(validSourceRecords[index], completedRecords[index].CellData)}" +
+                    $"[云端补传] 结果=Paused，原因码={result.ReasonCode}。");
+            }
             return CloudRetryProcessResult.PauseForRecovery;
         }
 
@@ -226,7 +240,6 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
                 await HandleInvalidPayloadAsync(source, result.ReasonCode, cancellationToken).ConfigureAwait(false);
             }
 
-            Logger.Warn($"[PlcCode={DataPipelineRetryChannelMetadata.ResolveLogPlcCode(validSourceRecords)}][云端补传] {processType} 批量补传记录因永久契约错误进入死信，数量：{validSourceRecords.Count}。");
             return CloudRetryProcessResult.Continue;
         }
 
@@ -236,7 +249,6 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
             await HandleRetryFailureAsync(source, $"Cloud 批量补传失败（{result.ReasonCode}）。", cancellationToken).ConfigureAwait(false);
         }
 
-        Logger.Warn($"[PlcCode={DataPipelineRetryChannelMetadata.ResolveLogPlcCode(validSourceRecords)}][云端补传] {processType} 批量补传失败，数量：{validSourceRecords.Count}。");
         return CloudRetryProcessResult.Continue;
     }
 
@@ -299,13 +311,17 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
             cancellationToken.ThrowIfCancellationRequested();
             await RetryStore.DeleteAsync(record.Id).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
-            Logger.Info($"[PlcCode={record.PlcCode}][云端补传] {cellData.DisplayLabel} 补传成功，记录已删除。");
+            Logger.Info(
+                $"{DataPipelineLogContext.Format(record, cellData)}[云端补传] " +
+                "结果=Uploaded，本地补传记录已删除。");
             return CloudRetryProcessResult.Continue;
         }
 
         if (ShouldPauseForRecovery(result))
         {
-            Logger.Warn($"[PlcCode={record.PlcCode}][云端补传] {cellData.DisplayLabel} 补传已暂停，结果：{result.Outcome}，原因：{result.ReasonCode}。");
+            Logger.Warn(
+                $"{DataPipelineLogContext.Format(record, cellData)}[云端补传] " +
+                $"结果=Paused，原因码={result.ReasonCode}。");
             return CloudRetryProcessResult.PauseForRecovery;
         }
 
@@ -366,7 +382,9 @@ internal sealed class CloudRetryRecordProcessor : RetryRecordProcessorBase<Cloud
         }
         catch (Exception releaseEx)
         {
-            Logger.Error($"[云端补传] 释放补传领取标记 {claimToken} 失败：{releaseEx.Message}");
+            Logger.Error(
+                $"[云端补传] 结果=ClaimReleaseFailed，" +
+                $"异常类型={releaseEx.GetType().Name}。");
         }
     }
 

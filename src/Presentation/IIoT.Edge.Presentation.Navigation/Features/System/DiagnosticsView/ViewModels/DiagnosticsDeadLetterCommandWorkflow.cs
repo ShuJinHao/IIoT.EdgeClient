@@ -7,8 +7,6 @@ public interface IDiagnosticsDeadLetterCommandWorkflow
     bool CanOperate(DeadLetterRow? row);
 
     Task RequeueAsync(DeadLetterRow row);
-
-    Task DeleteAsync(DeadLetterRow row);
 }
 
 internal sealed class DiagnosticsDeadLetterCommandWorkflow(
@@ -50,41 +48,7 @@ internal sealed class DiagnosticsDeadLetterCommandWorkflow(
             callback.SetError(callback.FormatText(
                 "Navigation_Diagnostics_RequeueFailedFormat",
                 "死信重新入队失败：{0}",
-                ex.Message));
-        }
-    }
-
-    public async Task DeleteAsync(DeadLetterRow row)
-    {
-        try
-        {
-            if (!EnsureCanOperateDeadLetters())
-            {
-                return;
-            }
-
-            if (!await confirmationService.ConfirmDeleteAsync(row))
-            {
-                callback.SetStatus(callback.GetText("Navigation_Diagnostics_DeleteCanceled", "已取消死信删除。"));
-                return;
-            }
-
-            var result = await deadLetterOperator.DeleteAsync(row);
-            if (result.IsSuccess)
-            {
-                await callback.RefreshAsync(CancellationToken.None);
-                callback.SetStatus(result.Message);
-                return;
-            }
-
-            callback.SetError(result.Message);
-        }
-        catch (Exception ex)
-        {
-            callback.SetError(callback.FormatText(
-                "Navigation_Diagnostics_DeleteFailedFormat",
-                "死信删除失败：{0}",
-                ex.Message));
+                ex.GetType().Name));
         }
     }
 

@@ -3,6 +3,7 @@ using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
+using IIoT.Edge.Application.Features.DataPipeline.DeadLetters;
 
 using IIoT.Edge.Module.Contracts.Mes;
 namespace IIoT.Edge.Host.DataPipeline.Services;
@@ -23,6 +24,7 @@ internal sealed class MesRetryRecordProcessor : RetryRecordProcessorBase<MesRetr
         ILogService logger,
         IMesRetryRecordStore retryStore,
         IMesDeadLetterStore deadLetterStore,
+        IMesRetryDeadLetterTransitionStore retryDeadLetterTransitionStore,
         ICriticalPersistenceFallbackWriter criticalFallbackWriter,
         IMesConsumer mesConsumer,
         IRetryBackoffStrategy retryBackoffStrategy,
@@ -39,6 +41,7 @@ internal sealed class MesRetryRecordProcessor : RetryRecordProcessorBase<MesRetr
             deadLetterWriter,
             cellDataJsonSerializer,
             DeadLetterChannel,
+            retryDeadLetterTransitionStore.MoveExhaustedRetryToDeadLetterAsync,
             MaxRetryCount)
     {
         ArgumentNullException.ThrowIfNull(consumerInvoker);
@@ -78,8 +81,13 @@ internal sealed class MesRetryRecordProcessor : RetryRecordProcessorBase<MesRetr
         catch (Exception ex)
         {
             await TryReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
-
-            Logger.Error($"[MES补传] 补传批次执行异常：{ex.Message}");
+            foreach (var record in claimedBatch.Records)
+            {
+                Logger.Error(
+                    $"{DataPipelineLogContext.Format(record)}[MES补传] " +
+                    $"结果=BatchFailed，原因码=RetryBatchException，" +
+                    $"异常类型={ex.GetType().Name}。");
+            }
             return MesRetryProcessResult.Failed;
         }
 
@@ -126,7 +134,9 @@ internal sealed class MesRetryRecordProcessor : RetryRecordProcessorBase<MesRetr
             cancellationToken.ThrowIfCancellationRequested();
             await RetryStore.DeleteAsync(record.Id).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
-            Logger.Info($"[PlcCode={record.PlcCode}][MES补传] {cellData.DisplayLabel} 补传成功，记录已删除。");
+            Logger.Info(
+                $"{DataPipelineLogContext.Format(record, cellData)}[MES补传] " +
+                "结果=Uploaded，本地补传记录已删除。");
             return true;
         }
 
@@ -143,7 +153,9 @@ internal sealed class MesRetryRecordProcessor : RetryRecordProcessorBase<MesRetr
         }
         catch (Exception releaseEx)
         {
-            Logger.Error($"[MES补传] 释放补传领取标记 {claimToken} 失败：{releaseEx.Message}");
+            Logger.Error(
+                $"[MES补传] 结果=ClaimReleaseFailed，" +
+                $"异常类型={releaseEx.GetType().Name}。");
         }
     }
 

@@ -40,14 +40,14 @@ public sealed class MesConsumer : ProcessUploaderConsumerBase<IProcessMesUploade
         }
 
         var processType = record.CellData.ProcessType;
-        var plcCode = record.ResolvePlcCode();
+        var logContext = UploadTraceLogFormatter.Format(record, "MES");
         var isRegistered = _processIntegrationRegistry.HasMesUploader(processType);
         if (!isRegistered)
         {
             const string reason = "uploader_not_registered";
             _diagnosticsStore.RecordFailure(processType, reason, UploadDiagnosticsContextFactory.CreateMesContext(record));
             Logger.Error(
-                $"[PlcCode={plcCode}][MES] 工序 {processType} 的记录已指定 MES 目标，但未注册上传器。");
+                $"{logContext}[MES直传] 结果=Failed，原因码={reason}。");
             return false;
         }
 
@@ -58,12 +58,13 @@ public sealed class MesConsumer : ProcessUploaderConsumerBase<IProcessMesUploade
                 ? "mes_upload_gate_blocked"
                 : gate.ReasonCode;
             _diagnosticsStore.RecordBlocked(processType, reason, UploadDiagnosticsContextFactory.CreateMesContext(record));
-            Logger.Warn($"[PlcCode={plcCode}][MES] 上传门控未就绪（{reason}），本次数据转入 MES 补偿队列。工序={processType}");
+            Logger.Warn(
+                $"{logContext}[MES直传] 结果=Blocked，原因码=mes_upload_gate_blocked；" +
+                "将交接到 MES 持久补偿链。");
             return false;
         }
 
         if (!TryResolveUploader(
-                "MES",
                 processType,
                 isRegistered,
                 out var uploader,
@@ -71,7 +72,8 @@ public sealed class MesConsumer : ProcessUploaderConsumerBase<IProcessMesUploade
         {
             const string reason = "uploader_not_found";
             _diagnosticsStore.RecordFailure(processType, reason, UploadDiagnosticsContextFactory.CreateMesContext(record));
-            Logger.Error($"[PlcCode={plcCode}][MES] 工序 {processType} 已注册上传器，但未找到可用实现。");
+            Logger.Error(
+                $"{logContext}[MES直传] 结果=Failed，原因码={reason}。");
             return false;
         }
 
@@ -87,7 +89,7 @@ public sealed class MesConsumer : ProcessUploaderConsumerBase<IProcessMesUploade
         if (result.Outcome == MesCallOutcome.Success)
         {
             _diagnosticsStore.RecordSuccess(processType, UploadDiagnosticsContextFactory.CreateMesContext(record));
-            Logger.Info($"[PlcCode={plcCode}][MES] 工序 {processType} 上传成功。");
+            Logger.Info($"{logContext}[MES直传] 结果=Uploaded。");
             return true;
         }
 
@@ -96,13 +98,16 @@ public sealed class MesConsumer : ProcessUploaderConsumerBase<IProcessMesUploade
             const string reason = "mes_uploader_disabled";
             _diagnosticsStore.RecordBlocked(processType, reason, UploadDiagnosticsContextFactory.CreateMesContext(record));
             Logger.Warn(
-                $"[PlcCode={plcCode}][MES] 工序 {processType} 上传器已禁用（{reason}），本次数据转入 MES 补偿队列。原因：{result.Message}");
+                $"{logContext}[MES直传] 结果=Blocked，原因码={reason}；" +
+                "将交接到 MES 持久补偿链。");
             return false;
         }
 
-        _diagnosticsStore.RecordFailure(processType, result.Message, UploadDiagnosticsContextFactory.CreateMesContext(record));
+        var failureReason = UploadTraceLogFormatter.ReasonCode("mes_upload", result.Outcome);
+        _diagnosticsStore.RecordFailure(processType, failureReason, UploadDiagnosticsContextFactory.CreateMesContext(record));
         Logger.Error(
-            $"[PlcCode={plcCode}][MES] 工序 {processType} 上传失败，结果：{result.Outcome}，原因：{result.Message}");
+            $"{logContext}[MES直传] 结果=Failed，原因码={failureReason}；" +
+            "将交接到 MES 持久补偿链。");
         return false;
     }
 }

@@ -42,7 +42,7 @@ internal abstract class FallbackRecoveryServiceBase<TFallbackRecord> : RetryDead
             return;
         }
 
-        var recoveredIds = new List<long>();
+        var recoveredRecords = new List<(TFallbackRecord Record, CellDataBase CellData)>();
         var deadLetterIds = new List<long>();
         foreach (var fallback in pending)
         {
@@ -52,8 +52,9 @@ internal abstract class FallbackRecoveryServiceBase<TFallbackRecord> : RetryDead
                     or CloudIdempotencyKeyVersion.PlcStableV2))
             {
                 Logger.Error(
-                    $"[PlcCode={FormatPlcCode(fallback.PlcCode)}][TaskKey={fallback.TaskKey}] "
-                    + $"{ChannelDisplayName}兜底记录 {fallback.Id} 身份未解析，原记录保留并停止移动。");
+                    $"{DataPipelineLogContext.FormatFallback(fallback)}" +
+                    $"[{DeadLetterChannelMetadata.LogPrefix}] 结果=Blocked，" +
+                    "原因码=IdentityUnresolved，原记录保留。");
                 continue;
             }
 
@@ -84,15 +85,20 @@ internal abstract class FallbackRecoveryServiceBase<TFallbackRecord> : RetryDead
                 if (!string.IsNullOrWhiteSpace(retryBlockedReason))
                 {
                     Logger.Warn(
-                        $"[PlcCode={fallback.PlcCode}][{DeadLetterChannelMetadata.LogPrefix}] {ChannelDisplayName}兜底记录 {fallback.Id} 因补传容量阻塞继续保留，原因：{retryBlockedReason}。");
+                        $"{DataPipelineLogContext.FormatFallback(fallback, cellData)}" +
+                        $"[{DeadLetterChannelMetadata.LogPrefix}] 结果=Blocked，" +
+                        $"原因码={retryBlockedReason}，兜底记录保留。");
                     continue;
                 }
 
-                recoveredIds.Add(fallback.Id);
+                recoveredRecords.Add((fallback, cellData));
             }
             catch (Exception ex)
             {
-                Logger.Error($"[PlcCode={fallback.PlcCode}][{DeadLetterChannelMetadata.LogPrefix}] 恢复 {ChannelDisplayName}兜底记录 {fallback.Id} 失败：{ex.Message}");
+                Logger.Error(
+                    $"{DataPipelineLogContext.FormatFallback(fallback, cellData)}" +
+                    $"[{DeadLetterChannelMetadata.LogPrefix}] 结果=RecoveryFailed，" +
+                    $"异常类型={ex.GetType().Name}，原记录保留。");
             }
         }
 
@@ -101,10 +107,18 @@ internal abstract class FallbackRecoveryServiceBase<TFallbackRecord> : RetryDead
             await FallbackStore.DeleteBatchAsync(deadLetterIds).ConfigureAwait(false);
         }
 
-        if (recoveredIds.Count > 0)
+        if (recoveredRecords.Count > 0)
         {
-            await FallbackStore.MovePendingToRetryAsync(recoveredIds).ConfigureAwait(false);
-            Logger.Info($"[{DeadLetterChannelMetadata.LogPrefix}] 已将 {recoveredIds.Count} 条 {ChannelDisplayName}兜底记录恢复到补传主表。");
+            await FallbackStore
+                .MovePendingToRetryAsync(recoveredRecords.Select(item => item.Record.Id).ToArray())
+                .ConfigureAwait(false);
+            foreach (var (record, cellData) in recoveredRecords)
+            {
+                Logger.Info(
+                    $"{DataPipelineLogContext.FormatFallback(record, cellData)}" +
+                    $"[{DeadLetterChannelMetadata.LogPrefix}] 结果=DurableRetryHandoff，" +
+                    "说明=已恢复到本地补传表，尚未上传成功。");
+            }
         }
 
         await RefreshFallbackCapacityStatusAsync().ConfigureAwait(false);
@@ -140,6 +154,4 @@ internal abstract class FallbackRecoveryServiceBase<TFallbackRecord> : RetryDead
             IdempotencyKeyVersion = fallback.IdempotencyKeyVersion
         };
 
-    private static string FormatPlcCode(string? plcCode)
-        => string.IsNullOrWhiteSpace(plcCode) ? "未解析" : plcCode;
 }
