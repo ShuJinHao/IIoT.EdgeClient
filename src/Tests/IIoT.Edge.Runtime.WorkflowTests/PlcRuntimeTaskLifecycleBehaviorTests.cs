@@ -30,9 +30,11 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             runtime.PlcCode,
             "改名后的现场名称",
             [
-                new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
+                new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
                     "Task.MG1",
-                    (_, _) => business)
+                    new PlcRuntimeTaskPlanEntry(
+                        (_, _) => business,
+                        requiresPeriodicRead: true))
             ]);
 
         var result = await runtime.ApplyTaskPlanAsync(
@@ -144,7 +146,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             runtime.GetTaskStatus("Task.MG2")?.State);
         var originalMg1 = runtime.GetBusinessTask("Task.MG1");
         var originalMg2 = runtime.GetBusinessTask("Task.MG2");
-        Assert.Equal(5, runtime.GetRunningHandlesSnapshot().Count);
+        Assert.Equal(6, runtime.GetRunningHandlesSnapshot().Count);
 
         runtime.ConnectionSignal.Report(true);
         Assert.Equal(1, periodicRead.Starts.Count);
@@ -188,8 +190,289 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
         Assert.Same(originalContext, runtime.Context);
         Assert.Same(originalService, runtime.PlcService);
         Assert.Equal(1, connection.Starts.Count);
-        Assert.Equal(5, runtime.GetRunningHandlesSnapshot().Count);
+        Assert.Equal(6, runtime.GetRunningHandlesSnapshot().Count);
 
+        await CleanupAsync(runtime);
+    }
+
+    [Fact]
+    public void TaskPlan_ShouldExposeAnExplicitPeriodicReadRequirementForEveryTaskKey()
+    {
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            new ControlledLoopTask("PeriodicRead"));
+        var plan = CreatePlanWithRequirements(
+            runtime,
+            ("Task.Read", (_, _) => new ControlledBusinessTask("Task.Read"), true),
+            ("Task.Write", (_, _) => new ControlledBusinessTask("Task.Write"), false));
+
+        Assert.True(plan.GetRequiredEntry("task.read").RequiresPeriodicRead);
+        Assert.False(plan.GetRequiredEntry("TASK.WRITE").RequiresPeriodicRead);
+        runtime.Runtime.DisposeCancellation();
+    }
+
+    [Fact]
+    public async Task PeriodicReadUnexpectedExit_ShouldPauseOnlyReadDependentTaskAndKeepOtherPlcRunning()
+    {
+        var periodicRead = new ControllablePeriodicReadTask("PeriodicRead");
+        var readDependent = new ControlledBusinessTask("Task.Read");
+        var writeOnly = new ControlledBusinessTask("Task.Write");
+        var plcService = new RecordingConnectedPlcService();
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            periodicRead,
+            plcService: plcService);
+        var otherTask = new ControlledBusinessTask("Task.Other");
+        var otherRuntime = CreateRuntime(
+            new ControlledLoopTask("Other.Connection"),
+            new ControlledLoopTask("Other.PeriodicRead"),
+            deviceName: "PLC-B",
+            deviceId: 2);
+        var plan = CreatePlanWithRequirements(
+            runtime,
+            ("Task.Read", (_, _) => readDependent, true),
+            ("Task.Write", (_, _) => writeOnly, false));
+        await runtime.ApplyTaskPlanAsync(plan, TestContext.Current.CancellationToken);
+        await otherRuntime.ApplyTaskPlanAsync(
+            CreatePlanWithRequirements(
+                otherRuntime,
+                ("Task.Other", (_, _) => otherTask, true)),
+            TestContext.Current.CancellationToken);
+        runtime.Start();
+        otherRuntime.Start();
+        runtime.ConnectionSignal.Report(true);
+        otherRuntime.ConnectionSignal.Report(true);
+        await Task.WhenAll(
+            readDependent.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
+            writeOnly.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
+            otherTask.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+        var readTaskInstance = runtime.GetBusinessTask("Task.Read");
+        var writeTaskInstance = runtime.GetBusinessTask("Task.Write");
+        var lastSuccessfulAtUtc = runtime.GetTaskStatus("Task.Read")!.LastSuccessfulAtUtc;
+
+        periodicRead.CompleteNormally();
+        await runtime.WaitForTaskStateAsync(
+            "Task.Read",
+            PlcTaskRuntimeState.Faulted,
+            TestContext.Current.CancellationToken);
+        await runtime.ApplyTaskPlanAsync(plan, TestContext.Current.CancellationToken);
+
+        var readStatus = runtime.GetTaskStatus("Task.Read");
+        Assert.Equal(PlcTaskRuntimeErrorCodes.PeriodicReadFault, readStatus?.ErrorCode);
+        Assert.Equal(lastSuccessfulAtUtc, readStatus?.LastSuccessfulAtUtc);
+        Assert.Equal(PlcTaskRuntimeState.Running, runtime.GetTaskStatus("Task.Write")?.State);
+        Assert.Equal(PlcTaskRuntimeState.Running, otherRuntime.GetTaskStatus("Task.Other")?.State);
+        Assert.Equal(1, readDependent.Stops.Count);
+        Assert.Equal(0, writeOnly.Stops.Count);
+        Assert.Equal(0, otherTask.Stops.Count);
+        Assert.Equal(1, periodicRead.Starts.Count);
+        Assert.True(runtime.Runtime.IsConnected);
+        Assert.True(plcService.IsConnected);
+        Assert.Equal(0, plcService.Disconnects.Count);
+        Assert.Same(readTaskInstance, runtime.GetBusinessTask("Task.Read"));
+        Assert.Same(writeTaskInstance, runtime.GetBusinessTask("Task.Write"));
+
+        await CleanupAsync(runtime);
+        await CleanupAsync(otherRuntime);
+    }
+
+    [Fact]
+    public async Task PeriodicReadNonTransportFault_ShouldKeepTcpAndPublishSafeTaskFault()
+    {
+        var periodicRead = new ControllablePeriodicReadTask("PeriodicRead");
+        var readDependent = new ControlledBusinessTask("Task.Read");
+        var writeOnly = new ControlledBusinessTask("Task.Write");
+        var plcService = new RecordingConnectedPlcService();
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            periodicRead,
+            plcService: plcService);
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlanWithRequirements(
+                runtime,
+                ("Task.Read", (_, _) => readDependent, true),
+                ("Task.Write", (_, _) => writeOnly, false)),
+            TestContext.Current.CancellationToken);
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await Task.WhenAll(
+            readDependent.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
+            writeOnly.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+
+        periodicRead.Fail(new InvalidDataException("raw periodic payload"));
+        await runtime.WaitForTaskStateAsync(
+            "Task.Read",
+            PlcTaskRuntimeState.Faulted,
+            TestContext.Current.CancellationToken);
+
+        var readStatus = runtime.GetTaskStatus("Task.Read");
+        Assert.Equal(PlcTaskRuntimeErrorCodes.PeriodicReadFault, readStatus?.ErrorCode);
+        Assert.Equal(nameof(InvalidDataException), readStatus?.ExceptionType);
+        Assert.Equal(PlcTaskRuntimeState.Running, runtime.GetTaskStatus("Task.Write")?.State);
+        Assert.True(runtime.Runtime.IsConnected);
+        Assert.True(plcService.IsConnected);
+        Assert.Equal(0, plcService.Disconnects.Count);
+        Assert.DoesNotContain(
+            runtime.LoggerEntries,
+            entry => entry.Message.Contains("raw periodic payload", StringComparison.Ordinal));
+
+        await CleanupAsync(runtime);
+    }
+
+    [Fact]
+    public async Task PeriodicReadSocketFault_ShouldDisconnectAndPauseAllTasks()
+    {
+        var periodicRead = new ControllablePeriodicReadTask("PeriodicRead");
+        var readDependent = new ControlledBusinessTask("Task.Read");
+        var writeOnly = new ControlledBusinessTask("Task.Write");
+        var plcService = new RecordingConnectedPlcService();
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            periodicRead,
+            plcService: plcService);
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlanWithRequirements(
+                runtime,
+                ("Task.Read", (_, _) => readDependent, true),
+                ("Task.Write", (_, _) => writeOnly, false)),
+            TestContext.Current.CancellationToken);
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await Task.WhenAll(
+            readDependent.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
+            writeOnly.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+
+        periodicRead.Fail(
+            new AggregateException(
+                new IOException(
+                    "wrapped socket failure",
+                    new SocketException())));
+        await Task.WhenAll(
+            plcService.Disconnects.WaitForAtLeastAsync(
+                1,
+                TestContext.Current.CancellationToken),
+            runtime.WaitForTaskStateAsync(
+                "Task.Read",
+                PlcTaskRuntimeState.WaitingForConnection,
+                TestContext.Current.CancellationToken),
+            runtime.WaitForTaskStateAsync(
+                "Task.Write",
+                PlcTaskRuntimeState.WaitingForConnection,
+                TestContext.Current.CancellationToken));
+
+        Assert.False(runtime.Runtime.IsConnected);
+        Assert.False(plcService.IsConnected);
+        Assert.Equal(1, readDependent.Stops.Count);
+        Assert.Equal(1, writeOnly.Stops.Count);
+        Assert.DoesNotContain(
+            runtime.LoggerEntries,
+            entry => entry.Message.Contains("wrapped socket failure", StringComparison.Ordinal));
+
+        await CleanupAsync(runtime);
+    }
+
+    [Fact]
+    public async Task PeriodicReadFault_WhenDependentStopTimesOut_ShouldKeepSpecificStopError()
+    {
+        var periodicRead = new ControllablePeriodicReadTask("PeriodicRead");
+        var stalled = new StalledStopBusinessTask("Task.Read.Stalled");
+        var healthy = new ControlledBusinessTask("Task.Read.Healthy");
+        var timeProvider = new ObservableFakeTimeProvider();
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            periodicRead,
+            timeProvider: timeProvider);
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlanWithRequirements(
+                runtime,
+                ("Task.Read.Stalled", (_, _) => stalled, true),
+                ("Task.Read.Healthy", (_, _) => healthy, true)),
+            TestContext.Current.CancellationToken);
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await Task.WhenAll(
+            stalled.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
+            healthy.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+        var scheduledBeforeFault = timeProvider.ScheduledTimeouts.Count;
+
+        periodicRead.Fail(new InvalidDataException("bad periodic response"));
+        await Task.WhenAll(
+            stalled.Stops.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
+            healthy.Stops.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
+            runtime.WaitForTaskErrorCodeAsync(
+                "Task.Read.Healthy",
+                PlcTaskRuntimeErrorCodes.PeriodicReadFault,
+                TestContext.Current.CancellationToken),
+            timeProvider.ScheduledTimeouts.WaitForAtLeastAsync(
+                scheduledBeforeFault + 1,
+                TestContext.Current.CancellationToken));
+        timeProvider.Advance(TimeSpan.FromSeconds(5));
+        await runtime.WaitForTaskStateAsync(
+            "Task.Read.Stalled",
+            PlcTaskRuntimeState.Faulted,
+            TestContext.Current.CancellationToken);
+        await runtime.WaitForTaskStateAsync(
+            "Task.Read.Healthy",
+            PlcTaskRuntimeState.Faulted,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            PlcTaskRuntimeErrorCodes.TaskStopTimeout,
+            runtime.GetTaskStatus("Task.Read.Stalled")?.ErrorCode);
+        Assert.Equal(
+            PlcTaskRuntimeErrorCodes.PeriodicReadFault,
+            runtime.GetTaskStatus("Task.Read.Healthy")?.ErrorCode);
+        Assert.True(runtime.Runtime.IsConnected);
+
+        stalled.ReleaseStop();
+        await stalled.StopCompletion;
+        await CleanupAsync(runtime);
+    }
+
+    [Fact]
+    public async Task PeriodicReadFault_WhenDependentStopFails_ShouldKeepSpecificStopError()
+    {
+        var periodicRead = new ControllablePeriodicReadTask("PeriodicRead");
+        var failedStop = new ControlledBusinessTask("Task.Read.FailedStop")
+        {
+            ThrowOnStop = true
+        };
+        var healthy = new ControlledBusinessTask("Task.Read.Healthy");
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            periodicRead);
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlanWithRequirements(
+                runtime,
+                ("Task.Read.FailedStop", (_, _) => failedStop, true),
+                ("Task.Read.Healthy", (_, _) => healthy, true)),
+            TestContext.Current.CancellationToken);
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await Task.WhenAll(
+            failedStop.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
+            healthy.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+
+        periodicRead.Fail(new InvalidDataException("bad periodic response"));
+        await Task.WhenAll(
+            runtime.WaitForTaskStateAsync(
+                "Task.Read.FailedStop",
+                PlcTaskRuntimeState.Faulted,
+                TestContext.Current.CancellationToken),
+            runtime.WaitForTaskStateAsync(
+                "Task.Read.Healthy",
+                PlcTaskRuntimeState.Faulted,
+                TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            PlcTaskRuntimeErrorCodes.TaskStopFailed,
+            runtime.GetTaskStatus("Task.Read.FailedStop")?.ErrorCode);
+        Assert.Equal(
+            PlcTaskRuntimeErrorCodes.PeriodicReadFault,
+            runtime.GetTaskStatus("Task.Read.Healthy")?.ErrorCode);
+        Assert.True(runtime.Runtime.IsConnected);
+
+        failedStop.ThrowOnStop = false;
         await CleanupAsync(runtime);
     }
 
@@ -537,6 +820,12 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             entry => entry.Level == "Error"
                      && entry.Message.Contains("停止钩子超过 5 秒", StringComparison.Ordinal),
             TestContext.Current.CancellationToken);
+        var disconnectTransitionSettled = runtime.WaitForLogAsync(
+            entry => entry.Level == "Error"
+                     && entry.Message.Contains(
+                         "断联后的依赖任务暂停未完整完成",
+                         StringComparison.Ordinal),
+            TestContext.Current.CancellationToken);
 
         runtime.ConnectionSignal.Report(false);
         await Task.WhenAll(
@@ -551,6 +840,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             TestContext.Current.CancellationToken);
         timeProvider.Advance(TimeSpan.FromSeconds(5));
         await boundedFailure;
+        await disconnectTransitionSettled;
 
         Assert.Equal(1, stalledStop.Stops.Count);
         Assert.Contains(
@@ -1098,15 +1388,32 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
     private static PlcRuntimeTaskPlan CreatePlan(
         TestPlcDeviceRuntimeHandle runtime,
         params (string TaskKey, PlcRuntimeBusinessTaskFactory Factory)[] tasks)
+        => CreatePlanWithRequirements(
+            runtime,
+            tasks
+                .Select(static task => (
+                    task.TaskKey,
+                    task.Factory,
+                    RequiresPeriodicRead: true))
+                .ToArray());
+
+    private static PlcRuntimeTaskPlan CreatePlanWithRequirements(
+        TestPlcDeviceRuntimeHandle runtime,
+        params (
+            string TaskKey,
+            PlcRuntimeBusinessTaskFactory Factory,
+            bool RequiresPeriodicRead)[] tasks)
         => new(
             runtime.DeviceId,
             runtime.PlcCode,
             runtime.DeviceName,
             tasks.Select(
                 static task =>
-                    new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
+                    new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
                         task.TaskKey,
-                        task.Factory)));
+                        new PlcRuntimeTaskPlanEntry(
+                            task.Factory,
+                            task.RequiresPeriodicRead))));
 
     private static async Task CleanupAsync(PlcDeviceRuntimeHandle runtime)
     {
@@ -1169,8 +1476,31 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             string taskKey,
             PlcTaskRuntimeState state,
             CancellationToken cancellationToken)
+            => await WaitForTaskStatusAsync(
+                    taskKey,
+                    snapshot => snapshot?.State == state,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        public async Task WaitForTaskErrorCodeAsync(
+            string taskKey,
+            string errorCode,
+            CancellationToken cancellationToken)
+            => await WaitForTaskStatusAsync(
+                    taskKey,
+                    snapshot => string.Equals(
+                        snapshot?.ErrorCode,
+                        errorCode,
+                        StringComparison.Ordinal),
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        private async Task WaitForTaskStatusAsync(
+            string taskKey,
+            Func<PlcTaskRuntimeSnapshot?, bool> predicate,
+            CancellationToken cancellationToken)
         {
-            if (GetTaskStatus(taskKey)?.State == state)
+            if (predicate(GetTaskStatus(taskKey)))
             {
                 return;
             }
@@ -1182,7 +1512,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             {
                 if (string.Equals(args.PlcCode, PlcCode, StringComparison.OrdinalIgnoreCase)
                     && string.Equals(args.TaskKey, taskKey, StringComparison.OrdinalIgnoreCase)
-                    && args.Snapshot?.State == state)
+                    && predicate(args.Snapshot))
                 {
                     completion.TrySetResult();
                 }
@@ -1190,7 +1520,7 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             TaskStatuses.StatusChanged += handler;
             try
             {
-                if (GetTaskStatus(taskKey)?.State == state)
+                if (predicate(GetTaskStatus(taskKey)))
                 {
                     return;
                 }
@@ -1232,6 +1562,49 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
+            }
+        }
+    }
+
+    private sealed class ControllablePeriodicReadTask(string taskName) : IPlcTask
+    {
+        private readonly TaskCompletionSource<Exception?> _completion =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public string TaskName { get; } = taskName;
+
+        public AsyncCounter Starts { get; } = new();
+
+        public AsyncCounter Stops { get; } = new();
+
+        public Task StartAsync(CancellationToken ct)
+        {
+            Starts.Increment();
+            return RunAsync(ct);
+        }
+
+        public Task StopAsync(CancellationToken ct)
+        {
+            Stops.Increment();
+            return Task.CompletedTask;
+        }
+
+        public void CompleteNormally() => _completion.TrySetResult(null);
+
+        public void Fail(Exception exception)
+        {
+            ArgumentNullException.ThrowIfNull(exception);
+            _completion.TrySetResult(exception);
+        }
+
+        private async Task RunAsync(CancellationToken cancellationToken)
+        {
+            var exception = await _completion.Task.WaitAsync(cancellationToken);
+            if (exception is not null)
+            {
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo
+                    .Capture(exception)
+                    .Throw();
             }
         }
     }

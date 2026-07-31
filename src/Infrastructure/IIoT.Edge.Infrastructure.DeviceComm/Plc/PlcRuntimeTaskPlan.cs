@@ -8,15 +8,31 @@ public delegate IPlcTask PlcRuntimeBusinessTaskFactory(
     IPlcBuffer buffer,
     ProductionContext context);
 
+public sealed class PlcRuntimeTaskPlanEntry
+{
+    public PlcRuntimeTaskPlanEntry(
+        PlcRuntimeBusinessTaskFactory factory,
+        bool requiresPeriodicRead)
+    {
+        ArgumentNullException.ThrowIfNull(factory);
+        Factory = factory;
+        RequiresPeriodicRead = requiresPeriodicRead;
+    }
+
+    public PlcRuntimeBusinessTaskFactory Factory { get; }
+
+    public bool RequiresPeriodicRead { get; }
+}
+
 public sealed class PlcRuntimeTaskPlan
 {
-    private readonly IReadOnlyDictionary<string, PlcRuntimeBusinessTaskFactory> _taskFactories;
+    private readonly IReadOnlyDictionary<string, PlcRuntimeTaskPlanEntry> _taskEntries;
 
     public PlcRuntimeTaskPlan(
         int networkDeviceId,
         string plcCode,
         string deviceName,
-        IEnumerable<KeyValuePair<string, PlcRuntimeBusinessTaskFactory>> taskFactories)
+        IEnumerable<KeyValuePair<string, PlcRuntimeTaskPlanEntry>> taskEntries)
     {
         if (networkDeviceId <= 0)
         {
@@ -27,14 +43,14 @@ public sealed class PlcRuntimeTaskPlan
 
         ArgumentException.ThrowIfNullOrWhiteSpace(plcCode);
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceName);
-        ArgumentNullException.ThrowIfNull(taskFactories);
+        ArgumentNullException.ThrowIfNull(taskEntries);
 
         NetworkDeviceId = networkDeviceId;
         PlcCode = plcCode.Trim();
         DeviceName = deviceName.Trim();
-        var normalized = new Dictionary<string, PlcRuntimeBusinessTaskFactory>(
+        var normalized = new Dictionary<string, PlcRuntimeTaskPlanEntry>(
             StringComparer.OrdinalIgnoreCase);
-        foreach (var pair in taskFactories)
+        foreach (var pair in taskEntries)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(pair.Key);
             ArgumentNullException.ThrowIfNull(pair.Value);
@@ -47,7 +63,7 @@ public sealed class PlcRuntimeTaskPlan
             }
         }
 
-        _taskFactories = normalized;
+        _taskEntries = normalized;
     }
 
     public int NetworkDeviceId { get; }
@@ -56,7 +72,7 @@ public sealed class PlcRuntimeTaskPlan
 
     public string DeviceName { get; }
 
-    public IReadOnlyCollection<string> TaskKeys => _taskFactories.Keys.ToArray();
+    public IReadOnlyCollection<string> TaskKeys => _taskEntries.Keys.ToArray();
 
     public static PlcRuntimeTaskPlan Empty(
         int networkDeviceId,
@@ -66,13 +82,13 @@ public sealed class PlcRuntimeTaskPlan
             networkDeviceId,
             plcCode,
             deviceName,
-            Array.Empty<KeyValuePair<string, PlcRuntimeBusinessTaskFactory>>());
+            Array.Empty<KeyValuePair<string, PlcRuntimeTaskPlanEntry>>());
 
-    public PlcRuntimeBusinessTaskFactory GetRequiredFactory(string taskKey)
+    public PlcRuntimeTaskPlanEntry GetRequiredEntry(string taskKey)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(taskKey);
-        return _taskFactories.TryGetValue(taskKey, out var factory)
-            ? factory
+        return _taskEntries.TryGetValue(taskKey, out var entry)
+            ? entry
             : throw new InvalidOperationException(
                 $"PLC“{PlcCode}”业务任务计划中不存在 TaskKey：{taskKey}。");
     }

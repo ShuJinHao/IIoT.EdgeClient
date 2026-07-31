@@ -432,6 +432,7 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
     private readonly bool _isDeviceEnabled;
     private PlcTaskRuntimeState? _runtimeState;
     private DateTimeOffset _displayStateChangedAtUtc;
+    private DateTimeOffset? _lastSuccessfulAtUtc;
     private string? _runtimeErrorCode;
     private string? _runtimeExceptionType;
 
@@ -442,6 +443,7 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
         _enabled = dto.Enabled;
         _isDeviceEnabled = isDeviceEnabled;
         _runtimeState = dto.RuntimeState;
+        _lastSuccessfulAtUtc = dto.LastSuccessfulAtUtc;
         _runtimeErrorCode = dto.RuntimeErrorCode;
         _runtimeExceptionType = dto.RuntimeExceptionType;
         OriginalEnabled = dto.Enabled;
@@ -516,6 +518,8 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
 
     public DateTimeOffset? RuntimeStateChangedAtUtc => _displayStateChangedAtUtc;
 
+    public DateTimeOffset? LastSuccessfulAtUtc => _lastSuccessfulAtUtc;
+
     public string? RuntimeErrorCode => _runtimeErrorCode;
 
     public string? RuntimeExceptionType => _runtimeExceptionType;
@@ -550,7 +554,10 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
                     _runtimeState == PlcTaskRuntimeState.Faulted
                         ? FormatRuntimeFailure(_runtimeErrorCode, _runtimeExceptionType)
                         : null,
-                    $"状态时间={_displayStateChangedAtUtc:yyyy-MM-dd HH:mm:ss} UTC"
+                    $"状态时间={_displayStateChangedAtUtc:yyyy-MM-dd HH:mm:ss} UTC",
+                    _lastSuccessfulAtUtc.HasValue
+                        ? $"最近成功启动/恢复={_lastSuccessfulAtUtc:yyyy-MM-dd HH:mm:ss} UTC"
+                        : "最近成功启动/恢复=尚无"
                 }
                 .Where(static x => !string.IsNullOrWhiteSpace(x));
 
@@ -563,6 +570,7 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
     {
         var previousDisplayState = ResolveDisplayState();
         _runtimeState = snapshot?.State;
+        _lastSuccessfulAtUtc = snapshot?.LastSuccessfulAtUtc;
         _runtimeErrorCode = snapshot?.ErrorCode;
         _runtimeExceptionType = snapshot?.ExceptionType;
         var nextDisplayState = ResolveDisplayState();
@@ -579,6 +587,7 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
 
         OnPropertyChanged(nameof(RuntimeState));
         OnPropertyChanged(nameof(RuntimeStateChangedAtUtc));
+        OnPropertyChanged(nameof(LastSuccessfulAtUtc));
         OnPropertyChanged(nameof(RuntimeErrorCode));
         OnPropertyChanged(nameof(RuntimeExceptionType));
         OnPropertyChanged(nameof(RuntimeStatusText));

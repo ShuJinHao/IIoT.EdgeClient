@@ -214,6 +214,11 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
             PlcTaskRuntimeState.Running);
 
         Assert.Equal("运行中", viewModel.Devices[0].Tasks[0].RuntimeStatusText);
+        Assert.NotNull(viewModel.Devices[0].Tasks[0].LastSuccessfulAtUtc);
+        Assert.Contains(
+            "最近成功启动/恢复=",
+            viewModel.Devices[0].Tasks[0].NoteText,
+            StringComparison.Ordinal);
         Assert.Equal("等待 runtime", viewModel.Devices[1].Tasks[0].RuntimeStatusText);
         Assert.Equal(1, service.GetCalls);
         await viewModel.OnDeactivatedAsync();
@@ -380,14 +385,23 @@ public sealed class PlcTaskBindingViewModelBehaviorTests
         runtimeStatuses.SetState(
             "P1-AP01",
             "Task.Upload",
+            PlcTaskRuntimeState.Running);
+        var lastSuccessfulAtUtc = runtimeStatuses
+            .GetSnapshot("P1-AP01", "Task.Upload")!
+            .LastSuccessfulAtUtc;
+        runtimeStatuses.SetState(
+            "P1-AP01",
+            "Task.Upload",
             PlcTaskRuntimeState.Faulted,
             PlcTaskRuntimeErrorCodes.TaskFault,
             nameof(InvalidOperationException));
 
         var task = Assert.Single(Assert.Single(viewModel.Devices).Tasks);
         Assert.Equal("故障", task.RuntimeStatusText);
+        Assert.Equal(lastSuccessfulAtUtc, task.LastSuccessfulAtUtc);
         Assert.Contains("运行错误码=TaskFault", task.NoteText, StringComparison.Ordinal);
         Assert.Contains("异常类型=InvalidOperationException", task.NoteText, StringComparison.Ordinal);
+        Assert.Contains("最近成功启动/恢复=", task.NoteText, StringComparison.Ordinal);
         await viewModel.OnDeactivatedAsync();
     }
 

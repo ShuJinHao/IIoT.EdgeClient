@@ -142,7 +142,7 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
             device.Id,
             candidates,
             cancellationToken).ConfigureAwait(false);
-        var taskFactories = new List<KeyValuePair<string, PlcRuntimeBusinessTaskFactory>>();
+        var taskEntries = new List<KeyValuePair<string, PlcRuntimeTaskPlanEntry>>();
 
         foreach (var taskKey in enabledTaskKeys.OrderBy(
                      static key => key,
@@ -162,6 +162,7 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
                 continue;
             }
 
+            var candidate = matches[0];
             var oneTaskSet = new HashSet<string>(
                 [taskKey],
                 StringComparer.OrdinalIgnoreCase);
@@ -177,33 +178,45 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
             }
 
             var capturedTaskKey = taskKey;
-            taskFactories.Add(
-                new KeyValuePair<string, PlcRuntimeBusinessTaskFactory>(
+            taskEntries.Add(
+                new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
                     capturedTaskKey,
-                    (buffer, context) =>
-                    {
-                        _signalBindingStore.Set(context, signalBindings);
-                        return PlcRuntimeSingleTaskFactory.CreateRequired(
-                            capturedTaskKey,
-                            enabledKeys => factory.CreateTasks(
-                                _serviceProvider,
-                                buffer,
-                                context,
-                                enabledKeys));
-                    }));
+                    new PlcRuntimeTaskPlanEntry(
+                        (buffer, context) =>
+                        {
+                            _signalBindingStore.Set(context, signalBindings);
+                            return PlcRuntimeSingleTaskFactory.CreateRequired(
+                                capturedTaskKey,
+                                enabledKeys => factory.CreateTasks(
+                                    _serviceProvider,
+                                    buffer,
+                                    context,
+                                    enabledKeys));
+                        },
+                        CandidateRequiresPeriodicRead(candidate))));
         }
 
         return new PlcRuntimeTaskPlan(
             device.Id,
             device.PlcCode,
             device.DeviceName,
-            taskFactories);
+            taskEntries);
     }
 
     private IStationRuntimeFactory? ResolveActiveRuntimeFactory()
     {
         var factories = _runtimeRegistry.GetRegistrations().Values.ToArray();
         return factories.Length == 1 ? factories[0] : null;
+    }
+
+    internal static bool CandidateRequiresPeriodicRead(TaskCandidate candidate)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        return candidate.RequiredSignals.Any(static required =>
+            string.Equals(
+                required.Direction,
+                "Read",
+                StringComparison.OrdinalIgnoreCase));
     }
 
     private static string BuildValidationFailureMessage(

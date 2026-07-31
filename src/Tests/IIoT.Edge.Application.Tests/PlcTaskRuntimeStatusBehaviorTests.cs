@@ -20,6 +20,59 @@ public sealed class PlcTaskRuntimeStatusBehaviorTests
         Assert.Equal("P1-AP01", snapshot!.PlcCode);
         Assert.Equal("Task.MG1", snapshot.TaskKey);
         Assert.Equal(PlcTaskRuntimeState.Running, snapshot.State);
+        Assert.NotNull(snapshot.LastSuccessfulAtUtc);
+    }
+
+    [Fact]
+    public void Store_LastSuccessfulAtUtc_ShouldAdvanceOnlyWhenTaskEntersRunning()
+    {
+        var timeProvider = new MutableTimeProvider(DateTimeOffset.UnixEpoch);
+        var store = new PlcTaskRuntimeStatusStore(timeProvider);
+        var targetedEvents = new List<PlcTaskRuntimeSnapshot>();
+        store.StatusChanged += (_, args) =>
+        {
+            if (string.Equals(args.PlcCode, "P1-AP01", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(args.TaskKey, "Task.MG1", StringComparison.OrdinalIgnoreCase)
+                && args.Snapshot is not null)
+            {
+                targetedEvents.Add(args.Snapshot);
+            }
+        };
+
+        store.SetState("P1-AP01", "Task.MG1", PlcTaskRuntimeState.WaitingForConnection);
+        Assert.Null(store.GetSnapshot("p1-ap01", "task.mg1")?.LastSuccessfulAtUtc);
+
+        timeProvider.Advance(TimeSpan.FromMinutes(1));
+        store.SetState("P1-AP01", "Task.MG1", PlcTaskRuntimeState.Starting);
+        timeProvider.Advance(TimeSpan.FromMinutes(1));
+        store.SetState("P1-AP01", "Task.MG1", PlcTaskRuntimeState.Running);
+        var firstSuccess = store.GetSnapshot("P1-AP01", "Task.MG1")!.LastSuccessfulAtUtc;
+
+        timeProvider.Advance(TimeSpan.FromMinutes(1));
+        store.SetState(
+            "P1-AP01",
+            "Task.MG1",
+            PlcTaskRuntimeState.Faulted,
+            PlcTaskRuntimeErrorCodes.TaskFault,
+            nameof(InvalidOperationException));
+        Assert.Equal(
+            firstSuccess,
+            store.GetSnapshot("P1-AP01", "Task.MG1")?.LastSuccessfulAtUtc);
+
+        timeProvider.Advance(TimeSpan.FromMinutes(1));
+        store.SetState("P1-AP01", "Task.MG1", PlcTaskRuntimeState.WaitingForConnection);
+        timeProvider.Advance(TimeSpan.FromMinutes(1));
+        store.SetState("P1-AP01", "Task.MG1", PlcTaskRuntimeState.Starting);
+        timeProvider.Advance(TimeSpan.FromMinutes(1));
+        store.SetState("P1-AP01", "Task.MG1", PlcTaskRuntimeState.Running);
+        var recovered = store.GetSnapshot("p1-ap01", "task.mg1");
+
+        Assert.Equal(DateTimeOffset.UnixEpoch.AddMinutes(2), firstSuccess);
+        Assert.Equal(DateTimeOffset.UnixEpoch.AddMinutes(6), recovered?.LastSuccessfulAtUtc);
+        Assert.Equal(recovered, targetedEvents[^1]);
+        Assert.All(
+            targetedEvents.Skip(3).Take(3),
+            snapshot => Assert.Equal(firstSuccess, snapshot.LastSuccessfulAtUtc));
     }
 
     [Fact]
@@ -98,5 +151,14 @@ public sealed class PlcTaskRuntimeStatusBehaviorTests
             runtimeState);
 
         Assert.Equal(expected, actual);
+    }
+
+    private sealed class MutableTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        private DateTimeOffset _utcNow = utcNow;
+
+        public override DateTimeOffset GetUtcNow() => _utcNow;
+
+        public void Advance(TimeSpan delta) => _utcNow = _utcNow.Add(delta);
     }
 }

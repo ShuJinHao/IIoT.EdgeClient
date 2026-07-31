@@ -51,6 +51,25 @@ namespace IIoT.Edge.Startup.IntegrationTests;
 public sealed class ModuleRuntimeRegistrationTests
 {
     [Fact]
+    public void PlcRuntimeTaskBinder_ShouldDerivePeriodicReadDependencyOnlyFromDeclaredReadSignals()
+    {
+        var readTask = new TaskCandidate(
+            "Task.Read",
+            "读任务",
+            [
+                new TaskRequiredSignal("Signal.Write", "Write"),
+                new TaskRequiredSignal("Signal.Read", "read")
+            ]);
+        var writeOnlyTask = new TaskCandidate(
+            "Task.Write",
+            "写任务",
+            [new TaskRequiredSignal("Signal.Write", "Write")]);
+
+        Assert.True(PlcRuntimeTaskBinder.CandidateRequiresPeriodicRead(readTask));
+        Assert.False(PlcRuntimeTaskBinder.CandidateRequiresPeriodicRead(writeOnlyTask));
+    }
+
+    [Fact]
     public void StartupModuleRegistrationValidator_WhenModuleIsMesOnly_ShouldNotRequireCloudUploader()
     {
         var module = new DiagnosticProcessModule("MesOnlyModule", "MesOnlyProcess", requiresCloud: false, requiresMes: true);

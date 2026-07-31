@@ -401,6 +401,7 @@ public sealed class PlcTaskBindingService(
                 observedAtUtc),
             runtime?.State,
             runtime?.StateChangedAtUtc,
+            runtime?.LastSuccessfulAtUtc,
             runtime?.ErrorCode,
             runtime?.ExceptionType);
     }
