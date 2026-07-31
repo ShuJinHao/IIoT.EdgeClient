@@ -587,7 +587,7 @@ public sealed class CapacitySyncTaskBehaviorTests
     }
 
     [Fact]
-    public async Task RetryBuffer_WhenBlockedRowsFillFirstBatch_ShouldContinueWithLaterResolvableRows()
+    public async Task RetryBuffer_WhenClaimedRawRowsCollapseIntoBlockedSummary_ShouldContinueWithLaterResolvableRows()
     {
         var cloudHttp = new FakeCloudHttpClient();
         var deviceService = new FakeDeviceService();
@@ -598,18 +598,22 @@ public sealed class CapacitySyncTaskBehaviorTests
             ClientCode = "CLIENT-01",
             ProcessId = Guid.NewGuid()
         });
-        var bufferStore = new FakeCapacityBufferStore();
-        for (var index = 0; index < 200; index++)
+        var bufferStore = new FakeCapacityBufferStore
+        {
+            // The real store can claim 200 raw rows that aggregate into one summary.
+            ClaimSummaryLimit = 1
+        };
+        for (var index = 0; index < 4; index++)
         {
             bufferStore.HourlySummaries.Add(new BufferHourlySummaryDto
             {
                 Date = "2026-07-30",
-                Hour = index % 24,
-                MinuteBucket = index % 2 == 0 ? 0 : 30,
-                ShiftCode = index % 24 is >= 8 and < 20 ? "D" : "N",
-                Total = 1,
-                OkCount = 1,
-                PlcName = $"无法解析-{index:D3}"
+                Hour = index,
+                MinuteBucket = 0,
+                ShiftCode = "D",
+                Total = 200,
+                OkCount = 200,
+                PlcName = $"无法解析的历史名称-{index}"
             });
         }
 
@@ -638,10 +642,10 @@ public sealed class CapacitySyncTaskBehaviorTests
         Assert.False(result);
         var payload = ParsePayload(Assert.Single(cloudHttp.PostPayloads));
         Assert.Equal("P1-AP01", payload.GetProperty("plcName").GetString());
-        Assert.Equal(200, bufferStore.HourlySummaries.Count);
+        Assert.Equal(4, bufferStore.HourlySummaries.Count);
         Assert.DoesNotContain(bufferStore.HourlySummaries, row => row.PlcName == "P1-AP01");
-        Assert.Single(bufferStore.ReleasedClaimTokens);
-        Assert.Equal([200, 200], bufferStore.ClaimBatchSizes);
+        Assert.Equal(4, bufferStore.ReleasedClaimTokens.Count);
+        Assert.Equal([200, 200, 200, 200, 200], bufferStore.ClaimBatchSizes);
     }
 
     [Fact]

@@ -277,7 +277,7 @@ public class CapacitySyncTask : ICapacitySyncTask
             var blockedClaimTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             try
             {
-                for (var batchIndex = 0; batchIndex < RetryMaxBatchesPerRound; batchIndex++)
+                for (var batchIndex = 0; ; batchIndex++)
                 {
                     var claimedBatch = await _bufferStore.ClaimHourlySummaryBatchAsync(RetryBatchSize).ConfigureAwait(false);
                     if (claimedBatch is null || claimedBatch.Summaries.Count == 0)
@@ -285,6 +285,7 @@ public class CapacitySyncTask : ICapacitySyncTask
                         return !identityBlockedInRound;
                     }
 
+                    var claimedRawRecordCount = claimedBatch.Summaries.Sum(static summary => summary.Total);
                     var claimReleased = false;
                     var identityBlockedInBatch = 0;
                     try
@@ -358,10 +359,19 @@ public class CapacitySyncTask : ICapacitySyncTask
 
                         _logger.Info(
                             $"[云端补传] 产能补传批次 {claimedBatch.ClaimToken} 已完成，"
-                            + $"行数：{claimedBatch.Summaries.Count}，身份阻断：{identityBlockedInBatch}");
-                        if (claimedBatch.Summaries.Count < RetryBatchSize)
+                            + $"汇总数：{claimedBatch.Summaries.Count}，原始行数：{claimedRawRecordCount}，"
+                            + $"身份阻断：{identityBlockedInBatch}");
+                        if (claimedRawRecordCount < RetryBatchSize)
                         {
                             return !identityBlockedInRound;
+                        }
+
+                        if (batchIndex + 1 >= RetryMaxBatchesPerRound && !identityBlockedInRound)
+                        {
+                            _logger.Info(
+                                $"[云端补传] 产能补传本轮已处理 {RetryMaxBatchesPerRound} 批，"
+                                + "剩余数据等待下一轮。");
+                            return true;
                         }
                     }
                     catch (Exception ex)
@@ -386,9 +396,6 @@ public class CapacitySyncTask : ICapacitySyncTask
                     }
                 }
 
-                _logger.Info(
-                    $"[云端补传] 产能补传本轮已处理 {RetryMaxBatchesPerRound} 批，剩余数据等待下一轮。");
-                return !identityBlockedInRound;
             }
             finally
             {

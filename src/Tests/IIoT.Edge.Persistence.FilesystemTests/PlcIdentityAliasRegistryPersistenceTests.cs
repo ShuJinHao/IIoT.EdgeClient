@@ -63,6 +63,7 @@ public sealed class PlcIdentityAliasRegistryPersistenceTests
             var logger = new FakeLogService();
 
             var registry = new PersistentPlcIdentityAliasRegistry(directory, logger);
+            registry.ObserveVerifiedAlias("P1-AP01", "当前展示名称");
 
             Assert.Empty(registry.GetVerifiedAliases("P1-AP00"));
             Assert.Empty(registry.GetVerifiedAliases("P1-AP01"));

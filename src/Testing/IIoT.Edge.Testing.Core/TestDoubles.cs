@@ -1488,6 +1488,7 @@ public sealed class FakeCapacityBufferStore : ICapacityBufferStore
     public List<string> ReleasedClaimTokens { get; } = new();
     public List<int> ClaimBatchSizes { get; } = new();
     public List<(string ClaimToken, string Date, int Hour, int MinuteBucket, string ShiftCode, string PlcName)> DeletedSummaries { get; } = new();
+    public int? ClaimSummaryLimit { get; set; }
     public int ClearAllCallCount { get; private set; }
     public Exception? CountException { get; set; }
     public TaskCompletionSource? CountStarted { get; set; }
@@ -1516,7 +1517,7 @@ public sealed class FakeCapacityBufferStore : ICapacityBufferStore
             .ToArray();
         var rows = HourlySummaries
             .Where(summary => !alreadyClaimed.Any(claimed => SameHourlySummary(claimed, summary)))
-            .Take(batchSize)
+            .Take(Math.Min(batchSize, ClaimSummaryLimit ?? batchSize))
             .Select(CloneHourlySummary)
             .ToList();
 
