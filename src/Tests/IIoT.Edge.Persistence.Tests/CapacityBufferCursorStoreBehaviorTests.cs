@@ -2,6 +2,7 @@ using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
+using Microsoft.Data.Sqlite;
 
 namespace IIoT.Edge.Persistence.Tests;
 
@@ -58,6 +59,7 @@ public sealed class CapacityBufferCursorStoreBehaviorTests
         }
         finally
         {
+            SqliteConnection.ClearAllPools();
             Directory.Delete(tempDirectory, recursive: true);
         }
     }
