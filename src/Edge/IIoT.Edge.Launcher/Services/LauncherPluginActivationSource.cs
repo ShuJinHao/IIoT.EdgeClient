@@ -151,11 +151,14 @@ public sealed class LauncherPluginActivationSource : ILauncherPluginActivationSo
         string pluginDirectory,
         LauncherEnabledPluginSelectionItem selectedPlugin)
     {
+        EnsurePathHasNoRedirects(pluginDirectory, pluginDirectory);
+
         var pluginManifestPath = Path.Combine(pluginDirectory, PluginManifestFileName);
         if (!File.Exists(pluginManifestPath))
         {
             return [];
         }
+        EnsurePathHasNoRedirects(pluginDirectory, pluginManifestPath);
 
         using var pluginDocument = JsonDocument.Parse(File.ReadAllText(pluginManifestPath));
         var pluginModuleId = ReadRequiredString(pluginDocument.RootElement, "moduleId");
@@ -174,6 +177,7 @@ public sealed class LauncherPluginActivationSource : ILauncherPluginActivationSo
         {
             return [];
         }
+        EnsurePathHasNoRedirects(pluginDirectory, activationManifestPath);
 
         using var activationDocument = JsonDocument.Parse(File.ReadAllText(activationManifestPath));
         var root = activationDocument.RootElement;
@@ -216,6 +220,8 @@ public sealed class LauncherPluginActivationSource : ILauncherPluginActivationSo
             {
                 throw new InvalidOperationException($"activation profile '{profileId}' 引用文件不存在。");
             }
+            EnsurePathHasNoRedirects(pluginDirectory, launcherProfilePath);
+            EnsurePathHasNoRedirects(pluginDirectory, machineConfigPath);
 
             var activation = new LauncherPluginActivation(
                 pluginModuleId,
@@ -359,6 +365,55 @@ public sealed class LauncherPluginActivationSource : ILauncherPluginActivationSo
         }
 
         return resolved;
+    }
+
+    private static void EnsurePathHasNoRedirects(string boundaryRoot, string existingPath)
+    {
+        var normalizedRoot = Path.GetFullPath(boundaryRoot)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var normalizedPath = Path.GetFullPath(existingPath)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var pathComparison = LauncherEnabledPluginSelection.PluginDirectoryComparison;
+        if (!string.Equals(normalizedRoot, normalizedPath, pathComparison)
+            && !normalizedPath.StartsWith(
+                normalizedRoot + Path.DirectorySeparatorChar,
+                pathComparison))
+        {
+            throw new InvalidOperationException("activation 实际路径越界。");
+        }
+
+        EnsureNotRedirected(normalizedRoot);
+        var relativePath = Path.GetRelativePath(normalizedRoot, normalizedPath);
+        if (relativePath == ".")
+        {
+            return;
+        }
+
+        var current = normalizedRoot;
+        foreach (var component in relativePath.Split(
+                     [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                     StringSplitOptions.RemoveEmptyEntries))
+        {
+            current = Path.Combine(current, component);
+            EnsureNotRedirected(current);
+        }
+    }
+
+    private static void EnsureNotRedirected(string path)
+    {
+        FileSystemInfo pathInfo = Directory.Exists(path)
+            ? new DirectoryInfo(path)
+            : new FileInfo(path);
+        if (!pathInfo.Exists)
+        {
+            throw new FileNotFoundException("activation 路径不存在。", path);
+        }
+
+        if ((pathInfo.Attributes & FileAttributes.ReparsePoint) != 0
+            || pathInfo.ResolveLinkTarget(returnFinalTarget: false) is not null)
+        {
+            throw new InvalidOperationException("activation 路径不得包含符号链接或重解析点。");
+        }
     }
 
     private static bool IsTransientDirectory(string path)

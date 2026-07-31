@@ -416,6 +416,96 @@ public sealed class LauncherPluginActivationTests
     }
 
     [Fact]
+    public void Catalog_WhenSelectedPluginDirectoryRedirectsToUnselectedBytes_ShouldFailClosed()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var launcherDirectory = Path.Combine(tempDirectory, "install", "current", "launcher");
+            Directory.CreateDirectory(launcherDirectory);
+            WriteBaseCatalog(launcherDirectory);
+            WriteActivation(
+                launcherDirectory,
+                "AP",
+                "DieCuttingAnodeLine",
+                "负极模切",
+                pluginDirectory: Path.Combine(".previous", "UnselectedAP"));
+            WriteEnabledSelection(launcherDirectory, "AP");
+            var pluginsRoot = EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(launcherDirectory);
+            Directory.CreateSymbolicLink(
+                Path.Combine(pluginsRoot, "AP"),
+                Path.Combine(pluginsRoot, ".previous", "UnselectedAP"));
+            var diagnostics = new LauncherStartupDiagnosticStore();
+            var selection = new LauncherEnabledPluginSelectionSource(launcherDirectory, diagnostics);
+            var source = new LauncherPluginActivationSource(launcherDirectory, selection, diagnostics);
+
+            var profiles = new LauncherProfileCatalog(
+                    launcherDirectory,
+                    activationSource: source)
+                .LoadProfiles();
+
+            Assert.Equal("Default", Assert.Single(profiles).ProfileId);
+            Assert.Contains(
+                diagnostics.Snapshot,
+                item => item.ReasonCode == "LAUNCHER_PLUGIN_ACTIVATION_INVALID"
+                        && item.Subject == "AP"
+                        && item.ExceptionType == nameof(InvalidOperationException));
+            Assert.Contains(
+                diagnostics.Snapshot,
+                item => item.ReasonCode == "LAUNCHER_PLUGIN_SELECTED_NOT_DISCOVERED"
+                        && item.Subject == "AP");
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void Catalog_WhenActivationReferenceRedirectsOutsideSelectedDirectory_ShouldFailClosed()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var launcherDirectory = Path.Combine(tempDirectory, "install", "current", "launcher");
+            Directory.CreateDirectory(launcherDirectory);
+            WriteBaseCatalog(launcherDirectory);
+            WriteActivation(launcherDirectory, "AP", "DieCuttingAnodeLine", "负极模切");
+            WriteEnabledSelection(launcherDirectory, "AP");
+            var pluginsRoot = EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(launcherDirectory);
+            var launcherProfilePath = Path.Combine(
+                pluginsRoot,
+                "AP",
+                "activation",
+                "launcher",
+                "launcher.profiles.AP.json");
+            var unselectedProfilePath = Path.Combine(
+                pluginsRoot,
+                ".previous",
+                "launcher.profiles.AP.json");
+            WriteText(unselectedProfilePath, File.ReadAllText(launcherProfilePath));
+            File.Delete(launcherProfilePath);
+            File.CreateSymbolicLink(launcherProfilePath, unselectedProfilePath);
+            var diagnostics = new LauncherStartupDiagnosticStore();
+            var selection = new LauncherEnabledPluginSelectionSource(launcherDirectory, diagnostics);
+            var source = new LauncherPluginActivationSource(launcherDirectory, selection, diagnostics);
+
+            var activations = source.LoadActivations();
+
+            Assert.Empty(activations);
+            Assert.Contains(
+                diagnostics.Snapshot,
+                item => item.ReasonCode == "LAUNCHER_PLUGIN_ACTIVATION_INVALID"
+                        && item.Subject == "AP"
+                        && item.ExceptionType == nameof(InvalidOperationException));
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
     public void Selection_PluginDirectoryIdentity_ShouldFollowPlatformPathCaseRules()
     {
         var selection = new LauncherEnabledPluginSelection(
