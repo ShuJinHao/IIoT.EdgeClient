@@ -10,13 +10,14 @@ using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
+using IIoT.Edge.Infrastructure.DeviceComm.Plc.Services;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Signals;
 
 /// <summary>
 /// PLC 只读数据扫描任务，负责把单点读数据和连续读数据刷新到运行缓冲区。
 /// </summary>
-public sealed class PlcDataReadScanTask : IPlcTask
+public class PlcPeriodicBatchReadTask : IPlcTask
 {
     private const int DisconnectLogIntervalSeconds = 30;
 
@@ -28,10 +29,11 @@ public sealed class PlcDataReadScanTask : IPlcTask
     private readonly Func<CancellationToken, Task<int>> _dataReadLoopIntervalResolver;
     private readonly Action<bool>? _connectionStateChanged;
     private readonly IReadOnlyList<PlcSignalBlock> _readBlocks;
+    private int _schedulingIntervalMs;
     private int _retryCount;
     private DateTime _lastDisconnectLogTime = DateTime.MinValue;
 
-    public PlcDataReadScanTask(
+    public PlcPeriodicBatchReadTask(
         IPlcService plcService,
         IPlcDataStore dataStore,
         NetworkDeviceEntity deviceConfig,
@@ -41,7 +43,8 @@ public sealed class PlcDataReadScanTask : IPlcTask
         PlcConnectionStatusStore? statusStore = null,
         PlcIoRuntimePolicy? runtimePolicy = null,
         Func<CancellationToken, Task<int>>? dataReadLoopIntervalResolver = null,
-        Action<bool>? connectionStateChanged = null)
+        Action<bool>? connectionStateChanged = null,
+        IReadOnlySet<string>? periodicReadExcludedSignalKeys = null)
     {
         _plcService = plcService ?? throw new ArgumentNullException(nameof(plcService));
         _dataStore = dataStore ?? throw new ArgumentNullException(nameof(dataStore));
@@ -54,6 +57,7 @@ public sealed class PlcDataReadScanTask : IPlcTask
         var policy = runtimePolicy ?? PlcIoRuntimePolicy.Default;
         _dataReadLoopIntervalResolver = dataReadLoopIntervalResolver
             ?? (_ => Task.FromResult(policy.NormalizeDataReadLoopInterval()));
+        _schedulingIntervalMs = policy.NormalizeDataReadLoopInterval();
 
         var scanMappings = (ioMappings ?? throw new ArgumentNullException(nameof(ioMappings)))
             .Where(static mapping => !string.IsNullOrWhiteSpace(mapping.PlcAddress))
@@ -68,7 +72,9 @@ public sealed class PlcDataReadScanTask : IPlcTask
             .ToArray();
 
         var readMappings = scanMappings
-            .Where(static mapping => mapping.IsRead && IoMappingOptionCatalog.IsReadDataCategory(mapping.Category))
+            .Where(mapping => mapping.IsRead
+                              && IoMappingOptionCatalog.IsReadDataCategory(mapping.Category)
+                              && !(periodicReadExcludedSignalKeys?.Contains(mapping.SignalKey) ?? false))
             .OrderBy(static mapping => mapping.SortOrder)
             .ToArray();
 
@@ -79,7 +85,7 @@ public sealed class PlcDataReadScanTask : IPlcTask
             isWrite: false);
     }
 
-    public string TaskName => $"PlcDataReadScan_{_device.DeviceName}";
+    public string TaskName => $"PlcPeriodicBatchRead_{_device.DeviceName}";
 
     public Task StartAsync(CancellationToken ct)
         => TaskCoreAsync(ct);
@@ -97,6 +103,10 @@ public sealed class PlcDataReadScanTask : IPlcTask
         {
             return;
         }
+
+        using var scheduling = PlcOperationSchedulingContext.Push(
+            PlcOperationPriority.Periodic,
+            TimeSpan.FromMilliseconds(Volatile.Read(ref _schedulingIntervalMs)));
 
         var stopwatch = Stopwatch.StartNew();
         var hasSuccessfulRead = await ReadPlcToBufferAsync(buffer, ct).ConfigureAwait(false);
@@ -119,7 +129,9 @@ public sealed class PlcDataReadScanTask : IPlcTask
             try
             {
                 await ExecuteOneCycleAsync(ct).ConfigureAwait(false);
-                await Task.Delay(await ResolveDataReadLoopIntervalAsync(ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+                var loopInterval = await ResolveDataReadLoopIntervalAsync(ct).ConfigureAwait(false);
+                Volatile.Write(ref _schedulingIntervalMs, loopInterval);
+                await Task.Delay(loopInterval, ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -195,12 +207,12 @@ public sealed class PlcDataReadScanTask : IPlcTask
 
                 foreach (var item in block.Items)
                 {
-                    stagedUpdates[item.Mapping.SignalKey] = new PlcReadSignalUpdate(
-                        SliceWords(words, item.Offset, item.Mapping.AddressCount),
-                        ReadSucceeded: true,
+                    StageSuccessfulItem(
+                        stagedUpdates,
+                        item,
+                        words,
                         batchId,
-                        attemptedAtUtc,
-                        FailureReason: null);
+                        attemptedAtUtc);
                 }
 
                 hasSuccessfulRead = true;
@@ -339,18 +351,6 @@ public sealed class PlcDataReadScanTask : IPlcTask
         return true;
     }
 
-    private static ushort[] SliceWords(IReadOnlyList<ushort> words, int offset, int count)
-    {
-        var result = new ushort[Math.Max(1, count)];
-        for (var index = 0; index < result.Length; index++)
-        {
-            var sourceIndex = offset + index;
-            result[index] = sourceIndex >= 0 && sourceIndex < words.Count ? words[sourceIndex] : (ushort)0;
-        }
-
-        return result;
-    }
-
     private static void StageFailedBlock(
         IDictionary<string, PlcReadSignalUpdate> stagedUpdates,
         PlcSignalBlock block,
@@ -367,6 +367,43 @@ public sealed class PlcDataReadScanTask : IPlcTask
                 attemptedAtUtc,
                 failureReason);
         }
+    }
+
+    private static void StageSuccessfulItem(
+        IDictionary<string, PlcReadSignalUpdate> stagedUpdates,
+        PlcSignalBlockItem item,
+        IReadOnlyList<ushort> blockWords,
+        Guid batchId,
+        DateTimeOffset attemptedAtUtc)
+    {
+        if (stagedUpdates.TryGetValue(item.Mapping.SignalKey, out var existing)
+            && !existing.ReadSucceeded)
+        {
+            return;
+        }
+
+        var signalWords = existing is null
+            ? new ushort[Math.Max(1, item.Mapping.AddressCount)]
+            : (ushort[])existing.CurrentWords.Clone();
+        for (var index = 0; index < item.EffectiveWordCount; index++)
+        {
+            var sourceIndex = item.Offset + index;
+            var targetIndex = item.MappingWordOffset + index;
+            if (sourceIndex >= 0
+                && sourceIndex < blockWords.Count
+                && targetIndex >= 0
+                && targetIndex < signalWords.Length)
+            {
+                signalWords[targetIndex] = blockWords[sourceIndex];
+            }
+        }
+
+        stagedUpdates[item.Mapping.SignalKey] = new PlcReadSignalUpdate(
+            signalWords,
+            ReadSucceeded: true,
+            batchId,
+            attemptedAtUtc,
+            FailureReason: null);
     }
 
     private static void CommitReadBatch(
@@ -386,8 +423,40 @@ public sealed class PlcDataReadScanTask : IPlcTask
         => string.Join(
             "、",
             block.Items.Select(static item =>
-                $"{item.Mapping.SignalKey}@{item.Mapping.PlcAddress}[{Math.Max(1, item.Mapping.AddressCount)}]"));
+                $"{item.Mapping.SignalKey}@{item.Mapping.PlcAddress}"
+                + $"[{item.MappingWordOffset}+{item.EffectiveWordCount}]"));
 
     private static int ToLatencyMs(long elapsedMilliseconds)
         => (int)Math.Min(int.MaxValue, Math.Max(0, elapsedMilliseconds));
+}
+
+/// <summary>
+/// Host API 2.0.x 兼容名称；新 runtime 使用 <see cref="PlcPeriodicBatchReadTask"/>。
+/// </summary>
+public sealed class PlcDataReadScanTask : PlcPeriodicBatchReadTask
+{
+    public PlcDataReadScanTask(
+        IPlcService plcService,
+        IPlcDataStore dataStore,
+        NetworkDeviceEntity deviceConfig,
+        IReadOnlyCollection<IoMappingEntity> ioMappings,
+        ILogService logger,
+        IPlcSignalBlockPlanner signalBlockPlanner,
+        PlcConnectionStatusStore? statusStore = null,
+        PlcIoRuntimePolicy? runtimePolicy = null,
+        Func<CancellationToken, Task<int>>? dataReadLoopIntervalResolver = null,
+        Action<bool>? connectionStateChanged = null)
+        : base(
+            plcService,
+            dataStore,
+            deviceConfig,
+            ioMappings,
+            logger,
+            signalBlockPlanner,
+            statusStore,
+            runtimePolicy,
+            dataReadLoopIntervalResolver,
+            connectionStateChanged)
+    {
+    }
 }

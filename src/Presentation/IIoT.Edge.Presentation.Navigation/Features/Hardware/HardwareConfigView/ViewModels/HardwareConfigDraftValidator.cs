@@ -18,14 +18,19 @@ internal static class HardwareConfigDraftValidator
             return getText("Navigation_Hardware_Validation_IoAddressRequired", "PLC 地址不能为空。");
         }
 
-        if (mapping.AddressCount <= 0)
+        var typeWordLength = PlcIoTypeWordLengthValidator.Validate(
+            mapping.DataType,
+            mapping.AddressCount);
+        if (!typeWordLength.IsValid)
         {
-            return getText("Navigation_Hardware_Validation_IoAddressCountPositive", "地址数量必须大于 0。");
-        }
-
-        if (!IoMappingOptionCatalog.IsKnownDataType(mapping.DataType))
-        {
-            return getText("Navigation_Hardware_Validation_IoDataTypeRequired", "请选择 IO 数据类型。");
+            return typeWordLength.FailureCode switch
+            {
+                PlcIoTypeWordLengthValidationResult.AddressCountMustBePositive =>
+                    getText("Navigation_Hardware_Validation_IoAddressCountPositive", "地址数量必须大于 0。"),
+                PlcIoTypeWordLengthValidationResult.AddressCountNotAligned =>
+                    getText("Navigation_Hardware_Validation_IoAddressCountAligned", "地址数量与所选数据类型的 word 长度不匹配。"),
+                _ => getText("Navigation_Hardware_Validation_IoDataTypeRequired", "请选择 IO 数据类型。")
+            };
         }
 
         return null;
@@ -46,14 +51,26 @@ internal static class HardwareConfigDraftValidator
             return getText("Navigation_Hardware_Validation_InteractionAddressRequired", "交互点位 PLC 地址不能为空。");
         }
 
-        if (pair.ReadAddressCount <= 0 || pair.WriteAddressCount <= 0)
+        var readTypeWordLength = PlcIoTypeWordLengthValidator.Validate(
+            pair.ReadDataType,
+            pair.ReadAddressCount);
+        var writeTypeWordLength = PlcIoTypeWordLengthValidator.Validate(
+            pair.WriteDataType,
+            pair.WriteAddressCount);
+        if (!readTypeWordLength.IsValid || !writeTypeWordLength.IsValid)
         {
-            return getText("Navigation_Hardware_Validation_IoAddressCountPositive", "IO 地址数量必须大于 0。");
-        }
+            if (readTypeWordLength.FailureCode == PlcIoTypeWordLengthValidationResult.AddressCountMustBePositive
+                || writeTypeWordLength.FailureCode == PlcIoTypeWordLengthValidationResult.AddressCountMustBePositive)
+            {
+                return getText("Navigation_Hardware_Validation_IoAddressCountPositive", "IO 地址数量必须大于 0。");
+            }
 
-        if (!IoMappingOptionCatalog.IsKnownDataType(pair.ReadDataType)
-            || !IoMappingOptionCatalog.IsKnownDataType(pair.WriteDataType))
-        {
+            if (readTypeWordLength.FailureCode == PlcIoTypeWordLengthValidationResult.AddressCountNotAligned
+                || writeTypeWordLength.FailureCode == PlcIoTypeWordLengthValidationResult.AddressCountNotAligned)
+            {
+                return getText("Navigation_Hardware_Validation_IoAddressCountAligned", "IO 地址数量与所选数据类型的 word 长度不匹配。");
+            }
+
             return getText("Navigation_Hardware_Validation_IoDataTypeRequired", "请选择 IO 数据类型。");
         }
 

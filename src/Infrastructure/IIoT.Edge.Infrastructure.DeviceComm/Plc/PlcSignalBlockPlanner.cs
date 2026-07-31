@@ -31,11 +31,11 @@ public sealed class DefaultPlcSignalBlockPlanner : IPlcSignalBlockPlanner
             return [];
         }
 
-        var maxWords = maxBlockWordCount <= 0 ? 100 : maxBlockWordCount;
+        var maxWords = maxBlockWordCount <= 0
+            ? 100
+            : Math.Min(100, maxBlockWordCount);
         var groups = activeMappings
-            .Select(static mapping => new PlannedMapping(mapping, PlcAddressRange.TryParse(
-                mapping.PlcAddress,
-                mapping.AddressCount)))
+            .SelectMany(mapping => ExpandMapping(mapping, maxWords))
             .GroupBy(static x => x.Range?.Prefix ?? x.Mapping.PlcAddress, StringComparer.OrdinalIgnoreCase)
             .OrderBy(static group => group.Key, StringComparer.OrdinalIgnoreCase);
 
@@ -54,7 +54,11 @@ public sealed class DefaultPlcSignalBlockPlanner : IPlcSignalBlockPlanner
                 blocks.Add(new PlcSignalBlock(
                     item.Mapping.PlcAddress,
                     item.Mapping.AddressCount,
-                    [new PlcSignalBlockItem(item.Mapping, 0)]));
+                    [new PlcSignalBlockItem(
+                        item.Mapping,
+                        0,
+                        item.MappingWordOffset,
+                        item.SegmentWordCount)]));
             }
         }
 
@@ -87,7 +91,8 @@ public sealed class DefaultPlcSignalBlockPlanner : IPlcSignalBlockPlanner
             var nextEndExclusive = Math.Max(currentEndExclusive, range.EndExclusive);
             var nextWordCount = currentStart!.ToWordCount(nextEndExclusive);
             var shouldSplitForGap = hasGap
-                                    && (!isWrite || writeGapPolicy == PlcIoWriteGapPolicy.Split);
+                                    && isWrite
+                                    && writeGapPolicy == PlcIoWriteGapPolicy.Split;
 
             if (shouldSplitForGap || nextWordCount > maxWords)
             {
@@ -120,13 +125,54 @@ public sealed class DefaultPlcSignalBlockPlanner : IPlcSignalBlockPlanner
         var items = mappings
             .Select(mapping => new PlcSignalBlockItem(
                 mapping.Mapping,
-                start.ToWordOffset(mapping.Range!.Number)))
+                start.ToWordOffset(mapping.Range!.Number),
+                mapping.MappingWordOffset,
+                mapping.SegmentWordCount))
             .ToArray();
 
         blocks.Add(new PlcSignalBlock(startAddress, totalCount, items));
     }
 
-    private sealed record PlannedMapping(PlcIoScanMapping Mapping, PlcAddressRange? Range);
+    private static IReadOnlyList<PlannedMapping> ExpandMapping(
+        PlcIoScanMapping mapping,
+        int maxWords)
+    {
+        var range = PlcAddressRange.TryParse(mapping.PlcAddress, mapping.AddressCount);
+        if (range is null)
+        {
+            if (mapping.AddressCount > maxWords)
+            {
+                throw new InvalidOperationException(
+                    $"PLC 地址“{mapping.PlcAddress}”无法解析且长度超过 {maxWords} words，拒绝生成不安全读取块。");
+            }
+
+            return [new PlannedMapping(mapping, null, 0, mapping.AddressCount)];
+        }
+
+        if (mapping.AddressCount <= maxWords)
+        {
+            return [new PlannedMapping(mapping, range, 0, mapping.AddressCount)];
+        }
+
+        var segments = new List<PlannedMapping>();
+        for (var mappingOffset = 0; mappingOffset < mapping.AddressCount; mappingOffset += maxWords)
+        {
+            var segmentWordCount = Math.Min(maxWords, mapping.AddressCount - mappingOffset);
+            segments.Add(new PlannedMapping(
+                mapping,
+                range.Slice(mappingOffset, segmentWordCount),
+                mappingOffset,
+                segmentWordCount));
+        }
+
+        return segments;
+    }
+
+    private sealed record PlannedMapping(
+        PlcIoScanMapping Mapping,
+        PlcAddressRange? Range,
+        int MappingWordOffset,
+        int SegmentWordCount);
 
     private sealed record PlcAddressRange(string Prefix, int Number, int AddressStep, int WordCount)
     {
@@ -138,6 +184,13 @@ public sealed class DefaultPlcSignalBlockPlanner : IPlcSignalBlockPlanner
 
         public int ToWordCount(int endExclusive)
             => Math.Max(1, (endExclusive - Number + AddressStep - 1) / AddressStep);
+
+        public PlcAddressRange Slice(int wordOffset, int wordCount)
+            => new(
+                Prefix,
+                Number + (wordOffset * AddressStep),
+                AddressStep,
+                wordCount);
 
         public static PlcAddressRange? TryParse(string address, int wordCount)
         {
@@ -191,4 +244,10 @@ public sealed record PlcSignalBlock(
 
 public sealed record PlcSignalBlockItem(
     PlcIoScanMapping Mapping,
-    int Offset);
+    int Offset,
+    int MappingWordOffset = 0,
+    int? SegmentWordCount = null)
+{
+    public int EffectiveWordCount
+        => SegmentWordCount ?? Mapping.AddressCount;
+}

@@ -22,6 +22,7 @@ using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.SharedKernel.Specification;
 using IIoT.Edge.Module.Contracts.Identity;
+using IIoT.Edge.Module.Sdk.Hardware;
 
 namespace IIoT.Edge.Runtime.WorkflowTests;
 
@@ -309,6 +310,71 @@ public sealed class PlcTaskBindingBehaviorTests
     }
 
     [Fact]
+    public void ValidateEnabledTasks_WhenRequiredIoWordLengthIsInvalid_ShouldIsolateThatTask()
+    {
+        var service = CreateService(defaultEnableAllTasks: true).Service;
+        ModuleIoSnapshot[] mappings =
+        [
+            new(
+                "Signal.Business",
+                "D300",
+                1,
+                IoMappingOptionCatalog.DataTypeInt32,
+                IoMappingOptionCatalog.DirectionRead,
+                1,
+                IoMappingOptionCatalog.CategorySingleRead,
+                "业务信号")
+        ];
+
+        var result = service.ValidateEnabledTasks(
+            TestCandidates,
+            new HashSet<string>(["Task.B"], StringComparer.OrdinalIgnoreCase),
+            mappings);
+
+        Assert.False(result.IsValid);
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("Task.B", issue.TaskKey);
+        Assert.Equal(PlcTaskBindingValidationIssueType.InvalidIoTypeWordLength, issue.IssueType);
+        Assert.Contains(
+            PlcIoTypeWordLengthValidationResult.AddressCountNotAligned,
+            issue.Message,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PrepareAsync_WhenEnabledTaskIoWordLengthIsInvalid_ShouldRejectBindingTransaction()
+    {
+        var harness = CreateService(defaultEnableAllTasks: true, seedIoMappings: false);
+        var device = harness.NetworkDevices.Add(CreateLifecyclePlc("PLC-INVALID-BINDING", 5901));
+        harness.IoMappings.Add(IoMappingEntity.Create(
+            device.Id,
+            "Signal.Business",
+            "D300",
+            1,
+            IoMappingOptionCatalog.DataTypeInt32,
+            IoMappingOptionCatalog.DirectionRead,
+            IoMappingOptionCatalog.CategorySingleRead,
+            "业务信号"));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.Service.PrepareAsync(
+                device.Id,
+                "TestModule",
+                new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Task.A"] = false,
+                    ["Task.B"] = true
+                },
+                TestContext.Current.CancellationToken));
+
+        Assert.Contains(
+            PlcIoTypeWordLengthValidationResult.AddressCountNotAligned,
+            exception.Message,
+            StringComparison.Ordinal);
+        Assert.Empty(harness.Bindings.Items);
+    }
+
+    [Fact]
     public async Task PrepareAndCommit_WhenHeartbeatDisabled_ShouldPersistCandidateRows()
     {
         var harness = CreateService(defaultEnableAllTasks: true);
@@ -503,11 +569,11 @@ public sealed class PlcTaskBindingBehaviorTests
 
         Assert.NotSame(dataStore.GetBuffer(plcA.Id), dataStore.GetBuffer(plcB.Id));
         Assert.Empty(factoryCalls);
-        Assert.Equal("PlcIoScan_PLC-A", runtimeA.ConnectionTask.TaskName);
-        Assert.Equal("PlcDataReadScan_PLC-A", runtimeA.PeriodicReadTask.TaskName);
+        Assert.Equal("PlcSignalInteraction_PLC-A", runtimeA.ConnectionTask.TaskName);
+        Assert.Equal("PlcPeriodicBatchRead_PLC-A", runtimeA.PeriodicReadTask.TaskName);
         Assert.Equal(["Business.PLC-A"], runtimeA.EnabledTaskKeys);
-        Assert.Equal("PlcIoScan_PLC-B", runtimeB.ConnectionTask.TaskName);
-        Assert.Equal("PlcDataReadScan_PLC-B", runtimeB.PeriodicReadTask.TaskName);
+        Assert.Equal("PlcSignalInteraction_PLC-B", runtimeB.ConnectionTask.TaskName);
+        Assert.Equal("PlcPeriodicBatchRead_PLC-B", runtimeB.PeriodicReadTask.TaskName);
         Assert.Equal(["Business.PLC-B"], runtimeB.EnabledTaskKeys);
 
         runtimeA.Start();
@@ -538,6 +604,51 @@ public sealed class PlcTaskBindingBehaviorTests
         await runtimeB.PlcService.DisposeAsync();
         runtimeA.DisposeCancellation();
         runtimeB.DisposeCancellation();
+    }
+
+    [Fact]
+    public async Task PlcDeviceRuntimeBuilder_WhenIoWordLengthIsInvalid_ShouldSkipOnlyMappingAndKeepBaseRuntime()
+    {
+        var ioMappings = new InMemoryRepository<IoMappingEntity>();
+        var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
+        var device = networkDevices.Add(CreateLifecyclePlc("PLC-INVALID-WORD", 6002));
+        ioMappings.Add(IoMappingEntity.Create(
+            device.Id,
+            "Signal.InvalidInt32",
+            "D400",
+            1,
+            IoMappingOptionCatalog.DataTypeInt32,
+            IoMappingOptionCatalog.DirectionRead,
+            IoMappingOptionCatalog.CategorySingleRead,
+            "invalid"));
+        var dataStore = new PlcDataStore();
+        var logger = new FakeLogService();
+        var runtimeBuilder = new PlcDeviceRuntimeBuilder(
+            ioMappings,
+            dataStore,
+            new TrackingPlcServiceFactory(),
+            new FakeProductionContextStore(),
+            logger,
+            new PlcConnectionStatusStore(),
+            new DefaultPlcSignalBlockPlanner(),
+            new StaticPlcEndpointResolver(),
+            new ModuleHardwareProfileResolver([]));
+
+        var runtime = await runtimeBuilder.BuildAsync(
+            device,
+            PlcRuntimeTaskPlan.Empty(device.Id, device.PlcCode, device.DeviceName),
+            TestContext.Current.CancellationToken);
+
+        var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(device.Id));
+        Assert.False(buffer.TryGetReadWords("Signal.InvalidInt32", out _));
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Message.Contains("SignalKey=Signal.InvalidInt32", StringComparison.Ordinal)
+                     && entry.Message.Contains(
+                         PlcIoTypeWordLengthValidationResult.AddressCountNotAligned,
+                         StringComparison.Ordinal));
+        await runtime.PlcService.DisposeAsync();
+        runtime.DisposeCancellation();
     }
 
     [Fact]
@@ -585,7 +696,7 @@ public sealed class PlcTaskBindingBehaviorTests
 
         Assert.Equal("PLC-STABLE-BLOCK", runtime.PlcCode);
         Assert.Empty(runtime.EnabledTaskKeys);
-        Assert.Equal($"PlcIoScan_{device.DeviceName}", runtime.ConnectionTask.TaskName);
+        Assert.Equal($"PlcSignalInteraction_{device.DeviceName}", runtime.ConnectionTask.TaskName);
         Assert.Equal("PLC-STABLE-BLOCK", statusStore.GetSnapshot(device.Id)!.PlcCode);
         Assert.Equal(
             PlcTaskRuntimeState.Faulted,
@@ -1418,8 +1529,8 @@ public sealed class PlcTaskBindingBehaviorTests
                 DeviceName = deviceName,
                 NetworkDeviceId = deviceId
             },
-            ConnectionTask = new NoopPlcTask($"PlcIoScan_{deviceName}"),
-            PeriodicReadTask = new NoopPlcTask($"PlcDataReadScan_{deviceName}"),
+            ConnectionTask = new NoopPlcTask($"PlcSignalInteraction_{deviceName}"),
+            PeriodicReadTask = new NoopPlcTask($"PlcPeriodicBatchRead_{deviceName}"),
             ConnectionSignal = new PlcRuntimeConnectionSignal(),
             Logger = logger,
             StatusStore = statusStore,

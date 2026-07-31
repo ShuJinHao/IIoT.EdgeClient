@@ -9,6 +9,7 @@ using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Signals;
+using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Module.Contracts.Runtime;
 using IIoT.Edge.Module.Contracts.Identity;
 using IIoT.Edge.SharedKernel.Repository;
@@ -76,9 +77,12 @@ public sealed class PlcDeviceRuntimeBuilder
             .Where(static x => !string.IsNullOrWhiteSpace(x.PlcAddress))
             .OrderBy(x => x.SortOrder)
             .ToArray();
-        var readCount = mappingArray.Where(x => x.Direction == "Read").Sum(x => x.AddressCount);
-        var writeCount = mappingArray.Where(x => x.Direction == "Write").Sum(x => x.AddressCount);
-        var signalBindings = BuildSignalBindings(mappingArray);
+        var runtimeMappingArray = mappingArray
+            .Where(mapping => IsValidRuntimeMapping(device.PlcCode, mapping))
+            .ToArray();
+        var readCount = runtimeMappingArray.Where(x => x.Direction == "Read").Sum(x => x.AddressCount);
+        var writeCount = runtimeMappingArray.Where(x => x.Direction == "Write").Sum(x => x.AddressCount);
+        var signalBindings = BuildSignalBindings(runtimeMappingArray);
 
         _dataStore.Register(device.Id, readCount, writeCount, signalBindings);
         var buffer = _dataStore.GetBuffer(device.Id);
@@ -104,7 +108,9 @@ public sealed class PlcDeviceRuntimeBuilder
             effectiveTaskPlan = PlcRuntimeTaskPlan.Empty(
                 device.Id,
                 device.PlcCode,
-                device.DeviceName);
+                device.DeviceName,
+                taskPlan.BusinessOnDemandReadSignalKeys,
+                taskPlan.PeriodicReadExcludedSignalKeys);
             _logger.Error(
                 $"[PlcCode={device.PlcCode}] 生产上下文稳定身份解析失败，已暂停该 PLC 全部业务 TaskKey，基础连接继续："
                 + $"{contextResolution.DiagnosticCode}/{contextResolution.DiagnosticMessage}");
@@ -122,35 +128,71 @@ public sealed class PlcDeviceRuntimeBuilder
         var deviceCts = new CancellationTokenSource();
         var runtimePolicy = hardwareProfile?.GetIoRuntimePolicy() ?? PlcIoRuntimePolicy.Default;
         var connectionSignal = new PlcRuntimeConnectionSignal();
-
-        var ioScanTask = new PlcIoScanTask(
-            plcService,
-            _dataStore,
-            device,
-            mappingArray,
-            _logger,
-            _signalBlockPlanner,
-            _statusStore,
-            runtimePolicy,
-            endpoint,
-            connectionSignal.Report);
-        var dataReadScanTask = new PlcDataReadScanTask(
-            plcService,
-            _dataStore,
-            device,
-            mappingArray,
-            _logger,
-            _signalBlockPlanner,
-            _statusStore,
-            runtimePolicy,
-            token => ResolveDataReadLoopIntervalAsync(hardwareProfile?.ModuleId, runtimePolicy, token),
-            connectionSignal.Report);
+        var scanIntervalResolver = new Func<CancellationToken, Task<int>>(
+            token => ResolveDataReadLoopIntervalAsync(hardwareProfile?.ModuleId, runtimePolicy, token));
 
         if (buffer is null)
         {
             throw new InvalidOperationException(
                 $"[PlcCode={device.PlcCode}] PLC Buffer 注册后仍不可用，拒绝创建 runtime。");
         }
+
+        if (effectiveTaskPlan.BusinessOnDemandReadSignalKeys.Count > 0)
+        {
+            if (buffer is not PlcBuffer hostBuffer)
+            {
+                throw new InvalidOperationException(
+                    $"[PlcCode={device.PlcCode}] PLC Buffer 不支持业务按需原子读取，拒绝启动相关 TaskKey。");
+            }
+
+            hostBuffer.SetOnDemandReadCoordinator(
+                new PlcBusinessOnDemandReadCoordinator(
+                    plcService,
+                    hostBuffer,
+                    runtimeMappingArray.Select(static mapping => new PlcIoScanMapping(
+                        mapping.SignalKey,
+                        mapping.PlcAddress,
+                        mapping.AddressCount,
+                        mapping.DataType,
+                        mapping.Direction,
+                        mapping.Category,
+                        mapping.SortOrder)).ToArray(),
+                    effectiveTaskPlan.BusinessOnDemandReadSignalKeys,
+                    _logger,
+                    _statusStore,
+                    connectionSignal.Report,
+                    _signalBlockPlanner,
+                    runtimePolicy,
+                    scanIntervalResolver,
+                    deviceCts.Token,
+                    device.Id,
+                    device.PlcCode,
+                    device.DeviceName));
+        }
+
+        var signalInteractionTask = new PlcSignalInteractionTask(
+            plcService,
+            _dataStore,
+            device,
+            runtimeMappingArray,
+            _logger,
+            _signalBlockPlanner,
+            _statusStore,
+            runtimePolicy,
+            endpoint,
+            connectionSignal.Report);
+        var periodicBatchReadTask = new PlcPeriodicBatchReadTask(
+            plcService,
+            _dataStore,
+            device,
+            runtimeMappingArray,
+            _logger,
+            _signalBlockPlanner,
+            _statusStore,
+            runtimePolicy,
+            scanIntervalResolver,
+            connectionSignal.Report,
+            effectiveTaskPlan.PeriodicReadExcludedSignalKeys);
 
         var runtime = new PlcDeviceRuntimeHandle
         {
@@ -160,8 +202,8 @@ public sealed class PlcDeviceRuntimeBuilder
             PlcService = plcService,
             Buffer = buffer,
             Context = context,
-            ConnectionTask = ioScanTask,
-            PeriodicReadTask = dataReadScanTask,
+            ConnectionTask = signalInteractionTask,
+            PeriodicReadTask = periodicBatchReadTask,
             ConnectionSignal = connectionSignal,
             Logger = _logger,
             StatusStore = _statusStore,
@@ -236,5 +278,21 @@ public sealed class PlcDeviceRuntimeBuilder
         }
 
         return bindings;
+    }
+
+    private bool IsValidRuntimeMapping(string plcCode, IoMappingEntity mapping)
+    {
+        var validation = PlcIoTypeWordLengthValidator.Validate(
+            mapping.DataType,
+            mapping.AddressCount);
+        if (validation.IsValid)
+        {
+            return true;
+        }
+
+        _logger.Error(
+            $"[PlcCode={plcCode}][TaskKey=未解析][SignalKey={mapping.SignalKey}] "
+            + $"IO 数据类型与 word 长度无效，运行时已跳过该映射：{validation.FailureCode}。");
+        return false;
     }
 }

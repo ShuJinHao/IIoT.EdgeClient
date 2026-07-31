@@ -12,13 +12,13 @@ namespace IIoT.Edge.Infrastructure.DeviceComm.Signals;
 /// <summary>
 /// 基于具体 PLC 通讯服务的 IO 扫描任务，状态上报留在基础设施层。
 /// </summary>
-public sealed class PlcIoScanTask : PlcIoScanTaskBase
+public class PlcSignalInteractionTask : PlcIoScanTaskBase
 {
     private readonly PlcConnectionStatusStore? _statusStore;
     private readonly Action<bool>? _connectionStateChanged;
     private readonly string _plcCode;
 
-    public PlcIoScanTask(
+    public PlcSignalInteractionTask(
         IPlcService plcService,
         IPlcDataStore dataStore,
         NetworkDeviceEntity deviceConfig,
@@ -89,5 +89,36 @@ public sealed class PlcIoScanTask : PlcIoScanTaskBase
     {
         _statusStore?.MarkDisconnected(DeviceId, _plcCode, DeviceName, reason);
         _connectionStateChanged?.Invoke(false);
+    }
+}
+
+/// <summary>
+/// Host API 2.0.x 兼容名称；新 runtime 使用 <see cref="PlcSignalInteractionTask"/>。
+/// </summary>
+public sealed class PlcIoScanTask : PlcSignalInteractionTask
+{
+    public PlcIoScanTask(
+        IPlcService plcService,
+        IPlcDataStore dataStore,
+        NetworkDeviceEntity deviceConfig,
+        IReadOnlyCollection<IoMappingEntity> ioMappings,
+        ILogService logger,
+        IPlcSignalBlockPlanner signalBlockPlanner,
+        PlcConnectionStatusStore? statusStore = null,
+        PlcIoRuntimePolicy? runtimePolicy = null,
+        PlcEndpoint? endpoint = null,
+        Action<bool>? connectionStateChanged = null)
+        : base(
+            plcService,
+            dataStore,
+            deviceConfig,
+            ioMappings,
+            logger,
+            signalBlockPlanner,
+            statusStore,
+            runtimePolicy,
+            endpoint,
+            connectionStateChanged)
+    {
     }
 }

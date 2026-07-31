@@ -109,6 +109,72 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
+    public void PlcRuntimeTaskBinder_ShouldSeparateOnDemandTriggersFromPeriodicAsciiExclusions()
+    {
+        var first = new TaskCandidate(
+            "Arbitrary.Alpha",
+            "第一任务",
+            [
+                new TaskRequiredSignal("Alpha.Code", "Read"),
+                new TaskRequiredSignal("Alpha.Quantity", "Read"),
+                new TaskRequiredSignal("Shared.Speed", "Read")
+            ]);
+        var second = new TaskCandidate(
+            "Arbitrary.Beta",
+            "第二任务",
+            [
+                new TaskRequiredSignal("Beta.Code", "Read"),
+                new TaskRequiredSignal("Beta.Quantity", "Read"),
+                new TaskRequiredSignal("Shared.Speed", "Read")
+            ]);
+        var sharedOnly = new TaskCandidate(
+            "Arbitrary.Shared",
+            "共享诊断任务",
+            [new TaskRequiredSignal("Shared.Speed", "Read")]);
+        ModuleIoSnapshot[] bindings =
+        [
+            ReadBinding("Alpha.Code", 1, IoMappingOptionCatalog.DataTypeAscii),
+            ReadBinding("Alpha.Quantity", 2),
+            ReadBinding("Shared.Speed", 3),
+            ReadBinding("Beta.Code", 4, IoMappingOptionCatalog.DataTypeAscii),
+            ReadBinding("Beta.Quantity", 5)
+        ];
+
+        var onDemand = PlcRuntimeTaskBinder.ResolveBusinessOnDemandReadSignalKeys(
+            [first, second, sharedOnly],
+            bindings);
+        var periodicExcluded = PlcRuntimeTaskBinder.ResolvePeriodicReadExcludedSignalKeys(
+            onDemand,
+            bindings);
+
+        Assert.Equal(
+            ["Alpha.Code", "Alpha.Quantity", "Beta.Code", "Beta.Quantity"],
+            onDemand.OrderBy(static key => key, StringComparer.OrdinalIgnoreCase));
+        Assert.Equal(
+            ["Alpha.Code", "Beta.Code"],
+            periodicExcluded.OrderBy(static key => key, StringComparer.OrdinalIgnoreCase));
+        Assert.DoesNotContain("Shared.Speed", onDemand);
+        Assert.DoesNotContain("Alpha.Quantity", periodicExcluded);
+        Assert.False(PlcRuntimeTaskBinder.CandidateRequiresPeriodicRead(first, bindings, onDemand));
+        Assert.False(PlcRuntimeTaskBinder.CandidateRequiresPeriodicRead(second, bindings, onDemand));
+        Assert.True(PlcRuntimeTaskBinder.CandidateRequiresPeriodicRead(sharedOnly, bindings, onDemand));
+        return;
+
+        static ModuleIoSnapshot ReadBinding(
+            string signalKey,
+            int sortOrder,
+            string dataType = IoMappingOptionCatalog.DataTypeUInt16)
+            => new(
+                signalKey,
+                $"D{sortOrder * 10}",
+                1,
+                dataType,
+                IoMappingOptionCatalog.DirectionRead,
+                sortOrder,
+                IoMappingOptionCatalog.CategorySingleRead);
+    }
+
+    [Fact]
     public void StartupModuleRegistrationValidator_WhenModuleIsMesOnly_ShouldNotRequireCloudUploader()
     {
         var module = new DiagnosticProcessModule("MesOnlyModule", "MesOnlyProcess", requiresCloud: false, requiresMes: true);

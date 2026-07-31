@@ -26,6 +26,7 @@ public class PlcDataStore : IPlcDataStore
                     return new PlcBuffer(readSize, writeSize, signalBindings);
                 }
 
+                existing.SetOnDemandReadCoordinator(null);
                 existing.SetSignalBindings(signalBindings);
                 return existing;
             });

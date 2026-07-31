@@ -1,11 +1,185 @@
 using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Services;
+using Microsoft.Extensions.Time.Testing;
 
 namespace IIoT.Edge.Runtime.WorkflowTests;
 
 public sealed class PlcOperationGateBehaviorTests
 {
     private static readonly TimeSpan LongTimeout = TimeSpan.FromMinutes(1);
+
+    [Fact]
+    public void SchedulingAgingInterval_ShouldClampToFiveHundredMillisecondsThroughFiveSeconds()
+    {
+        Assert.Equal(
+            TimeSpan.FromMilliseconds(500),
+            PlcOperationSchedulingContext.ClampAgingInterval(TimeSpan.FromMilliseconds(1)));
+        Assert.Equal(
+            TimeSpan.FromSeconds(2),
+            PlcOperationSchedulingContext.ClampAgingInterval(TimeSpan.FromSeconds(2)));
+        Assert.Equal(
+            TimeSpan.FromSeconds(5),
+            PlcOperationSchedulingContext.ClampAgingInterval(TimeSpan.FromMinutes(1)));
+    }
+
+    [Fact]
+    public async Task QueuedOperations_ShouldHonorPriorityAndFifoWithinSameLevel()
+    {
+        var gate = new PlcOperationGate("FakePLC", LongTimeout, LongTimeout);
+        var activeStarted = NewCompletion();
+        var activeCompletion = NewCompletion<int>();
+        var executionOrder = new List<string>();
+        var executionSync = new object();
+
+        var active = gate.ExecuteAsync(
+            "Active",
+            _ =>
+            {
+                activeStarted.TrySetResult();
+                return activeCompletion.Task;
+            },
+            LongTimeout,
+            static () => Task.CompletedTask,
+            static _ => Task.CompletedTask,
+            TestContext.Current.CancellationToken);
+        await activeStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+
+        var periodic = Queue(PlcOperationPriority.Periodic, "Periodic");
+        var businessFirst = Queue(PlcOperationPriority.BusinessOnDemand, "Business-1");
+        var businessSecond = Queue(PlcOperationPriority.BusinessOnDemand, "Business-2");
+        var interactive = Queue(PlcOperationPriority.Interactive, "Interactive");
+
+        activeCompletion.TrySetResult(0);
+        await Task.WhenAll(active, periodic, businessFirst, businessSecond, interactive)
+            .WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            ["Interactive", "Business-1", "Business-2", "Periodic"],
+            executionOrder);
+        await gate.DisposeAsync(static () => Task.CompletedTask);
+        return;
+
+        Task<int> Queue(PlcOperationPriority priority, string operationName)
+        {
+            using var scheduling = PlcOperationSchedulingContext.Push(
+                priority,
+                TimeSpan.FromSeconds(1));
+            return gate.ExecuteAsync(
+                operationName,
+                _ =>
+                {
+                    lock (executionSync)
+                    {
+                        executionOrder.Add(operationName);
+                    }
+
+                    return Task.FromResult(0);
+                },
+                LongTimeout,
+                static () => Task.CompletedTask,
+                static _ => Task.CompletedTask,
+                TestContext.Current.CancellationToken);
+        }
+    }
+
+    [Fact]
+    public async Task PeriodicWaiter_ShouldAgeToInteractiveAndAvoidStarvation()
+    {
+        var timeProvider = new FakeTimeProvider();
+        var gate = new PlcOperationGate("FakePLC", LongTimeout, LongTimeout, timeProvider);
+        var activeStarted = NewCompletion();
+        var activeCompletion = NewCompletion<int>();
+        var executionOrder = new List<string>();
+
+        var active = gate.ExecuteAsync(
+            "Active",
+            _ =>
+            {
+                activeStarted.TrySetResult();
+                return activeCompletion.Task;
+            },
+            LongTimeout,
+            static () => Task.CompletedTask,
+            static _ => Task.CompletedTask,
+            TestContext.Current.CancellationToken);
+        await activeStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+
+        Task<int> periodic;
+        using (PlcOperationSchedulingContext.Push(
+                   PlcOperationPriority.Periodic,
+                   TimeSpan.FromMilliseconds(500)))
+        {
+            periodic = Queue("Periodic");
+        }
+
+        timeProvider.Advance(TimeSpan.FromSeconds(1));
+        var interactive = new List<Task<int>>();
+        for (var index = 1; index <= 3; index++)
+        {
+            using var scheduling = PlcOperationSchedulingContext.Push(
+                PlcOperationPriority.Interactive,
+                TimeSpan.FromMilliseconds(500));
+            interactive.Add(Queue($"Interactive-{index}"));
+        }
+
+        activeCompletion.TrySetResult(0);
+        await Task.WhenAll([active, periodic, .. interactive])
+            .WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            ["Periodic", "Interactive-1", "Interactive-2", "Interactive-3"],
+            executionOrder);
+        await gate.DisposeAsync(static () => Task.CompletedTask);
+        return;
+
+        Task<int> Queue(string operationName)
+            => gate.ExecuteAsync(
+                operationName,
+                _ =>
+                {
+                    executionOrder.Add(operationName);
+                    return Task.FromResult(0);
+                },
+                LongTimeout,
+                static () => Task.CompletedTask,
+                static _ => Task.CompletedTask,
+                TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task DifferentPlcGates_ShouldExecuteInParallel()
+    {
+        var firstGate = new PlcOperationGate("PLC-1", LongTimeout, LongTimeout);
+        var secondGate = new PlcOperationGate("PLC-2", LongTimeout, LongTimeout);
+        var release = NewCompletion();
+        var firstStarted = NewCompletion();
+        var secondStarted = NewCompletion();
+
+        var first = Start(firstGate, firstStarted);
+        var second = Start(secondGate, secondStarted);
+        await Task.WhenAll(firstStarted.Task, secondStarted.Task)
+            .WaitAsync(TestContext.Current.CancellationToken);
+
+        release.TrySetResult();
+        await Task.WhenAll(first, second).WaitAsync(TestContext.Current.CancellationToken);
+        await firstGate.DisposeAsync(static () => Task.CompletedTask);
+        await secondGate.DisposeAsync(static () => Task.CompletedTask);
+        return;
+
+        Task<int> Start(PlcOperationGate gate, TaskCompletionSource started)
+            => gate.ExecuteAsync(
+                "Read",
+                async _ =>
+                {
+                    started.TrySetResult();
+                    await release.Task.ConfigureAwait(false);
+                    return 0;
+                },
+                LongTimeout,
+                static () => Task.CompletedTask,
+                static _ => Task.CompletedTask,
+                TestContext.Current.CancellationToken);
+    }
 
     [Fact]
     public async Task CallerCancellation_WhenAbortThrows_ShouldObserveProtocolBeforeQuarantine()

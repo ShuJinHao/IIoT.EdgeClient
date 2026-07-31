@@ -32,12 +32,16 @@ public sealed class PlcRuntimeTaskPlanEntry
 public sealed class PlcRuntimeTaskPlan
 {
     private readonly IReadOnlyDictionary<string, PlcRuntimeTaskPlanEntry> _taskEntries;
+    private readonly IReadOnlySet<string> _businessOnDemandReadSignalKeys;
+    private readonly IReadOnlySet<string> _periodicReadExcludedSignalKeys;
 
     public PlcRuntimeTaskPlan(
         int networkDeviceId,
         string plcCode,
         string deviceName,
-        IEnumerable<KeyValuePair<string, PlcRuntimeTaskPlanEntry>> taskEntries)
+        IEnumerable<KeyValuePair<string, PlcRuntimeTaskPlanEntry>> taskEntries,
+        IEnumerable<string>? businessOnDemandReadSignalKeys = null,
+        IEnumerable<string>? periodicReadExcludedSignalKeys = null)
     {
         if (networkDeviceId <= 0)
         {
@@ -69,6 +73,21 @@ public sealed class PlcRuntimeTaskPlan
         }
 
         _taskEntries = normalized;
+        _businessOnDemandReadSignalKeys = NormalizeSignalKeys(
+            businessOnDemandReadSignalKeys);
+        _periodicReadExcludedSignalKeys = NormalizeSignalKeys(
+            periodicReadExcludedSignalKeys);
+        if (!_periodicReadExcludedSignalKeys.IsSubsetOf(_businessOnDemandReadSignalKeys))
+        {
+            throw new InvalidOperationException(
+                $"PLC“{PlcCode}”周期排除信号必须属于业务按需读取信号集合。");
+        }
+
+        static IReadOnlySet<string> NormalizeSignalKeys(IEnumerable<string>? signalKeys)
+            => (signalKeys ?? [])
+            .Where(static key => !string.IsNullOrWhiteSpace(key))
+            .Select(static key => key.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     public int NetworkDeviceId { get; }
@@ -79,15 +98,25 @@ public sealed class PlcRuntimeTaskPlan
 
     public IReadOnlyCollection<string> TaskKeys => _taskEntries.Keys.ToArray();
 
+    public IReadOnlySet<string> BusinessOnDemandReadSignalKeys
+        => _businessOnDemandReadSignalKeys;
+
+    public IReadOnlySet<string> PeriodicReadExcludedSignalKeys
+        => _periodicReadExcludedSignalKeys;
+
     public static PlcRuntimeTaskPlan Empty(
         int networkDeviceId,
         string plcCode,
-        string deviceName)
+        string deviceName,
+        IEnumerable<string>? businessOnDemandReadSignalKeys = null,
+        IEnumerable<string>? periodicReadExcludedSignalKeys = null)
         => new(
             networkDeviceId,
             plcCode,
             deviceName,
-            Array.Empty<KeyValuePair<string, PlcRuntimeTaskPlanEntry>>());
+            Array.Empty<KeyValuePair<string, PlcRuntimeTaskPlanEntry>>(),
+            businessOnDemandReadSignalKeys,
+            periodicReadExcludedSignalKeys);
 
     public PlcRuntimeTaskPlanEntry GetRequiredEntry(string taskKey)
     {

@@ -102,7 +102,8 @@ public sealed record PlcTaskBindingValidationResult(
 public enum PlcTaskBindingValidationIssueType
 {
     MissingRequiredSignal,
-    UnsupportedDeviceModel
+    UnsupportedDeviceModel,
+    InvalidIoTypeWordLength
 }
 
 public sealed record PlcTaskBindingValidationIssue(
