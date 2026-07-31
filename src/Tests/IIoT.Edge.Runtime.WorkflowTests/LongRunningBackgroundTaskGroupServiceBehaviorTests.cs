@@ -139,9 +139,20 @@ public sealed class LongRunningBackgroundTaskGroupServiceBehaviorTests
             },
             status);
         await coordinator.StartAsync(TestContext.Current.CancellationToken);
+        var recoveredStatusPublished = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        status.Changed += (_, snapshot) =>
+        {
+            if (snapshot.ServiceName == task.TaskName
+                && snapshot.State == BackgroundServiceRuntimeState.Running)
+            {
+                recoveredStatusPublished.TrySetResult();
+            }
+        };
 
         task.CompleteFirstInvocation();
         await task.SecondInvocationStarted.WaitAsync(TestContext.Current.CancellationToken);
+        await recoveredStatusPublished.Task.WaitAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(2, task.InvocationCount);
         Assert.Equal(1, siblingTask.InvocationCount);
