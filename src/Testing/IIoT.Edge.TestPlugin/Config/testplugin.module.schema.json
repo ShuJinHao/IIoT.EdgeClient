@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:iiot:edge:module:TestPlugin:configuration:1",
+  "title": "TestPlugin module configuration",
+  "type": "object",
+  "x-moduleId": "TestPlugin",
+  "required": [ "ModuleSeed" ],
+  "properties": {
+    "ModuleSeed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "Version", "Environment" ],
+      "properties": {
+        "Version": { "type": "integer", "const": 1 },
+        "Environment": { "type": "string", "const": "Production" }
+      }
+    },
+    "DeviceSeed": {
+      "type": "object",
+      "deprecated": true
+    }
+  },
+  "additionalProperties": false
+}

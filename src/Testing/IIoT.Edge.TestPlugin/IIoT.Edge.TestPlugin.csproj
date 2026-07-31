@@ -24,9 +24,9 @@
     <None Update="plugin.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="Config\test-plugin.module.json">
+    <None Update="Config\testplugin.module.schema.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <TargetPath>Config\test-plugin.module.json</TargetPath>
+      <TargetPath>Config\testplugin.module.schema.json</TargetPath>
     </None>
   </ItemGroup>
 
@@ -51,6 +51,10 @@
     <ItemGroup>
       <FileWrites Include="@(_TestPluginCompanionCopiedFile)" />
     </ItemGroup>
+  </Target>
+
+  <Target Name="RemoveLegacyTestPluginRuntimeConfiguration" AfterTargets="Build">
+    <Delete Files="$(TargetDir)Config\test-plugin.module.json" />
   </Target>
 
 </Project>

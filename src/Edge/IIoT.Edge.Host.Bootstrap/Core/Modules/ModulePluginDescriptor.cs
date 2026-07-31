@@ -13,4 +13,13 @@ public sealed record ModulePluginDescriptor(
     string EntryTypeName,
     string PluginDirectory,
     string ManifestPath,
-    string EntryAssemblyPath);
+    string EntryAssemblyPath,
+    ModulePluginConfigurationContract? ConfigurationContract = null);
+
+public sealed record ModulePluginConfigurationContract(
+    string SchemaRelativePath,
+    string SchemaPath,
+    int SeedSchemaVersion,
+    int CurrentSeedVersion,
+    IReadOnlyList<string> SupportedEnvironments,
+    bool RequiresProductionPlan);

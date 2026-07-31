@@ -106,7 +106,7 @@ public static class DependencyInjection
         services.TryAddSingleton<IModulePluginLoader, ModulePluginLoader>();
         services.TryAddSingleton<IModulePluginCompatibilityPolicy, ModulePluginCompatibilityPolicy>();
         services.TryAddSingleton<IModuleCatalog, DirectoryModuleCatalog>();
-        services.AddSingleton<IDevelopmentSampleInitializer, DevelopmentSampleInitializer>();
+        services.AddSingleton<IModuleSeedInitializer, ModuleSeedInitializer>();
         services.AddSingleton<IStartupDiagnosticsStore, StartupDiagnosticsStore>();
         services.AddSingleton<ICloudUploadDiagnosticsStore, CloudUploadDiagnosticsStore>();
         services.AddSingleton<IMesUploadDiagnosticsStore, MesUploadDiagnosticsStore>();
@@ -218,6 +218,7 @@ public static class DependencyInjection
         services.AddSingleton<IStartupModuleRegistrationSnapshotBuilder, StartupModuleRegistrationSnapshotBuilder>();
         services.AddSingleton<IStartupDiagnosticValidator, StartupAppSettingsValidator>();
         services.AddSingleton<IStartupDiagnosticValidator, StartupModuleRegistrationValidator>();
+        services.AddSingleton<IStartupAsyncDiagnosticValidator, StartupMesConfigurationValidator>();
         services.AddSingleton<IStartupAsyncDiagnosticValidator, StartupPlcConfigurationValidator>();
         services.AddSingleton<IStartupDiagnosticsReportBuilder, StartupDiagnosticsReportBuilder>();
         services.AddSingleton<IPlcRuntimeTaskBinder, PlcRuntimeTaskBinder>();

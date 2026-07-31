@@ -61,7 +61,8 @@ public sealed class ModuleDevelopmentSeedWriterBehaviorTests
         var devices = new InMemoryRepository<NetworkDeviceEntity>();
         var mappings = new InMemoryRepository<IoMappingEntity>();
         var bindings = new InMemoryRepository<PlcTaskBindingEntity>();
-        var writer = new ModuleDevelopmentSeedWriter(new TestEdgeUnitOfWorkFactory(devices, mappings, bindings));
+        var unitOfWorkFactory = new TestEdgeUnitOfWorkFactory(devices, mappings, bindings);
+        var writer = new ModuleDevelopmentSeedWriter(unitOfWorkFactory);
         var template = Assert.Single(CreateRequest(resetBeforeImport: false).Devices);
         var request = new ModuleDevelopmentSeedRequest(
             "CP",
@@ -90,7 +91,7 @@ public sealed class ModuleDevelopmentSeedWriterBehaviorTests
     [Fact]
     public async Task ApplyAsync_WhenDeviceHasPartialConfiguration_ShouldOnlyBackfillMissingRows()
     {
-        var existingDevice = CreateDevice("PLC-Test-01", "D999", plcCode: "SITE-PLC-01");
+        var existingDevice = CreateDevice("PLC-Test-01", "D999", plcCode: "PLC-TEST-01");
         existingDevice.UpdateProtocolFrame("E3");
         var existingMapping = IoMappingEntity.Create(
             existingDevice.Id,
@@ -125,7 +126,7 @@ public sealed class ModuleDevelopmentSeedWriterBehaviorTests
         Assert.Contains(
             mappings.Items,
             static mapping => mapping.SignalKey == "TestModule.SignalB" && mapping.PlcAddress == "D200");
-        Assert.Equal("SITE-PLC-01", Assert.Single(devices.Items).PlcCode);
+        Assert.Equal("PLC-TEST-01", Assert.Single(devices.Items).PlcCode);
         Assert.Equal("E3", Assert.Single(devices.Items).ProtocolFrame);
         Assert.False(Assert.Single(bindings.Items, static binding => binding.TaskKey == "TestModule.MG1").Enabled);
         Assert.True(Assert.Single(bindings.Items, static binding => binding.TaskKey == "TestModule.MG2").Enabled);
@@ -151,7 +152,7 @@ public sealed class ModuleDevelopmentSeedWriterBehaviorTests
     }
 
     [Fact]
-    public async Task ApplyAsync_WhenResetRequested_ShouldReplaceAllHostDeviceAndMappingRows()
+    public async Task ApplyAsync_WhenResetRequested_ShouldFailBeforeOpeningTransactionAndPreserveRows()
     {
         var firstDevice = CreateDevice("PLC-Old-A", "D10");
         var secondDevice = CreateDevice("PLC-Old-B", "D20", id: 2);
@@ -162,24 +163,67 @@ public sealed class ModuleDevelopmentSeedWriterBehaviorTests
         var bindings = new InMemoryRepository<PlcTaskBindingEntity>(
             PlcTaskBindingEntity.Create(firstDevice.Id, "Old.TaskA", true, DateTimeOffset.UtcNow).WithId(12),
             PlcTaskBindingEntity.Create(secondDevice.Id, "Old.TaskB", true, DateTimeOffset.UtcNow).WithId(13));
-        var writer = new ModuleDevelopmentSeedWriter(new TestEdgeUnitOfWorkFactory(devices, mappings, bindings));
+        var unitOfWorkFactory = new TestEdgeUnitOfWorkFactory(devices, mappings, bindings);
+        var writer = new ModuleDevelopmentSeedWriter(unitOfWorkFactory);
 
-        var result = await writer.ApplyAsync(
-            CreateRequest(resetBeforeImport: true),
-            TestContext.Current.CancellationToken);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            writer.ApplyAsync(
+                CreateRequest(resetBeforeImport: true),
+                TestContext.Current.CancellationToken));
 
-        Assert.Equal(
-            new ModuleDevelopmentSeedResult(1, 2, 2, 2)
-            {
-                ImportedTaskBindingCount = 2,
-                ResetTaskBindingCount = 2
-            },
-            result);
-        Assert.Equal("PLC-Test-01", Assert.Single(devices.Items).DeviceName);
-        Assert.DoesNotContain(mappings.Items, static mapping => mapping.SignalKey.StartsWith("Old.", StringComparison.Ordinal));
+        Assert.Contains("MODULE_SEED_RESET_FORBIDDEN", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, unitOfWorkFactory.BeginCount);
+        Assert.Equal(2, devices.Items.Count);
         Assert.Equal(2, mappings.Items.Count);
-        Assert.DoesNotContain(bindings.Items, static binding => binding.TaskKey.StartsWith("Old.", StringComparison.Ordinal));
         Assert.Equal(2, bindings.Items.Count);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_WhenDeviceNameBelongsToDifferentPlcCode_ShouldFailWithoutClaimingIt()
+    {
+        var existingDevice = CreateDevice("PLC-Test-01", "D999", plcCode: "OTHER-PLC");
+        var devices = new InMemoryRepository<NetworkDeviceEntity>(existingDevice);
+        var mappings = new InMemoryRepository<IoMappingEntity>();
+        var bindings = new InMemoryRepository<PlcTaskBindingEntity>();
+        var writer = new ModuleDevelopmentSeedWriter(
+            new TestEdgeUnitOfWorkFactory(devices, mappings, bindings));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            writer.ApplyAsync(
+                CreateRequest(resetBeforeImport: false),
+                TestContext.Current.CancellationToken));
+
+        Assert.Contains("MODULE_SEED_DEVICE_NAME_CONFLICT", exception.Message, StringComparison.Ordinal);
+        Assert.Equal("OTHER-PLC", Assert.Single(devices.Items).PlcCode);
+        Assert.Empty(mappings.Items);
+        Assert.Empty(bindings.Items);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_WhenRequestRepeatsPlcCode_ShouldFailBeforeOpeningTransaction()
+    {
+        var devices = new InMemoryRepository<NetworkDeviceEntity>();
+        var mappings = new InMemoryRepository<IoMappingEntity>();
+        var bindings = new InMemoryRepository<PlcTaskBindingEntity>();
+        var unitOfWorkFactory = new TestEdgeUnitOfWorkFactory(devices, mappings, bindings);
+        var writer = new ModuleDevelopmentSeedWriter(unitOfWorkFactory);
+        var template = Assert.Single(CreateRequest(resetBeforeImport: false).Devices);
+        var request = new ModuleDevelopmentSeedRequest(
+            "TestModule",
+            ResetBeforeImport: false,
+            [
+                template,
+                template with { DeviceName = "PLC-Test-02", PlcCode = "plc-test-01" }
+            ]);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            writer.ApplyAsync(request, TestContext.Current.CancellationToken));
+
+        Assert.Contains("MODULE_SEED_PLC_CODE_DUPLICATE", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, unitOfWorkFactory.BeginCount);
+        Assert.Empty(devices.Items);
+        Assert.Empty(mappings.Items);
+        Assert.Empty(bindings.Items);
     }
 
     private static ModuleDevelopmentSeedRequest CreateRequest(bool resetBeforeImport)

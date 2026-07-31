@@ -24,6 +24,11 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
     {
         PropertyNameCaseInsensitive = true
     };
+    private static readonly JsonDocumentOptions SchemaJsonOptions = new()
+    {
+        AllowTrailingCommas = false,
+        CommentHandling = JsonCommentHandling.Disallow
+    };
 
     private readonly IModulePluginLoader _modulePluginLoader;
     private readonly IModulePluginCompatibilityPolicy _compatibilityPolicy;
@@ -330,6 +335,9 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
                 $"插件清单“{physicalManifestPath}”无法解析。");
 
         ValidateManifest(manifest, physicalManifestPath);
+        var configurationContract = LoadModuleConfigurationContract(
+            physicalPluginDirectory,
+            manifest);
 
         var entryAssemblyPath = ResolveEntryAssemblyPath(physicalPluginDirectory, manifest.EntryAssembly, manifest.ModuleId);
         if (!File.Exists(entryAssemblyPath))
@@ -355,7 +363,137 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
             manifest.EntryType,
             physicalPluginDirectory,
             physicalManifestPath,
-            entryAssemblyPath);
+            entryAssemblyPath,
+            configurationContract);
+    }
+
+    private static ModulePluginConfigurationContract? LoadModuleConfigurationContract(
+        string pluginDirectory,
+        ModulePluginManifest manifest)
+    {
+        var hasFormalConfigurationContract =
+            !string.IsNullOrWhiteSpace(manifest.ConfigurationSchema)
+            || manifest.ModuleSeed is not null
+            || manifest.Capabilities is not null;
+        if (!hasFormalConfigurationContract)
+        {
+            return null;
+        }
+
+        var expectedSchemaRelativePath =
+            $"Config/{manifest.ModuleId.ToLowerInvariant()}.module.schema.json";
+        if (!string.Equals(
+                manifest.ConfigurationSchema?.Trim(),
+                expectedSchemaRelativePath,
+                StringComparison.Ordinal))
+        {
+            throw new ModulePluginManifestException(
+                $"插件“{manifest.ModuleId}”的 configurationSchema 必须为“{expectedSchemaRelativePath}”。");
+        }
+
+        var moduleSeed = manifest.ModuleSeed
+            ?? throw new ModulePluginManifestException(
+                $"插件“{manifest.ModuleId}”缺少正式 moduleSeed 元数据。");
+        var supportedEnvironments = moduleSeed.SupportedEnvironments
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Select(static value => value.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (moduleSeed.SchemaVersion != 1
+            || moduleSeed.CurrentVersion <= 0
+            || supportedEnvironments.Length == 0
+            || moduleSeed.NewDevicesEnabled is not false
+            || moduleSeed.MissingTaskBindingsEnabled is not true
+            || moduleSeed.ResetBeforeImport is not false)
+        {
+            throw new ModulePluginManifestException(
+                $"插件“{manifest.ModuleId}”的 moduleSeed 必须使用 schema v1、正版本、禁用新设备、启用缺失任务绑定且禁止重置。");
+        }
+
+        var requiresProductionPlan = manifest.Capabilities?.RequiresProductionPlan
+            ?? throw new ModulePluginManifestException(
+                $"插件“{manifest.ModuleId}”缺少 capabilities.requiresProductionPlan。");
+        var lexicalSchemaPath = Path.GetFullPath(
+            Path.Combine(pluginDirectory, expectedSchemaRelativePath));
+        if (!File.Exists(lexicalSchemaPath))
+        {
+            throw new ModulePluginManifestException(
+                $"插件“{manifest.ModuleId}”的正式配置 schema 不存在：{expectedSchemaRelativePath}。");
+        }
+
+        var physicalSchemaPath = PluginPathBoundary.ResolveExistingPhysicalPath(lexicalSchemaPath);
+        if (!PluginPathBoundary.IsWithin(pluginDirectory, physicalSchemaPath))
+        {
+            throw new ModulePluginManifestException(
+                $"插件“{manifest.ModuleId}”的配置 schema 真实路径越出 staged 目录。");
+        }
+
+        using var schemaDocument = JsonDocument.Parse(
+            File.ReadAllText(physicalSchemaPath),
+            SchemaJsonOptions);
+        var schema = schemaDocument.RootElement;
+        if (schema.ValueKind != JsonValueKind.Object
+            || !schema.TryGetProperty("x-moduleId", out var schemaModuleId)
+            || !string.Equals(
+                schemaModuleId.GetString(),
+                manifest.ModuleId,
+                StringComparison.Ordinal)
+            || !SchemaRequiresModuleSeed(schema)
+            || !TryReadSeedSchemaConstants(
+                schema,
+                out var schemaVersion,
+                out var schemaEnvironment)
+            || schemaVersion != moduleSeed.CurrentVersion
+            || !supportedEnvironments.Contains(
+                schemaEnvironment,
+                StringComparer.OrdinalIgnoreCase)
+            || !schema.TryGetProperty("properties", out var properties)
+            || !properties.TryGetProperty("DeviceSeed", out var legacyDeviceSeed)
+            || !legacyDeviceSeed.TryGetProperty("deprecated", out var deprecated)
+            || deprecated.ValueKind != JsonValueKind.True)
+        {
+            throw new ModulePluginManifestException(
+                $"插件“{manifest.ModuleId}”的正式配置 schema 与 moduleSeed 元数据不一致。");
+        }
+
+        return new ModulePluginConfigurationContract(
+            expectedSchemaRelativePath,
+            physicalSchemaPath,
+            moduleSeed.SchemaVersion,
+            moduleSeed.CurrentVersion,
+            supportedEnvironments,
+            requiresProductionPlan);
+    }
+
+    private static bool SchemaRequiresModuleSeed(JsonElement schema)
+        => schema.TryGetProperty("required", out var required)
+           && required.ValueKind == JsonValueKind.Array
+           && required.EnumerateArray().Any(static item =>
+               item.ValueKind == JsonValueKind.String
+               && string.Equals(item.GetString(), "ModuleSeed", StringComparison.Ordinal));
+
+    private static bool TryReadSeedSchemaConstants(
+        JsonElement schema,
+        out int version,
+        out string environment)
+    {
+        version = 0;
+        environment = string.Empty;
+        if (!schema.TryGetProperty("properties", out var properties)
+            || !properties.TryGetProperty("ModuleSeed", out var moduleSeed)
+            || !moduleSeed.TryGetProperty("properties", out var seedProperties)
+            || !seedProperties.TryGetProperty("Version", out var versionProperty)
+            || !versionProperty.TryGetProperty("const", out var versionConstant)
+            || !versionConstant.TryGetInt32(out version)
+            || !seedProperties.TryGetProperty("Environment", out var environmentProperty)
+            || !environmentProperty.TryGetProperty("const", out var environmentConstant)
+            || environmentConstant.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+
+        environment = environmentConstant.GetString() ?? string.Empty;
+        return environment.Length > 0;
     }
 
     private static string ResolveEntryAssemblyPath(

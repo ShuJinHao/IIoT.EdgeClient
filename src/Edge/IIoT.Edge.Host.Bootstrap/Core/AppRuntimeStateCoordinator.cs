@@ -16,18 +16,18 @@ public sealed class AppRuntimeStateCoordinator : IAppRuntimeStateCoordinator
 {
     private readonly IProductionContextStore _contextStore;
     private readonly IRecipeService _recipeService;
-    private readonly IDevelopmentSampleInitializer _developmentSampleInitializer;
+    private readonly IModuleSeedInitializer _moduleSeedInitializer;
     private readonly ILogService _logger;
 
     public AppRuntimeStateCoordinator(
         IProductionContextStore contextStore,
         IRecipeService recipeService,
-        IDevelopmentSampleInitializer developmentSampleInitializer,
+        IModuleSeedInitializer moduleSeedInitializer,
         ILogService logger)
     {
         _contextStore = contextStore;
         _recipeService = recipeService;
-        _developmentSampleInitializer = developmentSampleInitializer;
+        _moduleSeedInitializer = moduleSeedInitializer;
         _logger = logger;
     }
 
@@ -35,7 +35,9 @@ public sealed class AppRuntimeStateCoordinator : IAppRuntimeStateCoordinator
     {
         _contextStore.LoadFromFile();
         _recipeService.LoadFromFile();
-        await _developmentSampleInitializer.EnsureRuntimeSamplesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _moduleSeedInitializer
+            .RestoreRuntimeStateAsync(cancellationToken)
+            .ConfigureAwait(false);
         _logger.Info("[生命周期] 运行时持久化状态恢复完成。");
     }
 

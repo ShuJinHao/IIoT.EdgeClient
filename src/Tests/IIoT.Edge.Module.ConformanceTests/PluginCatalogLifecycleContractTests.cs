@@ -180,6 +180,106 @@ public sealed class PluginCatalogLifecycleContractTests
     }
 
     [Fact]
+    public void DiscoverModules_WhenFormalModuleSeedContractIsValid_ShouldExposeImmutableMetadata()
+    {
+        var pluginRoot = CreatePluginRoot("TestPlugin");
+        try
+        {
+            var discovery = CreateModuleCatalog().DiscoverModules(pluginRoot);
+
+            Assert.Empty(discovery.Issues);
+            var contract = Assert.IsType<ModulePluginConfigurationContract>(
+                Assert.Single(discovery.Modules).ConfigurationContract);
+            Assert.Equal("Config/testplugin.module.schema.json", contract.SchemaRelativePath);
+            Assert.Equal(1, contract.SeedSchemaVersion);
+            Assert.Equal(1, contract.CurrentSeedVersion);
+            Assert.Equal(["Production"], contract.SupportedEnvironments);
+            Assert.False(contract.RequiresProductionPlan);
+        }
+        finally
+        {
+            ContractTestPathHelper.DeleteDirectory(pluginRoot);
+        }
+    }
+
+    [Fact]
+    public void DiscoverModules_WhenFormalModuleSeedAllowsReset_ShouldRejectManifest()
+    {
+        var pluginRoot = CreatePluginRoot("TestPlugin");
+        try
+        {
+            var manifestPath = Path.Combine(pluginRoot, "TestPlugin", "plugin.json");
+            var manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
+            manifest["moduleSeed"]!["resetBeforeImport"] = true;
+            File.WriteAllText(manifestPath, manifest.ToJsonString(new() { WriteIndented = true }));
+
+            var discovery = CreateModuleCatalog().DiscoverModules(pluginRoot);
+
+            Assert.Empty(discovery.Modules);
+            Assert.Equal("PLUGIN_MANIFEST_INVALID", Assert.Single(discovery.Issues).Code);
+        }
+        finally
+        {
+            ContractTestPathHelper.DeleteDirectory(pluginRoot);
+        }
+    }
+
+    [Fact]
+    public void DiscoverModules_WhenConfigurationSchemaIdentityDoesNotMatch_ShouldRejectManifest()
+    {
+        var pluginRoot = CreatePluginRoot("TestPlugin");
+        try
+        {
+            var schemaPath = Path.Combine(
+                pluginRoot,
+                "TestPlugin",
+                "Config",
+                "testplugin.module.schema.json");
+            var schema = JsonNode.Parse(File.ReadAllText(schemaPath))!.AsObject();
+            schema["x-moduleId"] = "OtherPlugin";
+            File.WriteAllText(schemaPath, schema.ToJsonString(new() { WriteIndented = true }));
+
+            var discovery = CreateModuleCatalog().DiscoverModules(pluginRoot);
+
+            Assert.Empty(discovery.Modules);
+            Assert.Equal("PLUGIN_MANIFEST_INVALID", Assert.Single(discovery.Issues).Code);
+        }
+        finally
+        {
+            ContractTestPathHelper.DeleteDirectory(pluginRoot);
+        }
+    }
+
+    [Fact]
+    public void DiscoverModules_WhenConfigurationSchemaSymlinkEscapesStagedDirectory_ShouldRejectManifest()
+    {
+        var pluginRoot = CreatePluginRoot("TestPlugin");
+        try
+        {
+            var schemaPath = Path.Combine(
+                pluginRoot,
+                "TestPlugin",
+                "Config",
+                "testplugin.module.schema.json");
+            var outsideSchemaPath = Path.Combine(pluginRoot, "outside.module.schema.json");
+            File.Copy(schemaPath, outsideSchemaPath, overwrite: true);
+            File.Delete(schemaPath);
+            File.CreateSymbolicLink(schemaPath, outsideSchemaPath);
+
+            var discovery = CreateModuleCatalog().DiscoverModules(pluginRoot);
+
+            Assert.Empty(discovery.Modules);
+            var issue = Assert.Single(discovery.Issues);
+            Assert.Equal("PLUGIN_MANIFEST_INVALID", issue.Code);
+            Assert.Contains("staged", issue.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            ContractTestPathHelper.DeleteDirectory(pluginRoot);
+        }
+    }
+
+    [Fact]
     public void CreateEnabledModules_WhenHostApiVersionDoesNotMatch_ShouldReportCompatibilityIssue()
     {
         var pluginRoot = CreatePluginRoot("TestPlugin");
@@ -289,6 +389,26 @@ public sealed class PluginCatalogLifecycleContractTests
             var manifestPath = Path.Combine(pluginRoot, "TestPlugin", "plugin.json");
             var manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
             manifest[manifestProperty] = manifestValue;
+            if (manifestProperty == "moduleId")
+            {
+                var originalSchemaPath = Path.Combine(
+                    pluginRoot,
+                    "TestPlugin",
+                    "Config",
+                    "testplugin.module.schema.json");
+                var renamedSchemaPath = Path.Combine(
+                    pluginRoot,
+                    "TestPlugin",
+                    "Config",
+                    "manifestalias.module.schema.json");
+                var schema = JsonNode.Parse(File.ReadAllText(originalSchemaPath))!.AsObject();
+                schema["x-moduleId"] = manifestValue;
+                File.WriteAllText(
+                    renamedSchemaPath,
+                    schema.ToJsonString(new() { WriteIndented = true }));
+                File.Delete(originalSchemaPath);
+                manifest["configurationSchema"] = "Config/manifestalias.module.schema.json";
+            }
             File.WriteAllText(manifestPath, manifest.ToJsonString(new() { WriteIndented = true }));
             var catalog = CreateModuleCatalog();
             var discovery = catalog.DiscoverModules(pluginRoot);

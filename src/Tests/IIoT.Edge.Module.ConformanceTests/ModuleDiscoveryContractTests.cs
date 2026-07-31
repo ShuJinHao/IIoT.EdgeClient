@@ -201,7 +201,7 @@ public sealed class ModuleDiscoveryContractTests
     {
         AssertStagedModuleLayout(
             "TestPlugin",
-            "test-plugin.module.json",
+            "testplugin.module.schema.json",
             "IIoT.Edge.TestPlugin.dll");
 
         var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("TestPlugin");
@@ -235,6 +235,10 @@ public sealed class ModuleDiscoveryContractTests
         Assert.True(File.Exists(Path.Combine(runtimeDirectory, entryAssemblyName)));
         Assert.True(File.Exists(Path.Combine(runtimeDirectory, "Config", configFileName)));
         Assert.Empty(Directory.GetFiles(runtimeDirectory, "*.module.json", SearchOption.TopDirectoryOnly));
+        Assert.Empty(Directory.GetFiles(
+            Path.Combine(runtimeDirectory, "Config"),
+            "*.module.json",
+            SearchOption.TopDirectoryOnly));
         Assert.Empty(Directory.GetFiles(runtimeDirectory, "*.axaml", SearchOption.TopDirectoryOnly));
 
         if (hasLanguageResources)

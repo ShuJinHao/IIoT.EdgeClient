@@ -6,7 +6,7 @@ using IIoT.Edge.SharedKernel.Repository;
 namespace IIoT.Edge.Application.Modules.Samples;
 
 /// <summary>
-/// 宿主侧开发模板物化器。插件只提交 DTO，聚合创建、事务和持久化始终归宿主。
+/// 宿主侧正式 ModuleSeed 物化器。插件只提交 DTO，聚合创建、事务和持久化始终归宿主。
 /// </summary>
 public sealed class ModuleDevelopmentSeedWriter : IModuleDevelopmentSeedWriter
 {
@@ -21,54 +21,18 @@ public sealed class ModuleDevelopmentSeedWriter : IModuleDevelopmentSeedWriter
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.ModuleId);
+        if (request.ResetBeforeImport)
+        {
+            throw new InvalidOperationException(
+                "MODULE_SEED_RESET_FORBIDDEN：正式播种只允许补缺失项，禁止删除或重置现场配置。");
+        }
+
+        ValidateStableIdentities(request);
 
         await using var unitOfWork = await _unitOfWorkFactory.BeginAsync(cancellationToken).ConfigureAwait(false);
         var devices = unitOfWork.Repository<NetworkDeviceEntity>();
         var mappings = unitOfWork.Repository<IoMappingEntity>();
         var taskBindings = unitOfWork.Repository<PlcTaskBindingEntity>();
-
-        var resetDeviceCount = 0;
-        var resetMappingCount = 0;
-        var resetTaskBindingCount = 0;
-        if (request.ResetBeforeImport)
-        {
-            var existingDevices = await devices.GetListAsync(_ => true, cancellationToken).ConfigureAwait(false);
-            var deviceIds = existingDevices.Select(static device => device.Id).ToHashSet();
-            var existingMappings = deviceIds.Count == 0
-                ? []
-                : await mappings.GetListAsync(
-                    mapping => deviceIds.Contains(mapping.NetworkDeviceId),
-                    cancellationToken).ConfigureAwait(false);
-            var existingTaskBindings = deviceIds.Count == 0
-                ? []
-                : await taskBindings.GetListAsync(
-                    binding => deviceIds.Contains(binding.NetworkDeviceId),
-                    cancellationToken).ConfigureAwait(false);
-
-            foreach (var binding in existingTaskBindings)
-            {
-                taskBindings.Delete(binding);
-            }
-
-            foreach (var mapping in existingMappings)
-            {
-                mappings.Delete(mapping);
-            }
-
-            foreach (var device in existingDevices)
-            {
-                devices.Delete(device);
-            }
-
-            resetDeviceCount = existingDevices.Count;
-            resetMappingCount = existingMappings.Count;
-            resetTaskBindingCount = existingTaskBindings.Count;
-            if (resetDeviceCount > 0 || resetMappingCount > 0 || resetTaskBindingCount > 0)
-            {
-                // 仍处于同一事务；先物化删除，避免同 PlcCode 重建时撞唯一约束。
-                await unitOfWork.FlushAsync(cancellationToken).ConfigureAwait(false);
-            }
-        }
 
         var importedDeviceCount = 0;
         var importedMappingCount = 0;
@@ -133,16 +97,15 @@ public sealed class ModuleDevelopmentSeedWriter : IModuleDevelopmentSeedWriter
             importedTaskBindingCount += missingTaskBindings.Length;
         }
 
-        // 本请求唯一 durable commit；FlushAsync 只在同一事务中物化删除/identity。
+        // 本请求唯一 durable commit；FlushAsync 只在同一事务中物化新设备 identity。
         await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
         return new ModuleDevelopmentSeedResult(
             importedDeviceCount,
             importedMappingCount,
-            resetDeviceCount,
-            resetMappingCount)
+            0,
+            0)
         {
-            ImportedTaskBindingCount = importedTaskBindingCount,
-            ResetTaskBindingCount = resetTaskBindingCount
+            ImportedTaskBindingCount = importedTaskBindingCount
         };
     }
 
@@ -161,11 +124,42 @@ public sealed class ModuleDevelopmentSeedWriter : IModuleDevelopmentSeedWriter
             {
                 return byPlcCode;
             }
+
+            var nameConflict = await devices.GetAsync(
+                candidate => candidate.DeviceName == seed.DeviceName,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (nameConflict is not null)
+            {
+                throw new InvalidOperationException(
+                    "MODULE_SEED_DEVICE_NAME_CONFLICT：设备名称已属于其它 PlcCode，禁止按名称认领或覆盖。");
+            }
+
+            // 正式 PlcCode 播种不允许按可变 DeviceName 认领现场设备。
+            return null;
         }
 
+        // Host API 2.0.x 的无 PlcCode 旧调用保留二进制兼容，仅此路径允许名称回退。
         return await devices.GetAsync(
             candidate => candidate.DeviceName == seed.DeviceName,
             cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private static void ValidateStableIdentities(ModuleDevelopmentSeedRequest request)
+    {
+        var plcCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var seed in request.Devices)
+        {
+            if (string.IsNullOrWhiteSpace(seed.PlcCode))
+            {
+                continue;
+            }
+
+            if (!plcCodes.Add(seed.PlcCode.Trim()))
+            {
+                throw new InvalidOperationException(
+                    $"MODULE_SEED_PLC_CODE_DUPLICATE：模块“{request.ModuleId}”重复声明 PlcCode。");
+            }
+        }
     }
 
     private static string BuildMappingIdentity(string signalKey, string direction)

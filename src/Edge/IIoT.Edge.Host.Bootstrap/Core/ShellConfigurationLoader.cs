@@ -116,16 +116,7 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
                 ? packagedMachineProfilePath
                 : null;
 
-        var configuration = new ConfigurationBuilder();
-        foreach (var pluginDefaults in FindPluginDefaultConfigurations(
-                     normalizedBaseDirectory,
-                     bootstrapConfiguration,
-                     issues))
-        {
-            configuration.AddInMemoryCollection(pluginDefaults);
-        }
-
-        configuration
+        var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(baseSettings)
             .AddInMemoryCollection(environmentSettings)
             .AddInMemoryCollection(packagedProfileSettings)
@@ -141,9 +132,16 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
                 ["Shell:ExternalMachineProfilePath"] = externalMachineProfilePath,
                 ["Shell:ExternalMachineProfileLoaded"] = externalMachineProfileLoaded.ToString()
             });
+        var configuredRoot = configuration.Build();
+        var pluginManifestMetadata = InspectPluginConfigurationContracts(
+            normalizedBaseDirectory,
+            configuredRoot,
+            issues);
+        configuration.AddInMemoryCollection(pluginManifestMetadata);
+        var configurationRoot = configuration.Build();
 
         return new ShellConfigurationLoadResult(
-            configuration.Build(),
+            configurationRoot,
             environmentName,
             machineProfile,
             machineProfileFileName,
@@ -171,7 +169,7 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
         return "Production";
     }
 
-    private IReadOnlyList<IReadOnlyDictionary<string, string?>> FindPluginDefaultConfigurations(
+    private IReadOnlyDictionary<string, string?> InspectPluginConfigurationContracts(
         string baseDirectory,
         IConfiguration configuration,
         ICollection<StartupDiagnosticIssue> issues)
@@ -184,7 +182,7 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
             .ToHashSet(StringComparer.OrdinalIgnoreCase)
             ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (enabledModuleIds.Count == 0)
-            return [];
+            return new Dictionary<string, string?>();
 
         var configuredRoots = configuration
             .GetSection("Modules:PluginRoots")
@@ -210,7 +208,9 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
         if (pluginRoots.Count == 0)
             pluginRoots.Add(EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(baseDirectory));
 
-        var result = new List<IReadOnlyDictionary<string, string?>>();
+        var result = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        var discoveredConfigurationOwners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var duplicateConfigurationOwners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var pluginRoot in pluginRoots.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             if (!Directory.Exists(pluginRoot))
@@ -229,42 +229,67 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
             foreach (var descriptor in discovery.Modules
                          .Where(descriptor => enabledModuleIds.Contains(descriptor.ModuleId)))
             {
-                foreach (var configPath in EnumeratePluginDefaultFiles(descriptor, issues))
+                foreach (var configPath in EnumerateLegacyRuntimeConfigurationFiles(descriptor, issues))
                 {
-                    var settings = ReadJsonSettings(
-                        configPath,
-                        "PLUGIN_DEFAULT_CONFIG_INVALID",
-                        required: true,
-                        issues);
-                    var requiredPrefix = $"Modules:{descriptor.ModuleId}";
-                    var scopedSettings = settings
-                        .Where(pair => pair.Key.StartsWith(
-                            requiredPrefix + ":",
-                            StringComparison.OrdinalIgnoreCase))
-                        .ToDictionary(
-                            static pair => pair.Key,
-                            static pair => pair.Value,
-                            StringComparer.OrdinalIgnoreCase);
-                    if (settings.Keys.Any(key => !key.StartsWith(
-                            requiredPrefix + ":",
-                            StringComparison.OrdinalIgnoreCase)))
-                    {
-                        issues.Add(StartupDiagnosticIssueFactory.Create(
-                            "PLUGIN_DEFAULT_SCOPE_REJECTED",
-                            $"插件“{descriptor.ModuleId}”的默认配置包含宿主或其他插件键，越界键已忽略：{configPath}",
-                            descriptor.ModuleId));
-                    }
-
-                    if (scopedSettings.Count > 0)
-                        result.Add(scopedSettings);
+                    issues.Add(StartupDiagnosticIssueFactory.Create(
+                        "PLUGIN_RUNTIME_CONFIG_IGNORED",
+                        $"插件“{descriptor.ModuleId}”携带旧 *.module.json，Host 不再将其作为运行配置源：{configPath}",
+                        descriptor.ModuleId));
                 }
+
+                var contract = descriptor.ConfigurationContract;
+                if (contract is null)
+                {
+                    issues.Add(StartupDiagnosticIssueFactory.Create(
+                        "PLUGIN_MODULE_CONFIGURATION_CONTRACT_MISSING",
+                        $"插件“{descriptor.ModuleId}”未声明正式 configurationSchema/moduleSeed，已继续启动但不加载任何插件默认配置。",
+                        descriptor.ModuleId));
+                    continue;
+                }
+
+                if (!discoveredConfigurationOwners.Add(descriptor.ModuleId))
+                {
+                    duplicateConfigurationOwners.Add(descriptor.ModuleId);
+                    result.Remove(
+                        $"Modules:{descriptor.ModuleId}:Capabilities:RequiresProductionPlan");
+                    issues.Add(StartupDiagnosticIssueFactory.Create(
+                        "PLUGIN_MODULE_CONFIGURATION_OWNER_DUPLICATE",
+                        $"插件“{descriptor.ModuleId}”在多个插件根目录声明正式配置 Owner，已拒绝注入不确定元数据。",
+                        descriptor.ModuleId));
+                    continue;
+                }
+
+                var configuredVersion = configuration.GetValue<int?>(
+                    $"Modules:{descriptor.ModuleId}:ModuleSeed:Version");
+                var configuredEnvironment = configuration[
+                    $"Modules:{descriptor.ModuleId}:ModuleSeed:Environment"]?.Trim();
+                if (configuredVersion != contract.CurrentSeedVersion
+                    || string.IsNullOrWhiteSpace(configuredEnvironment)
+                    || !contract.SupportedEnvironments.Contains(
+                        configuredEnvironment,
+                        StringComparer.OrdinalIgnoreCase))
+                {
+                    issues.Add(StartupDiagnosticIssueFactory.Create(
+                        "PLUGIN_MODULE_SEED_SELECTION_INVALID",
+                        $"插件“{descriptor.ModuleId}”的 ModuleSeed 选择无效；要求 v{contract.CurrentSeedVersion}/" +
+                        $"{string.Join('|', contract.SupportedEnvironments)}。",
+                        descriptor.ModuleId));
+                }
+
+                result[$"Modules:{descriptor.ModuleId}:Capabilities:RequiresProductionPlan"] =
+                    contract.RequiresProductionPlan.ToString();
             }
+        }
+
+        foreach (var duplicateModuleId in duplicateConfigurationOwners)
+        {
+            result.Remove($"Modules:{duplicateModuleId}:Capabilities:RequiresProductionPlan");
         }
 
         return result;
     }
 
-    private static IReadOnlyList<string> EnumeratePluginDefaultFiles(
+    private static IReadOnlyList<string> EnumerateLegacyRuntimeConfigurationFiles(
         ModulePluginDescriptor descriptor,
         ICollection<StartupDiagnosticIssue> issues)
     {
@@ -287,8 +312,8 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
                 if (!PluginPathBoundary.IsWithin(descriptor.PluginDirectory, physicalPath))
                 {
                     issues.Add(StartupDiagnosticIssueFactory.Create(
-                        "PLUGIN_DEFAULT_PATH_ESCAPE",
-                        $"插件“{descriptor.ModuleId}”的默认配置真实路径越出 staged 目录，已忽略：{candidate}",
+                        "PLUGIN_RUNTIME_CONFIG_PATH_ESCAPE",
+                        $"插件“{descriptor.ModuleId}”的旧运行配置真实路径越出 staged 目录，已忽略：{candidate}",
                         descriptor.ModuleId));
                     continue;
                 }
@@ -301,8 +326,8 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
         catch (Exception ex) when (StartupExceptionBoundary.IsApprovedPathFailure(ex))
         {
             issues.Add(StartupDiagnosticIssueFactory.Create(
-                "PLUGIN_DEFAULT_ENUMERATION_FAILED",
-                $"无法枚举插件“{descriptor.ModuleId}”的默认配置，已继续启动：{ex.Message}",
+                "PLUGIN_RUNTIME_CONFIG_ENUMERATION_FAILED",
+                $"无法枚举插件“{descriptor.ModuleId}”的旧运行配置，已继续启动：{ex.Message}",
                 descriptor.ModuleId));
             return [];
         }
