@@ -187,7 +187,11 @@
     <sys:String x:Key="Launcher_Status_PasswordChanged">Local password changed. Use the new password to sign in.</sys:String>
     <sys:String x:Key="Launcher_Status_PasswordChangeFailed">Local password change failed.</sys:String>
     <sys:String x:Key="Launcher_Status_LaunchSucceededFormat">Started {0}, MachineProfile = {1}.</sys:String>
+    <sys:String x:Key="Launcher_Status_LaunchSucceededWithDiagnosticsFormat">Started {0} with local diagnostics: {1}.</sys:String>
     <sys:String x:Key="Launcher_Status_LaunchFailedFormat">Failed to start {0}.</sys:String>
+    <sys:String x:Key="Launcher_StartupDiagnostics_Format">Local startup diagnostics: {0}. Use the listed repair target for affected features.</sys:String>
+    <sys:String x:Key="Launcher_Error_ShellLaunchFailedSafeFormat">Client startup failed ({0}). Review local diagnostics or logs.</sys:String>
+    <sys:String x:Key="Launcher_Error_LocalOperationFailedSafeFormat">The local operation did not complete ({0}). Review local diagnostics or logs.</sys:String>
     <sys:String x:Key="Launcher_Update_StatusInitial">Updates have not been checked.</sys:String>
     <sys:String x:Key="Launcher_Update_StatusChecking">Checking for updates...</sys:String>
     <sys:String x:Key="Launcher_Update_StatusNotConfigured">Update source is not configured.</sys:String>

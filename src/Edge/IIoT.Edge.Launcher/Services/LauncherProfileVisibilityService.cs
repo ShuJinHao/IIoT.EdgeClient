@@ -1,4 +1,3 @@
-using System.Text.Json;
 using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.SharedKernel.Configuration;
@@ -22,9 +21,13 @@ public sealed record LauncherProfileSelection(
 public sealed class LauncherProfileVisibilityService(
     string baseDirectory,
     IEdgeProfileModuleConfigurationStore moduleConfiguration,
-    ILauncherUpdateTargetFactory targetFactory) : ILauncherProfileVisibilityService
+    ILauncherUpdateTargetFactory targetFactory,
+    ILauncherEnabledPluginSelectionSource? enabledPluginSelectionSource = null)
+    : ILauncherProfileVisibilityService
 {
-    private const string EnabledPluginsFileName = "iiot-enabled-plugins.json";
+    private readonly ILauncherEnabledPluginSelectionSource _enabledPluginSelectionSource =
+        enabledPluginSelectionSource
+        ?? new LauncherEnabledPluginSelectionSource(baseDirectory);
 
     public IReadOnlyList<LauncherProfileDefinition> SelectVisibleProfiles(
         IReadOnlyList<LauncherProfileDefinition> profiles)
@@ -39,7 +42,10 @@ public sealed class LauncherProfileVisibilityService(
             return new LauncherProfileSelection(profiles, [], new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
         }
 
-        var selectedModuleIds = ReadEnabledPluginModuleIds();
+        var selectedModuleIds = _enabledPluginSelectionSource
+            .Load()
+            .ModuleIds
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (selectedModuleIds.Count == 0)
         {
             return BuildSelection(SelectMaintenanceProfiles(profiles));
@@ -52,57 +58,6 @@ public sealed class LauncherProfileVisibilityService(
         return visibleProfiles.Length > 0
             ? BuildSelection(visibleProfiles, selectedModuleIds)
             : BuildSelection(SelectMaintenanceProfiles(profiles));
-    }
-
-    private HashSet<string> ReadEnabledPluginModuleIds()
-    {
-        var path = Path.Combine(
-            EdgeClientProgramDataPaths.ResolveLauncherDirectory(baseDirectory),
-            EnabledPluginsFileName);
-        if (!File.Exists(path))
-        {
-            return [];
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(File.ReadAllText(path));
-            var root = document.RootElement;
-            if (!TryGetProperty(root, "plugins", out var plugins)
-                || plugins.ValueKind != JsonValueKind.Array)
-            {
-                return [];
-            }
-
-            var moduleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var plugin in plugins.EnumerateArray())
-            {
-                if (plugin.ValueKind != JsonValueKind.Object)
-                {
-                    continue;
-                }
-
-                var moduleId = ReadString(plugin, "moduleId");
-                if (!string.IsNullOrWhiteSpace(moduleId))
-                {
-                    moduleIds.Add(moduleId);
-                }
-            }
-
-            return moduleIds;
-        }
-        catch (JsonException)
-        {
-            return [];
-        }
-        catch (IOException)
-        {
-            return [];
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return [];
-        }
     }
 
     private bool ProfileUsesAnySelectedModule(
@@ -195,34 +150,4 @@ public sealed class LauncherProfileVisibilityService(
             .Where(profile => ReadProfileModuleIds(profile).Count == 0)
             .ToArray();
 
-    private static string? ReadString(JsonElement element, string propertyName)
-        => TryGetProperty(element, propertyName, out var value) && value.ValueKind == JsonValueKind.String
-            ? value.GetString()?.Trim()
-            : null;
-
-    private static bool TryGetProperty(JsonElement element, string propertyName, out JsonElement value)
-    {
-        if (element.ValueKind != JsonValueKind.Object)
-        {
-            value = default;
-            return false;
-        }
-
-        if (element.TryGetProperty(propertyName, out value))
-        {
-            return true;
-        }
-
-        foreach (var property in element.EnumerateObject())
-        {
-            if (string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
-            {
-                value = property.Value;
-                return true;
-            }
-        }
-
-        value = default;
-        return false;
-    }
 }

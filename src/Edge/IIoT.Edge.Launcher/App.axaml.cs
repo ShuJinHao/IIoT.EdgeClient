@@ -38,19 +38,31 @@ public partial class App : Avalonia.Application
 
     private void StartLauncher(IClassicDesktopStyleApplicationLifetime desktop)
     {
+        ServiceProvider services;
+        ILauncherStartupCoordinator startupCoordinator;
         try
         {
-            _serviceProvider = new ServiceCollection()
+            services = new ServiceCollection()
                 .AddLauncherServices(AppDomain.CurrentDomain.BaseDirectory)
                 .BuildServiceProvider();
-            _serviceProvider.GetRequiredService<IAppLanguageService>().Initialize();
-            _serviceProvider.GetRequiredService<ILauncherAccountCatalogInitializer>()
-                .EnsureCatalogExists();
-            _serviceProvider.GetRequiredService<IEdgeUpdateConfigInitializer>()
-                .EnsureConfigExists();
-            _ = TryCompleteUpdateStartup(_serviceProvider);
+            _serviceProvider = services;
+            startupCoordinator = services.GetRequiredService<ILauncherStartupCoordinator>();
+        }
+        catch (Exception ex)
+        {
+            DisposeServices();
+            EnsureLanguageResources();
+            ShowStartupError(
+                desktop,
+                CreateSafeStartupErrorMessage(ex));
+            return;
+        }
 
-            var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
+        startupCoordinator.PrepareLocalization();
+
+        try
+        {
+            var mainWindow = services.GetRequiredService<MainWindow>();
             desktop.MainWindow = mainWindow;
             mainWindow.Show();
         }
@@ -61,34 +73,18 @@ public partial class App : Avalonia.Application
             ShowStartupError(
                 desktop,
                 CreateSafeStartupErrorMessage(ex));
+            return;
         }
+
+        startupCoordinator.Initialize();
     }
 
     internal static bool TryCompleteUpdateStartup(IServiceProvider services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        using var recoveryLease = services
-            .GetRequiredService<ILauncherUpdateOperationGate>()
-            .TryAcquireUpdate();
-        if (recoveryLease is null)
-        {
-            return false;
-        }
-
-        var recovery = services
-            .GetRequiredService<IEdgeUpdateTransactionRecovery>()
-            .RecoverPendingTransaction();
-        if (!recovery.Success || recovery.Blocked)
-        {
-            return false;
-        }
-
-        services.GetRequiredService<ILauncherPluginActivationReconciler>()
-            .Reconcile();
-        services.GetRequiredService<ILauncherDeviceBindingImporter>()
-            .ApplyPendingBindings();
-        return true;
+        return services.GetRequiredService<ILauncherStartupCoordinator>()
+            .TryCompleteUpdateStartup();
     }
 
     private void DisposeServices()

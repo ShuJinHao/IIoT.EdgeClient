@@ -111,6 +111,41 @@ public sealed class LauncherWindowHeadlessTests
     }
 
     [AvaloniaFact]
+    public async Task MainWindow_WhenStartupHasLocalDiagnostics_ShouldShowSelectionNotice()
+    {
+        var diagnostics = new LauncherStartupDiagnosticStore();
+        diagnostics.ReplaceArea(
+            LauncherStartupDiagnosticAreas.EnabledPluginSelection,
+            [
+                new LauncherStartupDiagnostic(
+                    LauncherStartupDiagnosticAreas.EnabledPluginSelection,
+                    "LAUNCHER_PLUGIN_SELECTION_INVALID",
+                    LauncherStartupDiagnosticRepairTargets.PluginSelection)
+            ]);
+        var viewModel = CreateViewModel(startupDiagnosticReader: diagnostics);
+        await viewModel.LoginAsync("operator", "secret");
+        var window = CreateMainWindow(viewModel);
+
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+
+            Assert.True(window.FindControl<Control>("SelectionStartupDiagnosticsNotice")?.IsVisible);
+            Assert.Contains(
+                window.GetVisualDescendants()
+                    .OfType<TextBlock>()
+                    .Where(static text => text.IsVisible)
+                    .Select(static text => text.Text),
+                text => text?.Contains("LAUNCHER_PLUGIN_SELECTION_INVALID", StringComparison.Ordinal) == true);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
     public async Task MainWindow_WhenAuthenticated_ShouldExposeDedicatedUpdateCenter()
     {
         var viewModel = CreateViewModel();
@@ -302,7 +337,8 @@ public sealed class LauncherWindowHeadlessTests
         };
 
     private static LauncherMainViewModel CreateViewModel(
-        LauncherAccountCatalogStatus accountCatalogStatus = LauncherAccountCatalogStatus.Ready)
+        LauncherAccountCatalogStatus accountCatalogStatus = LauncherAccountCatalogStatus.Ready,
+        ILauncherStartupDiagnosticReader? startupDiagnosticReader = null)
         => new(
             new StubLauncherProfileCatalog(
             [
@@ -322,7 +358,8 @@ public sealed class LauncherWindowHeadlessTests
             new StubShellLaunchService(),
             new NotConfiguredReleaseService(),
             new LauncherUpdateTargetFactory(),
-            new TestLauncherUpdateOperationGate());
+            new TestLauncherUpdateOperationGate(),
+            startupDiagnosticReader: startupDiagnosticReader);
 
     private sealed class StubLauncherProfileCatalog(IReadOnlyList<LauncherProfileDefinition> profiles)
         : ILauncherProfileCatalog
@@ -363,10 +400,10 @@ public sealed class LauncherWindowHeadlessTests
 
         public bool IsProfileRunning(LauncherProfileDefinition profile) => false;
 
-        public Task LaunchAsync(
+        public Task<ShellLaunchResult> LaunchAsync(
             LauncherProfileDefinition profile,
             CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
+            => Task.FromResult(new ShellLaunchResult(false, []));
     }
 
     private sealed class NotConfiguredReleaseService : IEdgeReleaseService

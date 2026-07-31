@@ -23,9 +23,16 @@ public sealed class LauncherProfileVisibilityServiceTests
                 Path.Combine(launcherDirectory, "iiot-enabled-plugins.json"),
                 """
                 {
+                  "schemaVersion": 1,
                   "plugins": [
-                    { "moduleId": "TestPluginAlpha" },
-                    { "moduleId": "TestPluginBeta" }
+                    {
+                      "moduleId": "TestPluginAlpha",
+                      "pluginDirectory": "TestPluginAlpha"
+                    },
+                    {
+                      "moduleId": "TestPluginBeta",
+                      "pluginDirectory": "TestPluginBeta"
+                    }
                   ]
                 }
                 """);

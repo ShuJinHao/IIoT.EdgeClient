@@ -5,19 +5,30 @@ namespace IIoT.Edge.SharedKernel.Configuration;
 public static class EdgeClientShellLaunchStatuses
 {
     public const string Ready = "ready";
+    public const string ReadyWithDiagnostics = "readyWithDiagnostics";
     public const string Failed = "failed";
 }
+
+public sealed record EdgeClientShellLaunchDiagnostic(
+    string ReasonCode,
+    string RepairTarget,
+    string? ModuleId = null);
 
 public sealed record EdgeClientShellLaunchOutcome(
     int SchemaVersion,
     string Status,
     string MachineProfile,
     IReadOnlyList<string> ActiveModuleIds,
-    string? Message);
+    string? Message)
+{
+    public int ProcessId { get; init; }
+
+    public IReadOnlyList<EdgeClientShellLaunchDiagnostic> Diagnostics { get; init; } = [];
+}
 
 public static class EdgeClientUpdateCoordination
 {
-    public const int ShellLaunchOutcomeSchemaVersion = 1;
+    public const int ShellLaunchOutcomeSchemaVersion = 2;
     public const string UpdateOperationLockFileName = "update-operation.lock";
     public const string ShellPresenceLockFileName = "shell-presence.lock";
     public const string ShellLaunchReadyEnvironmentVariable =
@@ -71,7 +82,28 @@ public static class EdgeClientUpdateCoordination
                 EdgeClientShellLaunchStatuses.Ready,
                 machineProfile,
                 activeModuleIds,
-                Message: null),
+                Message: null)
+            {
+                ProcessId = Environment.ProcessId
+            },
+            baseDirectory);
+
+    public static bool TrySignalShellLaunchReadyWithDiagnostics(
+        string machineProfile,
+        IReadOnlyList<string> activeModuleIds,
+        IReadOnlyList<EdgeClientShellLaunchDiagnostic> diagnostics,
+        string? baseDirectory = null)
+        => TrySignalShellLaunchOutcome(
+            new EdgeClientShellLaunchOutcome(
+                ShellLaunchOutcomeSchemaVersion,
+                EdgeClientShellLaunchStatuses.ReadyWithDiagnostics,
+                machineProfile,
+                activeModuleIds,
+                Message: null)
+            {
+                ProcessId = Environment.ProcessId,
+                Diagnostics = diagnostics
+            },
             baseDirectory);
 
     public static bool TrySignalShellLaunchFailure(
@@ -85,7 +117,10 @@ public static class EdgeClientUpdateCoordination
                 EdgeClientShellLaunchStatuses.Failed,
                 machineProfile,
                 activeModuleIds,
-                message),
+                message)
+            {
+                ProcessId = Environment.ProcessId
+            },
             baseDirectory);
 
     public static bool TryWriteShellLaunchOutcomeToPath(
@@ -287,6 +322,7 @@ public static class EdgeClientUpdateCoordination
         outcome = default!;
         if (candidate is null
             || candidate.SchemaVersion != ShellLaunchOutcomeSchemaVersion
+            || candidate.ProcessId <= 0
             || string.IsNullOrWhiteSpace(candidate.MachineProfile)
             || candidate.MachineProfile.Length > 128
             || candidate.MachineProfile.Any(char.IsControl)
@@ -296,10 +332,27 @@ public static class EdgeClientUpdateCoordination
             return false;
         }
 
-        var status = candidate.Status?.Trim().ToLowerInvariant();
-        if (status is not (
-            EdgeClientShellLaunchStatuses.Ready
-            or EdgeClientShellLaunchStatuses.Failed))
+        var candidateStatus = candidate.Status?.Trim();
+        var status = candidateStatus switch
+        {
+            var value when string.Equals(
+                value,
+                EdgeClientShellLaunchStatuses.Ready,
+                StringComparison.OrdinalIgnoreCase)
+                => EdgeClientShellLaunchStatuses.Ready,
+            var value when string.Equals(
+                value,
+                EdgeClientShellLaunchStatuses.ReadyWithDiagnostics,
+                StringComparison.OrdinalIgnoreCase)
+                => EdgeClientShellLaunchStatuses.ReadyWithDiagnostics,
+            var value when string.Equals(
+                value,
+                EdgeClientShellLaunchStatuses.Failed,
+                StringComparison.OrdinalIgnoreCase)
+                => EdgeClientShellLaunchStatuses.Failed,
+            _ => null
+        };
+        if (status is null)
         {
             return false;
         }
@@ -318,6 +371,37 @@ public static class EdgeClientUpdateCoordination
             return false;
         }
 
+        if (candidate.Diagnostics is null
+            || candidate.Diagnostics.Count > 128)
+        {
+            return false;
+        }
+
+        var diagnostics = candidate.Diagnostics
+            .Where(static diagnostic => diagnostic is not null)
+            .Select(static diagnostic => new EdgeClientShellLaunchDiagnostic(
+                diagnostic.ReasonCode?.Trim() ?? string.Empty,
+                diagnostic.RepairTarget?.Trim() ?? string.Empty,
+                string.IsNullOrWhiteSpace(diagnostic.ModuleId)
+                    ? null
+                    : diagnostic.ModuleId.Trim()))
+            .Where(static diagnostic =>
+                diagnostic.ReasonCode.Length is > 0 and <= 128
+                && !diagnostic.ReasonCode.Any(char.IsControl)
+                && diagnostic.RepairTarget.Length is > 0 and <= 128
+                && !diagnostic.RepairTarget.Any(char.IsControl)
+                && (diagnostic.ModuleId is null
+                    || (diagnostic.ModuleId.Length <= 256
+                        && !diagnostic.ModuleId.Any(char.IsControl))))
+            .Distinct()
+            .OrderBy(static diagnostic => diagnostic.ReasonCode, StringComparer.Ordinal)
+            .ThenBy(static diagnostic => diagnostic.ModuleId, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (diagnostics.Length != candidate.Diagnostics.Count)
+        {
+            return false;
+        }
+
         var message = candidate.Message?.Trim();
         if (status == EdgeClientShellLaunchStatuses.Failed
             && (string.IsNullOrWhiteSpace(message)
@@ -326,8 +410,24 @@ public static class EdgeClientUpdateCoordination
         {
             return false;
         }
-        if (status == EdgeClientShellLaunchStatuses.Ready
+        if ((status == EdgeClientShellLaunchStatuses.Ready
+             || status == EdgeClientShellLaunchStatuses.ReadyWithDiagnostics)
             && !string.IsNullOrWhiteSpace(message))
+        {
+            return false;
+        }
+        if (status == EdgeClientShellLaunchStatuses.Ready
+            && diagnostics.Length != 0)
+        {
+            return false;
+        }
+        if (status == EdgeClientShellLaunchStatuses.ReadyWithDiagnostics
+            && diagnostics.Length == 0)
+        {
+            return false;
+        }
+        if (status == EdgeClientShellLaunchStatuses.Failed
+            && diagnostics.Length != 0)
         {
             return false;
         }
@@ -339,7 +439,11 @@ public static class EdgeClientUpdateCoordination
             activeModuleIds,
             status == EdgeClientShellLaunchStatuses.Failed
                 ? message
-                : null);
+                : null)
+        {
+            ProcessId = candidate.ProcessId,
+            Diagnostics = diagnostics
+        };
         return true;
     }
 }

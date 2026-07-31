@@ -50,7 +50,10 @@ public sealed class LongRunningBackgroundTaskGroupServiceBehaviorTests
     public async Task StartAsync_WhenExecutionFaultsBeforeReadiness_ShouldSurfaceStartupFailure()
     {
         var task = new FaultBeforeStartupBackgroundTask();
-        var service = new LongRunningBackgroundTaskService(task);
+        var status = new BackgroundServiceRuntimeStatusStore();
+        var service = new LongRunningBackgroundTaskService(
+            task,
+            runtimeStatus: status);
 
         var start = service.StartAsync(TestContext.Current.CancellationToken);
         await task.ExecutionStarted.WaitAsync(TestContext.Current.CancellationToken);
@@ -58,6 +61,30 @@ public sealed class LongRunningBackgroundTaskGroupServiceBehaviorTests
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => start);
         Assert.Equal("failed before startup", exception.Message);
+        Assert.True(status.TryGet(task.TaskName, out var snapshot));
+        Assert.Equal(BackgroundServiceRuntimeState.Faulted, snapshot.State);
+        Assert.Equal("BACKGROUND_TASK_START_FAILED", snapshot.ErrorCode);
+    }
+
+    [Fact]
+    public async Task StopAsync_AfterStartupFailureCleanup_ShouldKeepFaultedDiagnosticUntilRetry()
+    {
+        var task = new FaultBeforeStartupBackgroundTask();
+        var status = new BackgroundServiceRuntimeStatusStore();
+        var service = new LongRunningBackgroundTaskService(
+            task,
+            runtimeStatus: status);
+
+        var start = service.StartAsync(TestContext.Current.CancellationToken);
+        await task.ExecutionStarted.WaitAsync(TestContext.Current.CancellationToken);
+        task.FailBeforeStartup();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => start);
+
+        await service.StopAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(status.TryGet(task.TaskName, out var snapshot));
+        Assert.Equal(BackgroundServiceRuntimeState.Faulted, snapshot.State);
+        Assert.Equal("BACKGROUND_TASK_START_FAILED", snapshot.ErrorCode);
     }
 
     [Fact]
@@ -68,7 +95,8 @@ public sealed class LongRunningBackgroundTaskGroupServiceBehaviorTests
         var failureLogged = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         logger.EntryAdded += entry =>
         {
-            if (entry.Level == "Error" && entry.Message.Contains("later fault", StringComparison.Ordinal))
+            if (entry.Level == "Error"
+                && entry.Message.Contains(nameof(InvalidOperationException), StringComparison.Ordinal))
             {
                 failureLogged.TrySetResult();
             }
@@ -78,6 +106,9 @@ public sealed class LongRunningBackgroundTaskGroupServiceBehaviorTests
         await service.StartAsync(TestContext.Current.CancellationToken);
         task.FailFirstInvocation();
         await failureLogged.Task.WaitAsync(TestContext.Current.CancellationToken);
+        Assert.DoesNotContain(
+            logger.Entries,
+            entry => entry.Message.Contains("later fault", StringComparison.Ordinal));
 
         await service.StartAsync(TestContext.Current.CancellationToken);
         await task.SecondInvocationStarted.WaitAsync(TestContext.Current.CancellationToken);
@@ -85,6 +116,52 @@ public sealed class LongRunningBackgroundTaskGroupServiceBehaviorTests
 
         Assert.Equal(2, task.InvocationCount);
         Assert.True(task.SecondInvocationStopped.IsCompleted);
+    }
+
+    [Fact]
+    public async Task RecoverySupervisor_WhenPipelineWorkerExitsWithoutStop_ShouldRestartOnlyThatWorker()
+    {
+        var task = new CleanExitThenRunningBackgroundTask();
+        var siblingTask = new RestartableBackgroundTask();
+        var status = new BackgroundServiceRuntimeStatusStore();
+        var service = new LongRunningBackgroundTaskService(task, runtimeStatus: status);
+        var siblingService = new LongRunningBackgroundTaskService(
+            siblingTask,
+            runtimeStatus: status);
+        var coordinator = new BackgroundServiceCoordinator(
+            [service, siblingService],
+            new FakeLogService(),
+            new BackgroundServiceCoordinatorOptions
+            {
+                StartupTimeout = TimeSpan.FromSeconds(1),
+                StopTimeout = TimeSpan.FromSeconds(1),
+                RecoveryInterval = TimeSpan.FromMilliseconds(10)
+            },
+            status);
+        await coordinator.StartAsync(TestContext.Current.CancellationToken);
+        var recoveredStatusPublished = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        status.Changed += (_, snapshot) =>
+        {
+            if (snapshot.ServiceName == task.TaskName
+                && snapshot.State == BackgroundServiceRuntimeState.Running)
+            {
+                recoveredStatusPublished.TrySetResult();
+            }
+        };
+
+        task.CompleteFirstInvocation();
+        await task.SecondInvocationStarted.WaitAsync(TestContext.Current.CancellationToken);
+        await recoveredStatusPublished.Task.WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, task.InvocationCount);
+        Assert.Equal(1, siblingTask.InvocationCount);
+        Assert.True(status.TryGet(task.TaskName, out var recovered));
+        Assert.Equal(BackgroundServiceRuntimeState.Running, recovered.State);
+
+        await coordinator.StopAsync(TestContext.Current.CancellationToken);
+        Assert.True(task.SecondInvocationStopped.IsCompleted);
+        Assert.True(siblingTask.FirstInvocationStopped.IsCompleted);
     }
 
     [Fact]
@@ -97,6 +174,65 @@ public sealed class LongRunningBackgroundTaskGroupServiceBehaviorTests
         await service.StartAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(2, task.InvocationCount);
+    }
+
+    [Fact]
+    public void RuntimeStatusStore_ShouldUseCaseInsensitiveIdentityAndPublishOnlyTargetedChanges()
+    {
+        var store = new BackgroundServiceRuntimeStatusStore();
+        var events = new List<BackgroundServiceRuntimeSnapshot>();
+        store.Changed += (_, snapshot) => events.Add(snapshot);
+
+        store.Set("ProcessQueueTask", BackgroundServiceRuntimeState.Starting);
+        store.Set("processqueuetask", BackgroundServiceRuntimeState.Starting);
+        store.Set("PROCESSQUEUETASK", BackgroundServiceRuntimeState.Running);
+        store.Set("CloudRetryTask", BackgroundServiceRuntimeState.Faulted, "BACKGROUND_TASK_START_FAILED");
+
+        Assert.Equal(3, events.Count);
+        Assert.True(store.TryGet("processQueueTask", out var processQueue));
+        Assert.Equal(BackgroundServiceRuntimeState.Running, processQueue.State);
+        Assert.True(store.TryGet("cloudretrytask", out var cloudRetry));
+        Assert.Equal("BACKGROUND_TASK_START_FAILED", cloudRetry.ErrorCode);
+        Assert.Equal(2, store.GetAll().Count);
+    }
+
+    [Fact]
+    public async Task Service_WhenExecutionFaults_ShouldKeepSiblingIndependentAndPublishStableState()
+    {
+        var faultingTask = new LaterFaultThenRunningBackgroundTask();
+        var siblingTask = new RestartableBackgroundTask();
+        var status = new BackgroundServiceRuntimeStatusStore();
+        var faultPublished = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        status.Changed += (_, snapshot) =>
+        {
+            if (snapshot.ServiceName == faultingTask.TaskName
+                && snapshot.State == BackgroundServiceRuntimeState.Faulted)
+            {
+                faultPublished.TrySetResult();
+            }
+        };
+        var faultingService = new LongRunningBackgroundTaskService(
+            faultingTask,
+            runtimeStatus: status);
+        var siblingService = new LongRunningBackgroundTaskService(
+            siblingTask,
+            runtimeStatus: status);
+
+        await faultingService.StartAsync(TestContext.Current.CancellationToken);
+        await siblingService.StartAsync(TestContext.Current.CancellationToken);
+        faultingTask.FailFirstInvocation();
+        await faultPublished.Task.WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(status.TryGet(faultingTask.TaskName, out var faulted));
+        Assert.Equal(BackgroundServiceRuntimeState.Faulted, faulted.State);
+        Assert.Equal("BACKGROUND_TASK_EXECUTION_FAULT", faulted.ErrorCode);
+        Assert.True(status.TryGet(siblingTask.TaskName, out var sibling));
+        Assert.Equal(BackgroundServiceRuntimeState.Running, sibling.State);
+
+        await siblingService.StopAsync(TestContext.Current.CancellationToken);
+        Assert.True(status.TryGet(siblingTask.TaskName, out sibling));
+        Assert.Equal(BackgroundServiceRuntimeState.Stopped, sibling.State);
     }
 
     [Fact]
@@ -397,6 +533,42 @@ public sealed class LongRunningBackgroundTaskGroupServiceBehaviorTests
         }
     }
 
+    private sealed class CleanExitThenRunningBackgroundTask : TestStartupAwareBackgroundTask
+    {
+        private int _invocationCount;
+        private readonly TaskCompletionSource _firstCompletion =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _secondInvocationStarted =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _secondInvocationStopped =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override string TaskName => "ProcessQueueTask";
+        public int InvocationCount => Volatile.Read(ref _invocationCount);
+        public Task SecondInvocationStarted => _secondInvocationStarted.Task;
+        public Task SecondInvocationStopped => _secondInvocationStopped.Task;
+
+        public void CompleteFirstInvocation() => _firstCompletion.TrySetResult();
+
+        public override Task StartAsync(CancellationToken ct)
+            => Interlocked.Increment(ref _invocationCount) == 1
+                ? _firstCompletion.Task
+                : RunSecondInvocationAsync(ct);
+
+        private async Task RunSecondInvocationAsync(CancellationToken ct)
+        {
+            _secondInvocationStarted.TrySetResult();
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            }
+            finally
+            {
+                _secondInvocationStopped.TrySetResult();
+            }
+        }
+    }
+
     private sealed class ImmediatelyCompletingBackgroundTask : TestStartupAwareBackgroundTask
     {
         private int _invocationCount;
@@ -455,14 +627,14 @@ public sealed class LongRunningBackgroundTaskGroupServiceBehaviorTests
             return new BackgroundTaskRun(startup.Task, RunAsync(cancellationToken, startup));
         }
 
-        private async Task RunAsync(CancellationToken ct, TaskCompletionSource startup)
+        private Task RunAsync(CancellationToken ct, TaskCompletionSource startup)
         {
             try
             {
-                await cancellation.CancelAsync();
+                cancellation.Cancel();
                 ct.ThrowIfCancellationRequested();
                 startup.TrySetResult();
-                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                return Task.Delay(Timeout.InfiniteTimeSpan, ct);
             }
             finally
             {

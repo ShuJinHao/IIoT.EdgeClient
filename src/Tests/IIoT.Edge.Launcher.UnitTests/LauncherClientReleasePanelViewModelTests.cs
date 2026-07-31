@@ -526,10 +526,10 @@ public sealed class LauncherClientReleasePanelViewModelTests
 
         public bool IsProfileRunning(LauncherProfileDefinition profile) => false;
 
-        public Task LaunchAsync(
+        public Task<ShellLaunchResult> LaunchAsync(
             LauncherProfileDefinition profile,
             CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
+            => Task.FromResult(new ShellLaunchResult(false, []));
     }
 
     private sealed class TrackingUpdateOperationGate : ILauncherUpdateOperationGate

@@ -40,15 +40,15 @@ public sealed class ShellInstanceIdResolver : IShellInstanceIdResolver
         }
         catch (JsonException ex)
         {
-            Trace.TraceWarning($"解析 Shell 机器配置失败，无法探测运行态：{configPath}; {ex.Message}");
+            Trace.TraceWarning($"解析 Shell 机器配置失败，无法探测运行态：{configPath} ({ex.GetType().Name})");
         }
         catch (IOException ex)
         {
-            Trace.TraceWarning($"读取 Shell 机器配置失败，无法探测运行态：{configPath}; {ex.Message}");
+            Trace.TraceWarning($"读取 Shell 机器配置失败，无法探测运行态：{configPath} ({ex.GetType().Name})");
         }
         catch (UnauthorizedAccessException ex)
         {
-            Trace.TraceWarning($"无权限读取 Shell 机器配置，无法探测运行态：{configPath}; {ex.Message}");
+            Trace.TraceWarning($"无权限读取 Shell 机器配置，无法探测运行态：{configPath} ({ex.GetType().Name})");
         }
 
         return null;

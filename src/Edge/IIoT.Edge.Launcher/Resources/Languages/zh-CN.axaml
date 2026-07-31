@@ -187,7 +187,11 @@
     <sys:String x:Key="Launcher_Status_PasswordChanged">本地密码已修改，请使用新密码登录。</sys:String>
     <sys:String x:Key="Launcher_Status_PasswordChangeFailed">本地密码修改失败。</sys:String>
     <sys:String x:Key="Launcher_Status_LaunchSucceededFormat">已启动 {0}，MachineProfile = {1}。</sys:String>
+    <sys:String x:Key="Launcher_Status_LaunchSucceededWithDiagnosticsFormat">已启动 {0}，但存在局部诊断：{1}。</sys:String>
     <sys:String x:Key="Launcher_Status_LaunchFailedFormat">启动 {0} 失败。</sys:String>
+    <sys:String x:Key="Launcher_StartupDiagnostics_Format">局部启动诊断：{0}。请按修复入口处理受影响功能。</sys:String>
+    <sys:String x:Key="Launcher_Error_ShellLaunchFailedSafeFormat">客户端启动失败（{0}）。请查看局部诊断或日志。</sys:String>
+    <sys:String x:Key="Launcher_Error_LocalOperationFailedSafeFormat">本地操作未完成（{0}）。请查看局部诊断或日志。</sys:String>
     <sys:String x:Key="Launcher_Update_StatusInitial">未检查更新。</sys:String>
     <sys:String x:Key="Launcher_Update_StatusChecking">正在检查更新...</sys:String>
     <sys:String x:Key="Launcher_Update_StatusNotConfigured">未配置更新源。</sys:String>

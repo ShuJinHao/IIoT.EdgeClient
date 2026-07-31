@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -13,17 +14,30 @@ public interface ILauncherPluginActivationReconciler
     bool IsReady(LauncherPluginActivation activation);
 }
 
-public sealed class LauncherPluginActivationReconciler(
-    string baseDirectory,
-    ILauncherPluginActivationSource activationSource) : ILauncherPluginActivationReconciler
+public sealed class LauncherPluginActivationReconciler : ILauncherPluginActivationReconciler
 {
     private readonly HashSet<string> _readyActivations = new(StringComparer.OrdinalIgnoreCase);
-    private readonly LauncherHostRuntimeResolver _hostRuntimeResolver = new(baseDirectory);
+    private readonly LauncherHostRuntimeResolver _hostRuntimeResolver;
+    private readonly ILauncherPluginActivationSource _activationSource;
+    private readonly ILauncherStartupDiagnosticWriter? _diagnostics;
+
+    public LauncherPluginActivationReconciler(
+        string baseDirectory,
+        ILauncherPluginActivationSource activationSource,
+        ILauncherStartupDiagnosticWriter? diagnostics = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
+        _activationSource = activationSource
+            ?? throw new ArgumentNullException(nameof(activationSource));
+        _diagnostics = diagnostics;
+        _hostRuntimeResolver = new LauncherHostRuntimeResolver(baseDirectory);
+    }
 
     public void Reconcile()
     {
         _readyActivations.Clear();
-        foreach (var activation in activationSource.LoadActivations())
+        var reconciliationDiagnostics = new List<LauncherStartupDiagnostic>();
+        foreach (var activation in _activationSource.LoadActivations())
         {
             try
             {
@@ -32,17 +46,29 @@ public sealed class LauncherPluginActivationReconciler(
             }
             catch (Exception ex) when (ex is IOException
                                            or UnauthorizedAccessException
+                                           or SecurityException
                                            or JsonException
                                            or InvalidOperationException
-                                           or ArgumentException)
+                                           or ArgumentException
+                                           or NotSupportedException)
             {
                 Trace.TraceWarning(
                     "插件 activation 配置未应用：{0}/{1} ({2})",
                     activation.ModuleId,
                     activation.ProfileId,
                     ex.GetType().Name);
+                reconciliationDiagnostics.Add(new LauncherStartupDiagnostic(
+                    LauncherStartupDiagnosticAreas.PluginActivationMaterialization,
+                    "LAUNCHER_PLUGIN_ACTIVATION_APPLY_FAILED",
+                    LauncherStartupDiagnosticRepairTargets.PluginActivation,
+                    $"{activation.ModuleId}/{activation.ProfileId}",
+                    ex.GetType().Name));
             }
         }
+
+        _diagnostics?.ReplaceArea(
+            LauncherStartupDiagnosticAreas.PluginActivationMaterialization,
+            reconciliationDiagnostics);
     }
 
     public bool IsReady(LauncherPluginActivation activation)

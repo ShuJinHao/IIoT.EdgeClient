@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Threading;
+using IIoT.Edge.Application.Common.Tasks;
 using System.Windows.Input;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Presentation.Navigation.Localization;
@@ -14,6 +15,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
 {
     private readonly IStartupDiagnosticsStore _diagnosticsStore;
     private readonly IEdgeSyncDiagnosticsQuery _syncDiagnosticsQuery;
+    private readonly IBackgroundServiceRuntimeStatusReader _backgroundServiceRuntimeStatus;
     private readonly IDiagnosticsModuleDisplayNameResolver _displayNameResolver;
     private readonly IDiagnosticsSummaryBuilder _summaryBuilder;
     private readonly IDiagnosticsRowsBuilder _rowsBuilder;
@@ -34,6 +36,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
     public DiagnosticsViewModel(
         IStartupDiagnosticsStore diagnosticsStore,
         IEdgeSyncDiagnosticsQuery syncDiagnosticsQuery,
+        IBackgroundServiceRuntimeStatusReader backgroundServiceRuntimeStatus,
         IAppLanguageService languageService,
         IDiagnosticsModuleDisplayNameResolver displayNameResolver,
         IDiagnosticsSummaryBuilder summaryBuilder,
@@ -46,6 +49,7 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
     {
         _diagnosticsStore = diagnosticsStore;
         _syncDiagnosticsQuery = syncDiagnosticsQuery;
+        _backgroundServiceRuntimeStatus = backgroundServiceRuntimeStatus;
         _displayNameResolver = displayNameResolver;
         _summaryBuilder = summaryBuilder;
         _rowsBuilder = rowsBuilder;
@@ -306,10 +310,15 @@ public sealed class DiagnosticsViewModel : NavigationViewModelBase, IDiagnostics
     {
         var report = _diagnosticsStore.Current;
         var syncDiagnostics = await _syncDiagnosticsQuery.GetCurrentAsync(ct);
+        var backgroundServiceRuntime = _backgroundServiceRuntimeStatus.GetAll();
         var moduleNameMap = _displayNameResolver.BuildModuleNameMap(report);
 
         _refreshApplier.ApplySummary(_summaryBuilder.Build(report, syncDiagnostics, moduleNameMap));
-        _refreshApplier.ApplyRows(_rowsBuilder.Build(report, syncDiagnostics, moduleNameMap));
+        _refreshApplier.ApplyRows(_rowsBuilder.Build(
+            report,
+            syncDiagnostics,
+            backgroundServiceRuntime,
+            moduleNameMap));
         _refreshApplier.ApplyModuleCounts(report);
     }
 

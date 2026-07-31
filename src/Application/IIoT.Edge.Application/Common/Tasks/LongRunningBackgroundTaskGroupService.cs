@@ -31,6 +31,12 @@ public sealed class LongRunningBackgroundTaskGroupService : IManagedBackgroundSe
                 await service.StartAsync(cancellationToken).ConfigureAwait(false);
             }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            await StopAllBestEffortAsync(CancellationToken.None).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            throw;
+        }
         catch
         {
             await StopAllBestEffortAsync(CancellationToken.None).ConfigureAwait(false);

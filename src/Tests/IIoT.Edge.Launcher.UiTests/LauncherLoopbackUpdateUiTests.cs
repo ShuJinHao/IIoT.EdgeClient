@@ -304,9 +304,10 @@ public sealed class LauncherLoopbackUpdateUiTests
                     "iiot-enabled-plugins.json"),
                 """
                 {
+                  "schemaVersion": 1,
                   "plugins": [
-                    { "moduleId": "AP" },
-                    { "moduleId": "CP" }
+                    { "moduleId": "AP", "pluginDirectory": "AP" },
+                    { "moduleId": "CP", "pluginDirectory": "CP" }
                   ]
                 }
                 """);

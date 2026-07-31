@@ -392,6 +392,80 @@ public sealed class LauncherMainViewModelTests
     }
 
     [Fact]
+    public async Task LaunchAsync_WhenShellIsReadyWithDiagnostics_ShouldShowStableReasonCodes()
+    {
+        var profile = Profile("shell", "Shell");
+        var diagnostic = new IIoT.Edge.SharedKernel.Configuration.EdgeClientShellLaunchDiagnostic(
+            "STARTUP_CLOUD_RETRY_TASK_FAILED",
+            "System.Diagnostics");
+        var viewModel = CreateViewModel(
+            new StubLauncherProfileCatalog([profile]),
+            new StubLocalAccountAuthService(
+                LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
+            new StubShellLaunchService(
+                launchResult: new ShellLaunchResult(true, [diagnostic])));
+
+        await viewModel.LaunchAsync(profile);
+
+        Assert.Contains("STARTUP_CLOUD_RETRY_TASK_FAILED", viewModel.StatusMessage, StringComparison.Ordinal);
+        Assert.Empty(viewModel.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task LaunchAsync_WhenShellThrowsSensitiveFailure_ShouldShowOnlySafeExceptionType()
+    {
+        const string sensitiveMessage = "secret path and token";
+        var profile = Profile("shell", "Shell");
+        var viewModel = CreateViewModel(
+            new StubLauncherProfileCatalog([profile]),
+            new StubLocalAccountAuthService(
+                LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
+            new StubShellLaunchService(
+                launchException: new IOException(sensitiveMessage)));
+
+        await viewModel.LaunchAsync(profile);
+
+        Assert.DoesNotContain(sensitiveMessage, viewModel.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains(nameof(IOException), viewModel.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StartupDiagnostics_WhenStoreChanges_ShouldUpdateTextAndUnsubscribeOnDispose()
+    {
+        var diagnostics = new LauncherStartupDiagnosticStore();
+        var viewModel = CreateViewModel(
+            new StubLauncherProfileCatalog([Profile("shell", "Shell")]),
+            new StubLocalAccountAuthService(
+                LauncherAuthenticationResult.Passed(Account("operator", "operator"))),
+            new StubShellLaunchService(),
+            startupDiagnosticReader: diagnostics);
+
+        Assert.False(viewModel.HasStartupDiagnostics);
+        diagnostics.ReplaceArea(
+            LauncherStartupDiagnosticAreas.EnabledPluginSelection,
+            [
+                new LauncherStartupDiagnostic(
+                    LauncherStartupDiagnosticAreas.EnabledPluginSelection,
+                    "LAUNCHER_PLUGIN_SELECTION_INVALID",
+                    LauncherStartupDiagnosticRepairTargets.PluginSelection)
+            ]);
+
+        Assert.True(viewModel.HasStartupDiagnostics);
+        Assert.Contains("LAUNCHER_PLUGIN_SELECTION_INVALID", viewModel.StartupDiagnosticsText, StringComparison.Ordinal);
+        var beforeDispose = viewModel.StartupDiagnosticsText;
+        viewModel.Dispose();
+        diagnostics.ReplaceArea(
+            LauncherStartupDiagnosticAreas.EnabledPluginSelection,
+            [
+                new LauncherStartupDiagnostic(
+                    LauncherStartupDiagnosticAreas.EnabledPluginSelection,
+                    "LAUNCHER_PLUGIN_SELECTION_MISSING",
+                    LauncherStartupDiagnosticRepairTargets.PluginSelection)
+            ]);
+        Assert.Equal(beforeDispose, viewModel.StartupDiagnosticsText);
+    }
+
+    [Fact]
     public async Task LaunchAsync_WhenShellStartupIsPending_ShouldYieldUntilHandshakeCompletes()
     {
         var profile = Profile("shell", "Shell");
@@ -694,7 +768,8 @@ public sealed class LauncherMainViewModelTests
         IEdgeUpdateConfigurationProvider? updateConfigurationProvider = null,
         ILauncherUpdateTargetFactory? targetFactory = null,
         ILauncherProfileVisibilityService? profileVisibilityService = null,
-        ILauncherUpdateOperationGate? updateOperationGate = null)
+        ILauncherUpdateOperationGate? updateOperationGate = null,
+        ILauncherStartupDiagnosticReader? startupDiagnosticReader = null)
         => new(
             profileCatalog,
             authService,
@@ -704,7 +779,8 @@ public sealed class LauncherMainViewModelTests
             updateOperationGate ?? new TestLauncherUpdateOperationGate(),
             languageService,
             updateConfigurationProvider,
-            profileVisibilityService);
+            profileVisibilityService,
+            startupDiagnosticReader);
 
     private static EdgeReleaseCatalogResult CreateReleaseCheckWithPluginUpdate()
         => new(
@@ -1130,7 +1206,9 @@ public sealed class LauncherMainViewModelTests
     private sealed class StubShellLaunchService(
         bool hasRunningShellProcess = false,
         IReadOnlyList<string>? runningMachineProfiles = null,
-        Task? launchTask = null) : IShellLaunchService
+        Task? launchTask = null,
+        ShellLaunchResult? launchResult = null,
+        Exception? launchException = null) : IShellLaunchService
     {
         private readonly HashSet<string> _runningMachineProfiles = new(
             runningMachineProfiles ?? [],
@@ -1147,13 +1225,23 @@ public sealed class LauncherMainViewModelTests
         public bool IsProfileRunning(LauncherProfileDefinition profile)
             => _runningMachineProfiles.Contains(profile.MachineProfile);
 
-        public Task LaunchAsync(
+        public async Task<ShellLaunchResult> LaunchAsync(
             LauncherProfileDefinition profile,
             CancellationToken cancellationToken = default)
         {
             LaunchCallCount++;
             _launchedMachineProfiles.Add(profile.MachineProfile);
-            return launchTask ?? Task.CompletedTask;
+            if (launchTask is not null)
+            {
+                await launchTask.WaitAsync(cancellationToken);
+            }
+
+            if (launchException is not null)
+            {
+                throw launchException;
+            }
+
+            return launchResult ?? new ShellLaunchResult(false, []);
         }
     }
 

@@ -341,11 +341,21 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             TestContext.Current.CancellationToken);
 
         runtime.Start();
+        var mg1InitiallyRunning = runtime.WaitForTaskStateAsync(
+            "Task.MG1",
+            PlcTaskRuntimeState.Running,
+            TestContext.Current.CancellationToken);
+        var mg2InitiallyRunning = runtime.WaitForTaskStateAsync(
+            "Task.MG2",
+            PlcTaskRuntimeState.Running,
+            TestContext.Current.CancellationToken);
         runtime.ConnectionSignal.Report(true);
         await Task.WhenAll(
             periodicRead.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
             mg1.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
-            mg2.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken));
+            mg2.Starts.WaitForAtLeastAsync(1, TestContext.Current.CancellationToken),
+            mg1InitiallyRunning,
+            mg2InitiallyRunning);
         Assert.Equal(
             PlcTaskRuntimeState.Running,
             runtime.GetTaskStatus("Task.MG1")?.State);
@@ -733,6 +743,9 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
 
         stalledStop.ReleaseStop();
         await stalledStop.StopCompletion;
+        await runtime.WaitForRunningHandleCountAtMostAsync(
+            1,
+            TestContext.Current.CancellationToken);
         await CleanupAsync(runtime);
     }
 
@@ -984,11 +997,21 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             PlcTaskRuntimeState.WaitingForConnection,
             runtime.GetTaskStatus("Task.MG2")?.State);
         failedStop.ThrowOnStop = false;
+        var failedTaskRunning = runtime.WaitForTaskStateAsync(
+            "Task.MG1",
+            PlcTaskRuntimeState.Running,
+            TestContext.Current.CancellationToken);
+        var healthyTaskRunning = runtime.WaitForTaskStateAsync(
+            "Task.MG2",
+            PlcTaskRuntimeState.Running,
+            TestContext.Current.CancellationToken);
         runtime.ConnectionSignal.Report(true);
         await Task.WhenAll(
             failedStop.Starts.WaitForAtLeastAsync(2, TestContext.Current.CancellationToken),
             healthy.Starts.WaitForAtLeastAsync(2, TestContext.Current.CancellationToken),
-            periodicRead.Starts.WaitForAtLeastAsync(2, TestContext.Current.CancellationToken));
+            periodicRead.Starts.WaitForAtLeastAsync(2, TestContext.Current.CancellationToken),
+            failedTaskRunning,
+            healthyTaskRunning);
 
         Assert.Equal(2, failedStop.Starts.Count);
         Assert.Equal(2, healthy.Starts.Count);
@@ -1675,6 +1698,17 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
 
         public IReadOnlyCollection<Task> GetRunningHandlesSnapshot()
             => Runtime.GetRunningHandlesSnapshot();
+
+        public async Task WaitForRunningHandleCountAtMostAsync(
+            int expectedMaximum,
+            CancellationToken cancellationToken)
+        {
+            while (GetRunningHandlesSnapshot().Count > expectedMaximum)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await Task.Yield();
+            }
+        }
 
         public Task WaitForLogAsync(
             Func<LogEntry, bool> predicate,

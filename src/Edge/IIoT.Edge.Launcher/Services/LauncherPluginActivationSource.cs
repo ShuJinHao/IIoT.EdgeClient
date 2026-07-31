@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security;
 using System.Text.Json;
 using IIoT.Edge.SharedKernel.Configuration;
 
@@ -13,60 +14,170 @@ public sealed record LauncherPluginActivation(
     string ModuleId,
     string ProfileId,
     string LauncherProfilePath,
-    string MachineConfigPath);
+    string MachineConfigPath)
+{
+    public string PluginDirectory { get; init; } = string.Empty;
+}
 
-public sealed class LauncherPluginActivationSource(string baseDirectory) : ILauncherPluginActivationSource
+public sealed class LauncherPluginActivationSource : ILauncherPluginActivationSource
 {
     private const string PluginManifestFileName = "plugin.json";
     private const string ActivationDirectoryName = "activation";
     private const string ActivationManifestFileName = "manifest.json";
+    private readonly string _baseDirectory;
+    private readonly ILauncherEnabledPluginSelectionSource _selectionSource;
+    private readonly ILauncherStartupDiagnosticWriter? _diagnostics;
+
+    public LauncherPluginActivationSource(
+        string baseDirectory,
+        ILauncherEnabledPluginSelectionSource? selectionSource = null,
+        ILauncherStartupDiagnosticWriter? diagnostics = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
+        _baseDirectory = baseDirectory;
+        _diagnostics = diagnostics;
+        _selectionSource = selectionSource
+            ?? new LauncherEnabledPluginSelectionSource(baseDirectory, diagnostics);
+    }
 
     public IReadOnlyList<LauncherPluginActivation> LoadActivations()
     {
-        var pluginsRoot = EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(baseDirectory);
+        var selection = _selectionSource.Load();
+        if (selection.ModuleIds.Count == 0)
+        {
+            _diagnostics?.ReplaceArea(
+                LauncherStartupDiagnosticAreas.PluginActivationDiscovery,
+                []);
+            return [];
+        }
+
+        var pluginsRoot = EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(_baseDirectory);
         if (!Directory.Exists(pluginsRoot))
         {
+            ReplaceDiscoveryDiagnostics(
+                new[]
+                {
+                    CreateDiagnostic(
+                        "LAUNCHER_PLUGIN_ROOT_MISSING",
+                        subject: null,
+                        exceptionType: null)
+                }
+                .Concat(CreateMissingPluginDiagnostics(
+                    selection,
+                    new HashSet<string>(StringComparer.OrdinalIgnoreCase)))
+                .ToArray());
             return [];
         }
 
         var activations = new List<LauncherPluginActivation>();
-        foreach (var pluginDirectory in Directory
-                     .EnumerateDirectories(pluginsRoot)
-                     .Where(static path => !IsTransientDirectory(path))
-                     .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase))
+        var discoveryDiagnostics = new List<LauncherStartupDiagnostic>();
+        var discoveredModuleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        string[] pluginDirectories;
+        try
         {
-            try
-            {
-                activations.AddRange(LoadPluginActivations(pluginDirectory));
-            }
-            catch (Exception ex) when (ex is IOException
-                                           or UnauthorizedAccessException
-                                           or JsonException
-                                           or InvalidOperationException
-                                           or ArgumentException)
-            {
-                Trace.TraceWarning(
-                    "忽略无效插件 activation：{0} ({1})",
-                    Path.GetFileName(pluginDirectory),
-                    ex.GetType().Name);
-            }
+            pluginDirectories = Directory
+                .EnumerateDirectories(pluginsRoot)
+                .Where(static path => !IsTransientDirectory(path))
+                .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
         }
-
-        return activations;
-    }
-
-    private static IReadOnlyList<LauncherPluginActivation> LoadPluginActivations(string pluginDirectory)
-    {
-        var pluginManifestPath = Path.Combine(pluginDirectory, PluginManifestFileName);
-        var activationRoot = Path.Combine(pluginDirectory, ActivationDirectoryName);
-        var activationManifestPath = Path.Combine(activationRoot, ActivationManifestFileName);
-        if (!File.Exists(pluginManifestPath) || !File.Exists(activationManifestPath))
+        catch (Exception ex) when (ex is IOException
+                                       or UnauthorizedAccessException
+                                       or SecurityException
+                                       or ArgumentException
+                                       or NotSupportedException)
         {
+            ReplaceDiscoveryDiagnostics(
+                new[]
+                {
+                    CreateDiagnostic(
+                        "LAUNCHER_PLUGIN_ROOT_ENUMERATION_FAILED",
+                        subject: null,
+                        exceptionType: ex.GetType().Name)
+                }
+                .Concat(CreateMissingPluginDiagnostics(
+                    selection,
+                    new HashSet<string>(StringComparer.OrdinalIgnoreCase)))
+                .ToArray());
             return [];
         }
 
+        foreach (var pluginDirectory in pluginDirectories)
+        {
+            var pluginDirectoryName = Path.GetFileName(pluginDirectory);
+            if (!selection.TryGetByPluginDirectory(pluginDirectoryName, out var selectedPlugin))
+            {
+                continue;
+            }
+
+            try
+            {
+                var pluginActivations = LoadPluginActivations(
+                    pluginDirectory,
+                    selectedPlugin);
+                activations.AddRange(pluginActivations);
+                if (pluginActivations.Count > 0)
+                {
+                    discoveredModuleIds.Add(selectedPlugin.ModuleId);
+                }
+            }
+            catch (Exception ex) when (ex is IOException
+                                           or UnauthorizedAccessException
+                                           or SecurityException
+                                           or JsonException
+                                           or InvalidOperationException
+                                           or ArgumentException
+                                           or NotSupportedException)
+            {
+                var subject = Path.GetFileName(pluginDirectory);
+                Trace.TraceWarning(
+                    "忽略无效插件 activation：{0} ({1})",
+                    subject,
+                    ex.GetType().Name);
+                discoveryDiagnostics.Add(CreateDiagnostic(
+                    "LAUNCHER_PLUGIN_ACTIVATION_INVALID",
+                    subject,
+                    ex.GetType().Name));
+            }
+        }
+
+        discoveryDiagnostics.AddRange(
+            CreateMissingPluginDiagnostics(selection, discoveredModuleIds));
+        ReplaceDiscoveryDiagnostics(discoveryDiagnostics);
+        return activations;
+    }
+
+    private static IReadOnlyList<LauncherPluginActivation> LoadPluginActivations(
+        string pluginDirectory,
+        LauncherEnabledPluginSelectionItem selectedPlugin)
+    {
+        EnsurePathHasNoRedirects(pluginDirectory, pluginDirectory);
+
+        var pluginManifestPath = Path.Combine(pluginDirectory, PluginManifestFileName);
+        if (!File.Exists(pluginManifestPath))
+        {
+            return [];
+        }
+        EnsurePathHasNoRedirects(pluginDirectory, pluginManifestPath);
+
         using var pluginDocument = JsonDocument.Parse(File.ReadAllText(pluginManifestPath));
         var pluginModuleId = ReadRequiredString(pluginDocument.RootElement, "moduleId");
+        if (!string.Equals(
+                pluginModuleId,
+                selectedPlugin.ModuleId,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "plugin.json moduleId 与选择清单目录身份不一致。");
+        }
+
+        var activationRoot = Path.Combine(pluginDirectory, ActivationDirectoryName);
+        var activationManifestPath = Path.Combine(activationRoot, ActivationManifestFileName);
+        if (!File.Exists(activationManifestPath))
+        {
+            return [];
+        }
+        EnsurePathHasNoRedirects(pluginDirectory, activationManifestPath);
 
         using var activationDocument = JsonDocument.Parse(File.ReadAllText(activationManifestPath));
         var root = activationDocument.RootElement;
@@ -109,18 +220,50 @@ public sealed class LauncherPluginActivationSource(string baseDirectory) : ILaun
             {
                 throw new InvalidOperationException($"activation profile '{profileId}' 引用文件不存在。");
             }
+            EnsurePathHasNoRedirects(pluginDirectory, launcherProfilePath);
+            EnsurePathHasNoRedirects(pluginDirectory, machineConfigPath);
 
             var activation = new LauncherPluginActivation(
                 pluginModuleId,
                 profileId,
                 launcherProfilePath,
-                machineConfigPath);
+                machineConfigPath)
+            {
+                PluginDirectory = selectedPlugin.PluginDirectory
+            };
             ValidateActivationFiles(activation);
             result.Add(activation);
         }
 
         return result;
     }
+
+    private static IEnumerable<LauncherStartupDiagnostic> CreateMissingPluginDiagnostics(
+        LauncherEnabledPluginSelection selection,
+        IReadOnlySet<string> discoveredModuleIds)
+        => selection.Plugins
+            .Where(plugin => !discoveredModuleIds.Contains(plugin.ModuleId))
+            .Select(plugin => CreateDiagnostic(
+                "LAUNCHER_PLUGIN_SELECTED_NOT_DISCOVERED",
+                plugin.ModuleId,
+                exceptionType: null));
+
+    private void ReplaceDiscoveryDiagnostics(
+        IReadOnlyCollection<LauncherStartupDiagnostic> values)
+        => _diagnostics?.ReplaceArea(
+            LauncherStartupDiagnosticAreas.PluginActivationDiscovery,
+            values);
+
+    private static LauncherStartupDiagnostic CreateDiagnostic(
+        string reasonCode,
+        string? subject,
+        string? exceptionType)
+        => new(
+            LauncherStartupDiagnosticAreas.PluginActivationDiscovery,
+            reasonCode,
+            LauncherStartupDiagnosticRepairTargets.PluginActivation,
+            subject,
+            exceptionType);
 
     internal static void ValidateActivationFiles(LauncherPluginActivation activation)
     {
@@ -214,12 +357,63 @@ public sealed class LauncherPluginActivationSource(string baseDirectory) : ILaun
             relativePath
                 .Replace('\\', Path.DirectorySeparatorChar)
                 .Replace('/', Path.DirectorySeparatorChar)));
-        if (!resolved.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase))
+        if (!resolved.StartsWith(
+                normalizedRoot,
+                LauncherEnabledPluginSelection.PluginDirectoryComparison))
         {
             throw new InvalidOperationException("activation 路径越界。");
         }
 
         return resolved;
+    }
+
+    private static void EnsurePathHasNoRedirects(string boundaryRoot, string existingPath)
+    {
+        var normalizedRoot = Path.GetFullPath(boundaryRoot)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var normalizedPath = Path.GetFullPath(existingPath)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var pathComparison = LauncherEnabledPluginSelection.PluginDirectoryComparison;
+        if (!string.Equals(normalizedRoot, normalizedPath, pathComparison)
+            && !normalizedPath.StartsWith(
+                normalizedRoot + Path.DirectorySeparatorChar,
+                pathComparison))
+        {
+            throw new InvalidOperationException("activation 实际路径越界。");
+        }
+
+        EnsureNotRedirected(normalizedRoot);
+        var relativePath = Path.GetRelativePath(normalizedRoot, normalizedPath);
+        if (relativePath == ".")
+        {
+            return;
+        }
+
+        var current = normalizedRoot;
+        foreach (var component in relativePath.Split(
+                     [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                     StringSplitOptions.RemoveEmptyEntries))
+        {
+            current = Path.Combine(current, component);
+            EnsureNotRedirected(current);
+        }
+    }
+
+    private static void EnsureNotRedirected(string path)
+    {
+        FileSystemInfo pathInfo = Directory.Exists(path)
+            ? new DirectoryInfo(path)
+            : new FileInfo(path);
+        if (!pathInfo.Exists)
+        {
+            throw new FileNotFoundException("activation 路径不存在。", path);
+        }
+
+        if ((pathInfo.Attributes & FileAttributes.ReparsePoint) != 0
+            || pathInfo.ResolveLinkTarget(returnFinalTarget: false) is not null)
+        {
+            throw new InvalidOperationException("activation 路径不得包含符号链接或重解析点。");
+        }
     }
 
     private static bool IsTransientDirectory(string path)

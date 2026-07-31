@@ -20,6 +20,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
     private readonly IShellLaunchService _launchService;
     private readonly IEdgeReleaseService _clientReleaseService;
     private readonly ILauncherProfileVisibilityService? _profileVisibilityService;
+    private readonly ILauncherStartupDiagnosticReader? _startupDiagnosticReader;
     private readonly IAppLanguageService? _languageService;
     private readonly List<LauncherProfileDefinition> _allProfiles = [];
     private readonly List<LauncherProfileCardViewModel> _allProfileCards = [];
@@ -51,11 +52,13 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
     private string _profileSummaryText = string.Empty;
     private string _accountSetupUserName = string.Empty;
     private string _accountSetupDisplayName = string.Empty;
+    private string _startupDiagnosticsText = string.Empty;
     private LauncherProfileCardViewModel? _selectedUpdateProfile;
     private bool _isAuthenticated;
     private bool _accountSetupRequired;
     private bool _accountCatalogCorrupt;
     private bool _isBusy;
+    private bool _hasStartupDiagnostics;
 
     public LauncherMainViewModel(
         ILauncherProfileCatalog profileCatalog,
@@ -66,7 +69,8 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         ILauncherUpdateOperationGate updateOperationGate,
         IAppLanguageService? languageService = null,
         IEdgeUpdateConfigurationProvider? updateConfigurationProvider = null,
-        ILauncherProfileVisibilityService? profileVisibilityService = null)
+        ILauncherProfileVisibilityService? profileVisibilityService = null,
+        ILauncherStartupDiagnosticReader? startupDiagnosticReader = null)
     {
         _profileCatalog = profileCatalog ?? throw new ArgumentNullException(nameof(profileCatalog));
         _updateConfigurationProvider = updateConfigurationProvider;
@@ -75,6 +79,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         _launchService = launchService ?? throw new ArgumentNullException(nameof(launchService));
         _clientReleaseService = clientReleaseService ?? throw new ArgumentNullException(nameof(clientReleaseService));
         _profileVisibilityService = profileVisibilityService;
+        _startupDiagnosticReader = startupDiagnosticReader;
         _languageService = languageService;
         ClientReleasePanel = new LauncherClientReleasePanelViewModel(
             _clientReleaseService,
@@ -87,12 +92,17 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         {
             _languageService.LanguageChanged += OnLanguageChanged;
         }
+        if (_startupDiagnosticReader is not null)
+        {
+            _startupDiagnosticReader.Changed += OnStartupDiagnosticsChanged;
+        }
 
         AppVersionText = BuildAppVersionText();
         _accountSetupUserName = Text("Launcher_AccountSetup_DefaultUserName");
         _accountSetupDisplayName = Text("Launcher_AccountSetup_DefaultDisplayName");
         RefreshAccountCatalogState();
         RefreshLocalizedState();
+        RefreshStartupDiagnostics();
         RebuildUpdateRows();
     }
 
@@ -170,6 +180,18 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
     {
         get => _statusMessage;
         private set => SetProperty(ref _statusMessage, value);
+    }
+
+    public string StartupDiagnosticsText
+    {
+        get => _startupDiagnosticsText;
+        private set => SetProperty(ref _startupDiagnosticsText, value);
+    }
+
+    public bool HasStartupDiagnostics
+    {
+        get => _hasStartupDiagnostics;
+        private set => SetProperty(ref _hasStartupDiagnostics, value);
     }
 
     public string WelcomeText
@@ -300,7 +322,9 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         catch (Exception ex)
         {
             ResetToLoggedOutState();
-            ErrorMessage = ex.Message;
+            ErrorMessage = Format(
+                "Launcher_Error_LocalOperationFailedSafeFormat",
+                ex.GetType().Name);
             SetStatus("Launcher_Status_ProfileLoadFailed");
         }
         finally
@@ -341,7 +365,9 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         catch (Exception ex)
         {
             ResetToLoggedOutState();
-            ErrorMessage = ex.Message;
+            ErrorMessage = Format(
+                "Launcher_Error_LocalOperationFailedSafeFormat",
+                ex.GetType().Name);
             SetStatus("Launcher_Status_ProfileLoadFailed");
             return false;
         }
@@ -373,7 +399,9 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         }
         catch (Exception ex)
         {
-            ErrorMessage = ex.Message;
+            ErrorMessage = Format(
+                "Launcher_Error_LocalOperationFailedSafeFormat",
+                ex.GetType().Name);
             SetStatus("Launcher_Status_PasswordChangeFailed");
             return false;
         }
@@ -390,16 +418,28 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         ErrorMessage = string.Empty;
         try
         {
-            await _launchService.LaunchAsync(profile).ConfigureAwait(true);
-            SetStatus(
-                "Launcher_Status_LaunchSucceededFormat",
-                profile.DisplayName,
-                profile.MachineProfile);
+            var result = await _launchService.LaunchAsync(profile).ConfigureAwait(true);
+            if (result.ReadyWithDiagnostics)
+            {
+                SetStatus(
+                    "Launcher_Status_LaunchSucceededWithDiagnosticsFormat",
+                    profile.DisplayName,
+                    string.Join(", ", result.Diagnostics.Select(static item => item.ReasonCode)));
+            }
+            else
+            {
+                SetStatus(
+                    "Launcher_Status_LaunchSucceededFormat",
+                    profile.DisplayName,
+                    profile.MachineProfile);
+            }
             _ = ClientReleasePanel.ReportProfilesSilentlyAsync([profile]);
         }
         catch (Exception ex)
         {
-            ErrorMessage = ex.Message;
+            ErrorMessage = Format(
+                "Launcher_Error_ShellLaunchFailedSafeFormat",
+                ex.GetType().Name);
             SetStatus(
                 "Launcher_Status_LaunchFailedFormat",
                 profile.DisplayName);
@@ -545,6 +585,10 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         {
             _languageService.LanguageChanged -= OnLanguageChanged;
         }
+        if (_startupDiagnosticReader is not null)
+        {
+            _startupDiagnosticReader.Changed -= OnStartupDiagnosticsChanged;
+        }
 
         ClientReleasePanel.PropertyChanged -= OnClientReleasePanelChanged;
         ClientReleasePanel.Dispose();
@@ -581,6 +625,7 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         => RunOnUiThread(() =>
         {
             RefreshLocalizedState();
+            RefreshStartupDiagnostics();
             OnPropertyChanged(nameof(PlatformMetaText));
             OnPropertyChanged(nameof(MaintainerText));
             OnPropertyChanged(nameof(ArchitectureText));
@@ -593,9 +638,13 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
             RebuildUpdateRows();
         });
 
+    private void OnStartupDiagnosticsChanged(object? sender, EventArgs e)
+        => RunOnUiThread(RefreshStartupDiagnostics);
+
     private static void RunOnUiThread(Action action)
     {
-        if (Dispatcher.UIThread.CheckAccess())
+        if (global::Avalonia.Application.Current is null
+            || Dispatcher.UIThread.CheckAccess())
         {
             action();
             return;
@@ -609,6 +658,22 @@ public sealed class LauncherMainViewModel : BaseNotifyPropertyChanged, IDisposab
         StatusMessage = Format(_statusKey, _statusArgs);
         WelcomeText = Format(_welcomeKey, _welcomeArgs);
         ProfileSummaryText = Format(_profileSummaryKey, _profileSummaryArgs);
+    }
+
+    private void RefreshStartupDiagnostics()
+    {
+        var diagnostics = _startupDiagnosticReader?.Snapshot ?? [];
+        HasStartupDiagnostics = diagnostics.Count > 0;
+        StartupDiagnosticsText = diagnostics.Count == 0
+            ? string.Empty
+            : Format(
+                "Launcher_StartupDiagnostics_Format",
+                string.Join(
+                    ", ",
+                    diagnostics.Select(static diagnostic =>
+                        string.IsNullOrWhiteSpace(diagnostic.Subject)
+                            ? $"{diagnostic.ReasonCode} → {diagnostic.RepairTarget}"
+                            : $"{diagnostic.ReasonCode}[{diagnostic.Subject}] → {diagnostic.RepairTarget}")));
     }
 
     private void SetStatus(string key, params object[] args)

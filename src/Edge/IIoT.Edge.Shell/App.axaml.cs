@@ -9,6 +9,8 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using IIoT.Edge.Module.Contracts.Config;
 using IIoT.Edge.Module.Contracts.Diagnostics;
+using IIoT.Edge.Module.Contracts.Modules;
+using IIoT.Edge.Application.Common.Tasks;
 using IIoT.Edge.Host.Bootstrap;
 using IIoT.Edge.Presentation.Navigation.Features.Shell;
 using IIoT.Edge.Presentation.Panels.Features.Equipment;
@@ -156,10 +158,24 @@ public partial class App : global::Avalonia.Application
                 return;
             }
 
-            _ = EdgeClientUpdateCoordination.TrySignalShellLaunchReady(
-                machineProfile,
-                activeModuleIds,
-                AppDomain.CurrentDomain.BaseDirectory);
+            var launchDiagnostics = BuildShellLaunchDiagnostics(
+                _serviceProvider
+                    .GetRequiredService<IStartupDiagnosticsStore>()
+                    .Current
+                    .Issues,
+                _serviceProvider
+                    .GetRequiredService<IBackgroundServiceRuntimeStatusReader>()
+                    .GetAll());
+            _ = launchDiagnostics.Count > 0
+                ? EdgeClientUpdateCoordination.TrySignalShellLaunchReadyWithDiagnostics(
+                    machineProfile,
+                    activeModuleIds,
+                    launchDiagnostics,
+                    AppDomain.CurrentDomain.BaseDirectory)
+                : EdgeClientUpdateCoordination.TrySignalShellLaunchReady(
+                    machineProfile,
+                    activeModuleIds,
+                    AppDomain.CurrentDomain.BaseDirectory);
         }
         catch (Exception ex)
         {
@@ -172,6 +188,49 @@ public partial class App : global::Avalonia.Application
                 message,
                 AppDomain.CurrentDomain.BaseDirectory);
         }
+    }
+
+    internal static IReadOnlyList<EdgeClientShellLaunchDiagnostic> BuildShellLaunchDiagnostics(
+        IReadOnlyCollection<StartupDiagnosticIssue> issues,
+        IReadOnlyCollection<BackgroundServiceRuntimeSnapshot>? backgroundServices = null)
+    {
+        ArgumentNullException.ThrowIfNull(issues);
+        var startupDiagnostics = issues
+            .Select(static issue => new EdgeClientShellLaunchDiagnostic(
+                NormalizeLaunchDiagnosticToken(issue.Code, "STARTUP_DIAGNOSTIC_PRESENT", 128)
+                    ?? "STARTUP_DIAGNOSTIC_PRESENT",
+                "System.Diagnostics",
+                NormalizeLaunchDiagnosticToken(issue.ModuleId, fallback: null, 256)));
+        var backgroundDiagnostics = backgroundServices?
+            .Where(static snapshot => snapshot.State == BackgroundServiceRuntimeState.Faulted)
+            .Select(static snapshot => new EdgeClientShellLaunchDiagnostic(
+                NormalizeLaunchDiagnosticToken(
+                    snapshot.ErrorCode,
+                    "BACKGROUND_TASK_FAULTED",
+                    128) ?? "BACKGROUND_TASK_FAULTED",
+                "System.Diagnostics",
+                NormalizeLaunchDiagnosticToken(snapshot.ServiceName, fallback: null, 256)))
+            ?? [];
+
+        return startupDiagnostics
+            .Concat(backgroundDiagnostics)
+            .Distinct()
+            .OrderBy(static diagnostic => diagnostic.ReasonCode, StringComparer.Ordinal)
+            .ThenBy(static diagnostic => diagnostic.ModuleId, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static string? NormalizeLaunchDiagnosticToken(
+        string? value,
+        string? fallback,
+        int maximumLength)
+    {
+        var normalized = value?.Trim();
+        return string.IsNullOrWhiteSpace(normalized)
+               || normalized.Length > maximumLength
+               || normalized.Any(char.IsControl)
+            ? fallback
+            : normalized;
     }
 
     private void OnShutdownRequested(object? sender, ShutdownRequestedEventArgs e)

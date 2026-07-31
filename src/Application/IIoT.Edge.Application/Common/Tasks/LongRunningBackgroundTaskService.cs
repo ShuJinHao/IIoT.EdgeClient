@@ -7,11 +7,16 @@ public sealed class LongRunningBackgroundTaskService : IManagedBackgroundService
 {
     private readonly IStartupAwareBackgroundTask _task;
     private readonly ILogService? _logger;
+    private readonly IBackgroundServiceRuntimeStatusWriter? _runtimeStatus;
     private readonly object _lifecycleSync = new();
     private CancellationTokenSource? _linkedCts;
     private Task? _executionTask;
+    private bool _startupFailed;
 
-    public LongRunningBackgroundTaskService(IBackgroundTask task, ILogService? logger = null)
+    public LongRunningBackgroundTaskService(
+        IBackgroundTask task,
+        ILogService? logger = null,
+        IBackgroundServiceRuntimeStatusWriter? runtimeStatus = null)
     {
         ArgumentNullException.ThrowIfNull(task);
         _task = task as IStartupAwareBackgroundTask
@@ -19,6 +24,7 @@ public sealed class LongRunningBackgroundTaskService : IManagedBackgroundService
                 $"长运行后台任务 {task.TaskName} 必须实现 {nameof(IStartupAwareBackgroundTask)} 显式启动握手。",
                 nameof(task));
         _logger = logger;
+        _runtimeStatus = runtimeStatus;
     }
 
     public string ServiceName => _task.TaskName;
@@ -26,17 +32,27 @@ public sealed class LongRunningBackgroundTaskService : IManagedBackgroundService
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        SetRuntimeStatus(BackgroundServiceRuntimeState.Starting);
         CancellationTokenSource linkedCts;
         Task executionTask;
         Task startupTask;
         CancellationToken executionCancellationToken;
         lock (_lifecycleSync)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+            catch
+            {
+                SetRuntimeStatus(BackgroundServiceRuntimeState.Stopped);
+                throw;
+            }
             if (_executionTask is not null)
             {
                 if (!_executionTask.IsCompleted)
                 {
+                    SetRuntimeStatus(BackgroundServiceRuntimeState.Running);
                     return;
                 }
 
@@ -45,6 +61,7 @@ public sealed class LongRunningBackgroundTaskService : IManagedBackgroundService
                 _linkedCts = null;
             }
 
+            _startupFailed = false;
             linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             executionCancellationToken = linkedCts.Token;
             try
@@ -55,7 +72,11 @@ public sealed class LongRunningBackgroundTaskService : IManagedBackgroundService
             }
             catch
             {
+                _startupFailed = true;
                 linkedCts.Dispose();
+                SetRuntimeStatus(
+                    BackgroundServiceRuntimeState.Faulted,
+                    "BACKGROUND_TASK_START_FAILED");
                 throw;
             }
 
@@ -84,15 +105,26 @@ public sealed class LongRunningBackgroundTaskService : IManagedBackgroundService
 
             if (!executionTask.IsCompleted)
             {
+                SetRuntimeStatus(BackgroundServiceRuntimeState.Running);
                 _ = ObserveExecutionAsync(executionTask, linkedCts, executionCancellationToken);
                 return;
             }
 
             await executionTask.ConfigureAwait(false);
             ClearAttempt(executionTask, linkedCts);
+            PublishExecutionCompletionStatus(
+                failure: null,
+                executionCancellationToken.IsCancellationRequested);
         }
         catch
         {
+            lock (_lifecycleSync)
+            {
+                _startupFailed = true;
+            }
+            SetRuntimeStatus(
+                BackgroundServiceRuntimeState.Faulted,
+                "BACKGROUND_TASK_START_FAILED");
             BeginAbortStartAttempt(executionTask, linkedCts);
             throw;
         }
@@ -101,7 +133,8 @@ public sealed class LongRunningBackgroundTaskService : IManagedBackgroundService
     private async Task ObserveExecutionAsync(
         Task executionTask,
         CancellationTokenSource linkedCts,
-        CancellationToken executionCancellationToken)
+        CancellationToken executionCancellationToken,
+        bool publishCompletionStatus = true)
     {
         Exception? failure = null;
         try
@@ -124,30 +157,42 @@ public sealed class LongRunningBackgroundTaskService : IManagedBackgroundService
         {
             try
             {
-                _logger.Error($"[后台任务] {ServiceName} 运行失败：{failure.Message}");
+                _logger.Error($"[后台任务] {ServiceName} 运行失败（{failure.GetType().Name}）。");
             }
             catch
             {
                 // 故障观察本身不得制造第二个未观察后台异常。
             }
         }
+
+        if (publishCompletionStatus)
+            PublishExecutionCompletionStatus(
+                failure,
+                executionCancellationToken.IsCancellationRequested);
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         Task? executionTask;
         CancellationTokenSource? linkedCts;
+        bool preserveStartupFailure;
         lock (_lifecycleSync)
         {
             executionTask = _executionTask;
             linkedCts = _linkedCts;
+            preserveStartupFailure = _startupFailed;
         }
 
         if (executionTask is null || linkedCts is null)
         {
+            if (!preserveStartupFailure)
+            {
+                SetRuntimeStatus(BackgroundServiceRuntimeState.Stopped);
+            }
             return;
         }
 
+        SetRuntimeStatus(BackgroundServiceRuntimeState.Stopping);
         List<Exception>? failures = null;
         try
         {
@@ -192,6 +237,22 @@ public sealed class LongRunningBackgroundTaskService : IManagedBackgroundService
         if (executionTask.IsCompleted)
             ClearAttempt(executionTask, linkedCts);
 
+        if (failures is not null and { Count: > 0 })
+        {
+            SetRuntimeStatus(
+                BackgroundServiceRuntimeState.Faulted,
+                "BACKGROUND_TASK_STOP_FAILED");
+        }
+        else if (preserveStartupFailure)
+        {
+            SetRuntimeStatus(
+                BackgroundServiceRuntimeState.Faulted,
+                "BACKGROUND_TASK_START_FAILED");
+        }
+        else
+        {
+            SetRuntimeStatus(BackgroundServiceRuntimeState.Stopped);
+        }
         ThrowFailures(failures);
     }
 
@@ -201,7 +262,11 @@ public sealed class LongRunningBackgroundTaskService : IManagedBackgroundService
     {
         _ = CancelFailedStartAsync(linkedCts);
         _ = StopFailedStartAsync();
-        _ = ObserveExecutionAsync(executionTask, linkedCts, linkedCts.Token);
+        _ = ObserveExecutionAsync(
+            executionTask,
+            linkedCts,
+            linkedCts.Token,
+            publishCompletionStatus: false);
     }
 
     private async Task CancelFailedStartAsync(CancellationTokenSource linkedCts)
@@ -235,7 +300,7 @@ public sealed class LongRunningBackgroundTaskService : IManagedBackgroundService
 
         try
         {
-            _logger.Error($"[后台任务] {ServiceName} {action}：{exception.Message}");
+            _logger.Error($"[后台任务] {ServiceName} {action}（{exception.GetType().Name}）。");
         }
         catch
         {
@@ -276,5 +341,54 @@ public sealed class LongRunningBackgroundTaskService : IManagedBackgroundService
         }
 
         return false;
+    }
+
+    private void SetRuntimeStatus(
+        BackgroundServiceRuntimeState state,
+        string? errorCode = null)
+    {
+        try
+        {
+            _runtimeStatus?.Set(ServiceName, state, errorCode);
+        }
+        catch (Exception ex)
+        {
+            LogCleanupFailure("更新诊断状态失败", ex);
+        }
+    }
+
+    private void PublishExecutionCompletionStatus(
+        Exception? failure,
+        bool cancellationRequested)
+    {
+        if (failure is not null)
+        {
+            SetRuntimeStatus(
+                BackgroundServiceRuntimeState.Faulted,
+                "BACKGROUND_TASK_EXECUTION_FAULT");
+            return;
+        }
+
+        if (cancellationRequested)
+        {
+            SetRuntimeStatus(BackgroundServiceRuntimeState.Stopped);
+            return;
+        }
+
+        if (_logger is not null)
+        {
+            try
+            {
+                _logger.Error($"[后台任务] {ServiceName} 未收到停止请求即结束。");
+            }
+            catch
+            {
+                // 故障观察本身不得制造第二个未观察后台异常。
+            }
+        }
+
+        SetRuntimeStatus(
+            BackgroundServiceRuntimeState.Faulted,
+            "BACKGROUND_TASK_UNEXPECTED_EXIT");
     }
 }

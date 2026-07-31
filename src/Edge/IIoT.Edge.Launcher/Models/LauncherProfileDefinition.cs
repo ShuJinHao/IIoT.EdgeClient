@@ -12,6 +12,10 @@ public sealed record LauncherProfileDefinition(
 {
     public IReadOnlyList<string> ExpectedModuleIds { get; init; } = [];
 
+    public string ActivationModuleId { get; init; } = string.Empty;
+
+    public string ActivationPluginDirectory { get; init; } = string.Empty;
+
     public string PluginDisplayPath { get; init; } = string.Empty;
 
     public string DataDisplayPath { get; init; } = string.Empty;
