@@ -18,6 +18,7 @@ using IIoT.Edge.Module.Contracts.Recipe;
 using IIoT.Edge.Module.Contracts.Shared;
 using IIoT.Edge.Module.Contracts.Identity;
 using IIoT.Edge.Application.Features.DataPipeline.DeadLetters;
+using IIoT.Edge.Application.Common.DataPipeline;
 
 namespace IIoT.Edge.Testing;
 
@@ -1479,15 +1480,20 @@ public sealed class FakeDeviceAccessTokenProvider(string? accessToken = null) : 
     public DateTimeOffset? AccessTokenExpiresAtUtc { get; set; }
 }
 
-public sealed class FakeCapacityBufferStore : ICapacityBufferStore
+public sealed class FakeCapacityBufferStore : ICapacityBufferStore, ICapacityBufferCursorStore
 {
     private readonly Dictionary<string, List<BufferHourlySummaryDto>> _claims = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<BufferHourlySummaryDto, long> _lastRecordIdBySummary =
+        new(ReferenceEqualityComparer.Instance);
+    private long _lastAssignedRecordId;
 
     public List<CapacityRecord> Records { get; } = new();
     public List<BufferHourlySummaryDto> HourlySummaries { get; } = new();
     public List<string> ReleasedClaimTokens { get; } = new();
     public List<int> ClaimBatchSizes { get; } = new();
+    public List<long> ClaimAfterRecordIds { get; } = new();
     public List<(string ClaimToken, string Date, int Hour, int MinuteBucket, string ShiftCode, string PlcName)> DeletedSummaries { get; } = new();
+    public int? ClaimSummaryLimit { get; set; }
     public int ClearAllCallCount { get; private set; }
     public Exception? CountException { get; set; }
     public TaskCompletionSource? CountStarted { get; set; }
@@ -1516,7 +1522,7 @@ public sealed class FakeCapacityBufferStore : ICapacityBufferStore
             .ToArray();
         var rows = HourlySummaries
             .Where(summary => !alreadyClaimed.Any(claimed => SameHourlySummary(claimed, summary)))
-            .Take(batchSize)
+            .Take(Math.Min(batchSize, ClaimSummaryLimit ?? batchSize))
             .Select(CloneHourlySummary)
             .ToList();
 
@@ -1532,6 +1538,62 @@ public sealed class FakeCapacityBufferStore : ICapacityBufferStore
         {
             ClaimToken = claimToken,
             Summaries = rows
+        });
+    }
+
+    public Task<ClaimedCapacityBufferCursorBatch?> ClaimHourlySummaryBatchAfterAsync(
+        long afterRecordId,
+        int batchSize = 200)
+    {
+        ClaimBatchSizes.Add(batchSize);
+        ClaimAfterRecordIds.Add(afterRecordId);
+        foreach (var summary in HourlySummaries)
+        {
+            if (_lastRecordIdBySummary.ContainsKey(summary))
+            {
+                continue;
+            }
+
+            _lastAssignedRecordId += Math.Max(1, summary.Total);
+            _lastRecordIdBySummary.Add(summary, _lastAssignedRecordId);
+        }
+
+        var alreadyClaimed = _claims.Values
+            .SelectMany(static summaries => summaries)
+            .ToArray();
+        var rows = new List<BufferHourlySummaryDto>();
+        var claimedRecordCount = 0;
+        foreach (var summary in HourlySummaries.Where(summary =>
+                     _lastRecordIdBySummary[summary] > afterRecordId
+                     && !alreadyClaimed.Any(claimed => SameHourlySummary(claimed, summary))))
+        {
+            var summaryRecordCount = Math.Max(1, summary.Total);
+            if (rows.Count > 0 && claimedRecordCount + summaryRecordCount > batchSize)
+            {
+                break;
+            }
+
+            rows.Add(summary);
+            claimedRecordCount += summaryRecordCount;
+            if (claimedRecordCount >= batchSize)
+            {
+                break;
+            }
+        }
+
+        if (rows.Count == 0)
+        {
+            return Task.FromResult<ClaimedCapacityBufferCursorBatch?>(null);
+        }
+
+        var claimToken = Guid.NewGuid().ToString("N");
+        _claims[claimToken] = rows.Select(CloneHourlySummary).ToList();
+        return Task.FromResult<ClaimedCapacityBufferCursorBatch?>(new ClaimedCapacityBufferCursorBatch
+        {
+            ClaimToken = claimToken,
+            Summaries = rows.Select(CloneHourlySummary).ToArray(),
+            ClaimedRecordCount = claimedRecordCount,
+            LastRecordId = rows.Max(summary => _lastRecordIdBySummary[summary])
         });
     }
 

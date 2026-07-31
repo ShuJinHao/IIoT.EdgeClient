@@ -13,6 +13,7 @@ internal sealed class PersistentPlcIdentityAliasRegistry : IPlcIdentityAliasRegi
     private readonly ILogService _logger;
     private readonly string _persistPath;
     private readonly object _lock = new();
+    private bool _isQuarantined;
 
     public PersistentPlcIdentityAliasRegistry(string persistDirectory, ILogService logger)
     {
@@ -35,6 +36,11 @@ internal sealed class PersistentPlcIdentityAliasRegistry : IPlcIdentityAliasRegi
 
         lock (_lock)
         {
+            if (_isQuarantined)
+            {
+                return;
+            }
+
             if (!_aliasesByPlcCode.TryGetValue(normalizedCode, out var aliases))
             {
                 aliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -58,6 +64,11 @@ internal sealed class PersistentPlcIdentityAliasRegistry : IPlcIdentityAliasRegi
 
         lock (_lock)
         {
+            if (_isQuarantined)
+            {
+                return [];
+            }
+
             if (!_aliasesByPlcCode.TryGetValue(normalizedCode, out var aliases))
             {
                 return [];
@@ -110,6 +121,7 @@ internal sealed class PersistentPlcIdentityAliasRegistry : IPlcIdentityAliasRegi
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
+            _isQuarantined = true;
             _logger.Warn(
                 $"[PLC 身份别名] 无法读取 {PersistFileName}，原文件已保留且不会用于归属：{ex.Message}");
         }

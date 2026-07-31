@@ -2,6 +2,7 @@ using System.Runtime.ExceptionServices;
 using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
+using IIoT.Edge.Module.Contracts.Auth;
 using IIoT.Edge.Module.Contracts.Logging;
 
 namespace IIoT.Edge.Shell.Core;
@@ -51,6 +52,7 @@ public sealed class PlcTaskBindingTransactionService(
     IPlcTaskBindingPersistenceTransaction persistenceTransaction,
     IPlcTaskBindingRuntimeTransaction runtimeTransaction,
     IPlcRuntimeConfigurationMutationGate runtimeConfigurationMutationGate,
+    IClientPermissionService permissionService,
     ILogService logger)
     : IPlcTaskBindingTransactionService
 {
@@ -60,6 +62,8 @@ public sealed class PlcTaskBindingTransactionService(
         IReadOnlyDictionary<string, bool> taskStates,
         CancellationToken cancellationToken = default)
     {
+        EnsureHardwareEditPermission();
+
         if (networkDeviceId <= 0)
         {
             throw new ArgumentException("网络设备 Id 必须大于 0。", nameof(networkDeviceId));
@@ -72,6 +76,8 @@ public sealed class PlcTaskBindingTransactionService(
                    .EnterAsync(networkDeviceId, cancellationToken)
                    .ConfigureAwait(false))
         {
+            EnsureHardwareEditPermission();
+
             var preparation = await persistenceTransaction
                 .PrepareAsync(networkDeviceId, moduleId, taskStates, cancellationToken)
                 .ConfigureAwait(false);
@@ -109,6 +115,15 @@ public sealed class PlcTaskBindingTransactionService(
                 runtimeResult.EnabledTaskKeys
                     .OrderBy(static key => key, StringComparer.OrdinalIgnoreCase)
                     .ToArray());
+        }
+    }
+
+    private void EnsureHardwareEditPermission()
+    {
+        if (!permissionService.CanEditHardware)
+        {
+            throw new UnauthorizedAccessException(
+                "当前会话缺少硬件配置权限，PLC 任务绑定未修改。");
         }
     }
 

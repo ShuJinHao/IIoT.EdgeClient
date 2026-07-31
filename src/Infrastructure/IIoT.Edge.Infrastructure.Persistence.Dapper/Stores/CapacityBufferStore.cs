@@ -3,10 +3,13 @@ using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
 using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
+using IIoT.Edge.Application.Common.DataPipeline;
 
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 
-public class CapacityBufferStore : ClaimBufferStoreBase<CapacityRecord>, ICapacityBufferStore
+public class CapacityBufferStore : ClaimBufferStoreBase<CapacityRecord>,
+    ICapacityBufferStore,
+    ICapacityBufferCursorStore
 {
     private const string ClaimTableName = "capacity_buffer_claims";
     private const string InsertCapacitySql = @"
@@ -124,6 +127,62 @@ public class CapacityBufferStore : ClaimBufferStoreBase<CapacityRecord>, ICapaci
             {
                 ClaimToken = claimToken,
                 Summaries = summaries
+            }).ConfigureAwait(false);
+    }
+
+    public async Task<ClaimedCapacityBufferCursorBatch?> ClaimHourlySummaryBatchAfterAsync(
+        long afterRecordId,
+        int batchSize = 200)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(afterRecordId);
+        ArgumentOutOfRangeException.ThrowIfLessThan(batchSize, 1);
+
+        List<long>? claimedRecordIds = null;
+        return await ClaimBatchCoreAsync<BufferHourlySummaryDto, ClaimedCapacityBufferCursorBatch>(
+            ClaimTableName,
+            batchSize,
+            async (conn, tx, size, _) =>
+            {
+                claimedRecordIds = (await conn.QueryAsync<long>(
+                    @"
+                    SELECT b.Id
+                    FROM capacity_buffer b
+                    LEFT JOIN capacity_buffer_claims c ON c.RecordId = b.Id
+                    WHERE c.RecordId IS NULL
+                      AND b.Id > @AfterRecordId
+                    ORDER BY b.Id ASC
+                    LIMIT @BatchSize",
+                    new
+                    {
+                        AfterRecordId = afterRecordId,
+                        BatchSize = size
+                    },
+                    tx,
+                    commandTimeout: CommandTimeout).ConfigureAwait(false)).ToList();
+                return claimedRecordIds;
+            },
+            async (conn, tx, claimToken) => (await conn.QueryAsync<BufferHourlySummaryDto>(
+                BuildHourlySummarySql(
+                    @"FROM capacity_buffer b
+                INNER JOIN capacity_buffer_claims c ON c.RecordId = b.Id",
+                    completedTimeColumn: "b.CompletedTime",
+                    shiftCodeColumn: "b.ShiftCode",
+                    plcNameColumn: "b.PlcName",
+                    cellResultColumn: "b.CellResult",
+                    orderShiftCodeColumn: "b.ShiftCode",
+                    whereClause: "c.ClaimToken = @ClaimToken"),
+                new { ClaimToken = claimToken },
+                tx,
+                commandTimeout: CommandTimeout)).ToList(),
+            (claimToken, summaries) => new ClaimedCapacityBufferCursorBatch
+            {
+                ClaimToken = claimToken,
+                Summaries = summaries,
+                ClaimedRecordCount = claimedRecordIds?.Count
+                    ?? throw new InvalidOperationException("产能游标批次缺少原始记录计数。"),
+                LastRecordId = claimedRecordIds is { Count: > 0 }
+                    ? claimedRecordIds[^1]
+                    : throw new InvalidOperationException("产能游标批次缺少最后记录标识。")
             }).ConfigureAwait(false);
     }
 

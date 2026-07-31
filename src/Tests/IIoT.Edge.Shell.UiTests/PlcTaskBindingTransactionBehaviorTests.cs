@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
+using IIoT.Edge.Module.Contracts.Auth;
 using IIoT.Edge.Shell.Core;
 using IIoT.Edge.Testing;
 
@@ -10,6 +11,55 @@ namespace IIoT.Edge.Shell.UiTests;
 public sealed class PlcTaskBindingTransactionBehaviorTests
 {
     private static long _eventSequence;
+
+    [Fact]
+    public async Task SaveAndApply_WhenHardwarePermissionIsMissing_ShouldRejectBeforeMutation()
+    {
+        var persistence = new ControlledPersistenceTransaction();
+        var runtime = new ControlledRuntimeTransaction();
+        var service = CreateService(
+            persistence,
+            runtime,
+            permissionService: new ControlledPermissionService(canEditHardware: false));
+
+        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            service.SaveAndApplyAsync(
+                1,
+                "TestModule",
+                States(("Task.MG1", true)),
+                TestContext.Current.CancellationToken));
+
+        Assert.Contains("硬件配置权限", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(persistence.PreparedDeviceIds);
+        Assert.Equal(0, runtime.CaptureCalls);
+        Assert.Equal(0, runtime.ApplyCalls);
+    }
+
+    [Fact]
+    public async Task SaveAndApply_WhenPermissionIsRevokedWhileWaitingForMutationGate_ShouldRejectBeforeSnapshot()
+    {
+        var gate = new PlcRuntimeConfigurationMutationGate();
+        using var hardwareMutation = await gate.EnterAsync(
+            1,
+            TestContext.Current.CancellationToken);
+        var persistence = new ControlledPersistenceTransaction();
+        var runtime = new ControlledRuntimeTransaction();
+        var permissions = new ControlledPermissionService(canEditHardware: true);
+        var service = CreateService(persistence, runtime, gate, permissions);
+
+        var save = service.SaveAndApplyAsync(
+            1,
+            "TestModule",
+            States(("Task.MG1", true)),
+            TestContext.Current.CancellationToken);
+        permissions.CanEditHardware = false;
+        hardwareMutation.Dispose();
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => save);
+        Assert.Empty(persistence.PreparedDeviceIds);
+        Assert.Equal(0, runtime.CaptureCalls);
+        Assert.Equal(0, runtime.ApplyCalls);
+    }
 
     [Fact]
     public async Task SaveAndApply_WhenSqliteCommitFails_ShouldNotTouchRuntime()
@@ -220,11 +270,13 @@ public sealed class PlcTaskBindingTransactionBehaviorTests
     private static PlcTaskBindingTransactionService CreateService(
         ControlledPersistenceTransaction persistence,
         ControlledRuntimeTransaction runtime,
-        IPlcRuntimeConfigurationMutationGate? runtimeConfigurationMutationGate = null)
+        IPlcRuntimeConfigurationMutationGate? runtimeConfigurationMutationGate = null,
+        IClientPermissionService? permissionService = null)
         => new(
             persistence,
             runtime,
             runtimeConfigurationMutationGate ?? new PlcRuntimeConfigurationMutationGate(),
+            permissionService ?? new ControlledPermissionService(canEditHardware: true),
             new FakeLogService());
 
     private static IReadOnlyDictionary<string, bool> States(
@@ -233,6 +285,29 @@ public sealed class PlcTaskBindingTransactionBehaviorTests
             static state => state.Key,
             static state => state.Enabled,
             StringComparer.OrdinalIgnoreCase);
+
+    private sealed class ControlledPermissionService(bool canEditHardware)
+        : IClientPermissionService
+    {
+        public bool CanEditParams => false;
+
+        public bool CanEditHardware { get; set; } = canEditHardware;
+
+        public bool IsLocalAdmin => false;
+
+        public bool HasPermission(string permission)
+            => string.Equals(
+                   permission,
+                   Permissions.HardwareConfig,
+                   StringComparison.OrdinalIgnoreCase)
+               && CanEditHardware;
+
+        public event Action? PermissionStateChanged
+        {
+            add { }
+            remove { }
+        }
+    }
 
     private sealed class ControlledPersistenceTransaction
         : IPlcTaskBindingPersistenceTransaction

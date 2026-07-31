@@ -50,24 +50,25 @@ public sealed class PlcIdentityAliasRegistryPersistenceTests
             $"iiot-edge-plc-alias-invalid-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, "plc_identity_aliases.json");
+        const string invalidContent = """
+                                      {
+                                        "P1-AP00": ["历史名称"],
+                                        "P1-AP01": null
+                                      }
+                                      """;
 
         try
         {
-            File.WriteAllText(
-                path,
-                """
-                {
-                  "P1-AP00": ["历史名称"],
-                  "P1-AP01": null
-                }
-                """);
+            File.WriteAllText(path, invalidContent);
             var logger = new FakeLogService();
 
             var registry = new PersistentPlcIdentityAliasRegistry(directory, logger);
+            registry.ObserveVerifiedAlias("P1-AP01", "当前展示名称");
 
             Assert.Empty(registry.GetVerifiedAliases("P1-AP00"));
             Assert.Empty(registry.GetVerifiedAliases("P1-AP01"));
             Assert.True(File.Exists(path));
+            Assert.Equal(invalidContent, File.ReadAllText(path));
             Assert.Contains(
                 logger.Entries,
                 entry => entry.Level == "Warn"
