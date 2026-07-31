@@ -52,17 +52,23 @@ public sealed class LauncherPluginActivationSource : ILauncherPluginActivationSo
         if (!Directory.Exists(pluginsRoot))
         {
             ReplaceDiscoveryDiagnostics(
-            [
-                CreateDiagnostic(
-                    "LAUNCHER_PLUGIN_ROOT_MISSING",
-                    subject: null,
-                    exceptionType: null)
-            ]);
+                new[]
+                {
+                    CreateDiagnostic(
+                        "LAUNCHER_PLUGIN_ROOT_MISSING",
+                        subject: null,
+                        exceptionType: null)
+                }
+                .Concat(CreateMissingPluginDiagnostics(
+                    selection,
+                    new HashSet<string>(StringComparer.OrdinalIgnoreCase)))
+                .ToArray());
             return [];
         }
 
         var activations = new List<LauncherPluginActivation>();
         var discoveryDiagnostics = new List<LauncherStartupDiagnostic>();
+        var discoveredModuleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         string[] pluginDirectories;
         try
         {
@@ -79,20 +85,38 @@ public sealed class LauncherPluginActivationSource : ILauncherPluginActivationSo
                                        or NotSupportedException)
         {
             ReplaceDiscoveryDiagnostics(
-            [
-                CreateDiagnostic(
-                    "LAUNCHER_PLUGIN_ROOT_ENUMERATION_FAILED",
-                    subject: null,
-                    exceptionType: ex.GetType().Name)
-            ]);
+                new[]
+                {
+                    CreateDiagnostic(
+                        "LAUNCHER_PLUGIN_ROOT_ENUMERATION_FAILED",
+                        subject: null,
+                        exceptionType: ex.GetType().Name)
+                }
+                .Concat(CreateMissingPluginDiagnostics(
+                    selection,
+                    new HashSet<string>(StringComparer.OrdinalIgnoreCase)))
+                .ToArray());
             return [];
         }
 
         foreach (var pluginDirectory in pluginDirectories)
         {
+            var pluginDirectoryName = Path.GetFileName(pluginDirectory);
+            if (!selection.TryGetByPluginDirectory(pluginDirectoryName, out var selectedPlugin))
+            {
+                continue;
+            }
+
             try
             {
-                activations.AddRange(LoadPluginActivations(pluginDirectory, selection));
+                var pluginActivations = LoadPluginActivations(
+                    pluginDirectory,
+                    selectedPlugin);
+                activations.AddRange(pluginActivations);
+                if (pluginActivations.Count > 0)
+                {
+                    discoveredModuleIds.Add(selectedPlugin.ModuleId);
+                }
             }
             catch (Exception ex) when (ex is IOException
                                            or UnauthorizedAccessException
@@ -114,13 +138,15 @@ public sealed class LauncherPluginActivationSource : ILauncherPluginActivationSo
             }
         }
 
+        discoveryDiagnostics.AddRange(
+            CreateMissingPluginDiagnostics(selection, discoveredModuleIds));
         ReplaceDiscoveryDiagnostics(discoveryDiagnostics);
         return activations;
     }
 
     private static IReadOnlyList<LauncherPluginActivation> LoadPluginActivations(
         string pluginDirectory,
-        LauncherEnabledPluginSelection selection)
+        LauncherEnabledPluginSelectionItem selectedPlugin)
     {
         var pluginManifestPath = Path.Combine(pluginDirectory, PluginManifestFileName);
         if (!File.Exists(pluginManifestPath))
@@ -130,9 +156,13 @@ public sealed class LauncherPluginActivationSource : ILauncherPluginActivationSo
 
         using var pluginDocument = JsonDocument.Parse(File.ReadAllText(pluginManifestPath));
         var pluginModuleId = ReadRequiredString(pluginDocument.RootElement, "moduleId");
-        if (!selection.Contains(pluginModuleId))
+        if (!string.Equals(
+                pluginModuleId,
+                selectedPlugin.ModuleId,
+                StringComparison.OrdinalIgnoreCase))
         {
-            return [];
+            throw new InvalidOperationException(
+                "plugin.json moduleId 与选择清单目录身份不一致。");
         }
 
         var activationRoot = Path.Combine(pluginDirectory, ActivationDirectoryName);
@@ -195,6 +225,16 @@ public sealed class LauncherPluginActivationSource : ILauncherPluginActivationSo
 
         return result;
     }
+
+    private static IEnumerable<LauncherStartupDiagnostic> CreateMissingPluginDiagnostics(
+        LauncherEnabledPluginSelection selection,
+        IReadOnlySet<string> discoveredModuleIds)
+        => selection.Plugins
+            .Where(plugin => !discoveredModuleIds.Contains(plugin.ModuleId))
+            .Select(plugin => CreateDiagnostic(
+                "LAUNCHER_PLUGIN_SELECTED_NOT_DISCOVERED",
+                plugin.ModuleId,
+                exceptionType: null));
 
     private void ReplaceDiscoveryDiagnostics(
         IReadOnlyCollection<LauncherStartupDiagnostic> values)

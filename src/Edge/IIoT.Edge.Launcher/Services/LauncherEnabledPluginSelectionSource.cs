@@ -4,12 +4,40 @@ using IIoT.Edge.SharedKernel.Configuration;
 
 namespace IIoT.Edge.Launcher.Services;
 
+public sealed record LauncherEnabledPluginSelectionItem(
+    string ModuleId,
+    string PluginDirectory);
+
 public sealed record LauncherEnabledPluginSelection(
     bool ManifestIsValid,
-    IReadOnlyList<string> ModuleIds)
+    IReadOnlyList<LauncherEnabledPluginSelectionItem> Plugins)
 {
+    public IReadOnlyList<string> ModuleIds
+        => Plugins.Select(static plugin => plugin.ModuleId).ToArray();
+
     public bool Contains(string moduleId)
-        => ModuleIds.Contains(moduleId, StringComparer.OrdinalIgnoreCase);
+        => Plugins.Any(plugin => string.Equals(
+            plugin.ModuleId,
+            moduleId,
+            StringComparison.OrdinalIgnoreCase));
+
+    public bool TryGetByPluginDirectory(
+        string pluginDirectory,
+        out LauncherEnabledPluginSelectionItem plugin)
+    {
+        var match = Plugins.FirstOrDefault(item => string.Equals(
+            item.PluginDirectory,
+            pluginDirectory,
+            StringComparison.OrdinalIgnoreCase));
+        if (match is null)
+        {
+            plugin = default!;
+            return false;
+        }
+
+        plugin = match;
+        return true;
+    }
 }
 
 public interface ILauncherEnabledPluginSelectionSource
@@ -22,6 +50,7 @@ public sealed class LauncherEnabledPluginSelectionSource(
     ILauncherStartupDiagnosticWriter? diagnostics = null)
     : ILauncherEnabledPluginSelectionSource
 {
+    private const int SupportedSchemaVersion = 1;
     public const string EnabledPluginsFileName = "iiot-enabled-plugins.json";
 
     public LauncherEnabledPluginSelection Load()
@@ -39,7 +68,11 @@ public sealed class LauncherEnabledPluginSelectionSource(
         {
             using var document = JsonDocument.Parse(File.ReadAllText(path));
             var root = document.RootElement;
-            if (!TryGetProperty(root, "plugins", out var plugins)
+            if (!TryGetProperty(root, "schemaVersion", out var schemaVersion)
+                || schemaVersion.ValueKind != JsonValueKind.Number
+                || !schemaVersion.TryGetInt32(out var parsedSchemaVersion)
+                || parsedSchemaVersion != SupportedSchemaVersion
+                || !TryGetProperty(root, "plugins", out var plugins)
                 || plugins.ValueKind != JsonValueKind.Array)
             {
                 ReplaceDiagnostic("LAUNCHER_PLUGIN_SELECTION_INVALID");
@@ -47,38 +80,43 @@ public sealed class LauncherEnabledPluginSelectionSource(
             }
 
             var entries = plugins.EnumerateArray().ToArray();
-            var candidateModuleIds = entries
-                .Select(static plugin => plugin.ValueKind == JsonValueKind.Object
-                    ? ReadString(plugin, "moduleId")
-                    : null)
-                .ToArray();
-            if (candidateModuleIds.Any(static moduleId =>
-                    string.IsNullOrWhiteSpace(moduleId)
-                    || moduleId.Length > 256
-                    || moduleId.Any(char.IsControl)))
+            var moduleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var pluginDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var selectedPlugins = new List<LauncherEnabledPluginSelectionItem>();
+            foreach (var entry in entries)
             {
-                ReplaceDiagnostic("LAUNCHER_PLUGIN_SELECTION_INVALID");
-                return new LauncherEnabledPluginSelection(false, []);
+                var moduleId = entry.ValueKind == JsonValueKind.Object
+                    ? ReadString(entry, "moduleId")
+                    : null;
+                var pluginDirectory = entry.ValueKind == JsonValueKind.Object
+                    ? ReadString(entry, "pluginDirectory")
+                    : null;
+                if (!IsValidToken(moduleId)
+                    || !IsSafePluginDirectory(pluginDirectory)
+                    || !moduleIds.Add(moduleId!)
+                    || !pluginDirectories.Add(pluginDirectory!))
+                {
+                    ReplaceDiagnostic("LAUNCHER_PLUGIN_SELECTION_INVALID");
+                    return new LauncherEnabledPluginSelection(false, []);
+                }
+
+                selectedPlugins.Add(new LauncherEnabledPluginSelectionItem(
+                    moduleId!,
+                    pluginDirectory!));
             }
 
-            var moduleIds = candidateModuleIds
-                .Select(static moduleId => moduleId!)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(static moduleId => moduleId, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-            if (moduleIds.Length != entries.Length)
-            {
-                ReplaceDiagnostic("LAUNCHER_PLUGIN_SELECTION_INVALID");
-                return new LauncherEnabledPluginSelection(false, []);
-            }
-            if (moduleIds.Length == 0)
+            if (selectedPlugins.Count == 0)
             {
                 ReplaceDiagnostic("LAUNCHER_PLUGIN_SELECTION_EMPTY");
                 return new LauncherEnabledPluginSelection(true, []);
             }
 
             diagnostics?.ReplaceArea(LauncherStartupDiagnosticAreas.EnabledPluginSelection, []);
-            return new LauncherEnabledPluginSelection(true, moduleIds);
+            return new LauncherEnabledPluginSelection(
+                true,
+                selectedPlugins
+                    .OrderBy(static plugin => plugin.ModuleId, StringComparer.OrdinalIgnoreCase)
+                    .ToArray());
         }
         catch (Exception ex) when (ex is JsonException
                                        or IOException
@@ -110,6 +148,26 @@ public sealed class LauncherEnabledPluginSelectionSource(
            && value.ValueKind == JsonValueKind.String
             ? value.GetString()?.Trim()
             : null;
+
+    private static bool IsValidToken(string? value)
+        => !string.IsNullOrWhiteSpace(value)
+           && value.Length <= 256
+           && !value.Any(char.IsControl);
+
+    private static bool IsSafePluginDirectory(string? value)
+    {
+        if (!IsValidToken(value))
+        {
+            return false;
+        }
+
+        return value is not "." and not ".."
+               && !value!.Contains('/')
+               && !value.Contains('\\')
+               && value.IndexOfAny(['<', '>', ':', '"', '|', '?', '*']) < 0
+               && !value.EndsWith(' ')
+               && !value.EndsWith('.');
+    }
 
     private static bool TryGetProperty(
         JsonElement element,

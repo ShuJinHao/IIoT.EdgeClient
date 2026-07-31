@@ -333,6 +333,131 @@ public sealed class LauncherPluginActivationTests
     }
 
     [Fact]
+    public void Selection_WhenSchemaIsMissingInvalidOrUnsupported_ShouldFailClosed()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var launcherDirectory = Path.Combine(tempDirectory, "install", "current", "launcher");
+            var selectionPath = Path.Combine(
+                EdgeClientProgramDataPaths.ResolveLauncherDirectory(launcherDirectory),
+                LauncherEnabledPluginSelectionSource.EnabledPluginsFileName);
+            var diagnostics = new LauncherStartupDiagnosticStore();
+            var source = new LauncherEnabledPluginSelectionSource(
+                launcherDirectory,
+                diagnostics);
+
+            foreach (var manifest in new[]
+                     {
+                         """{"plugins":[{"moduleId":"AP","pluginDirectory":"AP"}]}""",
+                         """{"schemaVersion":"1","plugins":[{"moduleId":"AP","pluginDirectory":"AP"}]}""",
+                         """{"schemaVersion":2,"plugins":[{"moduleId":"AP","pluginDirectory":"AP"}]}""",
+                         """{"schemaVersion":1,"plugins":[{"moduleId":"AP"}]}""",
+                         """{"schemaVersion":1,"plugins":[{"moduleId":"AP","pluginDirectory":"../AP"}]}""",
+                         """{"schemaVersion":1,"plugins":[{"moduleId":"AP","pluginDirectory":"Shared"},{"moduleId":"CP","pluginDirectory":"Shared"}]}"""
+                     })
+            {
+                WriteText(selectionPath, manifest);
+
+                var selection = source.Load();
+
+                Assert.False(selection.ManifestIsValid);
+                Assert.Empty(selection.Plugins);
+                Assert.Contains(
+                    diagnostics.Snapshot,
+                    item => item.ReasonCode == "LAUNCHER_PLUGIN_SELECTION_INVALID");
+            }
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void Catalog_WhenUnselectedDirectoryImpersonatesModuleId_ShouldFailClosed()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var launcherDirectory = Path.Combine(tempDirectory, "install", "current", "launcher");
+            Directory.CreateDirectory(launcherDirectory);
+            WriteBaseCatalog(launcherDirectory);
+            WriteActivation(
+                launcherDirectory,
+                "AP",
+                "DieCuttingAnodeLine",
+                "负极模切",
+                pluginDirectory: "ManualDrop");
+            WriteEnabledSelectionEntries(launcherDirectory, ("AP", "AP"));
+            var diagnostics = new LauncherStartupDiagnosticStore();
+            var selection = new LauncherEnabledPluginSelectionSource(launcherDirectory, diagnostics);
+            var source = new LauncherPluginActivationSource(launcherDirectory, selection, diagnostics);
+
+            var profiles = new LauncherProfileCatalog(
+                    launcherDirectory,
+                    activationSource: source)
+                .LoadProfiles();
+
+            Assert.Equal("Default", Assert.Single(profiles).ProfileId);
+            Assert.Contains(
+                diagnostics.Snapshot,
+                item => item.ReasonCode == "LAUNCHER_PLUGIN_SELECTED_NOT_DISCOVERED"
+                        && item.Subject == "AP");
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Theory]
+    [InlineData("MissingDirectory")]
+    [InlineData("MissingPluginManifest")]
+    [InlineData("MissingActivationManifest")]
+    public void Activation_WhenSelectedPluginIsNotDiscoverable_ShouldPublishPerModuleDiagnostic(
+        string scenario)
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var launcherDirectory = Path.Combine(tempDirectory, "install", "current", "launcher");
+            var pluginDirectory = Path.Combine(
+                EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(launcherDirectory),
+                "AP");
+            Directory.CreateDirectory(Path.GetDirectoryName(pluginDirectory)!);
+            if (scenario != "MissingDirectory")
+            {
+                Directory.CreateDirectory(pluginDirectory);
+            }
+            if (scenario == "MissingActivationManifest")
+            {
+                WriteText(
+                    Path.Combine(pluginDirectory, "plugin.json"),
+                    """{"moduleId":"AP","version":"2.0.17","hostApiVersion":"2.0.0"}""");
+            }
+
+            WriteEnabledSelection(launcherDirectory, "AP");
+            var diagnostics = new LauncherStartupDiagnosticStore();
+            var selection = new LauncherEnabledPluginSelectionSource(launcherDirectory, diagnostics);
+            var source = new LauncherPluginActivationSource(launcherDirectory, selection, diagnostics);
+
+            var activations = source.LoadActivations();
+
+            Assert.Empty(activations);
+            Assert.Contains(
+                diagnostics.Snapshot,
+                item => item.ReasonCode == "LAUNCHER_PLUGIN_SELECTED_NOT_DISCOVERED"
+                        && item.Subject == "AP"
+                        && item.RepairTarget == LauncherStartupDiagnosticRepairTargets.PluginActivation);
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
     public void Reconciler_WhenPluginDirectoryIsNotSelected_ShouldNotExposeOrMaterializeIt()
     {
         var tempDirectory = CreateTempDirectory();
@@ -411,10 +536,11 @@ public sealed class LauncherPluginActivationTests
         string moduleId,
         string profileId,
         string displayName,
-        string clientCode = "")
+        string clientCode = "",
+        string? pluginDirectory = null)
     {
         var pluginsRoot = EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(launcherDirectory);
-        var pluginRoot = Path.Combine(pluginsRoot, moduleId);
+        var pluginRoot = Path.Combine(pluginsRoot, pluginDirectory ?? moduleId);
         var activationRoot = Path.Combine(pluginRoot, "activation");
         WriteText(
             Path.Combine(pluginRoot, "plugin.json"),
@@ -481,13 +607,29 @@ public sealed class LauncherPluginActivationTests
     private static void WriteEnabledSelection(
         string launcherDirectory,
         params string[] moduleIds)
+        => WriteEnabledSelectionEntries(
+            launcherDirectory,
+            moduleIds
+                .Select(static moduleId => (ModuleId: moduleId, PluginDirectory: moduleId))
+                .ToArray());
+
+    private static void WriteEnabledSelectionEntries(
+        string launcherDirectory,
+        params (string ModuleId, string PluginDirectory)[] plugins)
         => WriteText(
             Path.Combine(
                 EdgeClientProgramDataPaths.ResolveLauncherDirectory(launcherDirectory),
                 LauncherEnabledPluginSelectionSource.EnabledPluginsFileName),
             JsonSerializer.Serialize(new
             {
-                plugins = moduleIds.Select(static moduleId => new { moduleId }).ToArray()
+                schemaVersion = 1,
+                plugins = plugins
+                    .Select(static plugin => new
+                    {
+                        moduleId = plugin.ModuleId,
+                        pluginDirectory = plugin.PluginDirectory
+                    })
+                    .ToArray()
             }));
 
     private static void DeleteDirectory(string path)

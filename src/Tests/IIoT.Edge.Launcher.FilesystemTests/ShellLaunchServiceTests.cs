@@ -1266,7 +1266,13 @@ public sealed class ShellLaunchServiceTests
         : ILauncherEnabledPluginSelectionSource
     {
         public LauncherEnabledPluginSelection Load()
-            => new(manifestIsValid, moduleIds);
+            => new(
+                manifestIsValid,
+                moduleIds
+                    .Select(static moduleId => new LauncherEnabledPluginSelectionItem(
+                        moduleId,
+                        moduleId))
+                    .ToArray());
     }
 
     private sealed class FakeShellInstanceProbe(params string[] runningInstanceIds) : IShellInstanceProbe
