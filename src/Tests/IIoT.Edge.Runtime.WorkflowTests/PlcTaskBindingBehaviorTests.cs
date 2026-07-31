@@ -625,7 +625,6 @@ public sealed class PlcTaskBindingBehaviorTests
             new ModuleHardwareProfileResolver([]));
         var coordinator = new PlcLifecycleCoordinator(
             networkDevices,
-            contextStore,
             logger,
             runtimeRegistry,
             runtimeBuilder,
@@ -680,7 +679,6 @@ public sealed class PlcTaskBindingBehaviorTests
             new ModuleHardwareProfileResolver([]));
         var coordinator = new PlcLifecycleCoordinator(
             networkDevices,
-            contextStore,
             logger,
             runtimeRegistry,
             runtimeBuilder,
@@ -829,7 +827,6 @@ public sealed class PlcTaskBindingBehaviorTests
             new ModuleHardwareProfileResolver([]));
         var coordinator = new PlcLifecycleCoordinator(
             networkDevices,
-            contextStore,
             logger,
             runtimeRegistry,
             runtimeBuilder,
@@ -880,7 +877,6 @@ public sealed class PlcTaskBindingBehaviorTests
             new ModuleHardwareProfileResolver([]));
         var coordinator = new PlcLifecycleCoordinator(
             networkDevices,
-            contextStore,
             logger,
             runtimeRegistry,
             runtimeBuilder,
@@ -932,6 +928,75 @@ public sealed class PlcTaskBindingBehaviorTests
             Assert.Equal(PlcConnectionState.Faulted, snapshot.ConnectionState);
             Assert.Contains("同一端点 127.0.0.1:6300", snapshot.LastError, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public async Task PlcLifecycleCoordinator_WhenShutdownCheckpointFails_ShouldReleaseRuntimeAndPropagate()
+    {
+        var events = new ConcurrentQueue<string>();
+        var networkDevices = new InMemoryRepository<NetworkDeviceEntity>();
+        var ioMappings = new InMemoryRepository<IoMappingEntity>();
+        var device = networkDevices.Add(
+            CreateLifecyclePlc("PLC-A", 6350, plcCode: "PLC-A"));
+        var contextStore = new FakeProductionContextStore();
+        var logger = new FakeLogService();
+        var runtimeRegistry = new PlcRuntimeRegistry();
+        var statusStore = new PlcConnectionStatusStore();
+        var plcService = new RecordingDisposePlcService(events);
+        var task = new FailingCheckpointPlcTask(
+            "Task.MG1",
+            "TestModule",
+            device.PlcCode,
+            events);
+        var runtime = CreateInertRuntime(
+            device.Id,
+            device.DeviceName,
+            plcService,
+            logger,
+            statusStore);
+        var plan = new PlcRuntimeTaskPlan(
+            device.Id,
+            device.PlcCode,
+            device.DeviceName,
+            [
+                new KeyValuePair<string, PlcRuntimeTaskPlanEntry>(
+                    task.TaskName,
+                    new PlcRuntimeTaskPlanEntry(
+                        "TestModule",
+                        (_, _) => task,
+                        requiresPeriodicRead: false))
+            ]);
+        await runtime.ApplyTaskPlanAsync(
+            plan,
+            TestContext.Current.CancellationToken);
+        runtimeRegistry.RegisterTaskPlan(plan);
+        Assert.True(runtimeRegistry.TryAddRuntime(runtime));
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await task.Started.Task.WaitAsync(TestContext.Current.CancellationToken);
+        var coordinator = CreateLifecycleCoordinator(
+            networkDevices,
+            ioMappings,
+            new TrackingPlcServiceFactory(),
+            contextStore,
+            logger,
+            runtimeRegistry,
+            statusStore);
+
+        var failure = await Assert.ThrowsAnyAsync<Exception>(
+            () => coordinator.StopAsync(TestContext.Current.CancellationToken));
+
+        Assert.Contains(
+            PlcTaskRuntimeErrorCodes.TaskCheckpointSaveFailed,
+            failure.ToString(),
+            StringComparison.Ordinal);
+        Assert.Equal(
+            ["task-stop", "checkpoint-save", "runtime-release"],
+            events);
+        Assert.Equal(1, plcService.DisposeCallCount);
+        Assert.Null(runtimeRegistry.GetRuntime(device.Id));
+
+        await coordinator.DisposeAsync();
     }
 
     [Fact]
@@ -1326,7 +1391,6 @@ public sealed class PlcTaskBindingBehaviorTests
             taskStatusWriter: taskStatusWriter);
         return new PlcLifecycleCoordinator(
             networkDevices,
-            contextStore,
             logger,
             runtimeRegistry,
             runtimeBuilder,
@@ -1656,6 +1720,68 @@ public sealed class PlcTaskBindingBehaviorTests
         }
     }
 
+    private sealed class FailingCheckpointPlcTask(
+        string taskName,
+        string moduleId,
+        string plcCode,
+        ConcurrentQueue<string> events)
+        : IPlcTask, IStartupAwareBackgroundTask, IPlcTaskCheckpointParticipant
+    {
+        public string TaskName { get; } = taskName;
+
+        public PlcTaskCheckpointIdentity CheckpointIdentity { get; } =
+            new(moduleId, plcCode, taskName);
+
+        public TaskCompletionSource Started { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task StartAsync(CancellationToken cancellationToken)
+            => StartWithStartup(cancellationToken).Execution;
+
+        public BackgroundTaskRun StartWithStartup(
+            CancellationToken cancellationToken)
+        {
+            Started.TrySetResult();
+            return new BackgroundTaskRun(
+                Task.CompletedTask,
+                RunAsync(cancellationToken));
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            events.Enqueue("task-stop");
+            return Task.CompletedTask;
+        }
+
+        public ValueTask<PlcTaskCheckpointSaveResult> SaveCheckpointAsync(
+            PlcTaskCheckpointSaveReason reason,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Assert.Equal(PlcTaskCheckpointSaveReason.ProcessShutdown, reason);
+            events.Enqueue("checkpoint-save");
+            return ValueTask.FromResult(
+                PlcTaskCheckpointSaveResult.Failed(
+                    currentRevision: 7,
+                    diagnosticCode: "CheckpointPersistenceFailed"));
+        }
+
+        private static async Task RunAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                await Task.Delay(
+                    Timeout.InfiniteTimeSpan,
+                    cancellationToken);
+            }
+            catch (OperationCanceledException) when (
+                cancellationToken.IsCancellationRequested)
+            {
+            }
+        }
+    }
+
     private sealed class TrackingPlcServiceFactory : IPlcServiceFactory
     {
         public List<string> CreatedDeviceNames { get; } = [];
@@ -1730,6 +1856,22 @@ public sealed class PlcTaskBindingBehaviorTests
         public override ValueTask DisposeAsync()
         {
             IsConnected = false;
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingDisposePlcService(
+        ConcurrentQueue<string> events)
+        : PlcServiceTestDouble
+    {
+        private int _disposeCallCount;
+
+        public int DisposeCallCount => Volatile.Read(ref _disposeCallCount);
+
+        public override ValueTask DisposeAsync()
+        {
+            Interlocked.Increment(ref _disposeCallCount);
+            events.Enqueue("runtime-release");
             return ValueTask.CompletedTask;
         }
     }
