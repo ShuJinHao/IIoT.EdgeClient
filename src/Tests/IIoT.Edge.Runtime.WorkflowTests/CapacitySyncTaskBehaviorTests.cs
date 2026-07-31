@@ -355,11 +355,8 @@ public sealed class CapacitySyncTaskBehaviorTests
         Assert.Empty(bufferStore.HourlySummaries);
     }
 
-    [Theory]
-    [InlineData("P1-AP01")]
-    [InlineData("禁用但已配置")]
-    public async Task RetryBuffer_WhenRuntimeContextIsMissing_ShouldResolveFromDisabledConfiguredPlc(
-        string persistedIdentity)
+    [Fact]
+    public async Task RetryBuffer_WhenRuntimeContextIsMissing_ShouldResolveDisabledConfiguredPlcCode()
     {
         var cloudHttp = new FakeCloudHttpClient();
         var deviceService = new FakeDeviceService();
@@ -379,7 +376,7 @@ public sealed class CapacitySyncTaskBehaviorTests
             ShiftCode = "D",
             Total = 2,
             OkCount = 2,
-            PlcName = persistedIdentity
+            PlcName = "P1-AP01"
         });
         var configuredPlc = NetworkDeviceEntity.Create(
             "禁用但已配置",
@@ -403,6 +400,143 @@ public sealed class CapacitySyncTaskBehaviorTests
         var payload = ParsePayload(Assert.Single(cloudHttp.PostPayloads));
         Assert.Equal("P1-AP01", payload.GetProperty("plcName").GetString());
         Assert.Empty(bufferStore.HourlySummaries);
+    }
+
+    [Fact]
+    public async Task RetryBuffer_WhenOnlyCurrentDeviceNameMatches_ShouldFailClosedAndReleaseClaim()
+    {
+        var cloudHttp = new FakeCloudHttpClient();
+        var deviceService = new FakeDeviceService();
+        deviceService.SetOnline(new DeviceSession
+        {
+            DeviceId = Guid.NewGuid(),
+            DeviceName = "Host",
+            ClientCode = "CLIENT-01",
+            ProcessId = Guid.NewGuid()
+        });
+        var bufferStore = new FakeCapacityBufferStore();
+        bufferStore.HourlySummaries.Add(new BufferHourlySummaryDto
+        {
+            Date = "2026-07-30",
+            Hour = 8,
+            MinuteBucket = 0,
+            ShiftCode = "D",
+            Total = 2,
+            OkCount = 2,
+            PlcName = "当前展示名称"
+        });
+        var configuredPlc = NetworkDeviceEntity.Create(
+            "当前展示名称",
+            DeviceType.PLC,
+            "127.0.0.1",
+            102,
+            "P1-AP01");
+        var task = CreateTask(
+            cloudHttp,
+            deviceService,
+            bufferStore,
+            new FakeLogService(),
+            new FakeProductionContextStore(),
+            new InMemoryPlcIdentityAliasRegistry(),
+            new FakeNetworkDeviceReadRepository([configuredPlc]));
+
+        var result = await task.RetryBufferAsync();
+
+        Assert.False(result);
+        Assert.Equal(0, cloudHttp.PostCallCount);
+        Assert.Single(bufferStore.HourlySummaries);
+        Assert.Single(bufferStore.ReleasedClaimTokens);
+        Assert.Empty(bufferStore.DeletedSummaries);
+    }
+
+    [Fact]
+    public async Task RetryBuffer_WhenPlcCodeAlsoExistsAsAnotherPlcAlias_ShouldPreferExactCode()
+    {
+        var cloudHttp = new FakeCloudHttpClient();
+        var deviceService = new FakeDeviceService();
+        deviceService.SetOnline(new DeviceSession
+        {
+            DeviceId = Guid.NewGuid(),
+            DeviceName = "Host",
+            ClientCode = "CLIENT-01",
+            ProcessId = Guid.NewGuid()
+        });
+        var bufferStore = new FakeCapacityBufferStore();
+        bufferStore.HourlySummaries.Add(new BufferHourlySummaryDto
+        {
+            Date = "2026-07-30",
+            Hour = 8,
+            MinuteBucket = 0,
+            ShiftCode = "D",
+            Total = 2,
+            OkCount = 2,
+            PlcName = "P1-AP01"
+        });
+        var contexts = new FakeProductionContextStore();
+        contexts.GetOrCreate(new PlcIdentity("P1-AP01", 7, "一号 PLC"));
+        contexts.GetOrCreate(new PlcIdentity("P1-AP02", 8, "二号 PLC"));
+        var aliases = new InMemoryPlcIdentityAliasRegistry();
+        aliases.ObserveVerifiedAlias("P1-AP02", "P1-AP01");
+        var task = CreateTask(
+            cloudHttp,
+            deviceService,
+            bufferStore,
+            new FakeLogService(),
+            contexts,
+            aliases);
+
+        var result = await task.RetryBufferAsync();
+
+        Assert.True(result);
+        var payload = ParsePayload(Assert.Single(cloudHttp.PostPayloads));
+        Assert.Equal("P1-AP01", payload.GetProperty("plcName").GetString());
+        Assert.Empty(bufferStore.HourlySummaries);
+    }
+
+    [Fact]
+    public async Task RetryBuffer_WhenHistoricalAliasIsReusedByAnotherPlc_ShouldFailClosedAndReleaseClaim()
+    {
+        var cloudHttp = new FakeCloudHttpClient();
+        var deviceService = new FakeDeviceService();
+        deviceService.SetOnline(new DeviceSession
+        {
+            DeviceId = Guid.NewGuid(),
+            DeviceName = "Host",
+            ClientCode = "CLIENT-01",
+            ProcessId = Guid.NewGuid()
+        });
+        var bufferStore = new FakeCapacityBufferStore();
+        bufferStore.HourlySummaries.Add(new BufferHourlySummaryDto
+        {
+            Date = "2026-07-30",
+            Hour = 8,
+            MinuteBucket = 0,
+            ShiftCode = "D",
+            Total = 2,
+            OkCount = 2,
+            PlcName = "被复用的历史名称"
+        });
+        var contexts = new FakeProductionContextStore();
+        contexts.GetOrCreate(new PlcIdentity("P1-AP01", 7, "一号 PLC"));
+        contexts.GetOrCreate(new PlcIdentity("P1-AP02", 8, "二号 PLC"));
+        var aliases = new InMemoryPlcIdentityAliasRegistry();
+        aliases.ObserveVerifiedAlias("P1-AP01", "被复用的历史名称");
+        aliases.ObserveVerifiedAlias("P1-AP02", "被复用的历史名称");
+        var task = CreateTask(
+            cloudHttp,
+            deviceService,
+            bufferStore,
+            new FakeLogService(),
+            contexts,
+            aliases);
+
+        var result = await task.RetryBufferAsync();
+
+        Assert.False(result);
+        Assert.Equal(0, cloudHttp.PostCallCount);
+        Assert.Single(bufferStore.HourlySummaries);
+        Assert.Single(bufferStore.ReleasedClaimTokens);
+        Assert.Empty(bufferStore.DeletedSummaries);
     }
 
     [Fact]
@@ -442,7 +576,7 @@ public sealed class CapacitySyncTaskBehaviorTests
         Assert.False(result);
         Assert.Equal(0, cloudHttp.PostCallCount);
         Assert.Single(bufferStore.HourlySummaries);
-        Assert.Empty(bufferStore.ReleasedClaimTokens);
+        Assert.Single(bufferStore.ReleasedClaimTokens);
         Assert.Empty(bufferStore.DeletedSummaries);
         Assert.Contains(
             logger.Entries,
@@ -506,8 +640,52 @@ public sealed class CapacitySyncTaskBehaviorTests
         Assert.Equal("P1-AP01", payload.GetProperty("plcName").GetString());
         Assert.Equal(200, bufferStore.HourlySummaries.Count);
         Assert.DoesNotContain(bufferStore.HourlySummaries, row => row.PlcName == "P1-AP01");
-        Assert.Empty(bufferStore.ReleasedClaimTokens);
+        Assert.Single(bufferStore.ReleasedClaimTokens);
         Assert.Equal([200, 200], bufferStore.ClaimBatchSizes);
+    }
+
+    [Fact]
+    public async Task RetryBuffer_WhenAuthoritativePlcConfigurationReadFails_ShouldNotClaimOrChangeRows()
+    {
+        var cloudHttp = new FakeCloudHttpClient();
+        var deviceService = new FakeDeviceService();
+        deviceService.SetOnline(new DeviceSession
+        {
+            DeviceId = Guid.NewGuid(),
+            DeviceName = "Host",
+            ClientCode = "CLIENT-01",
+            ProcessId = Guid.NewGuid()
+        });
+        var bufferStore = new FakeCapacityBufferStore();
+        bufferStore.HourlySummaries.Add(new BufferHourlySummaryDto
+        {
+            Date = "2026-07-30",
+            Hour = 8,
+            MinuteBucket = 0,
+            ShiftCode = "D",
+            Total = 2,
+            OkCount = 2,
+            PlcName = "P1-AP01"
+        });
+        var task = CreateTask(
+            cloudHttp,
+            deviceService,
+            bufferStore,
+            new FakeLogService(),
+            new FakeProductionContextStore(),
+            new InMemoryPlcIdentityAliasRegistry(),
+            new FakeNetworkDeviceReadRepository(
+                [],
+                new IOException("configured PLC read failed")));
+
+        var result = await task.RetryBufferAsync();
+
+        Assert.False(result);
+        Assert.Equal(0, cloudHttp.PostCallCount);
+        Assert.Single(bufferStore.HourlySummaries);
+        Assert.Empty(bufferStore.ClaimBatchSizes);
+        Assert.Empty(bufferStore.ReleasedClaimTokens);
+        Assert.Empty(bufferStore.DeletedSummaries);
     }
 
     [Fact]
@@ -635,13 +813,16 @@ public sealed class CapacitySyncTaskBehaviorTests
     }
 
     private sealed class FakeNetworkDeviceReadRepository(
-        IReadOnlyCollection<NetworkDeviceEntity> devices)
+        IReadOnlyCollection<NetworkDeviceEntity> devices,
+        Exception? listFailure = null)
         : IReadRepository<NetworkDeviceEntity>
     {
         public Task<List<NetworkDeviceEntity>> GetListAsync(
             Expression<Func<NetworkDeviceEntity, bool>> expression,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(devices.Where(expression.Compile()).ToList());
+            => listFailure is null
+                ? Task.FromResult(devices.Where(expression.Compile()).ToList())
+                : Task.FromException<List<NetworkDeviceEntity>>(listFailure);
 
         public Task<NetworkDeviceEntity?> GetByIdAsync<TKey>(
             TKey id,

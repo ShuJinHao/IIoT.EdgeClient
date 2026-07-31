@@ -274,110 +274,138 @@ public class CapacitySyncTask : ICapacitySyncTask
             }
 
             var identityBlockedInRound = false;
-            for (var batchIndex = 0; batchIndex < RetryMaxBatchesPerRound; batchIndex++)
+            var blockedClaimTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try
             {
-                var claimedBatch = await _bufferStore.ClaimHourlySummaryBatchAsync(RetryBatchSize).ConfigureAwait(false);
-                if (claimedBatch is null || claimedBatch.Summaries.Count == 0)
+                for (var batchIndex = 0; batchIndex < RetryMaxBatchesPerRound; batchIndex++)
                 {
-                    return !identityBlockedInRound;
-                }
-
-                var claimReleased = false;
-                var identityBlockedInBatch = 0;
-                try
-                {
-                    foreach (var summary in claimedBatch.Summaries)
-                    {
-                        if (!TryResolveBufferedPlcIdentity(
-                                summary.PlcName,
-                                configuredPlcs,
-                                out var plcCode,
-                                out var deviceName,
-                                out var identityDiagnostic))
-                        {
-                            identityBlockedInRound = true;
-                            identityBlockedInBatch++;
-                            _logger.Error(
-                                $"[PlcCode=未解析][TaskKey=Capacity.Hourly][SignalKey=不适用] "
-                                + $"产能补传记录身份无法唯一解析，原始 PlcName={summary.PlcName}，"
-                                + $"诊断={identityDiagnostic}；原记录已保留并保持领取隔离，"
-                                + $"未上传、移动或删除；继续处理其它可解析记录。");
-                            continue;
-                        }
-
-                        var result = await PostCapacityAsync(
-                            deviceId,
-                            summary.Date,
-                            summary.Hour,
-                            summary.MinuteBucket,
-                            summary.ShiftCode,
-                            summary.Total,
-                            summary.OkCount,
-                            summary.NgCount,
-                            plcCode,
-                            deviceName).ConfigureAwait(false);
-                        if (!result.IsSuccess)
-                        {
-                            await _bufferStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
-                            claimReleased = true;
-                            var slotLabel = FormatCapacitySlot(
-                                summary.Date,
-                                summary.Hour,
-                                summary.MinuteBucket,
-                                summary.ShiftCode);
-                            if (IsUploadPaused(result))
-                            {
-                                _logger.Warn(
-                                    $"[云端补传] 产能补传已暂停，等待云端恢复：{slotLabel}（{result.ReasonCode}）");
-                            }
-                            else
-                            {
-                                _logger.Warn(
-                                    $"[云端补传] 产能补传失败：{slotLabel}");
-                            }
-                            return false;
-                        }
-
-                        await _bufferStore.DeleteClaimedSummaryAsync(
-                            claimedBatch.ClaimToken,
-                            summary.Date,
-                            summary.Hour,
-                            summary.MinuteBucket,
-                            summary.ShiftCode,
-                            summary.PlcName).ConfigureAwait(false);
-                    }
-
-                    _logger.Info(
-                        $"[云端补传] 产能补传批次 {claimedBatch.ClaimToken} 已完成，"
-                        + $"行数：{claimedBatch.Summaries.Count}，身份阻断：{identityBlockedInBatch}");
-                    if (claimedBatch.Summaries.Count < RetryBatchSize)
+                    var claimedBatch = await _bufferStore.ClaimHourlySummaryBatchAsync(RetryBatchSize).ConfigureAwait(false);
+                    if (claimedBatch is null || claimedBatch.Summaries.Count == 0)
                     {
                         return !identityBlockedInRound;
                     }
-                }
-                catch (Exception ex)
-                {
-                    if (!claimReleased)
+
+                    var claimReleased = false;
+                    var identityBlockedInBatch = 0;
+                    try
                     {
-                        try
+                        foreach (var summary in claimedBatch.Summaries)
                         {
-                            await _bufferStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
+                            if (!TryResolveBufferedPlcIdentity(
+                                    summary.PlcName,
+                                    configuredPlcs,
+                                    out var plcCode,
+                                    out var deviceName,
+                                    out var identityDiagnostic))
+                            {
+                                identityBlockedInRound = true;
+                                identityBlockedInBatch++;
+                                _logger.Error(
+                                    $"[PlcCode=未解析][TaskKey=Capacity.Hourly][SignalKey=不适用] "
+                                    + $"产能补传记录身份无法唯一解析，原始 PlcName={summary.PlcName}，"
+                                    + $"诊断={identityDiagnostic}；原记录已保留，"
+                                    + $"未上传、移动或删除；本轮结束后释放领取状态等待人工修复，"
+                                    + $"并继续处理本轮其它可解析记录。");
+                                continue;
+                            }
+
+                            var result = await PostCapacityAsync(
+                                deviceId,
+                                summary.Date,
+                                summary.Hour,
+                                summary.MinuteBucket,
+                                summary.ShiftCode,
+                                summary.Total,
+                                summary.OkCount,
+                                summary.NgCount,
+                                plcCode,
+                                deviceName).ConfigureAwait(false);
+                            if (!result.IsSuccess)
+                            {
+                                await _bufferStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
+                                claimReleased = true;
+                                var slotLabel = FormatCapacitySlot(
+                                    summary.Date,
+                                    summary.Hour,
+                                    summary.MinuteBucket,
+                                    summary.ShiftCode);
+                                if (IsUploadPaused(result))
+                                {
+                                    _logger.Warn(
+                                        $"[云端补传] 产能补传已暂停，等待云端恢复：{slotLabel}（{result.ReasonCode}）");
+                                }
+                                else
+                                {
+                                    _logger.Warn(
+                                        $"[云端补传] 产能补传失败：{slotLabel}");
+                                }
+                                return false;
+                            }
+
+                            await _bufferStore.DeleteClaimedSummaryAsync(
+                                claimedBatch.ClaimToken,
+                                summary.Date,
+                                summary.Hour,
+                                summary.MinuteBucket,
+                                summary.ShiftCode,
+                                summary.PlcName).ConfigureAwait(false);
                         }
-                        catch (Exception releaseEx)
+
+                        if (identityBlockedInBatch > 0)
                         {
-                            _logger.Error(
-                                $"[云端补传] 释放产能补传领取标记 {claimedBatch.ClaimToken} 失败：{releaseEx.Message}");
+                            blockedClaimTokens.Add(claimedBatch.ClaimToken);
+                        }
+
+                        _logger.Info(
+                            $"[云端补传] 产能补传批次 {claimedBatch.ClaimToken} 已完成，"
+                            + $"行数：{claimedBatch.Summaries.Count}，身份阻断：{identityBlockedInBatch}");
+                        if (claimedBatch.Summaries.Count < RetryBatchSize)
+                        {
+                            return !identityBlockedInRound;
                         }
                     }
+                    catch (Exception ex)
+                    {
+                        if (!claimReleased)
+                        {
+                            try
+                            {
+                                await _bufferStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
+                                claimReleased = true;
+                                blockedClaimTokens.Remove(claimedBatch.ClaimToken);
+                            }
+                            catch (Exception releaseEx)
+                            {
+                                _logger.Error(
+                                    $"[云端补传] 释放产能补传领取标记 {claimedBatch.ClaimToken} 失败：{releaseEx.Message}");
+                            }
+                        }
 
-                    _logger.Error($"[云端补传] 产能补传异常：{ex.Message}");
-                    return false;
+                        _logger.Error($"[云端补传] 产能补传异常：{ex.Message}");
+                        return false;
+                    }
+                }
+
+                _logger.Info(
+                    $"[云端补传] 产能补传本轮已处理 {RetryMaxBatchesPerRound} 批，剩余数据等待下一轮。");
+                return !identityBlockedInRound;
+            }
+            finally
+            {
+                foreach (var claimToken in blockedClaimTokens)
+                {
+                    try
+                    {
+                        await _bufferStore.ReleaseClaimAsync(claimToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(
+                            $"[云端补传] 身份阻断记录释放领取标记 {claimToken} 失败，"
+                            + $"原产能记录保持不变；异常类型={ex.GetType().Name}。");
+                    }
                 }
             }
-
-            _logger.Info(
-                $"[云端补传] 产能补传本轮已处理 {RetryMaxBatchesPerRound} 批，剩余数据等待下一轮。");
-            return !identityBlockedInRound;
         }
         finally
         {
@@ -419,31 +447,42 @@ public class CapacitySyncTask : ICapacitySyncTask
             return false;
         }
 
-        var matches = configuredPlcs
-            .Where(identity =>
-                string.Equals(
-                    identity.PlcCode,
-                    normalizedIdentity,
-                    StringComparison.OrdinalIgnoreCase)
-                || string.Equals(
-                    identity.DeviceName,
-                    normalizedIdentity,
-                    StringComparison.OrdinalIgnoreCase)
-                || _identityAliasRegistry
-                    .GetVerifiedAliases(identity.PlcCode)
-                    .Contains(normalizedIdentity, StringComparer.OrdinalIgnoreCase))
+        var exactCodeMatches = configuredPlcs
+            .Where(identity => string.Equals(
+                identity.PlcCode,
+                normalizedIdentity,
+                StringComparison.OrdinalIgnoreCase))
             .Take(2)
             .ToArray();
-        if (matches.Length != 1)
+        if (exactCodeMatches.Length == 1)
         {
-            diagnostic = matches.Length == 0
+            plcCode = exactCodeMatches[0].PlcCode.Trim();
+            deviceName = exactCodeMatches[0].DeviceName;
+            return true;
+        }
+
+        if (exactCodeMatches.Length > 1)
+        {
+            diagnostic = "capacity_buffer_plc_identity_ambiguous";
+            return false;
+        }
+
+        var verifiedAliasMatches = configuredPlcs
+            .Where(identity => _identityAliasRegistry
+                .GetVerifiedAliases(identity.PlcCode)
+                .Contains(normalizedIdentity, StringComparer.OrdinalIgnoreCase))
+            .Take(2)
+            .ToArray();
+        if (verifiedAliasMatches.Length != 1)
+        {
+            diagnostic = verifiedAliasMatches.Length == 0
                 ? "capacity_buffer_plc_identity_unresolved"
                 : "capacity_buffer_plc_identity_ambiguous";
             return false;
         }
 
-        plcCode = matches[0].PlcCode.Trim();
-        deviceName = matches[0].DeviceName;
+        plcCode = verifiedAliasMatches[0].PlcCode.Trim();
+        deviceName = verifiedAliasMatches[0].DeviceName;
         return true;
     }
 
