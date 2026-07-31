@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using IIoT.Edge.Module.Contracts.Diagnostics;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Module.Contracts.Hardware;
@@ -448,6 +449,33 @@ public sealed class ModuleRuntimeRegistrationTests
         Assert.True(
             finalContextSaveFailureIndex > backgroundStoppedIndex,
             "进程关闭必须先停止任务并保存各自检查点，再最终保存上下文。");
+    }
+
+    [Fact]
+    public async Task AppLifecycleManager_WhenBackgroundCheckpointStopFails_ShouldSaveFinalContextAndPropagate()
+    {
+        var checkpointFailure = new InvalidOperationException(
+            "checkpoint persistence failed");
+        var shutdownEvents = new ConcurrentQueue<string>();
+        await using var harness = await AppLifecycleHarness.CreateAsync(
+            enabledModules: ["TestPlugin"],
+            deviceModuleIds: ["TestPlugin"],
+            backgroundStopException: checkpointFailure,
+            shutdownEvents: shutdownEvents);
+        var start = await harness.Manager.StartAsync(
+            TestContext.Current.CancellationToken);
+        Assert.True(start.Success, start.Message);
+
+        var actual = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => harness.Manager.StopAsync(TestContext.Current.CancellationToken));
+
+        Assert.Same(checkpointFailure, actual);
+        Assert.Equal(
+            ["background-stop-failure", "final-context-save"],
+            shutdownEvents);
+        Assert.Equal(1, harness.BackgroundCoordinator.StopCallCount);
+        Assert.Equal(1, harness.ContextStore.SaveCallCount);
+        Assert.Equal(1, harness.RecipeService.SaveCallCount);
     }
 
     [Fact]
@@ -1608,7 +1636,9 @@ public sealed class ModuleRuntimeRegistrationTests
             string? unreachableServiceName = null,
             bool hardwareProfileDiagnosticThrows = false,
             IReadOnlyCollection<ITableInitializer>? additionalDapperTableInitializers = null,
-            Exception? contextSaveException = null)
+            Exception? contextSaveException = null,
+            Exception? backgroundStopException = null,
+            ConcurrentQueue<string>? shutdownEvents = null)
         {
             var tempDirectory = Path.Combine(Path.GetTempPath(), "edge-shell-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(tempDirectory);
@@ -1643,8 +1673,13 @@ public sealed class ModuleRuntimeRegistrationTests
 
             var plcManager = new SpyPlcConnectionManager();
             var plcRuntimeTaskController = new PlcRuntimeTaskController(new PlcRuntimeRegistry());
-            var contextStore = new SpyProductionContextStore(contextSaveException);
-            var backgroundCoordinator = new SpyBackgroundServiceCoordinator(backgroundStartException);
+            var contextStore = new SpyProductionContextStore(
+                contextSaveException,
+                shutdownEvents);
+            var backgroundCoordinator = new SpyBackgroundServiceCoordinator(
+                backgroundStartException,
+                backgroundStopException,
+                shutdownEvents);
             var logger = new SpyLogService();
             var recipeService = new SpyRecipeService();
 
@@ -1969,7 +2004,10 @@ public sealed class ModuleRuntimeRegistrationTests
             => ValueTask.FromResult(_queue.Count > 0);
     }
 
-    private sealed class SpyProductionContextStore(Exception? saveException = null) : IProductionContextStore
+    private sealed class SpyProductionContextStore(
+        Exception? saveException = null,
+        ConcurrentQueue<string>? shutdownEvents = null)
+        : IProductionContextStore
     {
         private readonly Dictionary<string, ProductionContext> _contexts = new(StringComparer.OrdinalIgnoreCase);
 
@@ -2000,6 +2038,7 @@ public sealed class ModuleRuntimeRegistrationTests
         public void SaveToFile()
         {
             SaveCallCount++;
+            shutdownEvents?.Enqueue("final-context-save");
             if (saveException is not null)
                 throw saveException;
         }
@@ -2007,9 +2046,14 @@ public sealed class ModuleRuntimeRegistrationTests
         public Task StartAutoSaveAsync(CancellationToken ct, int intervalSeconds = 30) => Task.CompletedTask;
     }
 
-    private sealed class SpyBackgroundServiceCoordinator(Exception? startException = null) : IBackgroundServiceCoordinator
+    private sealed class SpyBackgroundServiceCoordinator(
+        Exception? startException = null,
+        Exception? stopException = null,
+        ConcurrentQueue<string>? shutdownEvents = null)
+        : IBackgroundServiceCoordinator
     {
         private IBackgroundServiceCoordinator? _inner;
+        private Exception? _stopException = stopException;
 
         public int StartCallCount { get; private set; }
 
@@ -2036,6 +2080,15 @@ public sealed class ModuleRuntimeRegistrationTests
             if (_inner is not null)
             {
                 await _inner.StopAsync(cancellationToken);
+            }
+
+            var failure = Interlocked.Exchange(ref _stopException, null);
+            if (failure is not null)
+            {
+                shutdownEvents?.Enqueue("background-stop-failure");
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo
+                    .Capture(failure)
+                    .Throw();
             }
         }
     }
