@@ -9,6 +9,7 @@ using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
 using IIoT.Edge.Application.Common.Identity;
+using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.SharedKernel.Repository;
@@ -36,6 +37,7 @@ public class CapacitySyncTask : ICapacitySyncTask
     private CancellationTokenSource? _cts;
     private Task? _loopTask;
     private bool _isRunning;
+    private long _retryAfterRecordId;
 
     public CapacitySyncTask(
         ICloudHttpClient cloudHttp,
@@ -275,21 +277,38 @@ public class CapacitySyncTask : ICapacitySyncTask
 
             var identityBlockedInRound = false;
             var blockedClaimTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (_bufferStore is not ICapacityBufferCursorStore cursorStore)
+            {
+                _logger.Error(
+                    "[PlcCode=未解析][TaskKey=Capacity.Hourly][SignalKey=不适用] "
+                    + "产能补传存储未提供有界游标契约，原记录保持不变。");
+                return false;
+            }
+
             try
             {
-                for (var batchIndex = 0; ; batchIndex++)
+                for (var batchIndex = 0; batchIndex < RetryMaxBatchesPerRound; batchIndex++)
                 {
-                    var claimedBatch = await _bufferStore.ClaimHourlySummaryBatchAsync(RetryBatchSize).ConfigureAwait(false);
+                    var claimedBatch = await cursorStore
+                        .ClaimHourlySummaryBatchAfterAsync(_retryAfterRecordId, RetryBatchSize)
+                        .ConfigureAwait(false);
                     if (claimedBatch is null || claimedBatch.Summaries.Count == 0)
                     {
+                        _retryAfterRecordId = 0;
                         return !identityBlockedInRound;
                     }
 
-                    var claimedRawRecordCount = claimedBatch.Summaries.Sum(static summary => summary.Total);
                     var claimReleased = false;
                     var identityBlockedInBatch = 0;
                     try
                     {
+                        if (claimedBatch.ClaimedRecordCount <= 0
+                            || claimedBatch.LastRecordId <= _retryAfterRecordId)
+                        {
+                            throw new InvalidDataException(
+                                "产能补传游标批次未向前推进。");
+                        }
+
                         foreach (var summary in claimedBatch.Summaries)
                         {
                             if (!TryResolveBufferedPlcIdentity(
@@ -359,19 +378,13 @@ public class CapacitySyncTask : ICapacitySyncTask
 
                         _logger.Info(
                             $"[云端补传] 产能补传批次 {claimedBatch.ClaimToken} 已完成，"
-                            + $"汇总数：{claimedBatch.Summaries.Count}，原始行数：{claimedRawRecordCount}，"
+                            + $"汇总数：{claimedBatch.Summaries.Count}，原始行数：{claimedBatch.ClaimedRecordCount}，"
                             + $"身份阻断：{identityBlockedInBatch}");
-                        if (claimedRawRecordCount < RetryBatchSize)
+                        _retryAfterRecordId = claimedBatch.LastRecordId;
+                        if (claimedBatch.ClaimedRecordCount < RetryBatchSize)
                         {
+                            _retryAfterRecordId = 0;
                             return !identityBlockedInRound;
-                        }
-
-                        if (batchIndex + 1 >= RetryMaxBatchesPerRound && !identityBlockedInRound)
-                        {
-                            _logger.Info(
-                                $"[云端补传] 产能补传本轮已处理 {RetryMaxBatchesPerRound} 批，"
-                                + "剩余数据等待下一轮。");
-                            return true;
                         }
                     }
                     catch (Exception ex)
@@ -396,6 +409,10 @@ public class CapacitySyncTask : ICapacitySyncTask
                     }
                 }
 
+                _logger.Info(
+                    $"[云端补传] 产能补传本轮已处理 {RetryMaxBatchesPerRound} 批，"
+                    + $"下轮从 RecordId>{_retryAfterRecordId} 继续。");
+                return !identityBlockedInRound;
             }
             finally
             {
@@ -471,6 +488,15 @@ public class CapacitySyncTask : ICapacitySyncTask
         if (exactCodeMatches.Length > 1)
         {
             diagnostic = "capacity_buffer_plc_identity_ambiguous";
+            return false;
+        }
+
+        if (configuredPlcs.Any(identity => string.Equals(
+                identity.DeviceName,
+                normalizedIdentity,
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            diagnostic = "capacity_buffer_current_device_name_not_eligible";
             return false;
         }
 

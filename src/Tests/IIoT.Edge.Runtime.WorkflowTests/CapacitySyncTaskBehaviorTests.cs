@@ -431,13 +431,16 @@ public sealed class CapacitySyncTaskBehaviorTests
             "127.0.0.1",
             102,
             "P1-AP01");
+        var aliases = new InMemoryPlcIdentityAliasRegistry();
+        aliases.ObserveVerifiedAlias("P1-AP01", "当前展示名称");
+        var logger = new FakeLogService();
         var task = CreateTask(
             cloudHttp,
             deviceService,
             bufferStore,
-            new FakeLogService(),
+            logger,
             new FakeProductionContextStore(),
-            new InMemoryPlcIdentityAliasRegistry(),
+            aliases,
             new FakeNetworkDeviceReadRepository([configuredPlc]));
 
         var result = await task.RetryBufferAsync();
@@ -447,6 +450,11 @@ public sealed class CapacitySyncTaskBehaviorTests
         Assert.Single(bufferStore.HourlySummaries);
         Assert.Single(bufferStore.ReleasedClaimTokens);
         Assert.Empty(bufferStore.DeletedSummaries);
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.Message.Contains(
+                "capacity_buffer_current_device_name_not_eligible",
+                StringComparison.Ordinal));
     }
 
     [Fact]
@@ -598,11 +606,7 @@ public sealed class CapacitySyncTaskBehaviorTests
             ClientCode = "CLIENT-01",
             ProcessId = Guid.NewGuid()
         });
-        var bufferStore = new FakeCapacityBufferStore
-        {
-            // The real store can claim 200 raw rows that aggregate into one summary.
-            ClaimSummaryLimit = 1
-        };
+        var bufferStore = new FakeCapacityBufferStore();
         for (var index = 0; index < 4; index++)
         {
             bufferStore.HourlySummaries.Add(new BufferHourlySummaryDto
@@ -637,15 +641,22 @@ public sealed class CapacitySyncTaskBehaviorTests
             contexts,
             new InMemoryPlcIdentityAliasRegistry());
 
-        var result = await task.RetryBufferAsync();
+        var firstResult = await task.RetryBufferAsync();
+        var firstRoundClaimCount = bufferStore.ClaimBatchSizes.Count;
+        var firstRoundPostCount = cloudHttp.PostCallCount;
+        var secondResult = await task.RetryBufferAsync();
 
-        Assert.False(result);
+        Assert.False(firstResult);
+        Assert.False(secondResult);
+        Assert.Equal(3, firstRoundClaimCount);
+        Assert.Equal(0, firstRoundPostCount);
         var payload = ParsePayload(Assert.Single(cloudHttp.PostPayloads));
         Assert.Equal("P1-AP01", payload.GetProperty("plcName").GetString());
         Assert.Equal(4, bufferStore.HourlySummaries.Count);
         Assert.DoesNotContain(bufferStore.HourlySummaries, row => row.PlcName == "P1-AP01");
         Assert.Equal(4, bufferStore.ReleasedClaimTokens.Count);
         Assert.Equal([200, 200, 200, 200, 200], bufferStore.ClaimBatchSizes);
+        Assert.Equal([0, 200, 400, 600, 800], bufferStore.ClaimAfterRecordIds);
     }
 
     [Fact]
