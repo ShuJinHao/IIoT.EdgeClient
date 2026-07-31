@@ -615,11 +615,11 @@ public sealed class LauncherDependencyInjectionTests
             Assert.Contains(
                 diagnostics.Snapshot,
                 item => item.ReasonCode == "LAUNCHER_ACCOUNT_CATALOG_INITIALIZATION_FAILED"
-                        && item.ExceptionType == nameof(InvalidOperationException));
+                        && item.ExceptionType == nameof(IOException));
             Assert.Contains(
                 diagnostics.Snapshot,
                 item => item.ReasonCode == "LAUNCHER_PLUGIN_ACTIVATION_RECONCILIATION_FAILED"
-                        && item.ExceptionType == nameof(InvalidOperationException));
+                        && item.ExceptionType == nameof(IOException));
             Assert.DoesNotContain(
                 diagnostics.Snapshot,
                 item => item.ToString().Contains(sensitiveMessage, StringComparison.Ordinal));
@@ -631,6 +631,29 @@ public sealed class LauncherDependencyInjectionTests
                 Directory.Delete(baseDirectory, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public void StartupCoordinator_WhenLocalStepThrowsUnknownFault_ShouldPropagateOriginalException()
+    {
+        var expected = new NullReferenceException("implementation fault");
+        var diagnostics = new LauncherStartupDiagnosticStore();
+        var coordinator = new LauncherStartupCoordinator(
+            null!,
+            new UnexpectedAccountInitializer(expected),
+            null!,
+            null!,
+            null!,
+            null!,
+            null!,
+            diagnostics);
+
+        var actual = Assert.Throws<NullReferenceException>(coordinator.Initialize);
+
+        Assert.Same(expected, actual);
+        Assert.DoesNotContain(
+            diagnostics.Snapshot,
+            item => item.ReasonCode == "LAUNCHER_ACCOUNT_CATALOG_INITIALIZATION_FAILED");
     }
 
     [Theory]
@@ -729,7 +752,13 @@ public sealed class LauncherDependencyInjectionTests
     private sealed class ThrowingAccountInitializer(string message)
         : ILauncherAccountCatalogInitializer
     {
-        public void EnsureCatalogExists() => throw new InvalidOperationException(message);
+        public void EnsureCatalogExists() => throw new IOException(message);
+    }
+
+    private sealed class UnexpectedAccountInitializer(Exception exception)
+        : ILauncherAccountCatalogInitializer
+    {
+        public void EnsureCatalogExists() => throw exception;
     }
 
     private sealed class RecordingUpdateConfigInitializer : IEdgeUpdateConfigInitializer
@@ -746,7 +775,7 @@ public sealed class LauncherDependencyInjectionTests
         public void Reconcile()
         {
             ReconcileCallCount++;
-            throw new InvalidOperationException(message);
+            throw new IOException(message);
         }
 
         public bool IsReady(LauncherPluginActivation activation) => false;

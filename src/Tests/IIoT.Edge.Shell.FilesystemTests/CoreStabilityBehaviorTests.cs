@@ -318,6 +318,30 @@ public sealed class StartupExceptionAllowlistSourceGuardTests
         Assert.DoesNotContain(sensitiveMessage, diagnostic.ToString(), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ShellLaunchDiagnostics_ShouldIncludeCurrentBackgroundWorkerFaults()
+    {
+        var diagnostics = IIoT.Edge.Shell.App.BuildShellLaunchDiagnostics(
+            [],
+            [
+                new IIoT.Edge.Application.Common.Tasks.BackgroundServiceRuntimeSnapshot(
+                    "ProcessQueueTask",
+                    IIoT.Edge.Application.Common.Tasks.BackgroundServiceRuntimeState.Faulted,
+                    DateTime.UtcNow,
+                    "BACKGROUND_TASK_EXECUTION_FAULT"),
+                new IIoT.Edge.Application.Common.Tasks.BackgroundServiceRuntimeSnapshot(
+                    "CloudRetryTask",
+                    IIoT.Edge.Application.Common.Tasks.BackgroundServiceRuntimeState.Running,
+                    DateTime.UtcNow,
+                    null)
+            ]);
+
+        var diagnostic = Assert.Single(diagnostics);
+        Assert.Equal("BACKGROUND_TASK_EXECUTION_FAULT", diagnostic.ReasonCode);
+        Assert.Equal("ProcessQueueTask", diagnostic.ModuleId);
+        Assert.Equal("System.Diagnostics", diagnostic.RepairTarget);
+    }
+
     private static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

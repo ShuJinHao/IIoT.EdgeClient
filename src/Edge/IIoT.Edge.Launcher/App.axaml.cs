@@ -76,23 +76,7 @@ public partial class App : Avalonia.Application
             return;
         }
 
-        try
-        {
-            startupCoordinator.Initialize();
-        }
-        catch (Exception ex)
-        {
-            services.GetRequiredService<ILauncherStartupDiagnosticWriter>()
-                .ReplaceArea(
-                    LauncherStartupDiagnosticAreas.UpdateRecovery,
-                    [
-                        new LauncherStartupDiagnostic(
-                            LauncherStartupDiagnosticAreas.UpdateRecovery,
-                            "LAUNCHER_LOCAL_INITIALIZATION_BOUNDARY_FAILED",
-                            LauncherStartupDiagnosticRepairTargets.LauncherConfiguration,
-                            ExceptionType: ex.GetType().Name)
-                    ]);
-        }
+        startupCoordinator.Initialize();
     }
 
     internal static bool TryCompleteUpdateStartup(IServiceProvider services)

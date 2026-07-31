@@ -447,12 +447,12 @@ public sealed class BackgroundServiceCoordinator : IBackgroundServiceCoordinator
         catch (Exception ex)
         {
             _logger.Error($"[后台服务] {service.ServiceName} 超时后的停止任务最终失败（{ex.GetType().Name}）。");
-        }
-        finally
-        {
             PublishRecoverableStopTimeout(service);
-            _pendingStopTasks.TryRemove(service, out _);
+            return;
         }
+
+        PublishRecoverableStopTimeout(service);
+        _pendingStopTasks.TryRemove(service, out _);
     }
 
     private void PublishRecoverableStopTimeout(IManagedBackgroundService service)

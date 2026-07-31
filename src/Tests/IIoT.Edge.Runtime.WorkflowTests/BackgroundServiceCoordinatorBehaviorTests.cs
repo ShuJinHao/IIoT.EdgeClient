@@ -219,6 +219,62 @@ public sealed class BackgroundServiceCoordinatorBehaviorTests
         await coordinator.StopAsync(TestContext.Current.CancellationToken);
     }
 
+    [Fact]
+    public async Task RecoverySupervisor_WhenLateStopFaults_ShouldKeepWorkerQuarantined()
+    {
+        var runtimeStatus = new BackgroundServiceRuntimeStatusStore();
+        var processQueue = new CleanupTimeoutManagedService(
+            runtimeStatus,
+            failTimedOutStop: true);
+        var logger = new FakeLogService();
+        var lateStopFailureObserved = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        logger.EntryAdded += entry =>
+        {
+            if (entry.Message.Contains("超时后的停止任务最终失败", StringComparison.Ordinal))
+            {
+                lateStopFailureObserved.TrySetResult();
+            }
+        };
+        var coordinator = new BackgroundServiceCoordinator(
+            [processQueue],
+            logger,
+            new BackgroundServiceCoordinatorOptions
+            {
+                StartupTimeout = TimeSpan.FromSeconds(1),
+                StopTimeout = TimeSpan.FromMilliseconds(20),
+                RecoveryInterval = TimeSpan.FromMilliseconds(10)
+            },
+            runtimeStatus);
+
+        await Assert.ThrowsAsync<BackgroundServiceStartException>(
+            () => coordinator.StartAsync(TestContext.Current.CancellationToken));
+
+        processQueue.ReleaseTimedOutStop();
+        await lateStopFailureObserved.Task.WaitAsync(TestContext.Current.CancellationToken);
+        var timeoutRepublished = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        runtimeStatus.Changed += (_, snapshot) =>
+        {
+            if (snapshot.ServiceName == processQueue.ServiceName
+                && snapshot.State == BackgroundServiceRuntimeState.Faulted
+                && snapshot.ErrorCode == "BACKGROUND_TASK_STOP_TIMEOUT")
+            {
+                timeoutRepublished.TrySetResult();
+            }
+        };
+        runtimeStatus.Set(
+            processQueue.ServiceName,
+            BackgroundServiceRuntimeState.Stopped);
+
+        await timeoutRepublished.Task.WaitAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(1, processQueue.StartCallCount);
+        Assert.Equal(1, processQueue.StopCallCount);
+        await Assert.ThrowsAsync<BackgroundServiceStopException>(
+            () => coordinator.StopAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(1, processQueue.StartCallCount);
+    }
+
     private sealed class RecoverableManagedService(
         string serviceName,
         BackgroundServiceRuntimeStatusStore runtimeStatus,
@@ -274,7 +330,8 @@ public sealed class BackgroundServiceCoordinatorBehaviorTests
     }
 
     private sealed class CleanupTimeoutManagedService(
-        BackgroundServiceRuntimeStatusStore runtimeStatus)
+        BackgroundServiceRuntimeStatusStore runtimeStatus,
+        bool failTimedOutStop = false)
         : IManagedBackgroundService
     {
         private readonly TaskCompletionSource _releaseTimedOutStop =
@@ -286,6 +343,7 @@ public sealed class BackgroundServiceCoordinatorBehaviorTests
 
         public string ServiceName => "ProcessQueueTask";
         public int StartCallCount => Volatile.Read(ref _startCallCount);
+        public int StopCallCount => Volatile.Read(ref _stopCallCount);
         public Task Recovered => _recovered.Task;
 
         public void ReleaseTimedOutStop() => _releaseTimedOutStop.TrySetResult();
@@ -315,6 +373,10 @@ public sealed class BackgroundServiceCoordinatorBehaviorTests
             {
                 runtimeStatus.Set(ServiceName, BackgroundServiceRuntimeState.Stopping);
                 await _releaseTimedOutStop.Task.WaitAsync(cancellationToken);
+                if (failTimedOutStop)
+                {
+                    throw new InvalidOperationException("late stop failed");
+                }
             }
 
             runtimeStatus.Set(ServiceName, BackgroundServiceRuntimeState.Stopped);

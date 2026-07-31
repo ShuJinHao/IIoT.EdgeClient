@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security;
 using IIoT.Edge.Application.Features.Updates;
 using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.UI.Shared.Localization;
@@ -54,7 +55,7 @@ public sealed class LauncherStartupCoordinator(
         {
             recoveryLease = updateOperationGate.TryAcquireUpdate();
         }
-        catch (Exception ex)
+        catch (Exception ex) when (IsRecoverableLocalFailure(ex))
         {
             ReplaceFailure(
                 LauncherStartupDiagnosticAreas.UpdateRecovery,
@@ -80,7 +81,7 @@ public sealed class LauncherStartupCoordinator(
             {
                 recovery = updateTransactionRecovery.RecoverPendingTransaction();
             }
-            catch (Exception ex)
+            catch (Exception ex) when (IsRecoverableLocalFailure(ex))
             {
                 ReplaceFailure(
                     LauncherStartupDiagnosticAreas.UpdateRecovery,
@@ -133,11 +134,18 @@ public sealed class LauncherStartupCoordinator(
                 diagnostics.ReplaceArea(area, []);
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (IsRecoverableLocalFailure(ex))
         {
             ReplaceFailure(area, reasonCode, repairTarget, ex);
         }
     }
+
+    private static bool IsRecoverableLocalFailure(Exception exception)
+        => exception is ArgumentException
+            or NotSupportedException
+            or IOException
+            or UnauthorizedAccessException
+            or SecurityException;
 
     private void ReplaceFailure(
         string area,
