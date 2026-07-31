@@ -138,6 +138,12 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
                 mapping.BusinessGroup))
             .ToArray();
         var candidates = factory.GetTaskCandidates().ToArray();
+        var businessOnDemandReadSignalKeys = ResolveBusinessOnDemandReadSignalKeys(
+            candidates,
+            signalBindings);
+        var periodicReadExcludedSignalKeys = ResolvePeriodicReadExcludedSignalKeys(
+            businessOnDemandReadSignalKeys,
+            signalBindings);
         var enabledTaskKeys = await _taskBindingService.GetConfiguredEnabledTaskKeysAsync(
             device.Id,
             candidates,
@@ -194,14 +200,19 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
                                     context,
                                     enabledKeys));
                         },
-                        CandidateRequiresPeriodicRead(candidate, signalBindings))));
+                        CandidateRequiresPeriodicRead(
+                            candidate,
+                            signalBindings,
+                            businessOnDemandReadSignalKeys))));
         }
 
         return new PlcRuntimeTaskPlan(
             device.Id,
             device.PlcCode,
             device.DeviceName,
-            taskEntries);
+            taskEntries,
+            businessOnDemandReadSignalKeys,
+            periodicReadExcludedSignalKeys);
     }
 
     private IStationRuntimeFactory? ResolveActiveRuntimeFactory()
@@ -212,7 +223,8 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
 
     internal static bool CandidateRequiresPeriodicRead(
         TaskCandidate candidate,
-        IReadOnlyCollection<ModuleIoSnapshot> signalBindings)
+        IReadOnlyCollection<ModuleIoSnapshot> signalBindings,
+        IReadOnlySet<string>? businessOnDemandReadSignalKeys = null)
     {
         ArgumentNullException.ThrowIfNull(candidate);
         ArgumentNullException.ThrowIfNull(signalBindings);
@@ -227,12 +239,84 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
             .Select(static binding => binding.SignalKey)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        return candidate.RequiredSignals.Any(required =>
-            string.Equals(
+        var requiredReadSignalKeys = candidate.RequiredSignals
+            .Where(required => string.Equals(
                 required.Direction,
                 IoMappingOptionCatalog.DirectionRead,
-                StringComparison.OrdinalIgnoreCase)
-            && periodicReadSignalKeys.Contains(required.SignalKey));
+                StringComparison.OrdinalIgnoreCase))
+            .Select(static required => required.SignalKey)
+            .ToArray();
+        if (businessOnDemandReadSignalKeys is not null
+            && requiredReadSignalKeys.Any(businessOnDemandReadSignalKeys.Contains))
+        {
+            return false;
+        }
+
+        return requiredReadSignalKeys.Any(requiredSignalKey =>
+            periodicReadSignalKeys.Contains(requiredSignalKey));
+    }
+
+    internal static IReadOnlySet<string> ResolveBusinessOnDemandReadSignalKeys(
+        IReadOnlyCollection<TaskCandidate> candidates,
+        IReadOnlyCollection<ModuleIoSnapshot> signalBindings)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+        ArgumentNullException.ThrowIfNull(signalBindings);
+
+        var mappedDataReadSignalKeys = signalBindings
+            .Where(static binding =>
+                string.Equals(
+                    binding.Direction,
+                    IoMappingOptionCatalog.DirectionRead,
+                    StringComparison.OrdinalIgnoreCase)
+                && IoMappingOptionCatalog.IsReadDataCategory(binding.Category))
+            .Select(static binding => binding.SignalKey)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return candidates
+            .SelectMany(candidate => candidate.RequiredSignals
+                .Where(required => string.Equals(
+                    required.Direction,
+                    IoMappingOptionCatalog.DirectionRead,
+                    StringComparison.OrdinalIgnoreCase))
+                .Select(required => new
+                {
+                    CandidateKey = candidate.Key,
+                    required.SignalKey
+                }))
+            .GroupBy(static item => item.SignalKey, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group
+                .Select(static item => item.CandidateKey)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(2)
+                .Count() == 1)
+            .Select(static group => group.Key)
+            .Where(mappedDataReadSignalKeys.Contains)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    internal static IReadOnlySet<string> ResolvePeriodicReadExcludedSignalKeys(
+        IReadOnlySet<string> businessOnDemandReadSignalKeys,
+        IReadOnlyCollection<ModuleIoSnapshot> signalBindings)
+    {
+        ArgumentNullException.ThrowIfNull(businessOnDemandReadSignalKeys);
+        ArgumentNullException.ThrowIfNull(signalBindings);
+
+        // 弹夹码在插件正式配置中是候选任务独占的 Ascii 读信号。数量/速度仍由
+        // 周期采集刷新供通用 UI 与诊断使用；业务任务会通过按需协调器原子读取整组信号。
+        return signalBindings
+            .Where(binding =>
+                businessOnDemandReadSignalKeys.Contains(binding.SignalKey)
+                && string.Equals(
+                    binding.Direction,
+                    IoMappingOptionCatalog.DirectionRead,
+                    StringComparison.OrdinalIgnoreCase)
+                && string.Equals(
+                    binding.DataType,
+                    IoMappingOptionCatalog.DataTypeAscii,
+                    StringComparison.OrdinalIgnoreCase))
+            .Select(static binding => binding.SignalKey)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     private static string BuildValidationFailureMessage(

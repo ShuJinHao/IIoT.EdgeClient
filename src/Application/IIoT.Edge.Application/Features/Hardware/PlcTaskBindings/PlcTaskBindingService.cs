@@ -347,9 +347,6 @@ public sealed class PlcTaskBindingService(
         ArgumentNullException.ThrowIfNull(enabledTaskKeys);
         ArgumentNullException.ThrowIfNull(signalBindings);
 
-        var mappedSignals = signalBindings
-            .Select(static x => $"{x.SignalKey}\u001f{x.Direction}")
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var issues = new List<PlcTaskBindingValidationIssue>();
 
         foreach (var candidate in candidates.Where(candidate => enabledTaskKeys.Contains(candidate.Key)))
@@ -367,8 +364,17 @@ public sealed class PlcTaskBindingService(
 
             foreach (var required in candidate.RequiredSignals)
             {
-                var key = $"{required.SignalKey}\u001f{required.Direction}";
-                if (!mappedSignals.Contains(key))
+                var matches = signalBindings
+                    .Where(binding => string.Equals(
+                                          binding.SignalKey,
+                                          required.SignalKey,
+                                          StringComparison.OrdinalIgnoreCase)
+                                      && string.Equals(
+                                          binding.Direction,
+                                          required.Direction,
+                                          StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+                if (matches.Length == 0)
                 {
                     issues.Add(new PlcTaskBindingValidationIssue(
                         candidate.Key,
@@ -376,6 +382,26 @@ public sealed class PlcTaskBindingService(
                         required,
                         PlcTaskBindingValidationIssueType.MissingRequiredSignal,
                         $"任务“{candidate.DisplayName}”缺少 IO 信号：{required.SignalKey}/{required.Direction}。"));
+                    continue;
+                }
+
+                foreach (var mapping in matches)
+                {
+                    var typeWordLength = PlcIoTypeWordLengthValidator.Validate(
+                        mapping.DataType,
+                        mapping.AddressCount);
+                    if (typeWordLength.IsValid)
+                    {
+                        continue;
+                    }
+
+                    issues.Add(new PlcTaskBindingValidationIssue(
+                        candidate.Key,
+                        candidate.DisplayName,
+                        required,
+                        PlcTaskBindingValidationIssueType.InvalidIoTypeWordLength,
+                        $"任务“{candidate.DisplayName}”的 IO 信号 {required.SignalKey}/{required.Direction} "
+                        + $"数据类型与 word 长度无效：{typeWordLength.FailureCode}。"));
                 }
             }
         }
@@ -485,6 +511,9 @@ public sealed class PlcTaskBindingService(
     {
         var isSupported = candidate.SupportsDeviceModel(deviceModel);
         var missingSignals = FindMissingRequiredSignals(candidate, signalBindings);
+        var invalidTypeWordLengths = FindInvalidRequiredSignalTypeWordLengths(
+            candidate,
+            signalBindings);
 
         if (!isSupported)
         {
@@ -505,6 +534,15 @@ public sealed class PlcTaskBindingService(
                 IsSupportedByCurrentPlc: true);
         }
 
+        if (invalidTypeWordLengths.Count > 0)
+        {
+            return new TaskAvailability(
+                CanRun: false,
+                UnavailableReason: $"IO 类型/word 长度无效：{string.Join("、", invalidTypeWordLengths)}",
+                MissingRequiredSignals: [],
+                IsSupportedByCurrentPlc: true);
+        }
+
         return new TaskAvailability(
             CanRun: true,
             UnavailableReason: string.Empty,
@@ -522,6 +560,39 @@ public sealed class PlcTaskBindingService(
 
         return candidate.RequiredSignals
             .Where(required => !mappedSignals.Contains($"{required.SignalKey}\u001f{required.Direction}"))
+            .ToArray();
+    }
+
+    private static IReadOnlyList<string> FindInvalidRequiredSignalTypeWordLengths(
+        TaskCandidate candidate,
+        IReadOnlyCollection<ModuleIoSnapshot> signalBindings)
+    {
+        var invalid = new List<string>();
+        foreach (var required in candidate.RequiredSignals)
+        {
+            foreach (var mapping in signalBindings.Where(binding =>
+                         string.Equals(
+                             binding.SignalKey,
+                             required.SignalKey,
+                             StringComparison.OrdinalIgnoreCase)
+                         && string.Equals(
+                             binding.Direction,
+                             required.Direction,
+                             StringComparison.OrdinalIgnoreCase)))
+            {
+                var validation = PlcIoTypeWordLengthValidator.Validate(
+                    mapping.DataType,
+                    mapping.AddressCount);
+                if (!validation.IsValid)
+                {
+                    invalid.Add(
+                        $"{required.SignalKey}/{required.Direction}/{validation.FailureCode}");
+                }
+            }
+        }
+
+        return invalid
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }
 

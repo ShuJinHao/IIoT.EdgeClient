@@ -559,12 +559,11 @@ public sealed class PlcIoScanTaskBehaviorTests
     }
 
     [Fact]
-    public async Task PlcIoScanTask_WhenSignalAddressesHaveGaps_ShouldSplitReadBlocksAndBindBySignalKey()
+    public async Task PlcIoScanTask_WhenSignalAddressesHaveGaps_ShouldReadMinimumCoveringBlockAndBindBySignalKey()
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
-        plcService.ReadOutcomes.Enqueue(new ushort[] { 10 });
-        plcService.ReadOutcomes.Enqueue(new ushort[] { 13 });
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 10, 0, 0, 13 });
 
         var dataStore = new PlcDataStore();
         dataStore.Register(5, readSize: 0, writeSize: 0);
@@ -582,8 +581,9 @@ public sealed class PlcIoScanTaskBehaviorTests
 
         await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(["D700", "D703"], plcService.ReadRequests.Select(static x => x.Address));
-        Assert.All(plcService.ReadRequests, request => Assert.Equal((ushort)1, request.Length));
+        var request = Assert.Single(plcService.ReadRequests);
+        Assert.Equal("D700", request.Address);
+        Assert.Equal((ushort)4, request.Length);
 
         var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(5));
         Assert.True(buffer.TryGetReadWords("Read-D700", out var first));
@@ -654,12 +654,12 @@ public sealed class PlcIoScanTaskBehaviorTests
     }
 
     [Fact]
-    public async Task PlcIoScanTask_WhenReadMappingsHaveGap_ShouldSplitReadBlocksEvenWhenWriteGapPolicyIsZero()
+    public async Task PlcIoScanTask_WhenReadMappingsHaveGap_ShouldMergeWithinWordLimit()
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
-        plcService.ReadOutcomes.Enqueue(new ushort[] { 1 });
-        plcService.ReadOutcomes.Enqueue(new ushort[] { 2 });
+        plcService.ReadOutcomes.Enqueue(
+            Enumerable.Range(1, 21).Select(static value => (ushort)value).ToArray());
 
         var dataStore = new PlcDataStore();
         dataStore.Register(16, readSize: 0, writeSize: 0);
@@ -680,7 +680,181 @@ public sealed class PlcIoScanTaskBehaviorTests
 
         await interaction.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(["D700", "D720"], plcService.ReadRequests.Select(static x => x.Address));
+        var request = Assert.Single(plcService.ReadRequests);
+        Assert.Equal("D700", request.Address);
+        Assert.Equal((ushort)21, request.Length);
+    }
+
+    [Fact]
+    public void SignalBlockPlanner_ReadSpanOf100Words_ShouldMergeBut101WordsShouldSplit()
+    {
+        var withinLimit = SignalBlockPlanner.Plan(
+            [
+                CreateScanMapping("First", "D100", 1, sortOrder: 1),
+                CreateScanMapping("Last", "D199", 1, sortOrder: 2)
+            ],
+            maxBlockWordCount: 200,
+            PlcIoWriteGapPolicy.Split,
+            isWrite: false);
+        var merged = Assert.Single(withinLimit);
+        Assert.Equal("D100", merged.StartAddress);
+        Assert.Equal(100, merged.WordCount);
+
+        var overLimit = SignalBlockPlanner.Plan(
+            [
+                CreateScanMapping("First", "D100", 1, sortOrder: 1),
+                CreateScanMapping("PastLimit", "D200", 1, sortOrder: 2)
+            ],
+            maxBlockWordCount: 200,
+            PlcIoWriteGapPolicy.Zero,
+            isWrite: false);
+        Assert.Equal(["D100", "D200"], overLimit.Select(static block => block.StartAddress));
+        Assert.All(overLimit, static block => Assert.Equal(1, block.WordCount));
+
+        var continuous101 = SignalBlockPlanner.Plan(
+            [CreateScanMapping("Continuous", "D100", 101, sortOrder: 1)],
+            maxBlockWordCount: 200,
+            PlcIoWriteGapPolicy.Zero,
+            isWrite: false);
+        Assert.Collection(
+            continuous101,
+            block =>
+            {
+                Assert.Equal("D100", block.StartAddress);
+                Assert.Equal(100, block.WordCount);
+                var item = Assert.Single(block.Items);
+                Assert.Equal(0, item.MappingWordOffset);
+                Assert.Equal(100, item.EffectiveWordCount);
+            },
+            block =>
+            {
+                Assert.Equal("D200", block.StartAddress);
+                Assert.Equal(1, block.WordCount);
+                var item = Assert.Single(block.Items);
+                Assert.Equal(100, item.MappingWordOffset);
+                Assert.Equal(1, item.EffectiveWordCount);
+            });
+    }
+
+    [Fact]
+    public async Task PlcPeriodicBatchReadTask_WhenSingleMappingIs101Words_ShouldSplitAndReassembleAtomically()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+        plcService.ReadOutcomes.Enqueue(
+            Enumerable.Range(1, 100).Select(static value => (ushort)value).ToArray());
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 101 });
+        await plcService.ConnectAsync(TestContext.Current.CancellationToken);
+        var dataStore = new PlcDataStore();
+        dataStore.Register(
+            28,
+            readSize: 101,
+            writeSize: 0,
+            [new PlcBufferSignalBinding("Read-D100", "Read", 0, 101)]);
+        var task = new PlcPeriodicBatchReadTask(
+            plcService,
+            dataStore,
+            CreateDevice(28, "PLC-CONTINUOUS-101"),
+            [CreateIoMapping(
+                28,
+                "Read",
+                "D100",
+                101,
+                category: IoMappingOptionCatalog.CategoryContinuousRead)],
+            new FakeLogService(),
+            SignalBlockPlanner,
+            runtimePolicy: new PlcIoRuntimePolicy(MaxSignalBlockWordCount: 200));
+
+        await task.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            [("D100", (ushort)100), ("D200", (ushort)1)],
+            plcService.ReadRequests);
+        var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(28));
+        Assert.True(buffer.TryGetReadWords("Read-D100", out var words));
+        Assert.Equal(101, words.Length);
+        Assert.Equal((ushort)1, words[0]);
+        Assert.Equal((ushort)100, words[99]);
+        Assert.Equal((ushort)101, words[100]);
+        Assert.True(buffer.TryCaptureReadSnapshot(["Read-D100"], out var snapshot));
+        Assert.Equal(101, snapshot!.Signals["Read-D100"].Words.Count);
+    }
+
+    [Fact]
+    public async Task PlcPeriodicBatchReadTask_WhenLaterFragmentFails_ShouldFailWholeSignalQuality()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+        plcService.ReadOutcomes.Enqueue(Enumerable.Repeat((ushort)9, 100).ToArray());
+        plcService.ReadOutcomes.Enqueue(new TimeoutException("fragment timeout"));
+        await plcService.ConnectAsync(TestContext.Current.CancellationToken);
+        var dataStore = new PlcDataStore();
+        dataStore.Register(
+            29,
+            readSize: 101,
+            writeSize: 0,
+            [new PlcBufferSignalBinding("Read-D100", "Read", 0, 101)]);
+        var task = new PlcPeriodicBatchReadTask(
+            plcService,
+            dataStore,
+            CreateDevice(29, "PLC-CONTINUOUS-FAIL"),
+            [CreateIoMapping(
+                29,
+                "Read",
+                "D100",
+                101,
+                category: IoMappingOptionCatalog.CategoryContinuousRead)],
+            new FakeLogService(),
+            SignalBlockPlanner,
+            runtimePolicy: new PlcIoRuntimePolicy(MaxSignalBlockWordCount: 200));
+
+        await task.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
+
+        var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(29));
+        Assert.False(buffer.TryGetReadWords("Read-D100", out var words));
+        Assert.Equal(101, words.Length);
+        Assert.All(words, static word => Assert.Equal((ushort)0, word));
+        Assert.True(buffer.TryGetReadSignalState("Read-D100", out var state));
+        Assert.False(state.ReadSucceeded);
+        Assert.Equal(PlcTaskRuntimeErrorCodes.Timeout, state.FailureReason);
+    }
+
+    [Fact]
+    public async Task PlcPeriodicBatchReadTask_ShouldExcludeBarcodeButKeepQuantityAndSpeedForUi()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+        plcService.ReadOutcomes.Enqueue(new ushort[] { 7, 8 });
+        await plcService.ConnectAsync(TestContext.Current.CancellationToken);
+
+        var dataStore = new PlcDataStore();
+        dataStore.Register(27, readSize: 0, writeSize: 0);
+        var task = new PlcPeriodicBatchReadTask(
+            plcService,
+            dataStore,
+            CreateDevice(27, "PLC-PERIODIC-OWNERSHIP"),
+            [
+                CreateIoMapping(27, "Read", "D300", 1, category: IoMappingOptionCatalog.CategorySingleRead, sortOrder: 1),
+                CreateIoMapping(27, "Read", "D320", 1, category: IoMappingOptionCatalog.CategorySingleRead, sortOrder: 2),
+                CreateIoMapping(27, "Read", "D321", 1, category: IoMappingOptionCatalog.CategorySingleRead, sortOrder: 3)
+            ],
+            new FakeLogService(),
+            SignalBlockPlanner,
+            periodicReadExcludedSignalKeys: new HashSet<string>(
+                ["Read-D300"],
+                StringComparer.OrdinalIgnoreCase));
+
+        await task.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
+
+        var request = Assert.Single(plcService.ReadRequests);
+        Assert.Equal("D320", request.Address);
+        Assert.Equal((ushort)2, request.Length);
+        var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(27));
+        Assert.False(buffer.TryGetReadWords("Read-D300", out _));
+        Assert.True(buffer.TryGetReadWords("Read-D320", out var quantityWords));
+        Assert.Equal((ushort)7, Assert.Single(quantityWords));
+        Assert.True(buffer.TryGetReadWords("Read-D321", out var speedWords));
+        Assert.Equal((ushort)8, Assert.Single(speedWords));
     }
 
     [Fact]
@@ -746,6 +920,54 @@ public sealed class PlcIoScanTaskBehaviorTests
         Assert.Equal(["D600", "D603"], plcService.WriteRequests.Select(static x => x.Address));
         Assert.Equal([(ushort)1], plcService.WriteRequests[0].Data);
         Assert.Equal([(ushort)4], plcService.WriteRequests[1].Data);
+    }
+
+    [Fact]
+    public async Task PlcSignalInteractionTask_WhenWriteMappingIs101Words_ShouldPreserveIntentAcrossTwoBlocks()
+    {
+        var plcService = new ScriptedPlcService();
+        plcService.ConnectOutcomes.Enqueue(true);
+        var dataStore = new PlcDataStore();
+        dataStore.Register(
+            30,
+            readSize: 0,
+            writeSize: 101,
+            [new PlcBufferSignalBinding("Write-D600", "Write", 0, 101)]);
+        var buffer = Assert.IsType<PlcBuffer>(dataStore.GetBuffer(30));
+        for (var index = 0; index < 101; index++)
+        {
+            buffer.SetWriteValue("Write-D600", index, checked((ushort)(index + 1)));
+        }
+
+        var task = new PlcSignalInteractionTask(
+            plcService,
+            dataStore,
+            CreateDevice(30, "PLC-WRITE-101"),
+            [CreateIoMapping(
+                30,
+                "Write",
+                "D600",
+                101)],
+            new FakeLogService(),
+            SignalBlockPlanner,
+            runtimePolicy: new PlcIoRuntimePolicy(MaxSignalBlockWordCount: 200));
+
+        await task.ExecuteOneCycleAsync(TestContext.Current.CancellationToken);
+
+        Assert.Collection(
+            plcService.WriteRequests,
+            request =>
+            {
+                Assert.Equal("D600", request.Address);
+                Assert.Equal(100, request.Data.Length);
+                Assert.Equal((ushort)1, request.Data[0]);
+                Assert.Equal((ushort)100, request.Data[99]);
+            },
+            request =>
+            {
+                Assert.Equal("D700", request.Address);
+                Assert.Equal([(ushort)101], request.Data);
+            });
     }
 
     [Fact]
@@ -1170,7 +1392,7 @@ public sealed class PlcIoScanTaskBehaviorTests
     [Fact]
     public void PlcScanTaskApi_ShouldExposeOnlyCancellationAwareCycleEntryPoint()
     {
-        foreach (var taskType in new[] { typeof(PlcIoScanTaskBase), typeof(PlcDataReadScanTask) })
+        foreach (var taskType in new[] { typeof(PlcIoScanTaskBase), typeof(PlcPeriodicBatchReadTask) })
         {
             var cycleMethod = Assert.Single(
                 taskType.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly),
@@ -1229,6 +1451,20 @@ public sealed class PlcIoScanTaskBehaviorTests
         entity.UpdateSortOrder(sortOrder);
         return entity;
     }
+
+    private static PlcIoScanMapping CreateScanMapping(
+        string signalKey,
+        string address,
+        int addressCount,
+        int sortOrder)
+        => new(
+            signalKey,
+            address,
+            addressCount,
+            IoMappingOptionCatalog.DataTypeUInt16,
+            IoMappingOptionCatalog.DirectionRead,
+            IoMappingOptionCatalog.CategorySingleRead,
+            sortOrder);
 
     private static async Task WaitUntilAsync(Func<bool> condition)
     {

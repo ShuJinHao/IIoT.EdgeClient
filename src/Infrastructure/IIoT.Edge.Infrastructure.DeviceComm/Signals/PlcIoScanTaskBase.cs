@@ -8,6 +8,7 @@ using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
+using IIoT.Edge.Infrastructure.DeviceComm.Plc.Services;
 using System.Diagnostics;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Signals;
@@ -68,7 +69,7 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
             isWrite: true);
     }
 
-    public string TaskName => $"PlcIoScan_{_device.DeviceName}";
+    public string TaskName => $"PlcSignalInteraction_{_device.DeviceName}";
 
     public bool IsConnected => _plcService.IsConnected;
 
@@ -161,6 +162,10 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         {
             return;
         }
+
+        using var scheduling = PlcOperationSchedulingContext.Push(
+            PlcOperationPriority.Interactive,
+            TimeSpan.FromMilliseconds(_loopIntervalMs));
 
         if (_readBlocks.Count > 0)
         {
@@ -285,12 +290,12 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
 
                 foreach (var item in block.Items)
                 {
-                    stagedUpdates[item.Mapping.SignalKey] = new PlcReadSignalUpdate(
-                        SliceWords(words, item.Offset, item.Mapping.AddressCount),
-                        ReadSucceeded: true,
+                    StageSuccessfulItem(
+                        stagedUpdates,
+                        item,
+                        words,
                         batchId,
-                        attemptedAtUtc,
-                        FailureReason: null);
+                        attemptedAtUtc);
                 }
 
                 anySucceeded = true;
@@ -369,12 +374,16 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
                     continue;
                 }
 
-                for (var index = 0; index < Math.Min(signalWords.Length, item.Mapping.AddressCount); index++)
+                for (var index = 0; index < item.EffectiveWordCount; index++)
                 {
+                    var signalIndex = item.MappingWordOffset + index;
                     var blockIndex = item.Offset + index;
-                    if (blockIndex >= 0 && blockIndex < blockWords.Length)
+                    if (signalIndex >= 0
+                        && signalIndex < signalWords.Length
+                        && blockIndex >= 0
+                        && blockIndex < blockWords.Length)
                     {
-                        blockWords[blockIndex] = signalWords[index];
+                        blockWords[blockIndex] = signalWords[signalIndex];
                     }
                 }
             }
@@ -490,6 +499,43 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
         }
     }
 
+    private static void StageSuccessfulItem(
+        IDictionary<string, PlcReadSignalUpdate> stagedUpdates,
+        PlcSignalBlockItem item,
+        IReadOnlyList<ushort> blockWords,
+        Guid batchId,
+        DateTimeOffset attemptedAtUtc)
+    {
+        if (stagedUpdates.TryGetValue(item.Mapping.SignalKey, out var existing)
+            && !existing.ReadSucceeded)
+        {
+            return;
+        }
+
+        var signalWords = existing is null
+            ? new ushort[Math.Max(1, item.Mapping.AddressCount)]
+            : (ushort[])existing.CurrentWords.Clone();
+        for (var index = 0; index < item.EffectiveWordCount; index++)
+        {
+            var sourceIndex = item.Offset + index;
+            var targetIndex = item.MappingWordOffset + index;
+            if (sourceIndex >= 0
+                && sourceIndex < blockWords.Count
+                && targetIndex >= 0
+                && targetIndex < signalWords.Length)
+            {
+                signalWords[targetIndex] = blockWords[sourceIndex];
+            }
+        }
+
+        stagedUpdates[item.Mapping.SignalKey] = new PlcReadSignalUpdate(
+            signalWords,
+            ReadSucceeded: true,
+            batchId,
+            attemptedAtUtc,
+            FailureReason: null);
+    }
+
     private static void CommitReadBatch(
         IPlcBufferTransport buffer,
         IReadOnlyDictionary<string, PlcReadSignalUpdate> stagedUpdates)
@@ -575,18 +621,6 @@ public abstract class PlcIoScanTaskBase : IPlcIoScanTask
 
         _lastDisconnectLogTime = now;
         return true;
-    }
-
-    private static ushort[] SliceWords(IReadOnlyList<ushort> words, int offset, int count)
-    {
-        var result = new ushort[Math.Max(1, count)];
-        for (var index = 0; index < result.Length; index++)
-        {
-            var sourceIndex = offset + index;
-            result[index] = sourceIndex >= 0 && sourceIndex < words.Count ? words[sourceIndex] : (ushort)0;
-        }
-
-        return result;
     }
 
     private readonly record struct PlcReadCycleResult(bool AllSucceeded, bool AnySucceeded);

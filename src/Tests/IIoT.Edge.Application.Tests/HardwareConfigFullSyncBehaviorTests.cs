@@ -13,6 +13,7 @@ using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Module.Contracts.Runtime;
 using IIoT.Edge.SharedKernel.Domain;
 using IIoT.Edge.Module.Contracts.Hardware;
+using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.SharedKernel.Result;
 using IIoT.Edge.SharedKernel.Specification;
@@ -440,6 +441,39 @@ public sealed class HardwareConfigFullSyncBehaviorTests
         Assert.DoesNotContain(repo.Items, x => x.Id == 2);
         Assert.Contains(repo.Items, x => x.Id == 1 && x.Remark == "updated-remark");
         Assert.Contains(repo.Items, x => x.Id == 3 && x.Remark == "other-device");
+    }
+
+    [Fact]
+    public async Task SaveIoMappingsHandler_WhenDataTypeAndWordLengthAreInvalid_ShouldRejectWithoutChangingRows()
+    {
+        var original = CreateIoMapping(id: 1, deviceId: 9, signalKey: "Signal.A", remark: "keep");
+        var repo = new InMemoryRepository<IoMappingEntity>(original);
+        var handler = new SaveIoMappingsHandler(new TestEdgeUnitOfWorkFactory(repo));
+
+        var result = await handler.Handle(
+            new SaveIoMappingsCommand(
+                9,
+                [
+                    new IoMappingDto(
+                        1,
+                        9,
+                        "Signal.A",
+                        "D100",
+                        1,
+                        IoMappingOptionCatalog.DataTypeInt32,
+                        IoMappingOptionCatalog.DirectionRead,
+                        IoMappingOptionCatalog.CategorySingleRead,
+                        string.Empty,
+                        1,
+                        "must-not-apply")
+                ]),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        var unchanged = Assert.Single(repo.Items);
+        Assert.Equal("keep", unchanged.Remark);
+        Assert.Equal(original.DataType, unchanged.DataType);
+        Assert.Equal(original.AddressCount, unchanged.AddressCount);
     }
 
     [Fact]

@@ -3,6 +3,7 @@ using IIoT.Edge.SharedKernel.Messaging;
 using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.SharedKernel.Result;
 using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Module.Sdk.Hardware;
 
 namespace IIoT.Edge.Application.Features.Hardware.UseCases.IoMapping.Commands;
 
@@ -91,6 +92,14 @@ public class SaveIoMappingsHandler(
 
     private static string? Validate(int networkDeviceId, IoMappingDto dto)
     {
+        var typeWordLength = PlcIoTypeWordLengthValidator.Validate(
+            dto.DataType,
+            dto.AddressCount);
+        if (!typeWordLength.IsValid)
+        {
+            return $"IO“{dto.SignalKey}”数据类型与 word 长度不匹配：{typeWordLength.FailureCode}。";
+        }
+
         try
         {
             var entity = Create(networkDeviceId, dto);

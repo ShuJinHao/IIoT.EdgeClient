@@ -18,6 +18,29 @@ namespace IIoT.Edge.Shell.UiTests;
 
 public sealed class HardwareConfigViewModelBehaviorTests
 {
+    [Theory]
+    [InlineData("Int32", 1)]
+    public async Task IoMappingValidator_WhenTypeWordLengthIsInvalid_ShouldRejectDraft(
+        string dataType,
+        int addressCount)
+    {
+        var mapping = CreateMapping(
+            "Signal.Invalid",
+            "D100",
+            IoMappingOptionCatalog.DirectionRead,
+            "test",
+            IoMappingOptionCatalog.CategorySingleRead);
+        mapping.DataType = dataType;
+        mapping.AddressCount = addressCount;
+        var validator = new IoMappingValidator(new TestLanguageService());
+
+        var issues = await validator.ValidateAsync(
+            mapping,
+            TestContext.Current.CancellationToken);
+
+        Assert.Contains(issues, static issue => issue.Field == nameof(IoMappingVm.AddressCount));
+    }
+
     [AvaloniaFact]
     public async Task AddNetworkDevice_WhenConfirmed_ShouldSaveImmediately()
     {
@@ -354,7 +377,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
         viewModel.EditingInteractionPair.ReadAddressCount = 2;
         viewModel.EditingInteractionPair.ReadDataType = IoMappingOptionCatalog.DataTypeUInt16;
         viewModel.EditingInteractionPair.WritePlcAddress = "D610";
-        viewModel.EditingInteractionPair.WriteAddressCount = 3;
+        viewModel.EditingInteractionPair.WriteAddressCount = 4;
         viewModel.EditingInteractionPair.WriteDataType = IoMappingOptionCatalog.DataTypeInt32;
         viewModel.EditingInteractionPair.Remark = "现场调整";
         viewModel.ConfirmEditIoMappingCommand.Execute(null);
@@ -362,7 +385,7 @@ public sealed class HardwareConfigViewModelBehaviorTests
                                    && service.SavedMappings.Any(x => x.PlcAddress == "D610"));
 
         Assert.Contains(viewModel.IoMappings, x => x.PlcAddress == "D710" && x.AddressCount == 2 && x.DataType == IoMappingOptionCatalog.DataTypeUInt16);
-        Assert.Contains(viewModel.IoMappings, x => x.PlcAddress == "D610" && x.AddressCount == 3 && x.DataType == IoMappingOptionCatalog.DataTypeInt32);
+        Assert.Contains(viewModel.IoMappings, x => x.PlcAddress == "D610" && x.AddressCount == 4 && x.DataType == IoMappingOptionCatalog.DataTypeInt32);
         Assert.All(viewModel.IoMappings, x => Assert.Equal("现场调整", x.Remark));
         Assert.False(viewModel.IsEditIoMappingDialogOpen);
     }

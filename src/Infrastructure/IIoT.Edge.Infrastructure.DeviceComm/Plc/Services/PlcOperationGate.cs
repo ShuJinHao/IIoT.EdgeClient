@@ -9,16 +9,18 @@ namespace IIoT.Edge.Infrastructure.DeviceComm.Plc.Services;
 internal sealed class PlcOperationGate
 {
     private readonly object _stateLock = new();
-    private readonly SemaphoreSlim _semaphore = new(1, 1);
     private readonly CancellationTokenSource _lifetimeCts = new();
     private readonly TaskCompletionSource _drained = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly List<Waiter> _waiters = [];
     private readonly string _serviceName;
     private readonly TimeSpan _operationSettleTimeout;
     private readonly TimeSpan _disposeTimeout;
+    private readonly TimeProvider _timeProvider;
 
     private GateState _state = GateState.Open;
     private int _waiterCount;
     private int _activeLeaseCount;
+    private long _waiterSequence;
     private string? _quarantineDetail;
     private Task? _lifetimeCancellationTask;
     private Task? _shutdownTask;
@@ -26,7 +28,8 @@ internal sealed class PlcOperationGate
     public PlcOperationGate(
         string serviceName,
         TimeSpan operationSettleTimeout,
-        TimeSpan disposeTimeout)
+        TimeSpan disposeTimeout,
+        TimeProvider? timeProvider = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
         if (operationSettleTimeout <= TimeSpan.Zero)
@@ -42,6 +45,7 @@ internal sealed class PlcOperationGate
         _serviceName = serviceName;
         _operationSettleTimeout = operationSettleTimeout;
         _disposeTimeout = disposeTimeout;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public bool IsOpen
@@ -217,6 +221,7 @@ internal sealed class PlcOperationGate
     private async Task<Lease> EnterAsync(string operationName, CancellationToken cancellationToken)
     {
         CancellationTokenSource linkedCts;
+        Waiter? waiter = null;
         lock (_stateLock)
         {
             if (_state != GateState.Open)
@@ -227,51 +232,35 @@ internal sealed class PlcOperationGate
             linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken,
                 _lifetimeCts.Token);
+            if (_activeLeaseCount == 0)
+            {
+                _activeLeaseCount = 1;
+                return new Lease(this, linkedCts);
+            }
+
+            var scheduling = PlcOperationSchedulingContext.Current;
+            waiter = new Waiter(
+                this,
+                linkedCts,
+                scheduling,
+                _timeProvider.GetUtcNow(),
+                checked(++_waiterSequence));
+            _waiters.Add(waiter);
             _waiterCount++;
         }
 
-        var waiterCounted = true;
+        waiter.RegisterCancellation();
         try
         {
-            await _semaphore.WaitAsync(linkedCts.Token).ConfigureAwait(false);
-
-            GateState stateAfterEnter;
-            lock (_stateLock)
-            {
-                _waiterCount--;
-                waiterCounted = false;
-                _activeLeaseCount++;
-                stateAfterEnter = _state;
-            }
-
-            var lease = new Lease(this, linkedCts);
-            if (stateAfterEnter == GateState.Open)
-            {
-                return lease;
-            }
-
-            lease.Dispose();
-            throw CreateClosedException(operationName);
+            return await waiter.Completion.Task.ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            if (waiterCounted)
-            {
-                OnWaiterExited();
-            }
-
-            linkedCts.Dispose();
             throw CreateClosedException(operationName);
         }
-        catch
+        finally
         {
-            if (waiterCounted)
-            {
-                OnWaiterExited();
-            }
-
-            linkedCts.Dispose();
-            throw;
+            waiter.DisposeQueueRegistration();
         }
     }
 
@@ -447,7 +436,6 @@ internal sealed class PlcOperationGate
             _state = GateState.Disposed;
         }
 
-        _semaphore.Dispose();
         _lifetimeCts.Dispose();
     }
 
@@ -469,22 +457,52 @@ internal sealed class PlcOperationGate
                 _serviceName,
                 $"{_serviceName} 正在关闭或已释放，不能执行 {operationName}。");
 
-    private void OnWaiterExited()
+    private void CancelWaiter(Waiter waiter)
     {
+        var removed = false;
         lock (_stateLock)
         {
-            _waiterCount--;
-            SignalDrainedIfNeededLocked();
+            removed = _waiters.Remove(waiter);
+            if (removed)
+            {
+                _waiterCount--;
+                SignalDrainedIfNeededLocked();
+            }
+        }
+
+        if (removed)
+        {
+            waiter.Completion.TrySetCanceled(waiter.LinkedToken);
         }
     }
 
     private void OnLeaseReleased()
     {
+        Waiter? next = null;
         lock (_stateLock)
         {
             _activeLeaseCount--;
+            if (_state == GateState.Open && _waiters.Count > 0)
+            {
+                next = SelectNextWaiterLocked();
+                _waiters.Remove(next);
+                _waiterCount--;
+                _activeLeaseCount++;
+            }
+
             SignalDrainedIfNeededLocked();
         }
+
+        next?.Grant();
+    }
+
+    private Waiter SelectNextWaiterLocked()
+    {
+        var now = _timeProvider.GetUtcNow();
+        return _waiters
+            .OrderBy(waiter => waiter.GetEffectivePriority(now))
+            .ThenBy(static waiter => waiter.Sequence)
+            .First();
     }
 
     private void SignalDrainedIfNeededLocked()
@@ -543,8 +561,71 @@ internal sealed class PlcOperationGate
             }
 
             Interlocked.Exchange(ref _linkedCts, null)?.Dispose();
-            owner._semaphore.Release();
             owner.OnLeaseReleased();
+        }
+    }
+
+    private sealed class Waiter
+    {
+        private readonly PlcOperationGate _owner;
+        private readonly CancellationTokenSource _linkedCts;
+        private readonly PlcOperationSchedulingRequest _scheduling;
+        private readonly DateTimeOffset _enqueuedAt;
+        private CancellationTokenRegistration _queueCancellation;
+
+        public Waiter(
+            PlcOperationGate owner,
+            CancellationTokenSource linkedCts,
+            PlcOperationSchedulingRequest scheduling,
+            DateTimeOffset enqueuedAt,
+            long sequence)
+        {
+            _owner = owner;
+            _linkedCts = linkedCts;
+            _scheduling = scheduling;
+            _enqueuedAt = enqueuedAt;
+            Sequence = sequence;
+        }
+
+        public TaskCompletionSource<Lease> Completion { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public CancellationToken LinkedToken => _linkedCts.Token;
+
+        public long Sequence { get; }
+
+        public void RegisterCancellation()
+            => _queueCancellation = _linkedCts.Token.Register(
+                static state =>
+                {
+                    var waiter = (Waiter)state!;
+                    waiter._owner.CancelWaiter(waiter);
+                },
+                this);
+
+        public int GetEffectivePriority(DateTimeOffset now)
+        {
+            var elapsedTicks = Math.Max(0, (now - _enqueuedAt).Ticks);
+            var intervalTicks = Math.Max(1, _scheduling.AgingInterval.Ticks);
+            var promotions = Math.Min(
+                (int)_scheduling.Priority,
+                (int)Math.Min(int.MaxValue, elapsedTicks / intervalTicks));
+            return (int)_scheduling.Priority - promotions;
+        }
+
+        public void Grant()
+        {
+            _queueCancellation.Dispose();
+            Completion.TrySetResult(new Lease(_owner, _linkedCts));
+        }
+
+        public void DisposeQueueRegistration()
+        {
+            _queueCancellation.Dispose();
+            if (Completion.Task.IsCanceled)
+            {
+                _linkedCts.Dispose();
+            }
         }
     }
 

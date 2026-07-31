@@ -115,12 +115,16 @@ internal sealed class IoMappingValidator : IEditorValidator<IoMappingVm>
                     model.SignalKey),
                 nameof(model.PlcAddress)));
 
-        if (model.AddressCount <= 0)
+        var typeWordLength = PlcIoTypeWordLengthValidator.Validate(
+            model.DataType,
+            model.AddressCount);
+        if (!typeWordLength.IsValid)
             issues.Add(new ValidationIssue(
                 _languageService.Format(
-                    "Navigation_Hardware_Validation_IoAddressCountPositiveFormat",
-                    "IO“{0}”的地址长度必须大于 0。",
-                    model.SignalKey),
+                    "Navigation_Hardware_Validation_IoTypeWordLengthFormat",
+                    "IO“{0}”的数据类型与 word 长度无效：{1}。",
+                    model.SignalKey,
+                    typeWordLength.FailureCode),
                 nameof(model.AddressCount)));
 
         if (string.IsNullOrWhiteSpace(model.Category))

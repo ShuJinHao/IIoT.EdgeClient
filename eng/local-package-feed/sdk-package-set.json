@@ -1,32 +1,32 @@
 {
   "schemaVersion": 1,
   "sdkRepository": "ShuJinHao/IIoT.Edge.Sdk",
-  "sdkSourceCommit": "45094fe13513b32b7c3ebe27931c559531789701",
-  "version": "2.0.10",
+  "sdkSourceCommit": "fe8b4c46c48197eecbeaf74a8463cd347edf9129",
+  "version": "2.0.11",
   "packages": [
     {
       "id": "IIoT.Edge.Module.Analyzers",
-      "fileName": "IIoT.Edge.Module.Analyzers.2.0.10.nupkg",
-      "sha256": "764bd5e897743fe45a34963c815d5e610c5bd4bda2c8d8248cb94a66bd09f519",
-      "size": 39321
+      "fileName": "IIoT.Edge.Module.Analyzers.2.0.11.nupkg",
+      "sha256": "74b78b7999c39d4c8d419602c03fb6be86b59bcc6eb336fb541d871b6e9a8066",
+      "size": 39804
     },
     {
       "id": "IIoT.Edge.Module.Contracts",
-      "fileName": "IIoT.Edge.Module.Contracts.2.0.10.nupkg",
-      "sha256": "f0d1de5122591be61e9e5c20a60bb66ce4d909fdd07eb4db06956bbef1554b70",
-      "size": 134664
+      "fileName": "IIoT.Edge.Module.Contracts.2.0.11.nupkg",
+      "sha256": "28f3aa33d1442d70b7b709f0eab0f6b407bda48d68f519de281c6b163918f0a3",
+      "size": 134662
     },
     {
       "id": "IIoT.Edge.Module.Sdk",
-      "fileName": "IIoT.Edge.Module.Sdk.2.0.10.nupkg",
-      "sha256": "c1f0d281d339d01f3602a1522c5b337def8accabd79977064e1a4783ac69f3c3",
-      "size": 48010
+      "fileName": "IIoT.Edge.Module.Sdk.2.0.11.nupkg",
+      "sha256": "80a69a4cd93a65bc1ff9407ed9aeb1f88aba5009d92ba06f8becf5b8f65af272",
+      "size": 50016
     },
     {
       "id": "IIoT.Edge.UI.Shared",
-      "fileName": "IIoT.Edge.UI.Shared.2.0.10.nupkg",
-      "sha256": "4e2f1734c8012a562cfcfe6fd186877cca65c08533c693f34e8e2cdbcdb38661",
-      "size": 127705
+      "fileName": "IIoT.Edge.UI.Shared.2.0.11.nupkg",
+      "sha256": "ab3a962b3fdf5edbc7b526eb1ccc58ffeebbc8d3e9b49ee4269c193a3729e83d",
+      "size": 127703
     }
   ]
 }

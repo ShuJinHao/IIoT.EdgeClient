@@ -24,6 +24,7 @@ public class PlcBuffer : IPlcBufferTransport, IPlcReadSnapshotProvider, IPlcRead
         new Dictionary<string, ushort[]>(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, ushort[]> _writeSignals = new(StringComparer.OrdinalIgnoreCase);
     private long _readGeneration;
+    private IPlcOnDemandReadCoordinator? _onDemandReadCoordinator;
 
     public PlcBuffer(
         int readSize,
@@ -75,6 +76,22 @@ public class PlcBuffer : IPlcBufferTransport, IPlcReadSnapshotProvider, IPlcRead
         out PlcReadBatchSnapshot? snapshot)
     {
         ArgumentNullException.ThrowIfNull(requiredSignalKeys);
+        var onDemand = Volatile.Read(ref _onDemandReadCoordinator);
+        if (onDemand is not null && onDemand.Handles(requiredSignalKeys))
+        {
+            return onDemand.TryCapture(requiredSignalKeys, out snapshot);
+        }
+
+        return TryCapturePublishedReadSnapshot(requiredSignalKeys, out snapshot);
+    }
+
+    internal void SetOnDemandReadCoordinator(IPlcOnDemandReadCoordinator? coordinator)
+        => Volatile.Write(ref _onDemandReadCoordinator, coordinator);
+
+    private bool TryCapturePublishedReadSnapshot(
+        IReadOnlyCollection<string> requiredSignalKeys,
+        out PlcReadBatchSnapshot? snapshot)
+    {
         snapshot = null;
         if (requiredSignalKeys.Count == 0)
         {
