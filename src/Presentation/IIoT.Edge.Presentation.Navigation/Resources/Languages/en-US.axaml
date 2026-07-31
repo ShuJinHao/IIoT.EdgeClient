@@ -711,9 +711,36 @@
     <sys:String x:Key="Navigation_Column_TaskBindingSource">Binding Source</sys:String>
     <sys:String x:Key="Navigation_Column_TaskAvailability">Availability</sys:String>
     <sys:String x:Key="Navigation_Column_RuntimeStatus">Runtime status</sys:String>
+    <sys:String x:Key="Navigation_Column_CheckpointMagazine">Checkpoint magazine</sys:String>
+    <sys:String x:Key="Navigation_Column_ObservedMagazine">Observed value</sys:String>
+    <sys:String x:Key="Navigation_Column_RecoveryState">Recovery state</sys:String>
     <sys:String x:Key="Navigation_Column_Note">Note</sys:String>
     <sys:String x:Key="Navigation_Column_RequiredSignals">Required Signals</sys:String>
     <sys:String x:Key="Navigation_Column_TaskKey">Task Key</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_LocalAdminRequired">Only the currently signed-in local administrator can confirm task recovery.</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoverySelectionChanged">The selected PLC changed. Review the current task and try again.</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryCanceled">Recovery confirmation was canceled.</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryFailed">Recovery confirmation failed.</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryFailedFormat">Recovery confirmation failed. Code=RecoveryOperationFailed; exception type={0}.</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryRevisionConflict">The observed value changed. The page was refreshed; review the latest snapshot before confirming again.</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryRejectedFormat">Recovery confirmation was rejected. Code={0}.</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryResumeSuccess">The original checkpoint was confirmed for recovery.</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryTerminateSuccess">The old incomplete item was audit-terminated; no completion, upload, or production count was generated.</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_EmptyMagazineCode">Empty code</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryState_None">No pending checkpoint</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryState_WaitingForFreshSnapshot">Waiting for a fresh snapshot</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryState_AwaitingConfirmation">Waiting for local confirmation</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryState_WaitingForNextFreshSnapshot">Waiting for the next fresh snapshot</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryState_Unknown">Unknown recovery state</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_CheckpointTimeFormat">Checkpoint time={0:yyyy-MM-dd HH:mm:ss} UTC</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_ObservedTimeFormat">Observed time={0:yyyy-MM-dd HH:mm:ss} UTC</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryDiagnosticFormat">Code={0}</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryAction_Resume">Confirm recovery</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_RecoveryAction_AuditTerminate">Audit terminate</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_ResumeCheckpointConfirmTitle">Confirm checkpoint recovery</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_ResumeCheckpointConfirmMessageFormat">PLC “{0}” task “{1}” has an observed value matching checkpoint magazine “{2}”. Confirm recovery of the original checkpoint?</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_AuditTerminateConfirmTitle">Confirm audit termination</sys:String>
+    <sys:String x:Key="Navigation_PlcTaskBinding_AuditTerminateConfirmMessageFormat">PLC “{0}” task “{1}” has checkpoint magazine “{2}” and observed value “{3}”. This only audit-terminates the old incomplete item and creates no completion, upload, or production count. A different code waits for the next fresh snapshot; an empty code keeps waiting. Continue?</sys:String>
     <sys:String x:Key="Navigation_Label_InteractionGroup">Interaction Group</sys:String>
     <sys:String x:Key="Navigation_Label_IoCategory">IO Category</sys:String>
     <sys:String x:Key="Navigation_Label_ReadSignal">Read Signal</sys:String>

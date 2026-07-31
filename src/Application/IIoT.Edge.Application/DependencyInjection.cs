@@ -5,6 +5,7 @@ using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.Tasks;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Module.Contracts.Plc.Checkpoints;
 using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.Application.Auth;
 using IIoT.Edge.Application.Common.Diagnostics;
@@ -75,6 +76,12 @@ public static class DependencyInjection
         services.AddTransient<IParamViewCrudService, ParamViewCrudService>();
         services.AddTransient<IIoViewQueryFacade, IoViewQueryFacade>();
         services.AddTransient<IHardwareConfigCrudService, HardwareConfigCrudService>();
+        services.AddSingleton<IPlcTaskRecoveryApplicationService>(sp =>
+            new PlcTaskRecoveryApplicationService(
+                sp.GetServices<IPlcTaskRecoveryQuery>(),
+                sp.GetServices<IPlcTaskRecoveryConfirmationHandler>(),
+                sp.GetRequiredService<IClientPermissionService>(),
+                sp.GetRequiredService<IAuthService>()));
         services.AddTransient<IPlcTaskBindingService, PlcTaskBindingService>();
         services.AddTransient<IPlcTaskBindingPersistenceTransaction, PlcTaskBindingService>();
         services.AddSingleton<

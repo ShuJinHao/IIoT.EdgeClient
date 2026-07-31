@@ -40,6 +40,7 @@ public sealed class PlcTaskBindingTransactionBehaviorTests
     [InlineData("create")]
     [InlineData("start")]
     [InlineData("stop")]
+    [InlineData("checkpoint")]
     public async Task SaveAndApply_WhenRuntimeDeltaFails_ShouldRestoreRuntimeAndSqlite(
         string failureStage)
     {

@@ -67,6 +67,7 @@
             Margin="0,16,0,0"
             Title="{DynamicResource Navigation_Title_PlcTaskBinding}">
             <edge:EdgeDataGrid
+                x:Name="TaskBindingGrid"
                 AutoGenerateColumns="False"
                 CanUserReorderColumns="False"
                 CanUserResizeColumns="True"
@@ -79,7 +80,24 @@
                     <edge:EdgeTextColumn Binding="{Binding DisplayName}" Header="{DynamicResource Navigation_Column_TaskName}" IsReadOnly="True" MinWidth="200" Width="2*" />
                     <edge:EdgeTextColumn Binding="{Binding AvailabilityText}" Header="{DynamicResource Navigation_Column_TaskAvailability}" IsReadOnly="True" MinWidth="120" Width="120" />
                     <edge:EdgeTextColumn Binding="{Binding RuntimeStatusText}" Header="{DynamicResource Navigation_Column_RuntimeStatus}" IsReadOnly="True" MinWidth="120" Width="120" />
+                    <edge:EdgeTextColumn Binding="{Binding CheckpointMagazineText}" Header="{DynamicResource Navigation_Column_CheckpointMagazine}" IsReadOnly="True" MinWidth="140" Width="140" />
+                    <edge:EdgeTextColumn Binding="{Binding ObservedMagazineText}" Header="{DynamicResource Navigation_Column_ObservedMagazine}" IsReadOnly="True" MinWidth="140" Width="140" />
+                    <edge:EdgeTextColumn Binding="{Binding RecoverySummaryText}" Header="{DynamicResource Navigation_Column_RecoveryState}" IsReadOnly="True" MinWidth="220" Width="2*" />
                     <edge:EdgeTextColumn Binding="{Binding NoteText}" Header="{DynamicResource Navigation_Column_Note}" IsReadOnly="True" MinWidth="200" Width="3*" />
+                    <edge:EdgeActionColumn Header="{DynamicResource Navigation_Column_Action}" MinWidth="120" Width="120">
+                        <edge:EdgeActionColumn.CellTemplate>
+                            <DataTemplate>
+                                <edge:EdgeActionButton
+                                    Command="{Binding RecoveryCommand}"
+                                    Content="{Binding RecoveryActionText}"
+                                    IsEnabled="{Binding CanConfirmRecovery}"
+                                    IsVisible="{Binding HasRecoveryAction}"
+                                    Kind="Primary"
+                                    Role="Cell"
+                                    Size="Compact" />
+                            </DataTemplate>
+                        </edge:EdgeActionColumn.CellTemplate>
+                    </edge:EdgeActionColumn>
                 </edge:EdgeDataGrid.Columns>
             </edge:EdgeDataGrid>
         </edge:EdgeTablePanel>

@@ -5,6 +5,7 @@ using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.Application.Common.Plc;
+using IIoT.Edge.Module.Contracts.Plc.Checkpoints;
 
 namespace IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 
@@ -14,7 +15,8 @@ public sealed class PlcTaskBindingService(
     IReadRepository<IoMappingEntity> ioMappings,
     IReadRepository<PlcTaskBindingEntity> bindings,
     IEdgeUnitOfWorkFactory unitOfWorkFactory,
-    IPlcTaskRuntimeStatusReader? runtimeStatuses = null)
+    IPlcTaskRuntimeStatusReader? runtimeStatuses = null,
+    IPlcTaskRecoveryApplicationService? taskRecovery = null)
     : IPlcTaskBindingService, IPlcTaskBindingPersistenceTransaction
 {
     public async Task<IReadOnlyList<PlcTaskBindingDeviceDto>> GetModuleDeviceBindingsAsync(
@@ -42,6 +44,22 @@ public sealed class PlcTaskBindingService(
                 cancellationToken).ConfigureAwait(false);
             var rowByKey = rows.ToDictionary(x => x.TaskKey, StringComparer.OrdinalIgnoreCase);
             var signalBindings = await LoadSignalBindingsAsync(device.Id, cancellationToken).ConfigureAwait(false);
+            var recoveryByTaskKey = new Dictionary<string, PlcTaskRecoverySnapshot?>(
+                StringComparer.OrdinalIgnoreCase);
+            if (taskRecovery is not null && !string.IsNullOrWhiteSpace(device.PlcCode))
+            {
+                foreach (var candidate in candidates)
+                {
+                    recoveryByTaskKey[candidate.Key] = await taskRecovery
+                        .QueryAsync(
+                            moduleId,
+                            device.PlcCode,
+                            candidate.Key,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                }
+            }
+
             var taskItems = candidates
                 .Select(candidate => CreateItem(
                     candidate,
@@ -50,7 +68,8 @@ public sealed class PlcTaskBindingService(
                     device.DeviceModel,
                     device.PlcCode,
                     device.IsEnabled,
-                    observedAtUtc))
+                    observedAtUtc,
+                    recoveryByTaskKey.GetValueOrDefault(candidate.Key)))
                 .ToArray();
 
             results.Add(new PlcTaskBindingDeviceDto(
@@ -366,6 +385,24 @@ public sealed class PlcTaskBindingService(
             : PlcTaskBindingValidationResult.Failure(issues);
     }
 
+    public Task<PlcTaskRecoveryConfirmationResult> ConfirmRecoveryAsync(
+        string moduleId,
+        string plcCode,
+        string taskKey,
+        long expectedRevision,
+        PlcTaskRecoveryConfirmationAction action,
+        CancellationToken cancellationToken = default)
+        => taskRecovery?.ConfirmAsync(
+               moduleId,
+               plcCode,
+               taskKey,
+               expectedRevision,
+               action,
+               cancellationToken)
+           ?? Task.FromResult(PlcTaskRecoveryConfirmationResult.Rejected(
+               PlcTaskRecoveryConfirmationOutcome.NotFound,
+               PlcTaskRecoveryDiagnosticCodes.ProviderUnavailable));
+
     private PlcTaskBindingItemDto CreateItem(
         TaskCandidate candidate,
         IReadOnlyDictionary<string, PlcTaskBindingEntity> rowByKey,
@@ -373,7 +410,8 @@ public sealed class PlcTaskBindingService(
         string? deviceModel,
         string plcCode,
         bool isDeviceEnabled,
-        DateTimeOffset observedAtUtc)
+        DateTimeOffset observedAtUtc,
+        PlcTaskRecoverySnapshot? recovery)
     {
         var hasSavedBinding = rowByKey.ContainsKey(candidate.Key);
         var configuredEnabled = rowByKey.TryGetValue(candidate.Key, out var configuredRow)
@@ -403,7 +441,14 @@ public sealed class PlcTaskBindingService(
             runtime?.StateChangedAtUtc,
             runtime?.LastSuccessfulAtUtc,
             runtime?.ErrorCode,
-            runtime?.ExceptionType);
+            runtime?.ExceptionType,
+            recovery?.State ?? PlcTaskRecoveryState.None,
+            recovery?.Revision ?? 0,
+            recovery?.CheckpointMagazineCode,
+            recovery?.ObservedMagazineCode,
+            recovery?.CheckpointSavedAtUtc,
+            recovery?.ObservedAtUtc,
+            recovery?.DiagnosticCode);
     }
 
     private static DateTimeOffset ResolveConfigurationStateChangedAt(

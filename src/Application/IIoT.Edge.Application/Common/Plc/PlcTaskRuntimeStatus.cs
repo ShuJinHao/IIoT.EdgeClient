@@ -66,6 +66,7 @@ public static class PlcTaskRuntimeErrorCodes
     public const string TaskUnexpectedExit = nameof(TaskUnexpectedExit);
     public const string TaskStopFailed = nameof(TaskStopFailed);
     public const string TaskStopTimeout = nameof(TaskStopTimeout);
+    public const string TaskCheckpointSaveFailed = nameof(TaskCheckpointSaveFailed);
     public const string RuntimeInitializationFailed = nameof(RuntimeInitializationFailed);
     public const string RuntimeQuarantined = nameof(RuntimeQuarantined);
     public const string ConnectionTaskFault = nameof(ConnectionTaskFault);

@@ -4,6 +4,7 @@ using System.Windows.Input;
 using Avalonia.Threading;
 using IIoT.Edge.Module.Contracts.Auth;
 using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Module.Contracts.Plc.Checkpoints;
 using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Presentation.Navigation.Common;
@@ -26,6 +27,7 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
     private readonly AsyncCommand _saveCommand;
     private PlcTaskBindingDeviceVm? _selectedDevice;
     private bool _isDeviceSelectionSubscribed;
+    private bool _isPermissionSubscribed;
     private int _runtimeStatusSubscriptionActive;
     private int _runtimeStatusSubscriptionGeneration;
 
@@ -137,6 +139,7 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
     public override Task OnActivatedAsync()
     {
         SubscribeDeviceSelection();
+        SubscribePermission();
         SubscribeRuntimeStatus();
         return LoadAsync();
     }
@@ -144,6 +147,7 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
     public override Task OnDeactivatedAsync()
     {
         UnsubscribeDeviceSelection();
+        UnsubscribePermission();
         UnsubscribeRuntimeStatus();
         return Task.CompletedTask;
     }
@@ -212,7 +216,13 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
     private async Task LoadCoreAsync()
     {
         var devices = await _bindingService.GetModuleDeviceBindingsAsync(_moduleId).ConfigureAwait(false);
-        var deviceItems = devices.Select(static x => new PlcTaskBindingDeviceVm(x)).ToArray();
+        var deviceItems = devices
+            .Select(x => new PlcTaskBindingDeviceVm(
+                x,
+                ConfirmRecoveryAsync,
+                _permissionService.IsLocalAdmin,
+                GetText))
+            .ToArray();
 
         RunOnUiThread(() =>
         {
@@ -236,6 +246,106 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
                 : FormatText("Navigation_PlcTaskBinding_DeviceCountFormat", "已加载 {0} 台 PLC 的任务绑定。", Devices.Count));
         });
     }
+
+    private Task ConfirmRecoveryAsync(PlcTaskBindingTaskVm task)
+        => RunViewTaskAsync(
+            async () =>
+            {
+                var selected = SelectedDevice;
+                if (selected is null)
+                {
+                    SetError(GetText(
+                        "Navigation_PlcTaskBinding_SelectDeviceFirst",
+                        "请先选择 PLC 设备。"));
+                    return;
+                }
+
+                if (!selected.Tasks.Contains(task))
+                {
+                    SetError(GetText(
+                        "Navigation_PlcTaskBinding_RecoverySelectionChanged",
+                        "当前 PLC 选择已变化，请核对最新任务后重试。"));
+                    return;
+                }
+
+                if (!_permissionService.IsLocalAdmin)
+                {
+                    SetError(GetText(
+                        "Navigation_PlcTaskBinding_LocalAdminRequired",
+                        "只有当前已登录的本地管理员可以确认任务恢复。"));
+                    return;
+                }
+
+                var action = task.RecoveryAction;
+                var confirmed = await _confirmationService
+                    .ConfirmRecoveryAsync(
+                        selected.PlcCode,
+                        task.Key,
+                        task.CheckpointMagazineCode,
+                        task.ObservedMagazineCode,
+                        action)
+                    .ConfigureAwait(false);
+                if (!confirmed)
+                {
+                    SetStatus(GetText(
+                        "Navigation_PlcTaskBinding_RecoveryCanceled",
+                        "已取消恢复确认。"));
+                    return;
+                }
+
+                PlcTaskRecoveryConfirmationResult result;
+                try
+                {
+                    result = await _bindingService
+                        .ConfirmRecoveryAsync(
+                            _moduleId,
+                            selected.PlcCode,
+                            task.Key,
+                            task.RecoveryRevision,
+                            action)
+                        .ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    SetError(FormatText(
+                        "Navigation_PlcTaskBinding_RecoveryFailedFormat",
+                        "恢复确认失败，原因码=RecoveryOperationFailed，异常类型={0}。",
+                        ex.GetType().Name));
+                    return;
+                }
+
+                await LoadCoreAsync().ConfigureAwait(false);
+                if (result.Outcome == PlcTaskRecoveryConfirmationOutcome.RevisionConflict)
+                {
+                    SetError(GetText(
+                        "Navigation_PlcTaskBinding_RecoveryRevisionConflict",
+                        "现场读值已变化，页面已刷新；请核对最新快照后重新确认。"));
+                    return;
+                }
+
+                if (!result.IsSuccess)
+                {
+                    var diagnosticCode = string.IsNullOrWhiteSpace(result.DiagnosticCode)
+                        ? result.Outcome.ToString()
+                        : result.DiagnosticCode;
+                    SetError(FormatText(
+                        "Navigation_PlcTaskBinding_RecoveryRejectedFormat",
+                        "恢复确认被拒绝，原因码={0}。",
+                        diagnosticCode));
+                    return;
+                }
+
+                SetStatus(action == PlcTaskRecoveryConfirmationAction.ResumeCheckpoint
+                    ? GetText(
+                        "Navigation_PlcTaskBinding_RecoveryResumeSuccess",
+                        "已确认恢复原检查点。")
+                    : GetText(
+                        "Navigation_PlcTaskBinding_RecoveryTerminateSuccess",
+                        "已审计终止旧未完成件；不会生成完工、上传或产量。"));
+            },
+            GetText(
+                "Navigation_PlcTaskBinding_RecoveryFailed",
+                "恢复确认失败。"));
 
     private PlcTaskBindingDeviceVm? ResolveDeviceFromSharedSelection()
     {
@@ -331,6 +441,41 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
         _runtimeStatusReader.StatusChanged += OnRuntimeStatusChanged;
     }
 
+    private void SubscribePermission()
+    {
+        if (_isPermissionSubscribed)
+        {
+            return;
+        }
+
+        _permissionService.PermissionStateChanged += OnPermissionStateChanged;
+        _isPermissionSubscribed = true;
+    }
+
+    private void UnsubscribePermission()
+    {
+        if (!_isPermissionSubscribed)
+        {
+            return;
+        }
+
+        _permissionService.PermissionStateChanged -= OnPermissionStateChanged;
+        _isPermissionSubscribed = false;
+    }
+
+    private void OnPermissionStateChanged()
+        => RunOnUiThread(() =>
+        {
+            foreach (var task in Devices.SelectMany(static device => device.Tasks))
+            {
+                task.ApplyLocalAdminPermission(_permissionService.IsLocalAdmin);
+            }
+
+            OnPropertyChanged(nameof(CanEdit));
+            OnPropertyChanged(nameof(CanSave));
+            _saveCommand.RaiseCanExecuteChanged();
+        });
+
     private void UnsubscribeRuntimeStatus()
     {
         if (Interlocked.Exchange(
@@ -393,12 +538,20 @@ public class PlcTaskBindingViewModel : NavigationViewModelBase
         base.RefreshLocalization();
         OnPropertyChanged(nameof(SelectedDeviceDisplayName));
         OnPropertyChanged(nameof(SelectedDeviceTitle));
+        foreach (var task in Devices.SelectMany(static device => device.Tasks))
+        {
+            task.RefreshLocalization();
+        }
     }
 }
 
 public sealed class PlcTaskBindingDeviceVm
 {
-    public PlcTaskBindingDeviceVm(PlcTaskBindingDeviceDto dto)
+    public PlcTaskBindingDeviceVm(
+        PlcTaskBindingDeviceDto dto,
+        Func<PlcTaskBindingTaskVm, Task>? recoveryAction = null,
+        bool isLocalAdmin = false,
+        Func<string, string, string>? textResolver = null)
     {
         NetworkDeviceId = dto.NetworkDeviceId;
         PlcCode = dto.PlcCode;
@@ -407,7 +560,12 @@ public sealed class PlcTaskBindingDeviceVm
         IsDeviceEnabled = dto.IsDeviceEnabled;
         foreach (var task in dto.Tasks)
         {
-            Tasks.Add(new PlcTaskBindingTaskVm(task, dto.IsDeviceEnabled));
+            Tasks.Add(new PlcTaskBindingTaskVm(
+                task,
+                dto.IsDeviceEnabled,
+                recoveryAction,
+                isLocalAdmin,
+                textResolver));
         }
     }
 
@@ -435,8 +593,15 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
     private DateTimeOffset? _lastSuccessfulAtUtc;
     private string? _runtimeErrorCode;
     private string? _runtimeExceptionType;
+    private bool _isLocalAdmin;
+    private readonly Func<string, string, string> _textResolver;
 
-    public PlcTaskBindingTaskVm(PlcTaskBindingItemDto dto, bool isDeviceEnabled)
+    public PlcTaskBindingTaskVm(
+        PlcTaskBindingItemDto dto,
+        bool isDeviceEnabled,
+        Func<PlcTaskBindingTaskVm, Task>? recoveryAction = null,
+        bool isLocalAdmin = false,
+        Func<string, string, string>? textResolver = null)
     {
         Key = dto.Key;
         DisplayName = dto.DisplayName;
@@ -452,6 +617,18 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
         CanRun = dto.CanRun;
         UnavailableReason = dto.UnavailableReason;
         IsSupportedByCurrentPlc = dto.IsSupportedByCurrentPlc;
+        RecoveryState = dto.RecoveryState;
+        RecoveryRevision = dto.RecoveryRevision;
+        CheckpointMagazineCode = dto.CheckpointMagazineCode;
+        ObservedMagazineCode = dto.ObservedMagazineCode;
+        CheckpointSavedAtUtc = dto.CheckpointSavedAtUtc;
+        RecoveryObservedAtUtc = dto.RecoveryObservedAtUtc;
+        RecoveryDiagnosticCode = dto.RecoveryDiagnosticCode;
+        _isLocalAdmin = isLocalAdmin;
+        _textResolver = textResolver ?? ResolveFallbackText;
+        RecoveryCommand = new AsyncCommand(
+            () => recoveryAction?.Invoke(this) ?? Task.CompletedTask,
+            () => CanConfirmRecovery);
         RequiredSignalsText = string.Join(
             "；",
             dto.RequiredSignals.Select(static x => $"{x.SignalKey}/{FormatDirection(x.Direction)}"));
@@ -523,6 +700,137 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
     public string? RuntimeErrorCode => _runtimeErrorCode;
 
     public string? RuntimeExceptionType => _runtimeExceptionType;
+
+    public PlcTaskRecoveryState RecoveryState { get; }
+
+    public long RecoveryRevision { get; }
+
+    public string? CheckpointMagazineCode { get; }
+
+    public string? ObservedMagazineCode { get; }
+
+    public DateTimeOffset? CheckpointSavedAtUtc { get; }
+
+    public DateTimeOffset? RecoveryObservedAtUtc { get; }
+
+    public string? RecoveryDiagnosticCode { get; }
+
+    public string CheckpointMagazineText
+        => string.IsNullOrWhiteSpace(CheckpointMagazineCode)
+            ? "--"
+            : CheckpointMagazineCode;
+
+    public string ObservedMagazineText
+        => string.IsNullOrWhiteSpace(ObservedMagazineCode)
+            ? Text(
+                "Navigation_PlcTaskBinding_EmptyMagazineCode",
+                "空码")
+            : ObservedMagazineCode;
+
+    public string RecoveryStateText
+        => RecoveryState switch
+        {
+            PlcTaskRecoveryState.None => Text(
+                "Navigation_PlcTaskBinding_RecoveryState_None",
+                "无待恢复检查点"),
+            PlcTaskRecoveryState.WaitingForFreshSnapshot => Text(
+                "Navigation_PlcTaskBinding_RecoveryState_WaitingForFreshSnapshot",
+                "等待新鲜快照"),
+            PlcTaskRecoveryState.AwaitingConfirmation => Text(
+                "Navigation_PlcTaskBinding_RecoveryState_AwaitingConfirmation",
+                "等待本地确认"),
+            PlcTaskRecoveryState.WaitingForNextFreshSnapshot => Text(
+                "Navigation_PlcTaskBinding_RecoveryState_WaitingForNextFreshSnapshot",
+                "等待下一份新鲜快照"),
+            _ => Text(
+                "Navigation_PlcTaskBinding_RecoveryState_Unknown",
+                "未知恢复状态")
+        };
+
+    public string RecoverySummaryText
+    {
+        get
+        {
+            var items = new[]
+                {
+                    RecoveryStateText,
+                    CheckpointSavedAtUtc.HasValue
+                        ? string.Format(
+                            System.Globalization.CultureInfo.CurrentCulture,
+                            Text(
+                                "Navigation_PlcTaskBinding_CheckpointTimeFormat",
+                                "检查点时间={0:yyyy-MM-dd HH:mm:ss} UTC"),
+                            CheckpointSavedAtUtc)
+                        : null,
+                    RecoveryObservedAtUtc.HasValue
+                        ? string.Format(
+                            System.Globalization.CultureInfo.CurrentCulture,
+                            Text(
+                                "Navigation_PlcTaskBinding_ObservedTimeFormat",
+                                "现场读值时间={0:yyyy-MM-dd HH:mm:ss} UTC"),
+                            RecoveryObservedAtUtc)
+                        : null,
+                    string.IsNullOrWhiteSpace(RecoveryDiagnosticCode)
+                        ? null
+                        : string.Format(
+                            System.Globalization.CultureInfo.CurrentCulture,
+                            Text(
+                                "Navigation_PlcTaskBinding_RecoveryDiagnosticFormat",
+                                "原因码={0}"),
+                            RecoveryDiagnosticCode)
+                }
+                .Where(static item => !string.IsNullOrWhiteSpace(item));
+            return string.Join("；", items);
+        }
+    }
+
+    public PlcTaskRecoveryConfirmationAction RecoveryAction
+        => string.Equals(
+            CheckpointMagazineCode,
+            ObservedMagazineCode,
+            StringComparison.Ordinal)
+            && !string.IsNullOrWhiteSpace(CheckpointMagazineCode)
+                ? PlcTaskRecoveryConfirmationAction.ResumeCheckpoint
+                : PlcTaskRecoveryConfirmationAction.AuditTerminateIncomplete;
+
+    public string RecoveryActionText
+        => RecoveryAction == PlcTaskRecoveryConfirmationAction.ResumeCheckpoint
+            ? Text(
+                "Navigation_PlcTaskBinding_RecoveryAction_Resume",
+                "确认恢复")
+            : Text(
+                "Navigation_PlcTaskBinding_RecoveryAction_AuditTerminate",
+                "审计终止");
+
+    public bool HasRecoveryAction
+        => RecoveryState == PlcTaskRecoveryState.AwaitingConfirmation
+           && _isLocalAdmin;
+
+    public bool CanConfirmRecovery
+        => HasRecoveryAction && _isLocalAdmin;
+
+    public ICommand RecoveryCommand { get; }
+
+    public void ApplyLocalAdminPermission(bool isLocalAdmin)
+    {
+        if (_isLocalAdmin == isLocalAdmin)
+        {
+            return;
+        }
+
+        _isLocalAdmin = isLocalAdmin;
+        OnPropertyChanged(nameof(HasRecoveryAction));
+        OnPropertyChanged(nameof(CanConfirmRecovery));
+        ((AsyncCommand)RecoveryCommand).RaiseCanExecuteChanged();
+    }
+
+    public void RefreshLocalization()
+    {
+        OnPropertyChanged(nameof(ObservedMagazineText));
+        OnPropertyChanged(nameof(RecoveryStateText));
+        OnPropertyChanged(nameof(RecoverySummaryText));
+        OnPropertyChanged(nameof(RecoveryActionText));
+    }
 
     public string RuntimeStatusText
     {
@@ -626,4 +934,10 @@ public sealed class PlcTaskBindingTaskVm : PresentationObservableModelBase
         => string.Equals(direction, "Write", StringComparison.OrdinalIgnoreCase)
             ? "写"
             : "读";
+
+    private string Text(string key, string fallback)
+        => _textResolver(key, fallback);
+
+    private static string ResolveFallbackText(string key, string fallback)
+        => fallback;
 }
