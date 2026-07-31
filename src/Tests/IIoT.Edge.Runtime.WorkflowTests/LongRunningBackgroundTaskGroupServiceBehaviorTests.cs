@@ -119,6 +119,41 @@ public sealed class LongRunningBackgroundTaskGroupServiceBehaviorTests
     }
 
     [Fact]
+    public async Task RecoverySupervisor_WhenPipelineWorkerExitsWithoutStop_ShouldRestartOnlyThatWorker()
+    {
+        var task = new CleanExitThenRunningBackgroundTask();
+        var siblingTask = new RestartableBackgroundTask();
+        var status = new BackgroundServiceRuntimeStatusStore();
+        var service = new LongRunningBackgroundTaskService(task, runtimeStatus: status);
+        var siblingService = new LongRunningBackgroundTaskService(
+            siblingTask,
+            runtimeStatus: status);
+        var coordinator = new BackgroundServiceCoordinator(
+            [service, siblingService],
+            new FakeLogService(),
+            new BackgroundServiceCoordinatorOptions
+            {
+                StartupTimeout = TimeSpan.FromSeconds(1),
+                StopTimeout = TimeSpan.FromSeconds(1),
+                RecoveryInterval = TimeSpan.FromMilliseconds(10)
+            },
+            status);
+        await coordinator.StartAsync(TestContext.Current.CancellationToken);
+
+        task.CompleteFirstInvocation();
+        await task.SecondInvocationStarted.WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, task.InvocationCount);
+        Assert.Equal(1, siblingTask.InvocationCount);
+        Assert.True(status.TryGet(task.TaskName, out var recovered));
+        Assert.Equal(BackgroundServiceRuntimeState.Running, recovered.State);
+
+        await coordinator.StopAsync(TestContext.Current.CancellationToken);
+        Assert.True(task.SecondInvocationStopped.IsCompleted);
+        Assert.True(siblingTask.FirstInvocationStopped.IsCompleted);
+    }
+
+    [Fact]
     public async Task StartAsync_WhenTaskCompletesImmediately_ShouldPermitImmediateRestart()
     {
         var task = new ImmediatelyCompletingBackgroundTask();
@@ -471,6 +506,42 @@ public sealed class LongRunningBackgroundTaskGroupServiceBehaviorTests
         public override Task StartAsync(CancellationToken ct)
             => Interlocked.Increment(ref _invocationCount) == 1
                 ? _firstFailure.Task
+                : RunSecondInvocationAsync(ct);
+
+        private async Task RunSecondInvocationAsync(CancellationToken ct)
+        {
+            _secondInvocationStarted.TrySetResult();
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            }
+            finally
+            {
+                _secondInvocationStopped.TrySetResult();
+            }
+        }
+    }
+
+    private sealed class CleanExitThenRunningBackgroundTask : TestStartupAwareBackgroundTask
+    {
+        private int _invocationCount;
+        private readonly TaskCompletionSource _firstCompletion =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _secondInvocationStarted =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _secondInvocationStopped =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override string TaskName => "ProcessQueueTask";
+        public int InvocationCount => Volatile.Read(ref _invocationCount);
+        public Task SecondInvocationStarted => _secondInvocationStarted.Task;
+        public Task SecondInvocationStopped => _secondInvocationStopped.Task;
+
+        public void CompleteFirstInvocation() => _firstCompletion.TrySetResult();
+
+        public override Task StartAsync(CancellationToken ct)
+            => Interlocked.Increment(ref _invocationCount) == 1
+                ? _firstCompletion.Task
                 : RunSecondInvocationAsync(ct);
 
         private async Task RunSecondInvocationAsync(CancellationToken ct)

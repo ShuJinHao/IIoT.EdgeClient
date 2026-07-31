@@ -112,7 +112,9 @@ public sealed class LongRunningBackgroundTaskService : IManagedBackgroundService
 
             await executionTask.ConfigureAwait(false);
             ClearAttempt(executionTask, linkedCts);
-            SetRuntimeStatus(BackgroundServiceRuntimeState.Stopped);
+            PublishExecutionCompletionStatus(
+                failure: null,
+                executionCancellationToken.IsCancellationRequested);
         }
         catch
         {
@@ -164,13 +166,9 @@ public sealed class LongRunningBackgroundTaskService : IManagedBackgroundService
         }
 
         if (publishCompletionStatus)
-        {
-            SetRuntimeStatus(
-                failure is null
-                    ? BackgroundServiceRuntimeState.Stopped
-                    : BackgroundServiceRuntimeState.Faulted,
-                failure is null ? null : "BACKGROUND_TASK_EXECUTION_FAULT");
-        }
+            PublishExecutionCompletionStatus(
+                failure,
+                executionCancellationToken.IsCancellationRequested);
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
@@ -357,5 +355,40 @@ public sealed class LongRunningBackgroundTaskService : IManagedBackgroundService
         {
             LogCleanupFailure("更新诊断状态失败", ex);
         }
+    }
+
+    private void PublishExecutionCompletionStatus(
+        Exception? failure,
+        bool cancellationRequested)
+    {
+        if (failure is not null)
+        {
+            SetRuntimeStatus(
+                BackgroundServiceRuntimeState.Faulted,
+                "BACKGROUND_TASK_EXECUTION_FAULT");
+            return;
+        }
+
+        if (cancellationRequested)
+        {
+            SetRuntimeStatus(BackgroundServiceRuntimeState.Stopped);
+            return;
+        }
+
+        if (_logger is not null)
+        {
+            try
+            {
+                _logger.Error($"[后台任务] {ServiceName} 未收到停止请求即结束。");
+            }
+            catch
+            {
+                // 故障观察本身不得制造第二个未观察后台异常。
+            }
+        }
+
+        SetRuntimeStatus(
+            BackgroundServiceRuntimeState.Faulted,
+            "BACKGROUND_TASK_UNEXPECTED_EXIT");
     }
 }
