@@ -193,7 +193,7 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
                                     context,
                                     enabledKeys));
                         },
-                        CandidateRequiresPeriodicRead(candidate))));
+                        CandidateRequiresPeriodicRead(candidate, signalBindings))));
         }
 
         return new PlcRuntimeTaskPlan(
@@ -209,14 +209,29 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
         return factories.Length == 1 ? factories[0] : null;
     }
 
-    internal static bool CandidateRequiresPeriodicRead(TaskCandidate candidate)
+    internal static bool CandidateRequiresPeriodicRead(
+        TaskCandidate candidate,
+        IReadOnlyCollection<ModuleIoSnapshot> signalBindings)
     {
         ArgumentNullException.ThrowIfNull(candidate);
-        return candidate.RequiredSignals.Any(static required =>
+        ArgumentNullException.ThrowIfNull(signalBindings);
+
+        var periodicReadSignalKeys = signalBindings
+            .Where(static binding =>
+                string.Equals(
+                    binding.Direction,
+                    IoMappingOptionCatalog.DirectionRead,
+                    StringComparison.OrdinalIgnoreCase)
+                && IoMappingOptionCatalog.IsReadDataCategory(binding.Category))
+            .Select(static binding => binding.SignalKey)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return candidate.RequiredSignals.Any(required =>
             string.Equals(
                 required.Direction,
-                "Read",
-                StringComparison.OrdinalIgnoreCase));
+                IoMappingOptionCatalog.DirectionRead,
+                StringComparison.OrdinalIgnoreCase)
+            && periodicReadSignalKeys.Contains(required.SignalKey));
     }
 
     private static string BuildValidationFailureMessage(
