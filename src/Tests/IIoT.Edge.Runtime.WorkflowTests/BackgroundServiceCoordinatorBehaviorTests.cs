@@ -101,6 +101,129 @@ public sealed class BackgroundServiceCoordinatorBehaviorTests
         Assert.Equal(1, mesRetry.StopCallCount);
     }
 
+    [Fact]
+    public async Task RecoverySupervisor_WhenPipelineWorkerStartupFails_ShouldRetryOnlyFaultedWorker()
+    {
+        var runtimeStatus = new BackgroundServiceRuntimeStatusStore();
+        var processQueue = new RecoverableManagedService(
+            "ProcessQueueTask",
+            runtimeStatus,
+            failFirstStart: true);
+        var cloudRetry = new RecoverableManagedService(
+            "CloudRetryTask",
+            runtimeStatus);
+        var coordinator = new BackgroundServiceCoordinator(
+            [processQueue, cloudRetry],
+            new FakeLogService(),
+            new BackgroundServiceCoordinatorOptions
+            {
+                StartupTimeout = TimeSpan.FromSeconds(1),
+                StopTimeout = TimeSpan.FromSeconds(1),
+                RecoveryInterval = TimeSpan.FromMilliseconds(10)
+            },
+            runtimeStatus);
+
+        var exception = await Assert.ThrowsAsync<BackgroundServiceStartException>(
+            () => coordinator.StartAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("ProcessQueueTask", Assert.Single(exception.Failures).ServiceName);
+
+        await processQueue.Recovered.WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, processQueue.StartCallCount);
+        Assert.Equal(1, cloudRetry.StartCallCount);
+        Assert.True(runtimeStatus.TryGet("ProcessQueueTask", out var recovered));
+        Assert.Equal(BackgroundServiceRuntimeState.Running, recovered.State);
+
+        await coordinator.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task RecoverySupervisor_WhenPipelineWorkerFaultsAfterReady_ShouldRestartOnlyThatWorker()
+    {
+        var runtimeStatus = new BackgroundServiceRuntimeStatusStore();
+        var processQueue = new RecoverableManagedService(
+            "ProcessQueueTask",
+            runtimeStatus);
+        var mesRetry = new RecoverableManagedService(
+            "MesRetryTask",
+            runtimeStatus);
+        var coordinator = new BackgroundServiceCoordinator(
+            [processQueue, mesRetry],
+            new FakeLogService(),
+            new BackgroundServiceCoordinatorOptions
+            {
+                StartupTimeout = TimeSpan.FromSeconds(1),
+                StopTimeout = TimeSpan.FromSeconds(1),
+                RecoveryInterval = TimeSpan.FromMilliseconds(10)
+            },
+            runtimeStatus);
+        await coordinator.StartAsync(TestContext.Current.CancellationToken);
+
+        processQueue.FailAfterReady();
+        await processQueue.Recovered.WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, processQueue.StartCallCount);
+        Assert.Equal(1, mesRetry.StartCallCount);
+        Assert.True(runtimeStatus.TryGet("ProcessQueueTask", out var recovered));
+        Assert.Equal(BackgroundServiceRuntimeState.Running, recovered.State);
+
+        await coordinator.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    private sealed class RecoverableManagedService(
+        string serviceName,
+        BackgroundServiceRuntimeStatusStore runtimeStatus,
+        bool failFirstStart = false) : IManagedBackgroundService
+    {
+        private readonly TaskCompletionSource _recovered =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _startCallCount;
+        private int _stopCallCount;
+
+        public string ServiceName { get; } = serviceName;
+        public int StartCallCount => Volatile.Read(ref _startCallCount);
+        public int StopCallCount => Volatile.Read(ref _stopCallCount);
+        public Task Recovered => _recovered.Task;
+
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var call = Interlocked.Increment(ref _startCallCount);
+            if (failFirstStart && call == 1)
+            {
+                runtimeStatus.Set(
+                    ServiceName,
+                    BackgroundServiceRuntimeState.Faulted,
+                    "BACKGROUND_TASK_START_FAILED");
+                return Task.FromException(new InvalidOperationException("startup failed"));
+            }
+
+            runtimeStatus.Set(ServiceName, BackgroundServiceRuntimeState.Running);
+            if (call > 1)
+            {
+                _recovered.TrySetResult();
+            }
+            return Task.CompletedTask;
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Interlocked.Increment(ref _stopCallCount);
+            if (StartCallCount > 1 || !failFirstStart)
+            {
+                runtimeStatus.Set(ServiceName, BackgroundServiceRuntimeState.Stopped);
+            }
+            return Task.CompletedTask;
+        }
+
+        public void FailAfterReady()
+            => runtimeStatus.Set(
+                ServiceName,
+                BackgroundServiceRuntimeState.Faulted,
+                "BACKGROUND_TASK_EXECUTION_FAULT");
+    }
+
     private sealed class DeadlineManagedService : IManagedBackgroundService
     {
         private readonly bool _completeStartWhenStopped;

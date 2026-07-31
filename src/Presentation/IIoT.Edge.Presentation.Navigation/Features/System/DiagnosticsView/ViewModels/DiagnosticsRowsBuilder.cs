@@ -1,4 +1,5 @@
 using IIoT.Edge.Application.Common.DataPipeline;
+using IIoT.Edge.Application.Common.Tasks;
 using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.Device;
 using IIoT.Edge.Module.Contracts.Mes;
@@ -18,6 +19,7 @@ public interface IDiagnosticsRowsBuilder
     DiagnosticsRowsSnapshot Build(
         StartupDiagnosticsReport report,
         EdgeSyncDiagnosticsSnapshot syncDiagnostics,
+        IReadOnlyList<BackgroundServiceRuntimeSnapshot> backgroundServiceRuntime,
         IReadOnlyDictionary<string, string> moduleNameMap);
 }
 
@@ -31,6 +33,7 @@ internal sealed class DiagnosticsRowsBuilder(
     public DiagnosticsRowsSnapshot Build(
         StartupDiagnosticsReport report,
         EdgeSyncDiagnosticsSnapshot syncDiagnostics,
+        IReadOnlyList<BackgroundServiceRuntimeSnapshot> backgroundServiceRuntime,
         IReadOnlyDictionary<string, string> moduleNameMap)
     {
         var cloudDeadLetters = BuildDeadLetters(DataPipelineRetryChannel.Cloud, syncDiagnostics.Cloud.DeadLetters?.LatestRecords);
@@ -47,7 +50,7 @@ internal sealed class DiagnosticsRowsBuilder(
             issues,
             visibleIssueCount,
             BuildMesUploadDiagnostics(syncDiagnostics),
-            BuildSyncChannels(syncDiagnostics),
+            BuildSyncChannels(syncDiagnostics, backgroundServiceRuntime),
             cloudDeadLetters,
             mesDeadLetters);
     }
@@ -245,9 +248,12 @@ internal sealed class DiagnosticsRowsBuilder(
         return DataPipelineUploadScenarioResolver.Resolve(diagnostics.TaskKey, null, diagnostics.ProcessType);
     }
 
-    private IReadOnlyList<SyncChannelRow> BuildSyncChannels(EdgeSyncDiagnosticsSnapshot syncDiagnostics)
-        =>
-        [
+    private IReadOnlyList<SyncChannelRow> BuildSyncChannels(
+        EdgeSyncDiagnosticsSnapshot syncDiagnostics,
+        IReadOnlyList<BackgroundServiceRuntimeSnapshot> backgroundServiceRuntime)
+    {
+        var rows = new List<SyncChannelRow>
+        {
             new(
                 GetText("Navigation_Diagnostics_ChannelCloud", "云端"),
                 BuildCloudStatus(syncDiagnostics.Cloud),
@@ -269,7 +275,128 @@ internal sealed class DiagnosticsRowsBuilder(
                 syncDiagnostics.Mes.DeadLetters?.TotalCount ?? 0,
                 BuildMesLastError(syncDiagnostics.Mes),
                 BuildMesNote(syncDiagnostics.Mes))
-        ];
+        };
+        rows.AddRange(BuildBackgroundServiceRows(backgroundServiceRuntime));
+        return rows;
+    }
+
+    private IReadOnlyList<SyncChannelRow> BuildBackgroundServiceRows(
+        IReadOnlyList<BackgroundServiceRuntimeSnapshot> snapshots)
+        => snapshots
+            .Where(static snapshot => IsVisibleBackgroundService(snapshot.ServiceName))
+            .OrderBy(static snapshot => GetBackgroundServiceOrder(snapshot.ServiceName))
+            .ThenBy(static snapshot => snapshot.ServiceName, StringComparer.OrdinalIgnoreCase)
+            .Select(snapshot => new SyncChannelRow(
+                BuildBackgroundServiceDisplayName(snapshot.ServiceName),
+                BuildBackgroundServiceState(snapshot.State),
+                BuildBackgroundServiceVisualStatus(snapshot.State),
+                FormatText(
+                    "Navigation_Diagnostics_BackgroundChangedFormat",
+                    "最近状态：{0:yyyy-MM-dd HH:mm:ss} UTC",
+                    snapshot.ChangedAtUtc.ToUniversalTime()),
+                0,
+                string.IsNullOrWhiteSpace(snapshot.ErrorCode)
+                    ? "--"
+                    : DiagnosticsTextNormalizer.Normalize(snapshot.ErrorCode),
+                BuildBackgroundServiceRepairTarget(snapshot.ServiceName)))
+            .ToArray();
+
+    private string BuildBackgroundServiceDisplayName(string serviceName)
+    {
+        if (IsBackgroundService(serviceName, "ProcessQueueTask"))
+        {
+            return FormatText(
+                "Navigation_Diagnostics_ProcessQueueWorkerFormat",
+                "本地主队列（{0}）",
+                serviceName);
+        }
+        if (IsBackgroundService(serviceName, "CloudRetryTask"))
+        {
+            return FormatText(
+                "Navigation_Diagnostics_CloudRetryWorkerFormat",
+                "Cloud 重试（{0}）",
+                serviceName);
+        }
+        if (IsBackgroundService(serviceName, "MesRetryTask"))
+        {
+            return FormatText(
+                "Navigation_Diagnostics_MesRetryWorkerFormat",
+                "MES 重试（{0}）",
+                serviceName);
+        }
+        return DiagnosticsTextNormalizer.Normalize(serviceName);
+    }
+
+    private string BuildBackgroundServiceState(BackgroundServiceRuntimeState state)
+        => state switch
+        {
+            BackgroundServiceRuntimeState.Starting => GetText(
+                "Navigation_Diagnostics_BackgroundStarting",
+                "启动中"),
+            BackgroundServiceRuntimeState.Running => GetText(
+                "Navigation_Diagnostics_BackgroundRunning",
+                "运行中"),
+            BackgroundServiceRuntimeState.Stopping => GetText(
+                "Navigation_Diagnostics_BackgroundStopping",
+                "停止中"),
+            BackgroundServiceRuntimeState.Faulted => GetText(
+                "Navigation_Diagnostics_BackgroundFaulted",
+                "故障（自动恢复中）"),
+            _ => GetText(
+                "Navigation_Diagnostics_BackgroundStopped",
+                "已停止")
+        };
+
+    private static EdgeVisualStatus BuildBackgroundServiceVisualStatus(
+        BackgroundServiceRuntimeState state)
+        => state switch
+        {
+            BackgroundServiceRuntimeState.Running => EdgeVisualStatus.Running,
+            BackgroundServiceRuntimeState.Faulted => EdgeVisualStatus.Error,
+            _ => EdgeVisualStatus.Warning
+        };
+
+    private string BuildBackgroundServiceRepairTarget(string serviceName)
+    {
+        if (IsBackgroundService(serviceName, "ProcessQueueTask"))
+        {
+            return GetText(
+                "Navigation_Diagnostics_ProcessQueueRepair",
+                "已启用自动恢复；持续故障时检查本地主队列与持久化存储。");
+        }
+        if (IsBackgroundService(serviceName, "CloudRetryTask"))
+        {
+            return GetText(
+                "Navigation_Diagnostics_CloudRetryRepair",
+                "已启用自动恢复；持续故障时检查 Cloud 本地配置与网络。");
+        }
+        if (IsBackgroundService(serviceName, "MesRetryTask"))
+        {
+            return GetText(
+                "Navigation_Diagnostics_MesRetryRepair",
+                "已启用自动恢复；持续故障时检查 MES 本地配置与网络。");
+        }
+        return GetText(
+            "Navigation_Diagnostics_BackgroundRepair",
+            "已启用自动恢复；持续故障时查看诊断日志。");
+    }
+
+    private static bool IsVisibleBackgroundService(string serviceName)
+        => IsBackgroundService(serviceName, "ProcessQueueTask")
+           || IsBackgroundService(serviceName, "CloudRetryTask")
+           || IsBackgroundService(serviceName, "MesRetryTask");
+
+    private static int GetBackgroundServiceOrder(string serviceName)
+        => IsBackgroundService(serviceName, "ProcessQueueTask")
+            ? 0
+            : IsBackgroundService(serviceName, "CloudRetryTask")
+                ? 1
+                : IsBackgroundService(serviceName, "MesRetryTask")
+                    ? 2
+                    : int.MaxValue;
+
+    private static bool IsBackgroundService(string actual, string expected)
+        => string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase);
 
     private string BuildCloudStatus(CloudSyncDiagnosticsSnapshot cloud)
         => EdgeSyncDiagnosticStatusClassifier.ClassifyCloud(cloud) switch

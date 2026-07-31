@@ -411,6 +411,18 @@ public sealed class LauncherPluginActivationTests
         }
     }
 
+    [Fact]
+    public void Selection_PluginDirectoryIdentity_ShouldFollowPlatformPathCaseRules()
+    {
+        var selection = new LauncherEnabledPluginSelection(
+            true,
+            [new LauncherEnabledPluginSelectionItem("AP", "AP")]);
+
+        var matched = selection.TryGetByPluginDirectory("ap", out _);
+
+        Assert.Equal(OperatingSystem.IsWindows(), matched);
+    }
+
     [Theory]
     [InlineData("MissingDirectory")]
     [InlineData("MissingPluginManifest")]

@@ -12,6 +12,11 @@ public sealed record LauncherEnabledPluginSelection(
     bool ManifestIsValid,
     IReadOnlyList<LauncherEnabledPluginSelectionItem> Plugins)
 {
+    internal static StringComparer PluginDirectoryComparer { get; } =
+        OperatingSystem.IsWindows()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
+
     public IReadOnlyList<string> ModuleIds
         => Plugins.Select(static plugin => plugin.ModuleId).ToArray();
 
@@ -25,10 +30,9 @@ public sealed record LauncherEnabledPluginSelection(
         string pluginDirectory,
         out LauncherEnabledPluginSelectionItem plugin)
     {
-        var match = Plugins.FirstOrDefault(item => string.Equals(
+        var match = Plugins.FirstOrDefault(item => PluginDirectoryComparer.Equals(
             item.PluginDirectory,
-            pluginDirectory,
-            StringComparison.OrdinalIgnoreCase));
+            pluginDirectory));
         if (match is null)
         {
             plugin = default!;
@@ -81,7 +85,8 @@ public sealed class LauncherEnabledPluginSelectionSource(
 
             var entries = plugins.EnumerateArray().ToArray();
             var moduleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var pluginDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var pluginDirectories = new HashSet<string>(
+                LauncherEnabledPluginSelection.PluginDirectoryComparer);
             var selectedPlugins = new List<LauncherEnabledPluginSelectionItem>();
             foreach (var entry in entries)
             {

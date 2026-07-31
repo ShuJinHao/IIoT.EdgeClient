@@ -1,4 +1,5 @@
 using IIoT.Edge.Module.Contracts.Runtime;
+using IIoT.Edge.Application.Common.Tasks;
 using IIoT.Edge.Module.Contracts.Diagnostics;
 using System.Globalization;
 using Avalonia.Headless.XUnit;
@@ -174,6 +175,46 @@ public sealed class DiagnosticsViewModelBehaviorTests
         Assert.Equal(0, mesRow.DeadLetterCount);
         Assert.Equal("mes timeout", mesRow.LastError);
         Assert.Contains("存储故障：是", mesRow.Note, StringComparison.Ordinal);
+    }
+
+    [AvaloniaFact]
+    public async Task DiagnosticsViewModel_ShouldExposeLiveBackgroundWorkerFaultAndRecovery()
+    {
+        var startupStore = new FakeStartupDiagnosticsStore();
+        var diagnosticsQuery = new FakeEdgeSyncDiagnosticsQuery
+        {
+            Current = CreateReadySyncSnapshot()
+        };
+        var runtimeStatus = new BackgroundServiceRuntimeStatusStore();
+        runtimeStatus.Set(
+            "ProcessQueueTask",
+            BackgroundServiceRuntimeState.Faulted,
+            "BACKGROUND_TASK_EXECUTION_FAULT");
+        var viewModel = CreateViewModel(
+            startupStore,
+            diagnosticsQuery,
+            new TestAppLanguageService(),
+            backgroundServiceRuntimeStatus: runtimeStatus);
+
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        var faulted = Assert.Single(
+            viewModel.SyncChannels,
+            row => row.Channel.Contains("ProcessQueueTask", StringComparison.Ordinal));
+        Assert.Contains("故障", faulted.Status, StringComparison.Ordinal);
+        Assert.Equal("BACKGROUND_TASK_EXECUTION_FAULT", faulted.LastError);
+        Assert.Contains("自动恢复", faulted.Note, StringComparison.Ordinal);
+        Assert.Equal(EdgeVisualStatus.Error, faulted.VisualStatus);
+
+        runtimeStatus.Set("ProcessQueueTask", BackgroundServiceRuntimeState.Running);
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        var recovered = Assert.Single(
+            viewModel.SyncChannels,
+            row => row.Channel.Contains("ProcessQueueTask", StringComparison.Ordinal));
+        Assert.Equal("运行中", recovered.Status);
+        Assert.Equal("--", recovered.LastError);
+        Assert.Equal(EdgeVisualStatus.Running, recovered.VisualStatus);
     }
 
     [AvaloniaFact]
@@ -838,7 +879,8 @@ public sealed class DiagnosticsViewModelBehaviorTests
         IDiagnosticsDeadLetterOperator? deadLetterOperator = null,
         IDiagnosticsDeadLetterConfirmationService? deadLetterConfirmationService = null,
         IClientPermissionService? permissionService = null,
-        IDeviceSelectionService? deviceSelectionService = null)
+        IDeviceSelectionService? deviceSelectionService = null,
+        IBackgroundServiceRuntimeStatusReader? backgroundServiceRuntimeStatus = null)
     {
         deviceSelectionService ??= new DeviceSelectionService();
         var diagnosticsText = new LocalizedSyncDiagnosticsText(languageService);
@@ -852,6 +894,7 @@ public sealed class DiagnosticsViewModelBehaviorTests
         return new DiagnosticsViewModel(
             startupStore,
             diagnosticsQuery,
+            backgroundServiceRuntimeStatus ?? new BackgroundServiceRuntimeStatusStore(),
             languageService,
             displayNameResolver,
             new DiagnosticsSummaryBuilder(languageService, diagnosticsText, displayNameResolver),

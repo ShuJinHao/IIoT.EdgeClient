@@ -47,25 +47,42 @@ public sealed class BackgroundServiceCoordinatorOptions
 {
     public static readonly TimeSpan DefaultStartupTimeout = TimeSpan.FromSeconds(15);
     public static readonly TimeSpan DefaultStopTimeout = TimeSpan.FromSeconds(10);
+    public static readonly TimeSpan DefaultRecoveryInterval = TimeSpan.FromSeconds(5);
 
     public TimeSpan StartupTimeout { get; init; } = DefaultStartupTimeout;
 
     public TimeSpan StopTimeout { get; init; } = DefaultStopTimeout;
+
+    public TimeSpan RecoveryInterval { get; init; } = DefaultRecoveryInterval;
 }
 
 public sealed class BackgroundServiceCoordinator : IBackgroundServiceCoordinator
 {
+    private static readonly string[] RecoverableServiceNames =
+    [
+        "ProcessQueueTask",
+        "CloudRetryTask",
+        "MesRetryTask"
+    ];
+
     private readonly IReadOnlyList<IManagedBackgroundService> _services;
     private readonly ILogService _logger;
     private readonly BackgroundServiceCoordinatorOptions _options;
+    private readonly IBackgroundServiceRuntimeStatusReader? _runtimeStatus;
     private readonly List<IManagedBackgroundService> _startedServices = new();
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private CancellationTokenSource? _recoveryCancellation;
+    private Task? _recoveryTask;
     private bool _started;
 
     public BackgroundServiceCoordinator(
         IEnumerable<IManagedBackgroundService> services,
         ILogService logger)
-        : this(services, logger, new BackgroundServiceCoordinatorOptions())
+        : this(
+            services,
+            logger,
+            new BackgroundServiceCoordinatorOptions(),
+            runtimeStatus: null)
     {
     }
 
@@ -73,12 +90,23 @@ public sealed class BackgroundServiceCoordinator : IBackgroundServiceCoordinator
         IEnumerable<IManagedBackgroundService> services,
         ILogService logger,
         BackgroundServiceCoordinatorOptions options)
+        : this(services, logger, options, runtimeStatus: null)
+    {
+    }
+
+    public BackgroundServiceCoordinator(
+        IEnumerable<IManagedBackgroundService> services,
+        ILogService logger,
+        BackgroundServiceCoordinatorOptions options,
+        IBackgroundServiceRuntimeStatusReader? runtimeStatus)
     {
         _services = services.ToList().AsReadOnly();
         _logger = logger;
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _runtimeStatus = runtimeStatus;
         ValidateTimeout(options.StartupTimeout, nameof(options.StartupTimeout));
         ValidateTimeout(options.StopTimeout, nameof(options.StopTimeout));
+        ValidateRecoveryInterval(options.RecoveryInterval);
     }
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
@@ -122,6 +150,7 @@ public sealed class BackgroundServiceCoordinator : IBackgroundServiceCoordinator
             }
 
             _started = true;
+            StartRecoverySupervisor();
             if (failures.Count > 0)
             {
                 throw new BackgroundServiceStartException(failures);
@@ -138,11 +167,150 @@ public sealed class BackgroundServiceCoordinator : IBackgroundServiceCoordinator
         await _gate.WaitAsync(cancellationToken);
         try
         {
+            await StopRecoverySupervisorAsync().ConfigureAwait(false);
             var failures = await StopStartedServicesCoreAsync(cancellationToken).ConfigureAwait(false);
             if (failures.Count > 0)
                 throw new BackgroundServiceStopException(failures);
 
             _started = false;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private void StartRecoverySupervisor()
+    {
+        if (_runtimeStatus is null
+            || !_services.Any(service => IsRecoverableServiceName(service.ServiceName))
+            || _recoveryTask is { IsCompleted: false })
+        {
+            return;
+        }
+
+        _recoveryCancellation?.Dispose();
+        _recoveryCancellation = new CancellationTokenSource();
+        _recoveryTask = RunRecoverySupervisorAsync(_recoveryCancellation.Token);
+    }
+
+    private async Task StopRecoverySupervisorAsync()
+    {
+        var cancellation = _recoveryCancellation;
+        var recoveryTask = _recoveryTask;
+        _recoveryCancellation = null;
+        _recoveryTask = null;
+        if (cancellation is null || recoveryTask is null)
+        {
+            cancellation?.Dispose();
+            return;
+        }
+
+        try
+        {
+            await cancellation.CancelAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[后台服务] 取消故障恢复监督失败（{ex.GetType().Name}）。");
+        }
+
+        try
+        {
+            await recoveryTask.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[后台服务] 故障恢复监督退出失败（{ex.GetType().Name}）。");
+        }
+        finally
+        {
+            cancellation.Dispose();
+        }
+    }
+
+    private async Task RunRecoverySupervisorAsync(CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            await Task.Delay(_options.RecoveryInterval, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await RecoverFaultedServicesAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"[后台服务] 故障恢复轮询失败（{ex.GetType().Name}）。");
+            }
+        }
+    }
+
+    private async Task RecoverFaultedServicesAsync(CancellationToken cancellationToken)
+    {
+        if (_runtimeStatus is null)
+        {
+            return;
+        }
+
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (!_started)
+            {
+                return;
+            }
+
+            var faultedServiceNames = _runtimeStatus.GetAll()
+                .Where(static snapshot => snapshot.State == BackgroundServiceRuntimeState.Faulted)
+                .Select(static snapshot => snapshot.ServiceName)
+                .Where(IsRecoverableServiceName)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            foreach (var serviceName in faultedServiceNames)
+            {
+                var service = _services.FirstOrDefault(candidate => string.Equals(
+                    candidate.ServiceName,
+                    serviceName,
+                    StringComparison.OrdinalIgnoreCase));
+                if (service is null)
+                {
+                    continue;
+                }
+
+                _logger.Info($"[后台服务] 正在恢复 {service.ServiceName}。");
+                try
+                {
+                    await StartServiceWithDeadlineAsync(service, cancellationToken).ConfigureAwait(false);
+                    if (!_startedServices.Contains(service))
+                    {
+                        _startedServices.Add(service);
+                    }
+                    _logger.Info($"[后台服务] 已恢复 {service.ServiceName}。");
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"[后台服务] 恢复 {service.ServiceName} 失败（{ex.GetType().Name}）。");
+                    var cleanupFailure = await TryStopServiceAsync(
+                            service,
+                            CancellationToken.None)
+                        .ConfigureAwait(false);
+                    if (cleanupFailure is not null && !_startedServices.Contains(service))
+                    {
+                        _startedServices.Add(service);
+                    }
+                }
+            }
         }
         finally
         {
@@ -299,4 +467,17 @@ public sealed class BackgroundServiceCoordinator : IBackgroundServiceCoordinator
         if (timeout < TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(parameterName, "后台服务超时不得为负数。");
     }
+
+    private static void ValidateRecoveryInterval(TimeSpan recoveryInterval)
+    {
+        if (recoveryInterval <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(BackgroundServiceCoordinatorOptions.RecoveryInterval),
+                "后台服务故障恢复间隔必须大于零。");
+        }
+    }
+
+    private static bool IsRecoverableServiceName(string serviceName)
+        => RecoverableServiceNames.Contains(serviceName, StringComparer.OrdinalIgnoreCase);
 }
