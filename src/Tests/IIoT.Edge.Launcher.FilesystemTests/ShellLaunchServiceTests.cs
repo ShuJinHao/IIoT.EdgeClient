@@ -970,6 +970,40 @@ public sealed class ShellLaunchServiceTests
     }
 
     [Fact]
+    public async Task Launch_WhenSelectionChangesBeforeLease_ShouldRevalidateInsideLease()
+    {
+        var starter = new SpyProcessStarter();
+        var selection = new MutableEnabledPluginSelectionSource(["AP"]);
+        var gate = new MutatingLaunchGate(() => selection.SetModules(["CP"]));
+        using var service = new ShellLaunchService(
+            starter,
+            new FakeShellInstanceIdResolver(),
+            new FakeShellInstanceProbe(),
+            gate,
+            UnblockedUpdateTransactionRecovery.Instance,
+            selection);
+        var profile = new LauncherProfileDefinition(
+            "DieCuttingAnodeLine",
+            "负极模切",
+            "AP profile",
+            null,
+            "DieCuttingAnodeLine",
+            Path.Combine(Path.GetTempPath(), "IIoT.Edge.Shell"),
+            "ChartBar",
+            "#2563EB")
+        {
+            ExpectedModuleIds = ["AP"]
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.LaunchAsync(profile, TestContext.Current.CancellationToken));
+
+        Assert.Contains("不在当前启用工序清单", exception.Message, StringComparison.Ordinal);
+        Assert.Null(starter.StartInfo);
+        Assert.Equal(1, selection.LoadCount);
+    }
+
+    [Fact]
     public async Task Launch_WhenChildNeverSignalsReady_ShouldCancelAndReleaseLaunchGate()
     {
         var baseDirectory = Path.Combine(
@@ -1275,6 +1309,30 @@ public sealed class ShellLaunchServiceTests
                     .ToArray());
     }
 
+    private sealed class MutableEnabledPluginSelectionSource(
+        IReadOnlyList<string> moduleIds)
+        : ILauncherEnabledPluginSelectionSource
+    {
+        private IReadOnlyList<string> _moduleIds = moduleIds;
+        private int _loadCount;
+
+        public int LoadCount => Volatile.Read(ref _loadCount);
+
+        public void SetModules(IReadOnlyList<string> value) => _moduleIds = value;
+
+        public LauncherEnabledPluginSelection Load()
+        {
+            Interlocked.Increment(ref _loadCount);
+            return new LauncherEnabledPluginSelection(
+                true,
+                _moduleIds
+                    .Select(static moduleId => new LauncherEnabledPluginSelectionItem(
+                        moduleId,
+                        moduleId))
+                    .ToArray());
+        }
+    }
+
     private sealed class FakeShellInstanceProbe(params string[] runningInstanceIds) : IShellInstanceProbe
     {
         private readonly HashSet<string> _runningInstanceIds = new(runningInstanceIds, StringComparer.OrdinalIgnoreCase);
@@ -1308,6 +1366,30 @@ public sealed class ShellLaunchServiceTests
     private sealed class TestLauncherUpdateOperationGate : ILauncherUpdateOperationGate
     {
         public IDisposable TryAcquire() => Lease.Instance;
+
+        public IDisposable TryAcquireUpdate() => Lease.Instance;
+
+        public string CreateShellLaunchReadyPath()
+            => EdgeClientUpdateCoordination.CreateShellLaunchReadyPath();
+
+        private sealed class Lease : IDisposable
+        {
+            public static Lease Instance { get; } = new();
+
+            public void Dispose()
+            {
+            }
+        }
+    }
+
+    private sealed class MutatingLaunchGate(Action beforeAcquire)
+        : ILauncherUpdateOperationGate
+    {
+        public IDisposable TryAcquire()
+        {
+            beforeAcquire();
+            return Lease.Instance;
+        }
 
         public IDisposable TryAcquireUpdate() => Lease.Instance;
 

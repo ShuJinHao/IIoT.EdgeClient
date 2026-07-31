@@ -69,7 +69,11 @@ public sealed class BackgroundServiceCoordinator : IBackgroundServiceCoordinator
     private readonly ILogService _logger;
     private readonly BackgroundServiceCoordinatorOptions _options;
     private readonly IBackgroundServiceRuntimeStatusReader? _runtimeStatus;
+    private readonly IBackgroundServiceRuntimeStatusWriter? _runtimeStatusWriter;
     private readonly List<IManagedBackgroundService> _startedServices = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        IManagedBackgroundService,
+        Task> _pendingStopTasks = new(ReferenceEqualityComparer.Instance);
     private readonly SemaphoreSlim _gate = new(1, 1);
     private CancellationTokenSource? _recoveryCancellation;
     private Task? _recoveryTask;
@@ -104,6 +108,7 @@ public sealed class BackgroundServiceCoordinator : IBackgroundServiceCoordinator
         _logger = logger;
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _runtimeStatus = runtimeStatus;
+        _runtimeStatusWriter = runtimeStatus as IBackgroundServiceRuntimeStatusWriter;
         ValidateTimeout(options.StartupTimeout, nameof(options.StartupTimeout));
         ValidateTimeout(options.StopTimeout, nameof(options.StopTimeout));
         ValidateRecoveryInterval(options.RecoveryInterval);
@@ -267,6 +272,9 @@ public sealed class BackgroundServiceCoordinator : IBackgroundServiceCoordinator
                 return;
             }
 
+            foreach (var pendingService in _pendingStopTasks.Keys)
+                PublishRecoverableStopTimeout(pendingService);
+
             var faultedServiceNames = _runtimeStatus.GetAll()
                 .Where(static snapshot => snapshot.State == BackgroundServiceRuntimeState.Faulted)
                 .Select(static snapshot => snapshot.ServiceName)
@@ -283,6 +291,9 @@ public sealed class BackgroundServiceCoordinator : IBackgroundServiceCoordinator
                 {
                     continue;
                 }
+
+                if (_pendingStopTasks.ContainsKey(service))
+                    continue;
 
                 _logger.Info($"[后台服务] 正在恢复 {service.ServiceName}。");
                 try
@@ -370,6 +381,13 @@ public sealed class BackgroundServiceCoordinator : IBackgroundServiceCoordinator
         IManagedBackgroundService service,
         CancellationToken cancellationToken)
     {
+        if (_pendingStopTasks.ContainsKey(service))
+        {
+            PublishRecoverableStopTimeout(service);
+            return new TimeoutException(
+                $"后台服务 {service.ServiceName} 的上一次停止仍未完成。");
+        }
+
         _logger.Info($"[后台服务] 正在停止 {service.ServiceName}。");
         Task? stopTask = null;
         try
@@ -387,6 +405,8 @@ public sealed class BackgroundServiceCoordinator : IBackgroundServiceCoordinator
         }
         catch (TimeoutException) when (stopTask is { IsCompleted: false })
         {
+            _pendingStopTasks[service] = stopTask;
+            PublishRecoverableStopTimeout(service);
             ObserveLateStop(service, stopTask);
             var exception = new TimeoutException(
                 $"后台服务 {service.ServiceName} 未在 {_options.StopTimeout} 内停止。");
@@ -427,6 +447,38 @@ public sealed class BackgroundServiceCoordinator : IBackgroundServiceCoordinator
         catch (Exception ex)
         {
             _logger.Error($"[后台服务] {service.ServiceName} 超时后的停止任务最终失败（{ex.GetType().Name}）。");
+        }
+        finally
+        {
+            PublishRecoverableStopTimeout(service);
+            _pendingStopTasks.TryRemove(service, out _);
+        }
+    }
+
+    private void PublishRecoverableStopTimeout(IManagedBackgroundService service)
+    {
+        if (_runtimeStatusWriter is null
+            || !IsRecoverableServiceName(service.ServiceName))
+        {
+            return;
+        }
+
+        if (_runtimeStatus?.TryGet(service.ServiceName, out var current) == true
+            && current.State == BackgroundServiceRuntimeState.Faulted)
+        {
+            return;
+        }
+
+        try
+        {
+            _runtimeStatusWriter.Set(
+                service.ServiceName,
+                BackgroundServiceRuntimeState.Faulted,
+                "BACKGROUND_TASK_STOP_TIMEOUT");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[后台服务] 更新 {service.ServiceName} 停止超时状态失败（{ex.GetType().Name}）。");
         }
     }
 

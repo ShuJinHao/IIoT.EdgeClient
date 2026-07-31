@@ -87,13 +87,13 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
     {
         ArgumentNullException.ThrowIfNull(profile);
 
-        EnsureProfileIsSelected(profile);
-
         using var launchLease = _updateOperationGate.TryAcquire();
         if (launchLease is null)
         {
             throw new InvalidOperationException("更新正在进行，暂时不能启动客户端。");
         }
+
+        EnsureProfileIsSelected(profile);
 
         if (_updateTransactionRecovery.IsProfileBlocked(profile.MachineProfile))
         {
