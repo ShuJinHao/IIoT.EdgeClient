@@ -545,14 +545,14 @@ public sealed class LongRunningBackgroundTaskGroupServiceBehaviorTests
             return new BackgroundTaskRun(startup.Task, RunAsync(cancellationToken, startup));
         }
 
-        private async Task RunAsync(CancellationToken ct, TaskCompletionSource startup)
+        private Task RunAsync(CancellationToken ct, TaskCompletionSource startup)
         {
             try
             {
-                await cancellation.CancelAsync();
+                cancellation.Cancel();
                 ct.ThrowIfCancellationRequested();
                 startup.TrySetResult();
-                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                return Task.Delay(Timeout.InfiniteTimeSpan, ct);
             }
             finally
             {
