@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using IIoT.Edge.Module.Contracts.Cloud;
 using IIoT.Edge.Module.Contracts.Modules;
@@ -28,27 +29,33 @@ public sealed class StandardPassStationCloudUploader(
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        var payloadResult = TryCreatePayload(context, processType, records);
-        if (payloadResult.FailureReason is not null)
+        var batchesResult = TryCreatePayloads(context, processType, records);
+        if (batchesResult.FailureReason is not null)
         {
             return CloudCallResult.Failure(
                 CloudCallOutcome.InvalidPayload,
-                payloadResult.FailureReason);
+                batchesResult.FailureReason);
         }
-
-        var payload = payloadResult.Payload!;
 
         try
         {
-            return await cloudHttp.PostAsync(
-                    pathProvider.GetPassStationBatchPath(payload.ProcessType!),
-                    payload,
-                    new CloudRequestOptions
-                    {
-                        IdempotencyKey = payload.RequestId
-                    },
-                    cancellationToken)
-                .ConfigureAwait(false);
+            CloudCallResult result = CloudCallResult.Success();
+            foreach (var payload in batchesResult.Payloads)
+            {
+                result = await cloudHttp.PostAsync(
+                        pathProvider.GetPassStationBatchPath(payload.ProcessType!),
+                        payload,
+                        new CloudRequestOptions
+                        {
+                            IdempotencyKey = payload.RequestId
+                        },
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                if (!result.IsSuccess)
+                    return result;
+            }
+
+            return result;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -78,56 +85,83 @@ public sealed class StandardPassStationCloudUploader(
             : CloudCallResult.Failure(CloudCallOutcome.InvalidPayload, itemResult.FailureReason);
     }
 
-    private static PayloadCreationResult TryCreatePayload(
+    private static PayloadsCreationResult TryCreatePayloads(
         ProcessUploadContext context,
         string? processType,
         IReadOnlyList<CellCompletedRecord> records)
     {
         if (context.Device.DeviceId == Guid.Empty)
         {
-            return PayloadCreationResult.Invalid("pass_station_device_id_required");
+            return PayloadsCreationResult.Invalid("pass_station_device_id_required");
         }
 
         var processFailure = ValidateProcessType(processType, out var typeKey);
         if (processFailure is not null)
         {
-            return PayloadCreationResult.Invalid(processFailure);
+            return PayloadsCreationResult.Invalid(processFailure);
         }
 
         if (records.Count < PassStationCloudContract.MinItems)
         {
-            return PayloadCreationResult.Invalid("pass_station_items_required");
+            return PayloadsCreationResult.Invalid("pass_station_items_required");
         }
 
         if (records.Count > PassStationCloudContract.MaxItems)
         {
-            return PayloadCreationResult.Invalid("pass_station_items_limit_exceeded");
+            return PayloadsCreationResult.Invalid("pass_station_items_limit_exceeded");
         }
 
-        var items = new List<PassStationUploadItem>(records.Count);
+        var legacyItems = new List<PassStationUploadItem>(records.Count);
+        var legacyRecords = new List<CellCompletedRecord>(records.Count);
+        var strictItems = new List<PassStationUploadItem>(records.Count);
+        var strictRecords = new List<CellCompletedRecord>(records.Count);
         foreach (var record in records)
         {
             var itemResult = TryCreateItem(record);
             if (itemResult.FailureReason is not null)
             {
-                return PayloadCreationResult.Invalid(itemResult.FailureReason);
+                return PayloadsCreationResult.Invalid(itemResult.FailureReason);
             }
 
-            items.Add(itemResult.Item!);
+            if (IsStrictV2Eligible(typeKey, record, itemResult.Item!))
+            {
+                strictItems.Add(itemResult.Item!);
+                strictRecords.Add(record);
+            }
+            else
+            {
+                legacyItems.Add(itemResult.Item!);
+                legacyRecords.Add(record);
+            }
         }
 
-        var requestId = CloudIdempotencyKeyBuilder.ForBatch(typeKey, UploaderName, records);
-        if (requestId.Length > PassStationCloudContract.MaxRequestIdLength)
-        {
-            return PayloadCreationResult.Invalid("pass_station_request_id_too_long");
-        }
+        var payloads = new List<PassStationBatchUploadPayload>(2);
+        if (strictItems.Count > 0)
+            payloads.Add(CreatePayload(context, typeKey, strictRecords, strictItems, PassStationCloudContract.StrictSchemaVersion));
+        if (legacyItems.Count > 0)
+            payloads.Add(CreatePayload(context, typeKey, legacyRecords, legacyItems, PassStationCloudContract.LegacySchemaVersion));
 
-        return PayloadCreationResult.Valid(new PassStationBatchUploadPayload(
+        return payloads.Any(payload => payload.RequestId!.Length > PassStationCloudContract.MaxRequestIdLength)
+            ? PayloadsCreationResult.Invalid("pass_station_request_id_too_long")
+            : PayloadsCreationResult.Valid(payloads);
+    }
+
+    private static PassStationBatchUploadPayload CreatePayload(
+        ProcessUploadContext context,
+        string typeKey,
+        IReadOnlyList<CellCompletedRecord> records,
+        IReadOnlyList<PassStationUploadItem> items,
+        int schemaVersion)
+    {
+        var uploaderKey = schemaVersion == PassStationCloudContract.LegacySchemaVersion
+            ? UploaderName
+            : $"{UploaderName}:v{schemaVersion}";
+        return new PassStationBatchUploadPayload(
             context.Device.DeviceId,
             items,
-            requestId,
-            SchemaVersion: PassStationCloudContract.SchemaVersion,
-            ProcessType: typeKey));
+            CloudIdempotencyKeyBuilder.ForBatch(typeKey, uploaderKey, records),
+            schemaVersion,
+            typeKey);
     }
 
     private static string? ValidateProcessType(string? processType, out string typeKey)
@@ -208,6 +242,96 @@ public sealed class StandardPassStationCloudUploader(
             extensionPayload));
     }
 
+    private static bool IsStrictV2Eligible(
+        string typeKey,
+        CellCompletedRecord record,
+        PassStationUploadItem item)
+    {
+        if (typeKey is not "ap" and not "cp"
+            || item.CompletedTime.Kind != DateTimeKind.Utc)
+        {
+            return false;
+        }
+
+        var payload = item.Payload;
+        if (!TryGetRequiredString(payload, "plcCode", 64, out _)
+            || !TryGetRequiredString(payload, "plcName", 128, out _)
+            || !TryGetRequiredString(payload, "clipSlot", 3, out var clipSlot)
+            || clipSlot is not "MG1" and not "MG2"
+            || !TryGetUtcTimestamp(payload, "startTime", out var startTime)
+            || startTime > item.CompletedTime
+            || !TryGetNonNegativeInteger(payload, "punchingQuantity")
+            || !TryGetNonNegativeDecimal(payload, "punchingSpeed", 5))
+        {
+            return false;
+        }
+
+        return record.CellData.CellResult.HasValue
+               && item.CellResult is PassStationCloudContract.EmittedOk or PassStationCloudContract.EmittedNg;
+    }
+
+    private static bool TryGetRequiredString(
+        JsonElement payload,
+        string propertyName,
+        int maxLength,
+        out string value)
+    {
+        value = string.Empty;
+        if (!payload.TryGetProperty(propertyName, out var property)
+            || property.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+
+        value = property.GetString()?.Trim() ?? string.Empty;
+        return value.Length is > 0 && value.Length <= maxLength;
+    }
+
+    private static bool TryGetUtcTimestamp(
+        JsonElement payload,
+        string propertyName,
+        out DateTime utcValue)
+    {
+        utcValue = default;
+        if (!payload.TryGetProperty(propertyName, out var property)
+            || property.ValueKind != JsonValueKind.String
+            || !DateTimeOffset.TryParse(
+                property.GetString(),
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind,
+                out var parsed)
+            || parsed.Offset != TimeSpan.Zero)
+        {
+            return false;
+        }
+
+        utcValue = parsed.UtcDateTime;
+        return IsReasonableTimestamp(utcValue);
+    }
+
+    private static bool TryGetNonNegativeInteger(JsonElement payload, string propertyName)
+        => payload.TryGetProperty(propertyName, out var property)
+           && property.ValueKind == JsonValueKind.Number
+           && property.TryGetInt64(out var value)
+           && value >= 0;
+
+    private static bool TryGetNonNegativeDecimal(
+        JsonElement payload,
+        string propertyName,
+        int maxScale)
+    {
+        if (!payload.TryGetProperty(propertyName, out var property)
+            || property.ValueKind != JsonValueKind.Number
+            || !property.TryGetDecimal(out var value)
+            || value < 0)
+        {
+            return false;
+        }
+
+        var scale = (decimal.GetBits(value)[3] >> 16) & 0x7f;
+        return scale <= maxScale;
+    }
+
     private static bool IsReasonableTimestamp(DateTime value)
     {
         var utcValue = value.Kind == DateTimeKind.Unspecified
@@ -231,13 +355,13 @@ public sealed class StandardPassStationCloudUploader(
     private static string NormalizeTypeKey(string processType)
         => processType.Trim().ToLowerInvariant();
 
-    private sealed record PayloadCreationResult(
-        PassStationBatchUploadPayload? Payload,
+    private sealed record PayloadsCreationResult(
+        IReadOnlyList<PassStationBatchUploadPayload> Payloads,
         string? FailureReason)
     {
-        public static PayloadCreationResult Valid(PassStationBatchUploadPayload payload) => new(payload, null);
+        public static PayloadsCreationResult Valid(IReadOnlyList<PassStationBatchUploadPayload> payloads) => new(payloads, null);
 
-        public static PayloadCreationResult Invalid(string reason) => new(null, reason);
+        public static PayloadsCreationResult Invalid(string reason) => new([], reason);
     }
 
     private sealed record ItemCreationResult(
@@ -252,7 +376,9 @@ public sealed class StandardPassStationCloudUploader(
 
 internal static class PassStationCloudContract
 {
-    public const int SchemaVersion = 1;
+    public const int LegacySchemaVersion = 1;
+    public const int StrictSchemaVersion = 2;
+    public const int SchemaVersion = LegacySchemaVersion;
     public const int MinItems = 1;
     public const int MaxItems = 1000;
     public const int MaxProcessTypeLength = 32;

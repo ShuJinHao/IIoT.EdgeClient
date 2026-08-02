@@ -3,6 +3,8 @@ using IIoT.Edge.Module.Contracts.Config;
 using IIoT.Edge.Infrastructure.Integration.Capacity;
 using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
 using IIoT.Edge.Module.Contracts.Identity;
+using IIoT.Edge.Module.Contracts.Context;
+using IIoT.Edge.Module.Contracts.Runtime;
 using IIoT.Edge.Application.Common.Identity;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Module.Contracts.Hardware;
@@ -351,7 +353,12 @@ public sealed class CapacitySyncTaskBehaviorTests
 
         Assert.True(result);
         var payload = ParsePayload(Assert.Single(cloudHttp.PostPayloads));
-        Assert.Equal("P1-AP01", payload.GetProperty("plcName").GetString());
+        Assert.Equal(2, payload.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal("ap", payload.GetProperty("processType").GetString());
+        Assert.Equal("P1-AP01", payload.GetProperty("plcCode").GetString());
+        Assert.Equal("改名后", payload.GetProperty("plcName").GetString());
+        Assert.Equal(JsonValueKind.Null, payload.GetProperty("okCount").ValueKind);
+        Assert.Equal(JsonValueKind.Null, payload.GetProperty("ngCount").ValueKind);
         Assert.Empty(bufferStore.HourlySummaries);
     }
 
@@ -398,12 +405,14 @@ public sealed class CapacitySyncTaskBehaviorTests
 
         Assert.True(result);
         var payload = ParsePayload(Assert.Single(cloudHttp.PostPayloads));
+        Assert.Equal(1, payload.GetProperty("schemaVersion").GetInt32());
         Assert.Equal("P1-AP01", payload.GetProperty("plcName").GetString());
+        Assert.False(payload.TryGetProperty("plcCode", out _));
         Assert.Empty(bufferStore.HourlySummaries);
     }
 
     [Fact]
-    public async Task RetryBuffer_WhenOnlyCurrentDeviceNameMatches_ShouldFailClosedAndReleaseClaim()
+    public async Task RetryBuffer_WhenOnlyCurrentDeviceNameMatches_ShouldUploadLegacyV1AndDelete()
     {
         var cloudHttp = new FakeCloudHttpClient();
         var deviceService = new FakeDeviceService();
@@ -445,11 +454,13 @@ public sealed class CapacitySyncTaskBehaviorTests
 
         var result = await task.RetryBufferAsync();
 
-        Assert.False(result);
-        Assert.Equal(0, cloudHttp.PostCallCount);
-        Assert.Single(bufferStore.HourlySummaries);
-        Assert.Single(bufferStore.ReleasedClaimTokens);
-        Assert.Empty(bufferStore.DeletedSummaries);
+        Assert.True(result);
+        var payload = ParsePayload(Assert.Single(cloudHttp.PostPayloads));
+        Assert.Equal(1, payload.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal("当前展示名称", payload.GetProperty("plcName").GetString());
+        Assert.Empty(bufferStore.HourlySummaries);
+        Assert.Empty(bufferStore.ReleasedClaimTokens);
+        Assert.Single(bufferStore.DeletedSummaries);
         Assert.Contains(
             logger.Entries,
             entry => entry.Message.Contains(
@@ -497,12 +508,14 @@ public sealed class CapacitySyncTaskBehaviorTests
 
         Assert.True(result);
         var payload = ParsePayload(Assert.Single(cloudHttp.PostPayloads));
-        Assert.Equal("P1-AP01", payload.GetProperty("plcName").GetString());
+        Assert.Equal(2, payload.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal("P1-AP01", payload.GetProperty("plcCode").GetString());
+        Assert.Equal("一号 PLC", payload.GetProperty("plcName").GetString());
         Assert.Empty(bufferStore.HourlySummaries);
     }
 
     [Fact]
-    public async Task RetryBuffer_WhenHistoricalAliasIsReusedByAnotherPlc_ShouldFailClosedAndReleaseClaim()
+    public async Task RetryBuffer_WhenHistoricalAliasIsReusedByAnotherPlc_ShouldUploadLegacyV1AndDelete()
     {
         var cloudHttp = new FakeCloudHttpClient();
         var deviceService = new FakeDeviceService();
@@ -540,15 +553,17 @@ public sealed class CapacitySyncTaskBehaviorTests
 
         var result = await task.RetryBufferAsync();
 
-        Assert.False(result);
-        Assert.Equal(0, cloudHttp.PostCallCount);
-        Assert.Single(bufferStore.HourlySummaries);
-        Assert.Single(bufferStore.ReleasedClaimTokens);
-        Assert.Empty(bufferStore.DeletedSummaries);
+        Assert.True(result);
+        var payload = ParsePayload(Assert.Single(cloudHttp.PostPayloads));
+        Assert.Equal(1, payload.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal("被复用的历史名称", payload.GetProperty("plcName").GetString());
+        Assert.Empty(bufferStore.HourlySummaries);
+        Assert.Empty(bufferStore.ReleasedClaimTokens);
+        Assert.Single(bufferStore.DeletedSummaries);
     }
 
     [Fact]
-    public async Task RetryBuffer_WhenLegacyIdentityIsUnresolved_ShouldPreserveOriginalRows()
+    public async Task RetryBuffer_WhenLegacyIdentityIsUnresolved_ShouldUploadLegacyV1AndDelete()
     {
         var cloudHttp = new FakeCloudHttpClient();
         var deviceService = new FakeDeviceService();
@@ -581,21 +596,20 @@ public sealed class CapacitySyncTaskBehaviorTests
 
         var result = await task.RetryBufferAsync();
 
-        Assert.False(result);
-        Assert.Equal(0, cloudHttp.PostCallCount);
-        Assert.Single(bufferStore.HourlySummaries);
-        Assert.Single(bufferStore.ReleasedClaimTokens);
-        Assert.Empty(bufferStore.DeletedSummaries);
+        Assert.True(result);
+        var payload = ParsePayload(Assert.Single(cloudHttp.PostPayloads));
+        Assert.Equal(1, payload.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal("无法确认的旧名称", payload.GetProperty("plcName").GetString());
+        Assert.Empty(bufferStore.HourlySummaries);
+        Assert.Empty(bufferStore.ReleasedClaimTokens);
+        Assert.Single(bufferStore.DeletedSummaries);
         Assert.Contains(
             logger.Entries,
-            entry => entry.Message.Contains("原记录已保留", StringComparison.Ordinal)
-                     && entry.Message.Contains(
-                         "未上传、移动或删除",
-                         StringComparison.Ordinal));
+            entry => entry.Message.Contains("将按 v1 保留原始身份上传", StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task RetryBuffer_WhenClaimedRawRowsCollapseIntoBlockedSummary_ShouldContinueWithLaterResolvableRows()
+    public async Task RetryBuffer_WhenClaimedRawRowsCollapseIntoLegacySummaries_ShouldContinueWithLaterResolvableRows()
     {
         var cloudHttp = new FakeCloudHttpClient();
         var deviceService = new FakeDeviceService();
@@ -646,15 +660,18 @@ public sealed class CapacitySyncTaskBehaviorTests
         var firstRoundPostCount = cloudHttp.PostCallCount;
         var secondResult = await task.RetryBufferAsync();
 
-        Assert.False(firstResult);
-        Assert.False(secondResult);
+        Assert.True(firstResult);
+        Assert.True(secondResult);
         Assert.Equal(3, firstRoundClaimCount);
-        Assert.Equal(0, firstRoundPostCount);
-        var payload = ParsePayload(Assert.Single(cloudHttp.PostPayloads));
-        Assert.Equal("P1-AP01", payload.GetProperty("plcName").GetString());
-        Assert.Equal(4, bufferStore.HourlySummaries.Count);
-        Assert.DoesNotContain(bufferStore.HourlySummaries, row => row.PlcName == "P1-AP01");
-        Assert.Equal(4, bufferStore.ReleasedClaimTokens.Count);
+        Assert.Equal(3, firstRoundPostCount);
+        Assert.Equal(5, cloudHttp.PostCallCount);
+        var resolvedPayload = cloudHttp.PostPayloads
+            .Select(ParsePayload)
+            .Single(payload => payload.TryGetProperty("plcCode", out var plcCode)
+                               && plcCode.GetString() == "P1-AP01");
+        Assert.Equal(2, resolvedPayload.GetProperty("schemaVersion").GetInt32());
+        Assert.Empty(bufferStore.HourlySummaries);
+        Assert.Empty(bufferStore.ReleasedClaimTokens);
         Assert.Equal([200, 200, 200, 200, 200], bufferStore.ClaimBatchSizes);
         Assert.Equal([0, 200, 400, 600, 800], bufferStore.ClaimAfterRecordIds);
     }
@@ -747,7 +764,8 @@ public sealed class CapacitySyncTaskBehaviorTests
                 DayStart = "08:00",
                 DayEnd = "20:00"
             },
-            diagnostics);
+            diagnostics,
+            contextFactories: [new TestProductionContextFactory("ap")]);
 
         using var cts = new CancellationTokenSource();
         await task.StartAsync(cts.Token);
@@ -756,7 +774,9 @@ public sealed class CapacitySyncTaskBehaviorTests
 
         Assert.True(cloudHttp.PostCallCount >= 1);
         var payload = ParsePayload(cloudHttp.PostPayloads[0]);
-        Assert.Equal("P1-AP01", payload.GetProperty("plcName").GetString());
+        Assert.Equal(2, payload.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal("P1-AP01", payload.GetProperty("plcCode").GetString());
+        Assert.Equal("改名后的 AP", payload.GetProperty("plcName").GetString());
         Assert.Equal("P1-AP01", diagnostics.Snapshot.LastPlcCode);
         Assert.Equal("改名后的 AP", diagnostics.Snapshot.LastDeviceName);
     }
@@ -768,7 +788,8 @@ public sealed class CapacitySyncTaskBehaviorTests
         FakeLogService logger,
         FakeProductionContextStore? contextStore = null,
         IPlcIdentityAliasRegistry? identityAliasRegistry = null,
-        IReadRepository<NetworkDeviceEntity>? networkDevices = null)
+        IReadRepository<NetworkDeviceEntity>? networkDevices = null,
+        IEnumerable<IProductionContextFactory>? contextFactories = null)
     {
         var seedContextsFromBuffer = contextStore is null;
         contextStore ??= new FakeProductionContextStore();
@@ -803,7 +824,8 @@ public sealed class CapacitySyncTaskBehaviorTests
             },
             new FakeCloudDiagnosticsStore(),
             identityAliasRegistry,
-            networkDevices);
+            networkDevices,
+            contextFactories ?? [new TestProductionContextFactory("ap")]);
     }
 
     private static JsonElement ParsePayload(object payload)
@@ -825,6 +847,17 @@ public sealed class CapacitySyncTaskBehaviorTests
 
         await ObserveAsync(predicate, TestContext.Current.CancellationToken)
             .WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+    }
+
+    private sealed class TestProductionContextFactory(string moduleId)
+        : IProductionContextFactory
+    {
+        public string ModuleId { get; } = moduleId;
+
+        public Type ContextType => typeof(ProductionContext);
+
+        public ProductionContext Create(string deviceName)
+            => new() { DeviceName = deviceName };
     }
 
     private sealed class FakeNetworkDeviceReadRepository(

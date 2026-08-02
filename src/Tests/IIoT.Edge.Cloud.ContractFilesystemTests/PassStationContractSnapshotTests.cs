@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using IIoT.Edge.Module.Sdk.Cloud;
@@ -82,6 +83,42 @@ public sealed partial class PassStationContractSnapshotTests
         Assert.Equal(requestId.GetProperty("edgeLength").GetInt32(), actual.Length);
         Assert.Equal("sha256-uppercase-hex", requestId.GetProperty("edgeFormat").GetString());
         Assert.Matches(UppercaseSha256Pattern(), actual);
+    }
+
+    [Fact]
+    public void StrictV2Snapshot_ShouldMatchCloudProviderExampleAndConsumerConstants()
+    {
+        var path = Path.Combine(
+            AppContext.BaseDirectory,
+            "ContractSnapshots",
+            "pass-station-batch-v2.json");
+        var bytes = File.ReadAllBytes(path);
+        Assert.Equal(
+            "3ecfd0c47605dbc099a84c0b5b91ee8e53b4b45e2d4dec4bad3f7d24c5b23e40",
+            Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant());
+        using var snapshot = JsonDocument.Parse(bytes);
+        var root = snapshot.RootElement;
+
+        Assert.Equal(PassStationCloudContract.StrictSchemaVersion, root.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(
+            [PassStationCloudContract.LegacySchemaVersion, PassStationCloudContract.StrictSchemaVersion],
+            root.GetProperty("compatibility").GetProperty("providerContinuesToAccept")
+                .EnumerateArray()
+                .Select(item => item.GetInt32())
+                .ToArray());
+        Assert.Equal(
+            PassStationCloudContract.StrictSchemaVersion,
+            root.GetProperty("request").GetProperty("rules").GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(
+            "cloud_write_conflict",
+            root.GetProperty("request").GetProperty("rules").GetProperty("requestIdDifferentContentCode").GetString());
+
+        var example = root.GetProperty("example");
+        Assert.Equal("cp", example.GetProperty("processType").GetString());
+        Assert.Equal(PassStationCloudContract.StrictSchemaVersion, example.GetProperty("schemaVersion").GetInt32());
+        var item = Assert.Single(example.GetProperty("items").EnumerateArray());
+        Assert.Equal(PassStationCloudContract.EmittedOk, item.GetProperty("cellResult").GetString());
+        Assert.Equal("MG1", item.GetProperty("payload").GetProperty("clipSlot").GetString());
     }
 
     [GeneratedRegex("^[0-9A-F]{64}$", RegexOptions.CultureInvariant)]

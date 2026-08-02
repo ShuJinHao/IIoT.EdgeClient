@@ -138,6 +138,64 @@ public sealed class StandardPassStationCloudUploaderContractTests
         Assert.Equal(0, cloudHttp.PostCallCount);
     }
 
+    [Fact]
+    public async Task UploadAsync_WhenApCpRecordsHaveMixedCompleteness_ShouldSplitStrictV2FromLegacyV1()
+    {
+        var cloudHttp = new FakeCloudHttpClient();
+        var completedTime = new DateTime(2026, 8, 2, 1, 30, 0, DateTimeKind.Utc);
+        var strict = CreateCpRecord(
+            "CP-STRICT-001",
+            completedTime,
+            plcName: "正极模切一号 PLC");
+        var legacy = CreateCpRecord(
+            "CP-LEGACY-001",
+            completedTime.AddMinutes(1),
+            plcName: string.Empty);
+
+        var result = await CreateUploader(cloudHttp).UploadAsync(
+            CreateContext(),
+            " CP ",
+            [strict, legacy],
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, cloudHttp.PostCallCount);
+        var strictPayload = Assert.IsType<PassStationBatchUploadPayload>(cloudHttp.PostPayloads[0]);
+        var legacyPayload = Assert.IsType<PassStationBatchUploadPayload>(cloudHttp.PostPayloads[1]);
+        Assert.Equal(PassStationCloudContract.StrictSchemaVersion, strictPayload.SchemaVersion);
+        Assert.Equal("cp", strictPayload.ProcessType);
+        Assert.Equal("CP-STRICT-001", Assert.Single(strictPayload.Items).Barcode);
+        Assert.Equal(PassStationCloudContract.LegacySchemaVersion, legacyPayload.SchemaVersion);
+        Assert.Equal("cp", legacyPayload.ProcessType);
+        Assert.Equal("CP-LEGACY-001", Assert.Single(legacyPayload.Items).Barcode);
+        Assert.NotEqual(strictPayload.RequestId, legacyPayload.RequestId);
+        Assert.Equal(strictPayload.RequestId, cloudHttp.PostIdempotencyKeys[0]);
+        Assert.Equal(legacyPayload.RequestId, cloudHttp.PostIdempotencyKeys[1]);
+    }
+
+    [Theory]
+    [InlineData("MG3")]
+    [InlineData("")]
+    public async Task UploadAsync_WhenCpRecordViolatesStrictClipSlot_ShouldRemainCompatibleV1(
+        string clipSlot)
+    {
+        var cloudHttp = new FakeCloudHttpClient();
+        var record = CreateCpRecord(
+            "CP-HISTORY-001",
+            new DateTime(2026, 8, 2, 1, 30, 0, DateTimeKind.Utc),
+            clipSlot: clipSlot);
+
+        var result = await CreateUploader(cloudHttp).UploadAsync(
+            CreateContext(),
+            "cp",
+            [record],
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var payload = Assert.IsType<PassStationBatchUploadPayload>(cloudHttp.LastPayload);
+        Assert.Equal(PassStationCloudContract.LegacySchemaVersion, payload.SchemaVersion);
+    }
+
     private static StandardPassStationCloudUploader CreateUploader(FakeCloudHttpClient cloudHttp) =>
         new(new FakeCloudApiEndpointProvider(), cloudHttp);
 
@@ -158,6 +216,47 @@ public sealed class StandardPassStationCloudUploaderContractTests
             CompletedTime = DateTime.UtcNow
         }
     };
+
+    private static CellCompletedRecord CreateCpRecord(
+        string barcode,
+        DateTime completedTime,
+        string plcName = "正极模切一号 PLC",
+        string clipSlot = "MG1") => new()
+    {
+        CellData = new StrictCpCellData
+        {
+            Barcode = barcode,
+            CellResult = true,
+            CompletedTime = completedTime,
+            PlcCode = "P2-CP01",
+            PlcName = plcName,
+            ClipSlot = clipSlot,
+            StartTime = completedTime.AddMinutes(-5),
+            PunchingQuantity = 120,
+            PunchingSpeed = 1.25m
+        }
+    };
+
+    private sealed class StrictCpCellData : CellDataBase
+    {
+        public override string ProcessType => "cp";
+
+        public override string DisplayLabel => Barcode;
+
+        public string Barcode { get; init; } = string.Empty;
+
+        public string PlcCode { get; init; } = string.Empty;
+
+        public string PlcName { get; init; } = string.Empty;
+
+        public string ClipSlot { get; init; } = string.Empty;
+
+        public DateTime StartTime { get; init; }
+
+        public int PunchingQuantity { get; init; }
+
+        public decimal PunchingSpeed { get; init; }
+    }
 
     private sealed class ExtensionPayloadCellData : CellDataBase
     {

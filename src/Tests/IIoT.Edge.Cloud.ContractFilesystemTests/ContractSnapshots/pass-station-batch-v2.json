@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 2,
+  "contractId": "edge-pass-station-batch-v2",
+  "provider": "IIoT.CloudPlatform",
+  "consumer": "IIoT.EdgeClient",
+  "compatibility": {
+    "providerContinuesToAccept": [1, 2],
+    "consumerUsesV2OnlyForStrictlyCompleteApCpRecords": true,
+    "incompleteHistoricalRecordsUseSchemaVersion": 1
+  },
+  "http": {
+    "method": "POST",
+    "routeTemplate": "/api/v1/edge/pass-stations/{typeKey}/batch"
+  },
+  "request": {
+    "required": ["deviceId", "items", "schemaVersion", "processType"],
+    "rules": {
+      "schemaVersion": 2,
+      "processTypeMustEqualNormalizedTypeKey": true,
+      "requestIdSameContentIsDuplicate": true,
+      "requestIdDifferentContentStatus": 409,
+      "requestIdDifferentContentCode": "cloud_write_conflict"
+    }
+  },
+  "item": {
+    "required": ["barcode", "cellResult", "completedTime", "payload"],
+    "rules": {
+      "cellResult": ["OK", "NG"],
+      "completedTimeUtc": true,
+      "startTimeUtc": true,
+      "startTimeNotAfterCompletedTime": true,
+      "plcCodeMaxLength": 64,
+      "plcNameMaxLength": 128,
+      "clipSlot": ["MG1", "MG2"],
+      "punchingQuantityMinimum": 0,
+      "punchingSpeedMinimum": 0,
+      "punchingSpeedMaximumScale": 5
+    }
+  },
+  "example": {
+    "deviceId": "22222222-2222-2222-2222-222222222222",
+    "requestId": "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF",
+    "schemaVersion": 2,
+    "processType": "cp",
+    "items": [
+      {
+        "barcode": "CP-CLIP-001",
+        "cellResult": "OK",
+        "completedTime": "2026-08-02T01:30:00Z",
+        "payload": {
+          "plcCode": "P2-CP01",
+          "plcName": "正极模切一号 PLC",
+          "clipSlot": "MG1",
+          "startTime": "2026-08-02T01:25:00Z",
+          "punchingQuantity": 120,
+          "punchingSpeed": 1.25
+        }
+      }
+    ]
+  }
+}

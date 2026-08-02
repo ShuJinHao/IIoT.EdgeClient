@@ -6,6 +6,7 @@ using IIoT.Edge.Module.Contracts.Cloud;
 using IIoT.Edge.Module.Contracts.Device;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Modules;
+using IIoT.Edge.Module.Contracts.Runtime;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
 using IIoT.Edge.Application.Common.Identity;
@@ -32,6 +33,7 @@ public class CapacitySyncTask : ICapacitySyncTask
     private readonly ICloudUploadDiagnosticsStore _diagnosticsStore;
     private readonly IPlcIdentityAliasRegistry _identityAliasRegistry;
     private readonly IReadRepository<NetworkDeviceEntity>? _networkDevices;
+    private readonly IReadOnlyList<IProductionContextFactory> _contextFactories;
     private readonly object _lifecycleLock = new();
     private readonly SemaphoreSlim _syncGate = new(1, 1);
     private CancellationTokenSource? _cts;
@@ -50,7 +52,8 @@ public class CapacitySyncTask : ICapacitySyncTask
         ShiftConfig shiftConfig,
         ICloudUploadDiagnosticsStore diagnosticsStore,
         IPlcIdentityAliasRegistry? identityAliasRegistry = null,
-        IReadRepository<NetworkDeviceEntity>? networkDevices = null)
+        IReadRepository<NetworkDeviceEntity>? networkDevices = null,
+        IEnumerable<IProductionContextFactory>? contextFactories = null)
     {
         _cloudHttp = cloudHttp;
         _endpointProvider = endpointProvider;
@@ -64,6 +67,7 @@ public class CapacitySyncTask : ICapacitySyncTask
         _identityAliasRegistry =
             identityAliasRegistry ?? new InMemoryPlcIdentityAliasRegistry();
         _networkDevices = networkDevices;
+        _contextFactories = contextFactories?.ToArray() ?? [];
     }
 
     public Task StartAsync(CancellationToken ct)
@@ -189,6 +193,7 @@ public class CapacitySyncTask : ICapacitySyncTask
                 continue;
             }
 
+            var processType = ResolveProcessType(ctx);
             foreach (var slot in capacity.HalfHourly.Where(h => h.Total > 0).OrderBy(h => h.SlotIndex))
             {
                 var shiftCode = GetShiftCodeByTime(slot.StartHour, slot.StartMinute);
@@ -203,6 +208,8 @@ public class CapacitySyncTask : ICapacitySyncTask
                     slot.NgCount,
                     ctx.PlcCode,
                     ctx.DeviceName,
+                    processType,
+                    legacyPlcIdentity: ctx.PlcCode,
                     cancellationToken).ConfigureAwait(false);
             }
         }
@@ -219,6 +226,8 @@ public class CapacitySyncTask : ICapacitySyncTask
         int ngCount,
         string plcCode,
         string deviceName,
+        string? processType,
+        string legacyPlcIdentity,
         CancellationToken cancellationToken)
     {
         var result = await PostCapacityAsync(
@@ -232,6 +241,8 @@ public class CapacitySyncTask : ICapacitySyncTask
             ngCount,
             plcCode,
             deviceName,
+            processType,
+            legacyPlcIdentity,
             cancellationToken).ConfigureAwait(false);
         var slotLabel = FormatCapacitySlot(date, hour, minute, shiftCode);
         if (result.IsSuccess)
@@ -275,8 +286,6 @@ public class CapacitySyncTask : ICapacitySyncTask
                 return false;
             }
 
-            var identityBlockedInRound = false;
-            var blockedClaimTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (_bufferStore is not ICapacityBufferCursorStore cursorStore)
             {
                 _logger.Error(
@@ -285,51 +294,50 @@ public class CapacitySyncTask : ICapacitySyncTask
                 return false;
             }
 
-            try
+            for (var batchIndex = 0; batchIndex < RetryMaxBatchesPerRound; batchIndex++)
             {
-                for (var batchIndex = 0; batchIndex < RetryMaxBatchesPerRound; batchIndex++)
+                var claimedBatch = await cursorStore
+                    .ClaimHourlySummaryBatchAfterAsync(_retryAfterRecordId, RetryBatchSize)
+                    .ConfigureAwait(false);
+                if (claimedBatch is null || claimedBatch.Summaries.Count == 0)
                 {
-                    var claimedBatch = await cursorStore
-                        .ClaimHourlySummaryBatchAfterAsync(_retryAfterRecordId, RetryBatchSize)
-                        .ConfigureAwait(false);
-                    if (claimedBatch is null || claimedBatch.Summaries.Count == 0)
+                    _retryAfterRecordId = 0;
+                    return true;
+                }
+
+                var claimReleased = false;
+                var legacyV1InBatch = 0;
+                try
+                {
+                    if (claimedBatch.ClaimedRecordCount <= 0
+                        || claimedBatch.LastRecordId <= _retryAfterRecordId)
                     {
-                        _retryAfterRecordId = 0;
-                        return !identityBlockedInRound;
+                        throw new InvalidDataException(
+                            "产能补传游标批次未向前推进。");
                     }
 
-                    var claimReleased = false;
-                    var identityBlockedInBatch = 0;
-                    try
+                    foreach (var summary in claimedBatch.Summaries)
                     {
-                        if (claimedBatch.ClaimedRecordCount <= 0
-                            || claimedBatch.LastRecordId <= _retryAfterRecordId)
+                        if (!TryResolveBufferedPlcIdentity(
+                                summary.PlcName,
+                                configuredPlcs,
+                                out var plcCode,
+                                out var deviceName,
+                                out var processType,
+                                out var identityDiagnostic))
                         {
-                            throw new InvalidDataException(
-                                "产能补传游标批次未向前推进。");
+                            plcCode = summary.PlcName.Trim();
+                            deviceName = null;
+                            processType = null;
+                            legacyV1InBatch++;
+                            _logger.Warn(
+                                $"[PlcCode=未解析][TaskKey=Capacity.Hourly][SignalKey=不适用] "
+                                + $"产能补传记录无法确认真实 PLC 名称或工序，"
+                                + $"将按 v1 保留原始身份上传；原始 PlcName={summary.PlcName}，"
+                                + $"诊断={identityDiagnostic}。");
                         }
 
-                        foreach (var summary in claimedBatch.Summaries)
-                        {
-                            if (!TryResolveBufferedPlcIdentity(
-                                    summary.PlcName,
-                                    configuredPlcs,
-                                    out var plcCode,
-                                    out var deviceName,
-                                    out var identityDiagnostic))
-                            {
-                                identityBlockedInRound = true;
-                                identityBlockedInBatch++;
-                                _logger.Error(
-                                    $"[PlcCode=未解析][TaskKey=Capacity.Hourly][SignalKey=不适用] "
-                                    + $"产能补传记录身份无法唯一解析，原始 PlcName={summary.PlcName}，"
-                                    + $"诊断={identityDiagnostic}；原记录已保留，"
-                                    + $"未上传、移动或删除；本轮结束后释放领取状态等待人工修复，"
-                                    + $"并继续处理本轮其它可解析记录。");
-                                continue;
-                            }
-
-                            var result = await PostCapacityAsync(
+                        var result = await PostCapacityAsync(
                                 deviceId,
                                 summary.Date,
                                 summary.Hour,
@@ -339,97 +347,75 @@ public class CapacitySyncTask : ICapacitySyncTask
                                 summary.OkCount,
                                 summary.NgCount,
                                 plcCode,
-                                deviceName).ConfigureAwait(false);
-                            if (!result.IsSuccess)
-                            {
-                                await _bufferStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
-                                claimReleased = true;
-                                var slotLabel = FormatCapacitySlot(
-                                    summary.Date,
-                                    summary.Hour,
-                                    summary.MinuteBucket,
-                                    summary.ShiftCode);
-                                if (IsUploadPaused(result))
-                                {
-                                    _logger.Warn(
-                                        $"[云端补传] 产能补传已暂停，等待云端恢复：{slotLabel}（{result.ReasonCode}）");
-                                }
-                                else
-                                {
-                                    _logger.Warn(
-                                        $"[云端补传] 产能补传失败：{slotLabel}");
-                                }
-                                return false;
-                            }
-
-                            await _bufferStore.DeleteClaimedSummaryAsync(
-                                claimedBatch.ClaimToken,
+                                deviceName,
+                                processType,
+                            legacyPlcIdentity: summary.PlcName).ConfigureAwait(false);
+                        if (!result.IsSuccess)
+                        {
+                            await _bufferStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
+                            claimReleased = true;
+                            var slotLabel = FormatCapacitySlot(
                                 summary.Date,
                                 summary.Hour,
                                 summary.MinuteBucket,
-                                summary.ShiftCode,
-                                summary.PlcName).ConfigureAwait(false);
+                                summary.ShiftCode);
+                            if (IsUploadPaused(result))
+                            {
+                                _logger.Warn(
+                                    $"[云端补传] 产能补传已暂停，等待云端恢复：{slotLabel}（{result.ReasonCode}）");
+                            }
+                            else
+                            {
+                                _logger.Warn(
+                                    $"[云端补传] 产能补传失败：{slotLabel}");
+                            }
+                            return false;
                         }
 
-                        if (identityBlockedInBatch > 0)
-                        {
-                            blockedClaimTokens.Add(claimedBatch.ClaimToken);
-                        }
-
-                        _logger.Info(
-                            $"[云端补传] 产能补传批次 {claimedBatch.ClaimToken} 已完成，"
-                            + $"汇总数：{claimedBatch.Summaries.Count}，原始行数：{claimedBatch.ClaimedRecordCount}，"
-                            + $"身份阻断：{identityBlockedInBatch}");
-                        _retryAfterRecordId = claimedBatch.LastRecordId;
-                        if (claimedBatch.ClaimedRecordCount < RetryBatchSize)
-                        {
-                            _retryAfterRecordId = 0;
-                            return !identityBlockedInRound;
-                        }
+                        await _bufferStore.DeleteClaimedSummaryAsync(
+                            claimedBatch.ClaimToken,
+                            summary.Date,
+                            summary.Hour,
+                            summary.MinuteBucket,
+                            summary.ShiftCode,
+                            summary.PlcName).ConfigureAwait(false);
                     }
-                    catch (Exception ex)
-                    {
-                        if (!claimReleased)
-                        {
-                            try
-                            {
-                                await _bufferStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
-                                claimReleased = true;
-                                blockedClaimTokens.Remove(claimedBatch.ClaimToken);
-                            }
-                            catch (Exception releaseEx)
-                            {
-                                _logger.Error(
-                                    $"[云端补传] 释放产能补传领取标记 {claimedBatch.ClaimToken} 失败：{releaseEx.Message}");
-                            }
-                        }
 
-                        _logger.Error($"[云端补传] 产能补传异常：{ex.Message}");
-                        return false;
+                    _logger.Info(
+                        $"[云端补传] 产能补传批次 {claimedBatch.ClaimToken} 已完成，"
+                        + $"汇总数：{claimedBatch.Summaries.Count}，原始行数：{claimedBatch.ClaimedRecordCount}，"
+                        + $"v1 兼容上传：{legacyV1InBatch}");
+                    _retryAfterRecordId = claimedBatch.LastRecordId;
+                    if (claimedBatch.ClaimedRecordCount < RetryBatchSize)
+                    {
+                        _retryAfterRecordId = 0;
+                        return true;
                     }
                 }
-
-                _logger.Info(
-                    $"[云端补传] 产能补传本轮已处理 {RetryMaxBatchesPerRound} 批，"
-                    + $"下轮从 RecordId>{_retryAfterRecordId} 继续。");
-                return !identityBlockedInRound;
-            }
-            finally
-            {
-                foreach (var claimToken in blockedClaimTokens)
+                catch (Exception ex)
                 {
-                    try
+                    if (!claimReleased)
                     {
-                        await _bufferStore.ReleaseClaimAsync(claimToken).ConfigureAwait(false);
+                        try
+                        {
+                            await _bufferStore.ReleaseClaimAsync(claimedBatch.ClaimToken).ConfigureAwait(false);
+                        }
+                        catch (Exception releaseEx)
+                        {
+                            _logger.Error(
+                                $"[云端补传] 释放产能补传领取标记 {claimedBatch.ClaimToken} 失败：{releaseEx.Message}");
+                        }
                     }
-                    catch (Exception ex)
-                    {
-                        _logger.Error(
-                            $"[云端补传] 身份阻断记录释放领取标记 {claimToken} 失败，"
-                            + $"原产能记录保持不变；异常类型={ex.GetType().Name}。");
-                    }
+
+                    _logger.Error($"[云端补传] 产能补传异常：{ex.Message}");
+                    return false;
                 }
             }
+
+            _logger.Info(
+                $"[云端补传] 产能补传本轮已处理 {RetryMaxBatchesPerRound} 批，"
+                + $"下轮从 RecordId>{_retryAfterRecordId} 继续。");
+            return true;
         }
         finally
         {
@@ -460,10 +446,12 @@ public class CapacitySyncTask : ICapacitySyncTask
         IReadOnlyList<ConfiguredPlcIdentity> configuredPlcs,
         out string plcCode,
         out string? deviceName,
+        out string? processType,
         out string diagnostic)
     {
         plcCode = string.Empty;
         deviceName = null;
+        processType = null;
         diagnostic = "capacity_buffer_plc_identity_unresolved";
         var normalizedIdentity = persistedIdentity?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(normalizedIdentity))
@@ -482,6 +470,7 @@ public class CapacitySyncTask : ICapacitySyncTask
         {
             plcCode = exactCodeMatches[0].PlcCode.Trim();
             deviceName = exactCodeMatches[0].DeviceName;
+            processType = exactCodeMatches[0].ProcessType;
             return true;
         }
 
@@ -516,6 +505,7 @@ public class CapacitySyncTask : ICapacitySyncTask
 
         plcCode = verifiedAliasMatches[0].PlcCode.Trim();
         deviceName = verifiedAliasMatches[0].DeviceName;
+        processType = verifiedAliasMatches[0].ProcessType;
         return true;
     }
 
@@ -523,6 +513,20 @@ public class CapacitySyncTask : ICapacitySyncTask
     {
         if (_networkDevices is not null)
         {
+            var contextProcessTypes = _contextStore.GetAll()
+                .Where(context => context.NetworkDeviceId > 0)
+                .GroupBy(context => context.NetworkDeviceId)
+                .ToDictionary(
+                    group => group.Key,
+                    group =>
+                    {
+                        var processTypes = group.Select(ResolveProcessType)
+                        .Where(process => process is not null)
+                        .Distinct(StringComparer.Ordinal)
+                        .Take(2)
+                        .ToArray();
+                        return processTypes.Length == 1 ? processTypes[0] : null;
+                    });
             var configuredDevices = await _networkDevices
                 .GetListAsync(
                     static device => device.DeviceType == DeviceType.PLC,
@@ -533,9 +537,10 @@ public class CapacitySyncTask : ICapacitySyncTask
                 .Where(static device =>
                     !string.IsNullOrWhiteSpace(device.PlcCode)
                     && !string.IsNullOrWhiteSpace(device.DeviceName))
-                .Select(static device => new ConfiguredPlcIdentity(
+                .Select(device => new ConfiguredPlcIdentity(
                     device.PlcCode.Trim(),
-                    device.DeviceName.Trim()))
+                    device.DeviceName.Trim(),
+                    contextProcessTypes.GetValueOrDefault(device.Id)))
                 .ToArray();
         }
 
@@ -543,9 +548,10 @@ public class CapacitySyncTask : ICapacitySyncTask
             .Where(static context =>
                 !string.IsNullOrWhiteSpace(context.PlcCode)
                 && !string.IsNullOrWhiteSpace(context.DeviceName))
-            .Select(static context => new ConfiguredPlcIdentity(
+            .Select(context => new ConfiguredPlcIdentity(
                 context.PlcCode.Trim(),
-                context.DeviceName.Trim()))
+                context.DeviceName.Trim(),
+                ResolveProcessType(context)))
             .ToArray();
     }
 
@@ -560,6 +566,8 @@ public class CapacitySyncTask : ICapacitySyncTask
         int ngCount,
         string plcCode,
         string? deviceName,
+        string? processType,
+        string legacyPlcIdentity,
         CancellationToken cancellationToken = default)
     {
         var payload = CreatePayload(
@@ -571,7 +579,10 @@ public class CapacitySyncTask : ICapacitySyncTask
             totalCount,
             okCount,
             ngCount,
-            plcCode);
+            plcCode,
+            deviceName,
+            processType,
+            legacyPlcIdentity);
         var result = await _cloudHttp.PostAsync(
                 _endpointProvider.GetCapacityHourlyPath(),
                 payload,
@@ -600,10 +611,36 @@ public class CapacitySyncTask : ICapacitySyncTask
         int totalCount,
         int okCount,
         int ngCount,
-        string plcCode)
+        string plcCode,
+        string? plcName,
+        string? processType,
+        string legacyPlcIdentity)
     {
         var endMinute = minute == 30 ? 0 : 30;
         var endHour = minute == 30 ? (hour + 1) % 24 : hour;
+
+        var canSendV2 = processType is "ap" or "cp"
+                        && !string.IsNullOrWhiteSpace(plcCode)
+                        && !string.IsNullOrWhiteSpace(plcName);
+        if (canSendV2)
+        {
+            return new
+            {
+                deviceId,
+                date,
+                hour,
+                minute,
+                timeLabel = $"{hour:D2}:{minute:D2}-{endHour:D2}:{endMinute:D2}",
+                shiftCode,
+                totalCount,
+                okCount = (int?)null,
+                ngCount = (int?)null,
+                schemaVersion = 2,
+                processType,
+                plcCode,
+                plcName
+            };
+        }
 
         return new
         {
@@ -616,11 +653,27 @@ public class CapacitySyncTask : ICapacitySyncTask
             totalCount,
             okCount,
             ngCount,
-            plcName = plcCode
+            schemaVersion = 1,
+            plcName = legacyPlcIdentity
         };
     }
 
-    private sealed record ConfiguredPlcIdentity(string PlcCode, string DeviceName);
+    private string? ResolveProcessType(ProductionContext context)
+    {
+        var moduleIds = _contextFactories
+            .Where(factory => factory.ContextType.IsInstanceOfType(context))
+            .Select(factory => factory.ModuleId.Trim().ToLowerInvariant())
+            .Where(moduleId => moduleId is "ap" or "cp")
+            .Distinct(StringComparer.Ordinal)
+            .Take(2)
+            .ToArray();
+        return moduleIds.Length == 1 ? moduleIds[0] : null;
+    }
+
+    private sealed record ConfiguredPlcIdentity(
+        string PlcCode,
+        string DeviceName,
+        string? ProcessType);
 
     private string GetShiftCodeByTime(int hour, int minute)
     {
