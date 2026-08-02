@@ -209,10 +209,11 @@ launcher/
   launcher.update.json
 host/
 plugins/<ModuleId>/
-  iiot-plugin-binding.json
+  plugin.json
+  <module assemblies and activation files>
 ```
 
-安装器只负责解包、调用 Velopack Setup、复制引导文件和启动 Launcher。`ClientCode`、`BootstrapSecret` 等绑定信息只存在于受控 payload 的绑定文件中，不写 UI、不写日志、不进入公共 catalog。
+安装器只负责解包、调用 Velopack Setup、复制引导文件和启动 Launcher。`launcher/iiot-binding.json` 是 payload 中唯一允许携带 `ClientCode`、`BootstrapSecret` 等启动密钥的绑定输入；`iiot-enabled-plugins.json`、`launcher.update.json` 和插件目录均不得携带密钥。Cloud 组包必须剔除基础包或插件中遗留的任何 `iiot-plugin-binding.json`，最终 payload 中该文件数量必须为零。绑定信息不写 UI、不写日志、不进入公共 catalog。
 
 ## 5. 兼容语义
 
