@@ -1,8 +1,7 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Security.Claims;
+using System.Text.Json;
 using IIoT.Edge.Module.Contracts.Auth;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Infrastructure.Integration.Http;
@@ -356,18 +355,28 @@ public class AuthService : IAuthService
             return null;
         }
 
-        if (!await IsAccessTokenAcceptedByCloudAsync(httpClient, token, cancellationToken).ConfigureAwait(false))
+        var expiresAtUtc = CloudAuthHeaders.ReadAccessTokenExpiresAtUtc(response);
+        if (!expiresAtUtc.HasValue || expiresAtUtc.Value <= _timeProvider.GetUtcNow())
         {
             return null;
         }
 
-        return ParseJwtToken(
+        var trustedIdentity = await TryGetTrustedIdentityAsync(httpClient, token, cancellationToken)
+            .ConfigureAwait(false);
+        if (trustedIdentity is null)
+        {
+            return null;
+        }
+
+        return CreateCloudSession(
+            trustedIdentity,
             token,
+            expiresAtUtc.Value,
             CloudAuthHeaders.ReadRefreshToken(response),
             CloudAuthHeaders.ReadRefreshTokenExpiresAtUtc(response));
     }
 
-    private async Task<bool> IsAccessTokenAcceptedByCloudAsync(
+    private async Task<HumanIdentitySessionDto?> TryGetTrustedIdentityAsync(
         HttpClient httpClient,
         string token,
         CancellationToken cancellationToken)
@@ -378,7 +387,25 @@ public class AuthService : IAuthService
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        return response.IsSuccessStatusCode;
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        try
+        {
+            var session = await response.Content
+                .ReadFromJsonAsync<HumanIdentitySessionDto>(cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+
+            return IsValidTrustedIdentity(session) ? session : null;
+        }
+        catch (Exception ex) when (
+            !cancellationToken.IsCancellationRequested
+            && (ex is JsonException or NotSupportedException or InvalidOperationException))
+        {
+            return null;
+        }
     }
 
     private static async Task<string> BuildAuthFailureMessageAsync(HttpResponseMessage response)
@@ -415,76 +442,47 @@ public class AuthService : IAuthService
     private HttpClient CreateHttpClient()
         => _httpClientFactory.CreateClient(HttpClientName);
 
-    private UserSession? ParseJwtToken(
+    private static UserSession CreateCloudSession(
+        HumanIdentitySessionDto identity,
         string token,
+        DateTimeOffset expiresAtUtc,
         string? refreshToken,
         DateTimeOffset? refreshTokenExpiresAtUtc)
     {
-        try
+        var permissions = identity.Roles!
+            .Concat(identity.Permissions!)
+            .Select(value => value!.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return new UserSession
         {
-            var handler = new JwtSecurityTokenHandler
-            {
-                MapInboundClaims = false
-            };
-            if (!handler.CanReadToken(token))
-            {
-                return null;
-            }
-
-            var jwtToken = handler.ReadJwtToken(token);
-            var claims = jwtToken.Claims.ToArray();
-            var expiresAtUtc = TryGetExpiresAtUtc(claims);
-            if (!expiresAtUtc.HasValue || expiresAtUtc.Value <= _timeProvider.GetUtcNow())
-            {
-                return null;
-            }
-
-            var displayName = claims
-                .FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.UniqueName)
-                ?.Value
-                ?? claims.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value
-                ?? "未知用户";
-
-            var employeeNo = claims
-                .FirstOrDefault(c => string.Equals(c.Type, "employeeNo", StringComparison.OrdinalIgnoreCase))
-                ?.Value
-                ?? claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.UniqueName)?.Value
-                ?? claims.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
-
-            var permissions = claims
-                .Where(c =>
-                    string.Equals(c.Type, "Permission", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(c.Type, ClaimTypes.Role, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(c.Type, "role", StringComparison.OrdinalIgnoreCase))
-                .Select(c => c.Value)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            return new UserSession
-            {
-                DisplayName = displayName,
-                EmployeeNo = employeeNo,
-                IsLocalAdmin = false,
-                Permissions = permissions,
-                ExpiresAtUtc = expiresAtUtc,
-                AccessToken = token,
-                RefreshToken = refreshToken,
-                RefreshTokenExpiresAtUtc = refreshTokenExpiresAtUtc
-            };
-        }
-        catch
-        {
-            return null;
-        }
+            DisplayName = identity.DisplayName!.Trim(),
+            EmployeeNo = identity.EmployeeNo!.Trim(),
+            IsLocalAdmin = false,
+            Permissions = permissions,
+            ExpiresAtUtc = expiresAtUtc,
+            AccessToken = token,
+            RefreshToken = refreshToken,
+            RefreshTokenExpiresAtUtc = refreshTokenExpiresAtUtc
+        };
     }
 
-    private static DateTimeOffset? TryGetExpiresAtUtc(IEnumerable<Claim> claims)
-    {
-        var expClaim = claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Exp)?.Value;
-        if (!long.TryParse(expClaim, out var exp))
-        {
-            return null;
-        }
+    private static bool IsValidTrustedIdentity(HumanIdentitySessionDto? identity)
+        => identity is not null
+            && identity.UserId != Guid.Empty
+            && !string.IsNullOrWhiteSpace(identity.EmployeeNo)
+            && !string.IsNullOrWhiteSpace(identity.DisplayName)
+            && identity.Roles is not null
+            && identity.Permissions is not null
+            && identity.Roles.All(value => !string.IsNullOrWhiteSpace(value))
+            && identity.Permissions.All(value => !string.IsNullOrWhiteSpace(value));
 
-        return DateTimeOffset.FromUnixTimeSeconds(exp);
+    private sealed class HumanIdentitySessionDto
+    {
+        public Guid UserId { get; init; }
+        public string? EmployeeNo { get; init; }
+        public string? DisplayName { get; init; }
+        public IReadOnlyList<string?>? Roles { get; init; }
+        public IReadOnlyList<string?>? Permissions { get; init; }
     }
 }

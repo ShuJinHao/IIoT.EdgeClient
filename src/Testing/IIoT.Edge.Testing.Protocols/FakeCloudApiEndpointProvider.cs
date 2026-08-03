@@ -23,7 +23,7 @@ public sealed class FakeCloudApiEndpointProvider : ICloudApiEndpointProvider
     public string GetBootstrapRefreshPath() => "/api/v1/bootstrap/edge-refresh";
     public string GetIdentityDeviceLoginPath() => "/api/v1/bootstrap/edge-login";
     public string GetHumanIdentityRefreshPath() => "/api/v1/human/identity/refresh";
-    public string GetHumanSessionValidationPath() => "/api/v1/human/devices/select";
+    public string GetHumanSessionValidationPath() => "/api/v1/human/identity/session";
     public string GetDeviceLogPath() => "/api/v1/edge/device-logs";
     public string GetEdgeHostPlcRuntimeStatesPath() => "/api/v1/edge/edge-hosts/plc-runtime-states";
     public string GetPassStationBatchPath(string typeKey) => $"/api/v1/edge/pass-stations/{typeKey}/batch";
