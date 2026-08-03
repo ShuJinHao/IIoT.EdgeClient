@@ -236,8 +236,8 @@ function Assert-BindingPayload {
     )
 
     $binding = $BindingJson | ConvertFrom-Json
-    if ($binding.schemaVersion -ne 1) {
-        throw 'iiot-binding.json schemaVersion is invalid.'
+    if ($binding.schemaVersion -ne 2) {
+        throw 'iiot-binding.json schemaVersion must be 2.'
     }
 
     $baseUrl = ([string]$binding.baseUrl).Trim().TrimEnd('/')
@@ -247,6 +247,31 @@ function Assert-BindingPayload {
     if (-not [string]::IsNullOrWhiteSpace($ExpectedGateway) -and
         $baseUrl -cne $ExpectedGateway.Trim().TrimEnd('/')) {
         throw 'iiot-binding.json baseUrl does not match the expected Cloud Gateway.'
+    }
+
+    $expectedPaths = [ordered]@{
+        deviceInstance = '/api/v1/bootstrap/device-instance'
+        clientReleaseCatalogTemplate = '/api/v1/edge/client-releases/device/{deviceId}/catalog'
+        clientVersionReport = '/api/v1/edge/client-releases/version-reports'
+        runtimeHeartbeat = '/api/v1/edge/runtime-heartbeats'
+    }
+    if ($null -eq $binding.paths) {
+        throw 'iiot-binding.json paths must not be empty.'
+    }
+    foreach ($propertyName in $expectedPaths.Keys) {
+        $actualPath = [string]$binding.paths.$propertyName
+        if ($actualPath -cne [string]$expectedPaths[$propertyName]) {
+            throw "iiot-binding.json path '$propertyName' is invalid."
+        }
+    }
+
+    $generatedAtUtc = [DateTimeOffset]::MinValue
+    if (-not [DateTimeOffset]::TryParse(
+            [string]$binding.generatedAtUtc,
+            [Globalization.CultureInfo]::InvariantCulture,
+            [Globalization.DateTimeStyles]::RoundtripKind,
+            [ref]$generatedAtUtc)) {
+        throw 'iiot-binding.json generatedAtUtc is invalid.'
     }
 
     $items = @($binding.bindings)
@@ -275,6 +300,7 @@ function Assert-BindingPayload {
 
     return [pscustomobject]@{
         BaseUrl = $baseUrl
+        Paths = $binding.paths
         Bindings = $items
         BootstrapSecrets = @($items | ForEach-Object { [string]$_.bootstrapSecret })
     }

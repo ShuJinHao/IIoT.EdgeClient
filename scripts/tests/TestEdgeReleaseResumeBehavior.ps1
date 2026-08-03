@@ -350,6 +350,7 @@ $packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagePath).Hash
     New-Item -ItemType Directory -Force -Path $hostArtifactRoot, $hostVelopackRoot | Out-Null
     @{
         schemaVersion = 2
+        installerBindingSchemaVersion = 2
         channel = 'stable'
         version = '9.9.9'
         sourceCommit = $head

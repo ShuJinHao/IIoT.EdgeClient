@@ -561,6 +561,7 @@ if (-not [string]::IsNullOrWhiteSpace($VelopackSetupPath)) {
 
 $artifactProperties = [ordered]@{
     schemaVersion = 2
+    installerBindingSchemaVersion = 2
     channel = $ReleaseChannel
     version = $Version
     hostApiVersion = $HostApiVersion
