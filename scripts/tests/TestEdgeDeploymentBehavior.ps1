@@ -125,8 +125,14 @@ function New-DownloadedInstallerFixture {
     }
 
     $bindingJson = [ordered]@{
-        schemaVersion = 1
+        schemaVersion = 2
         baseUrl = $normalizedBaseUrl
+        paths = [ordered]@{
+            deviceInstance = '/api/v1/bootstrap/device-instance'
+            clientReleaseCatalogTemplate = '/api/v1/edge/client-releases/device/{deviceId}/catalog'
+            clientVersionReport = '/api/v1/edge/client-releases/version-reports'
+            runtimeHeartbeat = '/api/v1/edge/runtime-heartbeats'
+        }
         generatedAtUtc = '2026-08-02T00:00:00Z'
         bindings = @($bindings)
     } | ConvertTo-Json -Depth 8 -Compress

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -23,6 +24,8 @@ public interface ILauncherDeviceBindingImporter
 public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImporter
 {
     public const string BindingFileName = "iiot-binding.json";
+    private const int SupportedBindingSchemaVersion = 2;
+    private const string DeviceIdTemplate = "{deviceId}";
 
     private readonly string _baseDirectory;
     private readonly ILauncherProfileCatalog _profileCatalog;
@@ -56,8 +59,7 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
                 return;
             }
 
-            var bindings = ParseBindings(bindingPath, out var baseUrl);
-            if (bindings.Count == 0)
+            if (!TryParseBindingBundle(bindingPath, out var bundle))
             {
                 ReplaceBindingDiagnostics(
                 [
@@ -69,9 +71,9 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
             var profiles = _profileCatalog.LoadProfiles();
             var applied = new List<DeviceBinding>();
             var unresolved = new List<DeviceBinding>();
-            foreach (var binding in bindings)
+            foreach (var binding in bundle.Bindings)
             {
-                if (TryApplyOneBinding(profiles, binding, baseUrl))
+                if (TryApplyOneBinding(profiles, binding, bundle))
                 {
                     applied.Add(binding);
                 }
@@ -81,7 +83,7 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
                 }
             }
 
-            FinalizeAppliedBindings(bindingPath, applied, unresolved, baseUrl);
+            FinalizeAppliedBindings(bindingPath, applied, unresolved, bundle);
             ReplaceBindingDiagnostics(
                 unresolved
                     .Select(binding => CreateBindingDiagnostic(
@@ -112,16 +114,10 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
     private bool TryApplyOneBinding(
         IReadOnlyList<LauncherProfileDefinition> profiles,
         DeviceBinding binding,
-        string? baseUrl)
+        DeviceBindingBundle bundle)
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(binding.BootstrapSecret)
-                || !TryNormalizeHttpBaseUrl(baseUrl, out var normalizedBaseUrl))
-            {
-                return false;
-            }
-
             // moduleId -> profile：匹配“机器配置 Modules.Enabled 含该 module”的 profile（与规则一致）。
             var target = profiles.FirstOrDefault(profile =>
                 _moduleConfiguration.ReadEnabledModules(_targetFactory.Create(profile))
@@ -137,7 +133,8 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
                 _targetFactory.Create(target),
                 binding.ClientCode,
                 binding.BootstrapSecret,
-                normalizedBaseUrl);
+                bundle.BaseUrl,
+                bundle.Paths);
             return true;
         }
         catch (Exception ex) when (ex is IOException
@@ -154,7 +151,8 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
         EdgeUpdateTarget target,
         string clientCode,
         string bootstrapSecret,
-        string baseUrl)
+        string baseUrl,
+        BindingPaths paths)
     {
         var targetPath = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(
             target.MachineProfile,
@@ -179,6 +177,18 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
         cloudApi["BootstrapSecret"] = bootstrapSecret;
         cloudApi["BaseUrl"] = baseUrl;
 
+        if (cloudApi["Paths"] is not JsonObject cloudPaths)
+        {
+            cloudPaths = new JsonObject();
+            cloudApi["Paths"] = cloudPaths;
+        }
+
+        cloudPaths["DeviceInstance"] = paths.DeviceInstance;
+        cloudPaths["ClientReleaseCatalogTemplate"] =
+            paths.ClientReleaseCatalogTemplate;
+        cloudPaths["ClientVersionReport"] = paths.ClientVersionReport;
+        cloudPaths["RuntimeHeartbeat"] = paths.RuntimeHeartbeat;
+
         var directory = Path.GetDirectoryName(targetPath);
         if (!string.IsNullOrWhiteSpace(directory))
         {
@@ -188,53 +198,75 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
         WriteJsonAtomically(targetPath, root);
     }
 
-    private static List<DeviceBinding> ParseBindings(string bindingPath, out string? baseUrl)
+    private static bool TryParseBindingBundle(
+        string bindingPath,
+        out DeviceBindingBundle bundle)
     {
-        baseUrl = null;
-        var result = new List<DeviceBinding>();
+        bundle = default;
 
         using var document = JsonDocument.Parse(File.ReadAllText(bindingPath));
         var root = document.RootElement;
-        if (root.ValueKind != JsonValueKind.Object)
-        {
-            return result;
-        }
-
-        if (root.TryGetProperty("baseUrl", out var baseUrlElement)
-            && baseUrlElement.ValueKind == JsonValueKind.String)
-        {
-            var value = baseUrlElement.GetString();
-            baseUrl = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-        }
-
-        if (!root.TryGetProperty("bindings", out var bindingsElement)
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("schemaVersion", out var schemaVersion)
+            || schemaVersion.ValueKind != JsonValueKind.Number
+            || !schemaVersion.TryGetInt32(out var parsedSchemaVersion)
+            || parsedSchemaVersion != SupportedBindingSchemaVersion
+            || !TryNormalizeHttpBaseUrl(
+                ReadString(root, "baseUrl"),
+                out var baseUrl)
+            || !TryReadPaths(root, out var paths)
+            || !TryParseGeneratedAtUtc(root, out var generatedAtUtc)
+            || !root.TryGetProperty("bindings", out var bindingsElement)
             || bindingsElement.ValueKind != JsonValueKind.Array)
         {
-            return result;
+            return false;
         }
 
+        var bindings = new List<DeviceBinding>();
+        var moduleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var item in bindingsElement.EnumerateArray())
         {
             if (item.ValueKind != JsonValueKind.Object)
             {
-                continue;
+                return false;
             }
 
-            var moduleId = ReadString(item, "moduleId");
-            var clientCode = ReadString(item, "clientCode");
-            if (string.IsNullOrWhiteSpace(moduleId) || string.IsNullOrWhiteSpace(clientCode))
+            var moduleId = ReadString(item, "moduleId")?.Trim();
+            var clientCode = ReadString(item, "clientCode")?.Trim();
+            var bootstrapSecret = ReadString(item, "bootstrapSecret")?.Trim();
+            var deviceName = ReadString(item, "deviceName")?.Trim();
+            if (string.IsNullOrWhiteSpace(moduleId)
+                || !moduleIds.Add(moduleId)
+                || string.IsNullOrWhiteSpace(clientCode)
+                || string.IsNullOrWhiteSpace(bootstrapSecret)
+                || string.IsNullOrWhiteSpace(deviceName)
+                || !item.TryGetProperty("processId", out var processIdElement)
+                || processIdElement.ValueKind != JsonValueKind.String
+                || !Guid.TryParse(processIdElement.GetString(), out var processId)
+                || processId == Guid.Empty)
             {
-                continue;
+                return false;
             }
 
-            var bootstrapSecret = ReadString(item, "bootstrapSecret");
-            result.Add(new DeviceBinding(
-                moduleId.Trim(),
-                clientCode.Trim(),
-                bootstrapSecret?.Trim() ?? string.Empty));
+            bindings.Add(new DeviceBinding(
+                moduleId,
+                clientCode,
+                bootstrapSecret,
+                deviceName,
+                processId));
         }
 
-        return result;
+        if (bindings.Count == 0)
+        {
+            return false;
+        }
+
+        bundle = new DeviceBindingBundle(
+            baseUrl,
+            paths,
+            generatedAtUtc.ToUniversalTime(),
+            bindings);
+        return true;
     }
 
     // 只消费已经成功写入机器配置的绑定：摘要永不包含启动密钥；未匹配插件的原始绑定
@@ -243,7 +275,7 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
         string bindingPath,
         IReadOnlyList<DeviceBinding> applied,
         IReadOnlyList<DeviceBinding> unresolved,
-        string? baseUrl)
+        DeviceBindingBundle bundle)
     {
         if (applied.Count == 0)
         {
@@ -255,8 +287,10 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
 
         var summary = new JsonObject
         {
+            ["schemaVersion"] = SupportedBindingSchemaVersion,
             ["appliedAtUtc"] = DateTime.UtcNow.ToString("O"),
-            ["baseUrl"] = baseUrl,
+            ["baseUrl"] = bundle.BaseUrl,
+            ["paths"] = CreatePathsJson(bundle.Paths),
             ["bindings"] = new JsonArray(
                 applied.Select(binding => (JsonNode?)new JsonObject
                 {
@@ -281,14 +315,20 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
 
         var pending = new JsonObject
         {
-            ["schemaVersion"] = 1,
-            ["baseUrl"] = baseUrl,
+            ["schemaVersion"] = SupportedBindingSchemaVersion,
+            ["baseUrl"] = bundle.BaseUrl,
+            ["paths"] = CreatePathsJson(bundle.Paths),
+            ["generatedAtUtc"] = bundle.GeneratedAtUtc.ToString(
+                "O",
+                CultureInfo.InvariantCulture),
             ["bindings"] = new JsonArray(
                 unresolved.Select(binding => (JsonNode?)new JsonObject
                 {
                     ["moduleId"] = binding.ModuleId,
                     ["clientCode"] = binding.ClientCode,
                     ["bootstrapSecret"] = binding.BootstrapSecret,
+                    ["deviceName"] = binding.DeviceName,
+                    ["processId"] = binding.ProcessId.ToString("D"),
                 }).ToArray()),
         };
         WritePendingBindingsAtomically(bindingPath, pending);
@@ -345,7 +385,11 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
         if (string.IsNullOrWhiteSpace(rawValue)
             || !Uri.TryCreate(rawValue.Trim(), UriKind.Absolute, out var uri)
             || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
-            || string.IsNullOrWhiteSpace(uri.Host))
+            || string.IsNullOrWhiteSpace(uri.Host)
+            || !string.IsNullOrEmpty(uri.UserInfo)
+            || (!string.IsNullOrEmpty(uri.AbsolutePath) && uri.AbsolutePath != "/")
+            || !string.IsNullOrEmpty(uri.Query)
+            || !string.IsNullOrEmpty(uri.Fragment))
         {
             return false;
         }
@@ -353,6 +397,154 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
         normalized = uri.GetLeftPart(UriPartial.Authority);
         return true;
     }
+
+    private static bool TryReadPaths(
+        JsonElement root,
+        out BindingPaths paths)
+    {
+        paths = default;
+        if (!root.TryGetProperty("paths", out var pathsElement)
+            || pathsElement.ValueKind != JsonValueKind.Object
+            || !TryNormalizeRelativePath(
+                ReadString(pathsElement, "deviceInstance"),
+                requiresDeviceIdTemplate: false,
+                out var deviceInstance)
+            || !TryNormalizeRelativePath(
+                ReadString(pathsElement, "clientReleaseCatalogTemplate"),
+                requiresDeviceIdTemplate: true,
+                out var catalogTemplate)
+            || !TryNormalizeRelativePath(
+                ReadString(pathsElement, "clientVersionReport"),
+                requiresDeviceIdTemplate: false,
+                out var versionReport)
+            || !TryNormalizeRelativePath(
+                ReadString(pathsElement, "runtimeHeartbeat"),
+                requiresDeviceIdTemplate: false,
+                out var runtimeHeartbeat))
+        {
+            return false;
+        }
+
+        paths = new BindingPaths(
+            deviceInstance,
+            catalogTemplate,
+            versionReport,
+            runtimeHeartbeat);
+        return true;
+    }
+
+    private static bool TryNormalizeRelativePath(
+        string? rawValue,
+        bool requiresDeviceIdTemplate,
+        out string normalized)
+    {
+        normalized = string.Empty;
+        if (string.IsNullOrWhiteSpace(rawValue))
+        {
+            return false;
+        }
+
+        var value = rawValue.Trim();
+        if (!value.StartsWith("/", StringComparison.Ordinal)
+            || value.StartsWith("//", StringComparison.Ordinal)
+            || value.Contains('\\')
+            || value.Contains('?')
+            || value.Contains('#')
+            || value.Any(char.IsControl))
+        {
+            return false;
+        }
+
+        string decoded;
+        try
+        {
+            decoded = Uri.UnescapeDataString(value);
+        }
+        catch (UriFormatException)
+        {
+            return false;
+        }
+
+        if (decoded.StartsWith("//", StringComparison.Ordinal)
+            || decoded.Contains('\\')
+            || decoded.Contains('?')
+            || decoded.Contains('#')
+            || decoded.Any(char.IsControl)
+            || decoded.Split('/').Any(segment => segment is "." or ".."))
+        {
+            return false;
+        }
+
+        var tokenCount = CountOccurrences(value, DeviceIdTemplate);
+        var withoutDeviceId = value.Replace(
+            DeviceIdTemplate,
+            string.Empty,
+            StringComparison.Ordinal);
+        if ((requiresDeviceIdTemplate && tokenCount != 1)
+            || (!requiresDeviceIdTemplate && tokenCount != 0)
+            || withoutDeviceId.Contains('{')
+            || withoutDeviceId.Contains('}'))
+        {
+            return false;
+        }
+
+        normalized = value;
+        return true;
+    }
+
+    private static bool TryParseGeneratedAtUtc(
+        JsonElement root,
+        out DateTimeOffset generatedAtUtc)
+    {
+        generatedAtUtc = default;
+        if (!root.TryGetProperty("generatedAtUtc", out var element)
+            || element.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+
+        var rawValue = element.GetString()?.Trim();
+        if (string.IsNullOrWhiteSpace(rawValue))
+        {
+            return false;
+        }
+
+        var timeSeparator = rawValue.IndexOf('T');
+        var hasExplicitOffset = rawValue.EndsWith('Z')
+            || rawValue.EndsWith('z')
+            || (timeSeparator >= 0
+                && (rawValue.IndexOf('+', timeSeparator) >= 0
+                    || rawValue.IndexOf('-', timeSeparator) >= 0));
+        return hasExplicitOffset
+            && DateTimeOffset.TryParse(
+                rawValue,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind,
+                out generatedAtUtc);
+    }
+
+    private static int CountOccurrences(string value, string token)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = value.IndexOf(token, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += token.Length;
+        }
+
+        return count;
+    }
+
+    private static JsonObject CreatePathsJson(BindingPaths paths)
+        => new()
+        {
+            ["deviceInstance"] = paths.DeviceInstance,
+            ["clientReleaseCatalogTemplate"] =
+                paths.ClientReleaseCatalogTemplate,
+            ["clientVersionReport"] = paths.ClientVersionReport,
+            ["runtimeHeartbeat"] = paths.RuntimeHeartbeat,
+        };
 
     private static bool IsRecoverable(Exception exception)
         => exception is IOException
@@ -366,5 +558,22 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
             ? value.GetString()
             : null;
 
-    private readonly record struct DeviceBinding(string ModuleId, string ClientCode, string BootstrapSecret);
+    private readonly record struct DeviceBinding(
+        string ModuleId,
+        string ClientCode,
+        string BootstrapSecret,
+        string DeviceName,
+        Guid ProcessId);
+
+    private readonly record struct BindingPaths(
+        string DeviceInstance,
+        string ClientReleaseCatalogTemplate,
+        string ClientVersionReport,
+        string RuntimeHeartbeat);
+
+    private readonly record struct DeviceBindingBundle(
+        string BaseUrl,
+        BindingPaths Paths,
+        DateTimeOffset GeneratedAtUtc,
+        IReadOnlyList<DeviceBinding> Bindings);
 }

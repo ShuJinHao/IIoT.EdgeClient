@@ -23,7 +23,17 @@ public sealed class LauncherDeviceBindingImporterTests
                 Path.Combine(hostDirectory, "appsettings.machine.LineA.json"),
                 """
                 {
-                  "CloudApi": { "ClientCode": "", "BootstrapSecret": "" },
+                  "CloudApi": {
+                    "Enabled": false,
+                    "ClientCode": "",
+                    "BootstrapSecret": "",
+                    "TimeoutSecs": 17,
+                    "Paths": {
+                      "DeviceInstance": "/site/old-device-instance",
+                      "SiteOwned": "/site/keep"
+                    }
+                  },
+                  "Site": { "Keep": true },
                   "Modules": { "Enabled": [ "TestPlugin" ] }
                 }
                 """);
@@ -36,13 +46,22 @@ public sealed class LauncherDeviceBindingImporterTests
                     pendingPath,
                     """
                     {
-                      "schemaVersion": 1,
+                      "schemaVersion": 2,
                       "baseUrl": "http://cloud.local:81",
+                      "paths": {
+                        "deviceInstance": "/api/v1/bootstrap/device-instance",
+                        "clientReleaseCatalogTemplate": "/api/v1/edge/client-releases/device/{deviceId}/catalog",
+                        "clientVersionReport": "/api/v1/edge/client-releases/version-reports",
+                        "runtimeHeartbeat": "/api/v1/edge/runtime-heartbeats"
+                      },
+                      "generatedAtUtc": "2026-08-03T00:00:00Z",
                       "bindings": [
                         {
                           "moduleId": "TestPlugin",
                           "clientCode": "DEV-AAAAAAAAAA",
-                          "bootstrapSecret": "SEC-HOMOG-001"
+                          "bootstrapSecret": "SEC-HOMOG-001",
+                          "deviceName": "测试设备",
+                          "processId": "11111111-1111-1111-1111-111111111111"
                         }
                       ]
                     }
@@ -62,10 +81,112 @@ public sealed class LauncherDeviceBindingImporterTests
                 Assert.Contains("\"BaseUrl\": \"http://cloud.local:81\"", externalConfig, StringComparison.Ordinal);
                 Assert.Contains("\"ClientCode\": \"DEV-AAAAAAAAAA\"", externalConfig, StringComparison.Ordinal);
                 Assert.Contains("\"BootstrapSecret\": \"SEC-HOMOG-001\"", externalConfig, StringComparison.Ordinal);
+                Assert.Contains("\"DeviceInstance\": \"/api/v1/bootstrap/device-instance\"", externalConfig, StringComparison.Ordinal);
+                Assert.Contains("\"ClientReleaseCatalogTemplate\": \"/api/v1/edge/client-releases/device/{deviceId}/catalog\"", externalConfig, StringComparison.Ordinal);
+                Assert.Contains("\"ClientVersionReport\": \"/api/v1/edge/client-releases/version-reports\"", externalConfig, StringComparison.Ordinal);
+                Assert.Contains("\"RuntimeHeartbeat\": \"/api/v1/edge/runtime-heartbeats\"", externalConfig, StringComparison.Ordinal);
+                Assert.Contains("\"TimeoutSecs\": 17", externalConfig, StringComparison.Ordinal);
+                Assert.Contains("\"SiteOwned\": \"/site/keep\"", externalConfig, StringComparison.Ordinal);
+                Assert.Contains("\"Keep\": true", externalConfig, StringComparison.Ordinal);
                 Assert.False(File.Exists(pendingPath));
 
                 var appliedFiles = Directory.GetFiles(launcherDir, "iiot-binding.applied.*.json");
                 Assert.Single(appliedFiles);
+            });
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void ApplyPendingBindings_WithApAndCp_ShouldWriteBothExternalMachineConfigs()
+    {
+        var tempDirectory = CreateTempDirectory();
+        var dataRoot = Path.Combine(tempDirectory, "program-data");
+        try
+        {
+            var hostDirectory = Path.Combine(tempDirectory, "install", "current", "host");
+            Directory.CreateDirectory(hostDirectory);
+            WriteText(
+                Path.Combine(hostDirectory, "appsettings.machine.LineA.json"),
+                """{ "Modules": { "Enabled": [ "AP" ] } }""");
+            WriteText(
+                Path.Combine(hostDirectory, "appsettings.machine.LineB.json"),
+                """{ "Modules": { "Enabled": [ "CP" ] } }""");
+
+            WithDataRoot(dataRoot, () =>
+            {
+                var launcherDirectory =
+                    EdgeClientProgramDataPaths.ResolveLauncherDirectory(hostDirectory);
+                var pendingPath = Path.Combine(
+                    launcherDirectory,
+                    LauncherDeviceBindingImporter.BindingFileName);
+                WriteText(
+                    pendingPath,
+                    """
+                    {
+                      "schemaVersion": 2,
+                      "baseUrl": "https://cloud.example.test",
+                      "paths": {
+                        "deviceInstance": "/api/v1/bootstrap/device-instance",
+                        "clientReleaseCatalogTemplate": "/api/v1/edge/client-releases/device/{deviceId}/catalog",
+                        "clientVersionReport": "/api/v1/edge/client-releases/version-reports",
+                        "runtimeHeartbeat": "/api/v1/edge/runtime-heartbeats"
+                      },
+                      "generatedAtUtc": "2026-08-03T00:00:00Z",
+                      "bindings": [
+                        {
+                          "moduleId": "AP",
+                          "clientCode": "DEV-AP",
+                          "bootstrapSecret": "SECRET-AP",
+                          "deviceName": "AP 设备",
+                          "processId": "11111111-1111-1111-1111-111111111111"
+                        },
+                        {
+                          "moduleId": "CP",
+                          "clientCode": "DEV-CP",
+                          "bootstrapSecret": "SECRET-CP",
+                          "deviceName": "CP 设备",
+                          "processId": "22222222-2222-2222-2222-222222222222"
+                        }
+                      ]
+                    }
+                    """);
+
+                var importer = new LauncherDeviceBindingImporter(
+                    hostDirectory,
+                    new FakeProfileCatalog(
+                        Profile(hostDirectory, "LineA"),
+                        Profile(hostDirectory, "LineB")),
+                    new FileEdgeProfileModuleConfigurationStore(),
+                    new LauncherUpdateTargetFactory());
+
+                importer.ApplyPendingBindings();
+
+                var apConfig = File.ReadAllText(
+                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(
+                        "LineA",
+                        hostDirectory));
+                var cpConfig = File.ReadAllText(
+                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(
+                        "LineB",
+                        hostDirectory));
+                Assert.Contains("\"ClientCode\": \"DEV-AP\"", apConfig, StringComparison.Ordinal);
+                Assert.Contains("\"ClientCode\": \"DEV-CP\"", cpConfig, StringComparison.Ordinal);
+                Assert.Contains("\"RuntimeHeartbeat\": \"/api/v1/edge/runtime-heartbeats\"", apConfig, StringComparison.Ordinal);
+                Assert.Contains("\"RuntimeHeartbeat\": \"/api/v1/edge/runtime-heartbeats\"", cpConfig, StringComparison.Ordinal);
+                Assert.False(File.Exists(pendingPath));
+
+                var summary = File.ReadAllText(Assert.Single(
+                    Directory.GetFiles(
+                        launcherDirectory,
+                        "iiot-binding.applied.*.json")));
+                Assert.Contains("DEV-AP", summary, StringComparison.Ordinal);
+                Assert.Contains("DEV-CP", summary, StringComparison.Ordinal);
+                Assert.DoesNotContain("SECRET-AP", summary, StringComparison.Ordinal);
+                Assert.DoesNotContain("SECRET-CP", summary, StringComparison.Ordinal);
             });
         }
         finally
@@ -201,18 +322,29 @@ public sealed class LauncherDeviceBindingImporterTests
                     pendingPath,
                     """
                     {
-                      "schemaVersion": 1,
+                      "schemaVersion": 2,
                       "baseUrl": "http://cloud.local:81",
+                      "paths": {
+                        "deviceInstance": "/api/v1/bootstrap/device-instance",
+                        "clientReleaseCatalogTemplate": "/api/v1/edge/client-releases/device/{deviceId}/catalog",
+                        "clientVersionReport": "/api/v1/edge/client-releases/version-reports",
+                        "runtimeHeartbeat": "/api/v1/edge/runtime-heartbeats"
+                      },
+                      "generatedAtUtc": "2026-08-03T00:00:00Z",
                       "bindings": [
                         {
                           "moduleId": "AP",
                           "clientCode": "DEV-AP",
-                          "bootstrapSecret": "SECRET-AP"
+                          "bootstrapSecret": "SECRET-AP",
+                          "deviceName": "AP 设备",
+                          "processId": "11111111-1111-1111-1111-111111111111"
                         },
                         {
                           "moduleId": "CP",
                           "clientCode": "DEV-CP",
-                          "bootstrapSecret": "SECRET-CP"
+                          "bootstrapSecret": "SECRET-CP",
+                          "deviceName": "CP 设备",
+                          "processId": "22222222-2222-2222-2222-222222222222"
                         }
                       ]
                     }
@@ -262,12 +394,22 @@ public sealed class LauncherDeviceBindingImporterTests
                 const string pendingJson =
                     """
                     {
-                      "schemaVersion": 1,
+                      "schemaVersion": 2,
+                      "baseUrl": "http://cloud.local:81",
+                      "paths": {
+                        "deviceInstance": "/api/v1/bootstrap/device-instance",
+                        "clientReleaseCatalogTemplate": "/api/v1/edge/client-releases/device/{deviceId}/catalog",
+                        "clientVersionReport": "/api/v1/edge/client-releases/version-reports",
+                        "runtimeHeartbeat": "/api/v1/edge/runtime-heartbeats"
+                      },
+                      "generatedAtUtc": "2026-08-03T00:00:00Z",
                       "bindings": [
                         {
                           "moduleId": "CP",
                           "clientCode": "DEV-CP",
-                          "bootstrapSecret": "SECRET-CP"
+                          "bootstrapSecret": "SECRET-CP",
+                          "deviceName": "CP 设备",
+                          "processId": "22222222-2222-2222-2222-222222222222"
                         }
                       ]
                     }
@@ -301,12 +443,15 @@ public sealed class LauncherDeviceBindingImporterTests
         {
             var hostDirectory = Path.Combine(tempDirectory, "host");
             Directory.CreateDirectory(hostDirectory);
-            WriteText(
-                Path.Combine(hostDirectory, LauncherDeviceBindingImporter.BindingFileName),
-                "{ not valid json");
 
             WithDataRoot(dataRoot, () =>
             {
+                var launcherDirectory =
+                    EdgeClientProgramDataPaths.ResolveLauncherDirectory(hostDirectory);
+                var pendingPath = Path.Combine(
+                    launcherDirectory,
+                    LauncherDeviceBindingImporter.BindingFileName);
+                WriteText(pendingPath, "{ not valid json");
                 var importer = new LauncherDeviceBindingImporter(
                     hostDirectory,
                     new FakeProfileCatalog(Profile(hostDirectory)),
@@ -317,6 +462,95 @@ public sealed class LauncherDeviceBindingImporterTests
                 var exception = Record.Exception(() => importer.ApplyPendingBindings());
 
                 Assert.Null(exception);
+                Assert.True(File.Exists(pendingPath));
+                Assert.Empty(Directory.GetFiles(
+                    launcherDirectory,
+                    "iiot-binding.applied.*.json"));
+            });
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Theory]
+    [InlineData(1, true, "/api/v1/edge/client-releases/device/{deviceId}/catalog", "2026-08-03T00:00:00Z")]
+    [InlineData(2, false, "/api/v1/edge/client-releases/device/{deviceId}/catalog", "2026-08-03T00:00:00Z")]
+    [InlineData(2, true, "/api/v1/edge/client-releases/device/catalog", "2026-08-03T00:00:00Z")]
+    [InlineData(2, true, "/api/v1/%2e%2e/device/{deviceId}/catalog", "2026-08-03T00:00:00Z")]
+    [InlineData(2, true, "/api/v1/edge/client-releases/device/{deviceId}/catalog", "2026-08-03T00:00:00")]
+    public void ApplyPendingBindings_WhenSchemaOrPathsAreUnsupported_ShouldPerformZeroWrites(
+        int schemaVersion,
+        bool includeRuntimeHeartbeat,
+        string catalogTemplate,
+        string generatedAtUtc)
+    {
+        var tempDirectory = CreateTempDirectory();
+        var dataRoot = Path.Combine(tempDirectory, "program-data");
+        try
+        {
+            var hostDirectory = Path.Combine(tempDirectory, "host");
+            Directory.CreateDirectory(hostDirectory);
+            WriteText(
+                Path.Combine(hostDirectory, "appsettings.machine.LineA.json"),
+                """
+                {
+                  "CloudApi": { "Enabled": false },
+                  "Modules": { "Enabled": [ "CP" ] }
+                }
+                """);
+
+            WithDataRoot(dataRoot, () =>
+            {
+                var launcherDirectory =
+                    EdgeClientProgramDataPaths.ResolveLauncherDirectory(hostDirectory);
+                var pendingPath = Path.Combine(
+                    launcherDirectory,
+                    LauncherDeviceBindingImporter.BindingFileName);
+                var runtimeHeartbeat = includeRuntimeHeartbeat
+                    ? "\"runtimeHeartbeat\": \"/api/v1/edge/runtime-heartbeats\""
+                    : "\"unrelated\": \"/not-the-required-path\"";
+                var pendingJson = $$"""
+                    {
+                      "schemaVersion": {{schemaVersion}},
+                      "baseUrl": "https://cloud.example.test",
+                      "paths": {
+                        "deviceInstance": "/api/v1/bootstrap/device-instance",
+                        "clientReleaseCatalogTemplate": "{{catalogTemplate}}",
+                        "clientVersionReport": "/api/v1/edge/client-releases/version-reports",
+                        {{runtimeHeartbeat}}
+                      },
+                      "generatedAtUtc": "{{generatedAtUtc}}",
+                      "bindings": [
+                        {
+                          "moduleId": "CP",
+                          "clientCode": "DEV-CP",
+                          "bootstrapSecret": "SECRET-CP",
+                          "deviceName": "CP 设备",
+                          "processId": "22222222-2222-2222-2222-222222222222"
+                        }
+                      ]
+                    }
+                    """;
+                WriteText(pendingPath, pendingJson);
+
+                var importer = new LauncherDeviceBindingImporter(
+                    hostDirectory,
+                    new FakeProfileCatalog(Profile(hostDirectory)),
+                    new FileEdgeProfileModuleConfigurationStore(),
+                    new LauncherUpdateTargetFactory());
+
+                importer.ApplyPendingBindings();
+
+                Assert.Equal(pendingJson, File.ReadAllText(pendingPath));
+                Assert.False(File.Exists(
+                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(
+                        "LineA",
+                        hostDirectory)));
+                Assert.Empty(Directory.GetFiles(
+                    launcherDirectory,
+                    "iiot-binding.applied.*.json"));
             });
         }
         finally
@@ -356,13 +590,22 @@ public sealed class LauncherDeviceBindingImporterTests
                     pendingPath,
                     $$"""
                     {
-                      "schemaVersion": 1,
+                      "schemaVersion": 2,
                       "baseUrl": "{{baseUrl}}",
+                      "paths": {
+                        "deviceInstance": "/api/v1/bootstrap/device-instance",
+                        "clientReleaseCatalogTemplate": "/api/v1/edge/client-releases/device/{deviceId}/catalog",
+                        "clientVersionReport": "/api/v1/edge/client-releases/version-reports",
+                        "runtimeHeartbeat": "/api/v1/edge/runtime-heartbeats"
+                      },
+                      "generatedAtUtc": "2026-08-03T00:00:00Z",
                       "bindings": [
                         {
                           "moduleId": "CP",
                           "clientCode": "DEV-CP",
-                          "bootstrapSecret": "{{bootstrapSecret}}"
+                          "bootstrapSecret": "{{bootstrapSecret}}",
+                          "deviceName": "CP 设备",
+                          "processId": "22222222-2222-2222-2222-222222222222"
                         }
                       ]
                     }
@@ -412,13 +655,22 @@ public sealed class LauncherDeviceBindingImporterTests
                     pendingPath,
                     """
                     {
-                      "schemaVersion": 1,
+                      "schemaVersion": 2,
                       "baseUrl": "http://cloud.local",
+                      "paths": {
+                        "deviceInstance": "/api/v1/bootstrap/device-instance",
+                        "clientReleaseCatalogTemplate": "/api/v1/edge/client-releases/device/{deviceId}/catalog",
+                        "clientVersionReport": "/api/v1/edge/client-releases/version-reports",
+                        "runtimeHeartbeat": "/api/v1/edge/runtime-heartbeats"
+                      },
+                      "generatedAtUtc": "2026-08-03T00:00:00Z",
                       "bindings": [
                         {
                           "moduleId": "CP",
                           "clientCode": "DEV-CP",
-                          "bootstrapSecret": "SECRET-CP"
+                          "bootstrapSecret": "SECRET-CP",
+                          "deviceName": "CP 设备",
+                          "processId": "22222222-2222-2222-2222-222222222222"
                         }
                       ]
                     }
@@ -452,13 +704,15 @@ public sealed class LauncherDeviceBindingImporterTests
         public IReadOnlyList<LauncherProfileDefinition> LoadProfiles() => _profiles;
     }
 
-    private static LauncherProfileDefinition Profile(string hostDirectory)
+    private static LauncherProfileDefinition Profile(
+        string hostDirectory,
+        string machineProfile = "LineA")
         => new(
-            "LineA",
-            "Line A",
+            machineProfile,
+            machineProfile,
             "测试 profile",
             null,
-            "LineA",
+            machineProfile,
             Path.Combine(hostDirectory, "IIoT.Edge.Shell"),
             "BeakerOutline",
             "#4D7C0F");

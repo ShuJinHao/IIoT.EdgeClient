@@ -251,6 +251,10 @@ if ([int]$manifest.schemaVersion -ne 2) {
     throw "Installer artifact manifest schemaVersion must be 2, actual: $($manifest.schemaVersion)"
 }
 
+if ([int]$manifest.installerBindingSchemaVersion -ne 2) {
+    throw "Installer artifact manifest installerBindingSchemaVersion must be 2, actual: $($manifest.installerBindingSchemaVersion)"
+}
+
 if ($manifest.channel -ne $ExpectedChannel) {
     throw "Artifact channel '$($manifest.channel)' does not match expected '$ExpectedChannel'."
 }

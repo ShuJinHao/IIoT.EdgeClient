@@ -195,9 +195,16 @@ function Assert-BindingApplied {
         $clientCode = [string]$config.CloudApi.ClientCode
         $bootstrapSecret = [string]$config.CloudApi.BootstrapSecret
         $enabledModules = @($config.Modules.Enabled)
+        $paths = $config.CloudApi.Paths
+        $hasRequiredPaths = $null -ne $paths -and
+            [string]$paths.DeviceInstance -ceq '/api/v1/bootstrap/device-instance' -and
+            [string]$paths.ClientReleaseCatalogTemplate -ceq '/api/v1/edge/client-releases/device/{deviceId}/catalog' -and
+            [string]$paths.ClientVersionReport -ceq '/api/v1/edge/client-releases/version-reports' -and
+            [string]$paths.RuntimeHeartbeat -ceq '/api/v1/edge/runtime-heartbeats'
         if (
             (-not [string]::IsNullOrWhiteSpace($clientCode)) -and
             (-not [string]::IsNullOrWhiteSpace($bootstrapSecret)) -and
+            $hasRequiredPaths -and
             ($enabledModules -contains $ModuleId)
         ) {
             $identityConfig = $configFile
@@ -206,7 +213,7 @@ function Assert-BindingApplied {
     }
 
     if ($null -eq $identityConfig) {
-        throw "No machine profile config contains CloudApi ClientCode/BootstrapSecret and enabled module '$ModuleId'."
+        throw "No machine profile config contains CloudApi ClientCode/BootstrapSecret, all four Cloud paths, and enabled module '$ModuleId'."
     }
 
     Write-Host "Binding import summary: $($latestSummary.FullName)"

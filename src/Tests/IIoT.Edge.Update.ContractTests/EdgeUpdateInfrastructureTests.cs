@@ -195,7 +195,7 @@ public sealed class EdgeUpdateInfrastructureTests
     }
 
     [Fact]
-    public void ConfigurationProvider_WhenHeartbeatAndVersionReportPathsAreMissing_ShouldStillResolveCatalogControlPlane()
+    public void ConfigurationProvider_WhenHeartbeatAndVersionReportPathsAreMissing_ShouldFailClosed()
     {
         var tempDirectory = CreateTempDirectory();
         var dataRoot = Path.Combine(tempDirectory, "program-data");
@@ -224,13 +224,16 @@ public sealed class EdgeUpdateInfrastructureTests
                 var result = new FileEdgeUpdateConfigurationProvider(hostDirectory)
                     .Resolve(Target(hostDirectory));
 
-                Assert.True(result.Success, result.ErrorMessage);
-                Assert.NotNull(result.Options);
-                Assert.Empty(result.Options!.ClientVersionReportPath);
-                Assert.Empty(result.Options.RuntimeHeartbeatPath);
-                Assert.Equal(
-                    "/api/v1/edge/client-releases/device/{deviceId}/catalog",
-                    result.Options.ClientReleaseCatalogTemplate);
+                Assert.False(result.Success);
+                Assert.Null(result.Options);
+                Assert.Contains(
+                    "CloudApi:Paths:ClientVersionReport",
+                    result.ErrorMessage ?? string.Empty,
+                    StringComparison.Ordinal);
+                Assert.Contains(
+                    "CloudApi:Paths:RuntimeHeartbeat",
+                    result.ErrorMessage ?? string.Empty,
+                    StringComparison.Ordinal);
             });
         }
         finally
