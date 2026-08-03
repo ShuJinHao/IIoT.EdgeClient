@@ -1,25 +1,17 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Json;
-using System.Security.Claims;
-using System.Text;
 using IIoT.Edge.Module.Contracts.Auth;
 using IIoT.Edge.Infrastructure.Integration.Auth;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Infrastructure.Integration.Http;
 using IIoT.Edge.SharedKernel.Security;
-using Microsoft.IdentityModel.Tokens;
 
 namespace IIoT.Edge.Cloud.ContractTests;
 
 public sealed class AuthServiceBehaviorTests
 {
     private const string LegacySha256Password123456 = "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92";
-    private const string TestJwtSigningKey = "edge-client-test-signing-key-2026-minimum-32-bytes";
-    private const string OtherJwtSigningKey = "edge-client-other-signing-key-2026-minimum-32-bytes";
-    private const string TestJwtIssuer = "iiot-cloud-test";
-    private const string TestJwtAudience = "iiot-edge-client-test";
-    private const string HumanSessionValidationPath = "/api/v1/human/devices/select";
+    private const string HumanSessionValidationPath = "/api/v1/human/identity/session";
 
     [Fact]
     public async Task LoginLocalAsync_WhenHashIsMissing_ShouldFail()
@@ -124,14 +116,9 @@ public sealed class AuthServiceBehaviorTests
     }
 
     [Fact]
-    public async Task LoginCloudAsync_ShouldParseHumanSessionAndSupportCaseInsensitivePermissions()
+    public async Task LoginCloudAsync_ShouldBuildTrustedHumanSessionAndSupportCaseInsensitivePermissions()
     {
-        var token = CreateJwtToken(
-            expiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(10),
-            new Claim(JwtRegisteredClaimNames.UniqueName, "E001"),
-            new Claim("employeeNo", "E001"),
-            new Claim("Permission", "HardwareConfig"),
-            new Claim(ClaimTypes.Role, "Admin"));
+        const string token = "opaque-access-token-1";
 
         var requestPaths = new List<string>();
         var service = CreateService(
@@ -141,7 +128,11 @@ public sealed class AuthServiceBehaviorTests
                 if (request.RequestUri.AbsolutePath == HumanSessionValidationPath)
                 {
                     Assert.Equal($"Bearer {token}", request.Headers.Authorization?.ToString());
-                    return new HttpResponseMessage(HttpStatusCode.OK);
+                    return CreateSessionResponse(
+                        employeeNo: "E001",
+                        displayName: "张三",
+                        roles: ["Admin"],
+                        permissions: ["HardwareConfig"]);
                 }
 
                 return CreateTokenResponse(token, "refresh-token-1");
@@ -153,7 +144,7 @@ public sealed class AuthServiceBehaviorTests
         Assert.True(result.Success);
         Assert.True(service.IsAuthenticated);
         Assert.NotNull(service.CurrentUser);
-        Assert.Equal("E001", service.CurrentUser!.DisplayName);
+        Assert.Equal("张三", service.CurrentUser!.DisplayName);
         Assert.Equal("E001", service.CurrentUser.EmployeeNo);
         Assert.Equal(token, service.CurrentUser.AccessToken);
         Assert.Equal("refresh-token-1", service.CurrentUser.RefreshToken);
@@ -167,10 +158,7 @@ public sealed class AuthServiceBehaviorTests
     [Fact]
     public async Task LoginCloudAsync_WhenCloudRejectsExactBearerToken_ShouldRejectSession()
     {
-        var token = CreateJwtToken(
-            DateTimeOffset.UtcNow.AddMinutes(10),
-            new Claim(JwtRegisteredClaimNames.UniqueName, "E001"),
-            new Claim("Permission", "HardwareConfig"));
+        const string token = "opaque-access-token-rejected";
         var requestPaths = new List<string>();
         var service = CreateService(
             request =>
@@ -194,16 +182,15 @@ public sealed class AuthServiceBehaviorTests
     }
 
     [Fact]
-    public async Task LoginCloudAsync_WhenCloudAcceptsToken_ShouldNotRequireServerSigningSecretOnEdge()
+    public async Task LoginCloudAsync_WhenAccessTokenIsOpaque_ShouldUseCloudSessionWithoutParsingToken()
     {
-        var token = CreateJwtToken(
-            DateTimeOffset.UtcNow.AddMinutes(10),
-            OtherJwtSigningKey,
-            new Claim(JwtRegisteredClaimNames.UniqueName, "E001"),
-            new Claim("Permission", "HardwareConfig"));
+        const string token = "this-is-intentionally-not-a-jwt";
         var service = CreateService(
             request => request.RequestUri!.AbsolutePath == HumanSessionValidationPath
-                ? new HttpResponseMessage(HttpStatusCode.OK)
+                ? CreateSessionResponse(
+                    employeeNo: "E001",
+                    displayName: "李四",
+                    permissions: ["HardwareConfig"])
                 : CreateTokenResponse(token),
             new LocalAdminConfig { PasswordHash = "unused" });
 
@@ -212,14 +199,14 @@ public sealed class AuthServiceBehaviorTests
         Assert.True(result.Success);
         Assert.True(service.IsAuthenticated);
         Assert.Equal("E001", service.CurrentUser?.EmployeeNo);
+        Assert.Equal("李四", service.CurrentUser?.DisplayName);
+        Assert.Equal(token, service.CurrentUser?.AccessToken);
     }
 
     [Fact]
     public async Task LoginCloudAsync_WhenCloudValidationIsUnavailable_ShouldFailClosedWithoutBlockingLocalLogin()
     {
-        var token = CreateJwtToken(
-            DateTimeOffset.UtcNow.AddMinutes(10),
-            new Claim(JwtRegisteredClaimNames.UniqueName, "E001"));
+        const string token = "opaque-access-token-unavailable";
         var service = CreateService(
             request => request.RequestUri!.AbsolutePath == HumanSessionValidationPath
                 ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
@@ -236,12 +223,21 @@ public sealed class AuthServiceBehaviorTests
     }
 
     [Fact]
-    public async Task LoginCloudAsync_WhenTokenCannotBeParsed_ShouldRejectSessionAfterCloudValidation()
+    public async Task LoginCloudAsync_WhenSessionDtoIsMissingRequiredField_ShouldRejectSession()
     {
-        const string token = "not-a-jwt";
+        const string token = "opaque-access-token-malformed-session";
         var service = CreateService(
             request => request.RequestUri!.AbsolutePath == HumanSessionValidationPath
                 ? new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new
+                    {
+                        userId = Guid.NewGuid(),
+                        employeeNo = "E001",
+                        roles = Array.Empty<string>(),
+                        permissions = Array.Empty<string>()
+                    })
+                }
                 : CreateTokenResponse(token),
             new LocalAdminConfig { PasswordHash = "unused" });
 
@@ -250,6 +246,26 @@ public sealed class AuthServiceBehaviorTests
         Assert.False(result.Success);
         Assert.Equal("云端登录令牌无效。", result.Message);
         Assert.False(service.IsAuthenticated);
+    }
+
+    [Fact]
+    public async Task LoginCloudAsync_WhenSessionDtoContainsInvalidPermission_ShouldRejectSession()
+    {
+        const string token = "opaque-access-token-invalid-permission";
+        var service = CreateService(
+            request => request.RequestUri!.AbsolutePath == HumanSessionValidationPath
+                ? CreateSessionResponse(
+                    employeeNo: "E001",
+                    displayName: "王五",
+                    permissions: ["HardwareConfig", " "])
+                : CreateTokenResponse(token),
+            new LocalAdminConfig { PasswordHash = "unused" });
+
+        var result = await service.LoginCloudAsync("E001", "pwd", Guid.NewGuid());
+
+        Assert.False(result.Success);
+        Assert.Equal("云端登录令牌无效。", result.Message);
+        Assert.Null(service.CurrentUser);
     }
 
     [Fact]
@@ -275,14 +291,14 @@ public sealed class AuthServiceBehaviorTests
     [Fact]
     public async Task LoginCloudAsync_WhenAccessTokenIsExpired_ShouldRejectSession()
     {
-        var token = CreateJwtToken(
-            expiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(-1),
-            new Claim(JwtRegisteredClaimNames.UniqueName, "E002"));
+        const string token = "opaque-access-token-expired";
 
         var service = CreateService(
             request => request.RequestUri!.AbsolutePath == HumanSessionValidationPath
-                ? new HttpResponseMessage(HttpStatusCode.OK)
-                : CreateTokenResponse(token),
+                ? CreateSessionResponse(employeeNo: "E002", displayName: "赵六")
+                : CreateTokenResponse(
+                    token,
+                    accessTokenExpiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(-1)),
             new LocalAdminConfig { PasswordHash = "unused" });
 
         var result = await service.LoginCloudAsync("E002", "pwd", Guid.NewGuid());
@@ -294,12 +310,31 @@ public sealed class AuthServiceBehaviorTests
     }
 
     [Fact]
+    public async Task LoginCloudAsync_WhenAccessTokenExpiryHeaderIsMissing_ShouldRejectBeforeSessionRequest()
+    {
+        const string token = "opaque-access-token-no-expiry";
+        var requestPaths = new List<string>();
+        var service = CreateService(
+            request =>
+            {
+                requestPaths.Add(request.RequestUri!.AbsolutePath);
+                return CreateTokenResponse(token, includeAccessTokenExpiresAt: false);
+            },
+            new LocalAdminConfig { PasswordHash = "unused" });
+
+        var result = await service.LoginCloudAsync("E002", "pwd", Guid.NewGuid());
+
+        Assert.False(result.Success);
+        Assert.Equal("云端登录令牌无效。", result.Message);
+        Assert.Null(service.CurrentUser);
+        Assert.Equal(["/api/v1/bootstrap/edge-login"], requestPaths);
+    }
+
+    [Fact]
     public async Task IsAuthenticated_WhenCloudRefreshTokenIsExpired_ShouldClearSession()
     {
         var timeProvider = new MutableTimeProvider(DateTimeOffset.UtcNow);
-        var issuedToken = CreateJwtToken(
-            expiresAtUtc: timeProvider.GetUtcNow().AddSeconds(1),
-            new Claim(JwtRegisteredClaimNames.UniqueName, "E002"));
+        const string issuedToken = "opaque-access-token-short-lived";
         var requestCount = 0;
 
         var service = CreateService(
@@ -308,12 +343,13 @@ public sealed class AuthServiceBehaviorTests
                 requestCount++;
                 if (request.RequestUri!.AbsolutePath == HumanSessionValidationPath)
                 {
-                    return new HttpResponseMessage(HttpStatusCode.OK);
+                    return CreateSessionResponse(employeeNo: "E002", displayName: "钱七");
                 }
 
                 return CreateTokenResponse(
                     issuedToken,
                     "refresh-token-1",
+                    timeProvider.GetUtcNow().AddSeconds(1),
                     timeProvider.GetUtcNow().AddSeconds(1));
             },
             new LocalAdminConfig { PasswordHash = "unused" },
@@ -335,14 +371,12 @@ public sealed class AuthServiceBehaviorTests
         var timeProvider = new MutableTimeProvider(DateTimeOffset.UtcNow);
         var issuedTokens = new Queue<string>(new[]
         {
-            CreateJwtToken(
-                expiresAtUtc: timeProvider.GetUtcNow().AddSeconds(1),
-                new Claim(JwtRegisteredClaimNames.UniqueName, "E002")),
-            CreateJwtToken(
-                expiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(10),
-                new Claim(JwtRegisteredClaimNames.UniqueName, "E002"))
+            "opaque-access-token-before-refresh",
+            "opaque-access-token-after-refresh"
         });
         var requestPaths = new List<string>();
+        var bearerHeaders = new List<string?>();
+        var sessionRequestCount = 0;
 
         var service = CreateService(
             request =>
@@ -350,7 +384,14 @@ public sealed class AuthServiceBehaviorTests
                 requestPaths.Add(request.RequestUri!.AbsolutePath);
                 if (request.RequestUri.AbsolutePath == HumanSessionValidationPath)
                 {
-                    return new HttpResponseMessage(HttpStatusCode.OK);
+                    bearerHeaders.Add(request.Headers.Authorization?.ToString());
+                    sessionRequestCount++;
+                    return sessionRequestCount == 1
+                        ? CreateSessionResponse(employeeNo: "E002", displayName: "孙八")
+                        : CreateSessionResponse(
+                            employeeNo: "E002",
+                            displayName: "刷新后姓名",
+                            permissions: ["Recipe.Read"]);
                 }
 
                 var token = issuedTokens.Dequeue();
@@ -358,7 +399,11 @@ public sealed class AuthServiceBehaviorTests
                     token,
                     request.RequestUri.AbsolutePath.EndsWith("/refresh", StringComparison.Ordinal)
                         ? "refresh-token-2"
-                        : "refresh-token-1");
+                        : "refresh-token-1",
+                    accessTokenExpiresAtUtc:
+                        request.RequestUri.AbsolutePath.EndsWith("/refresh", StringComparison.Ordinal)
+                            ? timeProvider.GetUtcNow().AddMinutes(10)
+                            : timeProvider.GetUtcNow().AddSeconds(1));
             },
             new LocalAdminConfig { PasswordHash = "unused" },
             timeProvider: timeProvider);
@@ -372,6 +417,14 @@ public sealed class AuthServiceBehaviorTests
         Assert.True(service.IsAuthenticated);
         Assert.NotNull(service.CurrentUser);
         Assert.Equal("refresh-token-2", service.CurrentUser!.RefreshToken);
+        Assert.Equal("刷新后姓名", service.CurrentUser.DisplayName);
+        Assert.True(service.HasPermission("recipe.read"));
+        Assert.Equal(
+            [
+                "Bearer opaque-access-token-before-refresh",
+                "Bearer opaque-access-token-after-refresh"
+            ],
+            bearerHeaders);
         Assert.Equal(
             [
                 "/api/v1/bootstrap/edge-login",
@@ -386,9 +439,7 @@ public sealed class AuthServiceBehaviorTests
     public async Task EnsureAuthenticatedAsync_WhenRefreshFails_ShouldClearCurrentUser()
     {
         var timeProvider = new MutableTimeProvider(DateTimeOffset.UtcNow);
-        var issuedToken = CreateJwtToken(
-            expiresAtUtc: timeProvider.GetUtcNow().AddSeconds(1),
-            new Claim(JwtRegisteredClaimNames.UniqueName, "E003"));
+        const string issuedToken = "opaque-access-token-refresh-fails";
         var requestCount = 0;
 
         var service = CreateService(
@@ -397,12 +448,15 @@ public sealed class AuthServiceBehaviorTests
                 requestCount++;
                 if (request.RequestUri!.AbsolutePath == HumanSessionValidationPath)
                 {
-                    return new HttpResponseMessage(HttpStatusCode.OK);
+                    return CreateSessionResponse(employeeNo: "E003", displayName: "周九");
                 }
 
                 if (request.RequestUri.AbsolutePath == "/api/v1/bootstrap/edge-login")
                 {
-                    return CreateTokenResponse(issuedToken, "refresh-token-3");
+                    return CreateTokenResponse(
+                        issuedToken,
+                        "refresh-token-3",
+                        accessTokenExpiresAtUtc: timeProvider.GetUtcNow().AddSeconds(1));
                 }
 
                 return new HttpResponseMessage(HttpStatusCode.Unauthorized)
@@ -444,12 +498,21 @@ public sealed class AuthServiceBehaviorTests
     private static HttpResponseMessage CreateTokenResponse(
         string token,
         string? refreshToken = null,
-        DateTimeOffset? refreshTokenExpiresAtUtc = null)
+        DateTimeOffset? refreshTokenExpiresAtUtc = null,
+        DateTimeOffset? accessTokenExpiresAtUtc = null,
+        bool includeAccessTokenExpiresAt = true)
     {
         var response = new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = JsonContent.Create(token)
         };
+        if (includeAccessTokenExpiresAt)
+        {
+            response.Headers.Add(
+                CloudAuthHeaders.AccessTokenExpiresAt,
+                (accessTokenExpiresAtUtc ?? DateTimeOffset.UtcNow.AddMinutes(10)).ToString("O"));
+        }
+
         if (!string.IsNullOrWhiteSpace(refreshToken))
         {
             response.Headers.Add(CloudAuthHeaders.RefreshToken, refreshToken);
@@ -461,28 +524,23 @@ public sealed class AuthServiceBehaviorTests
         return response;
     }
 
-    private static string CreateJwtToken(
-        DateTimeOffset expiresAtUtc,
-        params Claim[] extraClaims)
-        => CreateJwtToken(expiresAtUtc, TestJwtSigningKey, extraClaims);
-
-    private static string CreateJwtToken(
-        DateTimeOffset expiresAtUtc,
-        string signingKey,
-        params Claim[] extraClaims)
-    {
-        var credentials = new SigningCredentials(
-            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
-            SecurityAlgorithms.HmacSha256);
-        var token = new JwtSecurityToken(
-            issuer: TestJwtIssuer,
-            audience: TestJwtAudience,
-            claims: extraClaims,
-            expires: expiresAtUtc.UtcDateTime,
-            signingCredentials: credentials);
-
-        return new JwtSecurityTokenHandler().WriteToken(token);
-    }
+    private static HttpResponseMessage CreateSessionResponse(
+        string employeeNo,
+        string displayName,
+        string[]? roles = null,
+        string[]? permissions = null,
+        Guid? userId = null)
+        => new(HttpStatusCode.OK)
+        {
+            Content = JsonContent.Create(new
+            {
+                userId = userId ?? Guid.NewGuid(),
+                employeeNo,
+                displayName,
+                roles = roles ?? Array.Empty<string>(),
+                permissions = permissions ?? Array.Empty<string>()
+            })
+        };
 
     private static async Task WaitUntilAsync(Func<bool> condition)
     {

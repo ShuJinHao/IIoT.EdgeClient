@@ -1461,7 +1461,7 @@ public sealed class ModuleRuntimeRegistrationTests
             ["CloudApi:Paths:BootstrapRefresh"] = "/api/v1/bootstrap/edge-refresh",
             ["CloudApi:Paths:IdentityDeviceLogin"] = "/api/v1/bootstrap/edge-login",
             ["CloudApi:Paths:HumanIdentityRefresh"] = "/api/v1/human/identity/refresh",
-            ["CloudApi:Paths:HumanSessionValidation"] = "/api/v1/human/devices/select",
+            ["CloudApi:Paths:HumanSessionValidation"] = "/api/v1/human/identity/session",
             ["CloudApi:Paths:DeviceLog"] = "/api/v1/edge/device-logs",
             ["CloudApi:Paths:PassStationBatchTemplate"] = "/api/v1/edge/pass-stations/{typeKey}/batch",
             ["CloudApi:Paths:CapacityHourly"] = "/api/v1/edge/capacity/hourly",
