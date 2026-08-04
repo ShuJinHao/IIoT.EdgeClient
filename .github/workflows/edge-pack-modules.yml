@@ -140,11 +140,11 @@ jobs:
 
       - name: Run runtime publish smoke test
         shell: pwsh
-        run: ./scripts/TestEdgeRuntimePublish.ps1 -Configuration Release -RuntimeIdentifier win-x64 -SelfContained
+        run: ./scripts/TestEdgeRuntimePublish.ps1 -Configuration Release -Version $env:EDGE_RELEASE_VERSION -RuntimeIdentifier win-x64 -SelfContained
 
       - name: Publish runtime directory
         shell: pwsh
-        run: ./scripts/PublishEdgeRuntime.ps1 -Configuration Release -RuntimeIdentifier win-x64 -SelfContained -OutputRoot publish/edge-runtime -CleanOutput
+        run: ./scripts/PublishEdgeRuntime.ps1 -Configuration Release -Version $env:EDGE_RELEASE_VERSION -RuntimeIdentifier win-x64 -SelfContained -OutputRoot publish/edge-runtime -CleanOutput
 
       - name: Resolve release notes
         shell: pwsh

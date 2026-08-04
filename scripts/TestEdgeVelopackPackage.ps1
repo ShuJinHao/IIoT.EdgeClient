@@ -353,10 +353,12 @@ finally {
 & (Join-Path $PSScriptRoot 'TestEdgeDependencyClosure.ps1') `
     -SourcePath $fullPackagePath `
     -LayoutRoot 'lib/app' `
+    -CandidateVersion $Version `
     -RequireReferenceComparison
 & (Join-Path $PSScriptRoot 'TestEdgeDependencyClosure.ps1') `
     -SourcePath $portablePath `
     -LayoutRoot 'current' `
+    -CandidateVersion $Version `
     -RequireReferenceComparison
 
 Write-Host "Velopack package smoke test passed: $resolvedOutputRoot"

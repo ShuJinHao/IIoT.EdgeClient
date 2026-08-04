@@ -5,6 +5,7 @@ param(
 
     [string]$ManifestPath = 'scripts\edge-runtime.publish.json',
 
+    [Parameter(Mandatory = $true)]
     [string]$Version,
 
     [string]$RuntimeIdentifier,
