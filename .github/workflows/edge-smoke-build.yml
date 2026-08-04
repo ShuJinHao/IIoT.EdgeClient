@@ -130,6 +130,7 @@ jobs:
         run: |
           ./scripts/tests/TestEdgeDeploymentPolicy.ps1
           ./scripts/tests/TestEdgeDeploymentBehavior.ps1
+          ./scripts/tests/TestEdgeDependencyClosureBehavior.ps1
           ./scripts/tests/TestEdgeReleaseResumeBehavior.ps1
 
       - name: Run explicit quality gates

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "referenceVersion": "2.0.8",
+  "approvals": [
+    {
+      "candidateVersion": "2.0.15",
+      "manifest": "IIoT.Edge.Shell.deps.json",
+      "removedLibraries": [
+        "Microsoft.AspNetCore.Authentication.JwtBearer",
+        "Microsoft.IdentityModel.Protocols",
+        "Microsoft.IdentityModel.Protocols.OpenIdConnect",
+        "runtimepack.Microsoft.AspNetCore.App.Runtime.win-x64",
+        "System.IdentityModel.Tokens.Jwt"
+      ],
+      "rationale": "EDGE-DEPLOY-SECURITY-001 removes unsigned local JWT claim parsing and the production JWT package dependency; only the exact resulting dependency-closure reduction is approved."
+    }
+  ]
+}

@@ -550,6 +550,7 @@ try {
     Invoke-EdgeScript 'TestEdgeDependencyClosure.ps1' -Arguments @(
         '-SourcePath', $bundleZip,
         '-LayoutRoot', 'installer',
+        '-CandidateVersion', $Version,
         '-RequireReferenceComparison'
     )
 

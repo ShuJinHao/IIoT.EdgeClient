@@ -173,6 +173,7 @@ try {
         'PublishEdgeClientInstallerArtifact.ps1',
         'PublishEdgePluginRelease.ps1',
         'SaveEdgeReleaseToken.ps1',
+        'TestEdgeDependencyClosure.ps1',
         'TestEdgeDeploymentPreflight.ps1'
     )) {
         Copy-Item `
@@ -180,6 +181,10 @@ try {
             -Destination (Join-Path $cloneRoot "scripts/$currentDeploymentScript") `
             -Force
     }
+    Copy-Item `
+        -LiteralPath (Join-Path $scriptsRoot 'edge-dependency-removal-approvals.json') `
+        -Destination (Join-Path $cloneRoot 'scripts/edge-dependency-removal-approvals.json') `
+        -Force
     Invoke-GitChecked -Directory $cloneRoot -Arguments @('add', 'scripts')
     Invoke-GitChecked -Directory $cloneRoot -Arguments @(
         'commit', '-q', '--allow-empty', '-m', 'test current deployment scripts')

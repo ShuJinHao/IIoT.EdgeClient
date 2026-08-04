@@ -147,6 +147,67 @@ try {
             -RequireReferenceComparison
     }
 
+    $approvalPath = Join-Path $temporaryRoot 'dependency-removal-approvals.json'
+    [ordered]@{
+        schemaVersion = 1
+        referenceVersion = '2.0.8'
+        approvals = @(
+            [ordered]@{
+                candidateVersion = '2.0.15'
+                manifest = 'IIoT.Edge.Launcher.deps.json'
+                removedLibraries = @('Reference.Runtime')
+                rationale = 'EDGE-DEPLOY-SECURITY-001 fixture approval'
+            },
+            [ordered]@{
+                candidateVersion = '2.0.15'
+                manifest = 'IIoT.Edge.Shell.deps.json'
+                removedLibraries = @('Reference.Runtime')
+                rationale = 'EDGE-DEPLOY-SECURITY-001 fixture approval'
+            }
+        )
+    } | ConvertTo-Json -Depth 8 |
+        Set-Content -Encoding utf8NoBOM -LiteralPath $approvalPath
+
+    Assert-Passes {
+        & $gate `
+            -SourcePath $currentRoot `
+            -LayoutRoot '.' `
+            -ReferenceSourcePath $referenceRoot `
+            -ReferenceLayoutRoot '.' `
+            -CandidateVersion '2.0.15' `
+            -RemovalApprovalPath $approvalPath `
+            -RequireReferenceComparison
+    }
+
+    Assert-ThrowsContaining -ExpectedText 'No exact candidate-version removal approval' -Action {
+        & $gate `
+            -SourcePath $currentRoot `
+            -LayoutRoot '.' `
+            -ReferenceSourcePath $referenceRoot `
+            -ReferenceLayoutRoot '.' `
+            -CandidateVersion '2.0.16' `
+            -RemovalApprovalPath $approvalPath `
+            -RequireReferenceComparison
+    }
+
+    $approvalContract = Get-Content -Raw -Encoding UTF8 -LiteralPath $approvalPath |
+        ConvertFrom-Json
+    $approvalContract.approvals[0].removedLibraries = @(
+        'Reference.Runtime',
+        'Unexpected.Runtime')
+    $approvalContract | ConvertTo-Json -Depth 8 |
+        Set-Content -Encoding utf8NoBOM -LiteralPath $approvalPath
+    Assert-ThrowsContaining -ExpectedText 'does not exactly match disappeared libraries' -Action {
+        & $gate `
+            -SourcePath $currentRoot `
+            -LayoutRoot '.' `
+            -ReferenceSourcePath $referenceRoot `
+            -ReferenceLayoutRoot '.' `
+            -CandidateVersion '2.0.15' `
+            -RemovalApprovalPath $approvalPath `
+            -RequireReferenceComparison
+    }
+
     Write-Host "Edge dependency closure behavior tests passed: $passed"
 }
 finally {
