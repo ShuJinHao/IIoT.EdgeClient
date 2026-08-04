@@ -81,6 +81,21 @@ internal static class PlcOperationFailureClassifier
                && Enumerate(exception).Any(static current => current is OperationCanceledException);
     }
 
+    public static bool IsOnlyCallerCancellation(
+        Exception exception,
+        CancellationToken callerToken)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        if (!callerToken.IsCancellationRequested)
+        {
+            return false;
+        }
+
+        var leaves = EnumerateLeaves(exception).ToArray();
+        return leaves.Length > 0
+               && leaves.All(static current => current is OperationCanceledException);
+    }
+
     private static PlcOperationFailure? Match<TException>(
         IReadOnlyCollection<Exception> exceptions,
         PlcOperationFailureKind kind,
@@ -131,5 +146,33 @@ internal static class PlcOperationFailureClassifier
                 pending.Push(current.InnerException);
             }
         }
+    }
+
+    private static IEnumerable<Exception> EnumerateLeaves(Exception exception)
+    {
+        if (exception is AggregateException aggregate)
+        {
+            foreach (var inner in aggregate.InnerExceptions)
+            {
+                foreach (var leaf in EnumerateLeaves(inner))
+                {
+                    yield return leaf;
+                }
+            }
+
+            yield break;
+        }
+
+        if (exception.InnerException is not null)
+        {
+            foreach (var leaf in EnumerateLeaves(exception.InnerException))
+            {
+                yield return leaf;
+            }
+
+            yield break;
+        }
+
+        yield return exception;
     }
 }

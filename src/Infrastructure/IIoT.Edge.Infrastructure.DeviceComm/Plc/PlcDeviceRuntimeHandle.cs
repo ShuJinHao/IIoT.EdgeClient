@@ -992,6 +992,15 @@ public sealed class PlcDeviceRuntimeHandle
 
         if (failures.Length > 0)
         {
+            if (cancellationToken.IsCancellationRequested
+                && failures.All(failure =>
+                    PlcOperationFailureClassifier.IsOnlyCallerCancellation(
+                        failure,
+                        cancellationToken)))
+            {
+                throw new OperationCanceledException(cancellationToken);
+            }
+
             throw new AggregateException(
                 $"PLC“{PlcCode}”断联后存在未安全暂停的任务。",
                 failures);
