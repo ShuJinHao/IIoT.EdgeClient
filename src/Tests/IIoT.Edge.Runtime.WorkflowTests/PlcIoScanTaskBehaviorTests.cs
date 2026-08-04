@@ -93,10 +93,18 @@ public sealed class PlcIoScanTaskBehaviorTests
                 new OperationCanceledException(caller.Token)));
 
         Assert.False(PlcOperationFailureClassifier.IsCallerCancellation(exception, caller.Token));
+        Assert.False(PlcOperationFailureClassifier.IsOnlyCallerCancellation(exception, caller.Token));
 
         caller.Cancel();
 
         Assert.True(PlcOperationFailureClassifier.IsCallerCancellation(exception, caller.Token));
+        Assert.True(PlcOperationFailureClassifier.IsOnlyCallerCancellation(exception, caller.Token));
+        Assert.False(
+            PlcOperationFailureClassifier.IsOnlyCallerCancellation(
+                new AggregateException(
+                    exception,
+                    new InvalidOperationException("independent stop failure")),
+                caller.Token));
     }
 
     [Fact]

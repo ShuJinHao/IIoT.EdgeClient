@@ -1128,6 +1128,41 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
     }
 
     [Fact]
+    public async Task ShutdownDuringDisconnectPause_WhenStopObservesCallerCancellation_ShouldCompleteCleanly()
+    {
+        var periodicRead = new DisconnectPauseRaceLoopTask("PeriodicRead");
+        var businessTask = new ControlledBusinessTask("Task.MG1");
+        var runtime = CreateRuntime(
+            new ControlledLoopTask("Connection"),
+            periodicRead);
+        await runtime.ApplyTaskPlanAsync(
+            CreatePlan(runtime, ("Task.MG1", (_, _) => businessTask)),
+            TestContext.Current.CancellationToken);
+        runtime.Start();
+        runtime.ConnectionSignal.Report(true);
+        await businessTask.Starts.WaitForAtLeastAsync(
+            1,
+            TestContext.Current.CancellationToken);
+
+        runtime.ConnectionSignal.Report(false);
+        await periodicRead.FirstStopStarted.Task.WaitAsync(
+            TestContext.Current.CancellationToken);
+        var runningHandles = runtime.GetRunningHandlesSnapshot();
+
+        var stop = runtime.Runtime.RequestStopAsync();
+        await periodicRead.SecondStopStarted.Task.WaitAsync(
+            TestContext.Current.CancellationToken);
+        periodicRead.ReleaseExecution();
+        await stop.WaitAsync(TestContext.Current.CancellationToken);
+        await Task.WhenAll(runningHandles)
+            .WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, periodicRead.Stops.Count);
+        await runtime.PlcService.DisposeAsync();
+        runtime.Runtime.DisposeCancellation();
+    }
+
+    [Fact]
     public async Task ConnectionStart_WhenStartupHandshakeStalls_ShouldTimeOutAndStartLaterTask()
     {
         var stalledStartup = new StalledStartupBusinessTask("Task.MG1");
@@ -1807,6 +1842,50 @@ public sealed class PlcRuntimeTaskLifecycleBehaviorTests
             {
             }
         }
+    }
+
+    private sealed class DisconnectPauseRaceLoopTask(string taskName) : IPlcTask
+    {
+        private readonly TaskCompletionSource _execution =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _stopCount;
+
+        public string TaskName { get; } = taskName;
+
+        public AsyncCounter Starts { get; } = new();
+
+        public AsyncCounter Stops { get; } = new();
+
+        public TaskCompletionSource FirstStopStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource SecondStopStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task StartAsync(CancellationToken ct)
+        {
+            Starts.Increment();
+            // Intentionally ignore the SUT token so shutdown races the still-running
+            // third-party handle, matching the Windows CI failure boundary.
+            return _execution.Task;
+        }
+
+        public Task StopAsync(CancellationToken ct)
+        {
+            Stops.Increment();
+            if (Interlocked.Increment(ref _stopCount) == 1)
+            {
+                FirstStopStarted.TrySetResult();
+            }
+            else
+            {
+                SecondStopStarted.TrySetResult();
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public void ReleaseExecution() => _execution.TrySetResult();
     }
 
     private sealed class ControllablePeriodicReadTask(string taskName) : IPlcTask
