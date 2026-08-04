@@ -7,6 +7,7 @@ param(
 
     [string]$LauncherProfileCatalogPath = 'src\Edge\IIoT.Edge.Launcher\launcher.profiles.json',
 
+    [Parameter(Mandatory = $true)]
     [string]$Version,
 
     [string]$RuntimeIdentifier,
@@ -122,7 +123,8 @@ try {
     Test-EdgeLauncherProfilesMatchManifest -Manifest $manifest -Profiles $launcherProfileCatalog.Profiles -LauncherRuntimeRoot $launcherRuntimeRoot -CheckExecutablePath
     & (Join-Path $PSScriptRoot 'TestEdgeDependencyClosure.ps1') `
         -SourcePath $resolvedOutputRoot `
-        -LayoutRoot '.'
+        -LayoutRoot '.' `
+        -CandidateVersion $Version
 
     Write-Host "Published runtime layout root: $resolvedOutputRoot"
 }

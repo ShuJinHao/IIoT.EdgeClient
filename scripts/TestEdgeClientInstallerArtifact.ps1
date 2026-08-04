@@ -4,6 +4,7 @@ param(
 
     [string]$ExpectedChannel = 'stable',
 
+    [Parameter(Mandatory = $true)]
     [string]$ExpectedVersion,
 
     [string]$ExpectedHostApiVersion = '2.0.0'
@@ -357,6 +358,7 @@ foreach ($directory in @($launcherPath, $hostPath, $pluginsPath)) {
 & (Join-Path $PSScriptRoot 'TestEdgeDependencyClosure.ps1') `
     -SourcePath $resolvedArtifactRoot `
     -LayoutRoot '.' `
+    -CandidateVersion $ExpectedVersion `
     -RequireReferenceComparison
 
 Write-Host "Edge installer artifact smoke test passed: $resolvedArtifactRoot"
