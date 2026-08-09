@@ -307,6 +307,25 @@ public static class DependencyInjection
         {
             if (!string.IsNullOrWhiteSpace(module.ProcessType))
             {
+                var declaredManifestMatches = descriptors
+                    .Where(descriptor => string.Equals(
+                        descriptor.ModuleId,
+                        module.ModuleId,
+                        StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+                if (declaredManifestMatches.Length == 1
+                    && !string.Equals(
+                        declaredManifestMatches[0].ProcessType,
+                        module.ProcessType,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    issues.Add(new ModuleCatalogIssue(
+                        "LEGACY_PLUGIN_PROCESS_TYPE_MISMATCH",
+                        $"旧插件清单 ProcessType '{declaredManifestMatches[0].ProcessType}' 与运行时入口 ProcessType '{module.ProcessType}' 不一致，已拒绝注册。",
+                        module.ModuleId));
+                    continue;
+                }
+
                 resolved.Add(module);
                 continue;
             }
