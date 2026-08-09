@@ -8,6 +8,7 @@ public static class EdgeClientProgramDataPaths
     public const string EdgeClientDirectoryName = "EdgeClient";
     public const string EdgeDataDirectoryName = "EdgeData";
     public const string LauncherDirectoryName = "launcher";
+    public const string HostDirectoryName = "host";
     public const string ProfilesDirectoryName = "profiles";
     public const string PluginsDirectoryName = "plugins";
     public const string DiagnosticsDirectoryName = "diagnostics";
@@ -16,6 +17,9 @@ public static class EdgeClientProgramDataPaths
     public const string LauncherUpdateConfigFileName = "launcher.update.json";
     public const string LanguageFileName = "language.json";
     public const string CloudSwitchProjectionFileName = "cloud-switch.projection.json";
+    public const string HostDatabaseFileName = "host.db";
+    public const string HostFileManifestFileName = "host-file-manifest.json";
+    public const string RuntimeBindingFileName = "iiot-binding.runtime.json";
 
     public static string ResolveApplicationDataRoot(string? baseDirectory = null)
     {
@@ -49,8 +53,46 @@ public static class EdgeClientProgramDataPaths
     public static string ResolveLauncherUpdateConfigPath(string? baseDirectory = null)
         => Path.Combine(ResolveLauncherDirectory(baseDirectory), LauncherUpdateConfigFileName);
 
+    public static string ResolveHostDataDirectory(string? baseDirectory = null)
+        => Path.Combine(ResolveConfigRoot(baseDirectory), HostDirectoryName);
+
+    public static string ResolveHostDatabasePath(string? baseDirectory = null)
+        => Path.Combine(ResolveHostDataDirectory(baseDirectory), HostDatabaseFileName);
+
+    public static string ResolveHostFileManifestPath(string? baseDirectory = null)
+        => Path.Combine(ResolveHostDataDirectory(baseDirectory), HostFileManifestFileName);
+
+    public static string ResolveRuntimeBindingPath(string? baseDirectory = null)
+        => Path.Combine(ResolveLauncherDirectory(baseDirectory), RuntimeBindingFileName);
+
     public static string ResolveApplicationPluginRoot(string? baseDirectory = null)
         => Path.Combine(ResolveApplicationLayoutRoot(baseDirectory), PluginsDirectoryName);
+
+    public static string ResolveDevicePluginRoot(string clientCode, string? baseDirectory = null)
+        => Path.Combine(
+            ResolveApplicationPluginRoot(baseDirectory),
+            EdgeClientIdentity.NormalizeClientCode(clientCode));
+
+    public static string ResolveDevicePluginDirectory(
+        string clientCode,
+        string childDirectory,
+        string? baseDirectory = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(childDirectory);
+        return Path.Combine(
+            ResolveDevicePluginRoot(clientCode, baseDirectory),
+            SanitizePathSegment(childDirectory));
+    }
+
+    public static string ResolveDevicePluginMachineConfigPath(
+        string clientCode,
+        string? baseDirectory = null)
+    {
+        var normalized = EdgeClientIdentity.NormalizeClientCode(clientCode);
+        return Path.Combine(
+            ResolveDevicePluginDirectory(normalized, "config", baseDirectory),
+            $"appsettings.machine.{normalized}.json");
+    }
 
     public static string ResolveConfiguredPluginRoot(string baseDirectory, string path)
     {

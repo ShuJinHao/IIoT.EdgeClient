@@ -254,50 +254,20 @@ try {
         }
     }
 
-    $profilesJson = Read-ZipEntryText -Archive $archive -EntryName 'lib/app/launcher.profiles.json'
-    $profiles = @($profilesJson | ConvertFrom-Json)
-    $expectedProfileIds = @('Default')
-    if ($profiles.Count -lt $expectedProfileIds.Count) {
-        throw "Velopack package launcher.profiles.json contains $($profiles.Count) profile(s), expected at least $($expectedProfileIds.Count)."
+    Test-ZipEntryMissing -Archive $archive -EntryName 'lib/app/launcher.profiles.json'
+
+    $hostExecutableEntry = Get-ZipEntry `
+        -Archive $archive `
+        -EntryName "lib/app/$ExpectedHostDirectory/IIoT.Edge.Shell.exe"
+    if ($null -eq $hostExecutableEntry) {
+        throw "Production package is missing the neutral Host executable."
     }
 
-    foreach ($expectedProfileId in $expectedProfileIds) {
-        if (-not @($profiles | Where-Object { $_.ProfileId -eq $expectedProfileId }).Count) {
-            throw "Velopack package launcher.profiles.json is missing profile '$expectedProfileId'."
-        }
-    }
-
-    $machineProfiles = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    foreach ($profile in $profiles) {
-        if ($profile.ExecutablePath -ne "$ExpectedHostDirectory/IIoT.Edge.Shell") {
-            throw "Launcher profile executable path should point to '$ExpectedHostDirectory/IIoT.Edge.Shell', actual: $($profile.ExecutablePath)"
-        }
-
-        $executableCandidates = @(
-            "lib/app/$($profile.ExecutablePath).exe",
-            "lib/app/$($profile.ExecutablePath)",
-            "lib/app/$($profile.ExecutablePath).dll"
-        )
-        $hasExecutableCandidate = $false
-        foreach ($candidate in $executableCandidates) {
-            if ($null -ne (Get-ZipEntry -Archive $archive -EntryName $candidate)) {
-                $hasExecutableCandidate = $true
-                break
-            }
-        }
-        if (-not $hasExecutableCandidate) {
-            throw "Launcher profile '$($profile.ProfileId)' executable path '$($profile.ExecutablePath)' does not resolve to an executable file in package."
-        }
-
-        $machineProfile = [string]$profile.MachineProfile
-        if ([string]::IsNullOrWhiteSpace($machineProfile)) {
-            throw "Launcher profile is missing MachineProfile."
-        }
-        if (-not $machineProfiles.Add($machineProfile)) {
-            throw "Launcher profile MachineProfile is duplicated: $machineProfile"
-        }
-
-        $machineConfigEntryName = "lib/app/$ExpectedHostDirectory/appsettings.machine.$machineProfile.json"
+    $machineConfigEntries = @($archive.Entries | Where-Object {
+        $_.FullName -like "lib/app/$ExpectedHostDirectory/appsettings.machine.*.json"
+    })
+    foreach ($machineConfigEntry in $machineConfigEntries) {
+        $machineConfigEntryName = $machineConfigEntry.FullName
         $machineConfigJson = Read-ZipEntryText -Archive $archive -EntryName $machineConfigEntryName
         Assert-CloudIdentityTemplateIsEmpty -Json $machineConfigJson -EntryName $machineConfigEntryName
 

@@ -9,7 +9,7 @@ using IIoT.Edge.Module.Contracts.Cloud;
 using IIoT.Edge.Module.Contracts.Shared;
 namespace IIoT.Edge.Infrastructure.Integration.Device;
 
-public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
+public class DeviceService : IDeviceService, IDeviceAccessTokenProvider, IDeviceActivationCoordinator
 {
     public const string HttpClientName = "CloudDevice";
 
@@ -22,6 +22,8 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
     private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
     private readonly ILogService _logger;
     private readonly IExternalHeartbeatStateStore? _heartbeatStateStore;
+    private readonly ICloudDeviceActivationClient? _activationClient;
+    private readonly IDeviceActivationStateStore? _activationStateStore;
     private readonly object _stateLock = new();
     private readonly object _lifecycleLock = new();
     private readonly SemaphoreSlim _identifyGate = new(1, 1);
@@ -53,7 +55,9 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         IDeviceSessionCacheCoordinator cacheCoordinator,
         ILocalSystemRuntimeConfigService runtimeConfig,
         ILogService logger,
-        IExternalHeartbeatStateStore? heartbeatStateStore = null)
+        IExternalHeartbeatStateStore? heartbeatStateStore = null,
+        ICloudDeviceActivationClient? activationClient = null,
+        IDeviceActivationStateStore? activationStateStore = null)
     {
         _bootstrapClient = bootstrapClient;
         _uploadGatePolicy = uploadGatePolicy;
@@ -62,6 +66,8 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         _runtimeConfig = runtimeConfig;
         _logger = logger;
         _heartbeatStateStore = heartbeatStateStore;
+        _activationClient = activationClient;
+        _activationStateStore = activationStateStore;
     }
 
     public Task StartAsync(CancellationToken ct)
@@ -122,6 +128,187 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
 
     public Task RefreshBootstrapAsync(CancellationToken ct = default)
         => RefreshOrIdentifyOnceAsync(ct);
+
+    public async Task<DeviceActivationResult> EnsureActivatedAsync(
+        DeviceActivationReadyFacts readyFacts,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(readyFacts);
+        var clientCode = IIoT.Edge.SharedKernel.Configuration.EdgeClientIdentity.NormalizeClientCode(
+            readyFacts.ClientCode);
+        if (readyFacts.Pid <= 0
+            || string.IsNullOrWhiteSpace(readyFacts.GenerationId)
+            || string.IsNullOrWhiteSpace(readyFacts.ModuleId)
+            || string.IsNullOrWhiteSpace(readyFacts.PluginVersion)
+            || string.IsNullOrWhiteSpace(readyFacts.PackageSha256)
+            || readyFacts.PackageSha256.Length != 64
+            || !readyFacts.PackageSha256.All(Uri.IsHexDigit))
+        {
+            return DeviceActivationResult.Failed("activation_ready_facts_invalid");
+        }
+
+        await _identifyGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var session = CurrentDevice;
+            var isSameGenerationActiveSession = session is not null
+                && string.Equals(session.SessionKind, "Active", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(session.ClientCode, clientCode, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(session.GenerationId, readyFacts.GenerationId, StringComparison.Ordinal);
+            var isSameGenerationActivatedSession = isSameGenerationActiveSession
+                && _activationStateStore?.IsActivated(clientCode, readyFacts.GenerationId) == true;
+
+            // An old Active session must never prove that a newly installed generation is ready.
+            // Unless both Cloud generation and the runtime activation ledger match exactly, force
+            // this generation through its pending bootstrap credential and Cloud activation API.
+            if (!isSameGenerationActiveSession
+                && (session is null
+                    || !string.Equals(session.SessionKind, "ActivationOnly", StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(session.GenerationId, readyFacts.GenerationId, StringComparison.Ordinal)
+                    || !string.Equals(session.ClientCode, clientCode, StringComparison.OrdinalIgnoreCase)))
+            {
+                var bootstrap = await _bootstrapClient.BootstrapAsync(cancellationToken).ConfigureAwait(false);
+                if (bootstrap.Kind != CloudDeviceBootstrapResultKind.Success || bootstrap.Session is null)
+                {
+                    return DeviceActivationResult.Failed("activation_bootstrap_failed");
+                }
+
+                session = bootstrap.Session;
+                SetCurrentDevice(session, persistToCache: false);
+            }
+
+            if (session is null)
+            {
+                return DeviceActivationResult.Failed("activation_session_missing");
+            }
+
+            if (string.Equals(session.SessionKind, "Active", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!isSameGenerationActiveSession)
+                {
+                    return DeviceActivationResult.Failed("active_session_generation_mismatch");
+                }
+
+                if (_uploadGatePolicy.TryResolveTokenBlockReason(session, out _)
+                    && _uploadGatePolicy.CanRefresh(session))
+                {
+                    var refresh = await _bootstrapClient.RefreshAsync(session, cancellationToken)
+                        .ConfigureAwait(false);
+                    if (refresh.Kind != CloudDeviceBootstrapResultKind.Success || refresh.Session is null)
+                    {
+                        return DeviceActivationResult.Failed("active_session_refresh_failed");
+                    }
+
+                    session = refresh.Session;
+                }
+
+                if (_uploadGatePolicy.TryResolveTokenBlockReason(session, out _))
+                {
+                    return DeviceActivationResult.Failed("active_session_invalid");
+                }
+
+                if (isSameGenerationActivatedSession)
+                {
+                    _cacheCoordinator.SaveRequired(session);
+                    _activationStateStore?.CommitActivated(session, readyFacts.GenerationId);
+                    GoOnline(
+                        session,
+                        DateTimeOffset.UtcNow,
+                        latencyMs: null,
+                        persistToCache: false);
+                    return DeviceActivationResult.Activated();
+                }
+
+                return await ConfirmActiveSessionAsync(
+                        session,
+                        readyFacts with { ClientCode = clientCode },
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            if (!string.Equals(session.SessionKind, "ActivationOnly", StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(session.GenerationId, readyFacts.GenerationId, StringComparison.Ordinal)
+                || !string.Equals(session.ClientCode, clientCode, StringComparison.OrdinalIgnoreCase)
+                || string.IsNullOrWhiteSpace(session.ActivationAccessToken)
+                || session.ActivationAccessTokenExpiresAtUtc is { } expiry
+                   && expiry <= DateTimeOffset.UtcNow)
+            {
+                return DeviceActivationResult.Failed("pending_session_invalid");
+            }
+
+            if (_activationClient is null || _activationStateStore is null)
+            {
+                return DeviceActivationResult.Failed("activation_service_unavailable");
+            }
+
+            var activation = await _activationClient
+                .ActivateAsync(session, readyFacts with { ClientCode = clientCode }, cancellationToken)
+                .ConfigureAwait(false);
+            if (activation.Kind != CloudDeviceBootstrapResultKind.Success || activation.Session is null)
+            {
+                return DeviceActivationResult.Failed("activation_request_failed");
+            }
+
+            var activeSession = activation.Session;
+            if (!string.Equals(activeSession.SessionKind, "Active", StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(activeSession.ClientCode, clientCode, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(activeSession.GenerationId, readyFacts.GenerationId, StringComparison.Ordinal)
+                || _uploadGatePolicy.TryResolveTokenBlockReason(activeSession, out _))
+            {
+                return DeviceActivationResult.Failed("activation_response_invalid");
+            }
+
+            return await ConfirmActiveSessionAsync(
+                    activeSession,
+                    readyFacts with { ClientCode = clientCode },
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[DeviceActivation] failed: {ex.GetType().Name}");
+            return DeviceActivationResult.Failed("activation_commit_failed");
+        }
+        finally
+        {
+            _identifyGate.Release();
+        }
+    }
+
+    private async Task<DeviceActivationResult> ConfirmActiveSessionAsync(
+        DeviceSession activeSession,
+        DeviceActivationReadyFacts readyFacts,
+        CancellationToken cancellationToken)
+    {
+        if (_activationClient is null || _activationStateStore is null)
+        {
+            return DeviceActivationResult.Failed("activation_confirmation_service_unavailable");
+        }
+
+        // Durable refresh storage must succeed before Cloud is allowed to revoke the legacy session.
+        _cacheCoordinator.SaveRequired(activeSession);
+        _activationStateStore.CommitActivating(activeSession, readyFacts.GenerationId);
+        SetCurrentDevice(activeSession, persistToCache: false);
+        if (!await _activationClient
+                .ConfirmAsync(activeSession, readyFacts, cancellationToken)
+                .ConfigureAwait(false))
+        {
+            return DeviceActivationResult.Failed("activation_confirmation_failed");
+        }
+
+        // The pending credential is deleted only after Cloud confirms the exact ready evidence.
+        _activationStateStore.CommitActivated(activeSession, readyFacts.GenerationId);
+        GoOnline(
+            activeSession,
+            DateTimeOffset.UtcNow,
+            latencyMs: null,
+            persistToCache: false);
+        return DeviceActivationResult.Activated();
+    }
 
     public void MarkUploadGateBlocked(EdgeUploadBlockReason reason, DateTimeOffset occurredAtUtc)
     {
@@ -348,7 +535,11 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
         GoOffline(session.ClientCode, session, invalidReason, attemptedAtUtc, latencyMs);
     }
 
-    private void GoOnline(DeviceSession session, DateTimeOffset attemptedAtUtc, int? latencyMs)
+    private void GoOnline(
+        DeviceSession session,
+        DateTimeOffset attemptedAtUtc,
+        int? latencyMs,
+        bool persistToCache = true)
     {
         var raiseStateChanged = false;
         var raiseDeviceIdentified = false;
@@ -356,7 +547,7 @@ public class DeviceService : IDeviceService, IDeviceAccessTokenProvider
 
         lock (_stateLock)
         {
-            raiseDeviceIdentified = SetCurrentDevice(session, persistToCache: true);
+            raiseDeviceIdentified = SetCurrentDevice(session, persistToCache);
 
             if (CurrentState != NetworkState.Online)
             {

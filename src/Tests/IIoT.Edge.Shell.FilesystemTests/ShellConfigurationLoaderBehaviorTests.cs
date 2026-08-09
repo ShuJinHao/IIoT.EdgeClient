@@ -1,8 +1,11 @@
 using IIoT.Edge.Host.Bootstrap.Modules;
 using IIoT.Edge.SharedKernel.Configuration;
+using IIoT.Edge.SharedKernel.Security;
 using IIoT.Edge.Shell.Core;
 using Microsoft.Extensions.Configuration;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace IIoT.Edge.Shell.FilesystemTests;
@@ -199,6 +202,84 @@ public sealed class ShellConfigurationLoaderBehaviorTests
                 Assert.Equal("External", result.Configuration["Modules:Enabled:0"]);
                 Assert.Equal("protected-client", result.Configuration["CloudApi:ClientCode"]);
                 Assert.Equal(originalExternalProfile, File.ReadAllText(externalPath));
+            });
+        }
+        finally
+        {
+            DeleteDirectory(tempDirectory);
+        }
+    }
+
+    [Fact]
+    public void Load_WhenBindingV3WasMaterialized_ShouldUseAllSeventeenRoutesAsAuthoritativeRuntimeConfiguration()
+    {
+        const string clientCode = "CLIENT-P1";
+        const string credentialReference = "IIoT.Edge/Pending/GEN-SHELL/CLIENT-P1";
+        const string bootstrapSecret = "credential-manager-only-secret";
+        var tempDirectory = CreateTempDirectory();
+        var hostDirectory = Path.Combine(tempDirectory, "install", "current", "host");
+        var dataRootOverride = Path.Combine(tempDirectory, "program-data");
+        try
+        {
+            WriteText(
+                Path.Combine(hostDirectory, "appsettings.json"),
+                """
+                {
+                  "Shell": { "MachineProfile": "CLIENT-P1" },
+                  "CloudApi": {
+                    "BaseUrl": "https://packaged-default.invalid",
+                    "Paths": {
+                      "DeviceInstance": "/api/v1/edge/packaged-default"
+                    }
+                  }
+                }
+                """);
+            var payload = CreateCanonicalV3Payload(credentialReference);
+            var binding = Assert.Single(payload.Bindings);
+            var materialized = new JsonObject();
+            EdgeBindingMaterializer.MaterializeV3(
+                materialized,
+                payload,
+                binding,
+                $"plugins/{clientCode}",
+                binding.PluginDirectory);
+
+            EdgeEnvironmentTestScope.WithDataRootOverride(dataRootOverride, () =>
+            {
+                WriteText(
+                    EdgeClientProgramDataPaths.ResolveRuntimeBindingPath(hostDirectory),
+                    EdgeInstallerBindingCodec.SerializeRuntime(
+                        EdgeInstallerBindingCodec.ToRuntime(payload, "S-1-5-21-1000")));
+                var machineConfigPath = EdgeClientProgramDataPaths.ResolveDevicePluginMachineConfigPath(
+                    clientCode,
+                    hostDirectory);
+                WriteText(
+                    machineConfigPath,
+                    materialized.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+                var packagedSettings = JsonNode.Parse(File.ReadAllText(
+                    Path.Combine(hostDirectory, "appsettings.json")))!.AsObject();
+                packagedSettings["Shell"]!["MachineConfigPath"] = machineConfigPath;
+                WriteText(
+                    Path.Combine(hostDirectory, "appsettings.json"),
+                    packagedSettings.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+                var result = new ShellConfigurationLoader(
+                        credentialStore: new FixedCredentialStore(
+                            credentialReference,
+                            bootstrapSecret))
+                    .Load(hostDirectory);
+
+                Assert.Equal(payload.BaseUrl, result.Configuration["CloudApi:BaseUrl"]);
+                Assert.Equal(clientCode, result.Configuration["CloudApi:ClientCode"]);
+                Assert.Equal(bootstrapSecret, result.Configuration["CloudApi:BootstrapSecret"]);
+                Assert.Equal(EdgeBindingRouteCatalog.ExpectedRouteCount, EdgeBindingRouteCatalog.All.Count);
+                Assert.All(EdgeBindingRouteCatalog.All, descriptor =>
+                    Assert.Equal(
+                        EdgeBindingRouteCatalog.Get(payload.Paths, descriptor.Key),
+                        result.Configuration[$"CloudApi:Paths:{descriptor.MachineConfigKey}"]));
+                Assert.DoesNotContain(bootstrapSecret, File.ReadAllText(machineConfigPath), StringComparison.Ordinal);
+                Assert.DoesNotContain(bootstrapSecret, File.ReadAllText(
+                    EdgeClientProgramDataPaths.ResolveRuntimeBindingPath(hostDirectory)), StringComparison.Ordinal);
             });
         }
         finally
@@ -839,6 +920,56 @@ public sealed class ShellConfigurationLoaderBehaviorTests
             """);
     }
 
+    private static EdgeInstallerBindingEnvelope CreateCanonicalV3Payload(string credentialReference)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var paths = new EdgeInstallerBindingPaths(
+            "/api/v1/edge/bootstrap/device-instance",
+            "/api/v1/edge/bootstrap/refresh",
+            "/api/v1/edge/devices/activate",
+            "/api/v1/edge/devices/activate/confirm",
+            "/api/v1/edge/identity/device-login",
+            "/api/v1/edge/identity/human/refresh",
+            "/api/v1/edge/identity/human/session-validation",
+            "/api/v1/edge/device-logs",
+            "/api/v1/edge/pass-stations/{typeKey}/batch",
+            "/api/v1/edge/capacity/hourly",
+            "/api/v1/edge/capacity/summary",
+            "/api/v1/edge/capacity/summary/range",
+            "/api/v1/edge/recipes/{deviceId}",
+            "/api/v1/edge/client-releases/{deviceId}",
+            "/api/v1/edge/client-versions",
+            "/api/v1/edge/runtime-heartbeats",
+            "/api/v1/edge/edge-hosts/plc-runtime-states");
+        return new EdgeInstallerBindingEnvelope(
+            EdgeInstallerBindingCodec.CurrentSchemaVersion,
+            "GEN-SHELL",
+            now,
+            now.AddMinutes(30),
+            "https://cloud.example.test",
+            paths,
+            [
+                new EdgeInstallerDeviceBinding(
+                    "CLIENT-P1",
+                    "P1",
+                    Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                    "DieCutting",
+                    "P1",
+                    "2.0.21",
+                    new string('A', 64),
+                    "plugins/CLIENT-P1/app",
+                    "plugins/CLIENT-P1/config",
+                    "plugins/CLIENT-P1/db",
+                    "plugins/CLIENT-P1/data",
+                    "plugins/CLIENT-P1/logs",
+                    "plugins/CLIENT-P1/cache",
+                    "plugins/CLIENT-P1/context",
+                    "plugins/CLIENT-P1/buffers",
+                    credentialReference,
+                    "pending-secret-never-materialized")
+            ]);
+    }
+
     private static void DeleteDirectory(string path)
     {
         try
@@ -872,6 +1003,20 @@ public sealed class ShellConfigurationLoaderBehaviorTests
         public bool IsDiscoveredModule(
             string moduleId,
             IReadOnlyList<ModulePluginDescriptor> discoveredModules)
+            => throw new NotSupportedException();
+    }
+
+    private sealed class FixedCredentialStore(string reference, string secret) : IEdgeCredentialStore
+    {
+        public void Write(string candidateReference, string candidateSecret)
+            => throw new NotSupportedException();
+
+        public string Read(string candidateReference)
+            => string.Equals(candidateReference, reference, StringComparison.Ordinal)
+                ? secret
+                : throw new InvalidDataException("Unexpected credential reference.");
+
+        public void Delete(string candidateReference)
             => throw new NotSupportedException();
     }
 }

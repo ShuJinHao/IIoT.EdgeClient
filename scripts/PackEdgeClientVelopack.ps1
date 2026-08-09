@@ -177,7 +177,11 @@ function Remove-EdgeProtectedPackFiles {
         [string]$PackDirectory
     )
 
-    foreach ($fileName in @('launcher.accounts.json', 'launcher.update.json')) {
+    foreach ($fileName in @(
+        'launcher.accounts.json',
+        'launcher.update.json',
+        'launcher.profiles.json'
+    )) {
         $files = Get-EdgePackFilePaths -Directory $PackDirectory -Filter $fileName
         foreach ($file in $files) {
             $relativePath = Get-EdgeRelativePackPath -BaseDirectory $PackDirectory -PathValue $file
@@ -231,6 +235,7 @@ function Assert-EdgeForbiddenPackContentMissing {
     $forbiddenPatterns = @(
         '(^|/)launcher\.accounts\.json$',
         '(^|/)launcher\.update\.json$',
+        '(^|/)launcher\.profiles\.json$',
         '(^|/)edge\.db$',
         '(^|/)pipeline_cloud\.db$',
         '(^|/)pipeline_mes\.db$',
@@ -351,10 +356,6 @@ Copy-EdgeVelopackDirectory `
 Copy-EdgeVelopackDirectory `
     -SourceDirectory (Join-Path $resolvedRuntimeLayoutRoot $manifest.hostDirectory) `
     -TargetDirectory (Join-Path $packDirectory $manifest.hostDirectory)
-Write-EdgeVelopackProfileCatalog `
-    -Profiles $launcherProfileCatalog.Profiles `
-    -Manifest $manifest `
-    -PackDirectory $packDirectory
 Assert-EdgeVelopackStagingRedlines -PackDirectory $packDirectory
 
 Assert-EdgeExecutablePath `

@@ -60,7 +60,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
         => ProcessBatchAsync([record], cancellationToken);
 
     public CloudCallResult ValidateBatchRecord(CellCompletedRecord record)
-        => StandardPassStationCloudUploader.ValidateRecord(record.CellData.ProcessType, record);
+        => StandardPassStationCloudUploader.ValidateRecord(ResolveProcessType(record), record);
 
     public async Task<CloudCallResult> ProcessBatchAsync(
         IReadOnlyList<CellCompletedRecord> records,
@@ -79,6 +79,12 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
             return CloudCallResult.Success();
         }
 
+        var identityFailure = ValidateV3DeviceIdentity(cloudRecords, _deviceService.CurrentDevice);
+        if (identityFailure is not null)
+        {
+            return CloudCallResult.Failure(CloudCallOutcome.InvalidPayload, identityFailure);
+        }
+
         var deviceStatusRecords = cloudRecords
             .Where(UploadDiagnosticsContextFactory.IsDeviceStatusRecord)
             .ToList();
@@ -95,15 +101,18 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
                 "PLC 设备状态专用接口未就绪，记录保持待传。",
                 isError: false);
             _diagnosticsStore.RecordBlocked(
-                deviceStatusRecords[0].CellData.ProcessType,
+                ResolveProcessType(deviceStatusRecords[0]),
                 reasonCode,
                 "PLC 设备状态 Cloud 专用接口未就绪，记录保持待传。",
                 UploadDiagnosticsContextFactory.CreateCloudContext(deviceStatusRecords));
             return blockedResult;
         }
 
-        foreach (var group in cloudRecords.GroupBy(x => x.CellData.ProcessType, StringComparer.OrdinalIgnoreCase))
+        foreach (var group in cloudRecords.GroupBy(CreateBatchKey))
         {
+            // The key is normalized only for grouping. Preserve the manifest/binding spelling
+            // when invoking the registered uploader and emitting diagnostics.
+            var processType = ResolveProcessType(group.First());
             if (!_executionPolicy.IsEnabled)
             {
                 const string reasonCode = "cloud_upload_disabled";
@@ -111,7 +120,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
                     CloudCallOutcome.SkippedUploadNotReady,
                     reasonCode);
                 _diagnosticsStore.RecordBlocked(
-                    group.Key,
+                    processType,
                     reasonCode,
                     "当前 profile 的 Cloud 通信已关闭。",
                     UploadDiagnosticsContextFactory.CreateCloudContext(group));
@@ -124,7 +133,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
                 return disabledResult;
             }
 
-            if (!_processIntegrationRegistry.TryGetCloudUploader(group.Key, out var registration))
+            if (!_processIntegrationRegistry.TryGetCloudUploader(processType, out var registration))
             {
                 const string reasonCode = "cloud_uploader_missing";
                 var missingUploaderResult = CloudCallResult.Failure(
@@ -137,7 +146,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
                     "未注册 Cloud 上传器，将交接到 Cloud 持久补偿链。",
                     isError: false);
                 _diagnosticsStore.RecordBlocked(
-                    group.Key,
+                    processType,
                     reasonCode,
                     "工序未注册 Cloud 上传器。",
                     UploadDiagnosticsContextFactory.CreateCloudContext(group));
@@ -157,7 +166,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
                     "Cloud 上传门控未就绪，将交接到 Cloud 持久补偿链。",
                     isError: false);
                 _diagnosticsStore.RecordBlocked(
-                    group.Key,
+                    processType,
                     gate.ReasonCode,
                     gate.Message,
                     UploadDiagnosticsContextFactory.CreateCloudContext(group));
@@ -180,7 +189,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
                         "Cloud 设备身份尚未识别，将交接到 Cloud 持久补偿链。",
                         isError: false);
                     _diagnosticsStore.RecordBlocked(
-                        group.Key,
+                        processType,
                         EdgeUploadBlockReason.DeviceUnidentified.ToReasonCode(),
                         "设备尚未识别。",
                         UploadDiagnosticsContextFactory.CreateCloudContext(groupRecords));
@@ -192,7 +201,7 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
                 if (registration.UploadMode == ProcessUploadMode.Batch)
                 {
                     result = await _standardUploader
-                        .UploadAsync(context, group.Key, groupRecords, cancellationToken)
+                        .UploadAsync(context, processType, groupRecords, cancellationToken)
                         .ConfigureAwait(false);
                     LogCloudResult(groupRecords, result);
                 }
@@ -200,13 +209,13 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
                 {
                     result = await UploadOneByOneAsync(
                             context,
-                            group.Key,
+                            processType,
                             groupRecords,
                             cancellationToken)
                         .ConfigureAwait(false);
                 }
 
-                _diagnosticsStore.RecordResult(group.Key, result, UploadDiagnosticsContextFactory.CreateCloudContext(groupRecords));
+                _diagnosticsStore.RecordResult(processType, result, UploadDiagnosticsContextFactory.CreateCloudContext(groupRecords));
                 if (!result.IsSuccess)
                 {
                     return result;
@@ -304,6 +313,22 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
             return null;
         }
 
+        var clientCodes = records
+            .Select(static record => record.ClientCode?.Trim())
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (clientCodes.Length > 0
+            && (clientCodes.Length != 1
+                || string.IsNullOrWhiteSpace(currentDevice.ClientCode)
+                || !string.Equals(
+                    clientCodes[0],
+                    currentDevice.ClientCode.Trim(),
+                    StringComparison.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
         var deviceNames = records
             .Select(record => record.ResolveDeviceName())
             .Where(name => !string.IsNullOrWhiteSpace(name))
@@ -314,5 +339,59 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
             ? currentDevice with { DeviceName = deviceNames[0] }
             : currentDevice;
     }
+
+    private static string? ValidateV3DeviceIdentity(
+        IReadOnlyCollection<CellCompletedRecord> records,
+        DeviceSession? currentDevice)
+    {
+        var identityKinds = records
+            .Select(DataPipelineRecordIdentityClassifier.Classify)
+            .Distinct()
+            .ToArray();
+        if (identityKinds is [DataPipelineRecordIdentityKind.LegacyV2])
+        {
+            return null;
+        }
+
+        if (identityKinds.Any(static kind => kind != DataPipelineRecordIdentityKind.CompleteV3))
+        {
+            return "cloud_v3_identity_incomplete";
+        }
+
+        if (currentDevice is null || string.IsNullOrWhiteSpace(currentDevice.ClientCode))
+        {
+            return "cloud_v3_device_session_required";
+        }
+
+        var expectedClientCode = currentDevice.ClientCode.Trim();
+        foreach (var record in records)
+        {
+            if (!string.Equals(
+                    record.ClientCode.Trim(),
+                    expectedClientCode,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return "cloud_v3_client_code_mismatch";
+            }
+        }
+
+        return null;
+    }
+
+    private static CloudUploadBatchKey CreateBatchKey(CellCompletedRecord record)
+        => new(
+            ResolveProcessType(record).Trim().ToLowerInvariant(),
+            (record.ClientCode ?? string.Empty).Trim().ToUpperInvariant(),
+            (record.TypeKey ?? string.Empty).Trim().ToLowerInvariant());
+
+    private static string ResolveProcessType(CellCompletedRecord record)
+        => !string.IsNullOrWhiteSpace(record.ProcessType)
+            ? record.ProcessType
+            : record.CellData.ProcessType;
+
+    private readonly record struct CloudUploadBatchKey(
+        string ProcessType,
+        string ClientCode,
+        string TypeKey);
 
 }

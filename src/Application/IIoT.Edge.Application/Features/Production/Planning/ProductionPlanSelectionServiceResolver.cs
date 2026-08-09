@@ -21,8 +21,7 @@ public sealed class ProductionPlanSelectionServiceResolver(
         foreach (var module in _modules)
         {
             var service = _services.FirstOrDefault(candidate =>
-                Matches(candidate.ProcessType, module.ProcessType)
-                || Matches(candidate.ProcessType, module.ModuleId));
+                Matches(candidate.ProcessType, module.ProcessType));
             if (service is not null)
             {
                 return service;

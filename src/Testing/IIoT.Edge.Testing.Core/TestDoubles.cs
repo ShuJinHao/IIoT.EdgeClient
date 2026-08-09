@@ -2360,6 +2360,45 @@ public sealed class FakeMesUploader : IProcessMesUploader
     }
 }
 
+public sealed class FakeMesUploaderV3 : IProcessMesUploaderV3
+{
+    private readonly Queue<MesCallResult> _results = new();
+
+    public FakeMesUploaderV3(
+        string processType,
+        ProcessUploadMode uploadMode = ProcessUploadMode.Single)
+    {
+        ProcessType = processType;
+        UploadMode = uploadMode;
+    }
+
+    public string ProcessType { get; }
+
+    public ProcessUploadMode UploadMode { get; }
+
+    public int UploadCallCount { get; private set; }
+
+    public List<DevicePluginUploadContext> UploadedContexts { get; } = new();
+
+    public DevicePluginUploadContext? LastUploadContext
+        => UploadedContexts.Count == 0 ? null : UploadedContexts[^1];
+
+    public void EnqueueResult(MesCallResult result) => _results.Enqueue(result);
+
+    public Task<MesCallResult> UploadAsync(
+        DevicePluginUploadContext context,
+        IReadOnlyList<CellCompletedRecord> records,
+        CancellationToken cancellationToken = default)
+    {
+        UploadCallCount++;
+        UploadedContexts.Add(context);
+        return Task.FromResult(
+            _results.Count > 0
+                ? _results.Dequeue()
+                : MesCallResult.Success());
+    }
+}
+
 public sealed class FakeProcessIntegrationRegistry : IProcessIntegrationRegistry
 {
     private readonly Dictionary<string, ProcessUploaderRegistration> _cloud = new(StringComparer.OrdinalIgnoreCase);

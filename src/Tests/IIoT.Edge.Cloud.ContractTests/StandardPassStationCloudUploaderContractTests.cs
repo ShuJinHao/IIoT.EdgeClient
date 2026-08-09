@@ -162,7 +162,7 @@ public sealed class StandardPassStationCloudUploaderContractTests
         Assert.Equal(2, cloudHttp.PostCallCount);
         var strictPayload = Assert.IsType<PassStationBatchUploadPayload>(cloudHttp.PostPayloads[0]);
         var legacyPayload = Assert.IsType<PassStationBatchUploadPayload>(cloudHttp.PostPayloads[1]);
-        Assert.Equal(PassStationCloudContract.StrictSchemaVersion, strictPayload.SchemaVersion);
+        Assert.Equal(PassStationCloudContract.LegacyStrictSchemaVersion, strictPayload.SchemaVersion);
         Assert.Equal("cp", strictPayload.ProcessType);
         Assert.Equal("CP-STRICT-001", Assert.Single(strictPayload.Items).Barcode);
         Assert.Equal(PassStationCloudContract.LegacySchemaVersion, legacyPayload.SchemaVersion);
@@ -194,6 +194,35 @@ public sealed class StandardPassStationCloudUploaderContractTests
         Assert.True(result.IsSuccess);
         var payload = Assert.IsType<PassStationBatchUploadPayload>(cloudHttp.LastPayload);
         Assert.Equal(PassStationCloudContract.LegacySchemaVersion, payload.SchemaVersion);
+    }
+
+    [Fact]
+    public async Task UploadAsync_V3Item_ShouldCarryStableCompletionAndDeviceIdentity()
+    {
+        var cloudHttp = new FakeCloudHttpClient();
+        var record = CreateRecord("BC-V3");
+        record.CompletionId = "completion-001";
+        record.ClientCode = "test-client";
+        record.ProcessType = "DieCut";
+        record.TypeKey = "diecut.completed";
+        record.PlcCode = "PLC-01";
+
+        var result = await CreateUploader(cloudHttp).UploadAsync(
+            CreateContext(),
+            "diecut",
+            [record],
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var payload = Assert.IsType<PassStationBatchUploadPayload>(cloudHttp.LastPayload);
+        Assert.Equal(PassStationCloudContract.StrictSchemaVersion, payload.SchemaVersion);
+        Assert.Equal("TEST-CLIENT", payload.ClientCode);
+        Assert.Equal("diecut.completed", payload.TypeKey);
+        var item = Assert.Single(payload.Items);
+        Assert.Equal("completion-001", item.CompletionId);
+        Assert.Equal("TEST-CLIENT", item.ClientCode);
+        Assert.Equal("diecut.completed", item.TypeKey);
+        Assert.Equal("PLC-01", item.PlcCode);
     }
 
     private static StandardPassStationCloudUploader CreateUploader(FakeCloudHttpClient cloudHttp) =>

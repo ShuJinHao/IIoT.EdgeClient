@@ -1,12 +1,14 @@
 using IIoT.Edge.Module.Contracts.Cloud;
 ﻿using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using IIoT.Edge.Module.Contracts.Config;
 using IIoT.Edge.Module.Contracts.Device;
 using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Infrastructure.Integration.Device;
 using IIoT.Edge.Infrastructure.Integration.Device.Cache;
 using IIoT.Edge.Infrastructure.Integration.Http;
+using IIoT.Edge.SharedKernel.Security;
 
 namespace IIoT.Edge.DeviceBootstrap.IntegrationTests;
 
@@ -162,6 +164,149 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
 
         var migrated = File.ReadAllText(_cacheFilePath);
         Assert.True(migrated.Contains("\"ClientCode\":\"LINE-B-02\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void TryLoad_WhenLegacyRefreshMigrationCannotUseCredentialManager_ShouldFailClosedAndPreserveFile()
+    {
+        var source = $$"""
+        {
+          "DeviceId": "{{Guid.NewGuid()}}",
+          "DeviceName": "Legacy Device",
+          "ClientCode": "LINE-LEGACY-01",
+          "ProcessId": "{{Guid.NewGuid()}}",
+          "RefreshToken": "plaintext-refresh"
+        }
+        """;
+        File.WriteAllText(_cacheFilePath, source);
+        var logger = new FakeLogService();
+        var coordinator = new DeviceSessionCacheCoordinator(
+            new DeviceSessionFileCacheStore(
+                _cacheFilePath,
+                new UnavailableCredentialStore()),
+            logger);
+
+        Assert.Throws<DeviceSessionCredentialMigrationException>(
+            () => coordinator.TryLoad("LINE-LEGACY-01"));
+
+        Assert.Equal(source, File.ReadAllText(_cacheFilePath));
+        Assert.Contains(logger.Entries, entry => entry.Message.Contains(
+            "已阻断设备启动",
+            StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task EnsureActivated_WhenConfirmResponseIsLost_ShouldReplayConfirmWithoutRepeatingReady()
+    {
+        const string clientCode = "P1-DEVICE";
+        const string generationId = "GEN-ACT-001";
+        var pending = new DeviceSession
+        {
+            SessionKind = "ActivationOnly",
+            GenerationId = generationId,
+            ClientCode = clientCode,
+            ActivationAccessToken = "activation-access",
+            ActivationAccessTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(5)
+        };
+        var active = new DeviceSession
+        {
+            SessionKind = "Active",
+            GenerationId = generationId,
+            ClientCode = clientCode,
+            DeviceId = Guid.NewGuid(),
+            DeviceName = "P1",
+            ProcessId = Guid.NewGuid(),
+            UploadAccessToken = "formal-access",
+            UploadAccessTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(5),
+            RefreshToken = "formal-refresh",
+            RefreshTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(1)
+        };
+        var bootstrap = new StubBootstrapClient(pending);
+        var activation = new RecordingActivationClient(active, [false, true]);
+        var state = new RecordingActivationStateStore();
+        var cacheStore = new RecordingSessionCacheStore();
+        var logger = new FakeLogService();
+        var service = new DeviceService(
+            bootstrap,
+            new DeviceUploadGatePolicy(),
+            new DeviceBootstrapEventLogger(logger),
+            new DeviceSessionCacheCoordinator(cacheStore, logger),
+            CreateRuntimeConfig(),
+            logger,
+            activationClient: activation,
+            activationStateStore: state);
+        var readyAt = DateTimeOffset.UtcNow;
+        var ready = new DeviceActivationReadyFacts(
+            generationId,
+            clientCode,
+            4242,
+            "P1Module",
+            "2.0.12",
+            new string('A', 64),
+            readyAt);
+
+        var first = await service.EnsureActivatedAsync(
+            ready,
+            TestContext.Current.CancellationToken);
+        var second = await service.EnsureActivatedAsync(
+            ready,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(first.Success);
+        Assert.Equal("activation_confirmation_failed", first.ErrorCode);
+        Assert.True(second.Success, second.ErrorCode);
+        Assert.Equal(1, bootstrap.BootstrapCalls);
+        Assert.Equal(1, activation.ActivateCalls);
+        Assert.Equal(2, activation.ConfirmCalls);
+        Assert.All(activation.ConfirmedFacts, item => Assert.Equal(ready, item));
+        Assert.Equal(["Activating", "Activating", "Activated"], state.Statuses);
+        Assert.Equal(2, cacheStore.Saved.Count);
+        Assert.All(cacheStore.Saved, saved => Assert.Equal("formal-refresh", saved.RefreshToken));
+        Assert.True(service.CanUploadToCloud);
+    }
+
+    [Fact]
+    public async Task ConfirmAsync_ShouldUseFormalAccessTokenAndExactReadyEvidence()
+    {
+        var readyAt = DateTimeOffset.UtcNow;
+        var handler = new RecordingHttpMessageHandler(request =>
+        {
+            Assert.Equal(
+                "/api/v1/edge/bootstrap/device-activation-confirm",
+                request.RequestUri!.AbsolutePath);
+            Assert.Equal("Bearer", request.Headers.Authorization?.Scheme);
+            Assert.Equal("formal-access", request.Headers.Authorization?.Parameter);
+            using var body = JsonDocument.Parse(
+                request.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
+            var root = body.RootElement;
+            Assert.Equal(3, root.EnumerateObject().Count());
+            Assert.Equal("GEN-CONFIRM", root.GetProperty("generationId").GetString());
+            Assert.Equal(7788, root.GetProperty("pid").GetInt32());
+            Assert.Equal(readyAt, root.GetProperty("readyAtUtc").GetDateTimeOffset());
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        });
+        var client = new CloudDeviceActivationClient(
+            new TestHttpClientFactory(new HttpClient(handler)),
+            new FakeEndpointProvider("P1-DEVICE"));
+
+        var confirmed = await client.ConfirmAsync(
+            new DeviceSession
+            {
+                SessionKind = "Active",
+                ClientCode = "P1-DEVICE",
+                UploadAccessToken = "formal-access"
+            },
+            new DeviceActivationReadyFacts(
+                "GEN-CONFIRM",
+                "P1-DEVICE",
+                7788,
+                "P1Module",
+                "2.0.12",
+                new string('A', 64),
+                readyAt),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(confirmed);
     }
 
     [Fact]
@@ -468,6 +613,8 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         public string GetBootstrapSecret() => bootstrapSecret;
         public string GetDeviceInstancePath() => "/api/v1/bootstrap/device-instance";
         public string GetBootstrapRefreshPath() => "/api/v1/bootstrap/edge-refresh";
+        public string GetDeviceActivatePath() => "/api/v1/edge/bootstrap/device-activate";
+        public string GetDeviceActivateConfirmPath() => "/api/v1/edge/bootstrap/device-activation-confirm";
         public string GetIdentityDeviceLoginPath() => "/api/v1/bootstrap/edge-login";
         public string GetHumanIdentityRefreshPath() => "/api/v1/human/identity/refresh";
         public string GetHumanSessionValidationPath() => "/api/v1/human/identity/session";
@@ -478,6 +625,94 @@ public sealed class DeviceBootstrapBehaviorTests : IDisposable
         public string GetCapacitySummaryPath() => "/api/v1/edge/capacity/summary";
         public string GetCapacitySummaryRangePath() => "/api/v1/edge/capacity/summary/range";
         public string BuildRecipeByDevicePath(Guid deviceId) => $"/api/v1/edge/recipes/device/{deviceId}";
+    }
+
+    private sealed class UnavailableCredentialStore : IEdgeCredentialStore
+    {
+        public void Write(string reference, string secret)
+            => throw new IOException("credential store unavailable");
+
+        public string Read(string reference)
+            => throw new IOException("credential store unavailable");
+
+        public void Delete(string reference)
+            => throw new IOException("credential store unavailable");
+    }
+
+    private sealed class StubBootstrapClient(DeviceSession session) : ICloudDeviceBootstrapClient
+    {
+        public int BootstrapCalls { get; private set; }
+
+        public Task<CloudDeviceBootstrapResult> BootstrapAsync(CancellationToken cancellationToken)
+        {
+            BootstrapCalls++;
+            return Task.FromResult(CloudDeviceBootstrapResult.Success(session.ClientCode, session));
+        }
+
+        public Task<CloudDeviceBootstrapResult> RefreshAsync(
+            DeviceSession current,
+            CancellationToken cancellationToken)
+            => Task.FromResult(CloudDeviceBootstrapResult.UnexpectedFailure(
+                current.ClientCode,
+                "refresh not expected"));
+    }
+
+    private sealed class RecordingActivationClient(
+        DeviceSession activeSession,
+        IEnumerable<bool> confirmResults) : ICloudDeviceActivationClient
+    {
+        private readonly Queue<bool> _confirmResults = new(confirmResults);
+
+        public int ActivateCalls { get; private set; }
+
+        public int ConfirmCalls { get; private set; }
+
+        public List<DeviceActivationReadyFacts> ConfirmedFacts { get; } = [];
+
+        public Task<CloudDeviceBootstrapResult> ActivateAsync(
+            DeviceSession pendingSession,
+            DeviceActivationReadyFacts readyFacts,
+            CancellationToken cancellationToken)
+        {
+            ActivateCalls++;
+            return Task.FromResult(CloudDeviceBootstrapResult.Success(
+                activeSession.ClientCode,
+                activeSession));
+        }
+
+        public Task<bool> ConfirmAsync(
+            DeviceSession session,
+            DeviceActivationReadyFacts readyFacts,
+            CancellationToken cancellationToken)
+        {
+            ConfirmCalls++;
+            ConfirmedFacts.Add(readyFacts);
+            return Task.FromResult(_confirmResults.Dequeue());
+        }
+    }
+
+    private sealed class RecordingActivationStateStore : IDeviceActivationStateStore
+    {
+        public List<string> Statuses { get; } = [];
+
+        public bool IsActivated(string clientCode, string generationId)
+            => Statuses.LastOrDefault() == "Activated";
+
+        public void CommitActivating(DeviceSession activeSession, string generationId)
+            => Statuses.Add("Activating");
+
+        public void CommitActivated(DeviceSession activeSession, string generationId)
+            => Statuses.Add("Activated");
+    }
+
+    private sealed class RecordingSessionCacheStore : IDeviceSessionCacheStore
+    {
+        public List<DeviceSession> Saved { get; } = [];
+
+        public void Save(DeviceSession session)
+            => Saved.Add(session);
+
+        public DeviceSession? TryLoad(string clientCode) => Saved.LastOrDefault();
     }
 
     private sealed class RecordingHttpMessageHandler(

@@ -6,7 +6,14 @@ namespace IIoT.Edge.Launcher.Services;
 
 public sealed record LauncherEnabledPluginSelectionItem(
     string ModuleId,
-    string PluginDirectory);
+    string PluginDirectory)
+{
+    public string ClientCode { get; init; } = string.Empty;
+
+    public string Version { get; init; } = string.Empty;
+
+    public string PackageSha256 { get; init; } = string.Empty;
+}
 
 public sealed record LauncherEnabledPluginSelection(
     bool ManifestIsValid,
@@ -47,6 +54,25 @@ public sealed record LauncherEnabledPluginSelection(
         plugin = match;
         return true;
     }
+
+    public bool TryGetByClientCode(
+        string clientCode,
+        out LauncherEnabledPluginSelectionItem plugin)
+    {
+        var normalized = EdgeClientIdentity.NormalizeClientCode(clientCode);
+        var match = Plugins.FirstOrDefault(item => string.Equals(
+            item.ClientCode,
+            normalized,
+            StringComparison.OrdinalIgnoreCase));
+        if (match is null)
+        {
+            plugin = default!;
+            return false;
+        }
+
+        plugin = match;
+        return true;
+    }
 }
 
 public interface ILauncherEnabledPluginSelectionSource
@@ -59,7 +85,8 @@ public sealed class LauncherEnabledPluginSelectionSource(
     ILauncherStartupDiagnosticWriter? diagnostics = null)
     : ILauncherEnabledPluginSelectionSource
 {
-    private const int SupportedSchemaVersion = 1;
+    private const int LegacySchemaVersion = 1;
+    private const int CurrentSchemaVersion = 2;
     public const string EnabledPluginsFileName = "iiot-enabled-plugins.json";
 
     public LauncherEnabledPluginSelection Load()
@@ -80,7 +107,7 @@ public sealed class LauncherEnabledPluginSelectionSource(
             if (!TryGetProperty(root, "schemaVersion", out var schemaVersion)
                 || schemaVersion.ValueKind != JsonValueKind.Number
                 || !schemaVersion.TryGetInt32(out var parsedSchemaVersion)
-                || parsedSchemaVersion != SupportedSchemaVersion
+                || parsedSchemaVersion is not (LegacySchemaVersion or CurrentSchemaVersion)
                 || !TryGetProperty(root, "plugins", out var plugins)
                 || plugins.ValueKind != JsonValueKind.Array)
             {
@@ -90,6 +117,7 @@ public sealed class LauncherEnabledPluginSelectionSource(
 
             var entries = plugins.EnumerateArray().ToArray();
             var moduleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var clientCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var pluginDirectories = new HashSet<string>(
                 LauncherEnabledPluginSelection.PluginDirectoryComparer);
             var selectedPlugins = new List<LauncherEnabledPluginSelectionItem>();
@@ -101,10 +129,39 @@ public sealed class LauncherEnabledPluginSelectionSource(
                 var pluginDirectory = entry.ValueKind == JsonValueKind.Object
                     ? ReadRawString(entry, "pluginDirectory")
                     : null;
+                var clientCode = parsedSchemaVersion == CurrentSchemaVersion
+                    ? ReadString(entry, "clientCode")
+                    : string.Empty;
+                var version = parsedSchemaVersion == CurrentSchemaVersion
+                    ? ReadString(entry, "version")
+                    : string.Empty;
+                var packageSha256 = parsedSchemaVersion == CurrentSchemaVersion
+                    ? ReadString(entry, "packageSha256") ?? string.Empty
+                    : string.Empty;
+                string normalizedClientCode;
+                try
+                {
+                    normalizedClientCode = parsedSchemaVersion == CurrentSchemaVersion
+                        ? EdgeClientIdentity.NormalizeClientCode(clientCode!)
+                        : string.Empty;
+                }
+                catch (ArgumentException)
+                {
+                    ReplaceDiagnostic("LAUNCHER_PLUGIN_SELECTION_INVALID");
+                    return new LauncherEnabledPluginSelection(false, []);
+                }
                 if (!IsValidToken(moduleId)
                     || !IsSafePluginDirectory(pluginDirectory)
                     || !moduleIds.Add(moduleId!)
-                    || !pluginDirectories.Add(pluginDirectory!))
+                    || !pluginDirectories.Add(pluginDirectory!)
+                    || (parsedSchemaVersion == CurrentSchemaVersion
+                        && (!IsValidToken(version)
+                            || (packageSha256.Length > 0 && !IsSha256(packageSha256))
+                            || !clientCodes.Add(normalizedClientCode)
+                            || !string.Equals(
+                                pluginDirectory,
+                                normalizedClientCode,
+                                StringComparison.OrdinalIgnoreCase))))
                 {
                     ReplaceDiagnostic("LAUNCHER_PLUGIN_SELECTION_INVALID");
                     return new LauncherEnabledPluginSelection(false, []);
@@ -112,7 +169,12 @@ public sealed class LauncherEnabledPluginSelectionSource(
 
                 selectedPlugins.Add(new LauncherEnabledPluginSelectionItem(
                     moduleId!,
-                    pluginDirectory!));
+                    pluginDirectory!)
+                {
+                    ClientCode = normalizedClientCode,
+                    Version = version ?? string.Empty,
+                    PackageSha256 = packageSha256.ToUpperInvariant()
+                });
             }
 
             if (selectedPlugins.Count == 0)
@@ -125,7 +187,11 @@ public sealed class LauncherEnabledPluginSelectionSource(
             return new LauncherEnabledPluginSelection(
                 true,
                 selectedPlugins
-                    .OrderBy(static plugin => plugin.ModuleId, StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(
+                        static plugin => string.IsNullOrWhiteSpace(plugin.ClientCode)
+                            ? plugin.ModuleId
+                            : plugin.ClientCode,
+                        StringComparer.OrdinalIgnoreCase)
                     .ToArray());
         }
         catch (Exception ex) when (ex is JsonException
@@ -169,6 +235,9 @@ public sealed class LauncherEnabledPluginSelectionSource(
         => !string.IsNullOrWhiteSpace(value)
            && value.Length <= 256
            && !value.Any(char.IsControl);
+
+    private static bool IsSha256(string value)
+        => value.Length == 64 && value.All(Uri.IsHexDigit);
 
     private static bool IsSafePluginDirectory(string? value)
     {

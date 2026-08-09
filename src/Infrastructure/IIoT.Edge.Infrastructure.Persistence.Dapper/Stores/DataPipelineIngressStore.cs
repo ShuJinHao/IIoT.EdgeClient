@@ -1,5 +1,6 @@
 using Dapper;
 using IIoT.Edge.Application.Common.DataPipeline;
+using IIoT.Edge.Application.Common.Identity;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Repository;
 using IIoT.Edge.Module.Contracts.DataPipeline;
@@ -19,6 +20,7 @@ public sealed class DataPipelineIngressStore
     private const string ConsumerTableName = "durable_ingress_consumers";
     private const string CompletedTableName = "durable_ingress_completed";
     private readonly ICellDataJsonSerializer _cellDataJsonSerializer;
+    private readonly IDevicePluginRuntimeContext? _runtimeContext;
 
     public override string DbName => "pipeline_ingress";
 
@@ -27,6 +29,9 @@ public sealed class DataPipelineIngressStore
     protected override string CreateTableSql => $"""
         CREATE TABLE IF NOT EXISTS {TableName} (
             CompletionId          TEXT    PRIMARY KEY,
+            ClientCode            TEXT    NOT NULL DEFAULT '',
+            FactCompletionId      TEXT    NOT NULL DEFAULT '',
+            TypeKey               TEXT    NOT NULL DEFAULT '',
             ProcessType           TEXT    NOT NULL,
             CellDataJson          TEXT    NOT NULL,
             PlcCode               TEXT    NOT NULL,
@@ -65,10 +70,12 @@ public sealed class DataPipelineIngressStore
     public DataPipelineIngressStore(
         SqliteConnectionFactory connectionFactory,
         ILogService logger,
-        ICellDataJsonSerializer cellDataJsonSerializer)
+        ICellDataJsonSerializer cellDataJsonSerializer,
+        IDevicePluginRuntimeContext? runtimeContext = null)
         : base(connectionFactory, logger)
     {
         _cellDataJsonSerializer = cellDataJsonSerializer;
+        _runtimeContext = runtimeContext;
     }
 
     public Task<DataPipelineIngressAcceptance> AcceptAsync(
@@ -80,6 +87,9 @@ public sealed class DataPipelineIngressStore
         cancellationToken.ThrowIfCancellationRequested();
 
         var completionId = DataPipelineCompletionIdentity.Create(record);
+        var processType = _runtimeContext?.Current is { IsV3: true } runtime
+            ? runtime.ProcessType
+            : record.CellData.ProcessType;
         var cellDataJson = _cellDataJsonSerializer.Serialize(record.CellData);
         var createdAtUtc = NormalizeCreatedAt(record.CreatedAtUtc);
         var acceptedAtUtc = DateTime.UtcNow;
@@ -102,12 +112,12 @@ public sealed class DataPipelineIngressStore
             await connection.ExecuteAsync(new CommandDefinition(
                 $"""
                  INSERT OR IGNORE INTO {TableName}
-                    (CompletionId, ProcessType, CellDataJson,
+                    (CompletionId, ClientCode, FactCompletionId, TypeKey, ProcessType, CellDataJson,
                      PlcCode, IdempotencyKeyVersion, NetworkDeviceId, DeviceName,
                      ModuleId, TaskKey, PlanSessionId, MainPlanCode, TraceBatchNumber,
                      CreatedAtUtc, AcceptedAtUtc)
                  VALUES
-                    (@CompletionId, @ProcessType, @CellDataJson,
+                    (@CompletionId, @ClientCode, @FactCompletionId, @TypeKey, @ProcessType, @CellDataJson,
                      @PlcCode, @IdempotencyKeyVersion, @NetworkDeviceId, @DeviceName,
                      @ModuleId, @TaskKey, @PlanSessionId, @MainPlanCode, @TraceBatchNumber,
                      @CreatedAtUtc, @AcceptedAtUtc)
@@ -115,7 +125,10 @@ public sealed class DataPipelineIngressStore
                 new
                 {
                     CompletionId = completionId,
-                    ProcessType = record.CellData.ProcessType,
+                    ClientCode = record.ClientCode?.Trim() ?? string.Empty,
+                    FactCompletionId = record.CompletionId?.Trim() ?? string.Empty,
+                    TypeKey = record.TypeKey?.Trim() ?? string.Empty,
+                    ProcessType = processType,
                     CellDataJson = cellDataJson,
                     PlcCode = record.ResolvePlcCode(),
                     IdempotencyKeyVersion = (int)record.IdempotencyKeyVersion,
@@ -358,6 +371,10 @@ public sealed class DataPipelineIngressStore
                 $"入口记录 {row.CompletionId} 的 CellData 无法反序列化。");
         return new CellCompletedRecord
         {
+            ClientCode = row.ClientCode,
+            CompletionId = row.FactCompletionId,
+            TypeKey = row.TypeKey,
+            ProcessType = row.ProcessType,
             CellData = cellData,
             PlcCode = row.PlcCode,
             IdempotencyKeyVersion = (CloudIdempotencyKeyVersion)row.IdempotencyKeyVersion,
@@ -394,6 +411,9 @@ public sealed class DataPipelineIngressStore
     public sealed class IngressRow
     {
         public string CompletionId { get; init; } = string.Empty;
+        public string ClientCode { get; init; } = string.Empty;
+        public string FactCompletionId { get; init; } = string.Empty;
+        public string TypeKey { get; init; } = string.Empty;
         public string ProcessType { get; init; } = string.Empty;
         public string CellDataJson { get; init; } = string.Empty;
         public string PlcCode { get; init; } = string.Empty;
@@ -407,6 +427,21 @@ public sealed class DataPipelineIngressStore
         public string TraceBatchNumber { get; init; } = string.Empty;
         public string CreatedAtUtc { get; init; } = string.Empty;
         public string AcceptedAtUtc { get; init; } = string.Empty;
+    }
+
+    protected override async Task AfterInitializeTableAsync(IDbConnection connection)
+    {
+        await EnsureColumnAsync(connection, TableName, "ClientCode", "TEXT NOT NULL DEFAULT ''")
+            .ConfigureAwait(false);
+        await EnsureColumnAsync(connection, TableName, "FactCompletionId", "TEXT NOT NULL DEFAULT ''")
+            .ConfigureAwait(false);
+        await EnsureColumnAsync(connection, TableName, "TypeKey", "TEXT NOT NULL DEFAULT ''")
+            .ConfigureAwait(false);
+        await connection.ExecuteAsync(
+            $"CREATE UNIQUE INDEX IF NOT EXISTS idx_durable_ingress_v3_fact " +
+            $"ON {TableName}(ClientCode, FactCompletionId) " +
+            "WHERE TRIM(ClientCode) <> '' AND TRIM(FactCompletionId) <> '';")
+            .ConfigureAwait(false);
     }
 
     private sealed class ConsumerCompletionRow

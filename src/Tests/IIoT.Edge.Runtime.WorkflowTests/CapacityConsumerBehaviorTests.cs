@@ -53,7 +53,7 @@ public sealed class CapacityConsumerBehaviorTests
     }
 
     [Fact]
-    public async Task ProcessAsync_WhenCloudIsUnavailable_ShouldBufferStablePlcCodeInsteadOfDisplayName()
+    public async Task ProcessAsync_WhenCloudIsUnavailable_ShouldNotCreateLegacyCapacityHistoryBuffer()
     {
         var todayCapacity = new CapturingTodayCapacityStore();
         var capacityBuffer = new FakeCapacityBufferStore();
@@ -88,8 +88,7 @@ public sealed class CapacityConsumerBehaviorTests
         }, TestContext.Current.CancellationToken);
 
         Assert.True(result);
-        var buffered = Assert.Single(capacityBuffer.Records);
-        Assert.Equal("P1-CP01", buffered.PlcName);
+        Assert.Empty(capacityBuffer.Records);
     }
 
     [Fact]

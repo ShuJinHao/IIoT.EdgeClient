@@ -339,7 +339,10 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
                 target,
                 orderedReleases
                     .Select(static release => release.ModuleId)
-                    .ToArray())],
+                    .ToArray())
+            {
+                ClientCode = context.CloudOptions!.ClientCode
+            }],
             BindReleaseSources(orderedReleases, context.CloudOptions!),
             compatibilityHostVersion,
             compatibilityHostApiVersion,
@@ -594,7 +597,10 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
                 ResolveTargetTransactionModules(
                     targetContext.EnabledModules,
                     selection.PluginVersions.Keys,
-                    selectedReleaseByModule)))
+                    selectedReleaseByModule))
+            {
+                ClientCode = targetContext.Operation.CloudOptions!.ClientCode
+            })
             .ToArray();
         var installResult = await InstallCompositionReleasesAsync(
             transactionTargets,
@@ -1178,7 +1184,10 @@ public sealed class EdgeReleaseService : IEdgeReleaseService
                     target,
                     ordered
                         .Select(static release => release.ModuleId)
-                        .ToArray())],
+                        .ToArray())
+                {
+                    ClientCode = context.CloudOptions!.ClientCode
+                }],
                 BindReleaseSources(ordered, context.CloudOptions!),
                 compatibilityHostVersion,
                 compatibilityHostApiVersion,

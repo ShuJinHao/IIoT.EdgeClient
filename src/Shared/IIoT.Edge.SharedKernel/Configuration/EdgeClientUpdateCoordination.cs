@@ -24,6 +24,14 @@ public sealed record EdgeClientShellLaunchOutcome(
     public int ProcessId { get; init; }
 
     public IReadOnlyList<EdgeClientShellLaunchDiagnostic> Diagnostics { get; init; } = [];
+
+    public string ClientCode { get; init; } = string.Empty;
+
+    public string ModuleId { get; init; } = string.Empty;
+
+    public string PluginVersion { get; init; } = string.Empty;
+
+    public string PackageSha256 { get; init; } = string.Empty;
 }
 
 public static class EdgeClientUpdateCoordination
@@ -75,7 +83,11 @@ public static class EdgeClientUpdateCoordination
     public static bool TrySignalShellLaunchReady(
         string machineProfile,
         IReadOnlyList<string> activeModuleIds,
-        string? baseDirectory = null)
+        string? baseDirectory = null,
+        string? clientCode = null,
+        string? moduleId = null,
+        string? pluginVersion = null,
+        string? packageSha256 = null)
         => TrySignalShellLaunchOutcome(
             new EdgeClientShellLaunchOutcome(
                 ShellLaunchOutcomeSchemaVersion,
@@ -84,7 +96,11 @@ public static class EdgeClientUpdateCoordination
                 activeModuleIds,
                 Message: null)
             {
-                ProcessId = Environment.ProcessId
+                ProcessId = Environment.ProcessId,
+                ClientCode = clientCode ?? string.Empty,
+                ModuleId = moduleId ?? string.Empty,
+                PluginVersion = pluginVersion ?? string.Empty,
+                PackageSha256 = packageSha256 ?? string.Empty
             },
             baseDirectory);
 
@@ -92,7 +108,11 @@ public static class EdgeClientUpdateCoordination
         string machineProfile,
         IReadOnlyList<string> activeModuleIds,
         IReadOnlyList<EdgeClientShellLaunchDiagnostic> diagnostics,
-        string? baseDirectory = null)
+        string? baseDirectory = null,
+        string? clientCode = null,
+        string? moduleId = null,
+        string? pluginVersion = null,
+        string? packageSha256 = null)
         => TrySignalShellLaunchOutcome(
             new EdgeClientShellLaunchOutcome(
                 ShellLaunchOutcomeSchemaVersion,
@@ -102,7 +122,11 @@ public static class EdgeClientUpdateCoordination
                 Message: null)
             {
                 ProcessId = Environment.ProcessId,
-                Diagnostics = diagnostics
+                Diagnostics = diagnostics,
+                ClientCode = clientCode ?? string.Empty,
+                ModuleId = moduleId ?? string.Empty,
+                PluginVersion = pluginVersion ?? string.Empty,
+                PackageSha256 = packageSha256 ?? string.Empty
             },
             baseDirectory);
 
@@ -110,7 +134,11 @@ public static class EdgeClientUpdateCoordination
         string machineProfile,
         IReadOnlyList<string> activeModuleIds,
         string message,
-        string? baseDirectory = null)
+        string? baseDirectory = null,
+        string? clientCode = null,
+        string? moduleId = null,
+        string? pluginVersion = null,
+        string? packageSha256 = null)
         => TrySignalShellLaunchOutcome(
             new EdgeClientShellLaunchOutcome(
                 ShellLaunchOutcomeSchemaVersion,
@@ -119,7 +147,11 @@ public static class EdgeClientUpdateCoordination
                 activeModuleIds,
                 message)
             {
-                ProcessId = Environment.ProcessId
+                ProcessId = Environment.ProcessId,
+                ClientCode = clientCode ?? string.Empty,
+                ModuleId = moduleId ?? string.Empty,
+                PluginVersion = pluginVersion ?? string.Empty,
+                PackageSha256 = packageSha256 ?? string.Empty
             },
             baseDirectory);
 
@@ -432,6 +464,38 @@ public static class EdgeClientUpdateCoordination
             return false;
         }
 
+        var clientCode = candidate.ClientCode?.Trim() ?? string.Empty;
+        var moduleId = candidate.ModuleId?.Trim() ?? string.Empty;
+        var pluginVersion = candidate.PluginVersion?.Trim() ?? string.Empty;
+        var packageSha256 = candidate.PackageSha256?.Trim().ToUpperInvariant() ?? string.Empty;
+        var hasAnyDeviceFact = clientCode.Length > 0
+                               || moduleId.Length > 0
+                               || pluginVersion.Length > 0
+                               || packageSha256.Length > 0;
+        if (hasAnyDeviceFact)
+        {
+            try
+            {
+                clientCode = EdgeClientIdentity.NormalizeClientCode(clientCode);
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+
+            if (moduleId.Length == 0
+                || moduleId.Length > 256
+                || moduleId.Any(char.IsControl)
+                || pluginVersion.Length == 0
+                || pluginVersion.Length > 128
+                || pluginVersion.Any(char.IsControl)
+                || packageSha256.Length != 64
+                || packageSha256.Any(static character => !Uri.IsHexDigit(character)))
+            {
+                return false;
+            }
+        }
+
         outcome = new EdgeClientShellLaunchOutcome(
             ShellLaunchOutcomeSchemaVersion,
             status,
@@ -442,7 +506,11 @@ public static class EdgeClientUpdateCoordination
                 : null)
         {
             ProcessId = candidate.ProcessId,
-            Diagnostics = diagnostics
+            Diagnostics = diagnostics,
+            ClientCode = clientCode,
+            ModuleId = moduleId,
+            PluginVersion = pluginVersion,
+            PackageSha256 = packageSha256
         };
         return true;
     }

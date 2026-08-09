@@ -2,7 +2,10 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$InstallerPath,
 
-    [string]$ExpectedModuleId = 'CP',
+    [Parameter(Mandatory = $true)]
+    [string[]]$ExpectedClientCode,
+
+    [hashtable]$ExpectedModuleIds = @{},
 
     [string]$ExpectedUpdateSource,
 
@@ -63,12 +66,51 @@ function Read-JsonFile {
     return Get-Content -Raw -Encoding UTF8 -Path $PathValue | ConvertFrom-Json
 }
 
+function Get-NormalizedExpectedClientCodes {
+    param([Parameter(Mandatory = $true)][string[]]$ClientCodes)
+
+    $values = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($clientCode in $ClientCodes) {
+        $normalized = ([string]$clientCode).Trim().ToUpperInvariant()
+        if ([string]::IsNullOrWhiteSpace($normalized) -or -not $values.Add($normalized)) {
+            throw 'ExpectedClientCode must contain unique, non-empty device plugin identities.'
+        }
+    }
+    if ($values.Count -eq 0) {
+        throw 'ExpectedClientCode must contain at least one device plugin identity.'
+    }
+
+    return ,@($values | Sort-Object)
+}
+
+function Get-ExpectedModuleId {
+    param(
+        [Parameter(Mandatory = $true)][string]$ClientCode,
+        [Parameter(Mandatory = $true)][hashtable]$ExpectedModules,
+        [Parameter(Mandatory = $true)][int]$ExpectedCount
+    )
+
+    if ($ExpectedModules.Count -eq 0) {
+        return $null
+    }
+    if ($ExpectedModules.Count -ne $ExpectedCount) {
+        throw 'ExpectedModuleIds must contain exactly one entry for every ExpectedClientCode.'
+    }
+    $keys = @($ExpectedModules.Keys | Where-Object {
+            [string]::Equals([string]$_, $ClientCode, [StringComparison]::OrdinalIgnoreCase)
+        })
+    if ($keys.Count -ne 1 -or [string]::IsNullOrWhiteSpace([string]$ExpectedModules[$keys[0]])) {
+        throw "ExpectedModuleIds does not contain exactly one module for ClientCode '$ClientCode'."
+    }
+    return ([string]$ExpectedModules[$keys[0]]).Trim()
+}
+
 function Assert-InstalledLayoutShape {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
         [Parameter(Mandatory = $true)][string]$HostDirectory,
         [Parameter(Mandatory = $true)][string]$PluginsRoot,
-        [Parameter(Mandatory = $true)][string]$ModuleId
+        [Parameter(Mandatory = $true)][string[]]$ClientCodes
     )
 
     $currentRoot = Join-Path $Root 'current'
@@ -82,11 +124,27 @@ function Assert-InstalledLayoutShape {
     $hostRoot = Join-Path $appContentRoot $HostDirectory
     $hostExe = Join-Path $hostRoot 'IIoT.Edge.Shell.exe'
     $pluginRoot = if ($isVelopackInstall) { $Root } else { $appContentRoot }
-    $pluginJson = Join-Path $pluginRoot "$PluginsRoot/$ModuleId/plugin.json"
 
-    foreach ($path in @($launcherExe, $hostRoot, $hostExe, $pluginJson)) {
+    foreach ($path in @($launcherExe, $hostRoot, $hostExe)) {
         if (-not (Test-Path $path)) {
             throw "Expected installed path was not found: $path"
+        }
+    }
+    foreach ($clientCode in $ClientCodes) {
+        foreach ($relativePath in @(
+            "$PluginsRoot/$clientCode/app/plugin.json",
+            "$PluginsRoot/$clientCode/config",
+            "$PluginsRoot/$clientCode/db",
+            "$PluginsRoot/$clientCode/logs",
+            "$PluginsRoot/$clientCode/cache",
+            "$PluginsRoot/$clientCode/context",
+            "$PluginsRoot/$clientCode/buffers",
+            "$PluginsRoot/$clientCode/data"
+        )) {
+            $path = Join-Path $pluginRoot $relativePath
+            if (-not (Test-Path $path)) {
+                throw "Expected ClientCode-isolated installed path was not found: $path"
+            }
         }
     }
 
@@ -136,88 +194,135 @@ function Assert-BindingApplied {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
         [Parameter(Mandatory = $true)][string]$AppContentRoot,
-        [Parameter(Mandatory = $true)][string]$ModuleId
+        [Parameter(Mandatory = $true)][string[]]$ClientCodes,
+        [Parameter(Mandatory = $true)][hashtable]$ExpectedModules
     )
 
     $appliedRoot = Join-Path $Root 'data/IIoT/EdgeClient/launcher'
-    $rawBindingPath = if ((Split-Path -Leaf $AppContentRoot) -eq 'current') {
-        Join-Path $appliedRoot 'iiot-binding.json'
-    } else {
-        Join-Path $Root 'launcher/iiot-binding.json'
-    }
-    $profilesRoot = Join-Path $Root 'data/IIoT/EdgeClient/profiles'
+    $runtimeBindingPath = Join-Path $appliedRoot 'iiot-binding.runtime.json'
+    $hostDatabasePath = Join-Path $Root 'data/IIoT/EdgeClient/host/host.db'
 
     Wait-Until `
         -TimeoutSeconds $WaitSeconds `
-        -TimeoutMessage "Timed out waiting for binding import summary under: $appliedRoot" `
+        -TimeoutMessage "Timed out waiting for runtime Binding and host.db under: $Root" `
         -Condition {
-            Test-Path (Join-Path $appliedRoot 'iiot-binding.applied.*.json')
+            (Test-Path $runtimeBindingPath) -and (Test-Path $hostDatabasePath)
         }
 
-    if (Test-Path $rawBindingPath) {
-        throw "Raw iiot-binding.json still exists after launcher start: $rawBindingPath"
-    }
-
-    $latestSummary = Get-ChildItem -LiteralPath $appliedRoot -Filter 'iiot-binding.applied.*.json' |
-        Sort-Object LastWriteTimeUtc -Descending |
-        Select-Object -First 1
-    if ($null -eq $latestSummary) {
-        throw "Binding summary was not found under: $appliedRoot"
-    }
-
-    $summary = Read-JsonFile -PathValue $latestSummary.FullName
-    $bindings = @($summary.bindings)
-    $matchingBinding = @($bindings | Where-Object { $_.moduleId -eq $ModuleId }) | Select-Object -First 1
-    if ($null -eq $matchingBinding) {
-        throw "Binding summary does not contain module '$ModuleId': $($latestSummary.FullName)"
-    }
-    if ([string]::IsNullOrWhiteSpace([string]$matchingBinding.clientCode)) {
-        throw "Binding summary has empty clientCode: $($latestSummary.FullName)"
-    }
-    if ($null -ne $matchingBinding.PSObject.Properties['bootstrapSecret']) {
-        throw "Binding summary must not persist bootstrapSecret: $($latestSummary.FullName)"
-    }
-
-    $machineConfigs = @(Get-ChildItem -LiteralPath $profilesRoot -Recurse -Filter 'appsettings.machine.*.json' -ErrorAction SilentlyContinue)
-    if ($machineConfigs.Count -eq 0) {
-        throw "No external machine profile config was written under: $profilesRoot"
-    }
-
-    $identityConfig = $null
-    foreach ($configFile in $machineConfigs) {
-        try {
-            $config = Read-JsonFile -PathValue $configFile.FullName
+    foreach ($rawBindingPath in @(
+        (Join-Path $appliedRoot 'iiot-binding.json'),
+        (Join-Path $Root 'launcher/iiot-binding.json'),
+        (Join-Path $AppContentRoot 'iiot-binding.json'),
+        (Join-Path $AppContentRoot 'launcher/iiot-binding.json')
+    )) {
+        if (Test-Path $rawBindingPath) {
+            throw "Raw iiot-binding.json still exists after install: $rawBindingPath"
         }
-        catch {
-            continue
+    }
+
+    $runtimeJson = Get-Content -Raw -Encoding UTF8 -LiteralPath $runtimeBindingPath
+    if ($runtimeJson -match '(?i)"(pendingCredentialSecret|bootstrapSecret|refreshToken|accessToken)"\s*:\s*"(?!\s*")') {
+        throw "Runtime Binding contains a plaintext credential: $runtimeBindingPath"
+    }
+    $runtime = $runtimeJson | ConvertFrom-Json
+    if ([int]$runtime.schemaVersion -ne 3) {
+        throw "Runtime Binding must use schemaVersion 3: $runtimeBindingPath"
+    }
+    $expectedRuntimePaths = [ordered]@{
+        deviceInstance = '/api/v1/edge/bootstrap/device-instance'
+        bootstrapRefresh = '/api/v1/edge/bootstrap/edge-refresh'
+        activateDevice = '/api/v1/edge/bootstrap/device-activate'
+        activateDeviceConfirm = '/api/v1/edge/bootstrap/device-activation-confirm'
+        identityDeviceLogin = '/api/v1/human/identity/edge-login'
+        humanIdentityRefresh = '/api/v1/human/identity/refresh'
+        humanSessionValidation = '/api/v1/human/identity/session'
+        deviceLog = '/api/v1/edge/device-logs'
+        passStationBatchTemplate = '/api/v1/edge/pass-stations/{typeKey}/batch'
+        capacityHourly = '/api/v1/edge/capacity/hourly'
+        capacitySummary = '/api/v1/edge/capacity/summary'
+        capacitySummaryRange = '/api/v1/edge/capacity/summary/range'
+        recipeByDeviceTemplate = '/api/v1/edge/recipes/device/{deviceId}'
+        clientReleaseCatalogTemplate = '/api/v1/edge/client-releases/device/{deviceId}/catalog'
+        clientVersionReport = '/api/v1/edge/client-releases/version-reports'
+        runtimeHeartbeat = '/api/v1/edge/runtime-heartbeats'
+        edgeHostPlcRuntimeStates = '/api/v1/edge/edge-hosts/plc-runtime-states'
+    }
+    if (@($runtime.paths.PSObject.Properties).Count -ne $expectedRuntimePaths.Count) {
+        throw 'Runtime Binding must contain exactly 17 routes.'
+    }
+    foreach ($routeName in $expectedRuntimePaths.Keys) {
+        if ([string]$runtime.paths.$routeName -cne [string]$expectedRuntimePaths[$routeName]) {
+            throw "Runtime Binding route '$routeName' is invalid."
+        }
+    }
+    $credentialOwnerSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $bindings = @($runtime.bindings)
+    if ($bindings.Count -ne $ClientCodes.Count) {
+        throw "Runtime Binding ClientCode count '$($bindings.Count)' does not match expected '$($ClientCodes.Count)'."
+    }
+    foreach ($clientCode in $ClientCodes) {
+        $matchingBindings = @($bindings | Where-Object {
+                [string]::Equals([string]$_.clientCode, $clientCode, [StringComparison]::OrdinalIgnoreCase)
+            })
+        if ($matchingBindings.Count -ne 1) {
+            throw "Runtime Binding must contain exactly one entry for ClientCode '$clientCode'."
+        }
+        $binding = $matchingBindings[0]
+        $expectedModuleId = Get-ExpectedModuleId `
+            -ClientCode $clientCode `
+            -ExpectedModules $ExpectedModules `
+            -ExpectedCount $ClientCodes.Count
+        if ($null -ne $expectedModuleId -and [string]$binding.moduleId -cne $expectedModuleId) {
+            throw "Runtime Binding moduleId for '$clientCode' does not match ExpectedModuleIds."
+        }
+        if ([string]::IsNullOrWhiteSpace([string]$binding.moduleId) -or
+            [string]::IsNullOrWhiteSpace([string]$binding.pluginVersion) -or
+            [string]$binding.packageSha256 -notmatch '^[0-9a-fA-F]{64}$' -or
+            -not ([string]$binding.pendingCredentialReference).StartsWith('IIoT.Edge/Pending/', [StringComparison]::Ordinal) -or
+            [string]$binding.credentialOwnerSid -cne $credentialOwnerSid) {
+            throw "Runtime Binding facts are incomplete for ClientCode '$clientCode'."
+        }
+        if ([string]$binding.activationStatus -notin @('Pending', 'Activating', 'Activated', 'Expired', 'Failed')) {
+            throw "Runtime Binding activationStatus is invalid for ClientCode '$clientCode'."
         }
 
-        $clientCode = [string]$config.CloudApi.ClientCode
-        $bootstrapSecret = [string]$config.CloudApi.BootstrapSecret
+        $machineConfigPath = Join-Path $Root "plugins/$clientCode/config/appsettings.machine.$clientCode.json"
+        if (-not (Test-Path $machineConfigPath)) {
+            throw "Device plugin machine configuration was not found: $machineConfigPath"
+        }
+        $machineConfigJson = Get-Content -Raw -Encoding UTF8 -LiteralPath $machineConfigPath
+        if ($machineConfigJson -match '(?i)"(bootstrapSecret|pendingCredentialSecret|refreshToken|accessToken)"\s*:\s*"(?!\s*")') {
+            throw "Machine configuration contains a plaintext credential: $machineConfigPath"
+        }
+        $config = $machineConfigJson | ConvertFrom-Json
+        if ([string]$config.CloudApi.ClientCode -cne $clientCode -or
+            [string]$config.CloudApi.BootstrapCredentialReference -cne [string]$binding.pendingCredentialReference) {
+            throw "Machine configuration identity does not match Runtime Binding for '$clientCode'."
+        }
         $enabledModules = @($config.Modules.Enabled)
+        $moduleId = if ($null -ne $expectedModuleId) { $expectedModuleId } else { [string]$binding.moduleId }
         $paths = $config.CloudApi.Paths
-        $hasRequiredPaths = $null -ne $paths -and
-            [string]$paths.DeviceInstance -ceq '/api/v1/bootstrap/device-instance' -and
-            [string]$paths.ClientReleaseCatalogTemplate -ceq '/api/v1/edge/client-releases/device/{deviceId}/catalog' -and
-            [string]$paths.ClientVersionReport -ceq '/api/v1/edge/client-releases/version-reports' -and
-            [string]$paths.RuntimeHeartbeat -ceq '/api/v1/edge/runtime-heartbeats'
-        if (
-            (-not [string]::IsNullOrWhiteSpace($clientCode)) -and
-            (-not [string]::IsNullOrWhiteSpace($bootstrapSecret)) -and
-            $hasRequiredPaths -and
-            ($enabledModules -contains $ModuleId)
-        ) {
-            $identityConfig = $configFile
-            break
+        $hasRequiredPaths = $null -ne $paths -and @($paths.PSObject.Properties).Count -eq 17
+        foreach ($routeName in $expectedRuntimePaths.Keys) {
+            $machineKey = $routeName.Substring(0, 1).ToUpperInvariant() + $routeName.Substring(1)
+            if ([string]$paths.$machineKey -cne [string]$expectedRuntimePaths[$routeName]) {
+                $hasRequiredPaths = $false
+            }
         }
+        if (-not $hasRequiredPaths -or $enabledModules.Count -ne 1 -or $enabledModules[0] -cne $moduleId) {
+            throw "Machine configuration routes or enabled module are invalid for '$clientCode'."
+        }
+        if ([string]$config.DevicePluginBinding.ClientCode -cne $clientCode -or
+            [string]$config.DevicePluginBinding.ModuleId -cne [string]$binding.moduleId -or
+            [string]$config.DevicePluginBinding.PluginVersion -cne [string]$binding.pluginVersion -or
+            [string]$config.DevicePluginBinding.PackageSha256 -cne [string]$binding.packageSha256) {
+            throw "Machine configuration binding facts do not match Runtime Binding for '$clientCode'."
+        }
+        Write-Host "Machine identity config: $machineConfigPath"
     }
 
-    if ($null -eq $identityConfig) {
-        throw "No machine profile config contains CloudApi ClientCode/BootstrapSecret, all four Cloud paths, and enabled module '$ModuleId'."
-    }
-
-    Write-Host "Binding import summary: $($latestSummary.FullName)"
-    Write-Host "Machine identity config: $($identityConfig.FullName)"
+    Write-Host "Runtime Binding: $runtimeBindingPath"
+    Write-Host "Host database: $hostDatabasePath"
 }
 
 function Assert-InstalledUpdateConfig {
@@ -376,6 +481,7 @@ function Resolve-InstalledLauncherPath {
 $scriptRoot = Split-Path -Parent $PSCommandPath
 $resolvedInstallerPath = Resolve-AcceptancePath -PathValue $InstallerPath
 $resolvedInstallRoot = Resolve-AcceptancePath -PathValue $InstallRoot
+$expectedClientCodes = Get-NormalizedExpectedClientCodes -ClientCodes $ExpectedClientCode
 
 if ($CleanInstallRoot) {
     if (-not $ConfirmCleanInstallRoot) {
@@ -388,7 +494,8 @@ if ($CleanInstallRoot) {
 
 & (Join-Path $scriptRoot 'TestEdgeDownloadedInstallerPackage.ps1') `
     -InstallerPath $resolvedInstallerPath `
-    -ExpectedModuleId $ExpectedModuleId `
+    -ExpectedClientCode $expectedClientCodes `
+    -ExpectedModuleIds $ExpectedModuleIds `
     -ExpectedUpdateSource $ExpectedUpdateSource `
     -ExpectedChannel $ExpectedChannel `
     -ExpectedTargetRuntime $ExpectedTargetRuntime `
@@ -418,7 +525,7 @@ $appContentRoot = Assert-InstalledLayoutShape `
     -Root $resolvedInstallRoot `
     -HostDirectory $ExpectedHostDirectory `
     -PluginsRoot $ExpectedPluginsRoot `
-    -ModuleId $ExpectedModuleId
+    -ClientCodes $expectedClientCodes
 
 $installedLauncherPath = Resolve-InstalledLauncherPath -AppContentRoot $appContentRoot
 if (-not $SkipLauncherProcessCheck) {
@@ -431,7 +538,8 @@ Assert-NoNewDesktopShortcut -ExistingBeforeInstall $desktopShortcutExistedBefore
 Assert-BindingApplied `
     -Root $resolvedInstallRoot `
     -AppContentRoot $appContentRoot `
-    -ModuleId $ExpectedModuleId
+    -ClientCodes $expectedClientCodes `
+    -ExpectedModules $ExpectedModuleIds
 
 Assert-InstalledUpdateConfig `
     -Root $resolvedInstallRoot `

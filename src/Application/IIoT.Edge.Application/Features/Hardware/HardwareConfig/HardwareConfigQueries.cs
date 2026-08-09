@@ -144,7 +144,8 @@ public class SaveHardwareConfigHandler(
     IClientPermissionService permissionService,
     IPlcConnectionManager plcConnectionManager,
     IPlcRuntimeApplyService plcRuntimeApplyService,
-    IPlcRuntimeConfigurationMutationGate runtimeConfigurationMutationGate)
+    IPlcRuntimeConfigurationMutationGate runtimeConfigurationMutationGate,
+    IPlcConfigurationSnapshotInvalidator? plcConfigurationSnapshotInvalidator = null)
     : IRequestHandler<SaveHardwareConfigCommand, CrudOperationResult>
 {
     public async Task<CrudOperationResult> Handle(SaveHardwareConfigCommand request, CancellationToken ct)
@@ -241,6 +242,11 @@ public class SaveHardwareConfigHandler(
                 request.IoMappings,
                 request.SelectedNetworkDeviceId);
 
+        // First invalidation: readers must stop observing the pre-write snapshot before
+        // the database mutation starts. A failed transaction will simply reload the
+        // still-authoritative database contents on the next read.
+        plcConfigurationSnapshotInvalidator?.Invalidate();
+
         await using var unitOfWork = await unitOfWorkFactory.BeginAsync(ct).ConfigureAwait(false);
         var networkDeviceRepository = unitOfWork.Repository<NetworkDeviceEntity>();
         var createdNetworkDevices = new List<NetworkDeviceEntity>();
@@ -302,6 +308,11 @@ public class SaveHardwareConfigHandler(
                 ct)
             .ConfigureAwait(false);
         await unitOfWork.CommitAsync(ct).ConfigureAwait(false);
+
+        // Second invalidation: the committed database version is now authoritative.
+        // Versioned cache publication prevents an older concurrent load from restoring
+        // the stale pre-commit snapshot.
+        plcConfigurationSnapshotInvalidator?.Invalidate();
 
         var stopFailures = new List<string>();
         var reloadFailures = new List<string>();
@@ -401,6 +412,18 @@ public class SaveHardwareConfigHandler(
         if (reloadFailures.Count > 0)
         {
             runtimeIssues.Add($"以下 PLC 重载失败：{string.Join("；", reloadFailures)}");
+        }
+
+        if (plcConfigurationSnapshotInvalidator is not null)
+        {
+            try
+            {
+                await plcConfigurationSnapshotInvalidator.WarmAsync(ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                runtimeIssues.Add($"PLC 权威配置缓存重建失败（{ex.Message}）");
+            }
         }
 
         return runtimeIssues.Count == 0

@@ -1,4 +1,5 @@
 using Dapper;
+using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 using IIoT.Edge.Module.Contracts.DataPipeline;
@@ -113,6 +114,49 @@ public sealed class RetryDeadLetterAtomicTransitionBehaviorTests
             Assert.Equal("LOCAL-ADMIN-01", audit.OperatorId);
             Assert.Equal("CLIP-REQUEUE", audit.BusinessIdentifier);
             Assert.Equal("Requeued", audit.Result);
+        }
+        finally
+        {
+            Cleanup(tempDir);
+        }
+    }
+
+    [Fact]
+    public async Task ManualRequeue_ShouldUseConfiguredRetryInterval()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var factory = new SqliteConnectionFactory(tempDir);
+            var retry = new CloudRetryRecordStore(
+                factory,
+                new FakeLogService(),
+                CreateSerializer(),
+                retryScheduleOptions: new DataPipelineRetryScheduleOptions { IntervalMinutes = 11 });
+            var dead = new CloudDeadLetterStore(factory, new FakeLogService());
+            await InitializeAsync(factory, retry, dead);
+            await dead.SaveAsync(
+                CreateDeadLetter("CLIP-CONFIGURED-REQUEUE"),
+                TestContext.Current.CancellationToken);
+            var deadLetterId = Assert.Single(await dead.GetLatestAsync()).Id;
+
+            var before = DateTimeOffset.UtcNow;
+            await retry.RequeueAndRemoveAsync(
+                deadLetterId,
+                "LOCAL-ADMIN-01",
+                "CLIP-CONFIGURED-REQUEUE",
+                TestContext.Current.CancellationToken);
+
+            using var connection = factory.Create(retry.DbName);
+            var nextRetryTime = DateTimeOffset.Parse(
+                await connection.QuerySingleAsync<string>(
+                    "SELECT NextRetryTime FROM failed_cloud_records"),
+                null,
+                System.Globalization.DateTimeStyles.RoundtripKind);
+            Assert.InRange(
+                (nextRetryTime - before).TotalSeconds,
+                TimeSpan.FromMinutes(11).TotalSeconds - 2,
+                TimeSpan.FromMinutes(11).TotalSeconds + 2);
         }
         finally
         {

@@ -248,12 +248,12 @@ foreach ($legacyProperty in @('layoutZipFile', 'layoutZipSha256', 'layoutZipSize
     }
 }
 
-if ([int]$manifest.schemaVersion -ne 2) {
-    throw "Installer artifact manifest schemaVersion must be 2, actual: $($manifest.schemaVersion)"
+if ([int]$manifest.schemaVersion -ne 3) {
+    throw "Installer artifact manifest schemaVersion must be 3, actual: $($manifest.schemaVersion)"
 }
 
-if ([int]$manifest.installerBindingSchemaVersion -ne 2) {
-    throw "Installer artifact manifest installerBindingSchemaVersion must be 2, actual: $($manifest.installerBindingSchemaVersion)"
+if ([int]$manifest.installerBindingSchemaVersion -ne 3) {
+    throw "Installer artifact manifest installerBindingSchemaVersion must be 3, actual: $($manifest.installerBindingSchemaVersion)"
 }
 
 if ($manifest.channel -ne $ExpectedChannel) {
@@ -311,6 +311,12 @@ $launcherPath = Join-Path $resolvedArtifactRoot $launcherDirectory
 Assert-PathExists -PathValue $launcherPath -Message "Launcher directory was not found: $launcherPath"
 Assert-PathExists -PathValue (Join-Path $launcherPath 'IIoT.Edge.Launcher.dll') -Message "Launcher runtime file was not found."
 Assert-SelfContainedRuntimeDirectory -Directory $launcherPath -Component 'Launcher installer payload'
+if ($manifest.launcherDirectorySha256 -ne (Get-TestDirectorySha256 -Directory $launcherPath)) {
+    throw "Launcher directory sha256 does not match installer-artifact.json."
+}
+if ([long]$manifest.launcherDirectorySize -ne (Get-TestDirectorySize -Directory $launcherPath)) {
+    throw "Launcher directory size does not match installer-artifact.json."
+}
 
 $hostDirectory = [string]$manifest.hostDirectory
 if ([string]::IsNullOrWhiteSpace($hostDirectory)) {
@@ -338,6 +344,37 @@ if ($manifest.hostDirectorySha256 -ne (Get-TestDirectorySha256 -Directory $hostP
 
 if ([long]$manifest.hostDirectorySize -ne (Get-TestDirectorySize -Directory $hostPath)) {
     throw "Host directory size does not match installer-artifact.json."
+}
+
+$hostFileManifestPath = Join-Path $resolvedArtifactRoot ([string]$manifest.hostFileManifest)
+Assert-PathExists -PathValue $hostFileManifestPath -Message "Host file manifest was not found: $hostFileManifestPath"
+if ([string]$manifest.hostFileManifestSha256 -ne (Get-TestSha256 -PathValue $hostFileManifestPath)) {
+    throw 'Host file manifest sha256 does not match installer-artifact.json.'
+}
+$hostFileManifest = Get-Content -Raw -Encoding UTF8 -LiteralPath $hostFileManifestPath | ConvertFrom-Json
+if ([int]$hostFileManifest.schemaVersion -ne 1 -or
+    [string]$hostFileManifest.component -cne 'Host' -or
+    [string]$hostFileManifest.version -cne [string]$manifest.version) {
+    throw 'Host file manifest header is invalid.'
+}
+$declaredHostFiles = @($hostFileManifest.files)
+$actualHostFiles = @(Get-TestFilePaths -Directory $hostPath)
+if ($declaredHostFiles.Count -ne $actualHostFiles.Count -or
+    [int]$manifest.hostFileManifestFileCount -ne $actualHostFiles.Count) {
+    throw 'Host file manifest count does not match the exact Host publish output.'
+}
+$seenHostPaths = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+foreach ($file in $declaredHostFiles) {
+    $relative = ([string]$file.path).Replace('\', '/')
+    if (-not $seenHostPaths.Add($relative)) {
+        throw "Host file manifest path is duplicated: $relative"
+    }
+    $fullPath = Join-Path $hostPath $relative
+    Assert-PathExists -PathValue $fullPath -Message "Host file manifest entry is missing: $relative"
+    if ([long]$file.size -ne (Get-Item -LiteralPath $fullPath).Length -or
+        -not [string]::Equals([string]$file.sha256, (Get-TestSha256 -PathValue $fullPath), [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Host file manifest facts do not match: $relative"
+    }
 }
 
 $modules = @($manifest.modules)

@@ -5,6 +5,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$PluginRepositoryRoot,
 
+    [Parameter(Mandatory = $true)]
+    [string]$SupportedProcessType,
+
     [ValidateSet('stable')]
     [string]$Channel = 'stable',
 
@@ -52,7 +55,17 @@ param(
 
     [switch]$PreparedSourceSnapshot,
 
-    [string]$PreparedResultPath = ''
+    [string]$PreparedResultPath = '',
+
+    [string]$HostFileManifestPath = $env:IIOT_EDGE_HOST_FILE_MANIFEST_PATH,
+
+    [string]$HostVersion = $env:IIOT_EDGE_HOST_VERSION,
+
+    [string]$HostFileManifestSha256 = $env:IIOT_EDGE_HOST_FILE_MANIFEST_SHA256,
+
+    [string]$ReleaseSigningPrivateKeyPath = $env:IIOT_EDGE_PLUGIN_RELEASE_SIGNING_PRIVATE_KEY_PATH,
+
+    [string]$ReleaseSigningKeyId = $env:IIOT_EDGE_PLUGIN_RELEASE_SIGNING_KEY_ID
 )
 
 $ErrorActionPreference = 'Stop'
@@ -120,6 +133,64 @@ function Invoke-PluginPack {
     }
 }
 
+function Resolve-HostFileManifestEvidence {
+    if ([string]::IsNullOrWhiteSpace($HostFileManifestPath) -or
+        [string]::IsNullOrWhiteSpace($HostVersion) -or
+        [string]::IsNullOrWhiteSpace($HostFileManifestSha256)) {
+        throw 'Plugin packaging requires HostFileManifestPath, HostVersion and HostFileManifestSha256 from the reviewed Prepared Host release.'
+    }
+    if ($HostFileManifestSha256 -cnotmatch '^[0-9A-Fa-f]{64}$') {
+        throw 'HostFileManifestSha256 must be exactly 64 hexadecimal characters.'
+    }
+
+    $resolvedPath = if ([IO.Path]::IsPathRooted($HostFileManifestPath)) {
+        [IO.Path]::GetFullPath($HostFileManifestPath)
+    }
+    else {
+        [IO.Path]::GetFullPath((Join-Path $repoRoot $HostFileManifestPath))
+    }
+    if (-not (Test-Path -LiteralPath $resolvedPath -PathType Leaf)) {
+        throw "Prepared Host file manifest was not found: $resolvedPath"
+    }
+    $actualSha256 = (Get-FileHash -LiteralPath $resolvedPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if (-not [string]::Equals(
+            $actualSha256,
+            $HostFileManifestSha256,
+            [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Prepared Host file manifest hash mismatch: expected=$HostFileManifestSha256 actual=$actualSha256"
+    }
+
+    $manifest = Get-Content -Raw -Encoding UTF8 -LiteralPath $resolvedPath | ConvertFrom-Json
+    if ([int]$manifest.schemaVersion -ne 1 -or
+        [string]::IsNullOrWhiteSpace([string]$manifest.component) -or
+        -not [string]::Equals([string]$manifest.version, $HostVersion, [StringComparison]::Ordinal) -or
+        @($manifest.files).Count -eq 0) {
+        throw 'Prepared Host file manifest header is invalid or does not match HostVersion.'
+    }
+
+    $paths = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($file in @($manifest.files)) {
+        $path = ([string]$file.path).Replace('\', '/').TrimStart('/')
+        if ([string]::IsNullOrWhiteSpace($path) -or
+            [IO.Path]::IsPathRooted([string]$file.path) -or
+            @($path.Split('/') | Where-Object { $_ -in @('.', '..') }).Count -gt 0 -or
+            -not $paths.Add($path) -or
+            [long]$file.size -lt 0 -or
+            [string]$file.sha256 -cnotmatch '^[0-9A-Fa-f]{64}$' -or
+            [string]::IsNullOrWhiteSpace([string]$file.type) -or
+            [string]::IsNullOrWhiteSpace([string]$file.component) -or
+            [string]::IsNullOrWhiteSpace([string]$file.version)) {
+            throw "Prepared Host file manifest entry is invalid or duplicated: $path"
+        }
+    }
+
+    return [pscustomobject]@{
+        Path = $resolvedPath
+        Version = $HostVersion
+        Sha256 = $actualSha256
+    }
+}
+
 function Get-PreservedPluginMetadataPath {
     param([Parameter(Mandatory = $true)][string]$PackageRoot)
 
@@ -157,6 +228,24 @@ function Test-PreservedPluginPackage {
     if ([string]$Metadata.sourceCommit -ne [string]$gitFacts.Head) {
         throw "Plugin package sourceCommit '$($Metadata.sourceCommit)' does not match release HEAD '$($gitFacts.Head)'."
     }
+    foreach ($requiredEvidence in @(
+        'dependencyClosureSha256',
+        'dependencyCount',
+        'dependencyHostComponent',
+        'dependencyHostVersion',
+        'dependencyHostFileManifestSha256'
+    )) {
+        if (-not $Metadata.PSObject.Properties[$requiredEvidence] -or
+            [string]::IsNullOrWhiteSpace([string]$Metadata.$requiredEvidence)) {
+            throw "Plugin package metadata is missing exact dependency evidence: $requiredEvidence"
+        }
+    }
+    if ([string]$Metadata.dependencyClosureSha256 -cnotmatch '^[0-9A-Fa-f]{64}$' -or
+        [int]$Metadata.dependencyCount -lt 1 -or
+        -not [string]::Equals([string]$Metadata.dependencyHostVersion, $hostManifestEvidence.Version, [StringComparison]::Ordinal) -or
+        -not [string]::Equals([string]$Metadata.dependencyHostFileManifestSha256, $hostManifestEvidence.Sha256, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Plugin package exact dependency evidence does not match the reviewed Prepared Host.'
+    }
     $package = Get-Item -LiteralPath $PackagePath
     if ($package.Length -ne [int64]$Metadata.packageSize) {
         throw "Plugin package size does not match metadata: expected=$($Metadata.packageSize) actual=$($package.Length)"
@@ -181,6 +270,13 @@ function Test-PreservedPluginPackage {
         }
         if ($archive.Entries.FullName -notcontains [string]$packagedManifest.entryAssembly) {
             throw "Plugin package entry assembly is missing: $($packagedManifest.entryAssembly)"
+        }
+        $actualDependencyClosureSha256 = Get-ZipEntrySha256 -Archive $archive -EntryName 'dependency-closure.json'
+        if (-not [string]::Equals(
+                $actualDependencyClosureSha256,
+                [string]$Metadata.dependencyClosureSha256,
+                [StringComparison]::OrdinalIgnoreCase)) {
+            throw 'Packaged dependency-closure.json does not match package metadata.'
         }
     }
     finally {
@@ -264,6 +360,139 @@ function Test-VerificationUrls {
     }
 }
 
+function Get-PluginReleaseCanonicalBytes {
+    param([Parameter(Mandatory = $true)]$Manifest)
+
+    $stream = [System.IO.MemoryStream]::new()
+    $writerOptions = [System.Text.Json.JsonWriterOptions]::new()
+    $writerOptions.Indented = $false
+    $writer = [System.Text.Json.Utf8JsonWriter]::new(
+        $stream,
+        $writerOptions)
+    try {
+        $writer.WriteStartObject()
+        $writer.WriteNumber('packageSchemaVersion', [int]$Manifest.packageSchemaVersion)
+        foreach ($name in @(
+            'channel', 'moduleId', 'processType', 'displayName')) {
+            $writer.WriteString($name, [string]$Manifest.$name)
+        }
+        foreach ($name in @('description', 'iconKind', 'accentColor')) {
+            $value = $Manifest.$name
+            if ($null -eq $value) {
+                $writer.WriteNull($name)
+            }
+            else {
+                $writer.WriteString($name, [string]$value)
+            }
+        }
+        foreach ($name in @(
+            'version', 'hostApiVersion', 'minHostVersion', 'maxHostVersion')) {
+            $writer.WriteString($name, [string]$Manifest.$name)
+        }
+        $writer.WriteStartArray('dependencies')
+        foreach ($dependency in @($Manifest.dependencies)) {
+            $writer.WriteStringValue([string]$dependency)
+        }
+        $writer.WriteEndArray()
+        foreach ($name in @('targetRuntime', 'targetFramework', 'packageFileName')) {
+            $writer.WriteString($name, [string]$Manifest.$name)
+        }
+        $writer.WriteNumber('packageSize', [int64]$Manifest.packageSize)
+        $writer.WriteString('sha256', ([string]$Manifest.sha256).ToLowerInvariant())
+        foreach ($name in @('publisher', 'sourceCommit', 'businessDocumentRef', 'businessDocumentSha256')) {
+            $value = [string]$Manifest.$name
+            if ($name.EndsWith('Sha256', [System.StringComparison]::Ordinal)) {
+                $value = $value.ToLowerInvariant()
+            }
+            $writer.WriteString($name, $value)
+        }
+        $writer.WriteString('fileManifestSha256', ([string]$Manifest.fileManifestSha256).ToLowerInvariant())
+        $writer.WriteNumber('fileManifestFileCount', [int]$Manifest.fileManifestFileCount)
+        $writer.WriteString('dataCapabilitiesFileName', [string]$Manifest.dataCapabilitiesFileName)
+        $writer.WriteString('dataCapabilitiesSha256', ([string]$Manifest.dataCapabilitiesSha256).ToLowerInvariant())
+        $writer.WriteString('dependencyClosureSha256', ([string]$Manifest.dependencyClosureSha256).ToLowerInvariant())
+        $writer.WriteNumber('dependencyCount', [int]$Manifest.dependencyCount)
+        foreach ($name in @('dependencyHostComponent', 'dependencyHostVersion')) {
+            $writer.WriteString($name, [string]$Manifest.$name)
+        }
+        $writer.WriteString(
+            'dependencyHostFileManifestSha256',
+            ([string]$Manifest.dependencyHostFileManifestSha256).ToLowerInvariant())
+        $writer.WriteString('releaseNotes', [string]$Manifest.releaseNotes)
+        $createdAtUtc = ([DateTimeOffset]$Manifest.createdAtUtc).UtcDateTime.ToString(
+            "yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'",
+            [System.Globalization.CultureInfo]::InvariantCulture)
+        $writer.WriteString('createdAtUtc', $createdAtUtc)
+        $writer.WriteEndObject()
+        $writer.Flush()
+        return ,$stream.ToArray()
+    }
+    finally {
+        $writer.Dispose()
+        $stream.Dispose()
+    }
+}
+
+function New-PluginReleaseSignature {
+    param([Parameter(Mandatory = $true)]$Manifest)
+
+    if ([string]::IsNullOrWhiteSpace($ReleaseSigningPrivateKeyPath) -or
+        [string]::IsNullOrWhiteSpace($ReleaseSigningKeyId)) {
+        throw 'Plugin release signing requires ReleaseSigningPrivateKeyPath and ReleaseSigningKeyId. Production publication fails closed without controlled signing material.'
+    }
+    if ($ReleaseSigningKeyId -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$') {
+        throw 'ReleaseSigningKeyId is invalid.'
+    }
+
+    $resolvedKeyPath = [System.IO.Path]::GetFullPath($ReleaseSigningPrivateKeyPath)
+    if (-not (Test-Path -LiteralPath $resolvedKeyPath -PathType Leaf)) {
+        throw "Plugin release signing key was not found: $resolvedKeyPath"
+    }
+
+    $rsa = [System.Security.Cryptography.RSA]::Create()
+    try {
+        $pem = Get-Content -Raw -Encoding UTF8 -LiteralPath $resolvedKeyPath
+        $rsa.ImportFromPem($pem)
+        if ($rsa.KeySize -lt 2048) {
+            throw 'Plugin release signing key must be at least RSA-2048.'
+        }
+        $canonical = Get-PluginReleaseCanonicalBytes -Manifest $Manifest
+        $signature = $rsa.SignData(
+            $canonical,
+            [System.Security.Cryptography.HashAlgorithmName]::SHA256,
+            [System.Security.Cryptography.RSASignaturePadding]::Pss)
+        return [ordered]@{
+            algorithm = 'rsa-pss-sha256'
+            keyId = $ReleaseSigningKeyId
+            value = [Convert]::ToBase64String($signature)
+        }
+    }
+    finally {
+        $rsa.Dispose()
+    }
+}
+
+function Get-ZipEntrySha256 {
+    param(
+        [Parameter(Mandatory = $true)][System.IO.Compression.ZipArchive]$Archive,
+        [Parameter(Mandatory = $true)][string]$EntryName
+    )
+
+    $entries = @($Archive.Entries | Where-Object {
+        [string]::Equals($_.FullName.Replace('\', '/'), $EntryName, [System.StringComparison]::Ordinal)
+    })
+    if ($entries.Count -ne 1) {
+        throw "Plugin package must contain exactly one '$EntryName'."
+    }
+    $stream = $entries[0].Open()
+    try {
+        return ([Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($stream))).ToLowerInvariant()
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
 function New-PluginReleaseWrapper {
     param(
         [Parameter(Mandatory = $true)]$Metadata,
@@ -272,16 +501,66 @@ function New-PluginReleaseWrapper {
         [Parameter(Mandatory = $true)][string]$OutputZip
     )
 
+    foreach ($requiredEvidence in @(
+        'businessDocumentRef',
+        'businessDocumentSha256',
+        'fileManifestSha256',
+        'fileManifestFileCount',
+        'dataCapabilitiesSha256',
+        'dependencyClosureSha256',
+        'dependencyCount',
+        'dependencyHostComponent',
+        'dependencyHostVersion',
+        'dependencyHostFileManifestSha256'
+    )) {
+        if (-not $Metadata.PSObject.Properties[$requiredEvidence] -or
+            [string]::IsNullOrWhiteSpace([string]$Metadata.$requiredEvidence)) {
+            throw "Plugin package metadata is missing required release evidence: $requiredEvidence"
+        }
+    }
+
+    if ([int]$Metadata.packageSchemaVersion -ne 2) {
+        throw "Plugin release wrapper requires package metadata schema 2; actual=$($Metadata.packageSchemaVersion)"
+    }
+
     $wrapperRoot = Join-Path (Split-Path -Parent $OutputZip) 'edge-plugin-wrapper'
     if (Test-Path $wrapperRoot) {
         Remove-Item -Path $wrapperRoot -Recurse -Force
     }
 
     New-Item -Path (Join-Path $wrapperRoot 'plugin') -ItemType Directory -Force | Out-Null
+    New-Item -Path (Join-Path $wrapperRoot 'evidence') -ItemType Directory -Force | Out-Null
     Copy-Item -Path $PackagePath -Destination (Join-Path $wrapperRoot 'plugin') -Force
 
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $archive = [System.IO.Compression.ZipFile]::OpenRead($PackagePath)
+    try {
+        $actualFileManifestSha256 = Get-ZipEntrySha256 -Archive $archive -EntryName 'file-manifest.json'
+        $actualDataCapabilitiesSha256 = Get-ZipEntrySha256 -Archive $archive -EntryName 'data-capabilities.json'
+        $actualDependencyClosureSha256 = Get-ZipEntrySha256 -Archive $archive -EntryName 'dependency-closure.json'
+        if (-not [string]::Equals($actualFileManifestSha256, [string]$Metadata.fileManifestSha256, [System.StringComparison]::OrdinalIgnoreCase) -or
+            -not [string]::Equals($actualDataCapabilitiesSha256, [string]$Metadata.dataCapabilitiesSha256, [System.StringComparison]::OrdinalIgnoreCase) -or
+            -not [string]::Equals($actualDependencyClosureSha256, [string]$Metadata.dependencyClosureSha256, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw 'Plugin package evidence hashes do not match package metadata.'
+        }
+    }
+    finally {
+        $archive.Dispose()
+    }
+
+    $businessDocumentSource = [System.IO.Path]::GetFullPath((Join-Path $pluginRepoRoot ([string]$Metadata.businessDocumentRef)))
+    if (-not (Test-Path -LiteralPath $businessDocumentSource -PathType Leaf)) {
+        throw "Plugin business document was not found: $businessDocumentSource"
+    }
+    $businessDocumentHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $businessDocumentSource).Hash.ToLowerInvariant()
+    if (-not [string]::Equals($businessDocumentHash, [string]$Metadata.businessDocumentSha256, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Plugin business document hash does not match package metadata.'
+    }
+    Copy-Item -LiteralPath $businessDocumentSource -Destination (Join-Path $wrapperRoot 'evidence/business-document.md')
+
     $releaseManifest = [ordered]@{
-        packageSchemaVersion = 1
+        packageSchemaVersion = 3
         channel = $Channel
         moduleId = [string]$Metadata.moduleId
         processType = [string]$Metadata.processType
@@ -298,17 +577,28 @@ function New-PluginReleaseWrapper {
         targetFramework = [string]$Metadata.targetFramework
         packageFileName = [string]$Metadata.packageFileName
         packageSize = [int64]$Metadata.packageSize
-        sha256 = [string]$Metadata.sha256
-        signature = [string]$Metadata.signature
+        sha256 = ([string]$Metadata.sha256).ToLowerInvariant()
         publisher = [string]$Metadata.publisher
         sourceCommit = [string]$Metadata.sourceCommit
+        businessDocumentRef = [string]$Metadata.businessDocumentRef
+        businessDocumentSha256 = ([string]$Metadata.businessDocumentSha256).ToLowerInvariant()
+        fileManifestSha256 = ([string]$Metadata.fileManifestSha256).ToLowerInvariant()
+        fileManifestFileCount = [int]$Metadata.fileManifestFileCount
+        dataCapabilitiesFileName = 'data-capabilities.json'
+        dataCapabilitiesSha256 = ([string]$Metadata.dataCapabilitiesSha256).ToLowerInvariant()
+        dependencyClosureSha256 = ([string]$Metadata.dependencyClosureSha256).ToLowerInvariant()
+        dependencyCount = [int]$Metadata.dependencyCount
+        dependencyHostComponent = [string]$Metadata.dependencyHostComponent
+        dependencyHostVersion = [string]$Metadata.dependencyHostVersion
+        dependencyHostFileManifestSha256 = ([string]$Metadata.dependencyHostFileManifestSha256).ToLowerInvariant()
         releaseNotes = $ReleaseNotesText
         createdAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
     }
+    $releaseManifest.releaseSignature = New-PluginReleaseSignature -Manifest $releaseManifest
 
     $releaseManifest |
         ConvertTo-Json -Depth 20 |
-        Set-Content -Encoding UTF8 -Path (Join-Path $wrapperRoot 'plugin-release.json')
+        Set-Content -Encoding utf8NoBOM -Path (Join-Path $wrapperRoot 'plugin-release.json')
 
     if (Test-Path $OutputZip) {
         Remove-Item -Path $OutputZip -Force
@@ -318,6 +608,12 @@ function New-PluginReleaseWrapper {
     Remove-Item -Path $wrapperRoot -Recurse -Force
     return $OutputZip
 }
+
+if ($MyInvocation.InvocationName -eq '.') {
+    return
+}
+
+$hostManifestEvidence = Resolve-HostFileManifestEvidence
 
 function Invoke-PluginPackageUpload {
     param([Parameter(Mandatory = $true)][string]$WrapperZip)
@@ -478,10 +774,14 @@ try {
             -Facts @{ moduleId = $ModuleId; version = $declaredVersion; sourceCommit = $gitFacts.Head; resumeReleaseRoot = $releaseRoot; resumed = $isResume } | Out-Null
         Invoke-PluginPack -Parameters @{
             ModuleId      = $ModuleId
+            SupportedProcessType = $SupportedProcessType
             Configuration = $Configuration
             TargetRuntime = $RuntimeIdentifier
             OutputRoot    = $pluginPackageScratchRoot
             SourceCommit  = $gitFacts.Head
+            HostFileManifestPath = $hostManifestEvidence.Path
+            HostVersion = $hostManifestEvidence.Version
+            HostFileManifestSha256 = $hostManifestEvidence.Sha256
             CleanOutput   = $true
         }
         Get-ChildItem -LiteralPath $pluginPackageScratchRoot -File |
@@ -495,6 +795,10 @@ try {
     $metadata = Get-Content -Raw -Encoding UTF8 -Path $metadataPath.FullName | ConvertFrom-Json
     if ([string]$metadata.version -ne $declaredVersion -or [string]$metadata.targetRuntime -ne $RuntimeIdentifier) {
         throw 'Preserved plugin metadata does not match the current manifest version/runtime.'
+    }
+    if (-not [string]::Equals([string]$metadata.dependencyHostVersion, $hostManifestEvidence.Version, [StringComparison]::Ordinal) -or
+        -not [string]::Equals([string]$metadata.dependencyHostFileManifestSha256, $hostManifestEvidence.Sha256, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Preserved plugin metadata does not match the exact Prepared Host file manifest.'
     }
     $packagePath = Join-Path $packageOutputRoot ([string]$metadata.packageFileName)
     if (-not (Test-Path -LiteralPath $packagePath -PathType Leaf)) {
@@ -571,6 +875,15 @@ try {
             hostApiVersion = [string]$metadata.hostApiVersion
             minHostVersion = [string]$metadata.minHostVersion
             maxHostVersion = [string]$metadata.maxHostVersion
+            dependencyClosureSha256 = ([string]$metadata.dependencyClosureSha256).ToLowerInvariant()
+            dependencyCount = [int]$metadata.dependencyCount
+            dependencyHostComponent = [string]$metadata.dependencyHostComponent
+            dependencyHostVersion = [string]$metadata.dependencyHostVersion
+            dependencyHostFileManifestSha256 = ([string]$metadata.dependencyHostFileManifestSha256).ToLowerInvariant()
+            processType = if ($metadata.PSObject.Properties['processType']) { [string]$metadata.processType } else { $SupportedProcessType }
+            businessDocumentRef = if ($metadata.PSObject.Properties['businessDocumentRef']) { [string]$metadata.businessDocumentRef } else { $null }
+            fileManifestSha256 = if ($metadata.PSObject.Properties['fileManifestSha256']) { [string]$metadata.fileManifestSha256 } else { $null }
+            dataCapabilitiesSha256 = if ($metadata.PSObject.Properties['dataCapabilitiesSha256']) { [string]$metadata.dataCapabilitiesSha256 } else { $null }
             completedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
         } | ConvertTo-Json -Depth 8 |
             Set-Content -LiteralPath $preparedResult -Encoding utf8NoBOM

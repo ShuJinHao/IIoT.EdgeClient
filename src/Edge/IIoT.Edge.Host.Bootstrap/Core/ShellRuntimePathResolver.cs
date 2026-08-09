@@ -9,7 +9,8 @@ namespace IIoT.Edge.Shell.Core;
 
 public sealed record ShellRuntimePathResolutionResult(
     EdgeRuntimePaths RuntimePaths,
-    IReadOnlyList<StartupDiagnosticIssue> Issues);
+    IReadOnlyList<StartupDiagnosticIssue> Issues,
+    bool Success);
 
 public interface IShellRuntimePathResolver
 {
@@ -60,6 +61,7 @@ public sealed class ShellRuntimePathResolver : IShellRuntimePathResolver
         ArgumentNullException.ThrowIfNull(configuration);
 
         var issues = new List<StartupDiagnosticIssue>();
+        var success = true;
         var normalizedBaseDirectory = Path.GetFullPath(baseDirectory);
         var requestedMachineProfile = configuration["Shell:MachineProfile"]?.Trim();
         var profileName = EdgeClientProgramDataPaths.SanitizePathSegment(
@@ -83,13 +85,14 @@ public sealed class ShellRuntimePathResolver : IShellRuntimePathResolver
         }
         catch (Exception ex) when (StartupExceptionBoundary.IsApprovedPathFailure(ex))
         {
+            success = false;
             defaultRuntimeDataRoot = Path.Combine(
                 normalizedBaseDirectory,
                 "runtime-data",
                 profileName);
             issues.Add(StartupDiagnosticIssueFactory.Create(
                 "RUNTIME_DEFAULT_ROOT_INVALID",
-                $"默认运行数据根目录无法解析，已回退到宿主目录内的安全路径：{ex.Message}"));
+                $"默认运行数据根目录无法解析，已阻止启动：{ex.Message}"));
         }
 
         var runtimeDataRootSetting = configuration["Shell:RuntimeDataRoot"]?.Trim();
@@ -104,9 +107,10 @@ public sealed class ShellRuntimePathResolver : IShellRuntimePathResolver
             }
             catch (Exception ex) when (StartupExceptionBoundary.IsApprovedPathFailure(ex))
             {
+                success = false;
                 issues.Add(StartupDiagnosticIssueFactory.Create(
                     "RUNTIME_DATA_ROOT_INVALID",
-                    $"运行数据根目录配置无效，已回退到 profile 默认目录：{ex.Message}"));
+                    $"运行数据根目录配置无效，已阻止启动：{ex.Message}"));
             }
         }
 
@@ -140,7 +144,7 @@ public sealed class ShellRuntimePathResolver : IShellRuntimePathResolver
             DeviceCacheFilePath: Path.Combine(runtimeDataRoot, "device_cache.json"),
             PrimaryCrashLogPath: Path.Combine(diagnosticsDirectory, "crash.log"),
             FallbackCrashLogPath: fallbackCrashLogPath);
-        return new ShellRuntimePathResolutionResult(runtimePaths, issues);
+        return new ShellRuntimePathResolutionResult(runtimePaths, issues, success);
     }
 
     private static string ResolvePath(string baseDirectory, string path)

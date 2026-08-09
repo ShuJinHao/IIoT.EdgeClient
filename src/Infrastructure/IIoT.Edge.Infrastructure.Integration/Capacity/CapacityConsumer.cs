@@ -15,9 +15,6 @@ namespace IIoT.Edge.Infrastructure.Integration.Capacity;
 public class CapacityConsumer : ICapacityConsumer
 {
     private readonly ITodayCapacityStore _todayCapacityStore;
-    private readonly IDeviceService _deviceService;
-    private readonly ILocalSystemRuntimeConfigService _runtimeConfig;
-    private readonly ICapacityBufferStore _capacityBufferStore;
     private readonly IPublisher _publisher;
     private readonly ILogService _logger;
     private readonly IProductionTimeProvider _productionTime;
@@ -38,9 +35,9 @@ public class CapacityConsumer : ICapacityConsumer
         IProductionTimeProvider productionTime)
     {
         _todayCapacityStore = todayCapacityStore;
-        _deviceService = deviceService;
-        _runtimeConfig = runtimeConfig;
-        _capacityBufferStore = capacityBufferStore;
+        ArgumentNullException.ThrowIfNull(deviceService);
+        ArgumentNullException.ThrowIfNull(runtimeConfig);
+        ArgumentNullException.ThrowIfNull(capacityBufferStore);
         _publisher = publisher;
         _logger = logger;
         _productionTime = productionTime;
@@ -63,18 +60,8 @@ public class CapacityConsumer : ICapacityConsumer
                 Snapshot = snapshot
             }, cancellationToken);
 
-            if (_runtimeConfig.Current.SystemCloudEnabled && !_deviceService.CanUploadToCloud)
-            {
-                await _capacityBufferStore.SaveAsync(new CapacityRecord
-                {
-                    Barcode = cellData.DisplayLabel,
-                    CellResult = isOk,
-                    ShiftCode = shiftCode,
-                    CompletedTime = completedTime,
-                    CreatedAt = _productionTime.UtcNow,
-                    PlcName = plcCode
-                });
-            }
+            // 容量卡片只维护当前运行内存投影。完成事实的 Cloud 失败补传由
+            // DataPipeline 的 Cloud retry/fallback/deadletter 通道统一承担，不再另写长期 CapacityBuffer。
 
             return true;
         }

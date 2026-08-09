@@ -10,6 +10,7 @@
     <AssemblyTitle>IIoT Edge Client</AssemblyTitle>
     <ApplicationIcon>..\Assets\icon.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+    <IIoTEdgePayloadTrustedKeysFile Condition="'$(IIoTEdgePayloadTrustedKeysFile)' == ''">trusted-payload-signing-keys.json</IIoTEdgePayloadTrustedKeysFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -36,6 +37,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
     <PackageReference Include="IIoT.Edge.UI.Shared" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="$(IIoTEdgePayloadTrustedKeysFile)" LogicalName="IIoT.Edge.Installer.trusted-payload-signing-keys.json" />
   </ItemGroup>
 
 </Project>

@@ -518,9 +518,8 @@ public sealed class LauncherDependencyInjectionTests
             Assert.True(ready);
             Assert.True(recovery.WasCalled);
             Assert.True(recovery.ObservedGateHeld);
-            Assert.True(startupActions.ReconcileCalled);
-            Assert.True(startupActions.BindingImportCalled);
-            Assert.True(startupActions.ObservedGateHeld);
+            Assert.False(startupActions.ReconcileCalled);
+            Assert.False(startupActions.BindingImportCalled);
             using var leaseAfterRecovery = gate.TryAcquire();
             Assert.NotNull(leaseAfterRecovery);
         }
@@ -578,7 +577,7 @@ public sealed class LauncherDependencyInjectionTests
     }
 
     [Fact]
-    public void StartupCoordinator_WhenLocalStepsFail_ShouldContinueAndPublishSafeDiagnostics()
+    public void StartupCoordinator_WhenCriticalStepFails_ShouldFailClosedAndPublishSafeDiagnostics()
     {
         var baseDirectory = Path.Combine(
             Path.GetTempPath(),
@@ -605,20 +604,20 @@ public sealed class LauncherDependencyInjectionTests
                 diagnostics);
 
             coordinator.PrepareLocalization();
-            coordinator.Initialize();
+            var exception = Assert.Throws<LauncherStartupBlockedException>(
+                coordinator.Initialize);
 
             Assert.Equal(1, language.InitializeCallCount);
-            Assert.Equal(1, update.EnsureCallCount);
+            Assert.Equal(0, update.EnsureCallCount);
             Assert.True(recovery.WasCalled);
-            Assert.Equal(1, activation.ReconcileCallCount);
-            Assert.Equal(1, binding.ApplyCallCount);
+            Assert.Equal(0, activation.ReconcileCallCount);
+            Assert.Equal(0, binding.ApplyCallCount);
+            Assert.Equal(
+                "LAUNCHER_ACCOUNT_CATALOG_INITIALIZATION_FAILED",
+                exception.ReasonCode);
             Assert.Contains(
                 diagnostics.Snapshot,
                 item => item.ReasonCode == "LAUNCHER_ACCOUNT_CATALOG_INITIALIZATION_FAILED"
-                        && item.ExceptionType == nameof(IOException));
-            Assert.Contains(
-                diagnostics.Snapshot,
-                item => item.ReasonCode == "LAUNCHER_PLUGIN_ACTIVATION_RECONCILIATION_FAILED"
                         && item.ExceptionType == nameof(IOException));
             Assert.DoesNotContain(
                 diagnostics.Snapshot,
@@ -638,12 +637,16 @@ public sealed class LauncherDependencyInjectionTests
     {
         var expected = new NullReferenceException("implementation fault");
         var diagnostics = new LauncherStartupDiagnosticStore();
+        var baseDirectory = Path.Combine(
+            Path.GetTempPath(),
+            $"iiot-launcher-unknown-fault-{Guid.NewGuid():N}");
+        var gate = new FileLauncherUpdateOperationGate(baseDirectory);
         var coordinator = new LauncherStartupCoordinator(
             null!,
             new UnexpectedAccountInitializer(expected),
             null!,
-            null!,
-            null!,
+            gate,
+            new GateObservingRecovery(gate),
             null!,
             null!,
             diagnostics);

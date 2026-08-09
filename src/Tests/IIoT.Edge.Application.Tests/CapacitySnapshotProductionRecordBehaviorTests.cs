@@ -62,7 +62,7 @@ public sealed class CapacitySnapshotProductionRecordBehaviorTests
     }
 
     [Fact]
-    public async Task Handler_WhenNoCompletedRows_ShouldReturnExplicitZeroSnapshot()
+    public async Task Handler_WhenNoLocalHistorySource_ShouldReturnUnavailableInsteadOfFalseZero()
     {
         var time = new FakeProductionTimeProvider
         {
@@ -80,9 +80,11 @@ public sealed class CapacitySnapshotProductionRecordBehaviorTests
         Assert.Equal(0, result.TodayOutput);
         Assert.Equal(0, result.OkCount);
         Assert.Equal(0, result.NgCount);
-        Assert.Equal("0.0%", result.TodayYield);
+        Assert.Equal("--", result.TodayYield);
         Assert.Equal("--", result.CurrentBatch);
         Assert.Equal(0, result.RecentHourOutput);
+        Assert.False(result.IsAvailable);
+        Assert.Equal("cloud_history_only", result.UnavailableReason);
     }
 
     [Fact]

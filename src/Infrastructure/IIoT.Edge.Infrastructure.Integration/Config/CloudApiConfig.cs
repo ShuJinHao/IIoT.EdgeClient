@@ -7,6 +7,7 @@ public class CloudApiConfig
     public int TimeoutSecs { get; set; } = 10;
     public string ClientCode { get; set; } = string.Empty;
     public string BootstrapSecret { get; set; } = string.Empty;
+    public string BootstrapCredentialReference { get; set; } = string.Empty;
     public CloudApiPaths Paths { get; set; } = new();
 }
 
@@ -14,6 +15,8 @@ public class CloudApiPaths
 {
     public string DeviceInstance { get; set; } = string.Empty;
     public string BootstrapRefresh { get; set; } = string.Empty;
+    public string ActivateDevice { get; set; } = string.Empty;
+    public string ActivateDeviceConfirm { get; set; } = string.Empty;
     public string IdentityDeviceLogin { get; set; } = string.Empty;
     public string HumanIdentityRefresh { get; set; } = string.Empty;
     public string HumanSessionValidation { get; set; } = string.Empty;

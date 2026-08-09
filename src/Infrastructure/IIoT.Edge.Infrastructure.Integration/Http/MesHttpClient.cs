@@ -60,6 +60,28 @@ public sealed class MesHttpClient : IMesHttpClient
         return response.content;
     }
 
+    public async Task<MesHttpResponse> PostWithStatusAsync(
+        string processType,
+        string url,
+        object payload,
+        IReadOnlyDictionary<string, string>? headers = null,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await SendAsync(
+                HttpMethod.Post,
+                processType,
+                url,
+                JsonContent.Create(payload),
+                headers,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        return new MesHttpResponse(
+            response.statusCode,
+            response.content,
+            response.transportError);
+    }
+
     public async Task<string?> GetAsync(
         string processType,
         string url,
@@ -78,7 +100,7 @@ public sealed class MesHttpClient : IMesHttpClient
         return response.content;
     }
 
-    private async Task<(bool isSuccess, string? content)> SendAsync(
+    private async Task<(bool isSuccess, int? statusCode, string? content, string? transportError)> SendAsync(
         HttpMethod method,
         string processType,
         string url,
@@ -102,13 +124,14 @@ public sealed class MesHttpClient : IMesHttpClient
             ApplyHeaders(request, headers);
 
             var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             if (response.IsSuccessStatusCode)
             {
-                return (true, await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
+                return (true, (int)response.StatusCode, body, null);
             }
 
             _logger.Warn($"[MesHttp] {method} 请求失败：{requestUrl}，状态码={(int)response.StatusCode} {response.ReasonPhrase}");
-            return (false, await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
+            return (false, (int)response.StatusCode, body, $"http_{(int)response.StatusCode}");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -117,7 +140,7 @@ public sealed class MesHttpClient : IMesHttpClient
         catch (Exception ex)
         {
             _logger.Error($"[MesHttp] {method} 请求异常：{requestUrl}，{ex.Message}");
-            return (false, null);
+            return (false, null, null, ex.GetType().Name);
         }
     }
 

@@ -8,6 +8,7 @@ using IIoT.Edge.Infrastructure.Update.Packages;
 using IIoT.Edge.Infrastructure.Update.Plugins;
 using IIoT.Edge.Infrastructure.Update.Profiles;
 using IIoT.Edge.SharedKernel.Configuration;
+using IIoT.Edge.SharedKernel.Security;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -27,11 +28,14 @@ public static class DependencyInjection
             Path.Combine(baseDirectory, FileEdgeUpdateConfigInitializer.SampleConfigFileName));
 
         services.TryAddSingleton<IEdgeVersionCompatibilityPolicy, EdgeVersionCompatibilityPolicy>();
+        services.TryAddSingleton<IEdgeCredentialStore, WindowsCredentialManagerStore>();
         services.TryAddSingleton<IEdgeReleaseService, EdgeReleaseService>();
         services.AddSingleton(updateConfigPaths);
         services.AddSingleton<IEdgeUpdateConfigInitializer, FileEdgeUpdateConfigInitializer>();
         services.AddSingleton<IEdgeUpdateConfigurationProvider>(
-            _ => new FileEdgeUpdateConfigurationProvider(baseDirectory));
+            provider => new FileEdgeUpdateConfigurationProvider(
+                baseDirectory,
+                provider.GetRequiredService<IEdgeCredentialStore>()));
         services.AddSingleton<IEdgeReleaseSourceValidator, FileEdgeReleaseSourceValidator>();
         services.TryAddSingleton(_ => new HttpClient(new SocketsHttpHandler
         {

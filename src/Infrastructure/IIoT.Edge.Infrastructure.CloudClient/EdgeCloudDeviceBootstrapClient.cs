@@ -89,7 +89,11 @@ public sealed class EdgeCloudDeviceBootstrapClient : IEdgeCloudDeviceBootstrapCl
             dto.UploadAccessToken,
             dto.UploadAccessTokenExpiresAtUtc ?? CloudClientAuthHeaders.ReadAccessTokenExpiresAtUtc(response.ResponseHeaders),
             dto.RefreshToken ?? CloudClientAuthHeaders.ReadRefreshToken(response.ResponseHeaders),
-            dto.RefreshTokenExpiresAtUtc ?? CloudClientAuthHeaders.ReadRefreshTokenExpiresAtUtc(response.ResponseHeaders));
+            dto.RefreshTokenExpiresAtUtc ?? CloudClientAuthHeaders.ReadRefreshTokenExpiresAtUtc(response.ResponseHeaders),
+            string.IsNullOrWhiteSpace(dto.SessionKind) ? "Active" : dto.SessionKind!,
+            dto.GenerationId,
+            dto.ActivationAccessToken,
+            dto.ActivationAccessTokenExpiresAtUtc);
 
         return EdgeCloudDeviceBootstrapResult.Success(clientCode, session);
     }
@@ -115,7 +119,11 @@ public sealed record EdgeCloudDeviceSession(
     string? UploadAccessToken,
     DateTimeOffset? UploadAccessTokenExpiresAtUtc,
     string? RefreshToken,
-    DateTimeOffset? RefreshTokenExpiresAtUtc);
+    DateTimeOffset? RefreshTokenExpiresAtUtc,
+    string SessionKind = "Active",
+    string? GenerationId = null,
+    string? ActivationAccessToken = null,
+    DateTimeOffset? ActivationAccessTokenExpiresAtUtc = null);
 
 public sealed record EdgeCloudDeviceBootstrapResult(
     EdgeCloudDeviceBootstrapResultKind Kind,
@@ -159,6 +167,10 @@ public enum EdgeCloudDeviceBootstrapResultKind
 
 public sealed class EdgeCloudDeviceSessionDto
 {
+    public string? SessionKind { get; set; }
+    public string? GenerationId { get; set; }
+    public string? ActivationAccessToken { get; set; }
+    public DateTimeOffset? ActivationAccessTokenExpiresAtUtc { get; set; }
     public Guid Id { get; set; }
     public string? DeviceName { get; set; }
     public string? ClientCode { get; set; }

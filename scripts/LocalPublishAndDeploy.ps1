@@ -53,7 +53,9 @@ param(
 
     [switch]$PreparedSourceSnapshot,
 
-    [string]$PreparedResultPath = ''
+    [string]$PreparedResultPath = '',
+
+    [string]$TrustedPayloadSigningKeysFile = $env:IIOT_EDGE_PAYLOAD_TRUSTED_KEYS_FILE
 )
 
 $ErrorActionPreference = 'Stop'
@@ -525,6 +527,7 @@ try {
             '-PreviousVersion', $previousVersion,
             '-PreviousSourceCommit', $previousSourceCommit,
             '-ReleaseNotes', $releaseNotes,
+            '-TrustedPayloadSigningKeysFile', $TrustedPayloadSigningKeysFile,
             '-CleanOutput'
         )
     }
@@ -562,6 +565,11 @@ try {
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $preparedResult) | Out-Null
         $manifestPath = Join-Path $installerArtifactRoot 'installer-artifact.json'
         $manifestHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $manifestPath).Hash.ToLowerInvariant()
+        $hostFileManifestPath = Join-Path $installerArtifactRoot 'host-file-manifest.json'
+        if (-not (Test-Path -LiteralPath $hostFileManifestPath -PathType Leaf)) {
+            throw "Prepared Host file manifest was not generated: $hostFileManifestPath"
+        }
+        $hostFileManifestHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $hostFileManifestPath).Hash.ToLowerInvariant()
         $bundle = Get-Item -LiteralPath $bundleZip
         [ordered]@{
             schemaVersion = 1
@@ -575,6 +583,9 @@ try {
             bundleSize = [long]$bundle.Length
             installerManifestPath = $manifestPath
             installerManifestSha256 = $manifestHash
+            hostFileManifestPath = [IO.Path]::GetFullPath($hostFileManifestPath)
+            hostFileManifestSha256 = $hostFileManifestHash
+            hostFileManifestVersion = $Version
             targetRuntime = $RuntimeIdentifier
             selfContained = $true
             completedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')

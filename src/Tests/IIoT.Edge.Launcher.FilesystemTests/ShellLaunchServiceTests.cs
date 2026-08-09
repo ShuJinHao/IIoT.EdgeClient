@@ -220,7 +220,7 @@ public sealed class ShellLaunchServiceTests
     }
 
     [Fact]
-    public void GetExecutableCandidates_WhenWindowsProfileUsesExtensionlessShellName_ShouldPreferExeThenConfiguredThenDll()
+    public void GetExecutableCandidates_WhenWindowsProfileUsesExtensionlessShellName_ShouldNeverOfferDllFallback()
     {
         var configuredPath = Path.Combine("runtime", "IIoT.Edge.Shell");
 
@@ -229,26 +229,23 @@ public sealed class ShellLaunchServiceTests
         Assert.Equal(
             [
                 configuredPath + ".exe",
-                configuredPath,
-                configuredPath + ".dll"
+                configuredPath
             ],
             candidates);
     }
 
     [Fact]
-    public void GetExecutableCandidates_WhenNonWindowsProfileKeepsExeCompatibility_ShouldPreferExtensionlessThenConfiguredThenDll()
+    public void GetExecutableCandidates_WhenNonWindowsProfileKeepsExeCompatibility_ShouldNeverOfferDllFallback()
     {
         var configuredPath = Path.Combine("runtime", "IIoT.Edge.Shell.exe");
         var extensionlessPath = Path.Combine("runtime", "IIoT.Edge.Shell");
-        var dllPath = Path.Combine("runtime", "IIoT.Edge.Shell.dll");
 
         var candidates = ShellLaunchTargetResolver.GetExecutableCandidates(configuredPath, isWindows: false);
 
         Assert.Equal(
             [
                 extensionlessPath,
-                configuredPath,
-                dllPath
+                configuredPath
             ],
             candidates);
     }
@@ -270,19 +267,17 @@ public sealed class ShellLaunchServiceTests
     }
 
     [Fact]
-    public void Resolve_WhenOnlyDllExists_ShouldUseDotnetFallback()
+    public void Resolve_WhenOnlyDllExists_ShouldFailClosedWithoutSystemDotnetFallback()
     {
         var configuredPath = Path.Combine("runtime", "IIoT.Edge.Shell");
         var dllPath = configuredPath + ".dll";
 
-        var target = ShellLaunchTargetResolver.Resolve(
+        var exception = Assert.Throws<FileNotFoundException>(() => ShellLaunchTargetResolver.Resolve(
             configuredPath,
             isWindows: false,
-            fileExists: path => string.Equals(path, dllPath, StringComparison.Ordinal));
+            fileExists: path => string.Equals(path, dllPath, StringComparison.Ordinal)));
 
-        Assert.Equal("dotnet", target.FileName);
-        Assert.Equal(new[] { dllPath }, target.Arguments);
-        Assert.Equal(Path.GetDirectoryName(dllPath), target.WorkingDirectory);
+        Assert.Contains("禁止回退调用系统 dotnet", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -423,7 +418,7 @@ public sealed class ShellLaunchServiceTests
             "#2563EB");
         var service = CreateService(
             new SpyProcessStarter(),
-            new FakeShellInstanceIdResolver(),
+            new FakeShellInstanceIdResolver(("another-profile", "another-profile")),
             new FakeShellInstanceProbe("TestPluginBetaLine"));
 
         Assert.False(service.IsProfileRunning(profile));
@@ -547,7 +542,7 @@ public sealed class ShellLaunchServiceTests
     }
 
     [Fact]
-    public async Task Launch_WhenOnlyShellDllExists_ShouldFallbackToDotnet()
+    public async Task Launch_WhenOnlyShellDllExists_ShouldFailBeforeStartingAnyProcess()
     {
         var configuredPath = Path.Combine(Path.GetTempPath(), "edge-launcher-shell-tests", Guid.NewGuid().ToString("N"), "IIoT.Edge.Shell");
         var dllPath = configuredPath + ".dll";
@@ -567,14 +562,12 @@ public sealed class ShellLaunchServiceTests
 
         try
         {
-            await service.LaunchAsync(
+            var exception = await Assert.ThrowsAsync<FileNotFoundException>(() => service.LaunchAsync(
                 profile,
-                TestContext.Current.CancellationToken);
+                TestContext.Current.CancellationToken));
 
-            Assert.NotNull(starter.StartInfo);
-            Assert.Equal("dotnet", starter.StartInfo!.FileName);
-            Assert.Contains(dllPath, starter.StartInfo.ArgumentList);
-            Assert.Equal(Path.GetDirectoryName(dllPath), starter.StartInfo.WorkingDirectory);
+            Assert.Contains("禁止回退调用系统 dotnet", exception.Message, StringComparison.Ordinal);
+            Assert.Null(starter.StartInfo);
         }
         finally
         {
@@ -583,7 +576,7 @@ public sealed class ShellLaunchServiceTests
     }
 
     [Fact]
-    public async Task Launch_WhenDotnetChildSignalsReady_ShouldHoldGateUntilPersistentShellPresenceExists()
+    public async Task Launch_WhenSelfContainedChildSignalsReady_ShouldHoldGateUntilPersistentShellPresenceExists()
     {
         var baseDirectory = Path.Combine(
             Path.GetTempPath(),
@@ -594,9 +587,8 @@ public sealed class ShellLaunchServiceTests
             baseDirectory,
             "runtime",
             "IIoT.Edge.Shell");
-        var dllPath = configuredPath + ".dll";
-        Directory.CreateDirectory(Path.GetDirectoryName(dllPath)!);
-        File.WriteAllText(dllPath, string.Empty);
+        Directory.CreateDirectory(Path.GetDirectoryName(configuredPath)!);
+        File.WriteAllText(configuredPath, string.Empty);
         var gate = new FileLauncherUpdateOperationGate(baseDirectory);
         using var starter = new ReadyShellProcessStarter(baseDirectory);
         using var service = CreateService(
@@ -619,7 +611,7 @@ public sealed class ShellLaunchServiceTests
                 TestContext.Current.CancellationToken);
 
             Assert.NotNull(starter.StartInfo);
-            Assert.Equal("dotnet", starter.StartInfo!.FileName);
+            Assert.Equal(configuredPath, starter.StartInfo!.FileName);
             Assert.True(starter.SignaledReady);
             Assert.Null(gate.TryAcquireUpdate());
 
@@ -651,9 +643,11 @@ public sealed class ShellLaunchServiceTests
             baseDirectory,
             "runtime",
             "IIoT.Edge.Shell");
-        var dllPath = configuredPath + ".dll";
-        Directory.CreateDirectory(Path.GetDirectoryName(dllPath)!);
-        File.WriteAllText(dllPath, string.Empty);
+        var executablePath = OperatingSystem.IsWindows()
+            ? configuredPath + ".exe"
+            : configuredPath;
+        Directory.CreateDirectory(Path.GetDirectoryName(executablePath)!);
+        File.WriteAllText(executablePath, string.Empty);
         var gate = new FileLauncherUpdateOperationGate(baseDirectory);
         using var starter = new ReadyShellProcessStarter(
             baseDirectory,
@@ -713,9 +707,11 @@ public sealed class ShellLaunchServiceTests
             baseDirectory,
             "runtime",
             "IIoT.Edge.Shell");
-        var dllPath = configuredPath + ".dll";
-        Directory.CreateDirectory(Path.GetDirectoryName(dllPath)!);
-        File.WriteAllText(dllPath, string.Empty);
+        var executablePath = OperatingSystem.IsWindows()
+            ? configuredPath + ".exe"
+            : configuredPath;
+        Directory.CreateDirectory(Path.GetDirectoryName(executablePath)!);
+        File.WriteAllText(executablePath, string.Empty);
         var gate = new FileLauncherUpdateOperationGate(baseDirectory);
         using var starter = new ReadyShellProcessStarter(
             baseDirectory,
@@ -778,9 +774,11 @@ public sealed class ShellLaunchServiceTests
             baseDirectory,
             "runtime",
             "IIoT.Edge.Shell");
-        var dllPath = configuredPath + ".dll";
-        Directory.CreateDirectory(Path.GetDirectoryName(dllPath)!);
-        File.WriteAllText(dllPath, string.Empty);
+        var executablePath = OperatingSystem.IsWindows()
+            ? configuredPath + ".exe"
+            : configuredPath;
+        Directory.CreateDirectory(Path.GetDirectoryName(executablePath)!);
+        File.WriteAllText(executablePath, string.Empty);
         var gate = new FileLauncherUpdateOperationGate(baseDirectory);
         using var starter = new DeferredReadyShellProcessStarter(
             baseDirectory,
@@ -834,8 +832,11 @@ public sealed class ShellLaunchServiceTests
             Guid.NewGuid().ToString("N"),
             "launcher");
         var configuredPath = Path.Combine(baseDirectory, "runtime", "IIoT.Edge.Shell");
-        Directory.CreateDirectory(Path.GetDirectoryName(configuredPath)!);
-        File.WriteAllText(configuredPath + ".dll", string.Empty);
+        var executablePath = OperatingSystem.IsWindows()
+            ? configuredPath + ".exe"
+            : configuredPath;
+        Directory.CreateDirectory(Path.GetDirectoryName(executablePath)!);
+        File.WriteAllText(executablePath, string.Empty);
         using var starter = new ReadyShellProcessStarter(
             baseDirectory,
             activeModuleIds: ["AP"],
@@ -890,8 +891,11 @@ public sealed class ShellLaunchServiceTests
             Guid.NewGuid().ToString("N"),
             "launcher");
         var configuredPath = Path.Combine(baseDirectory, "runtime", "IIoT.Edge.Shell");
-        Directory.CreateDirectory(Path.GetDirectoryName(configuredPath)!);
-        File.WriteAllText(configuredPath + ".dll", string.Empty);
+        var executablePath = OperatingSystem.IsWindows()
+            ? configuredPath + ".exe"
+            : configuredPath;
+        Directory.CreateDirectory(Path.GetDirectoryName(executablePath)!);
+        File.WriteAllText(executablePath, string.Empty);
         var expectedDiagnostic = new EdgeClientShellLaunchDiagnostic(
             "STARTUP_MES_RETRY_TASK_FAILED",
             "System.Diagnostics",
@@ -1115,7 +1119,11 @@ public sealed class ShellLaunchServiceTests
             $"edge-current-activation-{Guid.NewGuid():N}");
         var configuredPath = Path.Combine(tempDirectory, "IIoT.Edge.Shell");
         Directory.CreateDirectory(tempDirectory);
-        File.WriteAllBytes(configuredPath + ".dll", []);
+        File.WriteAllBytes(
+            OperatingSystem.IsWindows()
+                ? configuredPath + ".exe"
+                : configuredPath,
+            []);
         var starter = new SpyProcessStarter(activeModuleIds: ["AP"]);
         var selection = new FixedEnabledPluginSelectionSource(
         [
@@ -1459,9 +1467,22 @@ public sealed class ShellLaunchServiceTests
             StringComparer.OrdinalIgnoreCase);
 
         public string? ResolveInstanceId(LauncherProfileDefinition profile)
-            => _mappings.TryGetValue(profile.MachineProfile, out var instanceId)
-                ? instanceId
+        {
+            if (_mappings.TryGetValue(profile.MachineProfile, out var instanceId))
+            {
+                return instanceId;
+            }
+
+            // Most launch tests exercise the orchestration after a validated profile has
+            // already been loaded. An empty fake therefore represents that valid legacy/v3
+            // identity, while a non-empty unmatched map explicitly represents resolution
+            // failure.
+            return _mappings.Count == 0
+                ? string.IsNullOrWhiteSpace(profile.ClientCode)
+                    ? profile.MachineProfile
+                    : profile.ClientCode
                 : null;
+        }
     }
 
     private sealed class StubEnabledPluginSelectionSource(

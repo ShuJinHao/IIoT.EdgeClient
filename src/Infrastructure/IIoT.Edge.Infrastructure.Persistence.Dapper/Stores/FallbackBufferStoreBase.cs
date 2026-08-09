@@ -5,14 +5,15 @@ using IIoT.Edge.Infrastructure.Persistence.Dapper.Repository;
 using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 using System.Data;
+using IIoT.Edge.Application.Common.Identity;
 
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 
 public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TEntity>
     where TEntity : class
 {
-    private static readonly TimeSpan InitialRetryDelay = TimeSpan.FromSeconds(30);
     private readonly ICellDataJsonSerializer _cellDataJsonSerializer;
+    private readonly IDevicePluginRuntimeContext? _runtimeContext;
 
     protected abstract string ChannelName { get; }
 
@@ -29,10 +30,12 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
     protected FallbackBufferStoreBase(
         SqliteConnectionFactory connectionFactory,
         ILogService logger,
-        ICellDataJsonSerializer cellDataJsonSerializer)
+        ICellDataJsonSerializer cellDataJsonSerializer,
+        IDevicePluginRuntimeContext? runtimeContext = null)
         : base(connectionFactory, logger)
     {
         _cellDataJsonSerializer = cellDataJsonSerializer;
+        _runtimeContext = runtimeContext;
     }
 
     public async Task SaveAsync(
@@ -47,17 +50,24 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
 
         var sql = $@"
             INSERT INTO {TableName}
-                (ProcessType, CellDataJson, FailedTarget, ErrorMessage, CreatedAt,
+                (ClientCode, CompletionId, TypeKey,
+                 ProcessType, CellDataJson, FailedTarget, ErrorMessage, CreatedAt,
                  PlcCode, IdempotencyKeyVersion,
                  NetworkDeviceId, DeviceName, ModuleId, TaskKey, PlanSessionId, MainPlanCode, TraceBatchNumber)
             VALUES
-                (@ProcessType, @CellDataJson, @FailedTarget, @ErrorMessage, @CreatedAt,
+                (@ClientCode, @CompletionId, @TypeKey,
+                 @ProcessType, @CellDataJson, @FailedTarget, @ErrorMessage, @CreatedAt,
                  @PlcCode, @IdempotencyKeyVersion,
                  @NetworkDeviceId, @DeviceName, @ModuleId, @TaskKey, @PlanSessionId, @MainPlanCode, @TraceBatchNumber)";
 
         var affectedRows = await SafeExecuteAsync(sql, new
         {
-            ProcessType = cellData.ProcessType,
+            ProcessType = _runtimeContext?.Current is { IsV3: true } runtime
+                ? runtime.ProcessType
+                : cellData.ProcessType,
+            context.ClientCode,
+            context.CompletionId,
+            context.TypeKey,
             CellDataJson = cellDataJson,
             FailedTarget = failedTarget,
             ErrorMessage = errorMessage,
@@ -103,16 +113,19 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
 
         await ExecuteInTransactionAsync<int>(async (conn, tx) =>
         {
-            // FallbackBuffer 只负责把异常落盘数据交还给正式重试表；初始延迟避免恢复后立即打满上传通道，
-            // 后续失败退避由 CloudRetryTask/MesRetryTask 的重试策略继续接管。
-            var nextRetryTime = DateTime.UtcNow.Add(InitialRetryDelay).ToString("O");
-            var inserted = await conn.ExecuteAsync(
+            // 链路恢复的同一轮必须能够领取这些记录；批量上限负责限流，不能再人为延迟。
+            var nextRetryTime = DateTime.UtcNow.ToString("O");
+            await conn.ExecuteAsync(
                 $@"
-                INSERT INTO {RetryTableName}
-                    (ProcessType, CellDataJson, FailedTarget, ErrorMessage, RetryCount, NextRetryTime, CreatedAt,
+                INSERT OR IGNORE INTO {RetryTableName}
+                    (ClientCode, CompletionId, TypeKey,
+                     ProcessType, CellDataJson, FailedTarget, ErrorMessage, RetryCount, NextRetryTime, CreatedAt,
                      PlcCode, IdempotencyKeyVersion,
                      NetworkDeviceId, DeviceName, ModuleId, TaskKey, PlanSessionId, MainPlanCode, TraceBatchNumber)
                 SELECT
+                    ClientCode,
+                    CompletionId,
+                    TypeKey,
                     ProcessType,
                     CellDataJson,
                     FailedTarget,
@@ -141,9 +154,27 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
                 tx,
                 commandTimeout: CommandTimeout).ConfigureAwait(false);
 
-            if (inserted <= 0)
+            var uncoveredV3 = await conn.ExecuteScalarAsync<long>(
+                $"""
+                 SELECT COUNT(*)
+                 FROM {TableName} f
+                 WHERE f.Id IN @Ids
+                   AND TRIM(f.PlcCode) <> ''
+                   AND f.IdempotencyKeyVersion IN (1, 2)
+                   AND TRIM(f.ClientCode) <> ''
+                   AND TRIM(f.CompletionId) <> ''
+                   AND NOT EXISTS (
+                       SELECT 1
+                       FROM {RetryTableName} r
+                       WHERE r.ClientCode = f.ClientCode
+                         AND r.CompletionId = f.CompletionId)
+                 """,
+                new { Ids = idList },
+                tx,
+                commandTimeout: CommandTimeout).ConfigureAwait(false);
+            if (uncoveredV3 != 0)
             {
-                throw new InvalidOperationException($"移动 {ChannelDisplayName} 兜底记录到补传表失败。");
+                throw new InvalidOperationException($"移动 {ChannelDisplayName} 兜底记录到补传表后存在未覆盖事实。");
             }
 
             var deleted = await conn.ExecuteAsync(
@@ -194,6 +225,9 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
 
     private static DataPipelineContextRow CreateContextRow(CellCompletedRecord record)
         => new(
+            record.ClientCode,
+            record.CompletionId,
+            record.TypeKey,
             record.ResolvePlcCode(),
             record.IdempotencyKeyVersion,
             record.ResolveNetworkDeviceId(),
@@ -205,6 +239,9 @@ public abstract class FallbackBufferStoreBase<TEntity> : DapperRepositoryBase<TE
             record.TraceBatchNumber);
 
     private sealed record DataPipelineContextRow(
+        string ClientCode,
+        string CompletionId,
+        string TypeKey,
         string PlcCode,
         CloudIdempotencyKeyVersion IdempotencyKeyVersion,
         int? NetworkDeviceId,

@@ -48,6 +48,21 @@ public sealed class ProductionPlanSelectionServiceResolverBehaviorTests
         Assert.Null(resolved);
     }
 
+    [Fact]
+    public void ResolveCurrent_WhenOnlyModuleIdMatches_ShouldNotTreatModuleIdAsProcessType()
+    {
+        var resolver = new ProductionPlanSelectionServiceResolver(
+            [
+                new StubProductionPlanSelectionService("P1-DIECUT"),
+                new StubProductionPlanSelectionService("P2-DIECUT")
+            ],
+            [new StubEdgeProcessModule("P1-DIECUT", "DIECUT")]);
+
+        var resolved = resolver.ResolveCurrent();
+
+        Assert.Null(resolved);
+    }
+
     private sealed class StubProductionPlanSelectionService(string processType) : IProductionPlanSelectionService
     {
         public string ProcessType { get; } = processType;
@@ -64,11 +79,11 @@ public sealed class ProductionPlanSelectionServiceResolverBehaviorTests
             => Task.CompletedTask;
     }
 
-    private sealed class StubEdgeProcessModule(string moduleId) : IEdgeProcessModule
+    private sealed class StubEdgeProcessModule(string moduleId, string? processType = null) : IEdgeProcessModule
     {
         public string ModuleId { get; } = moduleId;
 
-        public string ProcessType => ModuleId;
+        public string ProcessType { get; } = processType ?? moduleId;
 
         public string DisplayName => ModuleId;
 

@@ -17,6 +17,16 @@ internal sealed class LauncherHostRuntimeResolver(
 
     public LauncherHostRuntimeLocation Resolve()
     {
+        if (!File.Exists(_catalogPath))
+        {
+            var fallbackExecutable = Path.GetFullPath(Path.Combine(
+                baseDirectory,
+                DefaultExecutablePath));
+            return new LauncherHostRuntimeLocation(
+                fallbackExecutable,
+                Path.GetDirectoryName(fallbackExecutable) ?? baseDirectory);
+        }
+
         using var document = JsonDocument.Parse(File.ReadAllText(_catalogPath));
         if (document.RootElement.ValueKind != JsonValueKind.Array)
         {

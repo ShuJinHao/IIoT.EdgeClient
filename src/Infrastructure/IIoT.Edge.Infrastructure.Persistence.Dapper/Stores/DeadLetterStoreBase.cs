@@ -21,18 +21,23 @@ public abstract class DeadLetterStoreBase : DapperRepositoryBase<DeadLetterRecor
     {
         var sql = $@"
             INSERT INTO {TableName}
-                (ProcessType, CellDataJson, FailedTarget, SourceTable, SourceRecordId,
+                (ClientCode, CompletionId, TypeKey,
+                 ProcessType, CellDataJson, FailedTarget, SourceTable, SourceRecordId,
                  FailureStage, FailureReason, CreatedAt,
                  PlcCode, IdempotencyKeyVersion,
                  NetworkDeviceId, DeviceName, ModuleId, TaskKey, PlanSessionId, MainPlanCode, TraceBatchNumber)
             VALUES
-                (@ProcessType, @CellDataJson, @FailedTarget, @SourceTable, @SourceRecordId,
+                (@ClientCode, @CompletionId, @TypeKey,
+                 @ProcessType, @CellDataJson, @FailedTarget, @SourceTable, @SourceRecordId,
                  @FailureStage, @FailureReason, @CreatedAt,
                  @PlcCode, @IdempotencyKeyVersion,
                  @NetworkDeviceId, @DeviceName, @ModuleId, @TaskKey, @PlanSessionId, @MainPlanCode, @TraceBatchNumber)";
 
         var affectedRows = await SafeExecuteAsync(sql, new
         {
+            record.ClientCode,
+            record.CompletionId,
+            record.TypeKey,
             record.ProcessType,
             record.CellDataJson,
             record.FailedTarget,

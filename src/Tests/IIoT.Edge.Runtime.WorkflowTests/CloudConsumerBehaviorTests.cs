@@ -7,11 +7,78 @@ using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 using IIoT.Edge.Module.Contracts.Cloud;
 using IIoT.Edge.Module.Contracts.Shared;
+using IIoT.Edge.Host.DataPipeline.Services;
 
 namespace IIoT.Edge.Runtime.WorkflowTests;
 
 public sealed class CloudConsumerBehaviorTests
 {
+    [Fact]
+    public async Task ProcessWithResultAsync_WhenLegacyRetryReconstructionCarriesOnlyProcessType_ShouldContinueV2Upload()
+    {
+        var cloudHttp = new FakeCloudHttpClient();
+        var consumer = new CloudConsumer(
+            CreateOnlineDeviceService(),
+            new FixedCloudExecutionPolicy(true),
+            new FixedCloudUploadGate(UploadGateSnapshot.Ready(ExternalSystemKind.Cloud)),
+            new StandardPassStationCloudUploader(new FakeCloudApiEndpointProvider(), cloudHttp),
+            CreateCloudRegistry(),
+            new FakeCloudDiagnosticsStore(),
+            new FakeLogService());
+        var reconstructed = DataPipelineRetryChannelMetadata.CreateCompletedRecord(
+            new FailedCellRecord
+            {
+                ProcessType = "OtherProcess",
+                CreatedAt = DateTime.UtcNow
+            },
+            new TestCellData
+            {
+                Barcode = "BAR-CLOUD-LEGACY-RETRY",
+                CellResult = true,
+                CompletedTime = DateTime.UtcNow,
+                UploadTargets = DataPipelineUploadTargets.Cloud
+            });
+
+        var result = await consumer.ProcessWithResultAsync(
+            reconstructed,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, cloudHttp.PostCallCount);
+    }
+
+    [Fact]
+    public async Task ProcessWithResultAsync_WhenV3ExclusiveIdentityIsPartial_ShouldFailClosedBeforeHttp()
+    {
+        var cloudHttp = new FakeCloudHttpClient();
+        var consumer = new CloudConsumer(
+            CreateOnlineDeviceService(),
+            new FixedCloudExecutionPolicy(true),
+            new FixedCloudUploadGate(UploadGateSnapshot.Ready(ExternalSystemKind.Cloud)),
+            new StandardPassStationCloudUploader(new FakeCloudApiEndpointProvider(), cloudHttp),
+            CreateCloudRegistry(),
+            new FakeCloudDiagnosticsStore(),
+            new FakeLogService());
+
+        var result = await consumer.ProcessWithResultAsync(new CellCompletedRecord
+        {
+            ClientCode = "CLIENT-CLOUD",
+            ProcessType = "OtherProcess",
+            CellData = new TestCellData
+            {
+                Barcode = "BAR-CLOUD-PARTIAL-V3",
+                CellResult = true,
+                CompletedTime = DateTime.UtcNow,
+                UploadTargets = DataPipelineUploadTargets.Cloud
+            }
+        }, TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(CloudCallOutcome.InvalidPayload, result.Outcome);
+        Assert.Equal("cloud_v3_identity_incomplete", result.ReasonCode);
+        Assert.Equal(0, cloudHttp.PostCallCount);
+    }
+
     [Fact]
     public async Task ProcessWithResultAsync_WhenSystemCloudDisabled_ShouldKeepRecordPendingWithoutCallingUploader()
     {

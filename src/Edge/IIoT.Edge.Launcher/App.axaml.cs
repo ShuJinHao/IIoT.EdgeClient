@@ -58,10 +58,10 @@ public partial class App : Avalonia.Application
             return;
         }
 
-        startupCoordinator.PrepareLocalization();
-
         try
         {
+            startupCoordinator.Initialize();
+            startupCoordinator.PrepareLocalization();
             var mainWindow = services.GetRequiredService<MainWindow>();
             desktop.MainWindow = mainWindow;
             mainWindow.Show();
@@ -75,8 +75,6 @@ public partial class App : Avalonia.Application
                 CreateSafeStartupErrorMessage(ex));
             return;
         }
-
-        startupCoordinator.Initialize();
     }
 
     internal static bool TryCompleteUpdateStartup(IServiceProvider services)
@@ -133,10 +131,13 @@ public partial class App : Avalonia.Application
     internal static string CreateSafeStartupErrorMessage(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
+        var safeReason = exception is LauncherStartupBlockedException blocked
+            ? blocked.ReasonCode
+            : exception.GetType().Name;
         return ResourceFormat(
             "Launcher_Startup_ErrorFormat",
             "本地启动器初始化失败：{0}",
-            exception.GetType().Name);
+            safeReason);
     }
 }
 

@@ -1,5 +1,7 @@
 using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Sdk.Cloud;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace IIoT.Edge.Application.Common.DataPipeline;
 
@@ -43,7 +45,8 @@ public sealed record DataPipelineIngressRecord(
     IReadOnlySet<string> CompletedConsumerKeys);
 
 /// <summary>
-/// 完工事实的稳定入口身份。V2 算法不包含可变 DeviceName 和本地 NetworkDeviceId。
+/// Stable durable-ingress identity. V3 isolates an explicit completion fact by ClientCode;
+/// legacy records continue using the immutable V2 algorithm without silent re-keying.
 /// </summary>
 public static class DataPipelineCompletionIdentity
 {
@@ -53,6 +56,19 @@ public static class DataPipelineCompletionIdentity
     {
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(record.CellData);
+        if (!string.IsNullOrWhiteSpace(record.ClientCode)
+            || !string.IsNullOrWhiteSpace(record.CompletionId)
+            || !string.IsNullOrWhiteSpace(record.TypeKey))
+        {
+            var clientCode = IIoT.Edge.SharedKernel.Configuration.EdgeClientIdentity.NormalizeClientCode(
+                record.ClientCode);
+            var completionId = RequireToken(record.CompletionId, nameof(record.CompletionId), 256);
+            _ = RequireToken(record.TypeKey, nameof(record.TypeKey), 128);
+            var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(
+                $"V3\n{clientCode}\n{completionId}"));
+            return $"V3:{Convert.ToHexString(bytes).ToLowerInvariant()}";
+        }
+
         return CloudIdempotencyKeyBuilder.ForRecord(
             record.CellData.ProcessType,
             IngressIdentityScope,
@@ -65,5 +81,18 @@ public static class DataPipelineCompletionIdentity
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(consumerName);
         return $"{channel}:{consumerName.Trim()}".ToUpperInvariant();
+    }
+
+    private static string RequireToken(string value, string name, int maximumLength)
+    {
+        var normalized = value?.Trim();
+        if (string.IsNullOrWhiteSpace(normalized)
+            || normalized.Length > maximumLength
+            || normalized.Any(char.IsControl))
+        {
+            throw new InvalidDataException($"{name} is required for a v3 completion record.");
+        }
+
+        return normalized;
     }
 }

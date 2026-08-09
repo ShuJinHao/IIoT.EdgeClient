@@ -17,6 +17,7 @@ public enum EdgePluginTransactionStage
     ActivationProfileStaged,
     DirectoryMovedBeforeJournal,
     DirectoryReplaced,
+    RuntimeBindingWritten,
     ProfileWritten,
     HostHandoffPending,
     Cleanup,
@@ -101,6 +102,16 @@ public sealed class EdgePluginCompositionTransaction
             return EdgePluginInstallResult.Failed("插件组合事务包含重复 ModuleId。");
         }
 
+        var identityIssue = TryResolveBindingV3Composition(
+            targets,
+            releases,
+            out var clientCodeByModule,
+            out var runtimeBinding);
+        if (identityIssue is not null)
+        {
+            return EdgePluginInstallResult.Failed(identityIssue);
+        }
+
         var modulePathIssue = ValidateModulePaths(releases);
         if (modulePathIssue is not null)
         {
@@ -136,6 +147,8 @@ public sealed class EdgePluginCompositionTransaction
                 pluginsRoot,
                 targets,
                 releases.Select(static item => item.Release).ToArray(),
+                clientCodeByModule,
+                runtimeBinding is not null,
                 pendingHostVersion);
         }
         catch (Exception ex) when (ex is IOException
@@ -155,10 +168,16 @@ public sealed class EdgePluginCompositionTransaction
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var release = releases[index];
+                var stagingSegment = clientCodeByModule.TryGetValue(
+                    release.Release.ModuleId,
+                    out var clientCode)
+                    ? EdgeClientIdentity.NormalizeClientCode(clientCode)
+                    : EdgeClientProgramDataPaths.SanitizePathSegment(
+                        release.Release.ModuleId);
                 var stagingRoot = Path.Combine(
                     transactionRoot,
                     "staging",
-                    EdgeClientProgramDataPaths.SanitizePathSegment(release.Release.ModuleId));
+                    stagingSegment);
                 prepared.Add(await _packageInstaller
                     .PrepareAsync(
                         stagingRoot,
@@ -173,12 +192,23 @@ public sealed class EdgePluginCompositionTransaction
                 _faultInjector?.Invoke(EdgePluginTransactionStage.PackagePrepared);
             }
 
-            SnapshotProfiles(journal, pluginsRoot);
-            StageProfiles(
-                journal,
-                pluginsRoot,
-                targets,
-                prepared);
+            if (runtimeBinding is not null)
+            {
+                StageRuntimeBinding(
+                    journal,
+                    pluginsRoot,
+                    runtimeBinding,
+                    releases.Select(static item => item.Release).ToArray());
+            }
+            else
+            {
+                SnapshotProfiles(journal, pluginsRoot);
+                StageProfiles(
+                    journal,
+                    pluginsRoot,
+                    targets,
+                    prepared);
+            }
             WriteJournal(journal);
             journalPersisted = true;
 
@@ -209,8 +239,23 @@ public sealed class EdgePluginCompositionTransaction
                 progress?.Report(55 + (index + 1) * 25 / prepared.Count);
             }
 
+            if (journal.RuntimeBinding is not null)
+            {
+                journal.RuntimeBinding.CommitStarted = true;
+                WriteJournal(journal);
+                CommitStagedRuntimeBinding(journal.RuntimeBinding, pluginsRoot);
+                journal.RuntimeBinding.Committed = true;
+                WriteJournal(journal);
+                _faultInjector?.Invoke(EdgePluginTransactionStage.RuntimeBindingWritten);
+            }
+
             foreach (var target in targets)
             {
+                if (journal.RuntimeBinding is not null)
+                {
+                    continue;
+                }
+
                 cancellationToken.ThrowIfCancellationRequested();
                 var profileEntry = journal.Profiles.Single(item =>
                     string.Equals(
@@ -454,6 +499,133 @@ public sealed class EdgePluginCompositionTransaction
         }
     }
 
+    private string? TryResolveBindingV3Composition(
+        IReadOnlyList<EdgePluginCompositionTarget> targets,
+        IReadOnlyList<EdgePluginCompositionRelease> releases,
+        out IReadOnlyDictionary<string, string> clientCodeByModule,
+        out EdgeRuntimeBindingEnvelope? runtimeBinding)
+    {
+        clientCodeByModule = new Dictionary<string, string>(
+            StringComparer.OrdinalIgnoreCase);
+        runtimeBinding = null;
+        var hasAnyClientCode = targets.Any(static target =>
+            !string.IsNullOrWhiteSpace(target.ClientCode));
+        if (!hasAnyClientCode)
+        {
+            return null;
+        }
+
+        if (targets.Any(static target => string.IsNullOrWhiteSpace(target.ClientCode)))
+        {
+            return "Binding v3 更新目标不允许混用缺失 ClientCode 的 v2 目标。";
+        }
+
+        var normalizedTargets = new List<(EdgePluginCompositionTarget Target, string ClientCode, string ModuleId)>();
+        try
+        {
+            foreach (var target in targets)
+            {
+                if (target.ModuleIds.Count != 1
+                    || string.IsNullOrWhiteSpace(target.ModuleIds[0]))
+                {
+                    return "Binding v3 一个设备插件更新目标必须且只能对应一个 ModuleId。";
+                }
+
+                normalizedTargets.Add((
+                    target,
+                    EdgeClientIdentity.NormalizeClientCode(target.ClientCode),
+                    target.ModuleIds[0].Trim()));
+            }
+        }
+        catch (ArgumentException ex)
+        {
+            return $"Binding v3 更新目标 ClientCode 无效：{ex.Message}";
+        }
+
+        if (normalizedTargets
+            .GroupBy(static item => item.ClientCode, StringComparer.Ordinal)
+            .Any(static group => group.Count() > 1))
+        {
+            return "Binding v3 更新目标包含重复 ClientCode。";
+        }
+
+        if (normalizedTargets
+            .GroupBy(static item => item.ModuleId, StringComparer.OrdinalIgnoreCase)
+            .Any(static group => group.Count() > 1))
+        {
+            return "Binding v3 活动组合内 ModuleId 必须唯一。";
+        }
+
+        if (normalizedTargets.Count != releases.Count
+            || releases.Any(release => !normalizedTargets.Any(target =>
+                string.Equals(
+                    target.ModuleId,
+                    release.Release.ModuleId,
+                    StringComparison.OrdinalIgnoreCase))))
+        {
+            return "Binding v3 每个设备目标必须精确对应本次一个独立插件发布。";
+        }
+
+        var runtimeBindingPath = EdgeClientProgramDataPaths.ResolveRuntimeBindingPath(
+            _baseDirectory);
+        if (!File.Exists(runtimeBindingPath))
+        {
+            return "Binding v3 更新缺少运行时 Binding，禁止按 ModuleId 猜测设备目录。";
+        }
+
+        try
+        {
+            runtimeBinding = EdgeInstallerBindingCodec.ParseRuntime(
+                File.ReadAllText(runtimeBindingPath));
+        }
+        catch (Exception ex) when (ex is IOException
+                                       or UnauthorizedAccessException
+                                       or JsonException
+                                       or InvalidDataException
+                                       or ArgumentException)
+        {
+            return $"Binding v3 运行时 Binding 无法安全读取：{ex.GetType().Name}";
+        }
+
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var target in normalizedTargets)
+        {
+            var matches = runtimeBinding.Bindings.Where(binding =>
+                    string.Equals(
+                        binding.ClientCode,
+                        target.ClientCode,
+                        StringComparison.Ordinal))
+                .ToArray();
+            if (matches.Length != 1)
+            {
+                return $"Binding v3 必须唯一命中设备 {target.ClientCode}。";
+            }
+
+            var binding = matches[0];
+            if (!string.Equals(
+                    binding.ModuleId,
+                    target.ModuleId,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return $"设备 {target.ClientCode} 的 Binding ModuleId 与更新目标不一致。";
+            }
+
+            var currentPluginDirectory = EdgeClientProgramDataPaths.ResolveDevicePluginDirectory(
+                target.ClientCode,
+                "app",
+                _baseDirectory);
+            if (!IsExpectedCurrentBindingPluginState(currentPluginDirectory, binding))
+            {
+                return $"设备 {target.ClientCode} 的当前插件目录与运行时 Binding 证据不一致。";
+            }
+
+            map.Add(target.ModuleId, target.ClientCode);
+        }
+
+        clientCodeByModule = map;
+        return null;
+    }
+
     private static string? ValidateModulePaths(
         IReadOnlyList<EdgePluginCompositionRelease> releases)
     {
@@ -509,29 +681,43 @@ public sealed class EdgePluginCompositionTransaction
         string pluginsRoot,
         IReadOnlyList<EdgePluginCompositionTarget> targets,
         IReadOnlyList<EdgePluginVersionRelease> releases,
+        IReadOnlyDictionary<string, string> clientCodeByModule,
+        bool usesRuntimeBinding,
         string? pendingHostVersion)
     {
         var configRoot = EdgeClientProgramDataPaths.ResolveConfigRoot(_baseDirectory);
         var plugins = releases
             .Select(release =>
             {
-                var segment = EdgeClientProgramDataPaths.SanitizePathSegment(release.ModuleId);
+                var hasClientCode = clientCodeByModule.TryGetValue(
+                    release.ModuleId,
+                    out var clientCode);
+                var segment = hasClientCode
+                    ? EdgeClientIdentity.NormalizeClientCode(clientCode!)
+                    : EdgeClientProgramDataPaths.SanitizePathSegment(release.ModuleId);
+                var pluginPath = hasClientCode
+                    ? Path.Combine(segment, "app")
+                    : segment;
                 return new PluginJournalEntry
                 {
+                    ClientCode = hasClientCode ? segment : string.Empty,
                     ModuleId = release.ModuleId,
                     Version = release.PackageVersion,
                     PackageSha256 = release.Sha256,
-                    ModulePath = segment,
+                    ModulePath = pluginPath,
                     BackupPath = Path.Combine(
                         transactionRelativePath,
                         "backups",
                         "plugins",
-                        segment),
-                    OriginalExists = Directory.Exists(Path.Combine(pluginsRoot, segment))
+                        segment,
+                        hasClientCode ? "app" : string.Empty),
+                    OriginalExists = Directory.Exists(Path.Combine(pluginsRoot, pluginPath))
                 };
             })
             .ToList();
-        var profiles = targets
+        List<ProfileJournalEntry> profiles = usesRuntimeBinding
+            ? []
+            : targets
             .DistinctBy(
                 static item => item.Target.MachineProfile,
                 StringComparer.OrdinalIgnoreCase)
@@ -580,7 +766,20 @@ public sealed class EdgePluginCompositionTransaction
                 firstTarget.HostExecutablePath),
             ExpectedHostVersion = pendingHostVersion,
             Plugins = plugins,
-            Profiles = profiles
+            Profiles = profiles,
+            RuntimeBinding = usesRuntimeBinding
+                ? new RuntimeBindingJournalEntry
+                {
+                    BackupPath = Path.Combine(
+                        transactionRelativePath,
+                        "backups",
+                        EdgeClientProgramDataPaths.RuntimeBindingFileName),
+                    StagedPath = Path.Combine(
+                        transactionRelativePath,
+                        "staging",
+                        EdgeClientProgramDataPaths.RuntimeBindingFileName)
+                }
+                : null
         };
     }
 
@@ -601,6 +800,77 @@ public sealed class EdgePluginCompositionTransaction
                 Path.GetDirectoryName(backupPath)
                 ?? throw new InvalidOperationException("profile 备份缺少目录。"));
             File.Copy(sourcePath, backupPath, overwrite: false);
+        }
+    }
+
+    private void StageRuntimeBinding(
+        UpdateTransactionJournal journal,
+        string pluginsRoot,
+        EdgeRuntimeBindingEnvelope runtimeBinding,
+        IReadOnlyList<EdgePluginVersionRelease> releases)
+    {
+        var entry = journal.RuntimeBinding
+            ?? throw new InvalidOperationException("Binding v3 事务缺少运行时 Binding 日志。");
+        var runtimeBindingPath = EdgeClientProgramDataPaths.ResolveRuntimeBindingPath(
+            _baseDirectory);
+        var backupPath = ResolveRelativePath(pluginsRoot, entry.BackupPath);
+        var stagedPath = ResolveRelativePath(pluginsRoot, entry.StagedPath);
+        Directory.CreateDirectory(
+            Path.GetDirectoryName(backupPath)
+            ?? throw new InvalidOperationException("Binding 备份缺少目录。"));
+        Directory.CreateDirectory(
+            Path.GetDirectoryName(stagedPath)
+            ?? throw new InvalidOperationException("Binding 暂存缺少目录。"));
+        File.Copy(runtimeBindingPath, backupPath, overwrite: false);
+        entry.OriginalSha256 = ComputeFileSha256(runtimeBindingPath)
+            ?? throw new InvalidOperationException("运行时 Binding 原文件缺失。");
+
+        var releaseByModule = releases.ToDictionary(
+            static release => release.ModuleId,
+            StringComparer.OrdinalIgnoreCase);
+        var updated = runtimeBinding with
+        {
+            Bindings = runtimeBinding.Bindings.Select(binding =>
+            {
+                var plugin = journal.Plugins.SingleOrDefault(item =>
+                    string.Equals(item.ClientCode, binding.ClientCode, StringComparison.Ordinal));
+                if (plugin is null)
+                {
+                    return binding;
+                }
+
+                var release = releaseByModule[plugin.ModuleId];
+                return binding with
+                {
+                    PluginVersion = release.PackageVersion,
+                    PackageSha256 = release.Sha256.ToUpperInvariant()
+                };
+            }).ToArray()
+        };
+        var serialized = EdgeInstallerBindingCodec.SerializeRuntime(updated);
+        File.WriteAllText(
+            stagedPath,
+            serialized,
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        _ = EdgeInstallerBindingCodec.ParseRuntime(File.ReadAllText(stagedPath));
+        entry.TargetSha256 = ComputeFileSha256(stagedPath)
+            ?? throw new InvalidOperationException("运行时 Binding 暂存文件缺失。");
+    }
+
+    private void CommitStagedRuntimeBinding(
+        RuntimeBindingJournalEntry entry,
+        string pluginsRoot)
+    {
+        var stagedPath = ResolveRelativePath(pluginsRoot, entry.StagedPath);
+        var runtimeBindingPath = EdgeClientProgramDataPaths.ResolveRuntimeBindingPath(
+            _baseDirectory);
+        RestoreFileAtomically(stagedPath, runtimeBindingPath);
+        if (!string.Equals(
+                ComputeFileSha256(runtimeBindingPath),
+                entry.TargetSha256,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("运行时 Binding 提交校验失败。");
         }
     }
 
@@ -783,6 +1053,24 @@ public sealed class EdgePluginCompositionTransaction
                 }
             }
 
+            if (journal.RuntimeBinding is { CommitStarted: true } runtimeBinding)
+            {
+                var backupPath = ResolveRelativePath(
+                    pluginsRoot,
+                    runtimeBinding.BackupPath);
+                RestoreFileAtomically(
+                    backupPath,
+                    EdgeClientProgramDataPaths.ResolveRuntimeBindingPath(_baseDirectory));
+                if (!string.Equals(
+                        ComputeFileSha256(
+                            EdgeClientProgramDataPaths.ResolveRuntimeBindingPath(_baseDirectory)),
+                        runtimeBinding.OriginalSha256,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException("Binding v3 回滚校验失败。");
+                }
+            }
+
             foreach (var plugin in journal.Plugins.AsEnumerable().Reverse())
             {
                 if (!plugin.CommitStarted)
@@ -923,6 +1211,16 @@ public sealed class EdgePluginCompositionTransaction
             }
         }
 
+        if (journal.RuntimeBinding is not null
+            && !string.Equals(
+                ComputeFileSha256(
+                    EdgeClientProgramDataPaths.ResolveRuntimeBindingPath(_baseDirectory)),
+                journal.RuntimeBinding.TargetSha256,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
         return journal.Profiles.All(profile =>
             string.Equals(
                 ComputeFileSha256(ResolveProfilePath(profile.ConfigPath)),
@@ -1034,7 +1332,12 @@ public sealed class EdgePluginCompositionTransaction
                     || string.IsNullOrWhiteSpace(profile.ConfigPath)
                     || string.IsNullOrWhiteSpace(profile.BackupPath)
                     || string.IsNullOrWhiteSpace(profile.StagedPath)
-                    || string.IsNullOrWhiteSpace(profile.TargetSha256)))
+                    || string.IsNullOrWhiteSpace(profile.TargetSha256))
+                || (journal.RuntimeBinding is not null
+                    && (string.IsNullOrWhiteSpace(journal.RuntimeBinding.BackupPath)
+                        || string.IsNullOrWhiteSpace(journal.RuntimeBinding.StagedPath)
+                        || string.IsNullOrWhiteSpace(journal.RuntimeBinding.OriginalSha256)
+                        || string.IsNullOrWhiteSpace(journal.RuntimeBinding.TargetSha256))))
             {
                 error = "更新事务日志结构无效。";
                 return null;
@@ -1266,6 +1569,43 @@ public sealed class EdgePluginCompositionTransaction
         }
     }
 
+    private static bool IsExpectedCurrentBindingPluginState(
+        string pluginDirectory,
+        EdgeRuntimeDeviceBinding binding)
+    {
+        try
+        {
+            using var manifest = JsonDocument.Parse(
+                File.ReadAllText(Path.Combine(pluginDirectory, "plugin.json")));
+            var root = manifest.RootElement;
+            if (!TryReadString(root, "moduleId", out var moduleId)
+                || !TryReadString(root, "supportedProcessType", out var processType)
+                || !TryReadString(root, "version", out var version)
+                || !string.Equals(moduleId, binding.ModuleId, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(processType, binding.ProcessType, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(version, binding.PluginVersion, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            using var install = JsonDocument.Parse(
+                File.ReadAllText(Path.Combine(pluginDirectory, "install.json")));
+            var installRoot = install.RootElement;
+            return TryReadString(installRoot, "moduleId", out var installedModule)
+                   && TryReadString(installRoot, "version", out var installedVersion)
+                   && TryReadString(installRoot, "packageSha256", out var installedSha256)
+                   && string.Equals(installedModule, binding.ModuleId, StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(installedVersion, binding.PluginVersion, StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(installedSha256, binding.PackageSha256, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is JsonException
+                                       or IOException
+                                       or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     private static bool TryReadString(
         JsonElement root,
         string propertyName,
@@ -1372,10 +1712,14 @@ public sealed class EdgePluginCompositionTransaction
         public List<PluginJournalEntry> Plugins { get; set; } = [];
 
         public List<ProfileJournalEntry> Profiles { get; set; } = [];
+
+        public RuntimeBindingJournalEntry? RuntimeBinding { get; set; }
     }
 
     private sealed class PluginJournalEntry
     {
+        public string ClientCode { get; set; } = string.Empty;
+
         public string ModuleId { get; set; } = string.Empty;
 
         public string Version { get; set; } = string.Empty;
@@ -1408,6 +1752,21 @@ public sealed class EdgePluginCompositionTransaction
         public string? OriginalSha256 { get; set; }
 
         public string? TargetSha256 { get; set; }
+    }
+
+    private sealed class RuntimeBindingJournalEntry
+    {
+        public string BackupPath { get; set; } = string.Empty;
+
+        public string StagedPath { get; set; } = string.Empty;
+
+        public string OriginalSha256 { get; set; } = string.Empty;
+
+        public string TargetSha256 { get; set; } = string.Empty;
+
+        public bool CommitStarted { get; set; }
+
+        public bool Committed { get; set; }
     }
 
     private sealed record RollbackResult(

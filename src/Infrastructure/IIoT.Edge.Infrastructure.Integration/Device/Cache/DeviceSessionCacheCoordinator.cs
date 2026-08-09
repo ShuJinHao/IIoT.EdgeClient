@@ -11,6 +11,8 @@ public interface IDeviceSessionCacheCoordinator
     DeviceSession? TryLoad(string clientCode);
 
     void Save(DeviceSession session);
+
+    void SaveRequired(DeviceSession session);
 }
 
 public sealed class DeviceSessionCacheCoordinator(
@@ -28,6 +30,11 @@ public sealed class DeviceSessionCacheCoordinator(
             }
 
             return cached;
+        }
+        catch (DeviceSessionCredentialMigrationException ex)
+        {
+            logger.Error($"[设备服务] 旧明文凭证迁移失败，已阻断设备启动：{ex.InnerException?.GetType().Name}");
+            throw;
         }
         catch (Exception ex)
         {
@@ -47,4 +54,7 @@ public sealed class DeviceSessionCacheCoordinator(
             logger.Warn($"[设备服务] 保存本地缓存失败：{ex.Message}");
         }
     }
+
+    public void SaveRequired(DeviceSession session)
+        => cacheStore.Save(session);
 }

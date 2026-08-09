@@ -2,12 +2,12 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$InstallerPath,
 
-    [ValidateSet('AP', 'CP')]
-    [string[]]$ExpectedModuleId = @('CP'),
+    [Parameter(Mandatory = $true)]
+    [string[]]$ExpectedClientCode,
+
+    [hashtable]$ExpectedModuleIds = @{},
 
     [hashtable]$ExpectedPluginVersions = @{},
-
-    [hashtable]$ExpectedPluginDirectories = @{},
 
     [string]$ExpectedGateway,
 
@@ -157,25 +157,25 @@ function Assert-ZipEntriesSafe {
     }
 }
 
-function Get-NormalizedExpectedModuleIds {
-    param([Parameter(Mandatory = $true)][string[]]$ModuleIds)
+function Get-NormalizedExpectedClientCodes {
+    param([Parameter(Mandatory = $true)][string[]]$ClientCodes)
 
-    $moduleIdSet = [Collections.Generic.HashSet[string]]::new(
+    $clientCodeSet = [Collections.Generic.HashSet[string]]::new(
         [StringComparer]::OrdinalIgnoreCase)
-    foreach ($moduleId in @($ModuleIds)) {
-        $normalized = ([string]$moduleId).Trim()
+    foreach ($clientCode in @($ClientCodes)) {
+        $normalized = ([string]$clientCode).Trim().ToUpperInvariant()
         if ([string]::IsNullOrWhiteSpace($normalized)) {
-            throw 'ExpectedModuleId must not contain an empty module id.'
+            throw 'ExpectedClientCode must not contain an empty device identity.'
         }
-        if (-not $moduleIdSet.Add($normalized)) {
-            throw "ExpectedModuleId contains duplicate module '$normalized'."
+        if (-not $clientCodeSet.Add($normalized)) {
+            throw "ExpectedClientCode contains duplicate device identity '$normalized'."
         }
     }
-    if ($moduleIdSet.Count -eq 0) {
-        throw 'ExpectedModuleId must contain at least one module.'
+    if ($clientCodeSet.Count -eq 0) {
+        throw 'ExpectedClientCode must contain at least one device plugin identity.'
     }
 
-    [string[]]$result = @($moduleIdSet)
+    [string[]]$result = @($clientCodeSet)
     [Array]::Sort($result, [StringComparer]::OrdinalIgnoreCase)
     return ,$result
 }
@@ -183,7 +183,7 @@ function Get-NormalizedExpectedModuleIds {
 function Get-ExpectedMapValue {
     param(
         [Parameter(Mandatory = $true)][hashtable]$Map,
-        [Parameter(Mandatory = $true)][string]$ModuleId,
+        [Parameter(Mandatory = $true)][string]$ClientCode,
         [Parameter(Mandatory = $true)][string]$Label,
         [Parameter(Mandatory = $true)][int]$ExpectedCount
     )
@@ -192,38 +192,38 @@ function Get-ExpectedMapValue {
         return $null
     }
     if ($Map.Count -ne $ExpectedCount) {
-        throw "$Label must contain exactly one entry for every expected module."
+        throw "$Label must contain exactly one entry for every expected ClientCode."
     }
 
     $matchingKeys = @($Map.Keys | Where-Object {
-            [string]::Equals([string]$_, $ModuleId, [StringComparison]::OrdinalIgnoreCase)
+            [string]::Equals([string]$_, $ClientCode, [StringComparison]::OrdinalIgnoreCase)
         })
     if ($matchingKeys.Count -ne 1) {
-        throw "$Label does not contain exactly one entry for module '$ModuleId'."
+        throw "$Label does not contain exactly one entry for ClientCode '$ClientCode'."
     }
     $value = ([string]$Map[$matchingKeys[0]]).Trim()
     if ([string]::IsNullOrWhiteSpace($value)) {
-        throw "$Label module '$ModuleId' has an empty value."
+        throw "$Label ClientCode '$ClientCode' has an empty value."
     }
     return $value
 }
 
-function Assert-ExactModuleSet {
+function Assert-ExactClientCodeSet {
     param(
         [Parameter(Mandatory = $true)][object[]]$Items,
-        [Parameter(Mandatory = $true)][string[]]$ExpectedModuleIds,
+        [Parameter(Mandatory = $true)][string[]]$ExpectedClientCodes,
         [Parameter(Mandatory = $true)][string]$Label
     )
 
-    $actualModuleIds = @($Items | ForEach-Object { ([string]$_.moduleId).Trim() })
-    if ($actualModuleIds.Count -ne $ExpectedModuleIds.Count) {
-        throw "$Label module count '$($actualModuleIds.Count)' does not match expected '$($ExpectedModuleIds.Count)'."
+    $actualClientCodes = @($Items | ForEach-Object { ([string]$_.clientCode).Trim().ToUpperInvariant() })
+    if ($actualClientCodes.Count -ne $ExpectedClientCodes.Count) {
+        throw "$Label ClientCode count '$($actualClientCodes.Count)' does not match expected '$($ExpectedClientCodes.Count)'."
     }
-    foreach ($expectedModuleId in $ExpectedModuleIds) {
-        if (@($actualModuleIds | Where-Object {
-                    [string]::Equals($_, $expectedModuleId, [StringComparison]::OrdinalIgnoreCase)
+    foreach ($expectedClientCode in $ExpectedClientCodes) {
+        if (@($actualClientCodes | Where-Object {
+                    [string]::Equals($_, $expectedClientCode, [StringComparison]::OrdinalIgnoreCase)
                 }).Count -ne 1) {
-            throw "$Label does not contain exactly one expected module '$expectedModuleId'."
+            throw "$Label does not contain exactly one expected ClientCode '$expectedClientCode'."
         }
     }
 }
@@ -231,13 +231,19 @@ function Assert-ExactModuleSet {
 function Assert-BindingPayload {
     param(
         [Parameter(Mandatory = $true)][string]$BindingJson,
-        [Parameter(Mandatory = $true)][string[]]$ExpectedModuleIds,
+        [Parameter(Mandatory = $true)][string[]]$ExpectedClientCodes,
         [string]$ExpectedGateway
     )
 
     $binding = $BindingJson | ConvertFrom-Json
-    if ($binding.schemaVersion -ne 2) {
-        throw 'iiot-binding.json schemaVersion must be 2.'
+    if ($binding.schemaVersion -ne 3) {
+        throw 'Cloud-generated installer iiot-binding.json schemaVersion must be 3.'
+    }
+
+    foreach ($propertyName in @('generationId', 'generatedAtUtc', 'expiresAtUtc')) {
+        if ([string]::IsNullOrWhiteSpace([string]$binding.$propertyName)) {
+            throw "iiot-binding.json field '$propertyName' must not be empty."
+        }
     }
 
     $baseUrl = ([string]$binding.baseUrl).Trim().TrimEnd('/')
@@ -250,13 +256,29 @@ function Assert-BindingPayload {
     }
 
     $expectedPaths = [ordered]@{
-        deviceInstance = '/api/v1/bootstrap/device-instance'
+        deviceInstance = '/api/v1/edge/bootstrap/device-instance'
+        bootstrapRefresh = '/api/v1/edge/bootstrap/edge-refresh'
+        activateDevice = '/api/v1/edge/bootstrap/device-activate'
+        activateDeviceConfirm = '/api/v1/edge/bootstrap/device-activation-confirm'
+        identityDeviceLogin = '/api/v1/human/identity/edge-login'
+        humanIdentityRefresh = '/api/v1/human/identity/refresh'
+        humanSessionValidation = '/api/v1/human/identity/session'
+        deviceLog = '/api/v1/edge/device-logs'
+        passStationBatchTemplate = '/api/v1/edge/pass-stations/{typeKey}/batch'
+        capacityHourly = '/api/v1/edge/capacity/hourly'
+        capacitySummary = '/api/v1/edge/capacity/summary'
+        capacitySummaryRange = '/api/v1/edge/capacity/summary/range'
+        recipeByDeviceTemplate = '/api/v1/edge/recipes/device/{deviceId}'
         clientReleaseCatalogTemplate = '/api/v1/edge/client-releases/device/{deviceId}/catalog'
         clientVersionReport = '/api/v1/edge/client-releases/version-reports'
         runtimeHeartbeat = '/api/v1/edge/runtime-heartbeats'
+        edgeHostPlcRuntimeStates = '/api/v1/edge/edge-hosts/plc-runtime-states'
     }
     if ($null -eq $binding.paths) {
         throw 'iiot-binding.json paths must not be empty.'
+    }
+    if (@($binding.paths.PSObject.Properties).Count -ne $expectedPaths.Count) {
+        throw 'iiot-binding.json must contain exactly the 17 Binding v3 routes.'
     }
     foreach ($propertyName in $expectedPaths.Keys) {
         $actualPath = [string]$binding.paths.$propertyName
@@ -273,6 +295,14 @@ function Assert-BindingPayload {
             [ref]$generatedAtUtc)) {
         throw 'iiot-binding.json generatedAtUtc is invalid.'
     }
+    $expiresAtUtc = [DateTimeOffset]::MinValue
+    if (-not [DateTimeOffset]::TryParse(
+            [string]$binding.expiresAtUtc,
+            [Globalization.CultureInfo]::InvariantCulture,
+            [Globalization.DateTimeStyles]::RoundtripKind,
+            [ref]$expiresAtUtc) -or $expiresAtUtc -le $generatedAtUtc) {
+        throw 'iiot-binding.json expiresAtUtc is invalid.'
+    }
 
     $items = @($binding.bindings)
     if ($items.Count -eq 0) {
@@ -281,28 +311,72 @@ function Assert-BindingPayload {
 
     $moduleIdSet = [Collections.Generic.HashSet[string]]::new(
         [StringComparer]::OrdinalIgnoreCase)
+    $clientCodeSet = [Collections.Generic.HashSet[string]]::new(
+        [StringComparer]::OrdinalIgnoreCase)
     foreach ($item in $items) {
         $moduleId = ([string]$item.moduleId).Trim()
         if ([string]::IsNullOrWhiteSpace($moduleId) -or -not $moduleIdSet.Add($moduleId)) {
             throw 'iiot-binding.json contains an empty or duplicate moduleId.'
         }
-        foreach ($propertyName in @('clientCode', 'bootstrapSecret', 'deviceName', 'processId')) {
+        $clientCode = ([string]$item.clientCode).Trim().ToUpperInvariant()
+        if ([string]::IsNullOrWhiteSpace($clientCode) -or -not $clientCodeSet.Add($clientCode)) {
+            throw 'iiot-binding.json contains an empty or duplicate ClientCode.'
+        }
+        foreach ($propertyName in @(
+            'deviceName', 'processId', 'processType', 'pluginVersion', 'packageSha256',
+            'pluginDirectory', 'configDirectory', 'dbDirectory', 'dataDirectory',
+            'logsDirectory', 'cacheDirectory', 'contextDirectory', 'buffersDirectory')) {
             $value = [string]$item.$propertyName
             if ([string]::IsNullOrWhiteSpace($value)) {
-                throw "iiot-binding.json module '$moduleId' has empty '$propertyName'."
+                throw "iiot-binding.json ClientCode '$clientCode' has empty '$propertyName'."
             }
         }
+        if ([string]$item.packageSha256 -notmatch '^[0-9a-fA-F]{64}$') {
+            throw "iiot-binding.json ClientCode '$clientCode' has invalid packageSha256."
+        }
+
+        $expectedRoot = "plugins/$clientCode"
+        $expectedDirectories = [ordered]@{
+            pluginDirectory = "$expectedRoot/app"
+            configDirectory = "$expectedRoot/config"
+            dbDirectory = "$expectedRoot/db"
+            dataDirectory = "$expectedRoot/data"
+            logsDirectory = "$expectedRoot/logs"
+            cacheDirectory = "$expectedRoot/cache"
+            contextDirectory = "$expectedRoot/context"
+            buffersDirectory = "$expectedRoot/buffers"
+        }
+        foreach ($propertyName in $expectedDirectories.Keys) {
+            $actualDirectory = ([string]$item.$propertyName).Replace('\', '/').Trim('/')
+            if (-not [string]::Equals(
+                    $actualDirectory,
+                    [string]$expectedDirectories[$propertyName],
+                    [StringComparison]::OrdinalIgnoreCase)) {
+                throw "iiot-binding.json ClientCode '$clientCode' has non-canonical '$propertyName'."
+            }
+        }
+
+        if ($null -eq $item.pendingCredential -or
+            [string]::IsNullOrWhiteSpace([string]$item.pendingCredential.name) -or
+            [string]::IsNullOrWhiteSpace([string]$item.pendingCredential.secret)) {
+            throw "iiot-binding.json ClientCode '$clientCode' has no pending credential."
+        }
+        $expectedCredentialName = "IIoT.Edge/Pending/$([string]$binding.generationId)/$clientCode"
+        if ([string]$item.pendingCredential.name -cne $expectedCredentialName) {
+            throw "iiot-binding.json ClientCode '$clientCode' has an invalid pending credential reference."
+        }
     }
-    Assert-ExactModuleSet `
+    Assert-ExactClientCodeSet `
         -Items $items `
-        -ExpectedModuleIds $ExpectedModuleIds `
+        -ExpectedClientCodes $ExpectedClientCodes `
         -Label 'iiot-binding.json'
 
     return [pscustomobject]@{
+        GenerationId = ([string]$binding.generationId).Trim()
         BaseUrl = $baseUrl
         Paths = $binding.paths
         Bindings = $items
-        BootstrapSecrets = @($items | ForEach-Object { [string]$_.bootstrapSecret })
+        PendingSecrets = @($items | ForEach-Object { [string]$_.pendingCredential.secret })
     }
 }
 
@@ -310,14 +384,14 @@ function Assert-HostPluginPayload {
     param(
         [Parameter(Mandatory = $true)][string]$HostPluginJson,
         [Parameter(Mandatory = $true)]$BindingBundle,
-        [Parameter(Mandatory = $true)][string[]]$ExpectedModuleIds,
-        [Parameter(Mandatory = $true)][hashtable]$ExpectedVersions,
-        [Parameter(Mandatory = $true)][hashtable]$ExpectedDirectories
+        [Parameter(Mandatory = $true)][string[]]$ExpectedClientCodes,
+        [Parameter(Mandatory = $true)][hashtable]$ExpectedModules,
+        [Parameter(Mandatory = $true)][hashtable]$ExpectedVersions
     )
 
     $hostPlugins = $HostPluginJson | ConvertFrom-Json
-    if ($hostPlugins.schemaVersion -ne 1) {
-        throw 'iiot-enabled-plugins.json schemaVersion is invalid.'
+    if ($hostPlugins.schemaVersion -ne 2) {
+        throw 'iiot-enabled-plugins.json schemaVersion must be 2.'
     }
 
     $plugins = @($hostPlugins.plugins)
@@ -328,14 +402,17 @@ function Assert-HostPluginPayload {
     foreach ($plugin in $plugins) {
         $moduleId = ([string]$plugin.moduleId).Trim()
         $pluginDirectory = ([string]$plugin.pluginDirectory).Trim()
+        $clientCode = ([string]$plugin.clientCode).Trim().ToUpperInvariant()
         if ([string]::IsNullOrWhiteSpace($moduleId) -or -not $moduleIdSet.Add($moduleId)) {
             throw 'iiot-enabled-plugins.json contains an empty or duplicate moduleId.'
         }
-        if ([string]::IsNullOrWhiteSpace($pluginDirectory) -or
+        if ([string]::IsNullOrWhiteSpace($clientCode) -or
+            [string]::IsNullOrWhiteSpace($pluginDirectory) -or
             $pluginDirectory -in @('.', '..') -or
             $pluginDirectory.Contains('/') -or
             $pluginDirectory.Contains('\') -or
-            -not $directorySet.Add($pluginDirectory)) {
+            -not $directorySet.Add($pluginDirectory) -or
+            -not [string]::Equals($pluginDirectory, $clientCode, [StringComparison]::OrdinalIgnoreCase)) {
             throw "iiot-enabled-plugins.json module '$moduleId' has an unsafe or duplicate pluginDirectory."
         }
         if ([string]::IsNullOrWhiteSpace([string]$plugin.version)) {
@@ -344,42 +421,46 @@ function Assert-HostPluginPayload {
 
         $bindingMatches = @($BindingBundle.Bindings | Where-Object {
                 [string]::Equals(
-                    [string]$_.moduleId,
-                    $moduleId,
+                    [string]$_.clientCode,
+                    $clientCode,
                     [StringComparison]::OrdinalIgnoreCase)
             })
         if ($bindingMatches.Count -ne 1) {
-            throw "iiot-enabled-plugins.json module '$moduleId' does not have exactly one iiot-binding.json entry."
+            throw "iiot-enabled-plugins.json ClientCode '$clientCode' does not have exactly one iiot-binding.json entry."
         }
         $binding = $bindingMatches[0]
-        foreach ($propertyName in @('clientCode', 'deviceName', 'processId')) {
-            if ([string]$plugin.$propertyName -cne [string]$binding.$propertyName) {
-                throw "iiot-enabled-plugins.json module '$moduleId' property '$propertyName' does not match iiot-binding.json."
+        if ([string]$plugin.packageSha256 -cne [string]$binding.packageSha256) {
+            throw "iiot-enabled-plugins.json ClientCode '$clientCode' packageSha256 does not match iiot-binding.json."
+        }
+        foreach ($propertyName in @('clientCode', 'deviceName', 'processId', 'moduleId', 'pluginVersion')) {
+            $pluginPropertyName = if ($propertyName -ceq 'pluginVersion') { 'version' } else { $propertyName }
+            if ([string]$plugin.$pluginPropertyName -cne [string]$binding.$propertyName) {
+                throw "iiot-enabled-plugins.json ClientCode '$clientCode' property '$pluginPropertyName' does not match iiot-binding.json."
             }
         }
 
         $expectedVersion = Get-ExpectedMapValue `
             -Map $ExpectedVersions `
-            -ModuleId $moduleId `
+            -ClientCode $clientCode `
             -Label 'ExpectedPluginVersions' `
-            -ExpectedCount $ExpectedModuleIds.Count
+            -ExpectedCount $ExpectedClientCodes.Count
         if ($null -ne $expectedVersion -and [string]$plugin.version -cne $expectedVersion) {
-            throw "iiot-enabled-plugins.json module '$moduleId' version does not match ExpectedPluginVersions."
+            throw "iiot-enabled-plugins.json ClientCode '$clientCode' version does not match ExpectedPluginVersions."
         }
 
-        $expectedDirectory = Get-ExpectedMapValue `
-            -Map $ExpectedDirectories `
-            -ModuleId $moduleId `
-            -Label 'ExpectedPluginDirectories' `
-            -ExpectedCount $ExpectedModuleIds.Count
-        if ($null -ne $expectedDirectory -and $pluginDirectory -cne $expectedDirectory) {
-            throw "iiot-enabled-plugins.json module '$moduleId' pluginDirectory does not match ExpectedPluginDirectories."
+        $expectedModule = Get-ExpectedMapValue `
+            -Map $ExpectedModules `
+            -ClientCode $clientCode `
+            -Label 'ExpectedModuleIds' `
+            -ExpectedCount $ExpectedClientCodes.Count
+        if ($null -ne $expectedModule -and $moduleId -cne $expectedModule) {
+            throw "iiot-enabled-plugins.json ClientCode '$clientCode' moduleId does not match ExpectedModuleIds."
         }
     }
 
-    Assert-ExactModuleSet `
+    Assert-ExactClientCodeSet `
         -Items $plugins `
-        -ExpectedModuleIds $ExpectedModuleIds `
+        -ExpectedClientCodes $ExpectedClientCodes `
         -Label 'iiot-enabled-plugins.json'
     return $plugins
 }
@@ -440,7 +521,9 @@ function Assert-PluginManifestPayloads {
             }
             $relative = $entryName.Substring($normalizedRoot.Length + 1)
             $segments = $relative.Split('/')
-            return $segments.Count -eq 2 -and $segments[1] -ceq 'plugin.json'
+            return $segments.Count -eq 3 -and
+                $segments[1] -ceq 'app' -and
+                $segments[2] -ceq 'plugin.json'
         })
     if ($payloadManifestEntries.Count -ne $Plugins.Count) {
         throw 'Installer payload plugin.json count does not match iiot-enabled-plugins.json.'
@@ -449,7 +532,7 @@ function Assert-PluginManifestPayloads {
     foreach ($plugin in $Plugins) {
         $moduleId = [string]$plugin.moduleId
         $pluginDirectory = [string]$plugin.pluginDirectory
-        $entryName = "$normalizedRoot/$pluginDirectory/plugin.json"
+        $entryName = "$normalizedRoot/$pluginDirectory/app/plugin.json"
         $pluginManifest = (Read-ZipEntryText -Archive $Archive -EntryName $entryName) |
             ConvertFrom-Json
         if ([string]$pluginManifest.moduleId -cne $moduleId) {
@@ -585,11 +668,102 @@ function Assert-PluginEntriesContainNoBootstrapSecret {
     }
 }
 
+function Assert-SignedPayloadManifest {
+    param(
+        [Parameter(Mandatory = $true)][System.IO.Compression.ZipArchive]$Archive,
+        [Parameter(Mandatory = $true)][string]$ExpectedGenerationId
+    )
+
+    $manifest = (Read-ZipEntryText -Archive $Archive -EntryName 'payload-manifest.json') |
+        ConvertFrom-Json
+    if ($manifest.schemaVersion -ne 1 -or
+        [string]::IsNullOrWhiteSpace([string]$manifest.component) -or
+        [string]::IsNullOrWhiteSpace([string]$manifest.version) -or
+        [string]$manifest.generationId -cne $ExpectedGenerationId) {
+        throw 'payload-manifest.json header does not match the selected installer generation.'
+    }
+    $createdAtUtc = [DateTimeOffset]::MinValue
+    if (-not [DateTimeOffset]::TryParse(
+            [string]$manifest.createdAtUtc,
+            [Globalization.CultureInfo]::InvariantCulture,
+            [Globalization.DateTimeStyles]::AssumeUniversal,
+            [ref]$createdAtUtc)) {
+        throw 'payload-manifest.json createdAtUtc is missing or invalid.'
+    }
+    if ([string]$manifest.signature.algorithm -cne 'rsa-pss-sha256' -or
+        [string]::IsNullOrWhiteSpace([string]$manifest.signature.keyId) -or
+        [string]::IsNullOrWhiteSpace([string]$manifest.signature.value)) {
+        throw 'payload-manifest.json does not contain the required RSA-PSS-SHA256 release signature.'
+    }
+    try {
+        $signatureBytes = [Convert]::FromBase64String([string]$manifest.signature.value)
+    }
+    catch {
+        throw 'payload-manifest.json signature is not valid Base64.'
+    }
+    if ($signatureBytes.Length -eq 0) {
+        throw 'payload-manifest.json signature is empty.'
+    }
+
+    $declared = [Collections.Generic.Dictionary[string, object]]::new(
+        [StringComparer]::OrdinalIgnoreCase)
+    foreach ($file in @($manifest.files)) {
+        $path = ([string]$file.path).Replace('\', '/').TrimStart('/')
+        $sha256 = ([string]$file.sha256).Trim()
+        if ([string]::IsNullOrWhiteSpace($path) -or
+            $path -ceq 'payload-manifest.json' -or
+            $path.Split('/') -contains '..' -or
+            [long]$file.size -lt 0 -or
+            $sha256 -notmatch '^[0-9a-f]{64}$' -or
+            [string]::IsNullOrWhiteSpace([string]$file.type) -or
+            [string]::IsNullOrWhiteSpace([string]$file.component) -or
+            [string]::IsNullOrWhiteSpace([string]$file.version) -or
+            -not $declared.TryAdd($path, $file)) {
+            throw "payload-manifest.json contains an invalid or duplicate file entry: $path"
+        }
+    }
+
+    $actualPaths = [Collections.Generic.HashSet[string]]::new(
+        [StringComparer]::OrdinalIgnoreCase)
+    foreach ($entry in $Archive.Entries) {
+        if ([string]::IsNullOrEmpty($entry.Name)) {
+            continue
+        }
+        $path = $entry.FullName.Replace('\', '/').TrimStart('/')
+        if ($path -ceq 'payload-manifest.json') {
+            continue
+        }
+        if (-not $actualPaths.Add($path) -or -not $declared.ContainsKey($path)) {
+            throw "Installer payload contains an undeclared or duplicate file: $path"
+        }
+        $file = $declared[$path]
+        if ($entry.Length -ne [long]$file.size) {
+            throw "Installer payload file size does not match manifest: $path"
+        }
+        $stream = $entry.Open()
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try {
+            $actualSha256 = [Convert]::ToHexString($sha.ComputeHash($stream)).ToLowerInvariant()
+        }
+        finally {
+            $sha.Dispose()
+            $stream.Dispose()
+        }
+        if ($actualSha256 -cne [string]$file.sha256) {
+            throw "Installer payload file hash does not match manifest: $path"
+        }
+    }
+    if ($actualPaths.Count -ne $declared.Count) {
+        $missing = @($declared.Keys | Where-Object { -not $actualPaths.Contains($_) } | Sort-Object)
+        throw "Installer payload is incomplete; manifest files are missing: $($missing -join ', ')"
+    }
+}
+
 $resolvedInstallerPath = Resolve-TestPath -PathValue $InstallerPath
 if (-not (Test-Path $resolvedInstallerPath)) {
     throw "Installer package was not found: $resolvedInstallerPath"
 }
-$expectedModuleIds = Get-NormalizedExpectedModuleIds -ModuleIds $ExpectedModuleId
+$expectedClientCodes = Get-NormalizedExpectedClientCodes -ClientCodes $ExpectedClientCode
 
 $payload = Read-AppendedPayload -PathValue $resolvedInstallerPath
 $payloadStream = [System.IO.MemoryStream]::new($payload, $false)
@@ -613,13 +787,24 @@ try {
     Assert-ZipEntryExists -Archive $archive -EntryName 'launcher/iiot-binding.json'
     Assert-ZipEntryExists -Archive $archive -EntryName 'launcher/iiot-enabled-plugins.json'
     Assert-ZipEntryExists -Archive $archive -EntryName 'launcher/launcher.update.json'
+    Assert-ZipEntryExists -Archive $archive -EntryName 'payload-manifest.json'
+    Assert-ZipEntryExists -Archive $archive -EntryName 'launcher/IIoT.Edge.Launcher.exe'
     Assert-ZipEntryExists -Archive $archive -EntryName "$ExpectedHostDirectory/IIoT.Edge.Shell.dll"
+    Assert-ZipEntryExists -Archive $archive -EntryName "$ExpectedHostDirectory/IIoT.Edge.Shell.exe"
+    if ($null -ne ($archive.Entries | Where-Object {
+            $_.FullName -ceq 'launcher/launcher.profiles.json'
+        } | Select-Object -First 1)) {
+        throw 'Production installer payload must not contain launcher.profiles.json or a startable Default card.'
+    }
 
     $bindingJson = Read-ZipEntryText -Archive $archive -EntryName 'launcher/iiot-binding.json'
     $bindingBundle = Assert-BindingPayload `
         -BindingJson $bindingJson `
-        -ExpectedModuleIds $expectedModuleIds `
+        -ExpectedClientCodes $expectedClientCodes `
         -ExpectedGateway $ExpectedGateway
+    Assert-SignedPayloadManifest `
+        -Archive $archive `
+        -ExpectedGenerationId $bindingBundle.GenerationId
 
     $updateConfigJson = Read-ZipEntryText -Archive $archive -EntryName 'launcher/launcher.update.json'
     $updateConfig = Assert-UpdateConfigPayload `
@@ -638,18 +823,18 @@ try {
     Assert-TextContainsNoBootstrapSecret `
         -Text $hostPluginJson `
         -Label 'iiot-enabled-plugins.json' `
-        -BootstrapSecrets $bindingBundle.BootstrapSecrets
+        -BootstrapSecrets $bindingBundle.PendingSecrets
     Assert-TextContainsNoBootstrapSecret `
         -Text $updateConfigJson `
         -Label 'launcher.update.json' `
-        -BootstrapSecrets $bindingBundle.BootstrapSecrets
+        -BootstrapSecrets $bindingBundle.PendingSecrets
 
     $plugins = Assert-HostPluginPayload `
         -HostPluginJson $hostPluginJson `
         -BindingBundle $bindingBundle `
-        -ExpectedModuleIds $expectedModuleIds `
-        -ExpectedVersions $ExpectedPluginVersions `
-        -ExpectedDirectories $ExpectedPluginDirectories
+        -ExpectedClientCodes $expectedClientCodes `
+        -ExpectedModules $ExpectedModuleIds `
+        -ExpectedVersions $ExpectedPluginVersions
     Assert-PluginManifestPayloads `
         -Archive $archive `
         -Plugins $plugins `
@@ -657,7 +842,7 @@ try {
     Assert-PluginEntriesContainNoBootstrapSecret `
         -Archive $archive `
         -PluginsRoot $ExpectedPluginsRoot `
-        -BootstrapSecrets $bindingBundle.BootstrapSecrets
+        -BootstrapSecrets $bindingBundle.PendingSecrets
 
     if ($ExtractPayload) {
         if ([string]::IsNullOrWhiteSpace($PayloadOutputDirectory)) {

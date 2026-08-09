@@ -10,6 +10,18 @@ public sealed record LauncherProfileDefinition(
     string IconKind,
     string AccentColor)
 {
+    public string ClientCode { get; init; } = string.Empty;
+
+    public string ProcessType { get; init; } = string.Empty;
+
+    public Guid? ProcessId { get; init; }
+
+    public string PluginVersion { get; init; } = string.Empty;
+
+    public string PackageSha256 { get; init; } = string.Empty;
+
+    public string MachineConfigPath { get; init; } = string.Empty;
+
     public IReadOnlyList<string> ExpectedModuleIds { get; init; } = [];
 
     public string ActivationModuleId { get; init; } = string.Empty;

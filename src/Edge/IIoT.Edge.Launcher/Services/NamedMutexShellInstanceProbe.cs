@@ -44,15 +44,15 @@ public sealed class NamedMutexShellInstanceProbe : IShellInstanceProbe
         }
         catch (IOException)
         {
-            return false;
+            return true;
         }
         catch (PlatformNotSupportedException)
         {
-            return false;
+            return true;
         }
         catch (ArgumentException)
         {
-            return false;
+            return true;
         }
     }
 }

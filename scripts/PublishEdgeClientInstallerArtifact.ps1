@@ -48,6 +48,8 @@ param(
 
     [string]$ReleaseNotesPath = '',
 
+    [string]$TrustedPayloadSigningKeysFile = $env:IIOT_EDGE_PAYLOAD_TRUSTED_KEYS_FILE,
+
     [string]$Publisher = 'IIoT'
 )
 
@@ -141,6 +143,102 @@ function Get-ArtifactDirectorySha256 {
     finally {
         $hasher.Dispose()
     }
+}
+
+function Write-HostFileManifest {
+    param(
+        [Parameter(Mandatory = $true)][string]$HostDirectory,
+        [Parameter(Mandatory = $true)][string]$OutputPath,
+        [Parameter(Mandatory = $true)][string]$HostVersion
+    )
+
+    $resolvedHost = [IO.Path]::GetFullPath($HostDirectory).TrimEnd(
+        [IO.Path]::DirectorySeparatorChar,
+        [IO.Path]::AltDirectorySeparatorChar)
+    $files = @(Get-ArtifactFilePaths -Directory $resolvedHost | ForEach-Object {
+        $file = [IO.FileInfo]$_
+        $relative = Get-ArtifactRelativePath -BaseDirectory $resolvedHost -PathValue $file.FullName
+        [pscustomobject][ordered]@{
+            path = $relative
+            size = [long]$file.Length
+            sha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            type = if ([string]::IsNullOrWhiteSpace($file.Extension)) { 'file' } else { $file.Extension.TrimStart('.').ToLowerInvariant() }
+            component = 'Host'
+            version = $HostVersion
+        }
+    } | Sort-Object path)
+    if ($files.Count -eq 0 -or @($files | Group-Object path | Where-Object Count -gt 1).Count -gt 0) {
+        throw 'Prepared Host file manifest must contain a non-empty unique relative-path set.'
+    }
+
+    [ordered]@{
+        schemaVersion = 1
+        component = 'Host'
+        version = $HostVersion
+        files = $files
+    } | ConvertTo-Json -Depth 20 |
+        Set-Content -LiteralPath $OutputPath -Encoding utf8NoBOM
+    return [pscustomobject]@{
+        Path = [IO.Path]::GetFullPath($OutputPath)
+        Sha256 = (Get-FileHash -LiteralPath $OutputPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        FileCount = $files.Count
+    }
+}
+
+function Resolve-TrustedPayloadSigningKeysFile {
+    if ([string]::IsNullOrWhiteSpace($TrustedPayloadSigningKeysFile)) {
+        throw 'Production Installer publish requires -TrustedPayloadSigningKeysFile (or IIOT_EDGE_PAYLOAD_TRUSTED_KEYS_FILE). The repository default intentionally contains no trusted production key.'
+    }
+
+    $resolved = Resolve-EdgeAbsolutePath -BasePath $repoRoot -PathValue $TrustedPayloadSigningKeysFile
+    if (-not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
+        throw "Trusted Installer payload public-key file was not found: $resolved"
+    }
+
+    try {
+        $document = Get-Content -Raw -Encoding UTF8 -LiteralPath $resolved | ConvertFrom-Json
+    }
+    catch {
+        throw "Trusted Installer payload public-key file is not valid JSON: $resolved"
+    }
+    $keys = @($document.keys)
+    if ($keys.Count -eq 0) {
+        throw 'Trusted Installer payload public-key file must contain at least one public key.'
+    }
+
+    $keyIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($key in $keys) {
+        $keyId = [string]$key.keyId
+        $pem = [string]$key.publicKeyPem
+        if ($keyId -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$' -or
+            -not $keyIds.Add($keyId) -or
+            [string]::IsNullOrWhiteSpace($pem)) {
+            throw "Trusted Installer payload public-key entry is incomplete or duplicated: '$keyId'."
+        }
+
+        $rsa = [Security.Cryptography.RSA]::Create()
+        try {
+            $rsa.ImportFromPem($pem)
+            if ($rsa.KeySize -lt 2048) {
+                throw "Trusted Installer payload key '$keyId' must be at least RSA-2048."
+            }
+            try {
+                [void]$rsa.ExportParameters($true)
+                throw "Trusted Installer payload key '$keyId' must contain only a public key."
+            }
+            catch [Security.Cryptography.CryptographicException] {
+                # Expected: a correctly provisioned trust file must not contain private material.
+            }
+        }
+        catch [Security.Cryptography.CryptographicException] {
+            throw "Trusted Installer payload key '$keyId' is not a valid RSA public key."
+        }
+        finally {
+            $rsa.Dispose()
+        }
+    }
+
+    return [IO.Path]::GetFullPath($resolved)
 }
 
 function Get-ArtifactRelativePath {
@@ -270,7 +368,8 @@ function Copy-ArtifactDirectory {
 
 function Publish-InstallerStub {
     param(
-        [Parameter(Mandatory = $true)][string]$OutputDirectory
+        [Parameter(Mandatory = $true)][string]$OutputDirectory,
+        [Parameter(Mandatory = $true)][string]$TrustedKeysPath
     )
 
     $projectPath = Join-Path $repoRoot 'src\Edge\IIoT.Edge.Installer\IIoT.Edge.Installer.csproj'
@@ -295,6 +394,7 @@ function Publish-InstallerStub {
         '-p:PublishSingleFile=true',
         '-p:EnableCompressionInSingleFile=true',
         '-p:IncludeNativeLibrariesForSelfExtract=true',
+        "-p:IIoTEdgePayloadTrustedKeysFile=$TrustedKeysPath",
         "-p:Version=$Version",
         "-p:InformationalVersion=$Version"
     )
@@ -544,7 +644,15 @@ foreach ($directory in $artifactDirectoriesToValidate) {
     Assert-ArtifactCloudIdentityTemplatesAreEmpty -Directory $directory
 }
 
-$publishedStubPath = Publish-InstallerStub -OutputDirectory $stubPublishRoot
+$hostFileManifest = Write-HostFileManifest `
+    -HostDirectory (Join-Path $artifactRoot $manifest.hostDirectory) `
+    -OutputPath (Join-Path $artifactRoot 'host-file-manifest.json') `
+    -HostVersion $Version
+
+$trustedPayloadSigningKeysPath = Resolve-TrustedPayloadSigningKeysFile
+$publishedStubPath = Publish-InstallerStub `
+    -OutputDirectory $stubPublishRoot `
+    -TrustedKeysPath $trustedPayloadSigningKeysPath
 Copy-Item -Path $publishedStubPath -Destination $installerStubTargetPath -Force
 
 if (-not [string]::IsNullOrWhiteSpace($VelopackSetupPath)) {
@@ -560,8 +668,8 @@ if (-not [string]::IsNullOrWhiteSpace($VelopackSetupPath)) {
 }
 
 $artifactProperties = [ordered]@{
-    schemaVersion = 2
-    installerBindingSchemaVersion = 2
+    schemaVersion = 3
+    installerBindingSchemaVersion = 3
     channel = $ReleaseChannel
     version = $Version
     hostApiVersion = $HostApiVersion
@@ -576,9 +684,14 @@ $artifactProperties = [ordered]@{
     installerStubSha256 = Get-ArtifactSha256 -PathValue $installerStubTargetPath
     installerStubSize = (Get-Item $installerStubTargetPath).Length
     launcherDirectory = [string]$manifest.launcherDirectory
+    launcherDirectorySha256 = Get-ArtifactDirectorySha256 -Directory (Join-Path $artifactRoot $manifest.launcherDirectory)
+    launcherDirectorySize = Get-ArtifactDirectorySize -Directory (Join-Path $artifactRoot $manifest.launcherDirectory)
     hostDirectory = [string]$manifest.hostDirectory
     hostDirectorySha256 = Get-ArtifactDirectorySha256 -Directory (Join-Path $artifactRoot $manifest.hostDirectory)
     hostDirectorySize = Get-ArtifactDirectorySize -Directory (Join-Path $artifactRoot $manifest.hostDirectory)
+    hostFileManifest = 'host-file-manifest.json'
+    hostFileManifestSha256 = $hostFileManifest.Sha256
+    hostFileManifestFileCount = $hostFileManifest.FileCount
     pluginsRoot = [string]$manifest.pluginsRoot
     modules = $modules
 }

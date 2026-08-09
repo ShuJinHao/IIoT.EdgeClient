@@ -2,6 +2,7 @@ using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.SharedKernel.Configuration;
 using System.Diagnostics;
 using System.IO;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace IIoT.Edge.Launcher.Services;
@@ -16,6 +17,7 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
     private readonly string _baseDirectory;
     private readonly string _catalogPath;
     private readonly ILauncherPluginActivationSource _activationSource;
+    private readonly ILauncherEnabledPluginSelectionSource _selectionSource;
     private readonly ILauncherPluginActivationReconciler? _activationReconciler;
     private readonly LauncherHostRuntimeResolver _hostRuntimeResolver;
 
@@ -30,13 +32,30 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
 
         _baseDirectory = baseDirectory;
         _catalogPath = Path.Combine(baseDirectory, catalogFileName);
-        _activationSource = activationSource ?? new LauncherPluginActivationSource(baseDirectory);
+        _selectionSource = activationSource is null
+            ? new LauncherEnabledPluginSelectionSource(baseDirectory)
+            : new LauncherEnabledPluginSelectionSource(baseDirectory);
+        _activationSource = activationSource
+            ?? new LauncherPluginActivationSource(baseDirectory, _selectionSource);
         _activationReconciler = activationReconciler;
         _hostRuntimeResolver = new LauncherHostRuntimeResolver(baseDirectory, catalogFileName);
     }
 
     public IReadOnlyList<LauncherProfileDefinition> LoadProfiles()
     {
+        var runtimeBindingPath = EdgeClientProgramDataPaths.ResolveRuntimeBindingPath(_baseDirectory);
+        if (!File.Exists(runtimeBindingPath) && !File.Exists(_catalogPath))
+        {
+            throw new FileNotFoundException($"未找到启动器工序清单：'{_catalogPath}'。", _catalogPath);
+        }
+
+        var hostRuntime = _hostRuntimeResolver.Resolve();
+        var runtimeProfiles = LoadRuntimeBoundProfiles(hostRuntime);
+        if (runtimeProfiles is not null)
+        {
+            return runtimeProfiles;
+        }
+
         if (!File.Exists(_catalogPath))
         {
             throw new FileNotFoundException($"未找到启动器工序清单：'{_catalogPath}'。", _catalogPath);
@@ -49,7 +68,6 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
         }
 
         var profiles = entries.Select(entry => Map(entry)).ToList();
-        var hostRuntime = _hostRuntimeResolver.Resolve();
         var profileIds = profiles
             .Select(static profile => profile.ProfileId)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -102,6 +120,257 @@ public sealed class LauncherProfileCatalog : ILauncherProfileCatalog
         }
 
         return profiles;
+    }
+
+    private IReadOnlyList<LauncherProfileDefinition>? LoadRuntimeBoundProfiles(
+        LauncherHostRuntimeLocation hostRuntime)
+    {
+        var runtimeBindingPath = EdgeClientProgramDataPaths.ResolveRuntimeBindingPath(_baseDirectory);
+        if (!File.Exists(runtimeBindingPath))
+        {
+            return null;
+        }
+
+        var envelope = EdgeInstallerBindingCodec.ParseRuntime(
+            File.ReadAllText(runtimeBindingPath));
+        var selection = _selectionSource.Load();
+        if (!selection.ManifestIsValid
+            || selection.Plugins.Count != envelope.Bindings.Count)
+        {
+            throw new InvalidOperationException(
+                "设备插件启用清单与运行时 Binding 不一致。");
+        }
+        var profiles = new List<LauncherProfileDefinition>(envelope.Bindings.Count);
+        var layoutRoot = Path.GetDirectoryName(
+            EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(_baseDirectory))
+            ?? _baseDirectory;
+        foreach (var binding in envelope.Bindings)
+        {
+            var clientCode = EdgeClientIdentity.NormalizeClientCode(binding.ClientCode);
+            var pluginRoot = EdgeClientProgramDataPaths.ResolveDevicePluginRoot(
+                clientCode,
+                _baseDirectory);
+            var pluginAppDirectory = Path.Combine(pluginRoot, "app");
+            if (!selection.TryGetByClientCode(clientCode, out var selectedPlugin)
+                || !string.Equals(
+                    selectedPlugin.ModuleId,
+                    binding.ModuleId,
+                    StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(
+                    selectedPlugin.PluginDirectory,
+                    clientCode,
+                    StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(
+                    selectedPlugin.Version,
+                    binding.PluginVersion,
+                    StringComparison.Ordinal)
+                || !string.Equals(
+                    selectedPlugin.PackageSha256,
+                    binding.PackageSha256,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"设备插件 {clientCode} 的启用清单身份不一致。");
+            }
+
+            ValidateRuntimePluginManifest(pluginAppDirectory, binding);
+            var machineConfigPath = EdgeClientProgramDataPaths.ResolveDevicePluginMachineConfigPath(
+                clientCode,
+                _baseDirectory);
+            if (!File.Exists(machineConfigPath))
+            {
+                throw new InvalidOperationException(
+                    $"设备插件 {clientCode} 缺少运行配置：{machineConfigPath}。");
+            }
+
+            profiles.Add(new LauncherProfileDefinition(
+                clientCode,
+                binding.DeviceName,
+                binding.ProcessType,
+                ImagePath: null,
+                MachineProfile: clientCode,
+                hostRuntime.ExecutablePath,
+                DefaultIconKind,
+                DefaultAccentColor)
+            {
+                ClientCode = clientCode,
+                ProcessId = binding.ProcessId,
+                ProcessType = binding.ProcessType,
+                PluginVersion = binding.PluginVersion,
+                PackageSha256 = binding.PackageSha256,
+                MachineConfigPath = machineConfigPath,
+                ExpectedModuleIds = [binding.ModuleId],
+                ActivationModuleId = binding.ModuleId,
+                ActivationPluginDirectory = pluginAppDirectory,
+                PluginDisplayPath = NormalizeDisplayPath(
+                    Path.GetRelativePath(layoutRoot, pluginAppDirectory)),
+                DataDisplayPath = NormalizeDisplayPath(
+                    Path.GetRelativePath(layoutRoot, Path.Combine(pluginRoot, "data")))
+            });
+        }
+
+        return profiles;
+    }
+
+    private static void ValidateRuntimePluginManifest(
+        string pluginAppDirectory,
+        EdgeRuntimeDeviceBinding binding)
+    {
+        var manifestPath = Path.Combine(pluginAppDirectory, PluginManifestFileName);
+        if (!File.Exists(manifestPath))
+        {
+            throw new InvalidOperationException(
+                $"设备插件 {binding.ClientCode} 缺少 plugin.json。");
+        }
+
+        using var document = JsonDocument.Parse(File.ReadAllText(manifestPath));
+        var root = document.RootElement;
+        var moduleId = ReadRequiredManifestValue(root, "moduleId");
+        var version = ReadRequiredManifestValue(root, "version");
+        var processType = ReadRequiredManifestValue(root, "supportedProcessType");
+        if (!string.Equals(moduleId, binding.ModuleId, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(version, binding.PluginVersion, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(processType, binding.ProcessType, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"设备插件 {binding.ClientCode} 的 manifest 与运行时 Binding 不一致。");
+        }
+
+        ValidateRuntimePluginFileManifest(
+            pluginAppDirectory,
+            binding.ModuleId,
+            binding.PluginVersion);
+    }
+
+    private static void ValidateRuntimePluginFileManifest(
+        string pluginAppDirectory,
+        string expectedModuleId,
+        string expectedVersion)
+    {
+        var manifestPath = Path.Combine(pluginAppDirectory, "file-manifest.json");
+        if (!File.Exists(manifestPath))
+        {
+            throw new InvalidOperationException(
+                $"设备插件 {expectedModuleId} 缺少 file-manifest.json。");
+        }
+
+        using var document = JsonDocument.Parse(File.ReadAllText(manifestPath));
+        var root = document.RootElement;
+        if (!root.TryGetProperty("schemaVersion", out var schemaVersion)
+            || schemaVersion.ValueKind != JsonValueKind.Number
+            || schemaVersion.GetInt32() != 1
+            || !string.Equals(
+                ReadRequiredManifestValue(root, "component"),
+                expectedModuleId,
+                StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(
+                ReadRequiredManifestValue(root, "version"),
+                expectedVersion,
+                StringComparison.Ordinal)
+            || !root.TryGetProperty("files", out var files)
+            || files.ValueKind != JsonValueKind.Array)
+        {
+            throw new InvalidOperationException(
+                $"设备插件 {expectedModuleId} 的 file manifest 头无效。");
+        }
+
+        var expected = new Dictionary<string, (long Size, string Sha256)>(
+            StringComparer.OrdinalIgnoreCase);
+        foreach (var item in files.EnumerateArray())
+        {
+            var relativePath = NormalizeManifestPath(
+                ReadRequiredManifestValue(item, "path"));
+            if (!item.TryGetProperty("size", out var sizeElement)
+                || sizeElement.ValueKind != JsonValueKind.Number
+                || !sizeElement.TryGetInt64(out var size)
+                || size < 0)
+            {
+                throw new InvalidOperationException(
+                    $"设备插件 {expectedModuleId} 的 file manifest 大小无效。");
+            }
+
+            var sha256 = ReadRequiredManifestValue(item, "sha256");
+            if (string.Equals(
+                    relativePath,
+                    "file-manifest.json",
+                    StringComparison.OrdinalIgnoreCase)
+                || sha256.Length != 64
+                || !sha256.All(Uri.IsHexDigit)
+                || !expected.TryAdd(relativePath, (size, sha256)))
+            {
+                throw new InvalidOperationException(
+                    $"设备插件 {expectedModuleId} 的 file manifest 条目无效或重复。");
+            }
+        }
+
+        foreach (var path in Directory.EnumerateFiles(
+                     pluginAppDirectory,
+                     "*",
+                     SearchOption.AllDirectories))
+        {
+            var relativePath = NormalizeManifestPath(
+                Path.GetRelativePath(pluginAppDirectory, path));
+            if (string.Equals(
+                    relativePath,
+                    "file-manifest.json",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (!expected.Remove(relativePath, out var declared))
+            {
+                throw new InvalidOperationException(
+                    $"设备插件 {expectedModuleId} 包含未声明文件。");
+            }
+
+            var info = new FileInfo(path);
+            if (info.Length != declared.Size)
+            {
+                throw new InvalidOperationException(
+                    $"设备插件 {expectedModuleId} 文件大小与 manifest 不一致。");
+            }
+
+            using var stream = File.OpenRead(path);
+            var actualSha256 = Convert.ToHexString(SHA256.HashData(stream));
+            if (!string.Equals(actualSha256, declared.Sha256, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"设备插件 {expectedModuleId} 文件摘要与 manifest 不一致。");
+            }
+        }
+
+        if (expected.Count != 0)
+        {
+            throw new InvalidOperationException(
+                $"设备插件 {expectedModuleId} 缺少 manifest 声明文件。");
+        }
+    }
+
+    private static string NormalizeManifestPath(string value)
+    {
+        var normalized = value.Replace('\\', '/').Trim('/');
+        if (normalized.Length == 0
+            || Path.IsPathRooted(value)
+            || normalized.Split('/').Any(static segment => segment.Length == 0 || segment is "." or "..")
+            || normalized.Any(char.IsControl))
+        {
+            throw new InvalidOperationException("插件 file manifest 路径无效。");
+        }
+
+        return normalized;
+    }
+
+    private static string ReadRequiredManifestValue(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var value)
+            || value.ValueKind != JsonValueKind.String
+            || string.IsNullOrWhiteSpace(value.GetString()))
+        {
+            throw new InvalidOperationException($"plugin.json 缺少 {propertyName}。");
+        }
+
+        return value.GetString()!.Trim();
     }
 
     private static List<LauncherProfileFileEntry> ReadEntries(string path)

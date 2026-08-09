@@ -77,7 +77,7 @@ public sealed class SelfExtractorTests
     }
 
     [Fact]
-    public void VelopackPayload_ShouldCopyBootstrapBindingOutsideCurrent()
+    public void LegacyRawBindingCopy_ShouldBeProhibited()
     {
         var tempDir = CreateTempDir();
         var previousDataRoot = Environment.GetEnvironmentVariable(
@@ -114,62 +114,22 @@ public sealed class SelfExtractorTests
 
             var discoveredSetup = SelfExtractor.FindVelopackSetup(payloadRoot);
             var setupArguments = SelfExtractor.BuildVelopackSetupArguments(installRoot, silent: true);
-            SelfExtractor.CopyBootstrapFilesToVelopackDataRoot(payloadRoot, installRoot);
             var launcherDataRoot = EdgeClientProgramDataPaths.ResolveLauncherDirectory(currentRoot);
+
+            var exception = Assert.Throws<NotSupportedException>(() =>
+                SelfExtractor.CopyBootstrapFilesToVelopackDataRoot(payloadRoot, installRoot));
 
             Assert.Equal(setupPath, discoveredSetup);
             Assert.Equal(["--silent", "--installto", Path.GetFullPath(installRoot)], setupArguments);
-            Assert.False(File.Exists(Path.Combine(currentRoot, "iiot-binding.json")));
-            Assert.False(File.Exists(Path.Combine(currentRoot, "iiot-enabled-plugins.json")));
-            Assert.False(File.Exists(Path.Combine(currentRoot, "launcher.update.json")));
-            Assert.False(File.Exists(Path.Combine(currentRoot, "plugins", "TestPlugin", "plugin.json")));
-            Assert.True(File.Exists(Path.Combine(launcherDataRoot, "iiot-binding.json")));
-            Assert.True(File.Exists(Path.Combine(launcherDataRoot, "iiot-enabled-plugins.json")));
-            Assert.True(File.Exists(Path.Combine(launcherDataRoot, "launcher.update.json")));
-            Assert.True(File.Exists(Path.Combine(installRoot, "plugins", "TestPlugin", "plugin.json")));
-            Assert.Contains(
-                "DEV-AAAAAAAAAA",
-                File.ReadAllText(Path.Combine(launcherDataRoot, "iiot-binding.json")),
-                StringComparison.Ordinal);
+            Assert.Contains("raw iiot-binding.json", exception.Message, StringComparison.Ordinal);
+            Assert.False(File.Exists(Path.Combine(launcherDataRoot, "iiot-binding.json")));
+            Assert.False(File.Exists(EdgeClientProgramDataPaths.ResolveRuntimeBindingPath(currentRoot)));
         }
         finally
         {
             Environment.SetEnvironmentVariable(
                 EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable,
                 previousDataRoot);
-            DeleteDir(tempDir);
-        }
-    }
-
-    [Fact]
-    public void VelopackPayload_WhenLauncherUpdateConfigMissing_ShouldFailFast()
-    {
-        var tempDir = CreateTempDir();
-        try
-        {
-            var payloadRoot = Path.Combine(tempDir, "payload");
-            var payloadLauncherRoot = Path.Combine(payloadRoot, "launcher");
-            Directory.CreateDirectory(payloadLauncherRoot);
-            File.WriteAllText(
-                Path.Combine(payloadLauncherRoot, "iiot-binding.json"),
-                "{\"bindings\":[{\"moduleId\":\"TestPlugin\",\"clientCode\":\"DEV-AAAAAAAAAA\"}]}");
-            File.WriteAllText(
-                Path.Combine(payloadLauncherRoot, "iiot-enabled-plugins.json"),
-                "{\"plugins\":[{\"moduleId\":\"TestPlugin\"}]}");
-
-            var installRoot = Path.Combine(tempDir, "install");
-            Directory.CreateDirectory(Path.Combine(installRoot, "current"));
-
-            var exception = Assert.Throws<FileNotFoundException>(() =>
-                SelfExtractor.CopyBootstrapFilesToVelopackDataRoot(payloadRoot, installRoot));
-
-            Assert.EndsWith(
-                Path.Combine("launcher", "launcher.update.json"),
-                exception.FileName,
-                StringComparison.Ordinal);
-        }
-        finally
-        {
             DeleteDir(tempDir);
         }
     }
@@ -185,54 +145,6 @@ public sealed class SelfExtractorTests
             Path.Combine("IIoT Edge", "IIoT Edge Client.lnk"),
             path,
             StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void VelopackPayload_ShouldRespectProgramDataRootOverrideWhenCopyingBootstrapBinding()
-    {
-        var tempDir = CreateTempDir();
-        var previousDataRoot = Environment.GetEnvironmentVariable(
-            EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable);
-        try
-        {
-            var payloadRoot = Path.Combine(tempDir, "payload");
-            var payloadLauncherRoot = Path.Combine(payloadRoot, "launcher");
-            Directory.CreateDirectory(payloadLauncherRoot);
-            File.WriteAllText(
-                Path.Combine(payloadLauncherRoot, "iiot-binding.json"),
-                "{\"bindings\":[{\"moduleId\":\"TestPlugin\",\"clientCode\":\"DEV-AAAAAAAAAA\"}]}");
-            File.WriteAllText(
-                Path.Combine(payloadLauncherRoot, "iiot-enabled-plugins.json"),
-                "{\"plugins\":[{\"moduleId\":\"TestPlugin\"}]}");
-            File.WriteAllText(
-                Path.Combine(payloadLauncherRoot, "launcher.update.json"),
-                "{\"source\":\"https://cloud.example.com/edge-updates/velopack/stable\",\"channel\":\"stable\",\"targetRuntime\":\"win-x64\"}");
-
-            var dataRoot = Path.Combine(tempDir, "site-data");
-            Environment.SetEnvironmentVariable(
-                EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable,
-                dataRoot);
-
-            var installRoot = Path.Combine(tempDir, "install");
-            Directory.CreateDirectory(Path.Combine(installRoot, "current"));
-
-            SelfExtractor.CopyBootstrapFilesToVelopackDataRoot(payloadRoot, installRoot);
-
-            var launcherDataRoot = EdgeClientProgramDataPaths.ResolveLauncherDirectory(
-                Path.Combine(installRoot, "current"));
-            Assert.Equal(
-                Path.Combine(dataRoot, "IIoT", "EdgeClient", "launcher"),
-                launcherDataRoot);
-            Assert.True(File.Exists(Path.Combine(launcherDataRoot, "iiot-binding.json")));
-            Assert.True(File.Exists(Path.Combine(launcherDataRoot, "launcher.update.json")));
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable(
-                EdgeClientProgramDataPaths.ProgramDataRootEnvironmentVariable,
-                previousDataRoot);
-            DeleteDir(tempDir);
-        }
     }
 
     private static string CreateTempDir()

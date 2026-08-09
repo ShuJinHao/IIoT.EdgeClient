@@ -1,6 +1,7 @@
 using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Application.Common.Identity;
 using System.Threading.Channels;
 
 namespace IIoT.Edge.Host.DataPipeline.Services;
@@ -13,6 +14,7 @@ public class DataPipelineService : IDataPipelineService
     private readonly IIngressOverflowPersistence? _legacyOverflowPersistence;
     private readonly IDataPipelineIngressStore? _ingressStore;
     private readonly ILogService _logger;
+    private readonly IDevicePluginRuntimeContext? _runtimeContext;
     private int _pendingCount;
     private int _overflowCount;
     private int _spillCount;
@@ -26,15 +28,17 @@ public class DataPipelineService : IDataPipelineService
 
     public DataPipelineService(
         ILogService logger,
-        IDataPipelineIngressStore ingressStore)
-        : this(overflowPersistence: null, logger, ingressStore)
+        IDataPipelineIngressStore ingressStore,
+        IDevicePluginRuntimeContext? runtimeContext = null)
+        : this(overflowPersistence: null, logger, ingressStore, runtimeContext)
     {
     }
 
     public DataPipelineService(
         IIngressOverflowPersistence? overflowPersistence,
         ILogService logger,
-        IDataPipelineIngressStore? ingressStore)
+        IDataPipelineIngressStore? ingressStore,
+        IDevicePluginRuntimeContext? runtimeContext = null)
     {
         _queue = Channel.CreateBounded<CellCompletedRecord>(new BoundedChannelOptions(QueueCapacity)
         {
@@ -46,6 +50,7 @@ public class DataPipelineService : IDataPipelineService
         _legacyOverflowPersistence = overflowPersistence;
         _ingressStore = ingressStore;
         _logger = logger;
+        _runtimeContext = runtimeContext;
     }
 
     public int PendingCount => Volatile.Read(ref _pendingCount);
@@ -84,6 +89,13 @@ public class DataPipelineService : IDataPipelineService
         {
             _logger.Warn("[数据管道] 入队失败：CellData 为空。");
             return DataPipelineEnqueueResult.Rejected("null_cell_data");
+        }
+
+        var bindingFailure = ApplyV3Binding(record);
+        if (bindingFailure is not null)
+        {
+            _logger.Warn($"[数据管道] 入队失败：v3 设备插件身份不完整，原因={bindingFailure}。");
+            return DataPipelineEnqueueResult.Rejected(bindingFailure);
         }
 
         var missingContext = ResolveMissingPlcContext(record);
@@ -147,6 +159,62 @@ public class DataPipelineService : IDataPipelineService
 
         return overflowResult;
     }
+
+    private string? ApplyV3Binding(CellCompletedRecord record)
+    {
+        var runtime = _runtimeContext?.Current;
+        if (runtime is null || !runtime.IsV3)
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(record.ClientCode)
+            && !string.Equals(
+                record.ClientCode.Trim(),
+                runtime.ClientCode,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return "client_code_conflict";
+        }
+
+        if (!string.Equals(record.ModuleId?.Trim(), runtime.ModuleId, StringComparison.OrdinalIgnoreCase))
+        {
+            return "module_id_conflict";
+        }
+
+        if (!string.IsNullOrWhiteSpace(record.ProcessType)
+            && !string.Equals(
+                record.ProcessType.Trim(),
+                runtime.ProcessType,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return "process_type_conflict";
+        }
+
+        if (!IsRequiredToken(record.CompletionId, 256))
+        {
+            return "completion_id_missing";
+        }
+
+        if (!IsRequiredToken(record.TypeKey, 128))
+        {
+            return "type_key_missing";
+        }
+
+        record.ClientCode = runtime.ClientCode;
+        record.CompletionId = record.CompletionId.Trim();
+        record.TypeKey = record.TypeKey.Trim().ToLowerInvariant();
+        // The signed runtime Binding is the only authority for the Cloud-created process
+        // classification. Plugin code may still expose a legacy ModuleId-like ProcessType on
+        // CellData for ABI compatibility, but v3 routing/persistence must never consume it.
+        record.ProcessType = runtime.ProcessType;
+        return null;
+    }
+
+    private static bool IsRequiredToken(string? value, int maximumLength)
+        => !string.IsNullOrWhiteSpace(value)
+           && value.Trim().Length <= maximumLength
+           && !value.Any(char.IsControl);
 
     private async ValueTask<DataPipelineEnqueueResult> AcceptDurableIngressAsync(
         CellCompletedRecord record,

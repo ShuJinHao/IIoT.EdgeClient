@@ -1,5 +1,6 @@
 using IIoT.Edge.Module.Contracts.Diagnostics;
 using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
+using IIoT.Edge.SharedKernel.Configuration;
 using Microsoft.Extensions.Configuration;
 
 namespace IIoT.Edge.Shell.Core;
@@ -9,25 +10,6 @@ internal sealed class StartupAppSettingsValidator(
     ShiftConfig shiftConfig)
     : IStartupDiagnosticValidator
 {
-    private static readonly string[] CloudApiPathKeys =
-    [
-        "CloudApi:Paths:DeviceInstance",
-        "CloudApi:Paths:BootstrapRefresh",
-        "CloudApi:Paths:IdentityDeviceLogin",
-        "CloudApi:Paths:HumanIdentityRefresh",
-        "CloudApi:Paths:HumanSessionValidation",
-        "CloudApi:Paths:DeviceLog",
-        "CloudApi:Paths:PassStationBatchTemplate",
-        "CloudApi:Paths:CapacityHourly",
-        "CloudApi:Paths:CapacitySummary",
-        "CloudApi:Paths:CapacitySummaryRange",
-        "CloudApi:Paths:RecipeByDeviceTemplate",
-        "CloudApi:Paths:ClientReleaseCatalogTemplate",
-        "CloudApi:Paths:ClientVersionReport",
-        "CloudApi:Paths:RuntimeHeartbeat",
-        "CloudApi:Paths:EdgeHostPlcRuntimeStates"
-    ];
-
     public void Validate(StartupValidationContext context, List<StartupDiagnosticIssue> issues)
     {
         if (!context.SystemCloudEnabled)
@@ -48,36 +30,9 @@ internal sealed class StartupAppSettingsValidator(
         ValidateRequiredValue(issues, "CloudApi:ClientCode", "CloudApi:ClientCode 未配置。");
         ValidateRequiredValue(issues, "CloudApi:BootstrapSecret", "CloudApi:BootstrapSecret 未配置。");
 
-        foreach (var key in CloudApiPathKeys)
+        foreach (var descriptor in EdgeBindingRouteCatalog.All)
         {
-            ValidateRequiredCloudPath(issues, key);
-        }
-
-        var recipePath = configuration["CloudApi:Paths:RecipeByDeviceTemplate"]?.Trim();
-        if (!string.IsNullOrWhiteSpace(recipePath)
-            && !recipePath.Contains("{deviceId}", StringComparison.OrdinalIgnoreCase))
-        {
-            issues.Add(StartupDiagnosticIssueFactory.Create(
-                "CONFIG_INVALID",
-                "CloudApi:Paths:RecipeByDeviceTemplate 必须包含 {deviceId} 占位符。"));
-        }
-
-        var passStationPath = configuration["CloudApi:Paths:PassStationBatchTemplate"]?.Trim();
-        if (!string.IsNullOrWhiteSpace(passStationPath)
-            && !passStationPath.Contains("{typeKey}", StringComparison.OrdinalIgnoreCase))
-        {
-            issues.Add(StartupDiagnosticIssueFactory.Create(
-                "CONFIG_INVALID",
-                "CloudApi:Paths:PassStationBatchTemplate 必须包含 {typeKey} 占位符。"));
-        }
-
-        var clientReleaseCatalogPath = configuration["CloudApi:Paths:ClientReleaseCatalogTemplate"]?.Trim();
-        if (!string.IsNullOrWhiteSpace(clientReleaseCatalogPath)
-            && !clientReleaseCatalogPath.Contains("{deviceId}", StringComparison.OrdinalIgnoreCase))
-        {
-            issues.Add(StartupDiagnosticIssueFactory.Create(
-                "CONFIG_INVALID",
-                "CloudApi:Paths:ClientReleaseCatalogTemplate 必须包含 {deviceId} 占位符。"));
+            ValidateRequiredCloudPath(issues, descriptor);
         }
 
         ValidateShiftWindow(issues);
@@ -92,8 +47,11 @@ internal sealed class StartupAppSettingsValidator(
         }
     }
 
-    private void ValidateRequiredCloudPath(List<StartupDiagnosticIssue> issues, string key)
+    private void ValidateRequiredCloudPath(
+        List<StartupDiagnosticIssue> issues,
+        EdgeBindingRouteDescriptor descriptor)
     {
+        var key = $"CloudApi:Paths:{descriptor.MachineConfigKey}";
         var configured = configuration[key]?.Trim();
         if (string.IsNullOrWhiteSpace(configured))
         {
@@ -101,21 +59,15 @@ internal sealed class StartupAppSettingsValidator(
             return;
         }
 
-        if (HasExplicitScheme(configured))
+        try
         {
-            issues.Add(StartupDiagnosticIssueFactory.Create("CONFIG_INVALID", $"{key} 只能填写相对 API 路径，不能填写完整地址。"));
-            return;
+            _ = EdgeBindingRouteCatalog.ValidateAndNormalize(descriptor.Key, configured);
         }
-
-        if (configured.StartsWith("//", StringComparison.Ordinal))
+        catch (InvalidDataException exception)
         {
-            issues.Add(StartupDiagnosticIssueFactory.Create("CONFIG_INVALID", $"{key} 必须是以单个 / 开头的相对 API 路径。"));
-            return;
-        }
-
-        if (!configured.StartsWith('/'))
-        {
-            issues.Add(StartupDiagnosticIssueFactory.Create("CONFIG_INVALID", $"{key} 必须以 / 开头。"));
+            issues.Add(StartupDiagnosticIssueFactory.Create(
+                "CONFIG_INVALID",
+                $"{key} 无效：{exception.Message}"));
         }
     }
 
@@ -151,16 +103,4 @@ internal sealed class StartupAppSettingsValidator(
         }
     }
 
-    private static bool HasExplicitScheme(string value)
-    {
-        var colonIndex = value.IndexOf(':');
-        if (colonIndex <= 0)
-        {
-            return false;
-        }
-
-        var boundaryIndex = value.IndexOfAny(['/', '\\', '?', '#']);
-        return (boundaryIndex < 0 || colonIndex < boundaryIndex)
-            && Uri.CheckSchemeName(value[..colonIndex]);
-    }
 }

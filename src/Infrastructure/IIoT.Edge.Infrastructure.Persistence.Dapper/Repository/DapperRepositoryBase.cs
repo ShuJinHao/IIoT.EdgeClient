@@ -70,6 +70,9 @@ public abstract class DapperRepositoryBase<TEntity> : ITableInitializer
 
     protected async Task EnsureDataPipelineContextColumnsAsync(IDbConnection connection, string tableName)
     {
+        await EnsureColumnAsync(connection, tableName, "ClientCode", "TEXT NOT NULL DEFAULT ''").ConfigureAwait(false);
+        await EnsureColumnAsync(connection, tableName, "CompletionId", "TEXT NOT NULL DEFAULT ''").ConfigureAwait(false);
+        await EnsureColumnAsync(connection, tableName, "TypeKey", "TEXT NOT NULL DEFAULT ''").ConfigureAwait(false);
         await EnsureColumnAsync(connection, tableName, "PlcCode", "TEXT NOT NULL DEFAULT ''").ConfigureAwait(false);
         await EnsureColumnAsync(connection, tableName, "IdempotencyKeyVersion", "INTEGER NOT NULL DEFAULT 1").ConfigureAwait(false);
         await EnsureColumnAsync(connection, tableName, "NetworkDeviceId", "INTEGER NULL").ConfigureAwait(false);
@@ -79,6 +82,12 @@ public abstract class DapperRepositoryBase<TEntity> : ITableInitializer
         await EnsureColumnAsync(connection, tableName, "PlanSessionId", "TEXT NOT NULL DEFAULT ''").ConfigureAwait(false);
         await EnsureColumnAsync(connection, tableName, "MainPlanCode", "TEXT NOT NULL DEFAULT ''").ConfigureAwait(false);
         await EnsureColumnAsync(connection, tableName, "TraceBatchNumber", "TEXT NOT NULL DEFAULT ''").ConfigureAwait(false);
+        await connection.ExecuteAsync(
+                $"CREATE UNIQUE INDEX IF NOT EXISTS idx_{tableName}_v3_completion " +
+                $"ON {tableName}(ClientCode, CompletionId) " +
+                "WHERE TRIM(ClientCode) <> '' AND TRIM(CompletionId) <> '';",
+                commandTimeout: CommandTimeout)
+            .ConfigureAwait(false);
     }
 
     protected IDbConnection GetConnection() => ConnectionFactory.Create(DbName);

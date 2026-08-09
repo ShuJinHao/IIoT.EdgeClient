@@ -3,6 +3,7 @@ using IIoT.Edge.Infrastructure.Update;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.Launcher.ViewModels;
 using IIoT.Edge.SharedKernel.Configuration;
+using IIoT.Edge.SharedKernel.Security;
 using IIoT.Edge.UI.Shared.Localization;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -19,7 +20,8 @@ public static class LauncherDependencyInjection
 
         var accountPaths = new LauncherAccountCatalogPaths(
             EdgeClientProgramDataPaths.ResolveLauncherAccountsPath(baseDirectory),
-            Path.Combine(baseDirectory, LauncherAccountCatalog.SampleCatalogFileName));
+            Path.Combine(baseDirectory, LauncherAccountCatalog.SampleCatalogFileName),
+            EdgeClientProgramDataPaths.ResolveHostDatabasePath(baseDirectory));
 
         services.AddSingleton(accountPaths);
         services.AddEdgeUpdateInfrastructure(baseDirectory);
@@ -67,7 +69,19 @@ public static class LauncherDependencyInjection
                 provider.GetRequiredService<ILauncherProfileCatalog>(),
                 provider.GetRequiredService<IEdgeProfileModuleConfigurationStore>(),
                 provider.GetRequiredService<ILauncherUpdateTargetFactory>(),
-                provider.GetRequiredService<ILauncherStartupDiagnosticWriter>()));
+                provider.GetRequiredService<ILauncherStartupDiagnosticWriter>(),
+                provider.GetRequiredService<IEdgeCredentialStore>()));
+        services.AddSingleton<IEdgeCredentialOwnerSidProvider, WindowsCredentialOwnerSidProvider>();
+        services.AddSingleton<ILauncherLegacyCredentialMigrator>(provider =>
+            new LauncherLegacyCredentialMigrator(
+                baseDirectory,
+                provider.GetRequiredService<IEdgeCredentialStore>()));
+        services.AddSingleton<ILauncherRuntimePreflight>(provider =>
+            new LauncherRuntimePreflight(
+                baseDirectory,
+                provider.GetRequiredService<ILauncherProfileCatalog>(),
+                provider.GetRequiredService<IEdgeCredentialStore>(),
+                provider.GetRequiredService<IEdgeCredentialOwnerSidProvider>()));
         services.AddSingleton<IProcessStarter, ProcessStarter>();
         services.AddSingleton<IShellInstanceIdResolver, ShellInstanceIdResolver>();
         services.AddSingleton<IShellInstanceProbe, NamedMutexShellInstanceProbe>();

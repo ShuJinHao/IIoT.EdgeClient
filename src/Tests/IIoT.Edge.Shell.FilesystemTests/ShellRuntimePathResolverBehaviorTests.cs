@@ -179,7 +179,7 @@ public sealed class ShellRuntimePathResolverBehaviorTests
     }
 
     [Fact]
-    public void ResolveWithDiagnostics_WhenRuntimeRootIsInvalid_ShouldUseProfileDefaultWithoutThrowing()
+    public void ResolveWithDiagnostics_WhenRuntimeRootIsInvalid_ShouldFailClosed()
     {
         var baseDirectory = Path.Combine(Path.GetTempPath(), "edge-runtime-resolver-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(baseDirectory);
@@ -197,6 +197,7 @@ public sealed class ShellRuntimePathResolverBehaviorTests
 
             Assert.DoesNotContain("..", result.RuntimePaths.ProfileName, StringComparison.Ordinal);
             Assert.DoesNotContain("UnsafeProfile" + Path.DirectorySeparatorChar + "..", result.RuntimePaths.RuntimeDataRoot, StringComparison.Ordinal);
+            Assert.False(result.Success);
             Assert.Contains(result.Issues, issue => issue.Code == "RUNTIME_PROFILE_NAME_SANITIZED");
             Assert.Contains(result.Issues, issue => issue.Code == "RUNTIME_DATA_ROOT_INVALID");
         }
@@ -212,7 +213,7 @@ public sealed class ShellRuntimePathResolverBehaviorTests
     [InlineData(typeof(IOException))]
     [InlineData(typeof(UnauthorizedAccessException))]
     [InlineData(typeof(SecurityException))]
-    public void ResolveWithDiagnostics_WhenApprovedPathExceptionOccurs_ShouldUseSafeFallback(Type exceptionType)
+    public void ResolveWithDiagnostics_WhenDefaultPathCannotBeResolved_ShouldFailClosed(Type exceptionType)
     {
         var baseDirectory = Path.Combine(Path.GetTempPath(), "edge-runtime-resolver-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(baseDirectory);
@@ -231,6 +232,7 @@ public sealed class ShellRuntimePathResolverBehaviorTests
             Assert.Equal(
                 Path.Combine(baseDirectory, "runtime-data", "Default"),
                 result.RuntimePaths.RuntimeDataRoot);
+            Assert.False(result.Success);
             Assert.Contains(result.Issues, issue => issue.Code == "RUNTIME_DEFAULT_ROOT_INVALID");
         }
         finally
@@ -284,6 +286,7 @@ public sealed class ShellRuntimePathResolverBehaviorTests
             var result = resolver.ResolveWithDiagnostics(baseDirectory, configuration);
 
             Assert.Equal(1, callCount);
+            Assert.Equal(boundary == "fallback", result.Success);
             Assert.Contains(
                 result.Issues,
                 issue => issue.Code == (boundary == "configured"
@@ -366,36 +369,29 @@ public sealed class ShellRuntimePathResolverBehaviorTests
     }
 
     [Fact]
-    public void Preflight_WhenRuntimeDataRootCannotBeCreated_ShouldUseFallbackAndReportDiagnosticIssue()
+    public void Preflight_WhenRuntimeDataRootCannotBeCreated_ShouldFailClosedWithoutChangingRoot()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "edge-runtime-resolver-tests", Guid.NewGuid().ToString("N"));
         var blockedRuntimeRoot = Path.Combine(tempDirectory, "blocked-runtime-root");
         var profileName = "PreflightTest-" + Guid.NewGuid().ToString("N");
-        EdgeRuntimePathPreflightResult? result = null;
-
         try
         {
             Directory.CreateDirectory(tempDirectory);
             File.WriteAllText(blockedRuntimeRoot, "blocks directory creation");
             var runtimePaths = CreateRuntimePaths(tempDirectory, profileName, blockedRuntimeRoot);
 
-            result = EdgeRuntimePathPreflight.EnsureWritable(runtimePaths);
+            var result = EdgeRuntimePathPreflight.EnsureWritable(runtimePaths);
 
-            Assert.NotEqual(blockedRuntimeRoot, result.RuntimePaths.RuntimeDataRoot);
-            Assert.True(Directory.Exists(result.RuntimePaths.DatabaseDirectory));
+            Assert.False(result.Success);
+            Assert.Equal(blockedRuntimeRoot, result.RuntimePaths.RuntimeDataRoot);
+            Assert.False(Directory.Exists(result.RuntimePaths.DatabaseDirectory));
             var issue = Assert.Single(result.Issues);
-            Assert.Equal("RUNTIME_DATA_ROOT_FALLBACK", issue.Code);
+            Assert.Equal("RUNTIME_DATA_ROOT_UNAVAILABLE", issue.Code);
             Assert.Contains(blockedRuntimeRoot, issue.Message, StringComparison.Ordinal);
-            Assert.Contains(result.RuntimePaths.RuntimeDataRoot, issue.Message, StringComparison.Ordinal);
+            Assert.Contains("不会改用备用目录", issue.Message, StringComparison.Ordinal);
         }
         finally
         {
-            if (result?.RuntimePaths.RuntimeDataRoot is { } fallbackRoot
-                && Directory.Exists(fallbackRoot))
-            {
-                Directory.Delete(fallbackRoot, recursive: true);
-            }
-
             if (Directory.Exists(tempDirectory))
             {
                 Directory.Delete(tempDirectory, recursive: true);
@@ -404,39 +400,29 @@ public sealed class ShellRuntimePathResolverBehaviorTests
     }
 
     [Fact]
-    public void Preflight_WhenPrimaryDirectoryWriteReplaceProbeFails_ShouldUseFallbackAndRemoveProbeArtifacts()
+    public void Preflight_WhenPrimaryDirectoryWriteReplaceProbeFails_ShouldFailClosedWithoutChangingRoot()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "edge-runtime-resolver-tests", Guid.NewGuid().ToString("N"));
         var primaryRoot = Path.Combine(tempDirectory, "primary");
         var profileName = "WriteProbe-" + Guid.NewGuid().ToString("N");
-        EdgeRuntimePathPreflightResult? result = null;
         try
         {
             Directory.CreateDirectory(tempDirectory);
             var runtimePaths = CreateRuntimePaths(tempDirectory, profileName, primaryRoot);
-            result = EdgeRuntimePathPreflight.EnsureWritable(
+            var result = EdgeRuntimePathPreflight.EnsureWritable(
                 runtimePaths,
                 directory => string.Equals(directory, primaryRoot, StringComparison.Ordinal)
                     ? new IOException("write/replace denied")
                     : null);
 
-            Assert.NotEqual(primaryRoot, result.RuntimePaths.RuntimeDataRoot);
+            Assert.False(result.Success);
+            Assert.Equal(primaryRoot, result.RuntimePaths.RuntimeDataRoot);
             var issue = Assert.Single(result.Issues);
-            Assert.Equal("RUNTIME_DATA_ROOT_FALLBACK", issue.Code);
+            Assert.Equal("RUNTIME_DATA_ROOT_UNAVAILABLE", issue.Code);
             Assert.Contains("write/replace denied", issue.Message, StringComparison.Ordinal);
-            Assert.Empty(Directory.GetFiles(
-                result.RuntimePaths.RuntimeDataRoot,
-                ".iiot-edge-write-probe-*",
-                SearchOption.AllDirectories));
         }
         finally
         {
-            if (result?.RuntimePaths.RuntimeDataRoot is { } fallbackRoot
-                && Directory.Exists(fallbackRoot))
-            {
-                Directory.Delete(fallbackRoot, recursive: true);
-            }
-
             if (Directory.Exists(tempDirectory))
                 Directory.Delete(tempDirectory, recursive: true);
         }
@@ -482,13 +468,10 @@ public sealed class ShellRuntimePathResolverBehaviorTests
     }
 
     [Fact]
-    public void Preflight_WhenPrimaryAndFallbackProbeFail_ShouldProbeEveryDirectoryAtMostOnce()
+    public void Preflight_WhenFirstDirectoryProbeFails_ShouldStopWithoutProbingFallback()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "edge-runtime-resolver-tests", Guid.NewGuid().ToString("N"));
         var profileName = "SingleProbe-" + Guid.NewGuid().ToString("N");
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var fallbackBase = string.IsNullOrWhiteSpace(localAppData) ? Path.GetTempPath() : localAppData;
-        var fallbackRoot = Path.Combine(fallbackBase, "IIoT.Edge", "runtime-fallback", profileName);
         Directory.CreateDirectory(tempDirectory);
         try
         {
@@ -503,14 +486,13 @@ public sealed class ShellRuntimePathResolverBehaviorTests
                     return new IOException("probe denied");
                 });
 
+            Assert.False(result.Success);
             Assert.Equal("RUNTIME_DATA_ROOT_UNAVAILABLE", Assert.Single(result.Issues).Code);
-            Assert.NotEmpty(counts);
-            Assert.All(counts, pair => Assert.Equal(1, pair.Value));
+            Assert.Single(counts);
+            Assert.Equal(1, counts.Values.Single());
         }
         finally
         {
-            if (Directory.Exists(fallbackRoot))
-                Directory.Delete(fallbackRoot, recursive: true);
             if (Directory.Exists(tempDirectory))
                 Directory.Delete(tempDirectory, recursive: true);
         }
@@ -522,13 +504,10 @@ public sealed class ShellRuntimePathResolverBehaviorTests
     [InlineData(typeof(IOException))]
     [InlineData(typeof(UnauthorizedAccessException))]
     [InlineData(typeof(SecurityException))]
-    public void Preflight_WhenApprovedPrimaryProbeFailureOccurs_ShouldUseFallbackExactlyOnce(Type exceptionType)
+    public void Preflight_WhenApprovedPrimaryProbeFailureOccurs_ShouldFailClosedExactlyOnce(Type exceptionType)
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "edge-runtime-resolver-tests", Guid.NewGuid().ToString("N"));
         var profileName = "ApprovedProbe-" + Guid.NewGuid().ToString("N");
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var fallbackBase = string.IsNullOrWhiteSpace(localAppData) ? Path.GetTempPath() : localAppData;
-        var fallbackRoot = Path.Combine(fallbackBase, "IIoT.Edge", "runtime-fallback", profileName);
         Directory.CreateDirectory(tempDirectory);
         try
         {
@@ -549,13 +528,12 @@ public sealed class ShellRuntimePathResolverBehaviorTests
                 });
 
             Assert.Equal(1, primaryCallCount);
-            Assert.Equal("RUNTIME_DATA_ROOT_FALLBACK", Assert.Single(result.Issues).Code);
-            Assert.Equal(fallbackRoot, result.RuntimePaths.RuntimeDataRoot);
+            Assert.False(result.Success);
+            Assert.Equal("RUNTIME_DATA_ROOT_UNAVAILABLE", Assert.Single(result.Issues).Code);
+            Assert.Equal(primaryRoot, result.RuntimePaths.RuntimeDataRoot);
         }
         finally
         {
-            if (Directory.Exists(fallbackRoot))
-                Directory.Delete(fallbackRoot, recursive: true);
             if (Directory.Exists(tempDirectory))
                 Directory.Delete(tempDirectory, recursive: true);
         }
@@ -571,6 +549,7 @@ public sealed class ShellRuntimePathResolverBehaviorTests
 
             var result = EdgeRuntimePathPreflight.EnsureWritable(runtimePaths);
 
+            Assert.True(result.Success);
             Assert.Empty(result.Issues);
             Assert.Equal(runtimePaths.RuntimeDataRoot, result.RuntimePaths.RuntimeDataRoot);
             Assert.Empty(Directory.GetFiles(

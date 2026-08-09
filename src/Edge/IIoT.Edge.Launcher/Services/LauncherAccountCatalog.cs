@@ -1,10 +1,15 @@
 using System.Text.Json;
+using IIoT.Edge.Infrastructure.HostPersistence;
 using IIoT.Edge.Launcher.Models;
+using IIoT.Edge.SharedKernel.Configuration;
 using IIoT.Edge.SharedKernel.Security;
 
 namespace IIoT.Edge.Launcher.Services;
 
-public sealed record LauncherAccountCatalogPaths(string CatalogPath, string SampleCatalogPath);
+public sealed record LauncherAccountCatalogPaths(
+    string CatalogPath,
+    string SampleCatalogPath,
+    string? HostDatabasePath = null);
 
 public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
 {
@@ -13,6 +18,7 @@ public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
     public const string SampleCatalogFileName = "launcher.accounts.sample.json";
 
     private readonly string _catalogPath;
+    private readonly LauncherHostDatabase? _hostDatabase;
 
     public LauncherAccountCatalog(LauncherAccountCatalogPaths paths)
     {
@@ -20,6 +26,9 @@ public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
         ArgumentException.ThrowIfNullOrWhiteSpace(paths.CatalogPath);
 
         _catalogPath = paths.CatalogPath;
+        _hostDatabase = string.IsNullOrWhiteSpace(paths.HostDatabasePath)
+            ? null
+            : new LauncherHostDatabase(paths.HostDatabasePath, paths.CatalogPath);
     }
 
     public LauncherAccountCatalog(string baseDirectory, string catalogFileName = DefaultCatalogFileName)
@@ -39,6 +48,19 @@ public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
 
     public LauncherAccountCatalogStatus GetCatalogStatus()
     {
+        if (_hostDatabase is not null)
+        {
+            try
+            {
+                var accounts = _hostDatabase.LoadAccounts();
+                return ResolveStatus(accounts.Select(Map).ToArray());
+            }
+            catch (Exception ex) when (IsCorruptCatalogException(ex) || ex is InvalidDataException)
+            {
+                return LauncherAccountCatalogStatus.Corrupt;
+            }
+        }
+
         if (!File.Exists(_catalogPath))
         {
             return LauncherAccountCatalogStatus.Missing;
@@ -95,6 +117,14 @@ public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
 
     public IReadOnlyList<LauncherAccountRecord> LoadAccounts()
     {
+        if (_hostDatabase is not null)
+        {
+            var accounts = _hostDatabase.LoadAccounts();
+            return accounts.Count == 0
+                ? throw new InvalidOperationException("host.db 中本地账号为空。")
+                : accounts.Select(Map).ToArray();
+        }
+
         if (!File.Exists(_catalogPath))
         {
             throw new FileNotFoundException($"本地账号文件不存在：{_catalogPath}", _catalogPath);
@@ -123,18 +153,16 @@ public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
             throw new InvalidOperationException("本地账号文件已存在或已损坏，不能执行首次初始化。");
         }
 
-        WriteFileEntries(
-        [
-            new LauncherAccountFileEntry
-            {
-                UserName = userName.Trim(),
-                DisplayName = displayName.Trim(),
-                PasswordHash = passwordHash.Trim(),
-                IsEnabled = true,
-                AccessFailedCount = 0,
-                LockoutUntilUtc = null
-            }
-        ]);
+        var account = new LauncherAccountRecord(
+            userName.Trim(), displayName.Trim(), passwordHash.Trim(), true, 0, null);
+        if (_hostDatabase is not null)
+        {
+            _hostDatabase.ReplaceAccounts([Map(account)]);
+        }
+        else
+        {
+            WriteFileEntries([ToFileEntry(account)]);
+        }
     }
 
     public void UpdatePasswordHash(string userName, string passwordHash)
@@ -142,14 +170,20 @@ public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
         ArgumentException.ThrowIfNullOrWhiteSpace(userName);
         ArgumentException.ThrowIfNullOrWhiteSpace(passwordHash);
 
-        var entries = LoadFileEntries();
-        var entry = entries.FirstOrDefault(x =>
-            string.Equals(x.UserName, userName.Trim(), StringComparison.OrdinalIgnoreCase));
-        if (entry is null)
+        if (_hostDatabase is not null)
         {
-            throw new InvalidOperationException($"未找到本地账号：{userName}");
+            var account = FindAccount(userName);
+            _hostDatabase.UpdateAccount(Map(account with
+            {
+                PasswordHash = passwordHash.Trim(),
+                AccessFailedCount = 0,
+                LockoutUntilUtc = null
+            }));
+            return;
         }
 
+        var entries = LoadFileEntries();
+        var entry = FindFileEntry(entries, userName);
         entry.PasswordHash = passwordHash.Trim();
         entry.AccessFailedCount = 0;
         entry.LockoutUntilUtc = null;
@@ -164,14 +198,19 @@ public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
             throw new ArgumentOutOfRangeException(nameof(accessFailedCount), "失败次数不能为负数。");
         }
 
-        var entries = LoadFileEntries();
-        var entry = entries.FirstOrDefault(x =>
-            string.Equals(x.UserName, userName.Trim(), StringComparison.OrdinalIgnoreCase));
-        if (entry is null)
+        if (_hostDatabase is not null)
         {
-            throw new InvalidOperationException($"未找到本地账号：{userName}");
+            var account = FindAccount(userName);
+            _hostDatabase.UpdateAccount(Map(account with
+            {
+                AccessFailedCount = accessFailedCount,
+                LockoutUntilUtc = lockoutUntilUtc
+            }));
+            return;
         }
 
+        var entries = LoadFileEntries();
+        var entry = FindFileEntry(entries, userName);
         entry.AccessFailedCount = accessFailedCount;
         entry.LockoutUntilUtc = lockoutUntilUtc;
         WriteFileEntries(entries);
@@ -233,6 +272,95 @@ public sealed class LauncherAccountCatalog : ILauncherAccountCatalog
             entry.IsEnabled ?? true,
             Math.Max(0, entry.AccessFailedCount ?? 0),
             entry.LockoutUntilUtc);
+    }
+
+    internal void EnsureHostDatabase()
+        => _hostDatabase?.EnsureCreatedAndMigrate();
+
+    internal void ImportRuntimeBinding(EdgeRuntimeBindingEnvelope runtimeBinding)
+        => _hostDatabase?.ImportRuntimeBinding(runtimeBinding);
+
+    private LauncherAccountRecord FindAccount(string userName)
+        => _hostDatabase!.LoadAccounts()
+               .Select(Map)
+               .FirstOrDefault(account =>
+                   string.Equals(account.UserName, userName.Trim(), StringComparison.OrdinalIgnoreCase))
+           ?? throw new InvalidOperationException($"未找到本地账号：{userName}");
+
+    private static LauncherAccountRecord Map(HostAccountRecord account)
+        => new(
+            account.UserName,
+            account.DisplayName,
+            account.PasswordHash,
+            account.IsEnabled,
+            account.AccessFailedCount,
+            account.LockoutUntilUtc);
+
+    private static HostAccountRecord Map(LauncherAccountRecord account)
+        => new(
+            account.UserName,
+            account.DisplayName,
+            account.PasswordHash,
+            account.IsEnabled,
+            account.AccessFailedCount,
+            account.LockoutUntilUtc);
+
+    private static LauncherAccountFileEntry FindFileEntry(
+        IReadOnlyCollection<LauncherAccountFileEntry> entries,
+        string userName)
+        => entries.FirstOrDefault(entry =>
+               string.Equals(entry.UserName, userName.Trim(), StringComparison.OrdinalIgnoreCase))
+           ?? throw new InvalidOperationException($"未找到本地账号：{userName}");
+
+    private static LauncherAccountFileEntry ToFileEntry(LauncherAccountRecord account)
+        => new()
+        {
+            UserName = account.UserName,
+            DisplayName = account.DisplayName,
+            PasswordHash = account.PasswordHash,
+            IsEnabled = account.IsEnabled,
+            AccessFailedCount = account.AccessFailedCount,
+            LockoutUntilUtc = account.LockoutUntilUtc
+        };
+
+    private static LauncherAccountCatalogStatus ResolveStatus(
+        IReadOnlyCollection<LauncherAccountRecord> accounts)
+    {
+        if (accounts.Count == 0)
+        {
+            return LauncherAccountCatalogStatus.Missing;
+        }
+
+        var valid = 0;
+        var empty = 0;
+        foreach (var account in accounts)
+        {
+            if (string.IsNullOrWhiteSpace(account.UserName)
+                || string.IsNullOrWhiteSpace(account.DisplayName))
+            {
+                return LauncherAccountCatalogStatus.Corrupt;
+            }
+
+            if (string.IsNullOrWhiteSpace(account.PasswordHash))
+            {
+                empty++;
+            }
+            else if (LauncherPasswordHasher.Verify(string.Empty, account.PasswordHash)
+                     == EdgePasswordVerificationResult.InvalidHash)
+            {
+                return LauncherAccountCatalogStatus.Corrupt;
+            }
+            else
+            {
+                valid++;
+            }
+        }
+
+        return valid > 0 && empty == 0
+            ? LauncherAccountCatalogStatus.Ready
+            : valid == 0
+                ? LauncherAccountCatalogStatus.NeedsInitialSetup
+                : LauncherAccountCatalogStatus.Corrupt;
     }
 
     private static JsonSerializerOptions JsonOptions()

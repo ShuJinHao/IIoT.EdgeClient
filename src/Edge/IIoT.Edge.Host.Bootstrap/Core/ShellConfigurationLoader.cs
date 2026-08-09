@@ -2,6 +2,7 @@ using IIoT.Edge.Module.Contracts.Diagnostics;
 using IIoT.Edge.Host.Bootstrap;
 using IIoT.Edge.Host.Bootstrap.Modules;
 using IIoT.Edge.SharedKernel.Configuration;
+using IIoT.Edge.SharedKernel.Security;
 using Microsoft.Extensions.Configuration;
 using System.IO;
 using System.Text.Json;
@@ -31,6 +32,7 @@ public interface IShellConfigurationLoader
 
 public sealed class ShellConfigurationLoader : IShellConfigurationLoader
 {
+    public const string MachineConfigPathEnvironmentVariable = "Shell__MachineConfigPath";
     private static readonly JsonDocumentOptions JsonOptions = new()
     {
         AllowTrailingCommas = true,
@@ -38,13 +40,17 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
     };
 
     private readonly IModuleCatalog _moduleCatalog;
+    private readonly IEdgeCredentialStore _credentialStore;
 
-    public ShellConfigurationLoader(IModuleCatalog? moduleCatalog = null)
+    public ShellConfigurationLoader(
+        IModuleCatalog? moduleCatalog = null,
+        IEdgeCredentialStore? credentialStore = null)
     {
         _moduleCatalog = moduleCatalog
             ?? new DirectoryModuleCatalog(
                 new ModulePluginLoader(new ModulePluginAssemblyResolver()),
                 new ModulePluginCompatibilityPolicy());
+        _credentialStore = credentialStore ?? new WindowsCredentialManagerStore();
     }
 
     public ShellConfigurationLoadResult Load(string baseDirectory)
@@ -87,9 +93,14 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
         var packagedMachineProfilePath = machineProfileFileName is null
             ? null
             : Path.Combine(normalizedBaseDirectory, machineProfileFileName);
+        var requestedMachineConfigPath = bootstrapConfiguration["Shell:MachineConfigPath"]?.Trim();
         var externalMachineProfilePath = machineProfile is null
             ? null
-            : TryResolveExternalMachineProfilePath(machineProfile, normalizedBaseDirectory, issues);
+            : TryResolveExternalMachineProfilePath(
+                machineProfile,
+                requestedMachineConfigPath,
+                normalizedBaseDirectory,
+                issues);
 
         if (externalMachineProfilePath is not null)
         {
@@ -132,6 +143,12 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
                 ["Shell:ExternalMachineProfilePath"] = externalMachineProfilePath,
                 ["Shell:ExternalMachineProfileLoaded"] = externalMachineProfileLoaded.ToString()
             });
+        AddCredentialBackedSecrets(configuration, externalProfileSettings, issues);
+        var authoritativeBinding = BuildAuthoritativeV3BindingProjection(
+            normalizedBaseDirectory,
+            machineProfile,
+            externalProfileSettings);
+        configuration.AddInMemoryCollection(authoritativeBinding);
         var configuredRoot = configuration.Build();
         var pluginManifestMetadata = InspectPluginConfigurationContracts(
             normalizedBaseDirectory,
@@ -432,11 +449,25 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
 
     private static string? TryResolveExternalMachineProfilePath(
         string machineProfile,
+        string? requestedMachineConfigPath,
         string baseDirectory,
         ICollection<StartupDiagnosticIssue> issues)
     {
         try
         {
+            if (!string.IsNullOrWhiteSpace(requestedMachineConfigPath))
+            {
+                var candidate = Path.GetFullPath(requestedMachineConfigPath);
+                var configRoot = Path.GetFullPath(EdgeClientProgramDataPaths.ResolveConfigRoot(baseDirectory));
+                var pluginRoot = Path.GetFullPath(EdgeClientProgramDataPaths.ResolveApplicationPluginRoot(baseDirectory));
+                if (!IsWithin(configRoot, candidate) && !IsWithin(pluginRoot, candidate))
+                {
+                    throw new InvalidDataException("显式机型配置路径越出宿主配置或设备插件目录。");
+                }
+
+                return candidate;
+            }
+
             return EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(machineProfile, baseDirectory);
         }
         catch (Exception ex) when (StartupExceptionBoundary.IsApprovedPathFailure(ex))
@@ -446,6 +477,121 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
                 $"无法解析外部机型配置路径，已继续使用基础配置：{ex.Message}"));
             return null;
         }
+    }
+
+    private void AddCredentialBackedSecrets(
+        IConfigurationBuilder configuration,
+        IReadOnlyDictionary<string, string?> externalProfileSettings,
+        ICollection<StartupDiagnosticIssue> issues)
+    {
+        if (!externalProfileSettings.TryGetValue(
+                "CloudApi:BootstrapCredentialReference",
+                out var reference)
+            || string.IsNullOrWhiteSpace(reference))
+        {
+            return;
+        }
+
+        try
+        {
+            configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["CloudApi:BootstrapSecret"] = _credentialStore.Read(reference.Trim())
+            });
+        }
+        catch (Exception ex) when (ex is IOException
+                                       or UnauthorizedAccessException
+                                       or InvalidDataException
+                                       or InvalidOperationException
+                                       or PlatformNotSupportedException
+                                       or System.ComponentModel.Win32Exception)
+        {
+            issues.Add(StartupDiagnosticIssueFactory.Create(
+                "BOOTSTRAP_CREDENTIAL_UNAVAILABLE",
+                $"设备启动凭证无法从 Windows Credential Manager 读取，Cloud 链路保持关闭：{ex.GetType().Name}。"));
+        }
+    }
+
+    private static IReadOnlyDictionary<string, string?> BuildAuthoritativeV3BindingProjection(
+        string baseDirectory,
+        string? machineProfile,
+        IReadOnlyDictionary<string, string?> materializedSettings)
+    {
+        var runtimeBindingPath = EdgeClientProgramDataPaths.ResolveRuntimeBindingPath(baseDirectory);
+        if (!File.Exists(runtimeBindingPath))
+        {
+            return new Dictionary<string, string?>();
+        }
+
+        var runtime = EdgeInstallerBindingCodec.ParseRuntime(File.ReadAllText(runtimeBindingPath));
+        if (runtime.SchemaVersion != EdgeInstallerBindingCodec.CurrentSchemaVersion)
+        {
+            return new Dictionary<string, string?>();
+        }
+
+        var clientCode = EdgeClientIdentity.NormalizeClientCode(
+            string.IsNullOrWhiteSpace(machineProfile)
+                ? throw new InvalidDataException("Binding v3 requires a non-empty ClientCode machine profile.")
+                : machineProfile);
+        var binding = runtime.Bindings.SingleOrDefault(item =>
+            string.Equals(item.ClientCode, clientCode, StringComparison.Ordinal))
+            ?? throw new InvalidDataException(
+                $"Binding v3 has no runtime entry for ClientCode {clientCode}.");
+        var expected = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["InstanceId"] = clientCode,
+            ["Shell:MachineProfile"] = clientCode,
+            ["Shell:ClientCode"] = clientCode,
+            ["Shell:RuntimeDataRoot"] = $"plugins/{clientCode}",
+            ["Modules:Enabled:0"] = binding.ModuleId,
+            ["Modules:PluginRoots:0"] = binding.PluginDirectory,
+            ["CloudApi:Enabled"] = "true",
+            ["CloudApi:BaseUrl"] = runtime.BaseUrl,
+            ["CloudApi:ClientCode"] = clientCode,
+            ["CloudApi:BootstrapCredentialReference"] = binding.PendingCredentialReference,
+            ["DevicePluginBinding:SchemaVersion"] = EdgeInstallerBindingCodec.CurrentSchemaVersion.ToString(),
+            ["DevicePluginBinding:GenerationId"] = runtime.GenerationId,
+            ["DevicePluginBinding:ClientCode"] = clientCode,
+            ["DevicePluginBinding:DeviceName"] = binding.DeviceName,
+            ["DevicePluginBinding:ProcessId"] = binding.ProcessId.ToString("D"),
+            ["DevicePluginBinding:ProcessType"] = binding.ProcessType,
+            ["DevicePluginBinding:ModuleId"] = binding.ModuleId,
+            ["DevicePluginBinding:PluginVersion"] = binding.PluginVersion,
+            ["DevicePluginBinding:PackageSha256"] = binding.PackageSha256
+        };
+        foreach (var descriptor in EdgeBindingRouteCatalog.All)
+        {
+            expected[$"CloudApi:Paths:{descriptor.MachineConfigKey}"] =
+                EdgeBindingRouteCatalog.Get(runtime.Paths, descriptor.Key);
+        }
+
+        foreach (var pair in expected)
+        {
+            if (!materializedSettings.TryGetValue(pair.Key, out var actual)
+                || !string.Equals(actual?.Trim(), pair.Value, StringComparison.Ordinal))
+            {
+                throw new InvalidDataException(
+                    $"Final Binding v3 machine configuration does not match {pair.Key}.");
+            }
+        }
+
+        if (materializedSettings.ContainsKey("CloudApi:Paths:PlcSnapshot")
+            || materializedSettings.ContainsKey("CloudApi:Paths:PassStationBatch")
+            || materializedSettings.ContainsKey("CloudApi:BootstrapSecret"))
+        {
+            throw new InvalidDataException(
+                "Final Binding v3 machine configuration contains a legacy route alias or raw secret.");
+        }
+
+        return expected;
+    }
+
+    private static bool IsWithin(string root, string candidate)
+    {
+        var normalizedRoot = root.TrimEnd(
+            Path.DirectorySeparatorChar,
+            Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        return candidate.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase);
     }
 
     private static void TryInitializeExternalMachineProfile(
