@@ -196,6 +196,7 @@ public sealed class ModulePluginAssemblyResolver : IModulePluginAssemblyResolver
         private readonly string _pluginDirectory;
         private readonly Func<AssemblyName, Assembly?> _sharedAssemblyResolver;
         private readonly IReadOnlyDictionary<string, string> _localAssemblyPaths;
+        private readonly IReadOnlyDictionary<string, string> _localUnmanagedLibraryPaths;
         private readonly object _loadSync = new();
 
         public PluginAssemblyLoadContext(
@@ -206,7 +207,9 @@ public sealed class ModulePluginAssemblyResolver : IModulePluginAssemblyResolver
         {
             _pluginDirectory = pluginDirectory;
             _sharedAssemblyResolver = sharedAssemblyResolver;
-            _localAssemblyPaths = BuildLocalAssemblyMap(pluginDirectory, entryAssemblyPath);
+            var inventory = BuildLocalAssemblyInventory(pluginDirectory, entryAssemblyPath);
+            _localAssemblyPaths = inventory.ManagedAssemblyPaths;
+            _localUnmanagedLibraryPaths = inventory.UnmanagedLibraryPaths;
         }
 
         public Assembly LoadEntryAssembly(string assemblyPath)
@@ -248,11 +251,25 @@ public sealed class ModulePluginAssemblyResolver : IModulePluginAssemblyResolver
             }
         }
 
-        private static IReadOnlyDictionary<string, string> BuildLocalAssemblyMap(
+        protected override nint LoadUnmanagedDll(string unmanagedDllName)
+        {
+            var fileName = Path.GetFileName(unmanagedDllName);
+            var simpleName = Path.GetFileNameWithoutExtension(fileName);
+            if (string.IsNullOrWhiteSpace(simpleName)
+                || !_localUnmanagedLibraryPaths.TryGetValue(simpleName, out var path))
+            {
+                return nint.Zero;
+            }
+
+            return LoadUnmanagedDllFromPath(path);
+        }
+
+        private static LocalAssemblyInventory BuildLocalAssemblyInventory(
             string pluginDirectory,
             string entryAssemblyPath)
         {
-            var paths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var managedPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var unmanagedPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var lexicalPath in Directory.EnumerateFiles(pluginDirectory, "*.dll", SearchOption.TopDirectoryOnly))
             {
                 var physicalPath = PluginPathBoundary.ResolveExistingPhysicalPath(lexicalPath);
@@ -260,6 +277,27 @@ public sealed class ModulePluginAssemblyResolver : IModulePluginAssemblyResolver
                 {
                     throw new ModulePluginLoadException(
                         $"插件依赖程序集的真实路径越出 staged 目录：{lexicalPath}。");
+                }
+
+                using var stream = File.OpenRead(physicalPath);
+                using var peReader = new PEReader(stream);
+                if (!peReader.HasMetadata)
+                {
+                    if (peReader.PEHeaders.PEHeader is null
+                        || (peReader.PEHeaders.CoffHeader.Characteristics & Characteristics.Dll) == 0)
+                    {
+                        throw new ModulePluginLoadException(
+                            $"插件 staged artifact 包含既非托管程序集也非有效原生 PE DLL 的文件：{lexicalPath}。");
+                    }
+
+                    var nativeName = Path.GetFileNameWithoutExtension(physicalPath);
+                    if (managedPaths.ContainsKey(nativeName)
+                        || !unmanagedPaths.TryAdd(nativeName, physicalPath))
+                    {
+                        throw new ModulePluginLoadException($"插件目录包含重复程序库名：{nativeName}。");
+                    }
+
+                    continue;
                 }
 
                 var name = AssemblyName.GetAssemblyName(physicalPath).Name;
@@ -277,12 +315,13 @@ public sealed class ModulePluginAssemblyResolver : IModulePluginAssemblyResolver
                     throw new ModulePluginLoadException($"插件 staged artifact 携带未授权宿主程序集：{name}。");
                 }
 
-                if (!paths.TryAdd(name, physicalPath))
+                if (unmanagedPaths.ContainsKey(name)
+                    || !managedPaths.TryAdd(name, physicalPath))
                     throw new ModulePluginLoadException($"插件目录包含重复程序集名：{name}。");
             }
 
-            ValidatePluginOwnedReferences(paths, entryAssemblyPath);
-            return paths;
+            ValidatePluginOwnedReferences(managedPaths, entryAssemblyPath);
+            return new LocalAssemblyInventory(managedPaths, unmanagedPaths);
         }
 
         private static void ValidatePluginOwnedReferences(
@@ -309,6 +348,10 @@ public sealed class ModulePluginAssemblyResolver : IModulePluginAssemblyResolver
                 }
             }
         }
+
+        private sealed record LocalAssemblyInventory(
+            IReadOnlyDictionary<string, string> ManagedAssemblyPaths,
+            IReadOnlyDictionary<string, string> UnmanagedLibraryPaths);
 
         private static bool IsForbiddenHostAssembly(string assemblyName)
         {
