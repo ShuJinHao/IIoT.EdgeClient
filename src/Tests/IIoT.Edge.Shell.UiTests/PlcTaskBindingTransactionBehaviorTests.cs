@@ -126,7 +126,7 @@ public sealed class PlcTaskBindingTransactionBehaviorTests
         var primary = new InvalidOperationException("runtime apply failed");
         var persistence = new ControlledPersistenceTransaction
         {
-            RestoreFailure = new IOException("sqlite restore failed")
+            RestoreFailure = new IOException("plugin database restore failed")
         };
         var runtime = new ControlledRuntimeTransaction
         {
@@ -145,7 +145,7 @@ public sealed class PlcTaskBindingTransactionBehaviorTests
         Assert.Same(primary, actual.PrimaryFailure);
         Assert.Equal(2, actual.RollbackFailures.Count);
         Assert.Contains(actual.RollbackFailures, failure => failure.Message.Contains("运行任务组合", StringComparison.Ordinal));
-        Assert.Contains(actual.RollbackFailures, failure => failure.Message.Contains("SQLite", StringComparison.Ordinal));
+        Assert.Contains(actual.RollbackFailures, failure => failure.Message.Contains("插件私库", StringComparison.Ordinal));
         Assert.Equal(1, runtime.RestoreCalls);
         Assert.Equal(1, persistence.RestoreCalls);
     }

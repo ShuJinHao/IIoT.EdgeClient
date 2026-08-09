@@ -11,9 +11,7 @@ using IIoT.Edge.Infrastructure.Integration.Config;
 using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
 using IIoT.Edge.Application.Common.Identity;
 using IIoT.Edge.Application.Common.DataPipeline;
-using IIoT.Edge.Domain.Hardware.Aggregates;
-using IIoT.Edge.Module.Contracts.Hardware;
-using IIoT.Edge.SharedKernel.Repository;
+using IIoT.Edge.Application.Common.Plugins;
 
 namespace IIoT.Edge.Infrastructure.Integration.Capacity;
 
@@ -32,7 +30,7 @@ public class CapacitySyncTask : ICapacitySyncTask
     private readonly ShiftConfig _shiftConfig;
     private readonly ICloudUploadDiagnosticsStore _diagnosticsStore;
     private readonly IPlcIdentityAliasRegistry _identityAliasRegistry;
-    private readonly IReadRepository<NetworkDeviceEntity>? _networkDevices;
+    private readonly IDevicePluginConfigurationSnapshotAccessor? _pluginConfiguration;
     private readonly IReadOnlyList<IProductionContextFactory> _contextFactories;
     private readonly object _lifecycleLock = new();
     private readonly SemaphoreSlim _syncGate = new(1, 1);
@@ -52,7 +50,7 @@ public class CapacitySyncTask : ICapacitySyncTask
         ShiftConfig shiftConfig,
         ICloudUploadDiagnosticsStore diagnosticsStore,
         IPlcIdentityAliasRegistry? identityAliasRegistry = null,
-        IReadRepository<NetworkDeviceEntity>? networkDevices = null,
+        IDevicePluginConfigurationSnapshotAccessor? pluginConfiguration = null,
         IEnumerable<IProductionContextFactory>? contextFactories = null)
     {
         _cloudHttp = cloudHttp;
@@ -66,7 +64,7 @@ public class CapacitySyncTask : ICapacitySyncTask
         _diagnosticsStore = diagnosticsStore;
         _identityAliasRegistry =
             identityAliasRegistry ?? new InMemoryPlcIdentityAliasRegistry();
-        _networkDevices = networkDevices;
+        _pluginConfiguration = pluginConfiguration;
         _contextFactories = contextFactories?.ToArray() ?? [];
     }
 
@@ -511,7 +509,7 @@ public class CapacitySyncTask : ICapacitySyncTask
 
     private async Task<IReadOnlyList<ConfiguredPlcIdentity>> GetConfiguredPlcIdentitiesAsync()
     {
-        if (_networkDevices is not null)
+        if (_pluginConfiguration is not null)
         {
             var contextProcessTypes = _contextStore.GetAll()
                 .Where(context => context.NetworkDeviceId > 0)
@@ -527,12 +525,7 @@ public class CapacitySyncTask : ICapacitySyncTask
                         .ToArray();
                         return processTypes.Length == 1 ? processTypes[0] : null;
                     });
-            var configuredDevices = await _networkDevices
-                .GetListAsync(
-                    static device => device.DeviceType == DeviceType.PLC,
-                    includes: null,
-                    cancellationToken: default)
-                .ConfigureAwait(false);
+            var configuredDevices = _pluginConfiguration.GetPlcs();
             return configuredDevices
                 .Where(static device =>
                     !string.IsNullOrWhiteSpace(device.PlcCode)

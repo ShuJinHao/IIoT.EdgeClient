@@ -1,15 +1,11 @@
-using IIoT.Edge.Application.Common.Crud;
-using IIoT.Edge.SharedKernel.Messaging;
-using IIoT.Edge.SharedKernel.Repository;
-using IIoT.Edge.SharedKernel.Result;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
+using IIoT.Edge.Module.Contracts.Plugins;
 using IIoT.Edge.Module.Sdk.Hardware;
+using IIoT.Edge.SharedKernel.Messaging;
+using IIoT.Edge.SharedKernel.Result;
 
 namespace IIoT.Edge.Application.Features.Hardware.UseCases.IoMapping.Commands;
 
-/// <summary>
-/// 单条 IO 映射的数据传输对象。
-/// </summary>
 public record IoMappingDto(
     int Id,
     int NetworkDeviceId,
@@ -21,97 +17,108 @@ public record IoMappingDto(
     string Category,
     string BusinessGroup,
     int SortOrder,
-    string? Remark
-);
+    string? Remark);
 
-/// <summary>
-/// 命令：保存指定网络设备下的 IO 映射，按提交结果进行新增或更新。
-/// </summary>
 public record SaveIoMappingsCommand(
     int NetworkDeviceId,
-    List<IoMappingDto> Mappings
-) : ICommand<Result>;
+    List<IoMappingDto> Mappings) : ICommand<Result>;
 
-/// <summary>
-/// 处理器：保存指定网络设备的 IO 映射配置。
-/// </summary>
-public class SaveIoMappingsHandler(
-    IEdgeUnitOfWorkFactory unitOfWorkFactory
-) : ICommandHandler<SaveIoMappingsCommand, Result>
+/// <summary>正式 v3 IO 保存端口；一次写入只经当前插件拥有的版本化配置 Store。</summary>
+public sealed class SaveIoMappingsHandler(
+    IDevicePluginConfigurationSnapshotAccessor snapshots,
+    IEnumerable<IDevicePluginConfigurationStoreV1> stores)
+    : ICommandHandler<SaveIoMappingsCommand, Result>
 {
+    private readonly IDevicePluginConfigurationStoreV1[] _stores = stores.ToArray();
+
     public async Task<Result> Handle(
         SaveIoMappingsCommand request,
         CancellationToken cancellationToken)
     {
-        return await SubmittedEntityListSaveHelper.ExecuteInUnitOfWorkAsync<IoMappingEntity>(
-            unitOfWorkFactory,
-            (repo, ct) => ApplyAsync(repo, request, ct),
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    internal static async Task<Result> ApplyAsync(
-        IRepository<IoMappingEntity> repo,
-        SaveIoMappingsCommand request,
-        CancellationToken cancellationToken)
-    {
-        return await SubmittedEntityListSaveHelper.ReplaceSubmittedAsync(
-            repo,
-            request.Mappings,
-            ct => repo.GetListAsync(x => x.NetworkDeviceId == request.NetworkDeviceId, ct),
-            static dto => dto.Id,
-            dto => Validate(request.NetworkDeviceId, dto),
-            dto => Create(request.NetworkDeviceId, dto),
-            (entity, dto) => Apply(entity, request.NetworkDeviceId, dto),
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    private static IoMappingEntity Create(int networkDeviceId, IoMappingDto dto)
-        => IoMappingEntity.Create(
-            networkDeviceId,
-            dto.SignalKey,
-            dto.PlcAddress,
-            dto.AddressCount,
-            dto.DataType,
-            dto.Direction,
-            Normalize(dto.Category, "单点读数据"),
-            dto.BusinessGroup ?? string.Empty);
-
-    private static void Apply(IoMappingEntity entity, int networkDeviceId, IoMappingDto dto)
-    {
-        entity.BindNetworkDevice(networkDeviceId);
-        entity.UpdateAddress(dto.PlcAddress, dto.AddressCount);
-        entity.UpdateMetadata(
-            dto.SignalKey,
-            dto.DataType,
-            dto.Direction,
-            Normalize(dto.Category, "单点读数据"),
-            dto.BusinessGroup,
-            dto.Remark);
-        entity.UpdateSortOrder(dto.SortOrder);
-    }
-
-    private static string? Validate(int networkDeviceId, IoMappingDto dto)
-    {
-        var typeWordLength = PlcIoTypeWordLengthValidator.Validate(
-            dto.DataType,
-            dto.AddressCount);
-        if (!typeWordLength.IsValid)
+        if (_stores.Length != 1)
         {
-            return $"IO“{dto.SignalKey}”数据类型与 word 长度不匹配：{typeWordLength.FailureCode}。";
+            return Result.Failure("PLUGIN_DATABASE_PORT_CARDINALITY_INVALID");
         }
 
-        try
+        var plc = snapshots.GetPlcs().SingleOrDefault(item => item.Id == request.NetworkDeviceId);
+        if (plc is null)
         {
-            var entity = Create(networkDeviceId, dto);
-            Apply(entity, networkDeviceId, dto);
-            return null;
+            return Result.Failure("PLUGIN_PLC_NOT_FOUND");
         }
-        catch (ArgumentException ex)
-        {
-            return ex.Message;
-        }
-    }
 
-    private static string Normalize(string? value, string fallback)
-        => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+        var configurations = new List<DevicePluginIoPointConfiguration>(request.Mappings.Count);
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in request.Mappings)
+        {
+            var typeWordLength = PlcIoTypeWordLengthValidator.Validate(item.DataType, item.AddressCount);
+            if (!typeWordLength.IsValid
+                || string.IsNullOrWhiteSpace(item.SignalKey)
+                || string.IsNullOrWhiteSpace(item.PlcAddress)
+                || string.IsNullOrWhiteSpace(item.DataType)
+                || string.IsNullOrWhiteSpace(item.Direction)
+                || item.SortOrder < 0
+                || !keys.Add(item.SignalKey.Trim()))
+            {
+                return Result.Failure(
+                    typeWordLength.IsValid
+                        ? "PLUGIN_IO_CONFIGURATION_INVALID"
+                        : typeWordLength.FailureCode);
+            }
+
+            configurations.Add(new DevicePluginIoPointConfiguration(
+                plc.PlcCode,
+                item.SignalKey.Trim(),
+                item.PlcAddress.Trim(),
+                item.AddressCount,
+                item.DataType.Trim(),
+                item.Direction.Trim(),
+                string.IsNullOrWhiteSpace(item.Category) ? "单点读数据" : item.Category.Trim(),
+                item.BusinessGroup?.Trim() ?? string.Empty,
+                item.SortOrder,
+                string.IsNullOrWhiteSpace(item.Remark) ? null : item.Remark.Trim()));
+        }
+
+        var snapshot = snapshots.GetRequiredSnapshot();
+        var expectedVersion = snapshot.ConfigurationVersion;
+        var existing = snapshot.IoPoints
+            .Where(item => string.Equals(item.PlcCode, plc.PlcCode, StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(static item => item.SignalKey, StringComparer.OrdinalIgnoreCase);
+        var incoming = configurations.ToDictionary(
+            static item => item.SignalKey,
+            StringComparer.OrdinalIgnoreCase);
+        foreach (var removed in existing.Values.Where(item => !incoming.ContainsKey(item.SignalKey)))
+        {
+            var result = await _stores[0]
+                .DeleteIoPointAsync(plc.PlcCode, removed.SignalKey, expectedVersion, cancellationToken)
+                .ConfigureAwait(false);
+            if (!result.Succeeded)
+            {
+                return Result.Failure(result.FailureReasonCode ?? "PLUGIN_IO_DELETE_REJECTED");
+            }
+
+            expectedVersion = result.ConfigurationVersion;
+        }
+
+        foreach (var configuration in configurations)
+        {
+            if (existing.TryGetValue(configuration.SignalKey, out var current)
+                && current == configuration)
+            {
+                continue;
+            }
+
+            var result = await _stores[0]
+                .UpsertIoPointAsync(configuration, expectedVersion, cancellationToken)
+                .ConfigureAwait(false);
+            if (!result.Succeeded)
+            {
+                return Result.Failure(result.FailureReasonCode ?? "PLUGIN_IO_UPSERT_REJECTED");
+            }
+
+            expectedVersion = result.ConfigurationVersion;
+        }
+
+        await snapshots.RefreshAsync(cancellationToken).ConfigureAwait(false);
+        return Result.Success();
+    }
 }

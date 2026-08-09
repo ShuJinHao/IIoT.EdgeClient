@@ -1,13 +1,10 @@
-using System.Linq.Expressions;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Module.Contracts.Plc;
-using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Factory;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Services.Modbus;
-using IIoT.Edge.SharedKernel.Domain;
 using IIoT.Edge.Module.Contracts.Hardware;
-using IIoT.Edge.SharedKernel.Repository;
-using IIoT.Edge.SharedKernel.Specification;
+using IIoT.Edge.Module.Contracts.Plugins;
 
 namespace IIoT.Edge.Plc.ContractTests;
 
@@ -83,97 +80,52 @@ public sealed class ModbusPlcServiceBehaviorTests
     }
 
     [Fact]
-    public async Task PlcEndpointResolver_WhenModbusRtu_ShouldUseBoundSerialDevice()
+    public async Task PlcEndpointResolver_WhenModbusRtu_ShouldFailClosedWithoutLegacyHostSerialTables()
     {
-        var serialDevice = SerialDeviceEntity.Create("RTU-COM3", "Modbus RTU", "COM3", 19200);
-        serialDevice.UpdatePort("COM3", 19200, 8, "One", "None");
-        var resolver = new PlcEndpointResolver(new SerialDeviceReadRepository(serialDevice));
-        var plc = NetworkDeviceEntity.Create("PLC-RTU", DeviceType.PLC, "127.0.0.1", 7);
-        plc.UpdateDeviceModel(PlcType.ModbusRtu.ToString());
-        plc.UpdateCommands("RTU-COM3", null);
-        plc.UpdateEndpoint("127.0.0.1", 7, null, 5000);
-
-        var endpoint = await resolver.ResolveAsync(
-            plc,
-            PlcType.ModbusRtu,
-            TestContext.Current.CancellationToken);
-
-        var serialEndpoint = Assert.IsType<SerialPlcEndpoint>(endpoint);
-        Assert.Equal("COM3", serialEndpoint.PortName);
-        Assert.Equal(19200, serialEndpoint.BaudRate);
-        Assert.Equal((byte)7, serialEndpoint.SlaveId);
-        Assert.Equal(5000, serialEndpoint.ConnectTimeoutMs);
-    }
-
-    [Fact]
-    public async Task PlcEndpointResolver_WhenModbusRtuHasNoSerialBinding_ShouldReject()
-    {
-        var resolver = new PlcEndpointResolver(new SerialDeviceReadRepository());
-        var plc = NetworkDeviceEntity.Create("PLC-RTU", DeviceType.PLC, "127.0.0.1", 1);
-        plc.UpdateDeviceModel(PlcType.ModbusRtu.ToString());
+        var resolver = new PlcEndpointResolver();
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => resolver.ResolveAsync(
-                plc,
+                CreatePluginPlc("PLC-RTU", PlcType.ModbusRtu, 7, 5000),
                 PlcType.ModbusRtu,
                 TestContext.Current.CancellationToken));
 
-        Assert.Contains("Command1", exception.Message);
+        Assert.Equal("PLUGIN_SERIAL_DEVICE_NOT_SUPPORTED", exception.Message);
     }
 
-    private sealed class SerialDeviceReadRepository(params SerialDeviceEntity[] devices) : IReadRepository<SerialDeviceEntity>
+    [Fact]
+    public async Task PlcEndpointResolver_WhenModbusTcp_ShouldUsePluginSnapshotEndpoint()
     {
-        private readonly List<SerialDeviceEntity> _devices = [.. devices];
+        var resolver = new PlcEndpointResolver();
 
-        public IQueryable<SerialDeviceEntity> GetQueryable()
-            => _devices.AsQueryable();
+        var endpoint = await resolver.ResolveAsync(
+            CreatePluginPlc("PLC-TCP", PlcType.ModbusTcp, 502, 4500),
+            PlcType.ModbusTcp,
+            TestContext.Current.CancellationToken);
 
-        public Task<SerialDeviceEntity?> GetByIdAsync<TKey>(
-            TKey id,
-            CancellationToken cancellationToken = default)
-            where TKey : notnull
-            => Task.FromResult<SerialDeviceEntity?>(null);
-
-        public Task<SerialDeviceEntity?> GetAsync(
-            Expression<Func<SerialDeviceEntity, bool>> expression,
-            Expression<Func<SerialDeviceEntity, object>>[]? includes = null,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult(_devices.AsQueryable().FirstOrDefault(expression));
-
-        public Task<List<SerialDeviceEntity>> GetListAsync(
-            Expression<Func<SerialDeviceEntity, bool>> expression,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult(_devices.AsQueryable().Where(expression).ToList());
-
-        public Task<List<SerialDeviceEntity>> GetListAsync(
-            Expression<Func<SerialDeviceEntity, bool>> expression,
-            Expression<Func<SerialDeviceEntity, object>>[]? includes = null,
-            CancellationToken cancellationToken = default)
-            => GetListAsync(expression, cancellationToken);
-
-        public Task<List<SerialDeviceEntity>> GetListAsync(
-            ISpecification<SerialDeviceEntity>? specification = null,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult(_devices.ToList());
-
-        public Task<SerialDeviceEntity?> GetSingleOrDefaultAsync(
-            ISpecification<SerialDeviceEntity>? specification = null,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult(_devices.SingleOrDefault());
-
-        public Task<int> GetCountAsync(
-            Expression<Func<SerialDeviceEntity, bool>> expression,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult(_devices.AsQueryable().Count(expression));
-
-        public Task<int> CountAsync(
-            ISpecification<SerialDeviceEntity>? specification = null,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult(_devices.Count);
-
-        public Task<bool> AnyAsync(
-            ISpecification<SerialDeviceEntity>? specification = null,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult(_devices.Count > 0);
+        var tcp = Assert.IsType<TcpPlcEndpoint>(endpoint);
+        Assert.Equal("127.0.0.1", tcp.Host);
+        Assert.Equal(502, tcp.Port);
+        Assert.Equal(4500, tcp.ConnectTimeoutMs);
     }
+
+    private static DevicePluginPlcSnapshot CreatePluginPlc(
+        string plcCode,
+        PlcType plcType,
+        int port,
+        int connectTimeout)
+        => new(
+            1,
+            new DevicePluginPlcConfiguration(
+                plcCode,
+                plcCode,
+                "PLC",
+                plcType.ToString(),
+                null,
+                "127.0.0.1",
+                port,
+                null,
+                connectTimeout,
+                true,
+                null));
 }

@@ -2,6 +2,7 @@ using IIoT.Edge.Module.Contracts.Config;
 using IIoT.Edge.Module.Contracts.Context;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Recipe;
+using IIoT.Edge.Application.Common.Identity;
 
 namespace IIoT.Edge.Shell.Core;
 
@@ -16,28 +17,26 @@ public sealed class AppRuntimeStateCoordinator : IAppRuntimeStateCoordinator
 {
     private readonly IProductionContextStore _contextStore;
     private readonly IRecipeService _recipeService;
-    private readonly IModuleSeedInitializer _moduleSeedInitializer;
     private readonly ILogService _logger;
+    private readonly IDevicePluginRuntimeContext? _runtimeContext;
 
     public AppRuntimeStateCoordinator(
         IProductionContextStore contextStore,
         IRecipeService recipeService,
-        IModuleSeedInitializer moduleSeedInitializer,
-        ILogService logger)
+        ILogService logger,
+        IDevicePluginRuntimeContext? runtimeContext = null)
     {
         _contextStore = contextStore;
         _recipeService = recipeService;
-        _moduleSeedInitializer = moduleSeedInitializer;
         _logger = logger;
+        _runtimeContext = runtimeContext;
     }
 
     public async Task RestoreAsync(CancellationToken cancellationToken = default)
     {
         _contextStore.LoadFromFile();
         _recipeService.LoadFromFile();
-        _ = await _moduleSeedInitializer
-            .RestoreRuntimeStateAsync(cancellationToken)
-            .ConfigureAwait(false);
+        await Task.CompletedTask.ConfigureAwait(false);
         _logger.Info("[生命周期] 运行时持久化状态恢复完成。");
     }
 

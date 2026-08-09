@@ -1,6 +1,6 @@
 using System.Globalization;
 using IIoT.Edge.Module.Contracts.Plc;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Module.Contracts.Runtime;
 using IIoT.Edge.Module.Contracts.Identity;
 
@@ -26,11 +26,11 @@ internal static class MonitorDeviceIdentityHelper
     public static bool HasMonitorSourceForConfiguredDevice(
         IReadOnlyCollection<ProductionContext> contexts,
         IReadOnlyCollection<PlcConnectionRuntimeSnapshot> runtimeStatuses,
-        NetworkDeviceEntity device)
+        DevicePluginPlcSnapshot device)
         => contexts.Any(context => MatchesDevice(context, device))
             || runtimeStatuses.Any(runtimeStatus => MatchesDevice(runtimeStatus, device));
 
-    public static string ConfiguredDeviceKey(NetworkDeviceEntity device)
+    public static string ConfiguredDeviceKey(DevicePluginPlcSnapshot device)
         => !string.IsNullOrWhiteSpace(device.PlcCode)
             ? $"plc:{device.PlcCode}"
             : device.Id > 0
@@ -40,7 +40,7 @@ internal static class MonitorDeviceIdentityHelper
     public static int ResolveNetworkDeviceId(
         int contextNetworkDeviceId,
         PlcConnectionRuntimeSnapshot? runtimeStatus,
-        NetworkDeviceEntity? configuredDevice)
+        DevicePluginPlcSnapshot? configuredDevice)
     {
         if (configuredDevice?.Id > 0)
         {
@@ -58,7 +58,7 @@ internal static class MonitorDeviceIdentityHelper
     public static string ResolveDeviceName(
         string? contextDeviceName,
         PlcConnectionRuntimeSnapshot? runtimeStatus,
-        NetworkDeviceEntity? configuredDevice)
+        DevicePluginPlcSnapshot? configuredDevice)
     {
         if (!string.IsNullOrWhiteSpace(configuredDevice?.DeviceName))
         {
@@ -83,7 +83,7 @@ internal static class MonitorDeviceIdentityHelper
     public static string ResolvePlcCode(
         string? contextPlcCode,
         PlcConnectionRuntimeSnapshot? runtimeStatus,
-        NetworkDeviceEntity? configuredDevice)
+        DevicePluginPlcSnapshot? configuredDevice)
         => new[]
             {
                 contextPlcCode,
@@ -94,7 +94,7 @@ internal static class MonitorDeviceIdentityHelper
             ?.Trim()
             ?? string.Empty;
 
-    public static string FormatEndpoint(NetworkDeviceEntity? device)
+    public static string FormatEndpoint(DevicePluginPlcSnapshot? device)
     {
         if (device is null)
         {

@@ -2,17 +2,16 @@ using System.Data;
 using System.Text.Json;
 using Dapper;
 using IIoT.Edge.Application.Common.DataPipeline;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
 using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Contracts.Logging;
-using IIoT.Edge.SharedKernel.Repository;
 
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 
 public sealed class DataPipelineIdentityMigration(
     SqliteConnectionFactory connectionFactory,
-    IReadRepository<NetworkDeviceEntity> networkDevices,
+    IDevicePluginConfigurationSnapshotAccessor snapshots,
     ILogService logger)
     : IDataPipelineIdentityMigration
 {
@@ -29,9 +28,8 @@ public sealed class DataPipelineIdentityMigration(
     public async Task<DataPipelineIdentityMigrationResult> MigrateAsync(
         CancellationToken cancellationToken = default)
     {
-        var devices = await networkDevices.GetListAsync(
-            static device => device.DeviceType == DeviceType.PLC,
-            cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        var devices = snapshots.GetPlcs();
         var deviceById = devices
             .Where(static device => device.Id > 0)
             .GroupBy(static device => device.Id)
@@ -128,8 +126,8 @@ public sealed class DataPipelineIdentityMigration(
 
     private static IdentityResolution Resolve(
         LegacyIdentityRow row,
-        IReadOnlyDictionary<int, NetworkDeviceEntity> deviceById,
-        IReadOnlyDictionary<string, NetworkDeviceEntity> deviceByPlcCode)
+        IReadOnlyDictionary<int, DevicePluginPlcSnapshot> deviceById,
+        IReadOnlyDictionary<string, DevicePluginPlcSnapshot> deviceByPlcCode)
     {
         if (row.IdempotencyKeyVersion is not (1 or 2))
         {

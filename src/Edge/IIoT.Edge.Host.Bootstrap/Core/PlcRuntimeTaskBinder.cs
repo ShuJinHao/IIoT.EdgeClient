@@ -5,10 +5,9 @@ using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Sdk.Hardware;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Module.Sdk.Signals;
-using IIoT.Edge.SharedKernel.Repository;
 
 namespace IIoT.Edge.Shell.Core;
 
@@ -25,8 +24,7 @@ public interface IPlcRuntimeTaskBinder
 public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
 {
     private readonly IServiceProvider _serviceProvider;
-    private readonly IReadRepository<NetworkDeviceEntity> _networkDevices;
-    private readonly IReadRepository<IoMappingEntity> _ioMappings;
+    private readonly IDevicePluginConfigurationSnapshotAccessor _snapshots;
     private readonly IStationRuntimeRegistry _runtimeRegistry;
     private readonly IPlcTaskBindingService _taskBindingService;
     private readonly IProductionContextSignalBindingStore _signalBindingStore;
@@ -35,8 +33,7 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
 
     public PlcRuntimeTaskBinder(
         IServiceProvider serviceProvider,
-        IReadRepository<NetworkDeviceEntity> networkDevices,
-        IReadRepository<IoMappingEntity> ioMappings,
+        IDevicePluginConfigurationSnapshotAccessor snapshots,
         IStationRuntimeRegistry runtimeRegistry,
         IPlcTaskBindingService taskBindingService,
         IProductionContextSignalBindingStore signalBindingStore,
@@ -44,8 +41,7 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
         ILogService logger)
     {
         _serviceProvider = serviceProvider;
-        _networkDevices = networkDevices;
-        _ioMappings = ioMappings;
+        _snapshots = snapshots;
         _runtimeRegistry = runtimeRegistry;
         _taskBindingService = taskBindingService;
         _signalBindingStore = signalBindingStore;
@@ -55,9 +51,10 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
 
     public async Task BindAsync(CancellationToken cancellationToken = default)
     {
-        var plcDevices = await _networkDevices.GetListAsync(
-            x => x.IsEnabled && x.DeviceType == DeviceType.PLC,
-            cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        var plcDevices = _snapshots.GetPlcs()
+            .Where(static item => item.IsEnabled)
+            .ToArray();
 
         foreach (var device in plcDevices)
         {
@@ -83,9 +80,8 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
             throw new ArgumentException("网络设备 Id 必须大于 0。", nameof(networkDeviceId));
         }
 
-        var device = await _networkDevices
-            .GetByIdAsync(networkDeviceId, cancellationToken)
-            .ConfigureAwait(false)
+        cancellationToken.ThrowIfCancellationRequested();
+        var device = _snapshots.GetPlcs().SingleOrDefault(item => item.Id == networkDeviceId)
             ?? throw new InvalidOperationException("未找到要绑定运行任务的 PLC 设备。");
         if (device.DeviceType != DeviceType.PLC)
         {
@@ -109,7 +105,7 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
     }
 
     private async Task<PlcRuntimeTaskPlan> BuildTaskPlanAsync(
-        NetworkDeviceEntity device,
+        DevicePluginPlcSnapshot device,
         CancellationToken cancellationToken)
     {
         var factory = ResolveActiveRuntimeFactory();
@@ -123,9 +119,10 @@ public sealed class PlcRuntimeTaskBinder : IPlcRuntimeTaskBinder
             return PlcRuntimeTaskPlan.Empty(device.Id, device.PlcCode, device.DeviceName);
         }
 
-        var mappings = await _ioMappings.GetListAsync(
-            x => x.NetworkDeviceId == device.Id,
-            cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        var mappings = _snapshots.GetIoPoints()
+            .Where(item => item.NetworkDeviceId == device.Id)
+            .ToArray();
         var signalBindings = mappings
             .Select(static mapping => new ModuleIoSnapshot(
                 mapping.SignalKey,

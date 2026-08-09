@@ -37,11 +37,35 @@ public sealed class ModulePluginManifest
     [JsonPropertyName("moduleSeed")]
     public ModulePluginSeedManifest? ModuleSeed { get; set; }
 
+    [JsonPropertyName("privateDatabase")]
+    public ModulePluginPrivateDatabaseManifest? PrivateDatabase { get; set; }
+
     [JsonPropertyName("capabilities")]
     public ModulePluginCapabilitiesManifest? Capabilities { get; set; }
 
     [JsonPropertyName("dependencies")]
     public List<string> Dependencies { get; set; } = [];
+}
+
+public sealed class ModulePluginPrivateDatabaseManifest
+{
+    [JsonPropertyName("ownerEnabled")]
+    public bool OwnerEnabled { get; set; }
+
+    [JsonPropertyName("lifecycleContractVersion")]
+    public string LifecycleContractVersion { get; set; } = string.Empty;
+
+    [JsonPropertyName("configurationContractVersion")]
+    public string ConfigurationContractVersion { get; set; } = string.Empty;
+
+    [JsonPropertyName("schemaVersion")]
+    public int SchemaVersion { get; set; }
+
+    [JsonPropertyName("migrationAssembly")]
+    public string MigrationAssembly { get; set; } = string.Empty;
+
+    [JsonPropertyName("entryPoint")]
+    public string EntryPoint { get; set; } = string.Empty;
 }
 
 public sealed class ModulePluginSeedManifest

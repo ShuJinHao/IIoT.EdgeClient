@@ -317,8 +317,12 @@ public sealed partial class ProjectRegistryArchitectureTests
             connectionManager,
             StringComparison.Ordinal);
         Assert.Matches(
-            @"ApplyDeviceRuntimeAsync\(\s*target\.DeviceId",
+            @"ApplyDeviceRuntimeAsync\(\s*deviceId",
             hardwareSave);
+        Assert.Contains(
+            "snapshots.GetPlcs()",
+            runtimeApply,
+            StringComparison.Ordinal);
         Assert.Contains(
             "ReloadDeviceAsync(device.Id",
             runtimeApply,
@@ -344,10 +348,14 @@ public sealed partial class ProjectRegistryArchitectureTests
 
         Assert.Equal(
             [
-                "src/Application/IIoT.Edge.Application/Features/Hardware/HardwareConfig/HardwareConfigCrudService.cs",
-                "src/Application/IIoT.Edge.Application/Features/Hardware/HardwareConfig/HardwareConfigQueries.cs"
+                "src/Application/IIoT.Edge.Application/Features/Hardware/HardwareConfig/HardwareConfigCrudService.cs"
             ],
             callers);
+        var hardwareSave = File.ReadAllText(Path.Combine(
+            root,
+            "src/Application/IIoT.Edge.Application/Features/Hardware/HardwareConfig/HardwareConfigQueries.cs"));
+        Assert.Contains("UpsertIoPointAsync", hardwareSave, StringComparison.Ordinal);
+        Assert.Contains("DeleteIoPointAsync", hardwareSave, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -367,11 +375,130 @@ public sealed partial class ProjectRegistryArchitectureTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(
-            [
-                "src/Application/IIoT.Edge.Application/Features/Hardware/HardwareConfig/HardwareConfigQueries.cs"
-            ],
-            callers);
+        Assert.Empty(callers);
+        var hardwareSave = File.ReadAllText(Path.Combine(
+            root,
+            "src/Application/IIoT.Edge.Application/Features/Hardware/HardwareConfig/HardwareConfigQueries.cs"));
+        Assert.Contains("UpsertPlcAsync", hardwareSave, StringComparison.Ordinal);
+        Assert.Contains("DeletePlcAsync", hardwareSave, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FormalV3HostProjectGraph_ShouldNotReferenceLegacyPluginEfOwner()
+    {
+        var root = FindRepositoryRoot();
+        Assert.False(File.Exists(Path.Combine(
+            root,
+            "src/Infrastructure/IIoT.Edge.Infrastructure.Persistence.EfCore",
+            "IIoT.Edge.Infrastructure.Persistence.EfCore.csproj")));
+        var hostProject = Path.Combine(
+            root,
+            "src/Edge/IIoT.Edge.Host.Bootstrap/IIoT.Edge.Host.Bootstrap.csproj");
+        var graph = EnumerateProjectGraph(hostProject)
+            .Select(path => Normalize(Path.GetRelativePath(root, path)))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        Assert.DoesNotContain(
+            graph,
+            path => path.Contains(
+                "IIoT.Edge.Infrastructure.Persistence.EfCore",
+                StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void FormalV3ProductionSource_ShouldNotReferenceLegacyPluginEntitiesOrUnitOfWork()
+    {
+        var root = FindRepositoryRoot();
+        var productionRoots = new[]
+        {
+            "src/Application",
+            "src/Edge",
+            "src/Infrastructure",
+            "src/Presentation"
+        };
+        var forbidden = new[]
+        {
+            "IEdgeUnitOfWorkFactory",
+            "SystemConfigEntity",
+            "SerialDeviceEntity",
+            "NetworkDeviceEntity",
+            "IoMappingEntity",
+            "PlcTaskBindingEntity",
+            "DeviceParamEntity",
+            "ModuleDevelopmentSeedWriter"
+        };
+
+        var violations = productionRoots
+            .SelectMany(relative => EnumerateSourceFiles(Path.Combine(root, relative), "*.cs"))
+            .Where(path => !path.Contains(
+                $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                StringComparison.OrdinalIgnoreCase))
+            .Select(path => new
+            {
+                Path = Normalize(Path.GetRelativePath(root, path)),
+                Text = File.ReadAllText(path)
+            })
+            .SelectMany(file => forbidden
+                .Where(token => file.Text.Contains(token, StringComparison.Ordinal))
+                .Select(token => $"{file.Path}: {token}"))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void FormalV3HostComposition_ShouldUseOnlyPluginDatabasePorts()
+    {
+        var root = FindRepositoryRoot();
+        var composition = File.ReadAllText(Path.Combine(
+            root,
+            "src/Edge/IIoT.Edge.Host.Bootstrap/DependencyInjection.cs"));
+        var startup = File.ReadAllText(Path.Combine(
+            root,
+            "src/Edge/IIoT.Edge.Host.Bootstrap/Core/AppStartupInitializer.cs"));
+
+        Assert.Contains("IDevicePluginDatabaseStartup", composition, StringComparison.Ordinal);
+        Assert.Contains("IDevicePluginConfigurationSnapshotAccessor", composition, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddEfCorePersistenceInfrastructure", composition, StringComparison.Ordinal);
+        Assert.DoesNotContain("IEdgeUnitOfWorkFactory", composition, StringComparison.Ordinal);
+        Assert.DoesNotContain("ModuleDevelopmentSeedWriter", composition, StringComparison.Ordinal);
+        Assert.Contains("PLUGIN_DATABASE_V3_REQUIRED", startup, StringComparison.Ordinal);
+        Assert.DoesNotContain("ApplyMigrations", startup, StringComparison.Ordinal);
+        Assert.DoesNotContain("ModuleSeedInitializer", startup, StringComparison.Ordinal);
+    }
+
+    private static IReadOnlyCollection<string> EnumerateProjectGraph(string rootProject)
+    {
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var pending = new Stack<string>();
+        pending.Push(Path.GetFullPath(rootProject));
+        while (pending.TryPop(out var projectPath))
+        {
+            if (!visited.Add(projectPath))
+            {
+                continue;
+            }
+
+            var project = XDocument.Load(projectPath);
+            var projectDirectory = Path.GetDirectoryName(projectPath)!;
+            foreach (var reference in project.Descendants("ProjectReference"))
+            {
+                var include = reference.Attribute("Include")?.Value;
+                if (string.IsNullOrWhiteSpace(include))
+                {
+                    continue;
+                }
+
+                var relativePath = include
+                    .Replace('\\', Path.DirectorySeparatorChar)
+                    .Replace('/', Path.DirectorySeparatorChar);
+                pending.Push(Path.GetFullPath(Path.Combine(projectDirectory, relativePath)));
+            }
+        }
+
+        return visited;
     }
 
     [GeneratedRegex("<Project\\s+Path=\"([^\"]+\\.csproj)\"", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]

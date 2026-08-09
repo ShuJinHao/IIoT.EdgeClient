@@ -1,5 +1,7 @@
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Module.Contracts.Plc.Store;
+using IIoT.Edge.Module.Contracts.Plugins;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Application.Features.Production.Equipment;
 using IIoT.Edge.Domain.Hardware.Aggregates;
@@ -64,7 +66,10 @@ public sealed class EquipmentQueriesBehaviorTests
         {
             if (request is GetAllNetworkDevicesQuery)
             {
-                return Task.FromResult((TResponse)(object)Result.Success(new List<NetworkDeviceEntity> { device }));
+                return Task.FromResult((TResponse)(object)Result.Success(new List<DevicePluginPlcSnapshot>
+                {
+                    ToSnapshot(device)
+                }));
             }
 
             throw new NotSupportedException(request.GetType().Name);
@@ -83,6 +88,22 @@ public sealed class EquipmentQueriesBehaviorTests
         public IAsyncEnumerable<object?> CreateStream(object request, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
     }
+
+    private static DevicePluginPlcSnapshot ToSnapshot(NetworkDeviceEntity device)
+        => new(
+            device.Id,
+            new DevicePluginPlcConfiguration(
+                device.PlcCode,
+                device.DeviceName,
+                device.DeviceType.ToString(),
+                device.DeviceModel,
+                device.ProtocolFrame,
+                device.IpAddress,
+                device.Port1,
+                device.Port2,
+                device.ConnectTimeout,
+                device.IsEnabled,
+                device.Remark));
 
     private sealed class FakePlcConnectionManager(PlcConnectionRuntimeSnapshot? snapshot) : IPlcConnectionManager
     {

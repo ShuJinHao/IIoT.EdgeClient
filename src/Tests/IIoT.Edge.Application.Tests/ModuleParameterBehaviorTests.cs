@@ -87,12 +87,9 @@ public sealed class ModuleParameterBehaviorTests
         Assert.Equal(
             expectedCloudApiParamCount,
             cloudParams.Count);
-        Assert.Contains(cloudParams, x =>
-            x.Key == CloudApiConfigParamSchema.BaseUrl
-            && x.Value == "https://config-cloud.test");
-        Assert.Contains(cloudParams, x =>
-            x.Key == CloudApiConfigParamSchema.PassStationBatchTemplatePath
-            && x.Value == "/config/pass-stations/{typeKey}/batch");
+        Assert.DoesNotContain(cloudParams, x => x.Key == CloudApiConfigParamSchema.BaseUrl);
+        Assert.DoesNotContain(cloudParams, x =>
+            x.Key == CloudApiConfigParamSchema.PassStationBatchTemplatePath);
         Assert.DoesNotContain(cloudParams, x => x.Key == CloudApiConfigParamSchema.ClientCode);
         Assert.DoesNotContain(cloudParams, x => x.Key == CloudApiConfigParamSchema.BootstrapSecret);
     }

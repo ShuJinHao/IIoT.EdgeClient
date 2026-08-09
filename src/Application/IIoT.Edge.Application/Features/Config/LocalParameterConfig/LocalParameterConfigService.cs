@@ -1,9 +1,7 @@
-using IIoT.Edge.Module.Contracts.Cache;
 using IIoT.Edge.Module.Contracts.Config;
-using IIoT.Edge.Application.Features.Config;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
-using IIoT.Edge.Domain.Config.Aggregates;
-using IIoT.Edge.SharedKernel.Repository;
+using IIoT.Edge.Module.Contracts.Plugins;
 
 namespace IIoT.Edge.Application.Features.Config.LocalParameterConfig;
 
@@ -11,32 +9,30 @@ namespace IIoT.Edge.Application.Features.Config.LocalParameterConfig;
 /// 统一封装本地模块参数读取与变更通知。
 /// </summary>
 public sealed class LocalParameterConfigService(
-    IReadRepository<SystemConfigEntity> systemConfigs,
-    IEdgeUnitOfWorkFactory unitOfWorkFactory,
-    IEdgeCacheService cache)
+    IDevicePluginConfigurationSnapshotAccessor snapshots,
+    IEnumerable<IDevicePluginConfigurationStoreV1> stores)
     : ILocalParameterConfigService, ILocalParameterConfigChangePublisher, ILocalSystemConfigSnapshotReader
 {
-    private readonly IReadRepository<SystemConfigEntity> _systemConfigs = systemConfigs;
-    private readonly IEdgeCacheService _cache = cache;
-    private IReadOnlyList<LocalSystemConfigSnapshot> _currentSystemConfigs = Array.Empty<LocalSystemConfigSnapshot>();
+    private readonly IDevicePluginConfigurationStoreV1[] _stores = stores.ToArray();
+    private IReadOnlyList<LocalSystemConfigSnapshot> _currentSystemConfigs = [];
 
     public event EventHandler<ParameterConfigChangedEventArgs>? ParameterConfigChanged;
 
-    public async Task<IReadOnlyList<LocalSystemConfigSnapshot>> GetSystemConfigsAsync(
+    public Task<IReadOnlyList<LocalSystemConfigSnapshot>> GetSystemConfigsAsync(
         CancellationToken cancellationToken = default)
     {
-        var result = await _cache.GetOrCreateAsync<List<SystemConfigEntity>>(
-                ParameterCacheKeys.SystemAll,
-                async ct => await _systemConfigs.GetListAsync(_ => true, ct).ConfigureAwait(false),
-                cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-
-        var snapshots = (result ?? [])
-            .OrderBy(x => x.SortOrder)
-            .Select(MapSystemConfig)
+        cancellationToken.ThrowIfCancellationRequested();
+        var current = snapshots.GetRequiredSnapshot().ModuleSettings
+            .OrderBy(static item => item.SortOrder)
+            .Select(static item => new LocalSystemConfigSnapshot(
+                DevicePluginProjectionIds.Setting(item.Key),
+                item.Key,
+                item.Value,
+                item.DisplayName,
+                item.SortOrder))
             .ToArray();
-        Volatile.Write(ref _currentSystemConfigs, snapshots);
-        return snapshots;
+        Volatile.Write(ref _currentSystemConfigs, current);
+        return Task.FromResult<IReadOnlyList<LocalSystemConfigSnapshot>>(current);
     }
 
     public IReadOnlyList<LocalSystemConfigSnapshot> GetCurrentSystemConfigs()
@@ -50,26 +46,19 @@ public sealed class LocalParameterConfigService(
         CancellationToken cancellationToken = default)
     {
         var normalizedKey = NormalizeModuleParameterKey(key);
-        var entity = SystemConfigEntity.Create(normalizedKey, value, description);
-        entity.UpdateSortOrder(Math.Max(0, sortOrder));
-        await using (var unitOfWork = await unitOfWorkFactory
-                         .BeginAsync(cancellationToken)
-                         .ConfigureAwait(false))
-        {
-            var repository = unitOfWork.Repository<SystemConfigEntity>();
-            var existing = await repository
-                .GetListAsync(x => x.Key == normalizedKey, cancellationToken)
-                .ConfigureAwait(false);
-            foreach (var config in existing)
-            {
-                repository.Delete(config);
-            }
-
-            repository.Add(entity);
-            await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
-        }
-
-        InvalidateModuleCaches();
+        var snapshot = snapshots.GetRequiredSnapshot();
+        var settings = snapshot.ModuleSettings
+            .Where(item => !string.Equals(item.Key, normalizedKey, StringComparison.OrdinalIgnoreCase))
+            .Append(new DevicePluginModuleSetting(
+                normalizedKey,
+                value ?? string.Empty,
+                description,
+                Unit: null,
+                Math.Max(0, sortOrder)))
+            .OrderBy(static item => item.SortOrder)
+            .ToArray();
+        await WriteAsync(settings, snapshot.ConfigurationVersion, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task DeleteSystemConfigAsync(
@@ -77,23 +66,17 @@ public sealed class LocalParameterConfigService(
         CancellationToken cancellationToken = default)
     {
         var normalizedKey = NormalizeModuleParameterKey(key);
-        await using var unitOfWork = await unitOfWorkFactory
-            .BeginAsync(cancellationToken)
-            .ConfigureAwait(false);
-        var repository = unitOfWork.Repository<SystemConfigEntity>();
-        var existing = await repository
-            .GetListAsync(x => x.Key == normalizedKey, cancellationToken)
-            .ConfigureAwait(false);
-        foreach (var config in existing)
+        var snapshot = snapshots.GetRequiredSnapshot();
+        var settings = snapshot.ModuleSettings
+            .Where(item => !string.Equals(item.Key, normalizedKey, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (settings.Length == snapshot.ModuleSettings.Count)
         {
-            repository.Delete(config);
+            return;
         }
 
-        if (existing.Count > 0)
-        {
-            await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
-            InvalidateModuleCaches();
-        }
+        await WriteAsync(settings, snapshot.ConfigurationVersion, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public void NotifyModuleChanged()
@@ -101,10 +84,27 @@ public sealed class LocalParameterConfigService(
             this,
             new ParameterConfigChangedEventArgs(ParameterConfigChangeScope.Module));
 
-    private void InvalidateModuleCaches()
+    private async Task WriteAsync(
+        IReadOnlyList<DevicePluginModuleSetting> settings,
+        long expectedVersion,
+        CancellationToken cancellationToken)
     {
-        _cache.Remove(ParameterCacheKeys.SystemAll);
-        _cache.RemoveByPrefix(ParameterCacheKeys.ModuleSnapshotPrefix);
+        if (_stores.Length != 1)
+        {
+            throw new InvalidOperationException("PLUGIN_DATABASE_PORT_CARDINALITY_INVALID");
+        }
+
+        var result = await _stores[0]
+            .UpdateModuleSettingsAsync(settings, expectedVersion, cancellationToken)
+            .ConfigureAwait(false);
+        if (!result.Succeeded)
+        {
+            throw new InvalidOperationException(
+                result.FailureReasonCode ?? "PLUGIN_MODULE_SETTINGS_WRITE_REJECTED");
+        }
+
+        await snapshots.RefreshAsync(cancellationToken).ConfigureAwait(false);
+        _ = await GetSystemConfigsAsync(cancellationToken).ConfigureAwait(false);
         NotifyModuleChanged();
     }
 
@@ -118,12 +118,4 @@ public sealed class LocalParameterConfigService(
 
         return normalized;
     }
-
-    private static LocalSystemConfigSnapshot MapSystemConfig(SystemConfigEntity entity)
-        => new(
-            entity.Id,
-            entity.Key,
-            entity.Value,
-            entity.Description,
-            entity.SortOrder);
 }

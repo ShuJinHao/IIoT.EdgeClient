@@ -8,9 +8,11 @@ using IIoT.Edge.Module.Contracts.Plc.Checkpoints;
 using IIoT.Edge.Module.Contracts.Plc.Factory;
 using IIoT.Edge.Module.Contracts.Plc.Signals;
 using IIoT.Edge.Module.Contracts.Plc.Store;
+using IIoT.Edge.Module.Contracts.Plugins;
 using IIoT.Edge.Module.Contracts.Time;
 using IIoT.Edge.Module.Contracts.Tasks;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Domain.Hardware.Aggregates;
@@ -113,6 +115,29 @@ public sealed class PlcTaskBindingBehaviorTests
         Assert.Equal(
             PlcTaskRecoveryConfirmationAction.AuditTerminateIncomplete,
             recovery.LastAction);
+    }
+
+    [Fact]
+    public async Task GetModuleDeviceBindingsFromMemory_ShouldNotQueryRecoveryProvider()
+    {
+        var recovery = new RecordingRecoveryApplicationService();
+        var harness = CreateService(
+            defaultEnableAllTasks: null,
+            taskRecovery: recovery);
+        var device = harness.NetworkDevices.Add(
+            CreateLifecyclePlc("PLC-A", 6000, plcCode: "P1-AP01"));
+        harness.Bindings.Add(PlcTaskBindingEntity.Create(
+            device.Id,
+            "Task.B",
+            enabled: true,
+            DateTimeOffset.UtcNow));
+
+        var devices = await harness.Service.GetModuleDeviceBindingsFromMemoryAsync(
+            "TestModule",
+            TestContext.Current.CancellationToken);
+
+        Assert.Single(devices);
+        Assert.Empty(recovery.QueriedTaskKeys);
     }
 
     [Fact]
@@ -455,16 +480,14 @@ public sealed class PlcTaskBindingBehaviorTests
     }
 
     [Fact]
-    public async Task Prepare_WhenDeviceIsNotPlc_ShouldFailWithoutPartialSave()
+    public async Task Prepare_WhenPluginPlcIsMissing_ShouldFailWithoutPartialSave()
     {
         var harness = CreateService(defaultEnableAllTasks: true);
-        var device = harness.NetworkDevices.Add(
-            NetworkDeviceEntity.Create("Camera-A", DeviceType.Camera, "127.0.0.1", 102));
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             SaveBindingsForTestAsync(
                 harness.Service,
-                device.Id,
+                999,
                 "TestModule",
                 new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
                 {
@@ -472,7 +495,7 @@ public sealed class PlcTaskBindingBehaviorTests
                 },
                 TestContext.Current.CancellationToken));
 
-        Assert.Contains("不是 PLC", error.Message, StringComparison.Ordinal);
+        Assert.Contains("未找到", error.Message, StringComparison.Ordinal);
         Assert.Empty(harness.Bindings.Items);
     }
 
@@ -512,7 +535,7 @@ public sealed class PlcTaskBindingBehaviorTests
         var dataStore = new PlcDataStore();
         var contextStore = new FakeProductionContextStore();
         var runtimeBuilder = new PlcDeviceRuntimeBuilder(
-            ioMappings,
+            new RepositoryPluginConfiguration(networkDevices, ioMappings),
             dataStore,
             new TrackingPlcServiceFactory(),
             contextStore,
@@ -537,7 +560,7 @@ public sealed class PlcTaskBindingBehaviorTests
         }
 
         var runtimeA = await runtimeBuilder.BuildAsync(
-            plcA,
+            ToPluginPlc(plcA),
             new PlcRuntimeTaskPlan(
                 plcA.Id,
                 plcA.PlcCode,
@@ -552,7 +575,7 @@ public sealed class PlcTaskBindingBehaviorTests
                 ]),
             TestContext.Current.CancellationToken);
         var runtimeB = await runtimeBuilder.BuildAsync(
-            plcB,
+            ToPluginPlc(plcB),
             new PlcRuntimeTaskPlan(
                 plcB.Id,
                 plcB.PlcCode,
@@ -624,7 +647,7 @@ public sealed class PlcTaskBindingBehaviorTests
         var dataStore = new PlcDataStore();
         var logger = new FakeLogService();
         var runtimeBuilder = new PlcDeviceRuntimeBuilder(
-            ioMappings,
+            new RepositoryPluginConfiguration(networkDevices, ioMappings),
             dataStore,
             new TrackingPlcServiceFactory(),
             new FakeProductionContextStore(),
@@ -635,7 +658,7 @@ public sealed class PlcTaskBindingBehaviorTests
             new ModuleHardwareProfileResolver([]));
 
         var runtime = await runtimeBuilder.BuildAsync(
-            device,
+            ToPluginPlc(device),
             PlcRuntimeTaskPlan.Empty(device.Id, device.PlcCode, device.DeviceName),
             TestContext.Current.CancellationToken);
 
@@ -666,7 +689,7 @@ public sealed class PlcTaskBindingBehaviorTests
         var taskStatuses = new PlcTaskRuntimeStatusStore();
         var plcServiceFactory = new TrackingPlcServiceFactory();
         var runtimeBuilder = new PlcDeviceRuntimeBuilder(
-            ioMappings,
+            new RepositoryPluginConfiguration(networkDevices, ioMappings),
             new PlcDataStore(),
             plcServiceFactory,
             new BlockedPlcProductionContextStore(),
@@ -690,7 +713,7 @@ public sealed class PlcTaskBindingBehaviorTests
             ]);
 
         var runtime = await runtimeBuilder.BuildAsync(
-            device,
+            ToPluginPlc(device),
             plan,
             TestContext.Current.CancellationToken);
 
@@ -725,7 +748,7 @@ public sealed class PlcTaskBindingBehaviorTests
         var statusStore = new PlcConnectionStatusStore();
         var plcServiceFactory = new TrackingPlcServiceFactory();
         var runtimeBuilder = new PlcDeviceRuntimeBuilder(
-            ioMappings,
+            new RepositoryPluginConfiguration(networkDevices, ioMappings),
             new PlcDataStore(),
             plcServiceFactory,
             contextStore,
@@ -735,7 +758,7 @@ public sealed class PlcTaskBindingBehaviorTests
             new StaticPlcEndpointResolver(),
             new ModuleHardwareProfileResolver([]));
         var coordinator = new PlcLifecycleCoordinator(
-            networkDevices,
+            new RepositoryPluginConfiguration(networkDevices, ioMappings),
             logger,
             runtimeRegistry,
             runtimeBuilder,
@@ -779,7 +802,7 @@ public sealed class PlcTaskBindingBehaviorTests
         var statusStore = new PlcConnectionStatusStore();
         var endpointResolver = new ControlledPlcEndpointResolver();
         var runtimeBuilder = new PlcDeviceRuntimeBuilder(
-            ioMappings,
+            new RepositoryPluginConfiguration(networkDevices, ioMappings),
             new PlcDataStore(),
             new TrackingPlcServiceFactory(),
             contextStore,
@@ -789,7 +812,7 @@ public sealed class PlcTaskBindingBehaviorTests
             endpointResolver,
             new ModuleHardwareProfileResolver([]));
         var coordinator = new PlcLifecycleCoordinator(
-            networkDevices,
+            new RepositoryPluginConfiguration(networkDevices, ioMappings),
             logger,
             runtimeRegistry,
             runtimeBuilder,
@@ -927,7 +950,7 @@ public sealed class PlcTaskBindingBehaviorTests
         var statusStore = new PlcConnectionStatusStore();
         var plcServiceFactory = new HangingPlcServiceFactory();
         var runtimeBuilder = new PlcDeviceRuntimeBuilder(
-            ioMappings,
+            new RepositoryPluginConfiguration(networkDevices, ioMappings),
             new PlcDataStore(),
             plcServiceFactory,
             contextStore,
@@ -937,7 +960,7 @@ public sealed class PlcTaskBindingBehaviorTests
             new StaticPlcEndpointResolver(),
             new ModuleHardwareProfileResolver([]));
         var coordinator = new PlcLifecycleCoordinator(
-            networkDevices,
+            new RepositoryPluginConfiguration(networkDevices, ioMappings),
             logger,
             runtimeRegistry,
             runtimeBuilder,
@@ -977,7 +1000,7 @@ public sealed class PlcTaskBindingBehaviorTests
         var statusStore = new PlcConnectionStatusStore();
         var plcServiceFactory = new TrackingPlcServiceFactory();
         var runtimeBuilder = new PlcDeviceRuntimeBuilder(
-            ioMappings,
+            new RepositoryPluginConfiguration(networkDevices, ioMappings),
             new PlcDataStore(),
             plcServiceFactory,
             contextStore,
@@ -987,7 +1010,7 @@ public sealed class PlcTaskBindingBehaviorTests
             new StaticPlcEndpointResolver(),
             new ModuleHardwareProfileResolver([]));
         var coordinator = new PlcLifecycleCoordinator(
-            networkDevices,
+            new RepositoryPluginConfiguration(networkDevices, ioMappings),
             logger,
             runtimeRegistry,
             runtimeBuilder,
@@ -1490,7 +1513,7 @@ public sealed class PlcTaskBindingBehaviorTests
         IPlcTaskRuntimeStatusWriter? taskStatusWriter = null)
     {
         var runtimeBuilder = new PlcDeviceRuntimeBuilder(
-            ioMappings,
+            new RepositoryPluginConfiguration(networkDevices, ioMappings),
             new PlcDataStore(),
             plcServiceFactory,
             contextStore,
@@ -1501,7 +1524,7 @@ public sealed class PlcTaskBindingBehaviorTests
             new ModuleHardwareProfileResolver([]),
             taskStatusWriter: taskStatusWriter);
         return new PlcLifecycleCoordinator(
-            networkDevices,
+            new RepositoryPluginConfiguration(networkDevices, ioMappings),
             logger,
             runtimeRegistry,
             runtimeBuilder,
@@ -1590,12 +1613,14 @@ public sealed class PlcTaskBindingBehaviorTests
             AddTestIoMappings(ioMappings, networkDeviceId: 1);
         }
 
-        var service = new PlcTaskBindingService(
-            runtimeRegistry,
+        var pluginConfiguration = new RepositoryPluginConfiguration(
             networkDevices,
             ioMappings,
-            bindings,
-            new TestEdgeUnitOfWorkFactory(bindings),
+            bindings);
+        var service = new PlcTaskBindingService(
+            runtimeRegistry,
+            pluginConfiguration,
+            [pluginConfiguration],
             runtimeStatuses,
             taskRecovery);
 
@@ -1661,6 +1686,22 @@ public sealed class PlcTaskBindingBehaviorTests
         device.UpdateDeviceModel(PlcType.S7.ToString());
         return device;
     }
+
+    private static DevicePluginPlcSnapshot ToPluginPlc(NetworkDeviceEntity device)
+        => new(
+            device.Id,
+            new DevicePluginPlcConfiguration(
+                device.PlcCode,
+                device.DeviceName,
+                device.DeviceType.ToString(),
+                device.DeviceModel,
+                device.ProtocolFrame,
+                device.IpAddress,
+                device.Port1,
+                device.Port2,
+                device.ConnectTimeout,
+                device.IsEnabled,
+                device.Remark));
 
     private sealed record BindingServiceHarness(
         PlcTaskBindingService Service,
@@ -1907,7 +1948,7 @@ public sealed class PlcTaskBindingBehaviorTests
     private sealed class StaticPlcEndpointResolver : IPlcEndpointResolver
     {
         public Task<PlcEndpoint> ResolveAsync(
-            NetworkDeviceEntity device,
+            DevicePluginPlcSnapshot device,
             PlcType plcType,
             CancellationToken cancellationToken = default)
             => Task.FromResult<PlcEndpoint>(
@@ -1923,7 +1964,7 @@ public sealed class PlcTaskBindingBehaviorTests
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public async Task<PlcEndpoint> ResolveAsync(
-            NetworkDeviceEntity device,
+            DevicePluginPlcSnapshot device,
             PlcType plcType,
             CancellationToken cancellationToken = default)
         {
@@ -2036,6 +2077,189 @@ public sealed class PlcTaskBindingBehaviorTests
     {
         public override Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
             => new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously).Task;
+    }
+
+    private sealed class RepositoryPluginConfiguration(
+        InMemoryRepository<NetworkDeviceEntity> networkDevices,
+        InMemoryRepository<IoMappingEntity> ioMappings,
+        InMemoryRepository<PlcTaskBindingEntity>? bindings = null)
+        : IDevicePluginConfigurationSnapshotAccessor,
+          IDevicePluginConfigurationStoreV1
+    {
+        private readonly InMemoryRepository<PlcTaskBindingEntity> _bindings =
+            bindings ?? new InMemoryRepository<PlcTaskBindingEntity>();
+        private long _configurationVersion = 1;
+
+        public event EventHandler<DevicePluginConfigurationChangedEventArgs>? ConfigurationChanged;
+
+        public bool IsInitialized => true;
+
+        public DevicePluginConfigurationSnapshot GetRequiredSnapshot()
+            => new(
+                new DevicePluginIdentity("CLIENT-TEST", "TestModule", "TestModule"),
+                _configurationVersion,
+                GetPlcs().Select(static item => item.Configuration).ToArray(),
+                GetIoPoints().Select(static item => item.Configuration).ToArray(),
+                GetTaskBindings().Select(static item => item.Configuration).ToArray(),
+                [],
+                DateTimeOffset.UtcNow);
+
+        public IReadOnlyList<DevicePluginPlcSnapshot> GetPlcs()
+            => networkDevices.Items.Select(ToPluginPlc).ToArray();
+
+        public IReadOnlyList<DevicePluginIoPointSnapshot> GetIoPoints()
+            => ioMappings.Items.Select(mapping =>
+                new DevicePluginIoPointSnapshot(
+                    mapping.Id,
+                    mapping.NetworkDeviceId,
+                    new DevicePluginIoPointConfiguration(
+                        ResolvePlcCode(mapping.NetworkDeviceId),
+                        mapping.SignalKey,
+                        mapping.PlcAddress,
+                        mapping.AddressCount,
+                        mapping.DataType,
+                        mapping.Direction,
+                        mapping.Category,
+                        mapping.BusinessGroup,
+                        mapping.SortOrder,
+                        mapping.Remark))).ToArray();
+
+        public IReadOnlyList<DevicePluginTaskBindingSnapshot> GetTaskBindings()
+            => _bindings.Items.Select(binding =>
+                new DevicePluginTaskBindingSnapshot(
+                    binding.Id,
+                    binding.NetworkDeviceId,
+                    new DevicePluginTaskBindingConfiguration(
+                        ResolvePlcCode(binding.NetworkDeviceId),
+                        binding.TaskKey,
+                        binding.Enabled,
+                        binding.UpdatedAt))).ToArray();
+
+        public Task RefreshAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.CompletedTask;
+        }
+
+        public Task<DevicePluginConfigurationSnapshot> GetSnapshotAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(GetRequiredSnapshot());
+        }
+
+        public Task<DevicePluginConfigurationWriteResult> UpsertPlcAsync(
+            DevicePluginPlcConfiguration configuration,
+            long expectedConfigurationVersion,
+            CancellationToken cancellationToken = default)
+            => RejectedAsync(cancellationToken);
+
+        public Task<DevicePluginConfigurationWriteResult> DeletePlcAsync(
+            string plcCode,
+            long expectedConfigurationVersion,
+            CancellationToken cancellationToken = default)
+            => RejectedAsync(cancellationToken);
+
+        public Task<DevicePluginConfigurationWriteResult> UpsertIoPointAsync(
+            DevicePluginIoPointConfiguration configuration,
+            long expectedConfigurationVersion,
+            CancellationToken cancellationToken = default)
+            => RejectedAsync(cancellationToken);
+
+        public Task<DevicePluginConfigurationWriteResult> DeleteIoPointAsync(
+            string plcCode,
+            string signalKey,
+            long expectedConfigurationVersion,
+            CancellationToken cancellationToken = default)
+            => RejectedAsync(cancellationToken);
+
+        public Task<DevicePluginConfigurationWriteResult> ReplaceTaskBindingsAsync(
+            string plcCode,
+            IReadOnlyList<DevicePluginTaskBindingConfiguration> replacements,
+            long expectedConfigurationVersion,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (expectedConfigurationVersion != _configurationVersion)
+            {
+                return Task.FromResult(new DevicePluginConfigurationWriteResult(
+                    DevicePluginConfigurationWriteStatus.VersionConflict,
+                    _configurationVersion,
+                    "PLUGIN_CONFIGURATION_VERSION_CONFLICT"));
+            }
+
+            var device = networkDevices.Items.SingleOrDefault(item =>
+                string.Equals(item.PlcCode, plcCode, StringComparison.OrdinalIgnoreCase));
+            if (device is null
+                || replacements.Any(item => !string.Equals(
+                    item.PlcCode,
+                    plcCode,
+                    StringComparison.OrdinalIgnoreCase)))
+            {
+                return Task.FromResult(new DevicePluginConfigurationWriteResult(
+                    DevicePluginConfigurationWriteStatus.Rejected,
+                    _configurationVersion,
+                    "PLUGIN_TASK_BINDING_WRITE_REJECTED"));
+            }
+
+            var remaining = replacements.ToDictionary(
+                static item => item.TaskKey,
+                StringComparer.OrdinalIgnoreCase);
+            foreach (var existing in _bindings.Items
+                         .Where(item => item.NetworkDeviceId == device.Id)
+                         .ToArray())
+            {
+                if (remaining.Remove(existing.TaskKey, out var replacement))
+                {
+                    existing.UpdateEnabled(replacement.Enabled, replacement.UpdatedAtUtc);
+                }
+                else
+                {
+                    _bindings.Delete(existing);
+                }
+            }
+
+            foreach (var replacement in remaining.Values)
+            {
+                _bindings.Add(PlcTaskBindingEntity.Create(
+                    device.Id,
+                    replacement.TaskKey,
+                    replacement.Enabled,
+                    replacement.UpdatedAtUtc));
+            }
+
+            var previousVersion = _configurationVersion++;
+            ConfigurationChanged?.Invoke(
+                this,
+                new DevicePluginConfigurationChangedEventArgs(
+                    previousVersion,
+                    _configurationVersion));
+            return Task.FromResult(new DevicePluginConfigurationWriteResult(
+                DevicePluginConfigurationWriteStatus.Applied,
+                _configurationVersion));
+        }
+
+        public Task<DevicePluginConfigurationWriteResult> UpdateModuleSettingsAsync(
+            IReadOnlyList<DevicePluginModuleSetting> settings,
+            long expectedConfigurationVersion,
+            CancellationToken cancellationToken = default)
+            => RejectedAsync(cancellationToken);
+
+        private string ResolvePlcCode(int networkDeviceId)
+            => networkDevices.Items
+                   .SingleOrDefault(item => item.Id == networkDeviceId)
+                   ?.PlcCode
+               ?? $"PLC-{networkDeviceId}";
+
+        private Task<DevicePluginConfigurationWriteResult> RejectedAsync(
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(new DevicePluginConfigurationWriteResult(
+                DevicePluginConfigurationWriteStatus.Rejected,
+                _configurationVersion,
+                "TEST_STORE_OPERATION_NOT_SUPPORTED"));
+        }
     }
 
     private sealed class InMemoryRepository<T> : IRepository<T>

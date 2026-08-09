@@ -1,10 +1,12 @@
 using IIoT.Edge.Application.Common.Diagnostics;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Application;
 using IIoT.Edge.Module.Contracts.Context;
 using IIoT.Edge.Module.Contracts.Device;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Module.Contracts.Plc.Store;
+using IIoT.Edge.Module.Contracts.Plugins;
 using IIoT.Edge.Module.Contracts.Time;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Application.Features.Hardware.Queries;
@@ -944,6 +946,12 @@ public sealed class MonitorQueriesBehaviorTests
         public Task<IReadOnlyList<PlcTaskBindingDeviceDto>> GetModuleDeviceBindingsAsync(
             string moduleId,
             CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException(
+                "Monitor must use the memory-only task binding projection.");
+
+        public Task<IReadOnlyList<PlcTaskBindingDeviceDto>> GetModuleDeviceBindingsFromMemoryAsync(
+            string moduleId,
+            CancellationToken cancellationToken = default)
             => Task.FromResult(bindingsByModule.TryGetValue(moduleId, out var bindings)
                 ? bindings
                 : []);
@@ -976,7 +984,7 @@ public sealed class MonitorQueriesBehaviorTests
         {
             if (request is GetAllNetworkDevicesQuery)
             {
-                return Task.FromResult((TResponse)(object)Result.Success(devices.ToList()));
+                return Task.FromResult((TResponse)(object)Result.Success(devices.Select(ToSnapshot).ToList()));
             }
 
             throw new NotSupportedException(request.GetType().Name);
@@ -997,6 +1005,22 @@ public sealed class MonitorQueriesBehaviorTests
         public IAsyncEnumerable<object?> CreateStream(object request, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
     }
+
+    private static DevicePluginPlcSnapshot ToSnapshot(NetworkDeviceEntity device)
+        => new(
+            device.Id,
+            new DevicePluginPlcConfiguration(
+                device.PlcCode,
+                device.DeviceName,
+                device.DeviceType.ToString(),
+                device.DeviceModel,
+                device.ProtocolFrame,
+                device.IpAddress,
+                device.Port1,
+                device.Port2,
+                device.ConnectTimeout,
+                device.IsEnabled,
+                device.Remark));
 
     private sealed class FakePlcConnectionManager(IReadOnlyCollection<PlcConnectionRuntimeSnapshot> snapshots) : IPlcConnectionManager
     {

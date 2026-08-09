@@ -3,15 +3,14 @@ using IIoT.Edge.Module.Contracts.Diagnostics;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Sdk.Hardware;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Host.Bootstrap.Modules;
-using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 
 namespace IIoT.Edge.Shell.Core;
 
 internal sealed class StartupPlcConfigurationValidator(
-    IReadRepository<IoMappingEntity> ioMappings,
+    IDevicePluginConfigurationSnapshotAccessor snapshots,
     ICellDataRegistry cellDataRegistry,
     IStationRuntimeRegistry runtimeRegistry,
     IPlcTaskBindingService? taskBindingService = null)
@@ -22,7 +21,7 @@ internal sealed class StartupPlcConfigurationValidator(
         List<StartupDiagnosticIssue> issues,
         CancellationToken cancellationToken)
     {
-        var snapshots = new List<DeviceModuleBindingSnapshot>(context.PlcDevices.Count);
+        var bindingSnapshots = new List<DeviceModuleBindingSnapshot>(context.PlcDevices.Count);
         var activeModule = ResolveActiveModule(context);
         var activeHardwareProfile = ResolveActiveHardwareProfile(context);
         var activeModuleId = activeModule?.ModuleId ?? activeHardwareProfile?.ModuleId;
@@ -30,19 +29,20 @@ internal sealed class StartupPlcConfigurationValidator(
         foreach (var device in context.PlcDevices)
         {
             var deviceName = string.IsNullOrWhiteSpace(device.DeviceName) ? $"Id={device.Id}" : device.DeviceName;
-            var mappings = await ioMappings.GetListAsync(
-                x => x.NetworkDeviceId == device.Id,
-                cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            var mappings = snapshots.GetIoPoints()
+                .Where(item => item.NetworkDeviceId == device.Id)
+                .ToArray();
             var moduleExists = !string.IsNullOrWhiteSpace(activeModuleId)
                 && context.DiscoveredModulesById.ContainsKey(activeModuleId);
             var moduleEnabled = activeModule is not null;
 
-            snapshots.Add(new DeviceModuleBindingSnapshot(
+            bindingSnapshots.Add(new DeviceModuleBindingSnapshot(
                 deviceName,
                 activeModuleId,
                 moduleExists,
                 moduleEnabled,
-                mappings.Count > 0)
+                mappings.Length > 0)
             {
                 PlcCode = device.PlcCode
             });
@@ -56,12 +56,12 @@ internal sealed class StartupPlcConfigurationValidator(
                 cancellationToken).ConfigureAwait(false);
         }
 
-        context.DeviceBindings = snapshots;
+        context.DeviceBindings = bindingSnapshots;
     }
 
     private async Task ValidateTaskBindingsAsync(
-        NetworkDeviceEntity device,
-        IReadOnlyCollection<IoMappingEntity> mappings,
+        DevicePluginPlcSnapshot device,
+        IReadOnlyCollection<DevicePluginIoPointSnapshot> mappings,
         List<StartupDiagnosticIssue> issues,
         CancellationToken cancellationToken)
     {
@@ -152,9 +152,9 @@ internal sealed class StartupPlcConfigurationValidator(
     private void ValidateDeviceModuleBinding(
         IEdgeProcessModule? activeModule,
         string? activeModuleId,
-        NetworkDeviceEntity device,
+        DevicePluginPlcSnapshot device,
         string deviceName,
-        IReadOnlyCollection<IoMappingEntity> mappings,
+        IReadOnlyCollection<DevicePluginIoPointSnapshot> mappings,
         bool moduleExists,
         bool moduleEnabled,
         List<StartupDiagnosticIssue> issues)
@@ -207,7 +207,7 @@ internal sealed class StartupPlcConfigurationValidator(
 
     private void ValidateEnabledModuleServices(
         IEdgeProcessModule module,
-        NetworkDeviceEntity device,
+        DevicePluginPlcSnapshot device,
         string deviceName,
         List<StartupDiagnosticIssue> issues)
     {
@@ -233,7 +233,7 @@ internal sealed class StartupPlcConfigurationValidator(
     }
 
     private static void ValidateDeviceEndpoint(
-        NetworkDeviceEntity device,
+        DevicePluginPlcSnapshot device,
         string deviceName,
         List<StartupDiagnosticIssue> issues)
     {
@@ -306,9 +306,9 @@ internal sealed class StartupPlcConfigurationValidator(
     }
 
     private static void ValidateIoMappings(
-        NetworkDeviceEntity device,
+        DevicePluginPlcSnapshot device,
         string deviceName,
-        IReadOnlyCollection<IoMappingEntity> mappings,
+        IReadOnlyCollection<DevicePluginIoPointSnapshot> mappings,
         List<StartupDiagnosticIssue> issues)
     {
         if (mappings.Count == 0)
@@ -356,9 +356,9 @@ internal sealed class StartupPlcConfigurationValidator(
     private static void ValidateHardwareProfile(
         IModuleHardwareProfileProvider? provider,
         string? activeModuleId,
-        NetworkDeviceEntity device,
+        DevicePluginPlcSnapshot device,
         string deviceName,
-        IReadOnlyCollection<IoMappingEntity> mappings,
+        IReadOnlyCollection<DevicePluginIoPointSnapshot> mappings,
         List<StartupDiagnosticIssue> issues)
     {
         if (provider is null)
@@ -396,7 +396,7 @@ internal sealed class StartupPlcConfigurationValidator(
         string code,
         string message,
         string? moduleId,
-        NetworkDeviceEntity device,
+        DevicePluginPlcSnapshot device,
         string deviceName)
         => new(code, message, moduleId, deviceName)
         {

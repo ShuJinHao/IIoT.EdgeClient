@@ -19,7 +19,6 @@
     <ProjectReference Include="..\\..\\Infrastructure\\IIoT.Edge.Infrastructure.DeviceComm\\IIoT.Edge.Infrastructure.DeviceComm.csproj" />
     <ProjectReference Include="..\\..\\Infrastructure\\IIoT.Edge.Infrastructure.Integration\\IIoT.Edge.Infrastructure.Integration.csproj" />
     <ProjectReference Include="..\\..\\Infrastructure\\IIoT.Edge.Infrastructure.Persistence.Dapper\\IIoT.Edge.Infrastructure.Persistence.Dapper.csproj" />
-    <ProjectReference Include="..\\..\\Infrastructure\\IIoT.Edge.Infrastructure.Persistence.EfCore\\IIoT.Edge.Infrastructure.Persistence.EfCore.csproj" />
     <ProjectReference Include="..\\..\\Infrastructure\\IIoT.Edge.Infrastructure.Update\\IIoT.Edge.Infrastructure.Update.csproj" />
     <ProjectReference Include="..\\..\\Presentation\\IIoT.Edge.Presentation.Navigation\\IIoT.Edge.Presentation.Navigation.csproj" />
     <ProjectReference Include="..\\..\\Presentation\\IIoT.Edge.Presentation.Panels\\IIoT.Edge.Presentation.Panels.csproj" />

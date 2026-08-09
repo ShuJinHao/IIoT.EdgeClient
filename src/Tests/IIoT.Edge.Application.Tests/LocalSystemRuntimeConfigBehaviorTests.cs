@@ -70,6 +70,21 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
     }
 
     [Fact]
+    public async Task EnsureInitializedAsync_WhenPluginSnapshotHasNoHostCloudKey_ShouldUseBindingSnapshot()
+    {
+        var service = new LocalSystemRuntimeConfigService(
+            new MutableLocalParameterConfigService(),
+            new MutableModuleParamRoleProvider(),
+            new FakeProcessIntegrationRegistry([]),
+            new FakeLogService(),
+            new FixedCloudApiConfigSnapshotProvider(enabled: true));
+
+        await service.EnsureInitializedAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(service.Current.SystemCloudEnabled);
+    }
+
+    [Fact]
     public async Task EnsureInitializedAsync_WhenCloudApiEnabledFalse_ShouldDisableSystemCloud()
     {
         var parameterConfigService = new MutableLocalParameterConfigService();
@@ -266,5 +281,30 @@ public sealed class LocalSystemRuntimeConfigBehaviorTests
 
         public IReadOnlyDictionary<string, ProcessUploaderRegistration> GetMesUploaders()
             => _mesUploaders;
+    }
+
+    private sealed class FixedCloudApiConfigSnapshotProvider(bool enabled)
+        : ICloudApiConfigSnapshotProvider
+    {
+        public CloudApiConfigSnapshot GetCurrent()
+            => new(
+                "https://cloud.test",
+                "CLIENT-TEST",
+                string.Empty,
+                "/device-instance",
+                "/bootstrap-refresh",
+                "/login",
+                "/human-refresh",
+                "/logs",
+                "/pass-stations/{typeKey}/batch",
+                "/capacity-hourly",
+                "/capacity-summary",
+                "/capacity-range",
+                "/recipes/{deviceId}",
+                "/client-releases/device/{deviceId}/catalog",
+                "/client-version-reports",
+                enabled,
+                "/runtime-heartbeats",
+                "/plc-runtime-states");
     }
 }

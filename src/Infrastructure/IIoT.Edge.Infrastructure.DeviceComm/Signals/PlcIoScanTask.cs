@@ -4,7 +4,7 @@ using IIoT.Edge.Module.Contracts.Plc.Store;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Sdk.Hardware;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Signals;
@@ -21,8 +21,8 @@ public class PlcSignalInteractionTask : PlcIoScanTaskBase
     public PlcSignalInteractionTask(
         IPlcService plcService,
         IPlcDataStore dataStore,
-        NetworkDeviceEntity deviceConfig,
-        IReadOnlyCollection<IoMappingEntity> ioMappings,
+        DevicePluginPlcSnapshot deviceConfig,
+        IReadOnlyCollection<DevicePluginIoPointSnapshot> ioMappings,
         ILogService logger,
         IPlcSignalBlockPlanner signalBlockPlanner,
         PlcConnectionStatusStore? statusStore = null,
@@ -100,8 +100,8 @@ public sealed class PlcIoScanTask : PlcSignalInteractionTask
     public PlcIoScanTask(
         IPlcService plcService,
         IPlcDataStore dataStore,
-        NetworkDeviceEntity deviceConfig,
-        IReadOnlyCollection<IoMappingEntity> ioMappings,
+        DevicePluginPlcSnapshot deviceConfig,
+        IReadOnlyCollection<DevicePluginIoPointSnapshot> ioMappings,
         ILogService logger,
         IPlcSignalBlockPlanner signalBlockPlanner,
         PlcConnectionStatusStore? statusStore = null,

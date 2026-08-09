@@ -4,13 +4,12 @@ using IIoT.Edge.Module.Contracts.Config;
 using IIoT.Edge.Module.Contracts.Device;
 using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Module.Contracts.Plc.Store;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Infrastructure.Integration.EdgeHost;
-using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Module.Contracts.Runtime;
-using IIoT.Edge.SharedKernel.Domain;
 using IIoT.Edge.Module.Contracts.Hardware;
-using IIoT.Edge.SharedKernel.Repository;
-using IIoT.Edge.SharedKernel.Specification;
+using IIoT.Edge.Module.Contracts.Identity;
+using IIoT.Edge.Module.Contracts.Plugins;
 
 namespace IIoT.Edge.Runtime.WorkflowTests;
 
@@ -23,7 +22,7 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
         var plcA = CreatePlc(1, "PLC-A01", "10.10.1.11", 6000, "MC-3E");
         var plcB = CreatePlc(2, "PLC-A02", "10.10.1.12", 6000, "MC-3E");
         var provider = new EdgeHostPlcRuntimeStateSnapshotProvider(
-            new InMemoryRepository<NetworkDeviceEntity>(plcA, plcB),
+            new InMemoryPluginConfiguration(100, plcA, plcB),
             new FakePlcConnectionManager(
                 new PlcConnectionRuntimeSnapshot
                 {
@@ -33,8 +32,7 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
                     ConnectionState = PlcConnectionState.Connected,
                     LastReadAtUtc = observedAt
                 }),
-            CreateIdentifiedDeviceService(),
-            new MemoryPlcConfigurationVersionStore());
+            CreateIdentifiedDeviceService());
 
         var items = await provider.GetCurrentAsync(TestContext.Current.CancellationToken);
 
@@ -67,7 +65,7 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
     {
         var plc = CreatePlc(1, "PLC-A01", "10.10.1.11", 6000, "MC-3E");
         var provider = new EdgeHostPlcRuntimeStateSnapshotProvider(
-            new InMemoryRepository<NetworkDeviceEntity>(plc),
+            new InMemoryPluginConfiguration(100, plc),
             new FakePlcConnectionManager(
                 new PlcConnectionRuntimeSnapshot
                 {
@@ -77,8 +75,7 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
                     IsConnected = isConnected,
                     LastError = lastError
                 }),
-            CreateIdentifiedDeviceService(),
-            new MemoryPlcConfigurationVersionStore());
+            CreateIdentifiedDeviceService());
 
         var item = Assert.Single(await provider.GetCurrentAsync(TestContext.Current.CancellationToken));
 
@@ -90,13 +87,11 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
     [Fact]
     public async Task SnapshotProvider_WhenConfiguredPlcRenamed_ShouldKeepStableCodeAndReportNewName()
     {
-        var plc = CreatePlc(1, "PLC-A01", "10.10.1.11", 6000, "MC-3E");
-        plc.Rename("一号 PLC");
+        var plc = CreatePlc(1, "一号 PLC", "10.10.1.11", 6000, "MC-3E", "PLC-A01");
         var provider = new EdgeHostPlcRuntimeStateSnapshotProvider(
-            new InMemoryRepository<NetworkDeviceEntity>(plc),
+            new InMemoryPluginConfiguration(100, plc),
             new FakePlcConnectionManager(),
-            CreateIdentifiedDeviceService(),
-            new MemoryPlcConfigurationVersionStore());
+            CreateIdentifiedDeviceService());
 
         var item = Assert.Single(await provider.GetCurrentAsync(TestContext.Current.CancellationToken));
 
@@ -109,7 +104,7 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
     {
         var plc = CreatePlc(99, "重建后名称", "10.10.1.11", 6000, "MC-3E");
         var provider = new EdgeHostPlcRuntimeStateSnapshotProvider(
-            new InMemoryRepository<NetworkDeviceEntity>(plc),
+            new InMemoryPluginConfiguration(100, plc),
             new FakePlcConnectionManager(
                 new PlcConnectionRuntimeSnapshot
                 {
@@ -119,8 +114,7 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
                     ConnectionState = PlcConnectionState.Connected,
                     IsConnected = true
                 }),
-            CreateIdentifiedDeviceService(),
-            new MemoryPlcConfigurationVersionStore());
+            CreateIdentifiedDeviceService());
 
         var item = Assert.Single(await provider.GetCurrentAsync(TestContext.Current.CancellationToken));
 
@@ -134,7 +128,7 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
     {
         var plc = CreatePlc(1, "PLC-A01", "10.10.1.11", 6000, "MC-3E");
         var provider = new EdgeHostPlcRuntimeStateSnapshotProvider(
-            new InMemoryRepository<NetworkDeviceEntity>(plc),
+            new InMemoryPluginConfiguration(100, plc),
             new FakePlcConnectionManager(
                 new PlcConnectionRuntimeSnapshot
                 {
@@ -144,8 +138,7 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
                     ConnectionState = PlcConnectionState.Connected,
                     IsConnected = true
                 }),
-            CreateIdentifiedDeviceService(),
-            new MemoryPlcConfigurationVersionStore());
+            CreateIdentifiedDeviceService());
 
         var item = Assert.Single(await provider.GetCurrentAsync(TestContext.Current.CancellationToken));
 
@@ -157,7 +150,7 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
     public async Task SnapshotProvider_WhenNoConfiguredPlcs_ShouldIgnoreStaleRuntimeSnapshots()
     {
         var provider = new EdgeHostPlcRuntimeStateSnapshotProvider(
-            new InMemoryRepository<NetworkDeviceEntity>(),
+            new InMemoryPluginConfiguration(100),
             new FakePlcConnectionManager(
                 new PlcConnectionRuntimeSnapshot
                 {
@@ -166,8 +159,7 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
                     ConnectionState = PlcConnectionState.Connected,
                     IsConnected = true
                 }),
-            CreateIdentifiedDeviceService(),
-            new MemoryPlcConfigurationVersionStore());
+            CreateIdentifiedDeviceService());
 
         var items = await provider.GetCurrentAsync(TestContext.Current.CancellationToken);
 
@@ -175,51 +167,34 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
     }
 
     [Fact]
-    public async Task AuthoritativeSnapshot_AfterRestart_ShouldKeepPersistentMonotonicConfigurationVersion()
+    public async Task AuthoritativeSnapshot_AfterRestart_ShouldUsePluginPersistentConfigurationVersion()
     {
-        var baseDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "iiot-plc-version-tests",
-            Guid.NewGuid().ToString("N"),
-            "current");
-        Directory.CreateDirectory(baseDirectory);
-        try
-        {
-            var deviceService = CreateIdentifiedDeviceService();
-            var firstProvider = new EdgeHostPlcRuntimeStateSnapshotProvider(
-                new InMemoryRepository<NetworkDeviceEntity>(),
-                new FakePlcConnectionManager(),
-                deviceService,
-                new FilePlcConfigurationVersionStore(baseDirectory));
-            var first = await ((IAuthoritativePlcSnapshotProvider)firstProvider)
-                .GetCurrentAsync(TestContext.Current.CancellationToken);
+        var deviceService = CreateIdentifiedDeviceService();
+        var configuration = new InMemoryPluginConfiguration(100);
+        var firstProvider = new EdgeHostPlcRuntimeStateSnapshotProvider(
+            configuration,
+            new FakePlcConnectionManager(),
+            deviceService);
+        var first = await ((IAuthoritativePlcSnapshotProvider)firstProvider)
+            .GetCurrentAsync(TestContext.Current.CancellationToken);
 
-            firstProvider.Invalidate();
-            var changed = await ((IAuthoritativePlcSnapshotProvider)firstProvider)
-                .GetCurrentAsync(TestContext.Current.CancellationToken);
+        configuration.PublishVersion(101);
+        firstProvider.Invalidate();
+        var changed = await ((IAuthoritativePlcSnapshotProvider)firstProvider)
+            .GetCurrentAsync(TestContext.Current.CancellationToken);
 
-            var restartedProvider = new EdgeHostPlcRuntimeStateSnapshotProvider(
-                new InMemoryRepository<NetworkDeviceEntity>(),
-                new FakePlcConnectionManager(),
-                deviceService,
-                new FilePlcConfigurationVersionStore(baseDirectory));
-            var afterRestart = await ((IAuthoritativePlcSnapshotProvider)restartedProvider)
-                .GetCurrentAsync(TestContext.Current.CancellationToken);
+        var restartedProvider = new EdgeHostPlcRuntimeStateSnapshotProvider(
+            configuration,
+            new FakePlcConnectionManager(),
+            deviceService);
+        var afterRestart = await ((IAuthoritativePlcSnapshotProvider)restartedProvider)
+            .GetCurrentAsync(TestContext.Current.CancellationToken);
 
-            Assert.True(first.ClearProjection);
-            Assert.True(changed.ClearProjection);
-            Assert.True(changed.ConfigurationVersion > first.ConfigurationVersion);
-            Assert.Equal(changed.ConfigurationVersion, afterRestart.ConfigurationVersion);
-            Assert.True(afterRestart.ClearProjection);
-        }
-        finally
-        {
-            var root = Directory.GetParent(baseDirectory)?.FullName;
-            if (!string.IsNullOrWhiteSpace(root) && Directory.Exists(root))
-            {
-                Directory.Delete(root, recursive: true);
-            }
-        }
+        Assert.True(first.ClearProjection);
+        Assert.True(changed.ClearProjection);
+        Assert.Equal(101, changed.ConfigurationVersion);
+        Assert.Equal(changed.ConfigurationVersion, afterRestart.ConfigurationVersion);
+        Assert.True(afterRestart.ClearProjection);
     }
 
     [Fact]
@@ -325,18 +300,27 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
         Assert.Empty(payload.PlcStates);
     }
 
-    private static NetworkDeviceEntity CreatePlc(
+    private static DevicePluginPlcSnapshot CreatePlc(
         int id,
         string deviceName,
         string ipAddress,
         int port,
-        string protocol)
-    {
-        var device = NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, ipAddress, port)
-            .WithId(id);
-        device.UpdateProtocolFrame(protocol);
-        return device;
-    }
+        string protocol,
+        string? plcCode = null)
+        => new(
+            id,
+            new DevicePluginPlcConfiguration(
+                plcCode ?? deviceName,
+                deviceName,
+                "Mc",
+                "FX5U",
+                protocol,
+                ipAddress,
+                port,
+                null,
+                3000,
+                true,
+                null));
 
     private static FakeDeviceService CreateIdentifiedDeviceService()
     {
@@ -353,13 +337,35 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
         return service;
     }
 
-    private sealed class MemoryPlcConfigurationVersionStore : IPlcConfigurationVersionStore
+    private sealed class InMemoryPluginConfiguration(
+        long version,
+        params DevicePluginPlcSnapshot[] plcs)
+        : IDevicePluginConfigurationSnapshotAccessor
     {
-        private long _value = 100;
+        private long _version = version;
 
-        public long ReadOrCreate(string clientCode) => Volatile.Read(ref _value);
+        public bool IsInitialized => true;
 
-        public long Advance(string clientCode) => Interlocked.Increment(ref _value);
+        public DevicePluginConfigurationSnapshot GetRequiredSnapshot()
+            => new(
+                new DevicePluginIdentity("PLC-SNAPSHOT-DEVICE", "AP", "AP"),
+                Volatile.Read(ref _version),
+                plcs.Select(static item => item.Configuration).ToArray(),
+                [],
+                [],
+                [],
+                DateTimeOffset.UtcNow);
+
+        public IReadOnlyList<DevicePluginPlcSnapshot> GetPlcs() => plcs;
+
+        public IReadOnlyList<DevicePluginIoPointSnapshot> GetIoPoints() => [];
+
+        public IReadOnlyList<DevicePluginTaskBindingSnapshot> GetTaskBindings() => [];
+
+        public Task RefreshAsync(CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public void PublishVersion(long next) => Interlocked.Exchange(ref _version, next);
     }
 
     private sealed class StaticPlcRuntimeStateSnapshotProvider(
@@ -387,95 +393,4 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    private sealed class InMemoryRepository<T>(params T[] seedItems) : IRepository<T>
-        where T : class, IEntity<int>, IAggregateRoot
-    {
-        private readonly List<T> _items = [.. seedItems];
-
-        public IQueryable<T> GetQueryable() => _items.AsQueryable();
-
-        public Task<T?> GetByIdAsync<TKey>(TKey id, CancellationToken cancellationToken = default)
-            where TKey : notnull
-            => Task.FromResult(_items.FirstOrDefault(x => EqualityComparer<TKey>.Default.Equals((TKey)(object)x.Id, id)));
-
-        public Task<T?> GetAsync(
-            Expression<Func<T, bool>> expression,
-            Expression<Func<T, object>>[]? includes = null,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult(_items.AsQueryable().FirstOrDefault(expression));
-
-        public Task<List<T>> GetListAsync(
-            Expression<Func<T, bool>> expression,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult(_items.AsQueryable().Where(expression).ToList());
-
-        public Task<List<T>> GetListAsync(
-            Expression<Func<T, bool>> expression,
-            Expression<Func<T, object>>[]? includes = null,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult(_items.AsQueryable().Where(expression).ToList());
-
-        public Task<List<T>> GetListAsync(
-            ISpecification<T>? specification = null,
-            CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<T?> GetSingleOrDefaultAsync(
-            ISpecification<T>? specification = null,
-            CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<int> GetCountAsync(
-            Expression<Func<T, bool>> expression,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult(_items.AsQueryable().Count(expression));
-
-        public Task<int> CountAsync(
-            ISpecification<T>? specification = null,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult(_items.Count);
-
-        public Task<bool> AnyAsync(
-            ISpecification<T>? specification = null,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult(_items.Count > 0);
-
-        public T Add(T entity)
-        {
-            _items.Add(entity);
-            return entity;
-        }
-
-        public void Update(T entity) { }
-        public void Delete(T entity) => _items.Remove(entity);
-        public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) => Task.FromResult(0);
-
-        public Task<int> ExecuteDeleteAsync(
-            Expression<Func<T, bool>> predicate,
-            CancellationToken cancellationToken = default)
-        {
-            var remove = _items.AsQueryable().Where(predicate).ToArray();
-            foreach (var item in remove)
-            {
-                _items.Remove(item);
-            }
-
-            return Task.FromResult(remove.Length);
-        }
-
-        public async Task<int> ReplaceAsync(
-            Expression<Func<T, bool>> predicate,
-            IReadOnlyCollection<T> replacements,
-            CancellationToken cancellationToken = default)
-        {
-            var affected = await ExecuteDeleteAsync(predicate, cancellationToken);
-            foreach (var replacement in replacements)
-            {
-                Add(replacement);
-                affected++;
-            }
-
-            return affected;
-        }
-    }
 }

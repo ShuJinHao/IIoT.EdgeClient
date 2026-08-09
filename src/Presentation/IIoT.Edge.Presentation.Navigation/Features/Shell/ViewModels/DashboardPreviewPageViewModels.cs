@@ -9,7 +9,7 @@ using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Application.Common.Diagnostics;
 using IIoT.Edge.Application.Features.Production.Monitor;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Presentation.Navigation.Features.Dashboard;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.Presentation.Panels.Features.SysLog;
@@ -59,7 +59,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
     private EdgeVisualStatus _deviceLinksStatus = EdgeVisualStatus.Offline;
     private EdgeVisualStatus _uploadHealthStatus = EdgeVisualStatus.Offline;
     private IReadOnlyCollection<PlcConnectionRuntimeSnapshot> _lastPlcSnapshots = [];
-    private IReadOnlyCollection<NetworkDeviceEntity> _lastConfiguredPlcs = [];
+    private IReadOnlyCollection<DevicePluginPlcSnapshot> _lastConfiguredPlcs = [];
     private DashboardPreviewPlcStatusItem? _selectedPlcStatusDetail;
     private bool _isPlcStatusDetailOpen;
 
@@ -277,7 +277,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
     private void ApplyDiagnostics(
         EdgeSyncDiagnosticsSnapshot diagnostics,
         IReadOnlyCollection<PlcConnectionRuntimeSnapshot> plcSnapshots,
-        IReadOnlyCollection<NetworkDeviceEntity> configuredPlcs)
+        IReadOnlyCollection<DevicePluginPlcSnapshot> configuredPlcs)
     {
         ApplyRuntimeConfig(_runtimeConfig.Current);
 
@@ -315,7 +315,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
     }
 
     private void RefreshPlcStatusState(
-        IReadOnlyCollection<NetworkDeviceEntity> configuredPlcs,
+        IReadOnlyCollection<DevicePluginPlcSnapshot> configuredPlcs,
         IReadOnlyCollection<PlcConnectionRuntimeSnapshot> plcSnapshots,
         bool notify)
     {
@@ -371,7 +371,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
     }
 
     private static IReadOnlyList<DashboardPreviewPlcStatusProjection> BuildPlcStatusProjections(
-        IReadOnlyCollection<NetworkDeviceEntity> configuredPlcs,
+        IReadOnlyCollection<DevicePluginPlcSnapshot> configuredPlcs,
         IReadOnlyCollection<PlcConnectionRuntimeSnapshot> plcSnapshots)
     {
         var snapshotsById = plcSnapshots
@@ -1067,7 +1067,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
             ? timestamp.Value.ToLocalTime().ToString("HH:mm:ss")
             : EmptyValue;
 
-    private static string FormatEndpoint(NetworkDeviceEntity? device)
+    private static string FormatEndpoint(DevicePluginPlcSnapshot? device)
         => device is null
             ? EmptyValue
             : $"{device.IpAddress}:{device.Port1}";
@@ -1105,7 +1105,7 @@ internal sealed class DashboardPreviewRuntimeViewModel : DashboardPreviewLocaliz
         int NetworkDeviceId,
         string PlcCode,
         string DeviceName,
-        NetworkDeviceEntity? ConfiguredDevice,
+        DevicePluginPlcSnapshot? ConfiguredDevice,
         PlcConnectionRuntimeSnapshot? RuntimeSnapshot);
 }
 

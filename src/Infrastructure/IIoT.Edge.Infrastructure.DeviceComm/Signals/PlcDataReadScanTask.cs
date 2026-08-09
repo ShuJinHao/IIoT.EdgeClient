@@ -7,7 +7,7 @@ using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Module.Contracts.Hardware;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Services;
@@ -23,7 +23,7 @@ public class PlcPeriodicBatchReadTask : IPlcTask
 
     private readonly IPlcService _plcService;
     private readonly IPlcDataStore _dataStore;
-    private readonly NetworkDeviceEntity _device;
+    private readonly DevicePluginPlcSnapshot _device;
     private readonly ILogService _logger;
     private readonly PlcConnectionStatusStore? _statusStore;
     private readonly Func<CancellationToken, Task<int>> _dataReadLoopIntervalResolver;
@@ -36,8 +36,8 @@ public class PlcPeriodicBatchReadTask : IPlcTask
     public PlcPeriodicBatchReadTask(
         IPlcService plcService,
         IPlcDataStore dataStore,
-        NetworkDeviceEntity deviceConfig,
-        IReadOnlyCollection<IoMappingEntity> ioMappings,
+        DevicePluginPlcSnapshot deviceConfig,
+        IReadOnlyCollection<DevicePluginIoPointSnapshot> ioMappings,
         ILogService logger,
         IPlcSignalBlockPlanner signalBlockPlanner,
         PlcConnectionStatusStore? statusStore = null,
@@ -438,8 +438,8 @@ public sealed class PlcDataReadScanTask : PlcPeriodicBatchReadTask
     public PlcDataReadScanTask(
         IPlcService plcService,
         IPlcDataStore dataStore,
-        NetworkDeviceEntity deviceConfig,
-        IReadOnlyCollection<IoMappingEntity> ioMappings,
+        DevicePluginPlcSnapshot deviceConfig,
+        IReadOnlyCollection<DevicePluginIoPointSnapshot> ioMappings,
         ILogService logger,
         IPlcSignalBlockPlanner signalBlockPlanner,
         PlcConnectionStatusStore? statusStore = null,

@@ -1,5 +1,5 @@
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 
 namespace IIoT.Edge.Application.Features.Production.Monitor;
 
@@ -9,7 +9,7 @@ namespace IIoT.Edge.Application.Features.Production.Monitor;
 public interface IMonitorStateMachineTaskProjection
 {
     IReadOnlyList<MonitorStateMachineTaskSnapshot> BuildRows(
-        NetworkDeviceEntity? device,
+        DevicePluginPlcSnapshot? device,
         IReadOnlyDictionary<string, int> stepStates,
         IReadOnlyDictionary<int, PlcTaskBindingDeviceDto> taskBindingsByDevice);
 }

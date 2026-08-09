@@ -1,18 +1,15 @@
 using IIoT.Edge.Application.Common.Plc;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Module.Contracts.Cloud;
 using IIoT.Edge.Module.Contracts.Device;
-using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Contracts.Plc;
-using IIoT.Edge.SharedKernel.Repository;
 
 namespace IIoT.Edge.Infrastructure.Integration.EdgeHost;
 
 public sealed class EdgeHostPlcRuntimeStateSnapshotProvider(
-    IReadRepository<NetworkDeviceEntity> networkDevices,
+    IDevicePluginConfigurationSnapshotAccessor pluginConfiguration,
     IPlcConnectionManager plcConnectionManager,
-    IDeviceService deviceService,
-    IPlcConfigurationVersionStore configurationVersionStore)
+    IDeviceService deviceService)
     : IEdgeHostPlcRuntimeStateSnapshotProvider,
       IAuthoritativePlcSnapshotProvider,
       IPlcConfigurationSnapshotInvalidator
@@ -65,7 +62,7 @@ public sealed class EdgeHostPlcRuntimeStateSnapshotProvider(
 
         Interlocked.Exchange(
             ref _requestedVersion,
-            configurationVersionStore.Advance(clientCode));
+            pluginConfiguration.GetRequiredSnapshot().ConfigurationVersion);
         lock (_snapshotSync)
         {
             _configurationSnapshot = null;
@@ -152,16 +149,11 @@ public sealed class EdgeHostPlcRuntimeStateSnapshotProvider(
                     }
                 }
 
-                var requestedVersion = Volatile.Read(ref _requestedVersion);
-                if (requestedVersion <= 0)
-                {
-                    requestedVersion = configurationVersionStore.ReadOrCreate(clientCode);
-                    Interlocked.CompareExchange(ref _requestedVersion, requestedVersion, 0);
-                    requestedVersion = Volatile.Read(ref _requestedVersion);
-                }
-                var configuredPlcs = await networkDevices
-                    .GetListAsync(static device => device.DeviceType == DeviceType.PLC, cancellationToken)
-                    .ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                var currentPluginSnapshot = pluginConfiguration.GetRequiredSnapshot();
+                var requestedVersion = currentPluginSnapshot.ConfigurationVersion;
+                Interlocked.Exchange(ref _requestedVersion, requestedVersion);
+                var configuredPlcs = pluginConfiguration.GetPlcs();
                 var immutableDevices = configuredPlcs
                     .Select(static device => ConfiguredPlc.From(device))
                     .OrderBy(static device => device.PlcName, StringComparer.OrdinalIgnoreCase)
@@ -307,7 +299,7 @@ public sealed class EdgeHostPlcRuntimeStateSnapshotProvider(
         string? Protocol,
         bool IsEnabled)
     {
-        public static ConfiguredPlc From(NetworkDeviceEntity entity)
+        public static ConfiguredPlc From(DevicePluginPlcSnapshot entity)
             => new(
                 entity.Id,
                 entity.PlcCode?.Trim() ?? string.Empty,

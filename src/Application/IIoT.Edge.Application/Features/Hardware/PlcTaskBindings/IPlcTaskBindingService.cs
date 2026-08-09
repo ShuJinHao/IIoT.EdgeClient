@@ -11,6 +11,14 @@ public interface IPlcTaskBindingService
         string moduleId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// 监控热路径专用：只投影已经发布的插件配置与进程内运行状态，禁止查询任何 SQLite provider。
+    /// </summary>
+    Task<IReadOnlyList<PlcTaskBindingDeviceDto>> GetModuleDeviceBindingsFromMemoryAsync(
+        string moduleId,
+        CancellationToken cancellationToken = default)
+        => GetModuleDeviceBindingsAsync(moduleId, cancellationToken);
+
     Task<IReadOnlySet<string>> GetEnabledTaskKeysAsync(
         int networkDeviceId,
         IReadOnlyCollection<TaskCandidate> candidates,

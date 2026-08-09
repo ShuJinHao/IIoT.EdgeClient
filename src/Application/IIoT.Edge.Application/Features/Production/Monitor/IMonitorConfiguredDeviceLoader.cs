@@ -1,5 +1,5 @@
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 
 namespace IIoT.Edge.Application.Features.Production.Monitor;
 
@@ -8,10 +8,10 @@ namespace IIoT.Edge.Application.Features.Production.Monitor;
 /// </summary>
 public interface IMonitorConfiguredDeviceLoader
 {
-    Task<IReadOnlyList<NetworkDeviceEntity>> LoadConfiguredPlcDevicesAsync(CancellationToken ct);
+    Task<IReadOnlyList<DevicePluginPlcSnapshot>> LoadConfiguredPlcDevicesAsync(CancellationToken ct);
 
     Task<IReadOnlyDictionary<int, PlcTaskBindingDeviceDto>> LoadTaskBindingsByDeviceAsync(
-        IReadOnlyCollection<NetworkDeviceEntity> configuredPlcs,
+        IReadOnlyCollection<DevicePluginPlcSnapshot> configuredPlcs,
         CancellationToken ct);
 
     bool HasRuntimeFactory(string? moduleId);

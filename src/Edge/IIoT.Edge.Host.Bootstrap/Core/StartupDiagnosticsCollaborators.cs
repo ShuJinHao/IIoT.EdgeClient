@@ -1,6 +1,6 @@
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Module.Contracts.Diagnostics;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Host.Bootstrap.Modules;
 
 namespace IIoT.Edge.Shell.Core;
@@ -31,7 +31,7 @@ public sealed class StartupValidationContext
 
     public required bool SystemCloudEnabled { get; init; }
 
-    public required IReadOnlyCollection<NetworkDeviceEntity> PlcDevices { get; init; }
+    public required IReadOnlyCollection<DevicePluginPlcSnapshot> PlcDevices { get; init; }
 
     public required IReadOnlyDictionary<string, IEdgeProcessModule> ModulesById { get; init; }
 

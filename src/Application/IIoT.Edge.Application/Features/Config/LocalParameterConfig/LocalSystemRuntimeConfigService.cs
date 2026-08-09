@@ -9,7 +9,8 @@ public sealed class LocalSystemRuntimeConfigService(
     ILocalParameterConfigService parameterConfigService,
     IModuleParamRoleProvider moduleParamRoleProvider,
     IProcessIntegrationRegistry processIntegrationRegistry,
-    ILogService logger)
+    ILogService logger,
+    ICloudApiConfigSnapshotProvider? cloudApiConfigSnapshotProvider = null)
     : ILocalSystemRuntimeConfigService, IDisposable
 {
     private static readonly TimeSpan DefaultInterval = TimeSpan.FromSeconds(60);
@@ -19,6 +20,7 @@ public sealed class LocalSystemRuntimeConfigService(
     private readonly IModuleParamRoleProvider _moduleParamRoleProvider = moduleParamRoleProvider;
     private readonly IProcessIntegrationRegistry _processIntegrationRegistry = processIntegrationRegistry;
     private readonly ILogService _logger = logger;
+    private readonly ICloudApiConfigSnapshotProvider? _cloudApiConfigSnapshotProvider = cloudApiConfigSnapshotProvider;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
 
     public SystemRuntimeConfigSnapshot Current { get; private set; } = SystemRuntimeConfigSnapshot.Default;
@@ -96,9 +98,13 @@ public sealed class LocalSystemRuntimeConfigService(
             .ConfigureAwait(false);
         var value = configs.FirstOrDefault(static x =>
             string.Equals(x.Key, CloudApiConfigParamSchema.Enabled, StringComparison.OrdinalIgnoreCase))?.Value;
-        return string.IsNullOrWhiteSpace(value) || !bool.TryParse(value.Trim(), out var enabled)
-            ? false
-            : enabled;
+        if (!string.IsNullOrWhiteSpace(value)
+            && bool.TryParse(value.Trim(), out var enabled))
+        {
+            return enabled;
+        }
+
+        return _cloudApiConfigSnapshotProvider?.GetCurrent().Enabled == true;
     }
 
     private async Task<TimeSpan> ReadRuntimeHeartbeatIntervalAsync(CancellationToken cancellationToken)

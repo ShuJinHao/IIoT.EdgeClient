@@ -1,38 +1,29 @@
-using IIoT.Edge.Module.Contracts.Modules;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Application.Modules.Hardware;
-using IIoT.Edge.Module.Contracts.Hardware;
+using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Module.Sdk.Hardware;
-using IIoT.Edge.Domain.Hardware.Aggregates;
-using IIoT.Edge.SharedKernel.Repository;
 
 namespace IIoT.Edge.Application.Features.Config.SchemaReconciliation;
 
 public sealed class IoMappingSchemaSource(
-    IReadRepository<NetworkDeviceEntity> networkDevices,
+    IDevicePluginConfigurationSnapshotAccessor snapshots,
     ModuleHardwareProfileResolver hardwareProfileResolver) : IConfigSchemaSource
 {
     public string SchemaId => IoMappingSchemaIds.Signals;
 
-    public async Task<IReadOnlyCollection<ConfigSchemaItem>> GetItemsAsync(
+    public Task<IReadOnlyCollection<ConfigSchemaItem>> GetItemsAsync(
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var profile = hardwareProfileResolver.Resolve();
-        if (profile is null)
+        if (profile is null || !snapshots.IsInitialized)
         {
-            return [];
+            return Task.FromResult<IReadOnlyCollection<ConfigSchemaItem>>([]);
         }
 
-        var devices = await networkDevices
-            .GetListAsync(static x => x.DeviceType == DeviceType.PLC, cancellationToken)
-            .ConfigureAwait(false);
         var items = new List<ConfigSchemaItem>();
-        foreach (var device in devices.OrderBy(static x => x.Id))
+        foreach (var device in snapshots.GetPlcs().OrderBy(static item => item.Id))
         {
-            if (device.Id <= 0)
-            {
-                continue;
-            }
-
             foreach (var template in profile.GetIoMappingCandidates())
             {
                 var deviceTemplate = profile.ResolveIoTemplateForDevice(device.DeviceName, template);
@@ -49,9 +40,10 @@ public sealed class IoMappingSchemaSource(
             }
         }
 
-        return items
-            .GroupBy(static x => x.Key, StringComparer.Ordinal)
-            .Select(static x => x.First())
+        IReadOnlyCollection<ConfigSchemaItem> result = items
+            .GroupBy(static item => item.Key, StringComparer.Ordinal)
+            .Select(static group => group.First())
             .ToArray();
+        return Task.FromResult(result);
     }
 }

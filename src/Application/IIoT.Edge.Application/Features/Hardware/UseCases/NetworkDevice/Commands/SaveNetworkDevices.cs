@@ -1,15 +1,11 @@
-﻿using IIoT.Edge.Application.Common.Crud;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Module.Contracts.Hardware;
+using IIoT.Edge.Module.Contracts.Plugins;
 using IIoT.Edge.SharedKernel.Messaging;
-using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.SharedKernel.Result;
-using IIoT.Edge.Domain.Hardware.Aggregates;
 
 namespace IIoT.Edge.Application.Features.Hardware.UseCases.NetworkDevice.Commands;
 
-/// <summary>
-/// 单条网络设备的数据传输对象。
-/// </summary>
 public record NetworkDeviceDto(
     int Id,
     string DeviceName,
@@ -24,183 +20,101 @@ public record NetworkDeviceDto(
     bool IsEnabled,
     string? Remark,
     string? ProtocolFrame = null,
-    string PlcCode = ""
-);
+    string PlcCode = "");
 
-/// <summary>
-/// 命令：保存网络设备列表，按提交结果进行新增或更新。
-/// </summary>
-public record SaveNetworkDevicesCommand(
-    List<NetworkDeviceDto> Devices
-) : ICommand<Result>;
+public record SaveNetworkDevicesCommand(List<NetworkDeviceDto> Devices) : ICommand<Result>;
 
-/// <summary>
-/// 处理器：保存网络设备配置。
-/// </summary>
-public class SaveNetworkDevicesHandler(
-    IEdgeUnitOfWorkFactory unitOfWorkFactory
-) : ICommandHandler<SaveNetworkDevicesCommand, Result>
+/// <summary>正式 v3 网络设备保存端口；Host 不再取得插件 DbContext、Entity 或 UoW。</summary>
+public sealed class SaveNetworkDevicesHandler(
+    IDevicePluginConfigurationSnapshotAccessor snapshots,
+    IEnumerable<IDevicePluginConfigurationStoreV1> stores)
+    : ICommandHandler<SaveNetworkDevicesCommand, Result>
 {
+    private readonly IDevicePluginConfigurationStoreV1[] _stores = stores.ToArray();
+
     public async Task<Result> Handle(
         SaveNetworkDevicesCommand request,
         CancellationToken cancellationToken)
     {
-        return await SubmittedEntityListSaveHelper.ExecuteInUnitOfWorkAsync<NetworkDeviceEntity>(
-            unitOfWorkFactory,
-            (repo, ct) => ApplyAsync(repo, request, ct),
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    internal static async Task<Result> ApplyAsync(
-        IRepository<NetworkDeviceEntity> repo,
-        SaveNetworkDevicesCommand request,
-        CancellationToken cancellationToken)
-        => await ApplyCoreAsync(
-            repo,
-            request,
-            existingIdsToUpdate: null,
-            existingIdsToDelete: null,
-            createdEntities: null,
-            cancellationToken).ConfigureAwait(false);
-
-    internal static async Task<Result> ApplyPlannedAsync(
-        IRepository<NetworkDeviceEntity> repo,
-        SaveNetworkDevicesCommand request,
-        IReadOnlySet<int> existingIdsToUpdate,
-        IReadOnlySet<int> existingIdsToDelete,
-        ICollection<NetworkDeviceEntity> createdEntities,
-        CancellationToken cancellationToken)
-        => await ApplyCoreAsync(
-            repo,
-            request,
-            existingIdsToUpdate,
-            existingIdsToDelete,
-            createdEntities,
-            cancellationToken).ConfigureAwait(false);
-
-    private static async Task<Result> ApplyCoreAsync(
-        IRepository<NetworkDeviceEntity> repo,
-        SaveNetworkDevicesCommand request,
-        IReadOnlySet<int>? existingIdsToUpdate,
-        IReadOnlySet<int>? existingIdsToDelete,
-        ICollection<NetworkDeviceEntity>? createdEntities,
-        CancellationToken cancellationToken)
-    {
-        var existingItems = await repo.GetListAsync(_ => true, cancellationToken).ConfigureAwait(false);
-        var submittedIds = request.Devices
-            .Select(static dto => dto.Id)
-            .Where(static id => id > 0)
-            .ToHashSet();
-        var usedPlcCodes = existingItems
-            .Where(entity => submittedIds.Contains(entity.Id))
-            .Select(static entity => entity.PlcCode)
-            .Where(static code => !string.IsNullOrWhiteSpace(code))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        return await SubmittedEntityListSaveHelper.ReplaceSubmittedAsync(
-            repo,
-            request.Devices,
-            _ => Task.FromResult(existingItems),
-            static dto => dto.Id,
-            Validate,
-            dto => TrackCreatedEntity(
-                CreateWithUniquePlcCode(dto, usedPlcCodes),
-                createdEntities),
-            Apply,
-            entity => existingIdsToDelete is null || existingIdsToDelete.Contains(entity.Id),
-            (entity, _) => existingIdsToUpdate is null || existingIdsToUpdate.Contains(entity.Id),
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    private static NetworkDeviceEntity TrackCreatedEntity(
-        NetworkDeviceEntity entity,
-        ICollection<NetworkDeviceEntity>? createdEntities)
-    {
-        createdEntities?.Add(entity);
-        return entity;
-    }
-
-    private static NetworkDeviceEntity Create(NetworkDeviceDto dto)
-        => NetworkDeviceEntity.Create(
-            dto.DeviceName,
-            dto.DeviceType,
-            dto.IpAddress,
-            dto.Port1);
-
-    private static NetworkDeviceEntity CreateWithUniquePlcCode(
-        NetworkDeviceDto dto,
-        ISet<string> usedPlcCodes)
-    {
-        var entity = Create(dto);
-        if (usedPlcCodes.Add(entity.PlcCode))
+        if (_stores.Length != 1)
         {
-            return entity;
+            return Result.Failure("PLUGIN_DATABASE_PORT_CARDINALITY_INVALID");
         }
 
-        string fallbackCode;
-        do
+        var configurations = new List<DevicePluginPlcConfiguration>(request.Devices.Count);
+        var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in request.Devices)
         {
-            fallbackCode = NetworkDeviceEntity.CreateInternalPlcCode();
-        }
-        while (!usedPlcCodes.Add(fallbackCode));
+            if (item.DeviceType != DeviceType.PLC
+                || string.IsNullOrWhiteSpace(item.PlcCode)
+                || string.IsNullOrWhiteSpace(item.DeviceName)
+                || string.IsNullOrWhiteSpace(item.IpAddress)
+                || item.Port1 is < 1 or > 65535
+                || item.Port2 is < 1 or > 65535
+                || item.ConnectTimeout <= 0
+                || !codes.Add(item.PlcCode.Trim()))
+            {
+                return Result.Failure("PLUGIN_PLC_CONFIGURATION_INVALID");
+            }
 
-        return NetworkDeviceEntity.Create(
-            dto.DeviceName,
-            dto.DeviceType,
-            dto.IpAddress,
-            dto.Port1,
-            fallbackCode);
-    }
-
-    private static void Apply(NetworkDeviceEntity entity, NetworkDeviceDto dto)
-    {
-        entity.Rename(dto.DeviceName);
-        entity.ChangeType(dto.DeviceType);
-        entity.UpdateDeviceModel(dto.DeviceModel);
-        entity.UpdateProtocolFrame(NormalizeProtocolFrame(dto));
-        entity.UpdateEndpoint(dto.IpAddress, dto.Port1, dto.Port2, dto.ConnectTimeout);
-        entity.UpdateCommands(dto.SendCmd1, dto.SendCmd2);
-        entity.SetEnabled(dto.IsEnabled);
-        entity.UpdateRemark(dto.Remark);
-    }
-
-    private static string? Validate(NetworkDeviceDto dto)
-    {
-        try
-        {
-            var entity = Create(dto);
-            Apply(entity, dto);
-            return ValidateProtocolFrame(dto);
-        }
-        catch (ArgumentException ex)
-        {
-            return ex.Message;
-        }
-    }
-
-    private static string? ValidateProtocolFrame(NetworkDeviceDto dto)
-    {
-        if (!IsMcPlc(dto) || string.IsNullOrWhiteSpace(dto.ProtocolFrame))
-        {
-            return null;
+            configurations.Add(new DevicePluginPlcConfiguration(
+                item.PlcCode.Trim().ToUpperInvariant(),
+                item.DeviceName.Trim(),
+                item.DeviceType.ToString(),
+                Normalize(item.DeviceModel),
+                Normalize(item.ProtocolFrame)?.ToUpperInvariant(),
+                item.IpAddress.Trim(),
+                item.Port1,
+                item.Port2,
+                item.ConnectTimeout,
+                item.IsEnabled,
+                Normalize(item.Remark)));
         }
 
-        return IsSupportedMcFrame(dto.ProtocolFrame)
-            ? null
-            : "MC PLC 协议帧只支持 E3 或 E4。";
+        var snapshot = snapshots.GetRequiredSnapshot();
+        var expectedVersion = snapshot.ConfigurationVersion;
+        var incomingByCode = configurations.ToDictionary(
+            static item => item.PlcCode,
+            StringComparer.OrdinalIgnoreCase);
+        foreach (var existing in snapshot.Plcs.Where(item => !incomingByCode.ContainsKey(item.PlcCode)))
+        {
+            var result = await _stores[0]
+                .DeletePlcAsync(existing.PlcCode, expectedVersion, cancellationToken)
+                .ConfigureAwait(false);
+            if (!result.Succeeded)
+            {
+                return Result.Failure(result.FailureReasonCode ?? "PLUGIN_PLC_DELETE_REJECTED");
+            }
+
+            expectedVersion = result.ConfigurationVersion;
+        }
+
+        foreach (var configuration in configurations)
+        {
+            var existing = snapshot.Plcs.SingleOrDefault(item => string.Equals(
+                item.PlcCode,
+                configuration.PlcCode,
+                StringComparison.OrdinalIgnoreCase));
+            if (existing == configuration)
+            {
+                continue;
+            }
+
+            var result = await _stores[0]
+                .UpsertPlcAsync(configuration, expectedVersion, cancellationToken)
+                .ConfigureAwait(false);
+            if (!result.Succeeded)
+            {
+                return Result.Failure(result.FailureReasonCode ?? "PLUGIN_PLC_UPSERT_REJECTED");
+            }
+
+            expectedVersion = result.ConfigurationVersion;
+        }
+
+        await snapshots.RefreshAsync(cancellationToken).ConfigureAwait(false);
+        return Result.Success();
     }
-
-    private static string? NormalizeProtocolFrame(NetworkDeviceDto dto)
-        => IsMcPlc(dto) ? Normalize(dto.ProtocolFrame) : null;
-
-    private static bool IsMcPlc(NetworkDeviceDto dto)
-        => dto.DeviceType == DeviceType.PLC
-           && string.Equals(dto.DeviceModel?.Trim(), PlcType.Mc.ToString(), StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsSupportedMcFrame(string value)
-        => string.Equals(value.Trim(), nameof(IIoT.Edge.Module.Contracts.Plc.McPlcFrameType.E3), StringComparison.OrdinalIgnoreCase)
-           || string.Equals(value.Trim(), nameof(IIoT.Edge.Module.Contracts.Plc.McPlcFrameType.E4), StringComparison.OrdinalIgnoreCase);
 
     private static string? Normalize(string? value)
-        => string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

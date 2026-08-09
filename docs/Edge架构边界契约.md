@@ -1,6 +1,6 @@
 # Edge 架构边界契约
 
-> **状态：第 0～7 批候选代码保留；复审发现的问题尚未全部收口，当前不是生产基线。**
+> **状态：Host `2.0.17` 插件私库 Owner 源码闭环随本变更进入主线；尚未发布、部署或完成真实 Windows/现场迁移验收，仍不是生产基线。**
 
 本文档是 `IIoT.EdgeClient` 的长期架构边界与测试归口契约。它以当前源码、MSBuild 评估图、EF model、真实写入路径、插件装载/打包路径和测试资产为依据，为 `EDGE-ARCH-001` 提供权威输入；Analyzer 不得按目录名、接口名或 EF navigation 自行猜测业务边界。
 
@@ -30,7 +30,7 @@ Edge 的 Host、SDK 与 Private Plugins 物理 owner 和依赖方向由当前项
 | SDK Contracts | 独立 `IIoT.Edge.Sdk` 仓的 `IIoT.Edge.Module.Contracts` 包 |
 | UI Shared | 独立 `IIoT.Edge.Sdk` 仓的 `IIoT.Edge.UI.Shared` 包 |
 | Module SDK | 独立 `IIoT.Edge.Sdk` 仓的 `IIoT.Edge.Module.Sdk` 包 |
-| Infrastructure | `CloudClient`、`DeviceComm`、`Integration`、`Persistence.Dapper`、`Persistence.EfCore`、`Update` |
+| Infrastructure | `CloudClient`、`DeviceComm`、`Integration`、`Persistence.Dapper`、`Update` |
 | Presentation | `Presentation.Navigation`、`Presentation.Panels`、`Presentation.Shell`、`Presentation.VisualTestData` |
 | Host/Tool | `Host.Bootstrap`、`Host.DataPipeline`、`Shell`、`Launcher`、`Installer`、`RuntimeLayoutSync` |
 | Plugin SDK | Contracts + Module.Sdk，只提供通用 contract/基础能力，不承载具体工序 |
@@ -71,38 +71,23 @@ Edge 的 Host、SDK 与 Private Plugins 物理 owner 和依赖方向由当前项
 - `Presentation.Panels` 持有具体 `log4net` provider 实现，属于 Presentation → Infrastructure 泄漏；迁移前只能精确过渡，禁止扩大为 Presentation 可任意引用 provider。
 - 旧 Plugin -> Navigation/Panels 传递闭包已从生产插件源码移除；后续门禁应按包程序集身份证明该边保持为零。
 - Application 的 `Microsoft.Extensions.Hosting.Abstractions` 当前无源码消费证据，应删除验证；删除前只列精确 legacy exception。
-- Shell 的 `Microsoft.EntityFrameworkCore.Design` 应迁回 persistence/design-time owner；不得据此批准普通 Host 使用 EF API。
+- Shell 的 `Microsoft.EntityFrameworkCore.Design` 引用已随 Host EF Owner 退出而删除；普通 Host 不得重新引入 EF API 或 design-time 包。
 - 14 个生产项目存在 16 条 `InternalsVisibleTo`。必须建立精确 friend ledger；`IIoT.Edge.TestSimulator` 不在当前项目图中，是 stale friend，需删除。
 
-## 3. 聚合边界裁决
+## 3. 配置模型与实体边界
 
-EF navigation、`DbSet` 和 cascade 只表达 ORM 关系，不自动证明 DDD ownership。当前真实写入事务裁决如下：
-
-| 类型 | 裁决 | 依据与约束 |
-|---|---|---|
-| `NetworkDeviceEntity` | 批准 AggregateRoot | 有独立保存命令和仓储。`IoMappings`、`PlcTaskBindings` 使用私有 backing field 和只读视图，EF 只通过字段完成关系 fix-up；外部不能经 navigation 修改集合。 |
-| `IoMappingEntity` | 批准“按 NetworkDeviceId 分区的独立配置 AggregateRoot” | 由独立仓储、replace use case 和 schema reconciliation 写入；生产代码不经 `NetworkDevice.IoMappings` 修改。 |
-| `PlcTaskBindingEntity` | 批准“按 NetworkDeviceId 分区的独立配置 AggregateRoot” | 由独立服务按 `(NetworkDeviceId, TaskKey)` 删除/重建并提交；不是当前 NetworkDevice child。 |
-| `SerialDeviceEntity` | 批准 AggregateRoot | 独立保存命令、仓储，无 navigation child。 |
-| `SystemConfigEntity` | 批准 persistence/state root | 以 Key 为业务身份和唯一键，是配置状态持久化根，不冒充 rich domain aggregate。 |
-| `DeviceParamEntity` | 未裁决、dormant | 除实体、DbSet、EF configuration、migration 和实体单测外没有生产读写者。不得进入批准 root registry；任何新增 `IRepository<DeviceParamEntity>` 必须失败，直到单独裁决删除、独立 state root 或 NetworkDevice child。 |
-
-当前批准 root 精确为 5 个；当前没有源码证据足以批准任何 Aggregate child。
-
-`IoMappingEntity`、`PlcTaskBindingEntity` 与 `NetworkDeviceEntity` 的双向 navigation，以及三类外键的 `Cascade`，属于历史 ORM/lifecycle 策略，不是聚合所有权。删除 NetworkDevice 时 IO、binding、device-param 的物理生命周期必须由独立 policy test 明确，不能让 SQLite cascade 暗中替业务作决定。
+- 正式 v3 Host 不拥有 PLC、IO、任务绑定或插件参数的 EF Entity、DbContext、Repository、Unit of Work、migration 或 seed；Application、Edge、Infrastructure、Presentation 的生产源码不得引用旧 `NetworkDeviceEntity`、`IoMappingEntity`、`PlcTaskBindingEntity`、`SerialDeviceEntity`、`SystemConfigEntity`、`DeviceParamEntity` 或 `IEdgeUnitOfWorkFactory`。
+- Host 与 UI 只消费 SDK `IDevicePluginConfigurationStoreV1`、`IDevicePluginConfigurationSnapshotAccessor` 及其无秘密 DTO。配置写入携带 `ExpectedConfigurationVersion`，版本冲突失败关闭；写成功后由版本事件使 Host 内存快照失效并重载。
+- AP、CP 的数据库实体和关系只存在于各自插件实现内部，由各自 DbContext、migration assembly 和事务裁决；它们不进入 Host 的 Domain/Core 聚合注册表。
+- Host 仓仍可在测试资产或未被生产项目引用的历史类型中保留 v2 行为证据，但这些类型不得注册进生产 DI、不得被正式 v3 调用，也不得作为运行时 fallback。回滚只能使用旧 Host 版本和迁移前只读副本。
 
 ## 4. Persistence 与数据 Owner
 
-### 4.1 Host 自有状态与 v2 遗留 EF Core Owner
+### 4.1 Host 自有 `host.db` Owner
 
-本节只描述 `host.db` 中 Host 自有状态，以及尚待插件私库迁移退出的 v2 遗留共享 EF 实现；它不授予 Host 对插件 PLC、IO、MES、任务、参数或生产业务表的长期所有权。v3 唯一目标 Owner 见第 4.3 节。
-
-- Model/DbSet：`Infrastructure.Persistence.EfCore/EdgeDbContext`。
-- Read：`EfReadRepository<T>`；不得向调用方泄漏无法释放 context 的 `IQueryable`。
-- Write/commit：`EdgeUnitOfWorkFactory` 为每个 session 创建独占 `EdgeDbContext` 与 transaction，`EfUnitOfWorkRepository<T>` 只在该 session 内跟踪 Add/Update/Delete，只有 `EdgeUnitOfWork.FlushAsync`/`CommitAsync` 可调用 `DbContext.SaveChangesAsync`。旧 `EfRepository<T>`、repository `SaveChangesAsync`/`ExecuteDeleteAsync`/replace 端口和 open-generic 写 repository DI 已物理删除。
-- Runtime migration：`ApplyMigrations`，唯一 composition caller 为 `AppStartupInitializer`；其范围只允许 Host 自有 Schema 与仍在 GAP 中的 v2 遗留 Schema，不得据此新增插件业务表或延长共享库寿命。
-- Design-time：`EdgeDbContextFactory`。
-- `EdgeSqliteSchemaRepair` 是有期限的历史例外；目标是迁成真实 migration 后物理删除，不能成为第二套 schema 演进机制。
+- `host.db` 只保存 Launcher/Shell 本地账号、安装 Binding、插件 registry/版本/manifest/hash、宿主偏好、更新恢复 receipt 及插件数据库路径/Schema 状态等宿主技术事实；不得包含 PLC、IO、任务绑定、MES 或插件参数业务表。
+- `host.db` 由 `Infrastructure.Persistence.Dapper/Host/LauncherHostDatabase` 及其明确 Schema/恢复事务拥有；正式 Host 不注册 `Persistence.EfCore`、插件业务 DbContext、通用 EF Repository 或 `IEdgeUnitOfWorkFactory`。
+- Launcher/Installer 对 `host.db` 的恢复、校验和原子切换不得打开或代理 `plugin.db`；插件不得访问 `host.db`。
 
 ### 4.2 Dapper/SQLite workflow state Owner
 
@@ -114,25 +99,20 @@ EF navigation、`DbSet` 和 cascade 只表达 ORM 关系，不自动证明 DDD o
 
 ### 4.3 模块本地 Persistence Owner
 
-- 每个 `ClientCode` 插件独立拥有自己的私有数据库、Schema、migration、仅新空库首次 seed 和事务边界；一个插件不得读写或迁移另一个 `ClientCode` 的业务表。
+- 每个规范化 `ClientCode` 插件独立拥有 `plugins/{ClientCode}/db/plugin.db`、Schema、migration、仅新空库首次 seed 和事务边界；一个插件不得读写或迁移另一个 `ClientCode` 的业务表。
 - Host 只提供数据库路径、运行目录生命周期和诊断能力；不定义、查询、修改、播种或代理插件业务表，也不把插件数据库并入 `host.db`。
-- 插件业务文档负责裁决其窄 persistence port、Schema、migration、seed、transaction 和 UI 查询边界，插件仓负责对应测试；宿主只验证路径与包隔离契约。
+- Host 启动只调用 SDK lifecycle/configuration 窄端口；AP、CP 分别负责自己的 DbContext、实体、migration assembly、首次 seed、初始化标记、配置版本和事务，数值相同的版本号也不形成共同版本链。
 - 升级不得重新补回人员已删除的播种数据；只有新建空插件库才能执行首次 seed。
+- 旧 `edge.db` 只作为迁移前原字节不变的只读证据；正式 v3 正常运行只打开 `plugin.db`，不得暗中回退读取旧库。
 
-### 4.4 Host 自有状态与 v2 遗留写事务边界
+### 4.4 正式 v3 写事务与启动边界
 
-当前 Host 自有状态和 v2 遗留共享 EF 写路径使用显式、一次性、禁止 ambient/`AsyncLocal` 的 Unit of Work session。以下约束用于保护遗留实现直至插件私库迁移完成，不能解释为 Host 是插件业务 persistence 的最终 Owner：
-
-- `IEdgeUnitOfWorkFactory.BeginAsync(ct)` 创建独占一个 `EdgeDbContext` 和一个 provider-supported non-deferred SQLite transaction 的 `IEdgeUnitOfWork : IAsyncDisposable`。
-- 写 repository 只能由 `IEdgeUnitOfWork.Repository<T>()` 获取；删除 open-generic `IRepository<>` 的直接 DI 注册，Application handler 不得跨 session 缓存写 repository。
-- session 可提供 `FlushAsync(ct)` 仅用于同一事务内生成 identity；它不是 durable commit，其他 connection 不得看到，session 未 `CommitAsync` 即 Dispose/取消必须整体 rollback。
-- `CommitAsync` 只能成功一次。Save/commit 失败后 session 进入 faulted，使用 `CancellationToken.None` 尝试 rollback；rollback 再失败时只通过 `Exception.Data["IIoT.Edge.Persistence.RollbackException"]` 附着证据，不覆盖主失败。禁止盲目重试或返回成功；缓存失效、PLC stop/reload 和成功文案只能在 commit 成功后发生。
-- SystemConfig、TaskBinding 的 delete+insert 以及 Hardware 的 Network/Serial/IO 必须在同一 session/transaction 中完成；小配置集使用同 context query + tracked remove/add，不用另一个 context 的 bulk delete 绕过事务和 ChangeTracker。
-- `Update` 继续按主键 load 后 `CurrentValues.SetValues`，不得退化为 `DbContext.Update`，避免不存在记录被插入或 navigation graph 被错误追踪。
-- Stateless `IReadRepository<T>` 保持独立只读端口，泄漏 context 的 `GetQueryable()` 已物理删除；任何跨多步一致性读取必须从当前 UoW session 获取。
-- 每个 UoW connection 在 transaction 前设置 `PRAGMA foreign_keys=ON` 和 busy timeout，并由真实临时 SQLite 测试验证连接隔离、并发串行、flush 后 rollback、跨聚合 commit、外键、replace rollback 和主异常/rollback 异常优先级。
-- `ModuleDevelopmentSeedWriter` 是 v2 遗留共享库路径，只在现存链内承担 DTO → Domain 写入；它不是 v3 插件私库的 seed Owner，也不是未来唯一写入口。该路径统一归 `GAP-HL-005` 管理，下一批 AP/CP 私库物理迁移时必须由各插件自有 DbContext/migration/首次 seed/事务替代并从 Host 退出。本批不得以修正文档为由提前改写、复制或扩张该遗留 writer。
-- Cloud 文件 projection 不放进 SQLite transaction。保留 fail-closed saga：数据库与文件任一步失败都不得报告成功，并以独立原子补偿恢复禁用状态。
+- Host 的 Hardware、IO、任务绑定、参数页、PLC 启动校验和 runtime 只能调用当前插件的 configuration port；不得保留“插件端口失败后回退 Host EF”的路径。
+- 插件配置写入由插件在自己的 `plugin.db` 事务内完成并返回新版本；Host 只有在提交成功后才能失效/重载内存快照、停启 PLC runtime 或显示成功。
+- `AppStartupInitializer` 必须要求正式 Binding v3，先完成插件 lifecycle、完整性检查和配置快照，再初始化 Host workflow 数据库；v2 或缺少 lifecycle/configuration port 时在 PLC、MES、Cloud 和普通 UI 前失败关闭。
+- `ModuleDevelopmentSeedWriter`、`ModuleSeedInitializer`、Host 插件表 migration、配置枚举补写和 Cloud system-switch 数据库迁移均已退出正式源码/生产 DI，不得恢复。
+- Binding 17 路由、BaseUrl、ClientCode 和凭据引用由安装物化结果拥有，参数页不得写入插件数据库覆盖；`CloudApi:Enabled` 如需本机启停，只写独立原子投影并在刷新失败时回滚为关闭。
+- 监控 500ms 热路径只调用内存配置投影；网络设备、IO、任务绑定从已发布快照读取，带 recovery 明细的持久化查询不得进入 tick。配置版本事件负责失效和重载，稳态刷新必须为零 SQLite/EF/provider 查询。
 
 ## 5. 插件、Outbound 与 PLC Owner
 

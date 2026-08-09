@@ -1,26 +1,26 @@
 {
   "schemaVersion": 1,
   "sdkRepository": "ShuJinHao/IIoT.Edge.Sdk",
-  "sdkSourceCommit": "419d281026f0db4064c9af1049eae272e8ab33f4",
+  "sdkSourceCommit": "a7995c473c59ebea19283f0cb11f5f99af354726",
   "candidateSourceState": "clean-merged-main",
-  "version": "2.0.13",
+  "version": "2.0.14",
   "hostApiVersion": "2.0.0",
   "fileListDigestAlgorithm": "sha256(path-tab-size-tab-entrySha256-lf)",
   "packages": [
     {
       "id": "IIoT.Edge.Module.Analyzers",
-      "fileName": "IIoT.Edge.Module.Analyzers.2.0.13.nupkg",
-      "sha256": "7e3ccb6906b6b04b341bcfc52217487c5603c1ef6c2c39f380fa3b841a2347ce",
-      "size": 44475,
-      "fileListDigest": "c3737d8536b1baf04778451f0084952acbb63909d584e22f606b51e2da8c0e2c",
+      "fileName": "IIoT.Edge.Module.Analyzers.2.0.14.nupkg",
+      "sha256": "c8bc5dc67adb0b676faf4f9ddf3753e42d06bfb913de2f4ab320b207018828e2",
+      "size": 45579,
+      "fileListDigest": "dad1e5047c004859796ce548db954e6da7931416e826179fc9cf742640c72da4",
       "dependencies": []
     },
     {
       "id": "IIoT.Edge.Module.Contracts",
-      "fileName": "IIoT.Edge.Module.Contracts.2.0.13.nupkg",
-      "sha256": "65d0f6b0aef82e7beaf16ac8f03053b3b54eaa63e07eaff044e4f0c64ad9697d",
-      "size": 144482,
-      "fileListDigest": "2cd272236d098cef46d8d92f8e017b8d53e5a45e985d69cf6377ea5be12f79d0",
+      "fileName": "IIoT.Edge.Module.Contracts.2.0.14.nupkg",
+      "sha256": "a4a2542c62d8356cfb9d6822dd9a2f6cf2b3110e9285e61cafa7dc563603eff5",
+      "size": 151338,
+      "fileListDigest": "a14ca164389e5ce61525f2d2670cf18e210a24b67c9d26221996345af123fa73",
       "dependencies": [
         {
           "id": "MediatR",
@@ -38,14 +38,14 @@
     },
     {
       "id": "IIoT.Edge.Module.Sdk",
-      "fileName": "IIoT.Edge.Module.Sdk.2.0.13.nupkg",
-      "sha256": "295e78c8312545829aa9dc69be425f5367252f87da9afb74b4eda6066d2658be",
-      "size": 50019,
-      "fileListDigest": "97f5736571b0141e69721291c41339eb006e39c06ed166f849cf046475daeec0",
+      "fileName": "IIoT.Edge.Module.Sdk.2.0.14.nupkg",
+      "sha256": "03cc4e1113595a661c56c9e81a7298d5015862f959ef81a5e4ada9039ce48db7",
+      "size": 50062,
+      "fileListDigest": "557f17dcaeee63827dcd0886d1751b6978416c21f1e5ca530856f1799b1d841b",
       "dependencies": [
         {
           "id": "IIoT.Edge.Module.Contracts",
-          "version": "2.0.13"
+          "version": "2.0.14"
         },
         {
           "id": "Microsoft.Extensions.Configuration.Abstractions",
@@ -59,10 +59,10 @@
     },
     {
       "id": "IIoT.Edge.UI.Shared",
-      "fileName": "IIoT.Edge.UI.Shared.2.0.13.nupkg",
-      "sha256": "80bbe13c4f00d31958646c132e46300edb5ce49541b9c10ca0f6cecaace98c47",
-      "size": 127710,
-      "fileListDigest": "26cd4153f1fda60d9f92792ad7f6140bd68a8b75f942e2d619f04c3ee0288ce4",
+      "fileName": "IIoT.Edge.UI.Shared.2.0.14.nupkg",
+      "sha256": "d1d6e47621f8a4ff14ece70d43219d986d6824bee7b0cda856ffc9f3473a6b81",
+      "size": 127761,
+      "fileListDigest": "2192fed9b8dd3afab68e645965aabe946ef8deeec2ad5ac15fa4ee0c878a2e4e",
       "dependencies": [
         {
           "id": "Avalonia",

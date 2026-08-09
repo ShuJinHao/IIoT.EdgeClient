@@ -154,7 +154,7 @@ public sealed class PlcTaskBindingTransactionService(
         catch (Exception exception)
         {
             rollbackFailures.Add(
-                new InvalidOperationException("PLC 原 SQLite 任务绑定回滚失败。", exception));
+                new InvalidOperationException("PLC 原插件私库任务绑定回滚失败。", exception));
         }
 
         if (rollbackFailures.Count > 0)

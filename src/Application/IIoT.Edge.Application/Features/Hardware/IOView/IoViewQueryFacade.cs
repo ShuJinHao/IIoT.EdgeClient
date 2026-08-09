@@ -1,5 +1,5 @@
 using IIoT.Edge.Application.Features.Hardware.Queries;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.SharedKernel.Result;
 using MediatR;
 
@@ -10,7 +10,7 @@ namespace IIoT.Edge.Application.Features.Hardware.IOView;
 /// </summary>
 public interface IIoViewQueryFacade
 {
-    Task<Result<List<NetworkDeviceEntity>>> GetNetworkDevicesAsync(CancellationToken cancellationToken = default);
+    Task<Result<List<DevicePluginPlcSnapshot>>> GetNetworkDevicesAsync(CancellationToken cancellationToken = default);
 
     Task<Result<IoMappingPagedDto>> GetIoMappingsAsync(
         int networkDeviceId,
@@ -21,7 +21,7 @@ public interface IIoViewQueryFacade
 
 public sealed class IoViewQueryFacade(ISender sender) : IIoViewQueryFacade
 {
-    public Task<Result<List<NetworkDeviceEntity>>> GetNetworkDevicesAsync(CancellationToken cancellationToken = default)
+    public Task<Result<List<DevicePluginPlcSnapshot>>> GetNetworkDevicesAsync(CancellationToken cancellationToken = default)
         => sender.Send(new GetAllNetworkDevicesQuery(), cancellationToken);
 
     public Task<Result<IoMappingPagedDto>> GetIoMappingsAsync(

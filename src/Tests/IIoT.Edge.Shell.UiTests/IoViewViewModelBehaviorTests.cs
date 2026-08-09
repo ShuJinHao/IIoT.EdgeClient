@@ -5,12 +5,13 @@ using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.Application.Features.Hardware.IOView;
 using IIoT.Edge.Application.Features.Hardware.Queries;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.Module.Contracts.Runtime;
 using IIoT.Edge.Module.Contracts.Hardware;
+using IIoT.Edge.Module.Contracts.Plugins;
 using IIoT.Edge.SharedKernel.Result;
 using IIoT.Edge.UI.Shared.Localization;
 
@@ -35,7 +36,6 @@ public sealed class IoViewViewModelBehaviorTests
             CreateDevice(1, "PLC-TestPlugin-01", "TestPlugin"),
             CreateDevice(2, "PLC-TestProcess-02", "TestProcess"),
             CreateDevice(3, "PLC-TestProcess-01", "TestProcess"),
-            CreateDevice(4, "Scanner-TestProcess", "TestProcess", DeviceType.Scanner),
             CreateDevice(5, "PLC-TestProcess-Disabled", "TestProcess", isEnabled: false)
         };
         var viewModel = CreateViewModel(devices, moduleIdFilter: "TestProcess");
@@ -144,7 +144,7 @@ public sealed class IoViewViewModelBehaviorTests
         var selectionService = new DeviceSelectionService();
         var facade = new FakeIoViewQueryFacade(
             [deviceA, deviceB],
-            new Dictionary<int, List<IoMappingEntity>>());
+            new Dictionary<int, List<DevicePluginIoPointSnapshot>>());
         var dataStore = new PlcDataStore();
         var viewModel = new TestIoViewModel(
             dataStore,
@@ -164,7 +164,7 @@ public sealed class IoViewViewModelBehaviorTests
     public async Task LoadMappingsAsync_WhenInteractionUsesSameBusinessGroup_ShouldMergeReadAndWriteIntoOneRow()
     {
         var device = CreateDevice(10, "PLC-TestPlugin-01", "TestPlugin");
-        var mappings = new Dictionary<int, List<IoMappingEntity>>
+        var mappings = new Dictionary<int, List<DevicePluginIoPointSnapshot>>
         {
             [device.Id] =
             [
@@ -201,7 +201,7 @@ public sealed class IoViewViewModelBehaviorTests
     public async Task LoadMappingsAsync_WhenMappingsUseFiveCategories_ShouldExposeSameFiveIoBuckets()
     {
         var device = CreateDevice(18, "PLC-TestProcess-01", "TestProcess");
-        var mappings = new Dictionary<int, List<IoMappingEntity>>
+        var mappings = new Dictionary<int, List<DevicePluginIoPointSnapshot>>
         {
             [device.Id] =
             [
@@ -229,7 +229,7 @@ public sealed class IoViewViewModelBehaviorTests
     public async Task LoadMappingsAsync_WhenContinuousReadIsAscii_ShouldStayInContinuousReadBucket()
     {
         var device = CreateDevice(19, "PLC-TestProcess-01", "TestProcess");
-        var mappings = new Dictionary<int, List<IoMappingEntity>>
+        var mappings = new Dictionary<int, List<DevicePluginIoPointSnapshot>>
         {
             [device.Id] =
             [
@@ -253,7 +253,7 @@ public sealed class IoViewViewModelBehaviorTests
     public async Task LoadMappingsAsync_WhenInteractionGroupHasMultipleSignals_ShouldUseSingleLineSummary()
     {
         var device = CreateDevice(11, "PLC-TestPlugin-01", "TestPlugin");
-        var mappings = new Dictionary<int, List<IoMappingEntity>>
+        var mappings = new Dictionary<int, List<DevicePluginIoPointSnapshot>>
         {
             [device.Id] =
             [
@@ -284,7 +284,7 @@ public sealed class IoViewViewModelBehaviorTests
     {
         var deviceA = CreateDevice(21, "PLC-TestProcess-01", "TestProcess");
         var deviceB = CreateDevice(22, "PLC-TestProcess-02", "TestProcess");
-        var mappings = new Dictionary<int, List<IoMappingEntity>>
+        var mappings = new Dictionary<int, List<DevicePluginIoPointSnapshot>>
         {
             [deviceA.Id] = [CreateMapping(deviceA.Id, "层数", "D100", 1, "UInt16", "Read", "实时数据", "测试实时", 1)],
             [deviceB.Id] = [CreateMapping(deviceB.Id, "层数", "D100", 1, "UInt16", "Read", "实时数据", "测试实时", 1)]
@@ -311,7 +311,7 @@ public sealed class IoViewViewModelBehaviorTests
         var deviceA = CreateDevice(25, "PLC-TestPlugin-A", "TestPlugin");
         var deviceB = CreateDevice(26, "PLC-TestPlugin-B", "TestPlugin");
         const string signalKey = "TestPlugin.Interaction.Inbound";
-        var mappings = new Dictionary<int, List<IoMappingEntity>>
+        var mappings = new Dictionary<int, List<DevicePluginIoPointSnapshot>>
         {
             [deviceA.Id] =
             [
@@ -356,7 +356,7 @@ public sealed class IoViewViewModelBehaviorTests
     public async Task RefreshCurrentValues_ShouldDecodeCommonSignalTypes()
     {
         var device = CreateDevice(30, "PLC-TestPlugin-01", "TestPlugin");
-        var mappings = new Dictionary<int, List<IoMappingEntity>>
+        var mappings = new Dictionary<int, List<DevicePluginIoPointSnapshot>>
         {
             [device.Id] =
             [
@@ -418,7 +418,7 @@ public sealed class IoViewViewModelBehaviorTests
     public async Task LoadMappingsAsync_WhenContinuousSignalsShareGroup_ShouldBuildContinuousReadSection()
     {
         var device = CreateDevice(35, "PLC-TestPlugin-01", "TestPlugin");
-        var mappings = new Dictionary<int, List<IoMappingEntity>>
+        var mappings = new Dictionary<int, List<DevicePluginIoPointSnapshot>>
         {
             [device.Id] =
             [
@@ -450,7 +450,7 @@ public sealed class IoViewViewModelBehaviorTests
     public async Task RefreshCurrentValues_WhenContinuousSignalsUpdate_ShouldKeepContinuousReadSignalsStable()
     {
         var device = CreateDevice(37, "PLC-TestPlugin-01", "TestPlugin");
-        var mappings = new Dictionary<int, List<IoMappingEntity>>
+        var mappings = new Dictionary<int, List<DevicePluginIoPointSnapshot>>
         {
             [device.Id] =
             [
@@ -482,7 +482,7 @@ public sealed class IoViewViewModelBehaviorTests
     public async Task RefreshCurrentValues_WhenWriteDataConfigured_ShouldUseWriteBufferAndDisableManualRead()
     {
         var device = CreateDevice(36, "PLC-TestPlugin-01", "TestPlugin");
-        var mappings = new Dictionary<int, List<IoMappingEntity>>
+        var mappings = new Dictionary<int, List<DevicePluginIoPointSnapshot>>
         {
             [device.Id] =
             [
@@ -533,7 +533,7 @@ public sealed class IoViewViewModelBehaviorTests
     public async Task WriteInteractionRow_ShouldOnlyWriteCurrentRowOutputIndex()
     {
         var device = CreateDevice(40, "PLC-TestPlugin-01", "TestPlugin");
-        var mappings = new Dictionary<int, List<IoMappingEntity>>
+        var mappings = new Dictionary<int, List<DevicePluginIoPointSnapshot>>
         {
             [device.Id] =
             [
@@ -570,34 +570,42 @@ public sealed class IoViewViewModelBehaviorTests
     }
 
     private static TestIoViewModel CreateViewModel(
-        IReadOnlyCollection<NetworkDeviceEntity> devices,
-        IReadOnlyDictionary<int, List<IoMappingEntity>>? mappings = null,
+        IReadOnlyCollection<DevicePluginPlcSnapshot> devices,
+        IReadOnlyDictionary<int, List<DevicePluginIoPointSnapshot>>? mappings = null,
         IPlcDataStore? dataStore = null,
         string? moduleIdFilter = null,
         IDeviceSelectionService? deviceSelectionService = null)
         => new(
             dataStore ?? new PlcDataStore(),
             new FakePlcConnectionManager(devices.Select(static x => x.Id).ToArray()),
-            new FakeIoViewQueryFacade(devices, mappings ?? new Dictionary<int, List<IoMappingEntity>>()),
+            new FakeIoViewQueryFacade(
+                devices,
+                mappings ?? new Dictionary<int, List<DevicePluginIoPointSnapshot>>()),
             moduleIdFilter,
             deviceSelectionService ?? new DeviceSelectionService());
 
-    private static NetworkDeviceEntity CreateDevice(
+    private static DevicePluginPlcSnapshot CreateDevice(
         int id,
         string deviceName,
         string moduleId,
-        DeviceType deviceType = DeviceType.PLC,
         bool isEnabled = true,
         string? plcCode = null)
-    {
-        var entity = NetworkDeviceEntity.Create(deviceName, deviceType, "127.0.0.1", 102, plcCode);
-        entity.WithId(id);
-        entity.UpdateDeviceModel("S7");
-        entity.SetEnabled(isEnabled);
-        return entity;
-    }
+        => new(
+            id,
+            new DevicePluginPlcConfiguration(
+                plcCode ?? deviceName,
+                deviceName,
+                "PLC",
+                "S7",
+                null,
+                "127.0.0.1",
+                102,
+                null,
+                3000,
+                isEnabled,
+                moduleId));
 
-    private static IoMappingEntity CreateMapping(
+    private static DevicePluginIoPointSnapshot CreateMapping(
         int networkDeviceId,
         string signalKey,
         string address,
@@ -608,12 +616,20 @@ public sealed class IoViewViewModelBehaviorTests
         string businessGroup,
         int sortOrder,
         string? remark = null)
-    {
-        var entity = IoMappingEntity.Create(networkDeviceId, signalKey, address, count, dataType, direction, category, businessGroup);
-        entity.UpdateMetadata(signalKey, dataType, direction, category, businessGroup, remark);
-        entity.UpdateSortOrder(sortOrder);
-        return entity;
-    }
+        => new(
+            DevicePluginProjectionIds.Io($"PLC-{networkDeviceId}", signalKey),
+            networkDeviceId,
+            new DevicePluginIoPointConfiguration(
+                $"PLC-{networkDeviceId}",
+                signalKey,
+                address,
+                count,
+                dataType,
+                direction,
+                category,
+                businessGroup,
+                sortOrder,
+                remark));
 
 
     private sealed class TestIoViewModel(
@@ -672,12 +688,13 @@ public sealed class IoViewViewModelBehaviorTests
     }
 
     private sealed class FakeIoViewQueryFacade(
-        IReadOnlyCollection<NetworkDeviceEntity> devices,
-        IReadOnlyDictionary<int, List<IoMappingEntity>> mappings) : IIoViewQueryFacade
+        IReadOnlyCollection<DevicePluginPlcSnapshot> devices,
+        IReadOnlyDictionary<int, List<DevicePluginIoPointSnapshot>> mappings) : IIoViewQueryFacade
     {
         public int NetworkDeviceQueryCount { get; private set; }
 
-        public Task<Result<List<NetworkDeviceEntity>>> GetNetworkDevicesAsync(CancellationToken cancellationToken = default)
+        public Task<Result<List<DevicePluginPlcSnapshot>>> GetNetworkDevicesAsync(
+            CancellationToken cancellationToken = default)
         {
             NetworkDeviceQueryCount++;
             return Task.FromResult(Result.Success(devices.ToList()));
