@@ -77,6 +77,39 @@ public sealed class ModuleDiscoveryContractTests
         }
     }
 
+    [Fact]
+    public void AssemblyResolver_WhenValidNativeDllIsLocallyStaged_ShouldNotParseItAsManagedAssembly()
+    {
+        var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("TestPlugin");
+        try
+        {
+            var pluginDirectory = Path.Combine(pluginRoot, "TestPlugin");
+            var stagedAssemblyPath = Path.Combine(pluginDirectory, "IIoT.Edge.TestPlugin.dll");
+            var nativeLibraryPath = Path.Combine(
+                AppContext.BaseDirectory,
+                "runtimes",
+                "win-x64",
+                "native",
+                "e_sqlite3.dll");
+            Assert.True(File.Exists(nativeLibraryPath), $"Missing native test asset: {nativeLibraryPath}");
+            File.Copy(
+                nativeLibraryPath,
+                Path.Combine(pluginDirectory, "e_sqlite3.dll"),
+                overwrite: true);
+            using var resolver = new ModulePluginAssemblyResolver();
+
+            var pluginAssembly = resolver.LoadAssembly(stagedAssemblyPath, pluginDirectory);
+
+            Assert.Equal(
+                PluginPathBoundary.ResolveExistingPhysicalPath(stagedAssemblyPath),
+                PluginPathBoundary.ResolveExistingPhysicalPath(pluginAssembly.Location));
+        }
+        finally
+        {
+            ContractTestPathHelper.DeleteDirectory(pluginRoot);
+        }
+    }
+
     [Theory]
     [InlineData("IIoT.Edge.Presentation.Panels")]
     [InlineData("IIoT.Edge.Host.Bootstrap")]
