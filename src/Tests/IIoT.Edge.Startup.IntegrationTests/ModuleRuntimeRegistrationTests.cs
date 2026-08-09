@@ -769,7 +769,7 @@ public sealed class ModuleRuntimeRegistrationTests
             harness.StartupDiagnosticsStore.Current.Issues,
             issue => string.Equals(issue.Code, "CONFIG_INVALID", StringComparison.OrdinalIgnoreCase)
                      && issue.Message.Contains("CloudApi:Paths:DeviceInstance", StringComparison.Ordinal)
-                     && issue.Message.Contains("相对 API 路径", StringComparison.Ordinal));
+                     && issue.Message.Contains("Binding API path is invalid", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -787,7 +787,7 @@ public sealed class ModuleRuntimeRegistrationTests
             harness.StartupDiagnosticsStore.Current.Issues,
             issue => string.Equals(issue.Code, "CONFIG_INVALID", StringComparison.OrdinalIgnoreCase)
                      && issue.Message.Contains("CloudApi:Paths:DeviceInstance", StringComparison.Ordinal)
-                     && issue.Message.Contains("单个 /", StringComparison.Ordinal));
+                     && issue.Message.Contains("Binding API path is invalid", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1032,7 +1032,12 @@ public sealed class ModuleRuntimeRegistrationTests
             var activation = CreateShellModuleCatalog().CreateEnabledModules(
                 CreateConfiguration(["TestPlugin"]),
                 discovery.Modules);
-            var modules = activation.Modules;
+            var issues = activation.Issues.ToList();
+            var modules = IIoT.Edge.Host.Bootstrap.DependencyInjection
+                .BindLegacyProcessTypesFromManifests(
+                    activation.Modules,
+                    discovery.Modules,
+                    issues);
             var viewRegistry = new ViewRegistry();
             var cellDataRegistry = new CellDataRegistry(new CellDataTypeRegistry());
             var runtimeRegistry = new StationRuntimeRegistry();
@@ -1053,7 +1058,7 @@ public sealed class ModuleRuntimeRegistrationTests
                     moduleParamRegistry));
             }
 
-            Assert.Empty(activation.Issues);
+            Assert.Empty(issues);
             Assert.Single(modules);
             Assert.Single(cellDataRegistry.GetRegistrations());
             Assert.Single(runtimeRegistry.GetRegistrations());
@@ -1867,6 +1872,13 @@ public sealed class ModuleRuntimeRegistrationTests
 
             var discovery = DiscoverTestPlugins(pluginRoot);
             var activation = CreateShellModuleCatalog().CreateEnabledModules(configuration, discovery.Modules);
+            var moduleCatalogIssues = new List<ModuleCatalogIssue>(
+                [.. discovery.Issues, .. activation.Issues]);
+            var modules = IIoT.Edge.Host.Bootstrap.DependencyInjection
+                .BindLegacyProcessTypesFromManifests(
+                    activation.Modules,
+                    discovery.Modules,
+                    moduleCatalogIssues);
             var moduleViewRegistry = new ViewRegistry();
             var cellDataRegistry = new CellDataRegistry(new CellDataTypeRegistry());
             var runtimeRegistry = new StationRuntimeRegistry();
@@ -1874,7 +1886,7 @@ public sealed class ModuleRuntimeRegistrationTests
             var moduleParamRegistry = new ModuleParamRegistry();
             services.AddSingleton<IStationRuntimeRegistry>(runtimeRegistry);
 
-            foreach (var module in activation.Modules)
+            foreach (var module in modules)
             {
                 services.AddSingleton<IEdgeProcessModule>(module);
                 module.Configure(new EdgeProcessModuleBuilder(
@@ -1934,10 +1946,10 @@ public sealed class ModuleRuntimeRegistrationTests
                 networkDevices,
                 new StartupPluginLifecycleSnapshotBuilder(),
                 discovery.Modules,
-                [.. discovery.Issues, .. activation.Issues],
+                moduleCatalogIssues,
                 [],
                 activation.EnabledModuleIds,
-                activation.Modules,
+                modules,
                 diagnosticHardwareProfiles,
                 syncValidators,
                 asyncValidators,
