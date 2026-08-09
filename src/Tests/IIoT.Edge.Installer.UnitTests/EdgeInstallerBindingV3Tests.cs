@@ -93,6 +93,17 @@ public sealed class EdgeInstallerBindingV3Tests
             "/api/v1/edge-hosts/plc-runtime-states";
         Assert.Throws<InvalidDataException>(() =>
             EdgeInstallerBindingCodec.ParsePayload(wrongPlc.ToJsonString()));
+
+        var encodedFixedSegment = CreatePayload();
+        Paths(encodedFixedSegment)["edgeHostPlcRuntimeStates"] =
+            "/%61pi/v1/edge/edge-hosts/plc-runtime-states";
+        Assert.Throws<InvalidDataException>(() =>
+            EdgeInstallerBindingCodec.ParsePayload(encodedFixedSegment.ToJsonString()));
+
+        var emptySegment = CreatePayload();
+        Paths(emptySegment)["deviceLog"] = "/api/v1/edge//device-logs";
+        Assert.Throws<InvalidDataException>(() =>
+            EdgeInstallerBindingCodec.ParsePayload(emptySegment.ToJsonString()));
     }
 
     private static JsonObject CreatePayload()

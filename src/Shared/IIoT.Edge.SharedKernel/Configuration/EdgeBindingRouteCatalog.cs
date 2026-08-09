@@ -30,7 +30,7 @@ public sealed record EdgeBindingRouteDescriptor(
     string MachineConfigKey,
     string? RequiredPlaceholder,
     string RuntimeConsumer,
-    string? FixedPath = null);
+    IReadOnlyList<string>? FixedSegments = null);
 
 /// <summary>
 /// Binding v3 在 Edge 侧的唯一 17 路由描述表。解析、机器配置物化、占位符校验和
@@ -56,7 +56,7 @@ public static class EdgeBindingRouteCatalog
             "PassStationBatchTemplate",
             "{typeKey}",
             "PassStation",
-            "/api/v1/edge/pass-stations/{typeKey}/batch"),
+            ["api", "v1", "edge", "pass-stations", "{typeKey}", "batch"]),
         new(EdgeBindingRouteKey.CapacityHourly, "capacityHourly", "CapacityHourly", null, "Capacity"),
         new(EdgeBindingRouteKey.CapacitySummary, "capacitySummary", "CapacitySummary", null, "Capacity"),
         new(EdgeBindingRouteKey.CapacitySummaryRange, "capacitySummaryRange", "CapacitySummaryRange", null, "Capacity"),
@@ -70,7 +70,7 @@ public static class EdgeBindingRouteCatalog
             "EdgeHostPlcRuntimeStates",
             null,
             "PlcRuntimeState",
-            "/api/v1/edge/edge-hosts/plc-runtime-states")
+            ["api", "v1", "edge", "edge-hosts", "plc-runtime-states"])
     ];
 
     private static readonly IReadOnlyDictionary<string, EdgeBindingRouteDescriptor> ByWireName =
@@ -235,11 +235,12 @@ public static class EdgeBindingRouteCatalog
         string value)
     {
         var normalized = NormalizeRelativeApiPath(value);
-        if (descriptor.FixedPath is not null
-            && !string.Equals(normalized, descriptor.FixedPath, StringComparison.Ordinal))
+        if (descriptor.FixedSegments is { Count: > 0 } fixedSegments
+            && !HasExactSegments(normalized, fixedSegments))
         {
+            var expected = "/" + string.Join('/', fixedSegments);
             throw new InvalidDataException(
-                $"Binding route {descriptor.WireName} must equal {descriptor.FixedPath}.");
+                $"Binding route {descriptor.WireName} must equal {expected}.");
         }
 
         if (descriptor.RequiredPlaceholder is null)
@@ -276,8 +277,15 @@ public static class EdgeBindingRouteCatalog
             throw new InvalidDataException("Binding API path is invalid.");
         }
 
-        foreach (var segment in normalized.Split('/'))
+        var segments = normalized.Split('/');
+        for (var index = 1; index < segments.Length; index++)
         {
+            var segment = segments[index];
+            if (segment.Length == 0)
+            {
+                throw new InvalidDataException("Binding API path contains an empty segment.");
+            }
+
             string decoded;
             try
             {
@@ -295,6 +303,27 @@ public static class EdgeBindingRouteCatalog
         }
 
         return normalized;
+    }
+
+    private static bool HasExactSegments(
+        string normalized,
+        IReadOnlyList<string> expected)
+    {
+        var actual = normalized.Split('/');
+        if (actual.Length != expected.Count + 1 || actual[0].Length != 0)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < expected.Count; index++)
+        {
+            if (!string.Equals(actual[index + 1], expected[index], StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static int CountOccurrences(string value, string token)
