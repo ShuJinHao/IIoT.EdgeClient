@@ -479,7 +479,11 @@ public sealed class LauncherHostDatabase(string databasePath, string? legacyAcco
         {
             DataSource = Path.GetFullPath(path),
             Mode = create ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadWrite,
-            Cache = SqliteCacheMode.Shared
+            Cache = SqliteCacheMode.Shared,
+            // This store atomically renames staged database files and recovery images.
+            // A pooled handle keeps the old staging path alive after Dispose and can make
+            // the immediately following SQLite backup fail with SQLITE_IOERR_SHORT_READ.
+            Pooling = false
         }.ToString());
         connection.Open();
         return connection;
