@@ -2314,6 +2314,7 @@ public sealed class FakeMesUploadDiagnosticsStore : IMesUploadDiagnosticsStore
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
+#pragma warning disable CS0618 // Intentional v2 ABI test double used only by compatibility coverage.
 public sealed class FakeMesUploader : IProcessMesUploader
 {
     private readonly Queue<MesCallResult> _results = new();
@@ -2359,6 +2360,7 @@ public sealed class FakeMesUploader : IProcessMesUploader
         return Task.FromResult(MesCallResult.Success());
     }
 }
+#pragma warning restore CS0618
 
 public sealed class FakeMesUploaderV3 : IProcessMesUploaderV3
 {

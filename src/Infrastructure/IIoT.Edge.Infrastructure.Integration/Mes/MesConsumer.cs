@@ -11,6 +11,7 @@ namespace IIoT.Edge.Infrastructure.Integration.Mes;
 
 public sealed class MesConsumer : IMesConsumer
 {
+#pragma warning disable CS0618 // Exact v2 ABI adapter surface; formal v3 records never resolve this uploader set.
     private readonly IMesUploadGate _uploadGate;
     private readonly IProcessIntegrationRegistry _processIntegrationRegistry;
     private readonly IMesUploadDiagnosticsStore _diagnosticsStore;
@@ -65,6 +66,7 @@ public sealed class MesConsumer : IMesConsumer
                 uploader => uploader.ProcessType,
                 StringComparer.OrdinalIgnoreCase);
     }
+#pragma warning restore CS0618
 
     public async Task<bool> ProcessAsync(CellCompletedRecord record, CancellationToken cancellationToken = default)
     {

@@ -264,7 +264,9 @@ public sealed class MesFrameworkBehaviorTests
 
         Assert.True(success);
         Assert.Equal(1, uploader.UploadCallCount);
+#pragma warning disable CS0618 // This assertion proves the retained v2 ABI path.
         var uploadContext = Assert.IsType<ProcessUploadContext>(uploader.LastUploadContext);
+#pragma warning restore CS0618
         Assert.Equal("PLC-RECORD-01", uploadContext.Device.DeviceName);
         Assert.Equal(Guid.Empty, uploadContext.Device.DeviceId);
         Assert.Equal(string.Empty, uploadContext.Device.ClientCode);
@@ -504,7 +506,9 @@ public sealed class MesFrameworkBehaviorTests
 
         Assert.True(success);
         Assert.Equal(1, uploader.UploadCallCount);
+#pragma warning disable CS0618 // This assertion proves the retained v2 ABI path.
         var uploadContext = Assert.IsType<ProcessUploadContext>(uploader.LastUploadContext);
+#pragma warning restore CS0618
         Assert.Equal("PLC-MES-BLOCKED", uploadContext.Device.DeviceName);
         Assert.Equal(Guid.Empty, uploadContext.Device.DeviceId);
         Assert.Equal(string.Empty, uploadContext.Device.ClientCode);

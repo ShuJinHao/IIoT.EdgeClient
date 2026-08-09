@@ -10,6 +10,7 @@ using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 
 namespace IIoT.Edge.Infrastructure.Integration.PassStation;
 
+#pragma warning disable CS0618 // Cloud v2 transport context remains the governed Host ABI in SDK 2.0.13.
 public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
 {
     private readonly IDeviceService _deviceService;
@@ -395,3 +396,4 @@ public class CloudConsumer : ICloudConsumer, ICloudBatchConsumer
         string TypeKey);
 
 }
+#pragma warning restore CS0618

@@ -278,6 +278,7 @@ public sealed class CloudConsumerBehaviorTests
         var uploader = new StandardPassStationCloudUploader(new FakeCloudApiEndpointProvider(), cloudHttp);
         var device = CreateOnlineDeviceService().CurrentDevice!;
 
+#pragma warning disable CS0618 // Cloud compatibility contract still consumes the v2 Host context.
         var result = await uploader.UploadAsync(
             new ProcessUploadContext(device),
             "OtherProcess",
@@ -302,6 +303,7 @@ public sealed class CloudConsumerBehaviorTests
                 }
             ],
             TestContext.Current.CancellationToken);
+#pragma warning restore CS0618
 
         Assert.False(result.IsSuccess);
         Assert.Equal("pass_station_cell_result_required", result.ReasonCode);
@@ -324,6 +326,7 @@ public sealed class CloudConsumerBehaviorTests
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(
             TestContext.Current.CancellationToken);
 
+#pragma warning disable CS0618 // Cloud compatibility contract still consumes the v2 Host context.
         var uploadTask = uploader.UploadAsync(
             new ProcessUploadContext(CreateOnlineDeviceService().CurrentDevice!),
             "OtherProcess",
@@ -339,6 +342,7 @@ public sealed class CloudConsumerBehaviorTests
                 }
             ],
             cts.Token);
+#pragma warning restore CS0618
         await postStarted.Task.WaitAsync(
             TimeSpan.FromSeconds(2),
             TestContext.Current.CancellationToken);

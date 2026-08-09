@@ -13,6 +13,7 @@ namespace IIoT.Edge.Infrastructure.Integration.PassStation;
 /// <summary>
 /// 宿主标准过站 Cloud 上传器。插件只声明 CloudUploadMode，过站信封由宿主统一生成。
 /// </summary>
+#pragma warning disable CS0618 // Cloud v2 transport context remains the governed Host ABI in SDK 2.0.13.
 public sealed class StandardPassStationCloudUploader(
     ICloudApiPathProvider pathProvider,
     ICloudHttpClient cloudHttp)
@@ -502,6 +503,7 @@ public sealed class StandardPassStationCloudUploader(
         public static ItemCreationResult Invalid(string reason) => new(null, reason);
     }
 }
+#pragma warning restore CS0618
 
 internal static class PassStationCloudContract
 {

@@ -228,6 +228,7 @@ public sealed class StandardPassStationCloudUploaderContractTests
     private static StandardPassStationCloudUploader CreateUploader(FakeCloudHttpClient cloudHttp) =>
         new(new FakeCloudApiEndpointProvider(), cloudHttp);
 
+#pragma warning disable CS0618 // Cloud compatibility contract still consumes the v2 Host context.
     private static ProcessUploadContext CreateContext(Guid? deviceId = null) => new(new DeviceSession
     {
         DeviceId = deviceId ?? Guid.Parse("22222222-2222-2222-2222-222222222222"),
@@ -235,6 +236,7 @@ public sealed class StandardPassStationCloudUploaderContractTests
         ClientCode = "TEST-CLIENT",
         ProcessId = Guid.Parse("33333333-3333-3333-3333-333333333333")
     });
+#pragma warning restore CS0618
 
     private static CellCompletedRecord CreateRecord(string barcode) => new()
     {
