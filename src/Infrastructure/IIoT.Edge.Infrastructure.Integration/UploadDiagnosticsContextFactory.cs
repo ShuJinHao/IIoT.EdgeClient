@@ -55,7 +55,10 @@ internal static class UploadDiagnosticsContextFactory
     }
 
     public static UploadRecordSourceKey CreateSourceKey(CellCompletedRecord record)
-        => new(record.ResolvePlcCode().Trim());
+        => new(
+            (record.ClientCode ?? string.Empty).Trim(),
+            (record.TypeKey ?? string.Empty).Trim(),
+            record.ResolvePlcCode().Trim());
 
     public static bool IsDeviceStatusRecord(CellCompletedRecord record)
     {
@@ -92,4 +95,7 @@ internal static class UploadDiagnosticsContextFactory
             record.CellData.ProcessType);
 }
 
-internal readonly record struct UploadRecordSourceKey(string PlcCode);
+internal readonly record struct UploadRecordSourceKey(
+    string ClientCode,
+    string TypeKey,
+    string PlcCode);

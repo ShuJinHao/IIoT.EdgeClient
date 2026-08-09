@@ -9,13 +9,28 @@ internal static class UploadTraceLogFormatter
     {
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(record.CellData);
-        return $"[CorrelationId={DataPipelineCompletionIdentity.Create(record)}]" +
+        return $"[CorrelationId={TryCreateCorrelationId(record)}]" +
                $"[Channel={Normalize(channel, "Unresolved")}]" +
                $"[PlcCode={Normalize(record.ResolvePlcCode(), "Unresolved")}]" +
                $"[ModuleId={Normalize(record.ModuleId, "Unresolved")}]" +
                $"[ProcessType={Normalize(record.CellData.ProcessType, "Unresolved")}]" +
                $"[TaskKey={Normalize(record.TaskKey, "Unresolved")}]" +
                $"[BusinessId={Normalize(record.CellData.DisplayLabel, "Unresolved")}]";
+    }
+
+    private static string TryCreateCorrelationId(CellCompletedRecord record)
+    {
+        try
+        {
+            return DataPipelineCompletionIdentity.Create(record);
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidDataException)
+        {
+            // Diagnostics must remain available for a malformed v3 envelope so the consumer
+            // can fail it closed with the stable identity reason code instead of throwing while
+            // formatting the log entry.
+            return "InvalidIdentity";
+        }
     }
 
     public static string ReasonCode(string prefix, Enum outcome)

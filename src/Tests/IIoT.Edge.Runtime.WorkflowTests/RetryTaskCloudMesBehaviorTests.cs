@@ -331,8 +331,8 @@ public sealed class RetryTaskCloudMesBehaviorTests
 
         var delay10 = (update10.NextRetryTime - before).TotalSeconds;
         var delay11 = (update11.NextRetryTime - before).TotalSeconds;
-        Assert.InRange(delay10, 20, 40);
-        Assert.InRange(delay11, 20, 40);
+        Assert.InRange(delay10, 1790, 1810);
+        Assert.InRange(delay11, 1790, 1810);
     }
 
     [Fact]
@@ -860,7 +860,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
 
         Assert.True(failedStore.Updates.TryGetValue(62, out var update));
         Assert.Equal(5, update!.RetryCount);
-        Assert.InRange((update.NextRetryTime - before).TotalSeconds, 20, 40);
+        Assert.InRange((update.NextRetryTime - before).TotalSeconds, 1790, 1810);
     }
 
     [Fact]
@@ -1464,7 +1464,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         Assert.True(failedStore.Updates.TryGetValue(302, out var update));
         Assert.Equal(3, update!.RetryCount);
         Assert.Contains("死信持久化也失败", update.ErrorMessage, StringComparison.Ordinal);
-        Assert.InRange((update.NextRetryTime - before).TotalSeconds, 20, 40);
+        Assert.InRange((update.NextRetryTime - before).TotalSeconds, 1790, 1810);
         Assert.Single(criticalWriter.Writes);
 
         var reclaimedBatch = await failedStore.ClaimPendingBatchAsync("Cloud", 10);
@@ -1559,7 +1559,7 @@ public sealed class RetryTaskCloudMesBehaviorTests
         Assert.True(failedStore.Updates.TryGetValue(304, out var update));
         Assert.Equal(2, update!.RetryCount);
         Assert.Contains("死信持久化也失败", update.ErrorMessage, StringComparison.Ordinal);
-        Assert.InRange((update.NextRetryTime - before).TotalSeconds, 20, 40);
+        Assert.InRange((update.NextRetryTime - before).TotalSeconds, 1790, 1810);
         Assert.Single(criticalWriter.Writes);
 
         var reclaimedBatch = await failedStore.ClaimPendingBatchAsync("MES", 10);

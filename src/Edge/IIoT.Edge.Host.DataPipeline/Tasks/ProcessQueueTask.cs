@@ -163,12 +163,17 @@ public class ProcessQueueTask : ScheduledTaskBase
         var applicableConsumers = _consumers
             .Where(consumer => DataPipelineRetryChannelMetadata.ShouldProcess(record, consumer))
             .ToArray();
-        var requiredConsumerKeys = applicableConsumers
+        var allConsumerKeys = applicableConsumers
+            .Select(CreateConsumerKey)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var requiredDurableConsumerKeys = applicableConsumers
+            .Where(static consumer => consumer.FailureMode == ConsumerFailureMode.Durable)
             .Select(CreateConsumerKey)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        if (requiredConsumerKeys.Length != applicableConsumers.Length)
+        if (allConsumerKeys.Length != applicableConsumers.Length)
         {
             throw new InvalidOperationException("数据管道消费者稳定键重复，禁止消费不可区分的回执。");
         }
@@ -187,7 +192,7 @@ public class ProcessQueueTask : ScheduledTaskBase
             var context = new IngressConsumerContext(
                 ingress.CompletionId,
                 consumerKey,
-                requiredConsumerKeys);
+                requiredDurableConsumerKeys);
             if (consumer.FailureMode == ConsumerFailureMode.Durable)
             {
                 await DispatchDurableConsumerAsync(record, consumer, cancellationToken, context)
@@ -204,14 +209,14 @@ public class ProcessQueueTask : ScheduledTaskBase
         var completed = await _ingressStore!
             .CompleteIfAllConsumersFinishedAsync(
                 ingress.CompletionId,
-                requiredConsumerKeys,
+                requiredDurableConsumerKeys,
                 cancellationToken)
             .ConfigureAwait(false);
         if (completed)
         {
             WriteLogBestEffort(() => Logger.Info(
                 $"{DataPipelineLogContext.Format(record)}[数据管道] " +
-                "结果=IngressCompleted，全部必需本地消费与外部持久交接已完成。"));
+                "结果=IngressCompleted，Cloud/MES 外部通道已成功或可靠交接。"));
         }
     }
 
@@ -280,7 +285,7 @@ public class ProcessQueueTask : ScheduledTaskBase
                 Logger.Warn(
                     $"{DataPipelineLogContext.Format(record)}[数据管道] " +
                     $"本地消费者={consumer.Name}，结果=Failed，" +
-                    $"原因码={errorMessage}；入口回执保留待重试。"));
+                    $"原因码={errorMessage}；BestEffort 失败不阻塞外部通道交接完成。"));
             return false;
         }
 

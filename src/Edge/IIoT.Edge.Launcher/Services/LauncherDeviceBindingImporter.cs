@@ -1,44 +1,46 @@
-using System.Globalization;
+using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using IIoT.Edge.Module.Contracts.Updates;
+using IIoT.Edge.Infrastructure.HostPersistence;
 using IIoT.Edge.Launcher.Models;
+using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.SharedKernel.Configuration;
+using IIoT.Edge.SharedKernel.Security;
 
 namespace IIoT.Edge.Launcher.Services;
 
-/// <summary>
-/// 首装绑定导入器：客户端首次启动时读取随下载包附带的 <c>iiot-binding.json</c>，
-/// 把云端为每个插件分配的设备唯一码（ClientCode）写入对应 profile 的外部机器配置，
-/// 实现“下载即配置、现场零操作”。导入完成后归档绑定文件，避免下次启动重复导入；
-/// 若用户重装并重新放入新的绑定文件，则会按新文件再次写入（唯一码可复用）。
-    /// 启动红线：缺文件、JSON 损坏、无匹配 profile 等可恢复输入问题只保留 pending；
-    /// 程序错误不得被无限 catch 后伪装成导入成功。
-/// </summary>
 public interface ILauncherDeviceBindingImporter
 {
     void ApplyPendingBindings();
+
+    void ApplyPendingBindingsOrThrow() => ApplyPendingBindings();
 }
 
+/// <summary>
+/// Imports a complete Cloud installation binding. A bundle is an all-or-nothing unit: every
+/// ClientCode, machine configuration and credential must validate before any runtime file is
+/// switched. Secrets are moved to Windows Credential Manager and are never copied to the
+/// runtime binding or machine configuration.
+/// </summary>
 public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImporter
 {
     public const string BindingFileName = "iiot-binding.json";
-    private const int SupportedBindingSchemaVersion = 2;
-    private const string DeviceIdTemplate = "{deviceId}";
 
     private readonly string _baseDirectory;
     private readonly ILauncherProfileCatalog _profileCatalog;
     private readonly IEdgeProfileModuleConfigurationStore _moduleConfiguration;
     private readonly ILauncherUpdateTargetFactory _targetFactory;
     private readonly ILauncherStartupDiagnosticWriter? _startupDiagnostics;
+    private readonly IEdgeCredentialStore _credentialStore;
 
     public LauncherDeviceBindingImporter(
         string baseDirectory,
         ILauncherProfileCatalog profileCatalog,
         IEdgeProfileModuleConfigurationStore moduleConfiguration,
         ILauncherUpdateTargetFactory targetFactory,
-        ILauncherStartupDiagnosticWriter? startupDiagnostics = null)
+        ILauncherStartupDiagnosticWriter? startupDiagnostics = null,
+        IEdgeCredentialStore? credentialStore = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
         _baseDirectory = baseDirectory;
@@ -46,299 +48,368 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
         _moduleConfiguration = moduleConfiguration ?? throw new ArgumentNullException(nameof(moduleConfiguration));
         _targetFactory = targetFactory ?? throw new ArgumentNullException(nameof(targetFactory));
         _startupDiagnostics = startupDiagnostics;
+        _credentialStore = credentialStore ?? new WindowsCredentialManagerStore();
     }
 
     public void ApplyPendingBindings()
+        => ApplyPendingBindingsCore(throwOnFailure: false);
+
+    public void ApplyPendingBindingsOrThrow()
+        => ApplyPendingBindingsCore(throwOnFailure: true);
+
+    private void ApplyPendingBindingsCore(bool throwOnFailure)
     {
+        var bindingPath = ResolvePendingBindingPath();
+        if (bindingPath is null)
+        {
+            ReplaceBindingDiagnostics([]);
+            return;
+        }
+
         try
         {
-            var bindingPath = ResolvePendingBindingPath();
-            if (bindingPath is null)
+            var payload = EdgeInstallerBindingCodec.ParsePayload(File.ReadAllText(bindingPath));
+            if (payload.SchemaVersion != EdgeInstallerBindingCodec.LegacySchemaVersion)
             {
-                ReplaceBindingDiagnostics([]);
-                return;
+                throw new InvalidDataException(
+                    "Launcher only imports legacy Binding v2; Binding v3 must be materialized by Installer.");
+            }
+            if (payload.ExpiresAtUtc <= DateTimeOffset.UtcNow)
+            {
+                throw new InvalidDataException("安装 Binding 已过期，必须重新下载安装包。");
             }
 
-            if (!TryParseBindingBundle(bindingPath, out var bundle))
-            {
-                ReplaceBindingDiagnostics(
-                [
-                    CreateBindingDiagnostic("LAUNCHER_DEVICE_BINDING_INVALID")
-                ]);
-                return;
-            }
-
-            var profiles = _profileCatalog.LoadProfiles();
-            var applied = new List<DeviceBinding>();
-            var unresolved = new List<DeviceBinding>();
-            foreach (var binding in bundle.Bindings)
-            {
-                if (TryApplyOneBinding(profiles, binding, bundle))
-                {
-                    applied.Add(binding);
-                }
-                else
-                {
-                    unresolved.Add(binding);
-                }
-            }
-
-            FinalizeAppliedBindings(bindingPath, applied, unresolved, bundle);
-            ReplaceBindingDiagnostics(
-                unresolved
-                    .Select(binding => CreateBindingDiagnostic(
-                        "LAUNCHER_DEVICE_BINDING_PENDING",
-                        binding.ModuleId))
-                    .ToArray());
+            var runtimeBinding = EdgeInstallerBindingCodec.ToRuntime(payload);
+            var preparedFiles = PrepareAllFiles(payload, runtimeBinding);
+            ApplyAtomically(payload, preparedFiles);
+            WriteAppliedSummary(payload);
+            File.Delete(bindingPath);
+            ReplaceBindingDiagnostics([]);
         }
         catch (Exception ex) when (IsRecoverable(ex))
         {
-            // 非阻断：可恢复的绑定文件或文件系统问题保留原 pending，等待修复后重试。
             ReplaceBindingDiagnostics(
             [
                 CreateBindingDiagnostic(
                     "LAUNCHER_DEVICE_BINDING_IMPORT_FAILED",
                     exceptionType: ex.GetType().Name)
             ]);
+            if (throwOnFailure)
+            {
+                throw new InvalidDataException(
+                    "LAUNCHER_DEVICE_BINDING_IMPORT_FAILED: legacy Binding v2 migration did not complete.",
+                    ex);
+            }
         }
+    }
+
+    private IReadOnlyList<PreparedFile> PrepareAllFiles(
+        EdgeInstallerBindingEnvelope payload,
+        EdgeRuntimeBindingEnvelope runtimeBinding)
+    {
+        var profiles = _profileCatalog.LoadProfiles();
+        var prepared = new List<PreparedFile>(payload.Bindings.Count + 3);
+        foreach (var binding in payload.Bindings)
+        {
+            var sourceConfigPath = ResolveUniqueLegacySourceConfig(profiles, binding);
+            var targetConfigPath = EdgeClientProgramDataPaths.ResolveDevicePluginMachineConfigPath(
+                binding.ClientCode,
+                _baseDirectory);
+            prepared.Add(new PreparedFile(
+                targetConfigPath,
+                Encoding.UTF8.GetBytes(BuildMachineConfiguration(payload, binding, sourceConfigPath))));
+        }
+
+        var runtimeBindingPath = EdgeClientProgramDataPaths.ResolveRuntimeBindingPath(_baseDirectory);
+        var runtimeJson = EdgeInstallerBindingCodec.SerializeRuntime(runtimeBinding);
+        if (runtimeJson.Contains("pendingCredentialSecret", StringComparison.OrdinalIgnoreCase)
+            || payload.Bindings.Any(binding => runtimeJson.Contains(
+                binding.PendingCredentialSecret,
+                StringComparison.Ordinal)))
+        {
+            throw new InvalidDataException("运行时 Binding 不得包含原始凭证。");
+        }
+
+        prepared.Add(new PreparedFile(runtimeBindingPath, Encoding.UTF8.GetBytes(runtimeJson)));
+
+        var hostDatabasePath = EdgeClientProgramDataPaths.ResolveHostDatabasePath(_baseDirectory);
+        var hostDatabase = new LauncherHostDatabase(
+            hostDatabasePath,
+            EdgeClientProgramDataPaths.ResolveLauncherAccountsPath(_baseDirectory));
+        var hostDatabaseSnapshot = hostDatabase.PrepareRuntimeBindingImport(runtimeBinding);
+        prepared.Add(new PreparedFile(hostDatabasePath, hostDatabaseSnapshot.DatabaseBytes));
+        prepared.Add(new PreparedFile(
+            hostDatabasePath + ".recovery",
+            hostDatabaseSnapshot.DatabaseBytes.ToArray()));
+        return prepared;
+    }
+
+    private string ResolveUniqueLegacySourceConfig(
+        IReadOnlyList<LauncherProfileDefinition> profiles,
+        EdgeInstallerDeviceBinding binding)
+    {
+        var candidates = profiles.Where(profile =>
+        {
+            try
+            {
+                return _moduleConfiguration.ReadEnabledModules(_targetFactory.Create(profile))
+                    .Contains(binding.ModuleId, StringComparer.OrdinalIgnoreCase);
+            }
+            catch (Exception ex) when (IsRecoverable(ex))
+            {
+                return false;
+            }
+        }).ToArray();
+        if (candidates.Length != 1)
+        {
+            throw new InvalidDataException(
+                $"旧 Binding 的模块 {binding.ModuleId} 必须唯一对应一个 Profile，实际为 {candidates.Length} 个。");
+        }
+
+        var profile = candidates[0];
+        if (!string.IsNullOrWhiteSpace(profile.MachineConfigPath)
+            && File.Exists(profile.MachineConfigPath))
+        {
+            return profile.MachineConfigPath;
+        }
+
+        var hostDirectory = Path.GetDirectoryName(profile.ExecutablePath) ?? _baseDirectory;
+        var external = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(
+            profile.MachineProfile,
+            hostDirectory);
+        if (File.Exists(external))
+        {
+            return external;
+        }
+
+        var packaged = Path.Combine(
+            hostDirectory,
+            $"appsettings.machine.{profile.MachineProfile}.json");
+        return File.Exists(packaged)
+            ? packaged
+            : throw new FileNotFoundException(
+                $"旧 Binding 对应的机器配置不存在：{profile.MachineProfile}。",
+                packaged);
+    }
+
+    private string BuildMachineConfiguration(
+        EdgeInstallerBindingEnvelope payload,
+        EdgeInstallerDeviceBinding binding,
+        string sourceConfigPath)
+    {
+        var root = JsonNode.Parse(File.ReadAllText(sourceConfigPath))?.AsObject()
+            ?? throw new JsonException("机器配置根节点不能为空。");
+        var clientCode = EdgeClientIdentity.NormalizeClientCode(binding.ClientCode);
+        var pluginRoot = EdgeClientProgramDataPaths.ResolveDevicePluginRoot(clientCode, _baseDirectory);
+        var pluginAppDirectory = Path.Combine(pluginRoot, "app");
+
+        root["InstanceId"] = clientCode;
+        var shell = GetOrCreateObject(root, "Shell");
+        shell["MachineProfile"] = clientCode;
+        shell["ClientCode"] = clientCode;
+        shell["RuntimeDataRoot"] = pluginRoot;
+
+        var modules = GetOrCreateObject(root, "Modules");
+        modules["Enabled"] = new JsonArray(binding.ModuleId);
+        modules["PluginRoots"] = new JsonArray(pluginAppDirectory);
+
+        var cloudApi = GetOrCreateObject(root, "CloudApi");
+        cloudApi.Remove("BootstrapSecret");
+        cloudApi["Enabled"] = true;
+        cloudApi["ClientCode"] = clientCode;
+        cloudApi["BootstrapCredentialReference"] = binding.PendingCredentialReference;
+        cloudApi["BaseUrl"] = payload.BaseUrl;
+        var paths = GetOrCreateObject(cloudApi, "Paths");
+        paths["DeviceInstance"] = payload.Paths.DeviceInstance;
+        paths["ClientReleaseCatalogTemplate"] = payload.Paths.ClientReleaseCatalogTemplate;
+        paths["ClientVersionReport"] = payload.Paths.ClientVersionReport;
+        paths["RuntimeHeartbeat"] = payload.Paths.RuntimeHeartbeat;
+        SetOptionalPath(paths, "ActivateDevice", payload.Paths.ActivateDevice);
+        SetOptionalPath(paths, "ActivateDeviceConfirm", payload.Paths.ActivateDeviceConfirm);
+        SetOptionalPath(paths, "PlcSnapshot", payload.Paths.EdgeHostPlcRuntimeStates);
+        SetOptionalPath(paths, "PassStationBatch", payload.Paths.PassStationBatchTemplate);
+
+        var bindingFacts = GetOrCreateObject(root, "DevicePluginBinding");
+        bindingFacts["SchemaVersion"] = EdgeInstallerBindingCodec.LegacySchemaVersion;
+        bindingFacts["GenerationId"] = payload.GenerationId;
+        bindingFacts["ClientCode"] = clientCode;
+        bindingFacts["DeviceName"] = binding.DeviceName;
+        bindingFacts["ProcessId"] = binding.ProcessId.ToString("D");
+        bindingFacts["ProcessType"] = binding.ProcessType;
+        bindingFacts["ModuleId"] = binding.ModuleId;
+        bindingFacts["PluginVersion"] = binding.PluginVersion;
+        bindingFacts["PackageSha256"] = binding.PackageSha256;
+
+        return root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    private void ApplyAtomically(
+        EdgeInstallerBindingEnvelope payload,
+        IReadOnlyList<PreparedFile> preparedFiles)
+    {
+        var stagedFiles = new List<StagedFile>(preparedFiles.Count);
+        var credentialBackups = new List<CredentialBackup>(payload.Bindings.Count);
+        try
+        {
+            foreach (var file in preparedFiles)
+            {
+                var directory = Path.GetDirectoryName(file.TargetPath)
+                    ?? throw new InvalidOperationException("Binding 目标缺少目录。");
+                Directory.CreateDirectory(directory);
+                var temporaryPath = Path.Combine(
+                    directory,
+                    $".{Path.GetFileName(file.TargetPath)}.{Guid.NewGuid():N}.tmp");
+                File.WriteAllBytes(
+                    temporaryPath,
+                    file.Content);
+                using (var stream = new FileStream(
+                           temporaryPath,
+                           FileMode.Open,
+                           FileAccess.ReadWrite,
+                           FileShare.None,
+                           4096,
+                           FileOptions.WriteThrough))
+                {
+                    stream.Flush(flushToDisk: true);
+                }
+
+                stagedFiles.Add(new StagedFile(
+                    file.TargetPath,
+                    temporaryPath,
+                    File.Exists(file.TargetPath) ? File.ReadAllBytes(file.TargetPath) : null));
+            }
+
+            foreach (var binding in payload.Bindings)
+            {
+                var backup = CaptureCredential(binding.PendingCredentialReference);
+                credentialBackups.Add(backup);
+                _credentialStore.Write(
+                    binding.PendingCredentialReference,
+                    binding.PendingCredentialSecret);
+                var roundTrip = _credentialStore.Read(binding.PendingCredentialReference);
+                if (!string.Equals(roundTrip, binding.PendingCredentialSecret, StringComparison.Ordinal))
+                {
+                    throw new InvalidDataException(
+                        $"设备 {binding.ClientCode} 的 pending 凭证回读不一致。");
+                }
+            }
+
+            foreach (var file in stagedFiles)
+            {
+                File.Move(file.TemporaryPath, file.TargetPath, overwrite: true);
+            }
+        }
+        catch
+        {
+            RestoreFiles(stagedFiles);
+            RestoreCredentials(credentialBackups);
+            throw;
+        }
+        finally
+        {
+            foreach (var file in stagedFiles)
+            {
+                TryDelete(file.TemporaryPath);
+            }
+        }
+    }
+
+    private CredentialBackup CaptureCredential(string reference)
+    {
+        try
+        {
+            return new CredentialBackup(reference, _credentialStore.Read(reference));
+        }
+        catch (Win32Exception exception) when (exception.NativeErrorCode == 1168)
+        {
+            return new CredentialBackup(reference, null);
+        }
+        catch (KeyNotFoundException)
+        {
+            return new CredentialBackup(reference, null);
+        }
+    }
+
+    private void RestoreCredentials(IEnumerable<CredentialBackup> backups)
+    {
+        foreach (var backup in backups.Reverse())
+        {
+            try
+            {
+                if (backup.Secret is null)
+                {
+                    _credentialStore.Delete(backup.Reference);
+                }
+                else
+                {
+                    _credentialStore.Write(backup.Reference, backup.Secret);
+                }
+            }
+            catch (Exception ex) when (IsRecoverable(ex))
+            {
+                // The original import exception remains authoritative. Installer recovery keeps
+                // independent evidence when credential rollback itself fails.
+            }
+        }
+    }
+
+    private static void RestoreFiles(IEnumerable<StagedFile> stagedFiles)
+    {
+        foreach (var file in stagedFiles.Reverse())
+        {
+            try
+            {
+                if (file.OriginalContent is null)
+                {
+                    TryDelete(file.TargetPath);
+                }
+                else
+                {
+                    File.WriteAllBytes(file.TargetPath, file.OriginalContent);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+    }
+
+    private void WriteAppliedSummary(EdgeInstallerBindingEnvelope payload)
+    {
+        var launcherDirectory = EdgeClientProgramDataPaths.ResolveLauncherDirectory(_baseDirectory);
+        Directory.CreateDirectory(launcherDirectory);
+        var summary = new JsonObject
+        {
+            ["schemaVersion"] = payload.SchemaVersion,
+            ["generationId"] = payload.GenerationId,
+            ["appliedAtUtc"] = DateTimeOffset.UtcNow.ToString("O"),
+            ["bindings"] = new JsonArray(payload.Bindings.Select(binding => (JsonNode?)new JsonObject
+            {
+                ["clientCode"] = binding.ClientCode,
+                ["moduleId"] = binding.ModuleId,
+                ["pluginVersion"] = binding.PluginVersion,
+                ["packageSha256"] = binding.PackageSha256
+            }).ToArray())
+        };
+        var path = Path.Combine(
+            launcherDirectory,
+            $"iiot-binding.applied.{DateTime.UtcNow:yyyyMMddHHmmssfff}.json");
+        File.WriteAllText(
+            path,
+            summary.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
     }
 
     private string? ResolvePendingBindingPath()
     {
-        var dataPath = Path.Combine(
+        var path = Path.Combine(
             EdgeClientProgramDataPaths.ResolveLauncherDirectory(_baseDirectory),
             BindingFileName);
-        return File.Exists(dataPath) ? dataPath : null;
+        return File.Exists(path) ? path : null;
     }
 
-    private bool TryApplyOneBinding(
-        IReadOnlyList<LauncherProfileDefinition> profiles,
-        DeviceBinding binding,
-        DeviceBindingBundle bundle)
-    {
-        try
-        {
-            // moduleId -> profile：匹配“机器配置 Modules.Enabled 含该 module”的 profile（与规则一致）。
-            var target = profiles.FirstOrDefault(profile =>
-                _moduleConfiguration.ReadEnabledModules(_targetFactory.Create(profile))
-                    .Any(moduleId => string.Equals(moduleId, binding.ModuleId, StringComparison.OrdinalIgnoreCase)));
-
-            if (target is null)
-            {
-                // 没有匹配 profile：保留待处理绑定，等待对应插件安装。
-                return false;
-            }
-
-            WriteCloudApiIdentity(
-                _targetFactory.Create(target),
-                binding.ClientCode,
-                binding.BootstrapSecret,
-                bundle.BaseUrl,
-                bundle.Paths);
-            return true;
-        }
-        catch (Exception ex) when (ex is IOException
-                                       or UnauthorizedAccessException
-                                       or JsonException
-                                       or InvalidOperationException
-                                       or ArgumentException)
-        {
-            return false;
-        }
-    }
-
-    private static void WriteCloudApiIdentity(
-        EdgeUpdateTarget target,
-        string clientCode,
-        string bootstrapSecret,
-        string baseUrl,
-        BindingPaths paths)
-    {
-        var targetPath = EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(
-            target.MachineProfile,
-            target.HostDirectory);
-        var sourcePath = File.Exists(targetPath)
-            ? targetPath
-            : Path.Combine(target.HostDirectory, $"appsettings.machine.{target.MachineProfile}.json");
-        var root = File.Exists(sourcePath)
-            ? JsonNode.Parse(File.ReadAllText(sourcePath))?.AsObject()
-              ?? throw new JsonException("机器配置根节点不能为空。")
-            : new JsonObject();
-
-        if (root["CloudApi"] is not JsonObject cloudApi)
-        {
-            cloudApi = new JsonObject();
-            root["CloudApi"] = cloudApi;
-        }
-
-        // 只有 Cloud 下载包同时提供完整地址、设备寻址码和轮换后的启动密钥时才启用。
-        cloudApi["Enabled"] = true;
-        cloudApi["ClientCode"] = clientCode;
-        cloudApi["BootstrapSecret"] = bootstrapSecret;
-        cloudApi["BaseUrl"] = baseUrl;
-
-        if (cloudApi["Paths"] is not JsonObject cloudPaths)
-        {
-            cloudPaths = new JsonObject();
-            cloudApi["Paths"] = cloudPaths;
-        }
-
-        cloudPaths["DeviceInstance"] = paths.DeviceInstance;
-        cloudPaths["ClientReleaseCatalogTemplate"] =
-            paths.ClientReleaseCatalogTemplate;
-        cloudPaths["ClientVersionReport"] = paths.ClientVersionReport;
-        cloudPaths["RuntimeHeartbeat"] = paths.RuntimeHeartbeat;
-
-        var directory = Path.GetDirectoryName(targetPath);
-        if (!string.IsNullOrWhiteSpace(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        WriteJsonAtomically(targetPath, root);
-    }
-
-    private static bool TryParseBindingBundle(
-        string bindingPath,
-        out DeviceBindingBundle bundle)
-    {
-        bundle = default;
-
-        using var document = JsonDocument.Parse(File.ReadAllText(bindingPath));
-        var root = document.RootElement;
-        if (root.ValueKind != JsonValueKind.Object
-            || !root.TryGetProperty("schemaVersion", out var schemaVersion)
-            || schemaVersion.ValueKind != JsonValueKind.Number
-            || !schemaVersion.TryGetInt32(out var parsedSchemaVersion)
-            || parsedSchemaVersion != SupportedBindingSchemaVersion
-            || !TryNormalizeHttpBaseUrl(
-                ReadString(root, "baseUrl"),
-                out var baseUrl)
-            || !TryReadPaths(root, out var paths)
-            || !TryParseGeneratedAtUtc(root, out var generatedAtUtc)
-            || !root.TryGetProperty("bindings", out var bindingsElement)
-            || bindingsElement.ValueKind != JsonValueKind.Array)
-        {
-            return false;
-        }
-
-        var bindings = new List<DeviceBinding>();
-        var moduleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var item in bindingsElement.EnumerateArray())
-        {
-            if (item.ValueKind != JsonValueKind.Object)
-            {
-                return false;
-            }
-
-            var moduleId = ReadString(item, "moduleId")?.Trim();
-            var clientCode = ReadString(item, "clientCode")?.Trim();
-            var bootstrapSecret = ReadString(item, "bootstrapSecret")?.Trim();
-            var deviceName = ReadString(item, "deviceName")?.Trim();
-            if (string.IsNullOrWhiteSpace(moduleId)
-                || !moduleIds.Add(moduleId)
-                || string.IsNullOrWhiteSpace(clientCode)
-                || string.IsNullOrWhiteSpace(bootstrapSecret)
-                || string.IsNullOrWhiteSpace(deviceName)
-                || !item.TryGetProperty("processId", out var processIdElement)
-                || processIdElement.ValueKind != JsonValueKind.String
-                || !Guid.TryParse(processIdElement.GetString(), out var processId)
-                || processId == Guid.Empty)
-            {
-                return false;
-            }
-
-            bindings.Add(new DeviceBinding(
-                moduleId,
-                clientCode,
-                bootstrapSecret,
-                deviceName,
-                processId));
-        }
-
-        if (bindings.Count == 0)
-        {
-            return false;
-        }
-
-        bundle = new DeviceBindingBundle(
-            baseUrl,
-            paths,
-            generatedAtUtc.ToUniversalTime(),
-            bindings);
-        return true;
-    }
-
-    // 只消费已经成功写入机器配置的绑定：摘要永不包含启动密钥；未匹配插件的原始绑定
-    // 保留在 pending 文件中，供插件安装后的下一次启动继续处理。
-    private void FinalizeAppliedBindings(
-        string bindingPath,
-        IReadOnlyList<DeviceBinding> applied,
-        IReadOnlyList<DeviceBinding> unresolved,
-        DeviceBindingBundle bundle)
-    {
-        if (applied.Count == 0)
-        {
-            return;
-        }
-
-        var launcherDirectory = EdgeClientProgramDataPaths.ResolveLauncherDirectory(_baseDirectory);
-        Directory.CreateDirectory(launcherDirectory);
-
-        var summary = new JsonObject
-        {
-            ["schemaVersion"] = SupportedBindingSchemaVersion,
-            ["appliedAtUtc"] = DateTime.UtcNow.ToString("O"),
-            ["baseUrl"] = bundle.BaseUrl,
-            ["paths"] = CreatePathsJson(bundle.Paths),
-            ["bindings"] = new JsonArray(
-                applied.Select(binding => (JsonNode?)new JsonObject
-                {
-                    ["moduleId"] = binding.ModuleId,
-                    ["clientCode"] = binding.ClientCode,
-                }).ToArray()),
-        };
-
-        var summaryPath = Path.Combine(
-            launcherDirectory,
-            $"iiot-binding.applied.{DateTime.UtcNow:yyyyMMddHHmmssfff}.json");
-        File.WriteAllText(
-            summaryPath,
-            summary.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
-            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-
-        if (unresolved.Count == 0)
-        {
-            File.Delete(bindingPath);
-            return;
-        }
-
-        var pending = new JsonObject
-        {
-            ["schemaVersion"] = SupportedBindingSchemaVersion,
-            ["baseUrl"] = bundle.BaseUrl,
-            ["paths"] = CreatePathsJson(bundle.Paths),
-            ["generatedAtUtc"] = bundle.GeneratedAtUtc.ToString(
-                "O",
-                CultureInfo.InvariantCulture),
-            ["bindings"] = new JsonArray(
-                unresolved.Select(binding => (JsonNode?)new JsonObject
-                {
-                    ["moduleId"] = binding.ModuleId,
-                    ["clientCode"] = binding.ClientCode,
-                    ["bootstrapSecret"] = binding.BootstrapSecret,
-                    ["deviceName"] = binding.DeviceName,
-                    ["processId"] = binding.ProcessId.ToString("D"),
-                }).ToArray()),
-        };
-        WritePendingBindingsAtomically(bindingPath, pending);
-    }
-
-    private void ReplaceBindingDiagnostics(
-        IReadOnlyCollection<LauncherStartupDiagnostic> values)
-        => _startupDiagnostics?.ReplaceArea(
-            LauncherStartupDiagnosticAreas.DeviceBinding,
-            values);
+    private void ReplaceBindingDiagnostics(IReadOnlyCollection<LauncherStartupDiagnostic> values)
+        => _startupDiagnostics?.ReplaceArea(LauncherStartupDiagnosticAreas.DeviceBinding, values);
 
     private static LauncherStartupDiagnostic CreateBindingDiagnostic(
         string reasonCode,
@@ -351,229 +422,61 @@ public sealed class LauncherDeviceBindingImporter : ILauncherDeviceBindingImport
             subject,
             exceptionType);
 
-    private static void WritePendingBindingsAtomically(string bindingPath, JsonObject pending)
-        => WriteJsonAtomically(bindingPath, pending);
-
-    private static void WriteJsonAtomically(string targetPath, JsonObject payload)
+    private static JsonObject GetOrCreateObject(JsonObject parent, string propertyName)
     {
-        var directory = Path.GetDirectoryName(targetPath)
-            ?? throw new InvalidOperationException("目标文件缺少目录。");
-        Directory.CreateDirectory(directory);
-        var temporaryPath = Path.Combine(
-            directory,
-            $".{Path.GetFileName(targetPath)}.{Guid.NewGuid():N}.tmp");
+        if (parent[propertyName] is JsonObject value)
+        {
+            return value;
+        }
+
+        value = new JsonObject();
+        parent[propertyName] = value;
+        return value;
+    }
+
+    private static void SetOptionalPath(JsonObject paths, string propertyName, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            paths.Remove(propertyName);
+        }
+        else
+        {
+            paths[propertyName] = value;
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
         try
         {
-            File.WriteAllText(
-                temporaryPath,
-                payload.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
-                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-            File.Move(temporaryPath, targetPath, overwrite: true);
-        }
-        finally
-        {
-            if (File.Exists(temporaryPath))
+            if (File.Exists(path))
             {
-                File.Delete(temporaryPath);
+                File.Delete(path);
             }
         }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
     }
-
-    private static bool TryNormalizeHttpBaseUrl(string? rawValue, out string normalized)
-    {
-        normalized = string.Empty;
-        if (string.IsNullOrWhiteSpace(rawValue)
-            || !Uri.TryCreate(rawValue.Trim(), UriKind.Absolute, out var uri)
-            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
-            || string.IsNullOrWhiteSpace(uri.Host)
-            || !string.IsNullOrEmpty(uri.UserInfo)
-            || (!string.IsNullOrEmpty(uri.AbsolutePath) && uri.AbsolutePath != "/")
-            || !string.IsNullOrEmpty(uri.Query)
-            || !string.IsNullOrEmpty(uri.Fragment))
-        {
-            return false;
-        }
-
-        normalized = uri.GetLeftPart(UriPartial.Authority);
-        return true;
-    }
-
-    private static bool TryReadPaths(
-        JsonElement root,
-        out BindingPaths paths)
-    {
-        paths = default;
-        if (!root.TryGetProperty("paths", out var pathsElement)
-            || pathsElement.ValueKind != JsonValueKind.Object
-            || !TryNormalizeRelativePath(
-                ReadString(pathsElement, "deviceInstance"),
-                requiresDeviceIdTemplate: false,
-                out var deviceInstance)
-            || !TryNormalizeRelativePath(
-                ReadString(pathsElement, "clientReleaseCatalogTemplate"),
-                requiresDeviceIdTemplate: true,
-                out var catalogTemplate)
-            || !TryNormalizeRelativePath(
-                ReadString(pathsElement, "clientVersionReport"),
-                requiresDeviceIdTemplate: false,
-                out var versionReport)
-            || !TryNormalizeRelativePath(
-                ReadString(pathsElement, "runtimeHeartbeat"),
-                requiresDeviceIdTemplate: false,
-                out var runtimeHeartbeat))
-        {
-            return false;
-        }
-
-        paths = new BindingPaths(
-            deviceInstance,
-            catalogTemplate,
-            versionReport,
-            runtimeHeartbeat);
-        return true;
-    }
-
-    private static bool TryNormalizeRelativePath(
-        string? rawValue,
-        bool requiresDeviceIdTemplate,
-        out string normalized)
-    {
-        normalized = string.Empty;
-        if (string.IsNullOrWhiteSpace(rawValue))
-        {
-            return false;
-        }
-
-        var value = rawValue.Trim();
-        if (!value.StartsWith("/", StringComparison.Ordinal)
-            || value.StartsWith("//", StringComparison.Ordinal)
-            || value.Contains('\\')
-            || value.Contains('?')
-            || value.Contains('#')
-            || value.Any(char.IsControl))
-        {
-            return false;
-        }
-
-        string decoded;
-        try
-        {
-            decoded = Uri.UnescapeDataString(value);
-        }
-        catch (UriFormatException)
-        {
-            return false;
-        }
-
-        if (decoded.StartsWith("//", StringComparison.Ordinal)
-            || decoded.Contains('\\')
-            || decoded.Contains('?')
-            || decoded.Contains('#')
-            || decoded.Any(char.IsControl)
-            || decoded.Split('/').Any(segment => segment is "." or ".."))
-        {
-            return false;
-        }
-
-        var tokenCount = CountOccurrences(value, DeviceIdTemplate);
-        var withoutDeviceId = value.Replace(
-            DeviceIdTemplate,
-            string.Empty,
-            StringComparison.Ordinal);
-        if ((requiresDeviceIdTemplate && tokenCount != 1)
-            || (!requiresDeviceIdTemplate && tokenCount != 0)
-            || withoutDeviceId.Contains('{')
-            || withoutDeviceId.Contains('}'))
-        {
-            return false;
-        }
-
-        normalized = value;
-        return true;
-    }
-
-    private static bool TryParseGeneratedAtUtc(
-        JsonElement root,
-        out DateTimeOffset generatedAtUtc)
-    {
-        generatedAtUtc = default;
-        if (!root.TryGetProperty("generatedAtUtc", out var element)
-            || element.ValueKind != JsonValueKind.String)
-        {
-            return false;
-        }
-
-        var rawValue = element.GetString()?.Trim();
-        if (string.IsNullOrWhiteSpace(rawValue))
-        {
-            return false;
-        }
-
-        var timeSeparator = rawValue.IndexOf('T');
-        var hasExplicitOffset = rawValue.EndsWith('Z')
-            || rawValue.EndsWith('z')
-            || (timeSeparator >= 0
-                && (rawValue.IndexOf('+', timeSeparator) >= 0
-                    || rawValue.IndexOf('-', timeSeparator) >= 0));
-        return hasExplicitOffset
-            && DateTimeOffset.TryParse(
-                rawValue,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.RoundtripKind,
-                out generatedAtUtc);
-    }
-
-    private static int CountOccurrences(string value, string token)
-    {
-        var count = 0;
-        var index = 0;
-        while ((index = value.IndexOf(token, index, StringComparison.Ordinal)) >= 0)
-        {
-            count++;
-            index += token.Length;
-        }
-
-        return count;
-    }
-
-    private static JsonObject CreatePathsJson(BindingPaths paths)
-        => new()
-        {
-            ["deviceInstance"] = paths.DeviceInstance,
-            ["clientReleaseCatalogTemplate"] =
-                paths.ClientReleaseCatalogTemplate,
-            ["clientVersionReport"] = paths.ClientVersionReport,
-            ["runtimeHeartbeat"] = paths.RuntimeHeartbeat,
-        };
 
     private static bool IsRecoverable(Exception exception)
         => exception is IOException
             or UnauthorizedAccessException
             or JsonException
+            or InvalidDataException
             or InvalidOperationException
-            or ArgumentException;
+            or ArgumentException
+            or PlatformNotSupportedException
+            or Win32Exception
+            or KeyNotFoundException;
 
-    private static string? ReadString(JsonElement element, string propertyName)
-        => element.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String
-            ? value.GetString()
-            : null;
+    private sealed record PreparedFile(string TargetPath, byte[] Content);
 
-    private readonly record struct DeviceBinding(
-        string ModuleId,
-        string ClientCode,
-        string BootstrapSecret,
-        string DeviceName,
-        Guid ProcessId);
+    private sealed record StagedFile(
+        string TargetPath,
+        string TemporaryPath,
+        byte[]? OriginalContent);
 
-    private readonly record struct BindingPaths(
-        string DeviceInstance,
-        string ClientReleaseCatalogTemplate,
-        string ClientVersionReport,
-        string RuntimeHeartbeat);
-
-    private readonly record struct DeviceBindingBundle(
-        string BaseUrl,
-        BindingPaths Paths,
-        DateTimeOffset GeneratedAtUtc,
-        IReadOnlyList<DeviceBinding> Bindings);
+    private sealed record CredentialBackup(string Reference, string? Secret);
 }

@@ -1,16 +1,19 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using IIoT.Edge.Module.Contracts.Cloud;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Module.Sdk.Cloud;
 using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
+using IIoT.Edge.Infrastructure.Integration;
 
 namespace IIoT.Edge.Infrastructure.Integration.PassStation;
 
 /// <summary>
 /// 宿主标准过站 Cloud 上传器。插件只声明 CloudUploadMode，过站信封由宿主统一生成。
 /// </summary>
+#pragma warning disable CS0618 // Cloud v2 transport context remains the governed Host ABI in SDK 2.0.13.
 public sealed class StandardPassStationCloudUploader(
     ICloudApiPathProvider pathProvider,
     ICloudHttpClient cloudHttp)
@@ -42,8 +45,9 @@ public sealed class StandardPassStationCloudUploader(
             CloudCallResult result = CloudCallResult.Success();
             foreach (var payload in batchesResult.Payloads)
             {
+                var routeTypeKey = payload.TypeKey ?? payload.ProcessType;
                 result = await cloudHttp.PostAsync(
-                        pathProvider.GetPassStationBatchPath(payload.ProcessType!),
+                        pathProvider.GetPassStationBatchPath(routeTypeKey!),
                         payload,
                         new CloudRequestOptions
                         {
@@ -73,10 +77,14 @@ public sealed class StandardPassStationCloudUploader(
         string? processType,
         CellCompletedRecord record)
     {
-        var processFailure = ValidateProcessType(processType, out _);
-        if (processFailure is not null)
+        var identity = ResolveIdentity(
+            context: null,
+            processType,
+            [record],
+            requireDeviceMatch: false);
+        if (identity.FailureReason is not null)
         {
-            return CloudCallResult.Failure(CloudCallOutcome.InvalidPayload, processFailure);
+            return CloudCallResult.Failure(CloudCallOutcome.InvalidPayload, identity.FailureReason);
         }
 
         var itemResult = TryCreateItem(record);
@@ -95,10 +103,10 @@ public sealed class StandardPassStationCloudUploader(
             return PayloadsCreationResult.Invalid("pass_station_device_id_required");
         }
 
-        var processFailure = ValidateProcessType(processType, out var typeKey);
-        if (processFailure is not null)
+        var identity = ResolveIdentity(context, processType, records, requireDeviceMatch: true);
+        if (identity.FailureReason is not null)
         {
-            return PayloadsCreationResult.Invalid(processFailure);
+            return PayloadsCreationResult.Invalid(identity.FailureReason);
         }
 
         if (records.Count < PassStationCloudContract.MinItems)
@@ -111,10 +119,12 @@ public sealed class StandardPassStationCloudUploader(
             return PayloadsCreationResult.Invalid("pass_station_items_limit_exceeded");
         }
 
-        var legacyItems = new List<PassStationUploadItem>(records.Count);
-        var legacyRecords = new List<CellCompletedRecord>(records.Count);
-        var strictItems = new List<PassStationUploadItem>(records.Count);
-        var strictRecords = new List<CellCompletedRecord>(records.Count);
+        var legacyV1Items = new List<PassStationUploadItem>(records.Count);
+        var legacyV1Records = new List<CellCompletedRecord>(records.Count);
+        var legacyV2Items = new List<PassStationUploadItem>(records.Count);
+        var legacyV2Records = new List<CellCompletedRecord>(records.Count);
+        var v3Items = new List<PassStationUploadItem>(records.Count);
+        var v3Records = new List<CellCompletedRecord>(records.Count);
         foreach (var record in records)
         {
             var itemResult = TryCreateItem(record);
@@ -123,23 +133,34 @@ public sealed class StandardPassStationCloudUploader(
                 return PayloadsCreationResult.Invalid(itemResult.FailureReason);
             }
 
-            if (IsStrictV2Eligible(typeKey, record, itemResult.Item!))
+            // Binding v3 is data-capability driven: the generic Host validates only the
+            // envelope/identity and emits schema v3. Cloud validates TypeKey and payload fields
+            // against the exact installed plugin's data-capabilities.json. Current AP/CP/MG
+            // facts must never become Host framework constraints.
+            if (identity.IsV3)
             {
-                strictItems.Add(itemResult.Item!);
-                strictRecords.Add(record);
+                v3Items.Add(itemResult.Item!);
+                v3Records.Add(record);
+            }
+            else if (IsLegacyStrictV2Eligible(identity.TypeKey, record, itemResult.Item!))
+            {
+                legacyV2Items.Add(itemResult.Item!);
+                legacyV2Records.Add(record);
             }
             else
             {
-                legacyItems.Add(itemResult.Item!);
-                legacyRecords.Add(record);
+                legacyV1Items.Add(itemResult.Item!);
+                legacyV1Records.Add(record);
             }
         }
 
-        var payloads = new List<PassStationBatchUploadPayload>(2);
-        if (strictItems.Count > 0)
-            payloads.Add(CreatePayload(context, typeKey, strictRecords, strictItems, PassStationCloudContract.StrictSchemaVersion));
-        if (legacyItems.Count > 0)
-            payloads.Add(CreatePayload(context, typeKey, legacyRecords, legacyItems, PassStationCloudContract.LegacySchemaVersion));
+        var payloads = new List<PassStationBatchUploadPayload>(3);
+        if (v3Items.Count > 0)
+            payloads.Add(CreatePayload(context, identity, v3Records, v3Items, PassStationCloudContract.StrictSchemaVersion));
+        if (legacyV2Items.Count > 0)
+            payloads.Add(CreatePayload(context, identity, legacyV2Records, legacyV2Items, PassStationCloudContract.LegacyStrictSchemaVersion));
+        if (legacyV1Items.Count > 0)
+            payloads.Add(CreatePayload(context, identity, legacyV1Records, legacyV1Items, PassStationCloudContract.LegacySchemaVersion));
 
         return payloads.Any(payload => payload.RequestId!.Length > PassStationCloudContract.MaxRequestIdLength)
             ? PayloadsCreationResult.Invalid("pass_station_request_id_too_long")
@@ -148,7 +169,7 @@ public sealed class StandardPassStationCloudUploader(
 
     private static PassStationBatchUploadPayload CreatePayload(
         ProcessUploadContext context,
-        string typeKey,
+        UploadIdentity identity,
         IReadOnlyList<CellCompletedRecord> records,
         IReadOnlyList<PassStationUploadItem> items,
         int schemaVersion)
@@ -159,23 +180,108 @@ public sealed class StandardPassStationCloudUploader(
         return new PassStationBatchUploadPayload(
             context.Device.DeviceId,
             items,
-            CloudIdempotencyKeyBuilder.ForBatch(typeKey, uploaderKey, records),
+            CloudIdempotencyKeyBuilder.ForBatch(identity.TypeKey, uploaderKey, records),
             schemaVersion,
-            typeKey);
+            identity.IsV3 ? identity.ProcessType : identity.TypeKey,
+            identity.IsV3 ? identity.ClientCode : null,
+            identity.IsV3 ? identity.TypeKey : null);
     }
 
-    private static string? ValidateProcessType(string? processType, out string typeKey)
+    private static UploadIdentity ResolveIdentity(
+        ProcessUploadContext? context,
+        string? processType,
+        IReadOnlyList<CellCompletedRecord> records,
+        bool requireDeviceMatch)
     {
         if (string.IsNullOrWhiteSpace(processType))
         {
-            typeKey = string.Empty;
-            return "pass_station_process_type_required";
+            return UploadIdentity.Invalid("pass_station_process_type_required");
         }
 
-        typeKey = NormalizeTypeKey(processType);
-        return typeKey.Length > PassStationCloudContract.MaxProcessTypeLength
-            ? "pass_station_process_type_too_long"
-            : null;
+        var normalizedProcessType = processType.Trim().ToLowerInvariant();
+        if (normalizedProcessType.Length > PassStationCloudContract.MaxProcessTypeLength)
+        {
+            return UploadIdentity.Invalid("pass_station_process_type_too_long");
+        }
+
+        var identityKinds = records
+            .Select(DataPipelineRecordIdentityClassifier.Classify)
+            .Distinct()
+            .ToArray();
+        if (identityKinds.Length == 0
+            || identityKinds is [DataPipelineRecordIdentityKind.LegacyV2])
+        {
+            return UploadIdentity.Valid(
+                isV3: false,
+                clientCode: string.Empty,
+                processType: normalizedProcessType,
+                typeKey: normalizedProcessType);
+        }
+
+        if (identityKinds.Any(static kind => kind != DataPipelineRecordIdentityKind.CompleteV3))
+        {
+            return UploadIdentity.Invalid("pass_station_v3_identity_incomplete");
+        }
+
+        var clientCodes = records
+            .Select(static record => record.ClientCode.Trim().ToUpperInvariant())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var processTypes = records
+            .Select(static record => record.ProcessType.Trim().ToLowerInvariant())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var typeKeys = records
+            .Select(static record => record.TypeKey.Trim().ToLowerInvariant())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var completionIds = records
+            .Select(static record => record.CompletionId.Trim())
+            .ToArray();
+        if (clientCodes.Length != 1)
+        {
+            return UploadIdentity.Invalid("pass_station_client_code_mixed");
+        }
+
+        if (processTypes.Length != 1 || processTypes[0] != normalizedProcessType)
+        {
+            return UploadIdentity.Invalid("pass_station_process_type_mixed");
+        }
+
+        if (typeKeys.Length != 1)
+        {
+            return UploadIdentity.Invalid("pass_station_type_key_mixed");
+        }
+
+        if (completionIds.Any(static value => value.Length > PassStationCloudContract.MaxCompletionIdLength))
+        {
+            return UploadIdentity.Invalid("pass_station_completion_id_too_long");
+        }
+        if (completionIds.Distinct(StringComparer.Ordinal).Count() != completionIds.Length)
+        {
+            return UploadIdentity.Invalid("pass_station_completion_id_duplicate");
+        }
+
+        if (typeKeys[0].Length > PassStationCloudContract.MaxTypeKeyLength)
+        {
+            return UploadIdentity.Invalid("pass_station_type_key_too_long");
+        }
+
+        if (requireDeviceMatch)
+        {
+            var sessionClientCode = context?.Device.ClientCode?.Trim().ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(sessionClientCode)
+                || !string.Equals(sessionClientCode, clientCodes[0], StringComparison.Ordinal))
+            {
+                return UploadIdentity.Invalid("pass_station_session_client_code_mismatch");
+            }
+        }
+
+        return UploadIdentity.Valid(
+            isV3: true,
+            clientCode: clientCodes[0],
+            processType: normalizedProcessType,
+            typeKey: typeKeys[0]);
     }
 
     private static ItemCreationResult TryCreateItem(CellCompletedRecord record)
@@ -239,10 +345,19 @@ public sealed class StandardPassStationCloudUploader(
             barcode,
             FormatCellResult(record.CellData.CellResult.Value),
             record.CellData.CompletedTime.Value,
-            extensionPayload));
+            extensionPayload)
+        {
+            CompletionId = NormalizeOptional(record.CompletionId),
+            ClientCode = NormalizeOptional(record.ClientCode)?.ToUpperInvariant(),
+            TypeKey = NormalizeOptional(record.TypeKey)?.ToLowerInvariant(),
+            PlcCode = NormalizeOptional(record.ResolvePlcCode())
+        });
     }
 
-    private static bool IsStrictV2Eligible(
+    private static string? NormalizeOptional(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static bool IsLegacyStrictV2Eligible(
         string typeKey,
         CellCompletedRecord record,
         PassStationUploadItem item)
@@ -352,9 +467,6 @@ public sealed class StandardPassStationCloudUploader(
     private static string FormatCellResult(bool cellResult)
         => cellResult ? "OK" : "NG";
 
-    private static string NormalizeTypeKey(string processType)
-        => processType.Trim().ToLowerInvariant();
-
     private sealed record PayloadsCreationResult(
         IReadOnlyList<PassStationBatchUploadPayload> Payloads,
         string? FailureReason)
@@ -362,6 +474,24 @@ public sealed class StandardPassStationCloudUploader(
         public static PayloadsCreationResult Valid(IReadOnlyList<PassStationBatchUploadPayload> payloads) => new(payloads, null);
 
         public static PayloadsCreationResult Invalid(string reason) => new([], reason);
+    }
+
+    private sealed record UploadIdentity(
+        bool IsV3,
+        string ClientCode,
+        string ProcessType,
+        string TypeKey,
+        string? FailureReason)
+    {
+        public static UploadIdentity Valid(
+            bool isV3,
+            string clientCode,
+            string processType,
+            string typeKey)
+            => new(isV3, clientCode, processType, typeKey, null);
+
+        public static UploadIdentity Invalid(string reason)
+            => new(false, string.Empty, string.Empty, string.Empty, reason);
     }
 
     private sealed record ItemCreationResult(
@@ -373,15 +503,19 @@ public sealed class StandardPassStationCloudUploader(
         public static ItemCreationResult Invalid(string reason) => new(null, reason);
     }
 }
+#pragma warning restore CS0618
 
 internal static class PassStationCloudContract
 {
     public const int LegacySchemaVersion = 1;
-    public const int StrictSchemaVersion = 2;
+    public const int LegacyStrictSchemaVersion = 2;
+    public const int StrictSchemaVersion = 3;
     public const int SchemaVersion = LegacySchemaVersion;
     public const int MinItems = 1;
     public const int MaxItems = 1000;
     public const int MaxProcessTypeLength = 32;
+    public const int MaxTypeKeyLength = 128;
+    public const int MaxCompletionIdLength = 128;
     public const int MaxRequestIdLength = 128;
     public const int MaxBarcodeLength = 128;
     public const int MaxCellResultLength = 32;
@@ -399,10 +533,25 @@ public sealed record PassStationBatchUploadPayload(
     IReadOnlyList<PassStationUploadItem> Items,
     string? RequestId = null,
     int SchemaVersion = 1,
-    string? ProcessType = null);
+    string? ProcessType = null,
+    string? ClientCode = null,
+    string? TypeKey = null);
 
 public sealed record PassStationUploadItem(
     string Barcode,
     string CellResult,
     DateTime CompletedTime,
-    JsonElement Payload);
+    JsonElement Payload)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? CompletionId { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ClientCode { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TypeKey { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? PlcCode { get; init; }
+}

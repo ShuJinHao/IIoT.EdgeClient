@@ -254,10 +254,16 @@ public sealed class ModuleDiscoveryContractTests
         var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("TestPlugin");
         try
         {
-            var activation = ActivateAllForTest(DiscoverPlugins(pluginRoot).Modules);
-            var modules = activation.Modules;
+            var discovery = DiscoverPlugins(pluginRoot);
+            var activation = ActivateAllForTest(discovery.Modules);
+            var issues = activation.Issues.ToList();
+            var modules = IIoT.Edge.Host.Bootstrap.DependencyInjection
+                .BindLegacyProcessTypesFromManifests(
+                    activation.Modules,
+                    discovery.Modules,
+                    issues);
 
-            Assert.Empty(activation.Issues);
+            Assert.Empty(issues);
             Assert.Single(modules);
             Assert.Single(modules.Select(x => x.ModuleId).Distinct(StringComparer.OrdinalIgnoreCase));
             Assert.Single(modules.Select(x => x.ProcessType).Distinct(StringComparer.OrdinalIgnoreCase));
@@ -303,9 +309,15 @@ public sealed class ModuleDiscoveryContractTests
         var pluginRoot = ContractTestPathHelper.CreatePluginRuntimeRoot("TestPlugin");
         try
         {
-            var activation = ActivateAllForTest(DiscoverPlugins(pluginRoot).Modules);
-            var modules = activation.Modules;
-            Assert.Empty(activation.Issues);
+            var discovery = DiscoverPlugins(pluginRoot);
+            var activation = ActivateAllForTest(discovery.Modules);
+            var issues = activation.Issues.ToList();
+            var modules = IIoT.Edge.Host.Bootstrap.DependencyInjection
+                .BindLegacyProcessTypesFromManifests(
+                    activation.Modules,
+                    discovery.Modules,
+                    issues);
+            Assert.Empty(issues);
             var services = new ServiceCollection();
             var viewRegistry = new ViewRegistry();
         var cellDataRegistry = new CellDataRegistry(new CellDataTypeRegistry());
@@ -398,6 +410,8 @@ public sealed class ModuleDiscoveryContractTests
         public const string Process = "AdditionalTestPlugin";
 
         public override string ModuleId => Module;
+
+        public override string ProcessType => Process;
 
         public override string DisplayName => "Additional Test Plugin";
 

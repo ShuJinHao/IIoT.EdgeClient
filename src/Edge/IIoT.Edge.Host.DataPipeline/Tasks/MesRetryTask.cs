@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Module.Contracts.Config;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Modules;
@@ -27,14 +28,16 @@ public sealed class MesRetryTask : RetryTaskBase<MesRetryRuntimeState, MesRetryP
         IExternalHeartbeatStateStore heartbeatStateStore,
         IMesFallbackRecoveryService fallbackRecoveryService,
         IMesRetryRecordProcessor retryRecordProcessor,
-        IMesRetryHousekeepingService housekeepingService)
+        IMesRetryHousekeepingService housekeepingService,
+        DataPipelineRetryScheduleOptions? scheduleOptions = null)
         : base(
             logger,
             diagnosticsStore,
             fallbackRecoveryService,
             retryRecordProcessor,
             housekeepingService,
-            MesRetryRuntimeState.Retrying)
+            MesRetryRuntimeState.Retrying,
+            scheduleOptions)
     {
         ArgumentNullException.ThrowIfNull(capacityGuard);
         ArgumentNullException.ThrowIfNull(heartbeatStateStore);

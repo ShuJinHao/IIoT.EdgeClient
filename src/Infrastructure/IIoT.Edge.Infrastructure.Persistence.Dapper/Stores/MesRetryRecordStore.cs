@@ -6,6 +6,8 @@ using IIoT.Edge.Application.Features.DataPipeline.DeadLetters;
 using IIoT.Edge.Module.Contracts.DataPipeline;
 
 using IIoT.Edge.Module.Contracts.Mes;
+using IIoT.Edge.Application.Common.Identity;
+using IIoT.Edge.Application.Common.DataPipeline;
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 
 /// <summary>
@@ -68,8 +70,10 @@ public sealed class MesRetryRecordStore :
     public MesRetryRecordStore(
         SqliteConnectionFactory connectionFactory,
         ILogService logger,
-        ICellDataJsonSerializer cellDataJsonSerializer)
-        : base(connectionFactory, logger, cellDataJsonSerializer)
+        ICellDataJsonSerializer cellDataJsonSerializer,
+        IDevicePluginRuntimeContext? runtimeContext = null,
+        DataPipelineRetryScheduleOptions? retryScheduleOptions = null)
+        : base(connectionFactory, logger, cellDataJsonSerializer, runtimeContext, retryScheduleOptions)
     {
     }
 

@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Module.Contracts.Cloud;
 using IIoT.Edge.Module.Contracts.Config;
 using IIoT.Edge.Module.Contracts.Device;
@@ -31,14 +32,16 @@ public sealed class CloudRetryTask : RetryTaskBase<CloudRetryRuntimeState, Cloud
         ICloudFallbackRecoveryService fallbackRecoveryService,
         ICloudRetryRecordProcessor retryRecordProcessor,
         ICloudRetryHousekeepingService housekeepingService,
-        ILocalSystemRuntimeConfigService? runtimeConfig = null)
+        ILocalSystemRuntimeConfigService? runtimeConfig = null,
+        DataPipelineRetryScheduleOptions? scheduleOptions = null)
         : base(
             logger,
             diagnosticsStore,
             fallbackRecoveryService,
             retryRecordProcessor,
             housekeepingService,
-            CloudRetryRuntimeState.Retrying)
+            CloudRetryRuntimeState.Retrying,
+            scheduleOptions)
     {
         _deviceService = deviceService;
         _deviceLogSync = deviceLogSync;

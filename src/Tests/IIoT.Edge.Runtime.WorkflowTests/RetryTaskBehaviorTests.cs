@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline.Stores;
 using IIoT.Edge.Module.Contracts.Device;
@@ -15,16 +16,31 @@ namespace IIoT.Edge.Runtime.WorkflowTests;
 public sealed class RetryTaskBehaviorTests
 {
     [Theory]
-    [InlineData(1, 30)]
-    [InlineData(5, 30)]
-    [InlineData(6, 300)]
-    [InlineData(10, 300)]
-    [InlineData(11, 1800)]
+    [InlineData(0, 1800)]
+    [InlineData(1, 1800)]
+    [InlineData(5, 1800)]
+    [InlineData(10, 1800)]
+    [InlineData(19, 1800)]
     public void DefaultRetryBackoffStrategy_ShouldPreserveRetryBoundaries(int retryCount, int expectedSeconds)
     {
         var strategy = new DefaultRetryBackoffStrategy();
 
         Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), strategy.Calculate(retryCount));
+    }
+
+    [Fact]
+    public void DefaultRetryBackoffStrategy_ShouldUseConfiguredRetryInterval()
+    {
+        var schedule = new DataPipelineRetryScheduleOptions
+        {
+            IntervalMinutes = 7
+        };
+
+        var strategy = new DefaultRetryBackoffStrategy(schedule);
+
+        Assert.Equal(TimeSpan.FromMinutes(7), schedule.GetInterval());
+        Assert.Equal(TimeSpan.FromMinutes(7), strategy.Calculate(retryCount: 1));
+        Assert.Equal(TimeSpan.FromMinutes(7), strategy.Calculate(retryCount: 19));
     }
 
     [Fact]
@@ -84,9 +100,9 @@ public sealed class RetryTaskBehaviorTests
     }
 
     [Theory]
-    [InlineData(0, 20, 40)]
-    [InlineData(5, 240, 360)]
-    [InlineData(10, 1500, 2100)]
+    [InlineData(0, 1790, 1810)]
+    [InlineData(5, 1790, 1810)]
+    [InlineData(10, 1790, 1810)]
     public async Task RetryFailure_ShouldUseExpectedBackoffWindow(int currentRetryCount, int minSeconds, int maxSeconds)
     {
         var logger = new FakeLogService();

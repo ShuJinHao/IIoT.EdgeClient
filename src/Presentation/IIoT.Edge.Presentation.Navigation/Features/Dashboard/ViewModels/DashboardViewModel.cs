@@ -256,14 +256,14 @@ public sealed class DashboardViewModel : NavigationViewModelBase
                         ? "已激活"
                         : "未激活");
 
-            TodayOutput = capacity.TodayOutput.ToString();
-            TodayYield = capacity.TodayYield;
-            OkCount = capacity.OkCount.ToString();
-            NgCount = capacity.NgCount.ToString();
-            CurrentBatch = capacity.CurrentBatch ?? "--";
-            RecentHourOutput = capacity.RecentHourOutput.ToString();
-            RecentHourOk = capacity.RecentHourOk.ToString();
-            RecentHourNg = capacity.RecentHourNg.ToString();
+            TodayOutput = capacity.IsAvailable ? capacity.TodayOutput.ToString() : "--";
+            TodayYield = capacity.IsAvailable ? capacity.TodayYield : "--";
+            OkCount = capacity.IsAvailable ? capacity.OkCount.ToString() : "--";
+            NgCount = capacity.IsAvailable ? capacity.NgCount.ToString() : "--";
+            CurrentBatch = capacity.IsAvailable ? capacity.CurrentBatch ?? "--" : "--";
+            RecentHourOutput = capacity.IsAvailable ? capacity.RecentHourOutput.ToString() : "--";
+            RecentHourOk = capacity.IsAvailable ? capacity.RecentHourOk.ToString() : "--";
+            RecentHourNg = capacity.IsAvailable ? capacity.RecentHourNg.ToString() : "--";
             RecentHourLabel = capacity.RecentHourLabel;
 
             OnPropertyChanged(nameof(HasDevices));

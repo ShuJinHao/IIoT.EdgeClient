@@ -97,15 +97,32 @@ function New-DownloadedInstallerFixture {
     $bindings = [Collections.Generic.List[object]]::new()
     $plugins = [Collections.Generic.List[object]]::new()
     $secrets = @{}
+    $generationId = '11111111-1111-1111-1111-111111111111'
     foreach ($moduleId in $ModuleIds) {
+        $clientCode = "DEV-$moduleId"
         $secret = "fixture-secret-$($moduleId.ToLowerInvariant())-0123456789"
         $secrets[$moduleId] = $secret
+        $pluginRoot = "plugins/$clientCode"
         $binding = [ordered]@{
             moduleId = $moduleId
-            clientCode = "DEV-$moduleId"
-            bootstrapSecret = $secret
+            clientCode = $clientCode
             deviceName = "Fixture $moduleId"
-            processId = "00000000-0000-0000-0000-0000000000$($bindings.Count + 1)"
+            processId = ('00000000-0000-0000-0000-{0:D12}' -f ($bindings.Count + 1))
+            processType = 'DIECUT'
+            pluginVersion = [string]$SelectionVersions[$moduleId]
+            packageSha256 = ('{0:x64}' -f ($bindings.Count + 1))
+            pluginDirectory = "$pluginRoot/app"
+            configDirectory = "$pluginRoot/config"
+            dbDirectory = "$pluginRoot/db"
+            dataDirectory = "$pluginRoot/data"
+            logsDirectory = "$pluginRoot/logs"
+            cacheDirectory = "$pluginRoot/cache"
+            contextDirectory = "$pluginRoot/context"
+            buffersDirectory = "$pluginRoot/buffers"
+            pendingCredential = [ordered]@{
+                name = "IIoT.Edge/Pending/$generationId/$clientCode"
+                secret = $secret
+            }
         }
         $bindings.Add($binding)
 
@@ -113,7 +130,8 @@ function New-DownloadedInstallerFixture {
             moduleId = $moduleId
             displayName = "Fixture $moduleId"
             version = [string]$SelectionVersions[$moduleId]
-            pluginDirectory = $moduleId
+            packageSha256 = $binding.packageSha256
+            pluginDirectory = $clientCode
             clientCode = $binding.clientCode
             deviceName = $binding.deviceName
             processId = $binding.processId
@@ -125,19 +143,34 @@ function New-DownloadedInstallerFixture {
     }
 
     $bindingJson = [ordered]@{
-        schemaVersion = 2
+        schemaVersion = 3
+        generationId = $generationId
         baseUrl = $normalizedBaseUrl
         paths = [ordered]@{
-            deviceInstance = '/api/v1/bootstrap/device-instance'
+            deviceInstance = '/api/v1/edge/bootstrap/device-instance'
+            bootstrapRefresh = '/api/v1/edge/bootstrap/edge-refresh'
+            activateDevice = '/api/v1/edge/bootstrap/device-activate'
+            activateDeviceConfirm = '/api/v1/edge/bootstrap/device-activation-confirm'
+            identityDeviceLogin = '/api/v1/human/identity/edge-login'
+            humanIdentityRefresh = '/api/v1/human/identity/refresh'
+            humanSessionValidation = '/api/v1/human/identity/session'
+            deviceLog = '/api/v1/edge/device-logs'
+            passStationBatchTemplate = '/api/v1/edge/pass-stations/{typeKey}/batch'
+            capacityHourly = '/api/v1/edge/capacity/hourly'
+            capacitySummary = '/api/v1/edge/capacity/summary'
+            capacitySummaryRange = '/api/v1/edge/capacity/summary/range'
+            recipeByDeviceTemplate = '/api/v1/edge/recipes/device/{deviceId}'
             clientReleaseCatalogTemplate = '/api/v1/edge/client-releases/device/{deviceId}/catalog'
             clientVersionReport = '/api/v1/edge/client-releases/version-reports'
             runtimeHeartbeat = '/api/v1/edge/runtime-heartbeats'
+            edgeHostPlcRuntimeStates = '/api/v1/edge/edge-hosts/plc-runtime-states'
         }
         generatedAtUtc = '2026-08-02T00:00:00Z'
+        expiresAtUtc = '2026-08-09T00:00:00Z'
         bindings = @($bindings)
     } | ConvertTo-Json -Depth 8 -Compress
     $selectionJson = [ordered]@{
-        schemaVersion = 1
+        schemaVersion = 2
         generatedAtUtc = '2026-08-02T00:00:00Z'
         plugins = @($plugins)
     } | ConvertTo-Json -Depth 8 -Compress
@@ -147,6 +180,70 @@ function New-DownloadedInstallerFixture {
         targetRuntime = $TargetRuntime
     } | ConvertTo-Json -Depth 4 -Compress
 
+    $entries = [ordered]@{
+        'launcher/iiot-binding.json' = $bindingJson
+        'launcher/iiot-enabled-plugins.json' = $selectionJson
+        'launcher/launcher.update.json' = $updateJson
+        'launcher/IIoT.Edge.Launcher.exe' = 'launcher-exe'
+        'launcher/IIoT.Edge.Launcher.dll' = 'launcher-dll'
+        'host/IIoT.Edge.Shell.exe' = 'host-exe'
+        'host/IIoT.Edge.Shell.dll' = 'host-dll'
+        'velopack/IIoT.EdgeClient-stable-Setup.exe' = 'setup'
+    }
+    foreach ($moduleId in $ModuleIds) {
+        $clientCode = "DEV-$moduleId"
+        $pluginJson = [ordered]@{
+            moduleId = $moduleId
+            version = [string]$ManifestVersions[$moduleId]
+            entryAssembly = "IIoT.Edge.Module.$moduleId.dll"
+        } | ConvertTo-Json -Depth 4 -Compress
+        $entries["plugins/$clientCode/app/plugin.json"] = $pluginJson
+        $entries["plugins/$clientCode/app/IIoT.Edge.Module.$moduleId.dll"] = 'module'
+    }
+    if ($IncludeLegacyPluginBinding) {
+        $entries["plugins/DEV-$($ModuleIds[0])/app/iiot-plugin-binding.json"] = '{"schemaVersion":1}'
+    }
+    if ($LeakSecretInPlugin) {
+        $entries["plugins/DEV-$($ModuleIds[0])/app/Config/cloud.json"] = '{"bootstrapSecret":"forbidden-placeholder"}'
+    }
+    if ($LeakSecretInPluginBinary) {
+        $entries["plugins/DEV-$($ModuleIds[0])/app/Assets/cache.bin"] =
+            ('binary-prefix-' + $secrets[$ModuleIds[0]] + '-binary-suffix')
+    }
+
+    $manifestFiles = [Collections.Generic.List[object]]::new()
+    foreach ($entryName in $entries.Keys) {
+        $entryBytes = [Text.UTF8Encoding]::new($false).GetBytes([string]$entries[$entryName])
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try {
+            $entryHash = [Convert]::ToHexString($sha.ComputeHash($entryBytes)).ToLowerInvariant()
+        }
+        finally {
+            $sha.Dispose()
+        }
+        $manifestFiles.Add([ordered]@{
+            path = $entryName
+            size = $entryBytes.Length
+            sha256 = $entryHash
+            type = 'file'
+            component = 'fixture'
+            version = '1.0.0'
+        })
+    }
+    $entries['payload-manifest.json'] = [ordered]@{
+        schemaVersion = 1
+        component = 'edge-installer-payload'
+        version = '1.0.0'
+        generationId = $generationId
+        createdAtUtc = '2026-08-02T00:00:00.0000000Z'
+        files = @($manifestFiles)
+        signature = [ordered]@{
+            algorithm = 'rsa-pss-sha256'
+            keyId = 'fixture-key'
+            value = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('fixture-signature'))
+        }
+    } | ConvertTo-Json -Depth 8 -Compress
+
     $payloadStream = [IO.MemoryStream]::new()
     try {
         $archive = [IO.Compression.ZipArchive]::new(
@@ -154,38 +251,8 @@ function New-DownloadedInstallerFixture {
             [IO.Compression.ZipArchiveMode]::Create,
             $true)
         try {
-            Write-InstallerFixtureZipEntry $archive 'launcher/iiot-binding.json' $bindingJson
-            Write-InstallerFixtureZipEntry $archive 'launcher/iiot-enabled-plugins.json' $selectionJson
-            Write-InstallerFixtureZipEntry $archive 'launcher/launcher.update.json' $updateJson
-            Write-InstallerFixtureZipEntry $archive 'launcher/IIoT.Edge.Launcher.dll' 'launcher'
-            Write-InstallerFixtureZipEntry $archive 'host/IIoT.Edge.Shell.dll' 'host'
-            Write-InstallerFixtureZipEntry $archive 'velopack/IIoT.EdgeClient-stable-Setup.exe' 'setup'
-            foreach ($moduleId in $ModuleIds) {
-                $pluginJson = [ordered]@{
-                    moduleId = $moduleId
-                    version = [string]$ManifestVersions[$moduleId]
-                    entryAssembly = "IIoT.Edge.Module.$moduleId.dll"
-                } | ConvertTo-Json -Depth 4 -Compress
-                Write-InstallerFixtureZipEntry $archive "plugins/$moduleId/plugin.json" $pluginJson
-                Write-InstallerFixtureZipEntry $archive "plugins/$moduleId/IIoT.Edge.Module.$moduleId.dll" 'module'
-            }
-            if ($IncludeLegacyPluginBinding) {
-                Write-InstallerFixtureZipEntry `
-                    $archive `
-                    "plugins/$($ModuleIds[0])/iiot-plugin-binding.json" `
-                    '{"schemaVersion":1}'
-            }
-            if ($LeakSecretInPlugin) {
-                Write-InstallerFixtureZipEntry `
-                    $archive `
-                    "plugins/$($ModuleIds[0])/Config/cloud.json" `
-                    '{"bootstrapSecret":"forbidden-placeholder"}'
-            }
-            if ($LeakSecretInPluginBinary) {
-                Write-InstallerFixtureZipEntry `
-                    $archive `
-                    "plugins/$($ModuleIds[0])/Assets/cache.bin" `
-                    ('binary-prefix-' + $secrets[$ModuleIds[0]] + '-binary-suffix')
+            foreach ($entryName in $entries.Keys) {
+                Write-InstallerFixtureZipEntry $archive $entryName ([string]$entries[$entryName])
             }
         }
         finally {
@@ -215,10 +282,13 @@ function New-DownloadedInstallerFixture {
     }
 
     $expectedVersions = @{}
-    $expectedDirectories = @{}
+    $expectedModules = @{}
+    $expectedClientCodes = [Collections.Generic.List[string]]::new()
     foreach ($moduleId in $ModuleIds) {
-        $expectedVersions[$moduleId] = [string]$SelectionVersions[$moduleId]
-        $expectedDirectories[$moduleId] = $moduleId
+        $clientCode = "DEV-$moduleId"
+        $expectedClientCodes.Add($clientCode)
+        $expectedVersions[$clientCode] = [string]$SelectionVersions[$moduleId]
+        $expectedModules[$clientCode] = $moduleId
     }
 
     return [pscustomobject]@{
@@ -227,9 +297,9 @@ function New-DownloadedInstallerFixture {
         UpdateSource = $UpdateSource
         Channel = $Channel
         TargetRuntime = $TargetRuntime
-        ModuleIds = $ModuleIds
+        ClientCodes = @($expectedClientCodes)
+        Modules = $expectedModules
         Versions = $expectedVersions
-        Directories = $expectedDirectories
     }
 }
 
@@ -427,9 +497,9 @@ try {
         Assert-Passes -Action {
             & $downloadedInstallerVerifier `
                 -InstallerPath $validSingleModuleInstaller.InstallerPath `
-                -ExpectedModuleId $singleModuleId `
+                -ExpectedClientCode $validSingleModuleInstaller.ClientCodes `
+                -ExpectedModuleIds $validSingleModuleInstaller.Modules `
                 -ExpectedPluginVersions $validSingleModuleInstaller.Versions `
-                -ExpectedPluginDirectories $validSingleModuleInstaller.Directories `
                 -ExpectedGateway $validSingleModuleInstaller.BaseUrl `
                 -ExpectedUpdateSource $validSingleModuleInstaller.UpdateSource `
                 -ExpectedChannel $validSingleModuleInstaller.Channel `
@@ -437,12 +507,28 @@ try {
         }
     }
 
+    $p3Installer = New-DownloadedInstallerFixture `
+        -ModuleIds @('P3MOD') `
+        -SelectionVersions @{ P3MOD = '3.1.0' } `
+        -ManifestVersions @{ P3MOD = '3.1.0' }
+    Assert-Passes -Action {
+        & $downloadedInstallerVerifier `
+            -InstallerPath $p3Installer.InstallerPath `
+            -ExpectedClientCode $p3Installer.ClientCodes `
+            -ExpectedModuleIds $p3Installer.Modules `
+            -ExpectedPluginVersions $p3Installer.Versions `
+            -ExpectedGateway $p3Installer.BaseUrl `
+            -ExpectedUpdateSource $p3Installer.UpdateSource `
+            -ExpectedChannel $p3Installer.Channel `
+            -ExpectedTargetRuntime $p3Installer.TargetRuntime
+    }
+
     $validInstaller = New-DownloadedInstallerFixture
     $validInstallerParameters = @{
         InstallerPath = $validInstaller.InstallerPath
-        ExpectedModuleId = @('AP', 'CP')
+        ExpectedClientCode = $validInstaller.ClientCodes
+        ExpectedModuleIds = $validInstaller.Modules
         ExpectedPluginVersions = $validInstaller.Versions
-        ExpectedPluginDirectories = $validInstaller.Directories
         ExpectedGateway = $validInstaller.BaseUrl
         ExpectedUpdateSource = $validInstaller.UpdateSource
         ExpectedChannel = $validInstaller.Channel
@@ -452,32 +538,42 @@ try {
         & $downloadedInstallerVerifier @validInstallerParameters
     }
 
+    Assert-Passes -Action {
+        $legacyBundleSource = Get-Content -Raw -Encoding UTF8 -LiteralPath (
+            Join-Path $scriptsRoot 'PublishEdgeBundle.ps1')
+        if ($legacyBundleSource -match '\$BundleName\s*=\s*["'']all-official["'']' -or
+            $legacyBundleSource -notmatch '\[Parameter\(Mandatory\s*=\s*\$true\)\]\s*\[string\]\$BundleName' -or
+            $legacyBundleSource -notmatch 'LegacyCompatibilityOnly') {
+            throw 'Retired bundle tooling must have no all-official default and must require explicit legacy compatibility intent.'
+        }
+    }
+
     $legacyBindingInstaller = New-DownloadedInstallerFixture -IncludeLegacyPluginBinding
     Assert-ThrowsContaining -Action {
         & $downloadedInstallerVerifier `
             -InstallerPath $legacyBindingInstaller.InstallerPath `
-            -ExpectedModuleId @('AP', 'CP')
+            -ExpectedClientCode $legacyBindingInstaller.ClientCodes
     } -Needles @('zero iiot-plugin-binding.json', 'found 1')
 
     $selectionSecretInstaller = New-DownloadedInstallerFixture -LeakSecretInSelection
     Assert-ThrowsContaining -Action {
         & $downloadedInstallerVerifier `
             -InstallerPath $selectionSecretInstaller.InstallerPath `
-            -ExpectedModuleId @('AP', 'CP')
+            -ExpectedClientCode $selectionSecretInstaller.ClientCodes
     } -Needles @('iiot-enabled-plugins.json', 'must not declare bootstrapSecret')
 
     $pluginSecretInstaller = New-DownloadedInstallerFixture -LeakSecretInPlugin
     Assert-ThrowsContaining -Action {
         & $downloadedInstallerVerifier `
             -InstallerPath $pluginSecretInstaller.InstallerPath `
-            -ExpectedModuleId @('AP', 'CP')
+            -ExpectedClientCode $pluginSecretInstaller.ClientCodes
     } -Needles @('Plugin payload entry', 'must not declare bootstrapSecret')
 
     $pluginBinarySecretInstaller = New-DownloadedInstallerFixture -LeakSecretInPluginBinary
     Assert-ThrowsContaining -Action {
         & $downloadedInstallerVerifier `
             -InstallerPath $pluginBinarySecretInstaller.InstallerPath `
-            -ExpectedModuleId @('AP', 'CP')
+            -ExpectedClientCode $pluginBinarySecretInstaller.ClientCodes
     } -Needles @('Plugin payload entry', 'contains a bootstrap secret from iiot-binding.json')
 
     $mismatchedPluginVersionInstaller = New-DownloadedInstallerFixture `
@@ -485,8 +581,8 @@ try {
     Assert-ThrowsContaining -Action {
         & $downloadedInstallerVerifier `
             -InstallerPath $mismatchedPluginVersionInstaller.InstallerPath `
-            -ExpectedModuleId @('AP', 'CP') `
-            -ExpectedPluginVersions @{ AP = '2.0.19'; CP = '2.0.19' }
+            -ExpectedClientCode $mismatchedPluginVersionInstaller.ClientCodes `
+            -ExpectedPluginVersions @{ 'DEV-AP' = '2.0.19'; 'DEV-CP' = '2.0.19' }
     } -Needles @('plugin.json version', 'does not match iiot-enabled-plugins.json')
 
     $mismatchedUpdateSourceInstaller = New-DownloadedInstallerFixture `
@@ -494,14 +590,14 @@ try {
     Assert-ThrowsContaining -Action {
         & $downloadedInstallerVerifier `
             -InstallerPath $mismatchedUpdateSourceInstaller.InstallerPath `
-            -ExpectedModuleId @('AP', 'CP')
+            -ExpectedClientCode $mismatchedUpdateSourceInstaller.ClientCodes
     } -Needles @('launcher.update.json source', 'not consistent with iiot-binding.json baseUrl and channel')
 
     Assert-ThrowsContaining -Action {
         & $downloadedInstallerVerifier `
             -InstallerPath $validInstaller.InstallerPath `
-            -ExpectedModuleId AP
-    } -Needles @('iiot-binding.json module count', "does not match expected '1'")
+            -ExpectedClientCode 'DEV-AP'
+    } -Needles @('iiot-binding.json ClientCode count', "does not match expected '1'")
 
     $preflightFixture = New-PreflightWorkspaceFixture
     $basePreflightArguments = @(

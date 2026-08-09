@@ -2,6 +2,7 @@ using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.Config;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Application.Common.DataPipeline;
+using IIoT.Edge.Application.Common.Identity;
 using IIoT.Edge.Host.DataPipeline;
 using IIoT.Edge.Host.DataPipeline.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +17,8 @@ public sealed class DataPipelineServiceBehaviorTests
         var paths = CreateRuntimePaths();
         var missingIngressServices = new ServiceCollection();
         missingIngressServices.AddSingleton<ILogService>(new FakeLogService());
+        missingIngressServices.AddSingleton<IDevicePluginRuntimeContext>(
+            new StubDevicePluginRuntimeContext());
         missingIngressServices.AddEdgeRuntime(paths);
         using (var missingIngressProvider = missingIngressServices.BuildServiceProvider())
         {
@@ -26,12 +29,26 @@ public sealed class DataPipelineServiceBehaviorTests
 
         var services = new ServiceCollection();
         services.AddSingleton<ILogService>(new FakeLogService());
+        services.AddSingleton<IDevicePluginRuntimeContext>(
+            new StubDevicePluginRuntimeContext());
         services.AddSingleton<IDataPipelineIngressStore>(new FakeDataPipelineIngressStore());
         services.AddEdgeRuntime(paths);
         using var provider = services.BuildServiceProvider();
 
         Assert.NotNull(provider.GetRequiredService<DataPipelineService>());
         Assert.Null(provider.GetService<IIngressOverflowPersistence>());
+    }
+
+    private sealed class StubDevicePluginRuntimeContext : IDevicePluginRuntimeContext
+    {
+        public DevicePluginRuntimeIdentity Current { get; } = new(
+            3,
+            "GEN-TEST",
+            "P1-TEST",
+            "TestProcess",
+            "TestModule",
+            "2.0.12",
+            new string('A', 64));
     }
 
     [Fact]

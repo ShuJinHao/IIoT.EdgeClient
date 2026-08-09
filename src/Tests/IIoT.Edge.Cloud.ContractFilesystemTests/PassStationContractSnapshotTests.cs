@@ -25,6 +25,18 @@ public sealed partial class PassStationContractSnapshotTests
             nullability.Create(itemType.GetProperty(nameof(PassStationUploadItem.CellResult))!).ReadState);
         Assert.Equal(typeof(DateTime), itemType.GetProperty(nameof(PassStationUploadItem.CompletedTime))!.PropertyType);
         Assert.Equal(typeof(JsonElement), itemType.GetProperty(nameof(PassStationUploadItem.Payload))!.PropertyType);
+        Assert.Equal(typeof(string), Nullable.GetUnderlyingType(
+            itemType.GetProperty(nameof(PassStationUploadItem.CompletionId))!.PropertyType)
+            ?? itemType.GetProperty(nameof(PassStationUploadItem.CompletionId))!.PropertyType);
+        Assert.Equal(typeof(string), Nullable.GetUnderlyingType(
+            itemType.GetProperty(nameof(PassStationUploadItem.ClientCode))!.PropertyType)
+            ?? itemType.GetProperty(nameof(PassStationUploadItem.ClientCode))!.PropertyType);
+        Assert.Equal(typeof(string), Nullable.GetUnderlyingType(
+            itemType.GetProperty(nameof(PassStationUploadItem.TypeKey))!.PropertyType)
+            ?? itemType.GetProperty(nameof(PassStationUploadItem.TypeKey))!.PropertyType);
+        Assert.Equal(typeof(string), Nullable.GetUnderlyingType(
+            itemType.GetProperty(nameof(PassStationUploadItem.PlcCode))!.PropertyType)
+            ?? itemType.GetProperty(nameof(PassStationUploadItem.PlcCode))!.PropertyType);
     }
 
     [Fact]
@@ -86,22 +98,26 @@ public sealed partial class PassStationContractSnapshotTests
     }
 
     [Fact]
-    public void StrictV2Snapshot_ShouldMatchCloudProviderExampleAndConsumerConstants()
+    public void StrictV3Snapshot_ShouldMatchCloudProviderExampleAndConsumerConstants()
     {
         var path = Path.Combine(
             AppContext.BaseDirectory,
             "ContractSnapshots",
-            "pass-station-batch-v2.json");
+            "pass-station-batch-v3.json");
         var bytes = File.ReadAllBytes(path);
         Assert.Equal(
-            "3ecfd0c47605dbc099a84c0b5b91ee8e53b4b45e2d4dec4bad3f7d24c5b23e40",
+            "a4ab8dabc09d7f6d72d1f4b7c28efdfc39900c90a67f96325eeb768be2325cd2",
             Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant());
         using var snapshot = JsonDocument.Parse(bytes);
         var root = snapshot.RootElement;
 
         Assert.Equal(PassStationCloudContract.StrictSchemaVersion, root.GetProperty("schemaVersion").GetInt32());
         Assert.Equal(
-            [PassStationCloudContract.LegacySchemaVersion, PassStationCloudContract.StrictSchemaVersion],
+            [
+                PassStationCloudContract.LegacySchemaVersion,
+                2,
+                PassStationCloudContract.StrictSchemaVersion
+            ],
             root.GetProperty("compatibility").GetProperty("providerContinuesToAccept")
                 .EnumerateArray()
                 .Select(item => item.GetInt32())
@@ -114,11 +130,15 @@ public sealed partial class PassStationContractSnapshotTests
             root.GetProperty("request").GetProperty("rules").GetProperty("requestIdDifferentContentCode").GetString());
 
         var example = root.GetProperty("example");
-        Assert.Equal("cp", example.GetProperty("processType").GetString());
+        Assert.Equal("diecut", example.GetProperty("processType").GetString());
+        Assert.Equal("die-cutting-completion", example.GetProperty("routeTypeKey").GetString());
+        Assert.Equal("DEVICE-P2-0001", example.GetProperty("clientCode").GetString());
         Assert.Equal(PassStationCloudContract.StrictSchemaVersion, example.GetProperty("schemaVersion").GetInt32());
         var item = Assert.Single(example.GetProperty("items").EnumerateArray());
         Assert.Equal(PassStationCloudContract.EmittedOk, item.GetProperty("cellResult").GetString());
-        Assert.Equal("MG1", item.GetProperty("payload").GetProperty("clipSlot").GetString());
+        Assert.Equal("completion-20260802-0001", item.GetProperty("completionId").GetString());
+        Assert.Equal(example.GetProperty("clientCode").GetString(), item.GetProperty("clientCode").GetString());
+        Assert.Equal(example.GetProperty("routeTypeKey").GetString(), item.GetProperty("typeKey").GetString());
     }
 
     [GeneratedRegex("^[0-9A-F]{64}$", RegexOptions.CultureInvariant)]

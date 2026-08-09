@@ -26,18 +26,9 @@ internal static class ShellLaunchTargetResolver
             }
         }
 
-        var dllFallbackPath = GetDllFallbackPath(configuredPath);
-        if (fileExists(dllFallbackPath))
-        {
-            return new ShellLaunchTarget(
-                "dotnet",
-                [dllFallbackPath],
-                Path.GetDirectoryName(dllFallbackPath) ?? AppContext.BaseDirectory);
-        }
-
         var candidates = GetExecutableCandidates(configuredPath, isWindows);
         throw new FileNotFoundException(
-            $"未找到目标客户端可执行文件：{configuredPath}。候选路径：{string.Join(", ", candidates)}。请先确认目标工序运行目录已生成，或检查 launcher.profiles.json 中的 ExecutablePath 配置。",
+            $"未找到目标客户端自包含可执行文件：{configuredPath}。候选路径：{string.Join(", ", candidates)}。生产模式禁止回退调用系统 dotnet，请重新下载完整安装包。",
             configuredPath);
     }
 
@@ -45,7 +36,6 @@ internal static class ShellLaunchTargetResolver
     {
         var candidates = new List<string>();
         AddDistinct(candidates, GetDirectExecutableCandidates(configuredPath, isWindows));
-        AddDistinct(candidates, GetDllFallbackPath(configuredPath));
         return candidates;
     }
 

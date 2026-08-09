@@ -28,6 +28,7 @@
                       ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\Application\IIoT.Edge.Application\IIoT.Edge.Application.csproj" />
     <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.Update\IIoT.Edge.Infrastructure.Update.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\IIoT.Edge.Infrastructure.Persistence.Dapper\IIoT.Edge.Infrastructure.Persistence.Dapper.csproj" />
     <ProjectReference Include="..\..\Shared\IIoT.Edge.SharedKernel\IIoT.Edge.SharedKernel.csproj" />
     <PackageReference Include="IIoT.Edge.Module.Contracts" />
     <PackageReference Include="IIoT.Edge.UI.Shared" />

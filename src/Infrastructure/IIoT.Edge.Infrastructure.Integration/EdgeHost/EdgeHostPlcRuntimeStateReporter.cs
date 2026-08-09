@@ -2,6 +2,7 @@ using IIoT.Edge.Module.Contracts.Cloud;
 using IIoT.Edge.Module.Contracts.Config;
 using IIoT.Edge.Module.Contracts.Device;
 using IIoT.Edge.Module.Contracts.Logging;
+using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Application.Common.Device;
 using IIoT.Edge.Infrastructure.Integration.Config;
 
@@ -37,12 +38,32 @@ public sealed class EdgeHostPlcRuntimeStateReporter(
                     deviceService.CurrentUploadGate.Reason.ToReasonCode());
             }
 
-            var states = await snapshotProvider.GetCurrentAsync(cancellationToken).ConfigureAwait(false);
+            var authoritative = snapshotProvider is IAuthoritativePlcSnapshotProvider authoritativeProvider
+                ? await authoritativeProvider.GetCurrentAsync(cancellationToken).ConfigureAwait(false)
+                : null;
+            if (authoritative is { IsAuthoritative: false })
+            {
+                logger.Debug(
+                    $"[PLC 状态上报] 权威快照不可用，已跳过本轮：{authoritative.UnavailableReason ?? "unknown"}");
+                return EdgeHostPlcRuntimeStateReportResult.Skipped("plc_snapshot_unavailable");
+            }
+
+            var states = authoritative is null
+                ? await snapshotProvider.GetCurrentAsync(cancellationToken).ConfigureAwait(false)
+                : Map(authoritative.Items);
             var payload = new EdgeHostPlcRuntimeStateReport(
                 session.DeviceId,
                 session.ClientCode,
                 DateTime.UtcNow,
-                states);
+                states)
+            {
+                Authority = authoritative?.IsAuthoritative ?? true,
+                Status = authoritative?.Status ?? AuthoritativePlcSnapshotStatus.Authoritative,
+                ConfigurationVersion = authoritative?.ConfigurationVersion ?? 0,
+                CapturedAtUtc = authoritative?.CapturedAtUtc ?? DateTimeOffset.UtcNow,
+                ClearProjection = authoritative?.ClearProjection ?? false,
+                UnavailableReason = authoritative?.UnavailableReason
+            };
             var result = await cloudHttp
                 .PostAsync(
                     endpointProvider.GetEdgeHostPlcRuntimeStatesPath(),
@@ -67,6 +88,23 @@ public sealed class EdgeHostPlcRuntimeStateReporter(
             return EdgeHostPlcRuntimeStateReportResult.Failed("exception");
         }
     }
+
+    private static IReadOnlyList<EdgeHostPlcRuntimeStateReportItem> Map(
+        IReadOnlyList<AuthoritativePlcSnapshotItem> items)
+        => items.Select(static item => new EdgeHostPlcRuntimeStateReportItem(
+                item.PlcCode,
+                item.PlcName,
+                item.ConnectionState == PlcConnectionState.Connected,
+                item.ConnectionState.ToString(),
+                item.LastRealCommunicationAtUtc?.UtcDateTime,
+                Protocol: item.Protocol,
+                Address: string.IsNullOrWhiteSpace(item.IpAddress)
+                    ? null
+                    : item.Port.HasValue
+                        ? $"{item.IpAddress.Trim()}:{item.Port.Value}"
+                        : item.IpAddress.Trim(),
+                LastError: item.LastError))
+            .ToArray();
 
     private async Task<DeviceSession?> ResolveDeviceSessionAsync(CancellationToken cancellationToken)
     {

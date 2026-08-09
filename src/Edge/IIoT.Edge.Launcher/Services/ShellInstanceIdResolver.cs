@@ -12,7 +12,9 @@ public sealed class ShellInstanceIdResolver : IShellInstanceIdResolver
         ArgumentNullException.ThrowIfNull(profile);
 
         var hostDirectory = Path.GetDirectoryName(profile.ExecutablePath) ?? AppContext.BaseDirectory;
-        var configPath = ResolveMachineProfileConfigPath(hostDirectory, profile.MachineProfile);
+        var configPath = !string.IsNullOrWhiteSpace(profile.MachineConfigPath)
+            ? Path.GetFullPath(profile.MachineConfigPath)
+            : ResolveMachineProfileConfigPath(hostDirectory, profile.MachineProfile);
         if (!File.Exists(configPath))
         {
             Trace.TraceWarning($"未找到 Shell 机器配置，无法探测运行态：{configPath}");
@@ -36,7 +38,23 @@ public sealed class ShellInstanceIdResolver : IShellInstanceIdResolver
                 return null;
             }
 
-            return instanceId;
+            if (string.IsNullOrWhiteSpace(profile.ClientCode))
+            {
+                return instanceId;
+            }
+
+            var expected = EdgeClientIdentity.NormalizeClientCode(profile.ClientCode);
+            if (!EdgeClientIdentity.EqualsClientCode(instanceId, expected)
+                || !document.RootElement.TryGetProperty("CloudApi", out var cloudApi)
+                || !cloudApi.TryGetProperty("ClientCode", out var clientCodeElement)
+                || clientCodeElement.ValueKind != JsonValueKind.String
+                || !EdgeClientIdentity.EqualsClientCode(clientCodeElement.GetString(), expected))
+            {
+                Trace.TraceWarning($"Shell 机器配置 ClientCode 与 Launcher 卡片不一致：{configPath}");
+                return null;
+            }
+
+            return expected;
         }
         catch (JsonException ex)
         {

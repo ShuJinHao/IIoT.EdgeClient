@@ -1,5 +1,7 @@
 # Edge 架构边界契约
 
+> **状态：第 0～7 批候选代码保留；复审发现的问题尚未全部收口，当前不是生产基线。**
+
 本文档是 `IIoT.EdgeClient` 的长期架构边界与测试归口契约。它以当前源码、MSBuild 评估图、EF model、真实写入路径、插件装载/打包路径和测试资产为依据，为 `EDGE-ARCH-001` 提供权威输入；Analyzer 不得按目录名、接口名或 EF navigation 自行猜测业务边界。
 
 当前测试分类和选择以项目 metadata、`Select-EdgeCiTests.ps1` 的源码依赖/owner 映射以及本次 TRX discovery 为准。inventory 只能描述当前提交实际存在的项目和测试，不保存历史 case 下限，也不作为业务测试增删审批。已确认功能退役时直接删除其源码和专属测试，不保留兼容工程或 dummy case。
@@ -32,7 +34,7 @@ Edge 的 Host、SDK 与 Private Plugins 物理 owner 和依赖方向由当前项
 | Presentation | `Presentation.Navigation`、`Presentation.Panels`、`Presentation.Shell`、`Presentation.VisualTestData` |
 | Host/Tool | `Host.Bootstrap`、`Host.DataPipeline`、`Shell`、`Launcher`、`Installer`、`RuntimeLayoutSync` |
 | Plugin SDK | Contracts + Module.Sdk，只提供通用 contract/基础能力，不承载具体工序 |
-| Concrete plugin | 独立 `IIoT.Edge.Plugins.Private` 仓的 `IIoT.Edge.Module.Homogenization`；Host 无源码副本 |
+| Concrete plugin | 独立 `IIoT.Edge.Plugins.Private` 仓中当前 AP、CP 及未来经批准的动态设备插件；Host 无任何具体插件源码副本，当前集合不构成框架固定清单 |
 | Analyzer | 独立 `IIoT.Edge.Sdk` 仓的 `IIoT.Edge.Module.Analyzers` 包；作为生产构建 Analyzer 引用 |
 | Test | Host、SDK、插件各自拥有本仓测试；按当前 owner metadata 动态发现，禁止恢复单仓混合 owner |
 | Test fixture | `src/Testing/IIoT.Edge.TestPlugin`；只用于测试构建与 staging，禁止成为生产发布输入 |
@@ -91,12 +93,14 @@ EF navigation、`DbSet` 和 cascade 只表达 ORM 关系，不自动证明 DDD o
 
 ## 4. Persistence 与数据 Owner
 
-### 4.1 EF Core Owner
+### 4.1 Host 自有状态与 v2 遗留 EF Core Owner
+
+本节只描述 `host.db` 中 Host 自有状态，以及尚待插件私库迁移退出的 v2 遗留共享 EF 实现；它不授予 Host 对插件 PLC、IO、MES、任务、参数或生产业务表的长期所有权。v3 唯一目标 Owner 见第 4.3 节。
 
 - Model/DbSet：`Infrastructure.Persistence.EfCore/EdgeDbContext`。
 - Read：`EfReadRepository<T>`；不得向调用方泄漏无法释放 context 的 `IQueryable`。
 - Write/commit：`EdgeUnitOfWorkFactory` 为每个 session 创建独占 `EdgeDbContext` 与 transaction，`EfUnitOfWorkRepository<T>` 只在该 session 内跟踪 Add/Update/Delete，只有 `EdgeUnitOfWork.FlushAsync`/`CommitAsync` 可调用 `DbContext.SaveChangesAsync`。旧 `EfRepository<T>`、repository `SaveChangesAsync`/`ExecuteDeleteAsync`/replace 端口和 open-generic 写 repository DI 已物理删除。
-- Runtime migration：`ApplyMigrations`，唯一 composition caller 为 `AppStartupInitializer`。
+- Runtime migration：`ApplyMigrations`，唯一 composition caller 为 `AppStartupInitializer`；其范围只允许 Host 自有 Schema 与仍在 GAP 中的 v2 遗留 Schema，不得据此新增插件业务表或延长共享库寿命。
 - Design-time：`EdgeDbContextFactory`。
 - `EdgeSqliteSchemaRepair` 是有期限的历史例外；目标是迁成真实 migration 后物理删除，不能成为第二套 schema 演进机制。
 
@@ -110,11 +114,14 @@ EF navigation、`DbSet` 和 cascade 只表达 ORM 关系，不自动证明 DDD o
 
 ### 4.3 模块本地 Persistence Owner
 
-宿主契约当前不批准任何具体工序的模块本地 raw SQLite owner。具体插件确需持久化时，应由插件业务文档裁决窄 persistence port、schema、migration、transaction 和 UI 查询边界，并由插件仓测试负责；宿主只验证包隔离和 contract，不复制已移除工序的数据库实现，也不得把历史实现当作新插件正例。
+- 每个 `ClientCode` 插件独立拥有自己的私有数据库、Schema、migration、仅新空库首次 seed 和事务边界；一个插件不得读写或迁移另一个 `ClientCode` 的业务表。
+- Host 只提供数据库路径、运行目录生命周期和诊断能力；不定义、查询、修改、播种或代理插件业务表，也不把插件数据库并入 `host.db`。
+- 插件业务文档负责裁决其窄 persistence port、Schema、migration、seed、transaction 和 UI 查询边界，插件仓负责对应测试；宿主只验证路径与包隔离契约。
+- 升级不得重新补回人员已删除的播种数据；只有新建空插件库才能执行首次 seed。
 
-### 4.4 已落地的写事务边界
+### 4.4 Host 自有状态与 v2 遗留写事务边界
 
-当前写路径使用显式、一次性、禁止 ambient/`AsyncLocal` 的 Unit of Work session：
+当前 Host 自有状态和 v2 遗留共享 EF 写路径使用显式、一次性、禁止 ambient/`AsyncLocal` 的 Unit of Work session。以下约束用于保护遗留实现直至插件私库迁移完成，不能解释为 Host 是插件业务 persistence 的最终 Owner：
 
 - `IEdgeUnitOfWorkFactory.BeginAsync(ct)` 创建独占一个 `EdgeDbContext` 和一个 provider-supported non-deferred SQLite transaction 的 `IEdgeUnitOfWork : IAsyncDisposable`。
 - 写 repository 只能由 `IEdgeUnitOfWork.Repository<T>()` 获取；删除 open-generic `IRepository<>` 的直接 DI 注册，Application handler 不得跨 session 缓存写 repository。
@@ -124,7 +131,7 @@ EF navigation、`DbSet` 和 cascade 只表达 ORM 关系，不自动证明 DDD o
 - `Update` 继续按主键 load 后 `CurrentValues.SetValues`，不得退化为 `DbContext.Update`，避免不存在记录被插入或 navigation graph 被错误追踪。
 - Stateless `IReadRepository<T>` 保持独立只读端口，泄漏 context 的 `GetQueryable()` 已物理删除；任何跨多步一致性读取必须从当前 UoW session 获取。
 - 每个 UoW connection 在 transaction 前设置 `PRAGMA foreign_keys=ON` 和 busy timeout，并由真实临时 SQLite 测试验证连接隔离、并发串行、flush 后 rollback、跨聚合 commit、外键、replace rollback 和主异常/rollback 异常优先级。
-- 插件开发样本只提交 `ModuleDevelopmentSeedRequest` DTO；设备模板可选携带独立 `PlcCode` 与 `ProtocolFrame`，Host 的 `ModuleDevelopmentSeedWriter` 是 DTO → Domain 唯一写入端口，并且只在创建新设备时物化这些模板字段，不覆盖同名既有设备的现场参数。同一请求只创建一个 UoW/transaction，delete 与 identity 允许 non-durable `FlushAsync`，最终只允许一次 `CommitAsync`。本地候选尚未运行 SQLite rollback/同 PlcCode 重建验证，状态保持 `NOT-VERIFIED`。
+- `ModuleDevelopmentSeedWriter` 是 v2 遗留共享库路径，只在现存链内承担 DTO → Domain 写入；它不是 v3 插件私库的 seed Owner，也不是未来唯一写入口。该路径统一归 `GAP-HL-005` 管理，下一批 AP/CP 私库物理迁移时必须由各插件自有 DbContext/migration/首次 seed/事务替代并从 Host 退出。本批不得以修正文档为由提前改写、复制或扩张该遗留 writer。
 - Cloud 文件 projection 不放进 SQLite transaction。保留 fail-closed saga：数据库与文件任一步失败都不得报告成功，并以独立原子补偿恢复禁用状态。
 
 ## 5. 插件、Outbound 与 PLC Owner
@@ -133,7 +140,7 @@ EF navigation、`DbSet` 和 cascade 只表达 ORM 关系，不自动证明 DDD o
 
 - Plugin entry、Contracts、Module SDK、UI Shared、Analyzer 必须有显式包/角色 metadata；Analyzer 将 `IIoT.Edge.Module.Contracts` 与 `IIoT.Edge.Module.Sdk` 识别为 SDK 面，不能把 Contracts 误判成具体插件。
 - 插件生产源码只允许正式 SDK 包及公共第三方依赖；Application、Domain、SharedKernel、Infrastructure、Presentation、Host 均禁止，Navigation 不再有过渡例外。
-- 具体插件禁止互引，也不得通过 family shared 工程共享具体工序实现；确需通用能力时只能进入经过裁决的 Module SDK 或稳定 contract。
+- 具体插件禁止互引彼此实现、配置、状态或运行产物。通用且稳定的能力进入经过裁决的 Module SDK/contract；经批准的无状态模切族公共源码可以由独立 family source 工程共享，但不得包含设备身份、配置、数据库、状态、点位、MES 凭据或 AP/CP 业务差异，并必须分别进入各插件独立可验证的包闭包。
 - Host/Application/Core/Shared/Infrastructure/Presentation 禁止引用动态发现的具体插件 symbol；配置中的稳定 ModuleId 字符串不按 type reference 误报。
 
 ### 5.2 Outbound
@@ -141,6 +148,7 @@ EF navigation、`DbSet` 和 cascade 只表达 ORM 关系，不自动证明 DDD o
 - 模块 Production Task 只能生成 `DataPipelineRecord` 并调用 `IDataPipelineService.EnqueueAsync`。
 - Task 内禁止直接持有或调用 HttpClient、MES/Cloud client、request executor、uploader、`UploadAsync`/`PostAsync`/`SendAsync` 或 helper 包装后的同义绕过。
 - MES channel/Cloud channel 的批准 outbound owner 位于 Application/Infrastructure/模块已登记 channel seam；Cloud/MES probe、gate、retry、fallback、deadletter 继续严格分离。
+- 完整 Cloud `DeviceSession` 与 bootstrap/Access/Refresh/Activation Token 只归 Host 的 Cloud 出站 owner；SDK/插件 seam 只能暴露不含秘密的设备身份视图和业务完成事实。MES outbound 不得接收 `DeviceId`、Cloud Token、会话或门控状态。
 
 ### 5.3 PLC transport owner
 
@@ -151,7 +159,7 @@ EF navigation、`DbSet` 和 cascade 只表达 ORM 关系，不自动证明 DDD o
 
 ### 5.4 插件包动态边界
 
-当前宿主加载边界允许 `entry + plugin-owned assembly/resources/config + 声明的非宿主依赖 + activation`，并把 `IIoT.Edge.Module.Contracts`、`IIoT.Edge.Module.Sdk`、`IIoT.Edge.UI.Shared` 作为 Host 提供的共享程序集。activation 只能通过 schema v1 manifest 显式映射插件自有 launcher/machine 配置；不得包含 Cloud 身份、Host 二进制或越界路径。Launcher 对每个外部插件独立校验和组合，单插件 activation 失败只能 warning + 跳过并保留通用 Default，不能成为进程级启动失败。中性正例继续使用 `IIoT.Edge.Module.TestPlugin.Companion`；中性 fixture 本身只消费正式 SDK 包与 plugin-owned companion，两个 Host staging owner 的实际 artifact 均不含 Application、Domain 或 SharedKernel。预检以 PE metadata 精确拒绝 Application、Domain、SharedKernel、Host、Infrastructure、Presentation、Shell/Launcher/Installer/RuntimeLayoutSync，不得回退到默认 ALC、测试输出根或源项目 `bin`。
+当前宿主加载边界允许 `entry + plugin-owned assembly/resources/config + 声明的非宿主依赖 + activation`，并把 `IIoT.Edge.Module.Contracts`、`IIoT.Edge.Module.Sdk`、`IIoT.Edge.UI.Shared` 作为 Host 提供的共享程序集。activation 只能通过 schema v1 manifest 显式映射插件自有 launcher/machine 配置；不得包含 Cloud 身份、Host 二进制或越界路径。Launcher 对每个外部插件独立校验和组合，单插件 activation 失败只能隔离对应 `ClientCode` 并形成诊断，不得回退启动 `EdgeHostDefault`、空 profile 或借用另一插件目录。中性正例继续使用 `IIoT.Edge.Module.TestPlugin.Companion`；中性 fixture 本身只消费正式 SDK 包与 plugin-owned companion，两个 Host staging owner 的实际 artifact 均不含 Application、Domain 或 SharedKernel。预检以 PE metadata 精确拒绝 Application、Domain、SharedKernel、Host、Infrastructure、Presentation、Shell/Launcher/Installer/RuntimeLayoutSync，不得回退到默认 ALC、测试输出根或源项目 `bin`。
 
 ## 6. 稳定 Rule ID 与启用状态
 
@@ -179,7 +187,7 @@ EF navigation、`DbSet` 和 cascade 只表达 ORM 关系，不自动证明 DDD o
 | `DATA006` | Dapper 写只允许当前 persistence owner | 已启用 error；解析 Dapper extension symbol |
 | `DATA007` | migration/schema DDL 只允许唯一 owner | 先禁止新增 owner；SchemaRepair 迁移后收紧为零例外 |
 | `PLUG001` | 插件禁止 Application/Domain/SharedKernel/Host/Infrastructure/DataPipeline/Presentation 实现 | V1–V4 已验证包级与 runtime边界；不得恢复例外 |
-| `PLUG002` | 具体插件禁止互引，禁止插件族 Shared 业务工程 | 已启用 error；通用能力只能进入 SDK/contract |
+| `PLUG002` | 具体插件禁止互引实现/运行产物；仅允许经批准的无状态 family source 和正式 SDK/contract | 需按 `BR-PLUGIN-017` 校正：业务差异、配置和状态继续禁止共享，批准公共源码为正例 |
 | `PLUG003` | Host/Application/Core/Shared/Infra/Presentation 禁具体插件 symbol | 已启用 error，动态发现全部入口 |
 | `PLUG004` | Contracts/SDK/UI/Analyzer/插件角色、manifest、identity metadata 完整 | V1–V5 已完成本地包、Analyzer/project-graph/runtime验证 |
 | `PLUG005` | 插件硬件/样例契约必须经 module builder，Cloud uploader 必须使用标准通道基类 | 已启用 error；普通插件私有服务注册为正例 |
@@ -209,12 +217,18 @@ EF navigation、`DbSet` 和 cascade 只表达 ORM 关系，不自动证明 DDD o
 - `List/Dictionary.Add` 与 persistence Add 区分；非 Dapper `ExecuteAsync` 不误报。
 - 普通 MediatR `INotification` 与 DomainEvent 区分；名称含 `Store` 但不是 provider 不误报。
 - EF navigation 不等于 Aggregate child；批准的 5 root、未裁决 DeviceParam 精确对账。
-- 具体 plugin → 具体 plugin、plugin → family Shared 反例；plugin → Module SDK/稳定 contract 正例。
+- 具体 plugin → 另一具体 plugin 实现/目录/DLL 为反例；plugin → Module SDK/稳定 contract，以及经批准且无状态、无设备差异的 family source 为正例。family source 一旦持有配置、数据库、状态、身份、点位或 MES 语义必须失败。
 - Task 直连 uploader、经 helper 绕过反例；`IDataPipelineService` 正例。
 - `Task<T>.Result` 与业务 record/property `.Result`；event `async void` 正例和 helper `async void` 反例。
 - Debug-only VisualTestData 正例；无条件、`!=Release`、props/transitive/artifact copy 反例。
 
 AnalyzerTests 必须是 Pure/Architecture 测试，不得启动 Shell、SQLite、PLC、MES、Cloud、容器或 UI。project graph/MSBuild 负例使用隔离临时 fixture，并断言 `dotnet build` 以指定 Rule ID 失败。
+
+### 7.1 C# Analyzer 与 AXAML 门禁分工
+
+- Roslyn Analyzer 只分析 C# 编译语义、程序集引用、symbol、调用图和项目图；它不能证明 `.axaml` 控件树、资源字典或 XAML 编译产物符合共享 UI 规则，也不得把未检查 AXAML 宣称为已覆盖。
+- AXAML 合规由独立的 MSBuild/build-pack 静态门禁与必要的构造/装载验证负责，扫描范围包含插件包内 `.axaml`、编译资源和最终视图注册；其允许控件、文本基元例外及禁止项只引用 [Edge 客户端 UI 第二层规范](./Edge客户端UI第二层规范.md)和 SDK 共享 UI README。
+- C# Analyzer 负责禁止绕过共享 UI API、越界引用和非法注册；AXAML 门禁负责原生交互控件、资源/命名空间和打包后视图。两类门禁分别报告自己的稳定诊断，不得互相替代或用一个“Analyzer 已通过”汇总掩盖另一类未运行。
 
 当前默认 error compiler diagnostics 由 SDK 仓 `EdgeArchitectureDiagnostics.Create`、release docs 与 `SupportedDiagnostics` 共同定义；AnalyzerTests 和隔离 fixture 按当前提交实际发现，不冻结历史 case 数。Host 只消费中央 `Directory.Packages.props` 精确 pin 的 `IIoT.Edge.Module.Analyzers` 包，项目图从中央声明读取期望版本并与实际解析包根精确相等。Host 机器门禁必须从已解析包内的 `AnalyzerReleases.Shipped.md`、`AnalyzerReleases.Unshipped.md` 与 Analyzer DLL读取并校验唯一 `IIoT.Architecture/Error` ID 集合，禁止保留第二份源码真值或由诊断家族 Regex 猜测。根 `Directory.Build.targets` 必须向每个生产项目注入唯一的 `PrivateAssets=all`、`GeneratePathProperty=true`、包含 `analyzers` asset 的 PackageReference，测试与显式插件 fixture 排除；任何 Analyzer 源码 `ProjectReference` 必须 `WSARCH006` fail-closed。隔离 build fixture 必须锁定包 metadata、解析后包根和 Shell project-graph 参数，并以当前正反例 discovery 验证。Shell 与隔离 fixture 的 project-graph `Exec` 传给子进程的仓根和 solution 都必须求值为 canonical 绝对路径，目录参数不得带尾随分隔符，避免 Windows 反斜杠转义闭合引号；Shell 固定主仓路径不得改成可由 CLI 覆盖的属性而形成图路径旁路，fixture root 必须在规范化后精确去尾且继续只对显式 fixture role 生效。Task 到 outbound/DataPipeline sink 的 invocation graph 必须穿透 helper/interface/override/delegate；委托参数按调用点/路径传播，且 simple/compound assignment 必须同时捕获 local/field/property/parameter，批准的外部 method/constructor delegate 参数仍跟踪实际 callback，未知来源统一 fail-closed。只有仓外不可达且全部 source incoming delegate 参数完整绑定的普通非虚 helper 可跳过独立未知根；public、constructor、interface、override、virtual 及其他外部可达入口始终独立 fail-closed。source lambda/local function 使用 tree+span 身份，metadata symbol 使用程序集+限定身份，不能因同名匿名函数或不同调用点碰撞。Application、ModuleSdk、SharedKernel 外部边界除精确 allowlist 外对 `Task`、`void`、同步值和 custom awaitable 统一 fail-closed，无法解析的非 Task delegate 也不例外；`catch` 后重抛、恒 false filter 或非通用异常捕获不能伪装为已处理。Analyzer 必须对 generated code 执行 `Analyze | ReportDiagnostics`，所有 descriptor 必须 `NotConfigurable`。project graph 必须以 `-Force` 扫描根/嵌套隐藏 `.editorconfig`/`.globalconfig`、evaluated Analyzer config items，以及仓内 `.csproj/.props/.targets/.proj` 的 raw/inactive/imported/target-time PropertyGroup；`RunAnalyzers=false`、`RunAnalyzersDuringBuild=false`、架构 ID 的 `NoWarn`/`WarningsNotAsErrors`、任何 IIoT.Architecture ID/category severity 和多 ID `#pragma` 都必须以 `WSARCH006` fail-closed。系统 `SuppressMessageAttribute` 使用 Roslyn semantic model 精确识别；对含候选的项目把每个 `#if/#elif` 条件替换为独立扫描符号，在有界穷举内覆盖 active、inactive、`false` 和矛盾结构分支，超过上限直接失败。跨项目 const 导致 constructor symbol 不完整时必须由 exact attribute type 识别，并对 unresolved 参数 fail-closed；裸名、Attribute 后缀、全限定名、local/global alias 均不得绕过，同名 fake type/namespace alias 及不可满足 fake 分支不得误报。`bin/obj` 排除必须相对当前 `RepositoryRoot`，不得因 fixture 物理位于上层 `obj` 而漏扫。其余 Rule ID 仍是后续实施范围，不得把本次语义门禁扩张解读为生产 pack allowlist 已完成。
 

@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Module.Sdk.Base;
@@ -14,7 +15,10 @@ public abstract class RetryTaskBase<TRuntimeState, TProcessResult> : ScheduledTa
     private readonly IRetryTaskRecordProcessor<TProcessResult> _retryRecordProcessor;
     private readonly IRetryTaskHousekeepingService _housekeepingService;
     private readonly TRuntimeState _retryingState;
+    private readonly TimeSpan _retryInterval;
     private bool _wasUnavailable = true;
+    private DateTimeOffset _nextScheduledRunUtc = DateTimeOffset.MinValue;
+    private int _forceIteration;
 
     protected RetryTaskBase(
         ILogService logger,
@@ -22,7 +26,8 @@ public abstract class RetryTaskBase<TRuntimeState, TProcessResult> : ScheduledTa
         IRetryTaskFallbackRecoveryService fallbackRecoveryService,
         IRetryTaskRecordProcessor<TProcessResult> retryRecordProcessor,
         IRetryTaskHousekeepingService housekeepingService,
-        TRuntimeState retryingState)
+        TRuntimeState retryingState,
+        DataPipelineRetryScheduleOptions? scheduleOptions = null)
         : base(logger)
     {
         _diagnosticsStore = diagnosticsStore;
@@ -30,6 +35,7 @@ public abstract class RetryTaskBase<TRuntimeState, TProcessResult> : ScheduledTa
         _retryRecordProcessor = retryRecordProcessor;
         _housekeepingService = housekeepingService;
         _retryingState = retryingState;
+        _retryInterval = (scheduleOptions ?? new DataPipelineRetryScheduleOptions()).GetInterval();
     }
 
     protected virtual bool SetRetryingBeforeRecovery => false;
@@ -37,6 +43,7 @@ public abstract class RetryTaskBase<TRuntimeState, TProcessResult> : ScheduledTa
     internal Task ExecuteOneIterationAsync(CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
+        Interlocked.Exchange(ref _forceIteration, 1);
         return ExecuteAsync().WaitAsync(ct);
     }
 
@@ -54,6 +61,15 @@ public abstract class RetryTaskBase<TRuntimeState, TProcessResult> : ScheduledTa
             _wasUnavailable = true;
             return;
         }
+
+        var forceIteration = Interlocked.Exchange(ref _forceIteration, 0) != 0;
+        var now = DateTimeOffset.UtcNow;
+        if (!forceIteration && !_wasUnavailable && now < _nextScheduledRunUtc)
+        {
+            return;
+        }
+
+        _nextScheduledRunUtc = now.Add(_retryInterval);
 
         if (SetRetryingBeforeRecovery)
         {

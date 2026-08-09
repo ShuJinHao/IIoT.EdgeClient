@@ -8,12 +8,11 @@ namespace IIoT.Edge.Shell.Core;
 
 public sealed record EdgeRuntimePathPreflightResult(
     EdgeRuntimePaths RuntimePaths,
-    IReadOnlyList<StartupDiagnosticIssue> Issues);
+    IReadOnlyList<StartupDiagnosticIssue> Issues,
+    bool Success);
 
 public static class EdgeRuntimePathPreflight
 {
-    private const string FallbackDirectoryName = "runtime-fallback";
-
     public static EdgeRuntimePathPreflightResult EnsureWritable(EdgeRuntimePaths runtimePaths)
         => EnsureWritable(runtimePaths, ProbeWriteAndReplace);
 
@@ -30,26 +29,7 @@ public static class EdgeRuntimePathPreflight
                 out var failedPath,
                 out var primaryException))
         {
-            return new EdgeRuntimePathPreflightResult(runtimePaths, []);
-        }
-
-        var fallbackPaths = CreateFallbackRuntimePaths(runtimePaths);
-        var fallbackIsWritable = TryPrepareRuntimeDirectories(
-            fallbackPaths,
-            directoryProbe,
-            out var fallbackFailedPath,
-            out var fallbackException);
-        if (fallbackIsWritable)
-        {
-            return new EdgeRuntimePathPreflightResult(
-                fallbackPaths,
-                [
-                    StartupDiagnosticIssueFactory.Create(
-                        "RUNTIME_DATA_ROOT_FALLBACK",
-                        "运行数据目录不可用，已切换到本机可写备用目录。"
-                        + $" 原目录：{runtimePaths.RuntimeDataRoot}；失败路径：{failedPath ?? runtimePaths.RuntimeDataRoot}；"
-                        + $"备用目录：{fallbackPaths.RuntimeDataRoot}；原因：{primaryException?.Message ?? "未知错误"}。")
-                ]);
+            return new EdgeRuntimePathPreflightResult(runtimePaths, [], true);
         }
 
         return new EdgeRuntimePathPreflightResult(
@@ -57,12 +37,11 @@ public static class EdgeRuntimePathPreflight
             [
                 StartupDiagnosticIssueFactory.Create(
                     "RUNTIME_DATA_ROOT_UNAVAILABLE",
-                    "运行数据目录和备用目录都不可用，后续持久化服务可能无法启动。"
+                    "设备插件运行数据目录不可用，已阻止启动；系统不会改用备用目录创建第二份数据库。"
                     + $" 原目录：{runtimePaths.RuntimeDataRoot}；失败路径：{failedPath ?? runtimePaths.RuntimeDataRoot}；"
-                    + $"原错误：{primaryException?.Message ?? "未知错误"}；"
-                    + $"备用目录：{fallbackPaths.RuntimeDataRoot}；备用失败路径：{fallbackFailedPath ?? fallbackPaths.RuntimeDataRoot}；"
-                    + $"备用错误：{fallbackException?.Message ?? "未知错误"}。")
-            ]);
+                    + $"错误：{primaryException?.Message ?? "未知错误"}。")
+            ],
+            false);
     }
 
     private static bool TryPrepareRuntimeDirectories(
@@ -161,35 +140,4 @@ public static class EdgeRuntimePathPreflight
             .Where(static path => !string.IsNullOrWhiteSpace(path))
             .Distinct(StringComparer.OrdinalIgnoreCase);
 
-    private static EdgeRuntimePaths CreateFallbackRuntimePaths(EdgeRuntimePaths runtimePaths)
-    {
-        var profile = EdgeClientProgramDataPaths.SanitizePathSegment(runtimePaths.ProfileName);
-        var fallbackRoot = Path.Combine(
-            ResolveWritableFallbackBase(),
-            "IIoT.Edge",
-            FallbackDirectoryName,
-            profile);
-        var diagnosticsDirectory = Path.Combine(fallbackRoot, "diagnostics");
-        return runtimePaths with
-        {
-            RuntimeDataRoot = fallbackRoot,
-            DatabaseDirectory = Path.Combine(fallbackRoot, "db"),
-            ContextDirectory = Path.Combine(fallbackRoot, "context"),
-            RecipeDirectory = Path.Combine(fallbackRoot, "recipe"),
-            ExcelDirectory = Path.Combine(fallbackRoot, "excel"),
-            DiagnosticsDirectory = diagnosticsDirectory,
-            LogDirectory = Path.Combine(diagnosticsDirectory, "logs"),
-            DeviceCacheFilePath = Path.Combine(fallbackRoot, "device_cache.json"),
-            PrimaryCrashLogPath = Path.Combine(diagnosticsDirectory, "crash.log"),
-            FallbackCrashLogPath = Path.Combine(diagnosticsDirectory, "crash.fallback.log")
-        };
-    }
-
-    private static string ResolveWritableFallbackBase()
-    {
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return string.IsNullOrWhiteSpace(localAppData)
-            ? Path.GetTempPath()
-            : localAppData;
-    }
 }

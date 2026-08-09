@@ -6,6 +6,8 @@ using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 using IIoT.Edge.Application.Features.DataPipeline.DeadLetters;
 using System.Data;
+using IIoT.Edge.Application.Common.Identity;
+using IIoT.Edge.Application.Common.DataPipeline;
 
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 
@@ -13,6 +15,8 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
 {
     private static readonly DateTime AbandonedRetryTimeUtc = DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc);
     private readonly ICellDataJsonSerializer _cellDataJsonSerializer;
+    private readonly IDevicePluginRuntimeContext? _runtimeContext;
+    private readonly TimeSpan _retryInterval;
 
     protected abstract string ChannelName { get; }
     protected abstract string ClaimTableName { get; }
@@ -31,10 +35,14 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
     protected RetryRecordStoreBase(
         SqliteConnectionFactory connectionFactory,
         ILogService logger,
-        ICellDataJsonSerializer cellDataJsonSerializer)
+        ICellDataJsonSerializer cellDataJsonSerializer,
+        IDevicePluginRuntimeContext? runtimeContext = null,
+        DataPipelineRetryScheduleOptions? retryScheduleOptions = null)
         : base(connectionFactory, logger)
     {
         _cellDataJsonSerializer = cellDataJsonSerializer;
+        _runtimeContext = runtimeContext;
+        _retryInterval = (retryScheduleOptions ?? new DataPipelineRetryScheduleOptions()).GetInterval();
     }
 
     public async Task SaveAsync(
@@ -46,7 +54,9 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
         var cellData = record.CellData;
         var cellDataJson = _cellDataJsonSerializer.Serialize(cellData);
         await SaveRawCoreAsync(
-            cellData.ProcessType,
+            _runtimeContext?.Current is { IsV3: true } runtime
+                ? runtime.ProcessType
+                : cellData.ProcessType,
             cellDataJson,
             failedTarget,
             errorMessage,
@@ -75,6 +85,9 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
             record.FailedTarget,
             $"manual_requeue:{record.FailureStage}:{record.FailureReason}",
             new DataPipelineContextRow(
+                record.ClientCode,
+                record.CompletionId,
+                record.TypeKey,
                 record.PlcCode,
                 record.IdempotencyKeyVersion,
                 record.NetworkDeviceId,
@@ -103,12 +116,14 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
             await connection.ExecuteAsync(new CommandDefinition(
                 $"""
                  INSERT INTO {DeadLetterTableName}
-                    (ProcessType, CellDataJson, FailedTarget, SourceTable, SourceRecordId,
+                    (ClientCode, CompletionId, TypeKey,
+                     ProcessType, CellDataJson, FailedTarget, SourceTable, SourceRecordId,
                      FailureStage, FailureReason, CreatedAt,
                      PlcCode, IdempotencyKeyVersion,
                      NetworkDeviceId, DeviceName, ModuleId, TaskKey,
                      PlanSessionId, MainPlanCode, TraceBatchNumber)
                  SELECT
+                    r.ClientCode, r.CompletionId, r.TypeKey,
                     r.ProcessType, r.CellDataJson, r.FailedTarget, @SourceTable, r.Id,
                     @FailureStage, @FailureReason, @CreatedAt,
                     r.PlcCode, r.IdempotencyKeyVersion,
@@ -200,13 +215,15 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
             var retryId = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
                 $"""
                  INSERT INTO {TableName}
-                    (ProcessType, CellDataJson, FailedTarget, ErrorMessage,
+                    (ClientCode, CompletionId, TypeKey,
+                     ProcessType, CellDataJson, FailedTarget, ErrorMessage,
                      RetryCount, NextRetryTime, CreatedAt,
                      PlcCode, IdempotencyKeyVersion,
                      NetworkDeviceId, DeviceName, ModuleId, TaskKey,
                      PlanSessionId, MainPlanCode, TraceBatchNumber)
                  VALUES
-                    (@ProcessType, @CellDataJson, @FailedTarget, @ErrorMessage,
+                    (@ClientCode, @CompletionId, @TypeKey,
+                     @ProcessType, @CellDataJson, @FailedTarget, @ErrorMessage,
                      0, @NextRetryTime, @CreatedAt,
                      @PlcCode, @IdempotencyKeyVersion,
                      @NetworkDeviceId, @DeviceName, @ModuleId, @TaskKey,
@@ -215,11 +232,14 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
                  """,
                 new
                 {
+                    record.ClientCode,
+                    record.CompletionId,
+                    record.TypeKey,
                     record.ProcessType,
                     record.CellDataJson,
                     record.FailedTarget,
                     ErrorMessage = $"manual_requeue:{record.FailureStage}:{record.FailureReason}",
-                    NextRetryTime = nowUtc.AddSeconds(30).ToString("O"),
+                    NextRetryTime = nowUtc.Add(_retryInterval).ToString("O"),
                     CreatedAt = nowUtc.ToString("O"),
                     record.PlcCode,
                     IdempotencyKeyVersion = (int)record.IdempotencyKeyVersion,
@@ -289,13 +309,15 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
         var nowUtc = DateTime.UtcNow;
 
         var sql = $@"
-            INSERT INTO {TableName}
-                (ProcessType, CellDataJson, FailedTarget, ErrorMessage,
+            INSERT OR IGNORE INTO {TableName}
+                (ClientCode, CompletionId, TypeKey,
+                 ProcessType, CellDataJson, FailedTarget, ErrorMessage,
                  RetryCount, NextRetryTime, CreatedAt,
                  PlcCode, IdempotencyKeyVersion,
                  NetworkDeviceId, DeviceName, ModuleId, TaskKey, PlanSessionId, MainPlanCode, TraceBatchNumber)
             VALUES
-                (@ProcessType, @CellDataJson, @FailedTarget, @ErrorMessage,
+                (@ClientCode, @CompletionId, @TypeKey,
+                 @ProcessType, @CellDataJson, @FailedTarget, @ErrorMessage,
                  0, @NextRetryTime, @CreatedAt,
                  @PlcCode, @IdempotencyKeyVersion,
                  @NetworkDeviceId, @DeviceName, @ModuleId, @TaskKey, @PlanSessionId, @MainPlanCode, @TraceBatchNumber)";
@@ -303,10 +325,13 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
         var affectedRows = await SafeExecuteAsync(sql, new
         {
             ProcessType = processType,
+            context.ClientCode,
+            context.CompletionId,
+            context.TypeKey,
             CellDataJson = cellDataJson,
             FailedTarget = failedTarget,
             ErrorMessage = errorMessage,
-            NextRetryTime = nowUtc.AddSeconds(30).ToString("O"),
+            NextRetryTime = nowUtc.Add(_retryInterval).ToString("O"),
             CreatedAt = nowUtc.ToString("O"),
             context.PlcCode,
             IdempotencyKeyVersion = (int)context.IdempotencyKeyVersion,
@@ -321,6 +346,16 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
 
         if (affectedRows <= 0)
         {
+            if (!string.IsNullOrWhiteSpace(context.ClientCode)
+                && !string.IsNullOrWhiteSpace(context.CompletionId)
+                && await SafeCountAsync(
+                    $"SELECT COUNT(*) FROM {TableName} " +
+                    "WHERE ClientCode = @ClientCode AND CompletionId = @CompletionId",
+                    new { context.ClientCode, context.CompletionId }).ConfigureAwait(false) == 1)
+            {
+                return;
+            }
+
             throw new InvalidOperationException($"持久化 {ChannelDisplayName} 补传记录失败。");
         }
     }
@@ -331,6 +366,9 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
             SELECT
                 Id,
                 @Channel AS Channel,
+                ClientCode,
+                CompletionId,
+                TypeKey,
                 ProcessType,
                 CellDataJson,
                 FailedTarget,
@@ -392,6 +430,9 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
                 SELECT
                     r.Id,
                     @Channel AS Channel,
+                    r.ClientCode,
+                    r.CompletionId,
+                    r.TypeKey,
                     r.ProcessType,
                     r.CellDataJson,
                     r.FailedTarget,
@@ -568,6 +609,9 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
 
     private static DataPipelineContextRow CreateContextRow(CellCompletedRecord sourceRecord)
         => new(
+            sourceRecord.ClientCode,
+            sourceRecord.CompletionId,
+            sourceRecord.TypeKey,
             sourceRecord.ResolvePlcCode(),
             sourceRecord.IdempotencyKeyVersion,
             sourceRecord.ResolveNetworkDeviceId(),
@@ -579,6 +623,9 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
             sourceRecord.TraceBatchNumber);
 
     private sealed record DataPipelineContextRow(
+        string ClientCode,
+        string CompletionId,
+        string TypeKey,
         string PlcCode,
         CloudIdempotencyKeyVersion IdempotencyKeyVersion,
         int? NetworkDeviceId,
@@ -590,6 +637,9 @@ public abstract class RetryRecordStoreBase : ClaimBufferStoreBase<FailedCellReco
         string TraceBatchNumber)
     {
         public static DataPipelineContextRow Empty { get; } = new(
+            string.Empty,
+            string.Empty,
+            string.Empty,
             string.Empty,
             CloudIdempotencyKeyVersion.LegacyV1,
             null,

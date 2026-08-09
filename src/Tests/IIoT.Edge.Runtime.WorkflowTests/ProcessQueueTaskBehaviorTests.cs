@@ -2050,7 +2050,7 @@ public sealed class ProcessQueueTaskBehaviorTests
     }
 
     [Fact]
-    public async Task DurableIngress_ShouldResumeOnlyIncompleteConsumersWithoutRepeatingCompletedOutlet()
+    public async Task DurableIngress_ShouldDeleteHandoffAfterReliableRetryTransferWithoutRepeatingOutlets()
     {
         var ingressStore = new FakeDataPipelineIngressStore();
         var pipeline = new DataPipelineService(
@@ -2059,42 +2059,45 @@ public sealed class ProcessQueueTaskBehaviorTests
             ingressStore);
         var record = CreateTestPluginRecord(
             "TestPlugin.DurableIngress",
-            DataPipelineUploadTargets.Cloud);
+            DataPipelineUploadTargets.Cloud | DataPipelineUploadTargets.Mes);
         await pipeline.EnqueueAsync(record, TestContext.Current.CancellationToken);
 
         var localA = new FakeCellDataConsumer("Capacity", 10, retryChannel: null, result: true);
-        var allowLocalB = false;
-        var localB = new FakeCellDataConsumer(
-            "Excel",
-            20,
-            retryChannel: null,
-            result: false,
-            processAsync: (_, _) => Task.FromResult(allowLocalB));
+        var allowCloud = false;
         var cloud = new FakeCellDataConsumer(
             "Cloud",
+            20,
+            retryChannel: "Cloud",
+            result: false,
+            failureMode: ConsumerFailureMode.Durable,
+            processAsync: (_, _) => Task.FromResult(allowCloud));
+        var mes = new FakeCellDataConsumer(
+            "MES",
             30,
-            "Cloud",
+            "MES",
             result: true,
             failureMode: ConsumerFailureMode.Durable);
         var task = CreateDurableIngressTask(
             pipeline,
             ingressStore,
-            [localA, localB, cloud]);
+            [localA, cloud, mes]);
 
         await task.ExecuteOnceAsync();
 
-        Assert.Single(ingressStore.PendingCompletionIds);
+        // Cloud failure was durably handed to its retry channel, so the short-lived ingress
+        // handoff is complete and must not become a second local history store.
+        Assert.Empty(ingressStore.PendingCompletionIds);
         Assert.Equal(1, localA.ProcessCallCount);
-        Assert.Equal(1, localB.ProcessCallCount);
         Assert.Equal(1, cloud.ProcessCallCount);
+        Assert.Equal(1, mes.ProcessCallCount);
 
-        allowLocalB = true;
+        allowCloud = true;
         await task.ExecuteOnceAsync();
 
         Assert.Empty(ingressStore.PendingCompletionIds);
         Assert.Equal(1, localA.ProcessCallCount);
-        Assert.Equal(2, localB.ProcessCallCount);
         Assert.Equal(1, cloud.ProcessCallCount);
+        Assert.Equal(1, mes.ProcessCallCount);
     }
 
     [Fact]

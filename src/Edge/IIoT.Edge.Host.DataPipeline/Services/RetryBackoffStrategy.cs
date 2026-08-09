@@ -1,19 +1,16 @@
+using IIoT.Edge.Application.Common.DataPipeline;
+
 namespace IIoT.Edge.Host.DataPipeline.Services;
 
-public sealed class DefaultRetryBackoffStrategy : IRetryBackoffStrategy
+public sealed class DefaultRetryBackoffStrategy(
+    DataPipelineRetryScheduleOptions? scheduleOptions = null) : IRetryBackoffStrategy
 {
+    private readonly TimeSpan _retryInterval =
+        (scheduleOptions ?? new DataPipelineRetryScheduleOptions()).GetInterval();
+
     public TimeSpan Calculate(int retryCount)
     {
-        if (retryCount <= 5)
-        {
-            return TimeSpan.FromSeconds(30);
-        }
-
-        if (retryCount <= 10)
-        {
-            return TimeSpan.FromMinutes(5);
-        }
-
-        return TimeSpan.FromMinutes(30);
+        ArgumentOutOfRangeException.ThrowIfNegative(retryCount);
+        return _retryInterval;
     }
 }

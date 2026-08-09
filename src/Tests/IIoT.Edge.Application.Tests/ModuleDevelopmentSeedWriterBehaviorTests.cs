@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using IIoT.Edge.Application.Modules.Samples;
+using IIoT.Edge.Domain.Config.Aggregates;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Contracts.Modules;
@@ -226,6 +227,70 @@ public sealed class ModuleDevelopmentSeedWriterBehaviorTests
         Assert.Empty(bindings.Items);
     }
 
+    [Fact]
+    public async Task FirstInitialization_WhenOnlyGenericSystemConfigExists_ShouldStillSeedPluginData()
+    {
+        var devices = new InMemoryRepository<NetworkDeviceEntity>();
+        var mappings = new InMemoryRepository<IoMappingEntity>();
+        var bindings = new InMemoryRepository<PlcTaskBindingEntity>();
+        var configs = new InMemoryRepository<SystemConfigEntity>(
+            SystemConfigEntity.Create("Host.Language", "zh-CN"));
+        var writer = new ModuleDevelopmentSeedWriter(
+            new TestEdgeUnitOfWorkFactory(devices, mappings, bindings, configs));
+
+        var result = await writer.ApplyAsync(
+            CreateFirstInitializationRequest(),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.AlreadyInitialized);
+        Assert.False(result.ExistingDatabaseAdopted);
+        Assert.Single(devices.Items);
+        Assert.Contains(configs.Items, static item => item.Key == "Module:TestModule:Initialized");
+    }
+
+    [Fact]
+    public async Task FirstInitialization_WhenExistingPluginDeviceExists_ShouldOnlyAdoptAndWriteMarker()
+    {
+        var existing = CreateDevice("existing", "D999", plcCode: "EXISTING-PLC");
+        var devices = new InMemoryRepository<NetworkDeviceEntity>(existing);
+        var mappings = new InMemoryRepository<IoMappingEntity>();
+        var bindings = new InMemoryRepository<PlcTaskBindingEntity>();
+        var configs = new InMemoryRepository<SystemConfigEntity>();
+        var writer = new ModuleDevelopmentSeedWriter(
+            new TestEdgeUnitOfWorkFactory(devices, mappings, bindings, configs));
+
+        var result = await writer.ApplyAsync(
+            CreateFirstInitializationRequest(),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.AlreadyInitialized);
+        Assert.True(result.ExistingDatabaseAdopted);
+        Assert.Single(devices.Items);
+        Assert.Equal("EXISTING-PLC", Assert.Single(devices.Items).PlcCode);
+        Assert.Contains(configs.Items, static item => item.Key == "Module:TestModule:Initialized");
+    }
+
+    [Fact]
+    public async Task FirstInitialization_AfterSuccessfulSeedAndUserDeletesPlc_ShouldNotReplaySeed()
+    {
+        var devices = new InMemoryRepository<NetworkDeviceEntity>();
+        var mappings = new InMemoryRepository<IoMappingEntity>();
+        var bindings = new InMemoryRepository<PlcTaskBindingEntity>();
+        var configs = new InMemoryRepository<SystemConfigEntity>();
+        var writer = new ModuleDevelopmentSeedWriter(
+            new TestEdgeUnitOfWorkFactory(devices, mappings, bindings, configs));
+        var request = CreateFirstInitializationRequest();
+        _ = await writer.ApplyAsync(request, TestContext.Current.CancellationToken);
+        devices.Delete(Assert.Single(devices.Items));
+
+        var restarted = await writer.ApplyAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(restarted.AlreadyInitialized);
+        Assert.Empty(devices.Items);
+    }
+
     private static ModuleDevelopmentSeedRequest CreateRequest(bool resetBeforeImport)
         => new(
             "TestModule",
@@ -274,6 +339,18 @@ public sealed class ModuleDevelopmentSeedWriterBehaviorTests
                     ]
                 }
             ]);
+
+    private static ModuleFirstInitializationRequest CreateFirstInitializationRequest()
+        => new(
+            "EDGE-TEST-001",
+            "TestModule",
+            new ModuleInitializationDescriptor(
+                SchemaVersion: 1,
+                SeedVersion: 1,
+                Environment: "Production",
+                InitializationMarkerKey: "Module:TestModule:Initialized",
+                RunOnlyForNewDatabase: true),
+            CreateRequest(resetBeforeImport: false).Devices);
 
     private static NetworkDeviceEntity CreateDevice(
         string name,

@@ -148,7 +148,7 @@ public sealed class DataPipelineCascadingPersistenceWriter
         try
         {
             retryBlockedReason = await operations
-                .GetRetryBlockReasonAsync(record.CellData.ProcessType, cancellationToken)
+                .GetRetryBlockReasonAsync(ResolveProcessType(record), cancellationToken)
                 .ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
         }
@@ -213,7 +213,7 @@ public sealed class DataPipelineCascadingPersistenceWriter
         try
         {
             fallbackBlockedReason = await operations
-                .GetFallbackBlockReasonAsync(record.CellData.ProcessType, cancellationToken)
+                .GetFallbackBlockReasonAsync(ResolveProcessType(record), cancellationToken)
                 .ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
         }
@@ -366,7 +366,10 @@ public sealed class DataPipelineCascadingPersistenceWriter
                 SourceRecordId: sourceRecordId,
                 FailureStage: stage.ToString(),
                 FailureReason: failureReason,
-                ProcessType: record.CellData.ProcessType,
+                ClientCode: record.ClientCode,
+                CompletionId: record.CompletionId,
+                TypeKey: record.TypeKey,
+                ProcessType: ResolveProcessType(record),
                 CellDataJson: _cellDataJsonSerializer.Serialize(record.CellData),
                 PlcCode: record.ResolvePlcCode(),
                 IdempotencyKeyVersion: record.IdempotencyKeyVersion,
@@ -418,7 +421,10 @@ public sealed class DataPipelineCascadingPersistenceWriter
         string failureReason)
         => new()
         {
-            ProcessType = record.CellData.ProcessType,
+            ClientCode = record.ClientCode,
+            CompletionId = record.CompletionId,
+            TypeKey = record.TypeKey,
+            ProcessType = ResolveProcessType(record),
             CellDataJson = _cellDataJsonSerializer.Serialize(record.CellData),
             FailedTarget = failedTarget,
             SourceTable = sourceTable,
@@ -436,6 +442,11 @@ public sealed class DataPipelineCascadingPersistenceWriter
             MainPlanCode = record.MainPlanCode,
             TraceBatchNumber = record.TraceBatchNumber
         };
+
+    private static string ResolveProcessType(CellCompletedRecord record)
+        => !string.IsNullOrWhiteSpace(record.ProcessType)
+            ? record.ProcessType
+            : record.CellData.ProcessType;
 
     private static string BuildCapacityBlockedFailureReason(
         CapacityBlockedChannel channel,
@@ -477,6 +488,9 @@ public sealed class DataPipelineCascadingPersistenceWriter
         long? SourceRecordId,
         string FailureStage,
         string FailureReason,
+        string ClientCode,
+        string CompletionId,
+        string TypeKey,
         string ProcessType,
         string CellDataJson,
         string PlcCode,

@@ -17,6 +17,8 @@ using IIoT.Edge.Module.Contracts.Time;
 using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.Application.Common.Tasks;
 using IIoT.Edge.Application.Common.Time;
+using IIoT.Edge.Application.Common.Identity;
+using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Module.Contracts.Diagnostics;
 using IIoT.Edge.Host.Bootstrap.Modules;
 using IIoT.Edge.Infrastructure.DeviceComm;
@@ -33,6 +35,7 @@ using IIoT.Edge.Presentation.Panels;
 using IIoT.Edge.Presentation.Shell;
 using IIoT.Edge.Host.DataPipeline;
 using IIoT.Edge.Host.DataPipeline.Tasks;
+using IIoT.Edge.Host.DataPipeline.Services;
 using IIoT.Edge.Module.Contracts.DataPipeline.Capacity;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 using IIoT.Edge.Shell.Core;
@@ -73,10 +76,60 @@ public static class DependencyInjection
         var moduleCatalogIssueList = moduleCatalogIssues.ToList();
         var bootstrapDiagnosticIssueList = bootstrapDiagnosticIssues?.ToList() ?? [];
         var configuredEnabledModuleList = configuredEnabledModuleIds.ToArray();
+        var devicePluginRuntimeContext = new ConfigurationDevicePluginRuntimeContext(configuration);
+        if (devicePluginRuntimeContext.Current.IsV3)
+        {
+            var binding = devicePluginRuntimeContext.Current;
+            var descriptors = discoveredModuleList
+                .Where(descriptor => string.Equals(
+                    descriptor.ModuleId,
+                    binding.ModuleId,
+                    StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            var configuredMatches = configuredEnabledModuleList.Length == 1
+                && string.Equals(
+                    configuredEnabledModuleList[0],
+                    binding.ModuleId,
+                    StringComparison.OrdinalIgnoreCase);
+            var descriptorMatches = descriptors.Length == 1
+                && string.Equals(
+                    descriptors[0].ProcessType,
+                    binding.ProcessType,
+                    StringComparison.OrdinalIgnoreCase);
+            var moduleMatches = enabledModules.Count == 1
+                && string.Equals(
+                    enabledModules[0].ModuleId,
+                    binding.ModuleId,
+                    StringComparison.OrdinalIgnoreCase);
+
+            if (!configuredMatches || !descriptorMatches || !moduleMatches)
+            {
+                moduleCatalogIssueList.Add(new ModuleCatalogIssue(
+                    "DEVICE_PLUGIN_BINDING_MISMATCH",
+                    "v3 Binding 的 ModuleId/ProcessType 与已签名插件清单或实际加载入口不一致，已拒绝注册。",
+                    binding.ModuleId));
+                enabledModules = [];
+            }
+            else
+            {
+                enabledModules =
+                [
+                    new RuntimeBoundEdgeProcessModule(enabledModules[0], binding.ProcessType)
+                ];
+            }
+        }
+        else
+        {
+            enabledModules = BindLegacyProcessTypesFromManifests(
+                enabledModules,
+                discoveredModuleList,
+                moduleCatalogIssueList);
+        }
         var efDbPath = Path.Combine(runtimePaths.DatabaseDirectory, "edge.db");
 
         services.AddSingleton(configuration);
         services.AddSingleton(runtimePaths);
+        services.AddSingleton<IDevicePluginRuntimeContext>(devicePluginRuntimeContext);
         services.AddSingleton<IHostEnvironment>(
             new EdgeHostEnvironment(environmentName, AppContext.BaseDirectory));
         var cellDataTypeRegistry = new CellDataTypeRegistry();
@@ -115,6 +168,10 @@ public static class DependencyInjection
         services.AddSingleton<ICriticalPersistenceFallbackWriter, CriticalPersistenceFallbackWriter>();
         services.Configure<DataPipelineCapacityOptions>(configuration.GetSection(DataPipelineCapacityOptions.SectionName));
         services.AddSingleton(configuration.GetSection(DataPipelineRuntimeOptions.SectionName).Get<DataPipelineRuntimeOptions>() ?? new DataPipelineRuntimeOptions());
+        services.AddSingleton(
+            configuration.GetSection(DataPipelineRetryScheduleOptions.SectionName)
+                .Get<DataPipelineRetryScheduleOptions>()
+            ?? new DataPipelineRetryScheduleOptions());
 
         var shiftConfig = new ShiftConfig();
         configuration.GetSection("Shift").Bind(shiftConfig);
@@ -144,7 +201,9 @@ public static class DependencyInjection
             cellDataTypeRegistry,
             moduleCatalogIssueList);
         var moduleAssemblies = enabledModules
-            .Select(static module => module.GetType().Assembly)
+            .Select(static module => module is RuntimeBoundEdgeProcessModule runtimeBound
+                ? runtimeBound.ImplementationAssembly
+                : module.GetType().Assembly)
             .Distinct()
             .ToArray();
         services.AddMediatR(cfg =>
@@ -234,6 +293,67 @@ public static class DependencyInjection
         return services;
     }
 
+    internal static List<IEdgeProcessModule> BindLegacyProcessTypesFromManifests(
+        IReadOnlyCollection<IEdgeProcessModule> modules,
+        IReadOnlyCollection<ModulePluginDescriptor> descriptors,
+        ICollection<ModuleCatalogIssue> issues)
+    {
+        ArgumentNullException.ThrowIfNull(modules);
+        ArgumentNullException.ThrowIfNull(descriptors);
+        ArgumentNullException.ThrowIfNull(issues);
+
+        var resolved = new List<IEdgeProcessModule>(modules.Count);
+        foreach (var module in modules)
+        {
+            if (!string.IsNullOrWhiteSpace(module.ProcessType))
+            {
+                var declaredManifestMatches = descriptors
+                    .Where(descriptor => string.Equals(
+                        descriptor.ModuleId,
+                        module.ModuleId,
+                        StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+                if (declaredManifestMatches.Length == 1
+                    && !string.Equals(
+                        declaredManifestMatches[0].ProcessType,
+                        module.ProcessType,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    issues.Add(new ModuleCatalogIssue(
+                        "LEGACY_PLUGIN_PROCESS_TYPE_MISMATCH",
+                        $"旧插件清单 ProcessType '{declaredManifestMatches[0].ProcessType}' 与运行时入口 ProcessType '{module.ProcessType}' 不一致，已拒绝注册。",
+                        module.ModuleId));
+                    continue;
+                }
+
+                resolved.Add(module);
+                continue;
+            }
+
+            var manifestMatches = descriptors
+                .Where(descriptor => string.Equals(
+                    descriptor.ModuleId,
+                    module.ModuleId,
+                    StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            if (manifestMatches.Length != 1
+                || string.IsNullOrWhiteSpace(manifestMatches[0].ProcessType))
+            {
+                issues.Add(new ModuleCatalogIssue(
+                    "LEGACY_PLUGIN_PROCESS_TYPE_UNRESOLVED",
+                    "旧插件未显式声明 ProcessType，且无法从唯一、已验证的旧 manifest 解析工序，已拒绝注册；禁止回退到 ModuleId。",
+                    module.ModuleId));
+                continue;
+            }
+
+            resolved.Add(new RuntimeBoundEdgeProcessModule(
+                module,
+                manifestMatches[0].ProcessType));
+        }
+
+        return resolved;
+    }
+
     private static string? ResolveMediatRLicenseKey(IConfiguration configuration)
         => FirstNonEmpty(
             Environment.GetEnvironmentVariable("MediatR__LicenseKey"),
@@ -316,11 +436,6 @@ public static class DependencyInjection
             .Where(static group => group.Count() > 1)
             .Select(static group => group.Key)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var duplicateProcessTypes = modules
-            .GroupBy(static module => module.ProcessType, StringComparer.OrdinalIgnoreCase)
-            .Where(static group => group.Count() > 1)
-            .Select(static group => group.Key)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var transaction = new ModuleRegistrationTransaction(
             services,
             viewRegistry,
@@ -333,12 +448,11 @@ public static class DependencyInjection
 
         foreach (var module in modules)
         {
-            if (duplicateModuleIds.Contains(module.ModuleId)
-                || duplicateProcessTypes.Contains(module.ProcessType))
+            if (duplicateModuleIds.Contains(module.ModuleId))
             {
                 issues.Add(new ModuleCatalogIssue(
                     "PLUGIN_IDENTITY_DUPLICATE",
-                    $"插件“{module.ModuleId}”的 ModuleId 或 ProcessType 重复，已拒绝注册。",
+                    $"插件“{module.ModuleId}”的 ModuleId 重复，已拒绝注册。",
                     module.ModuleId));
                 continue;
             }

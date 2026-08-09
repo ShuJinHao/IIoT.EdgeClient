@@ -10,6 +10,8 @@ public interface ICloudApiEndpointProvider : ICloudApiPathProvider
     string GetBootstrapSecret();
     string GetDeviceInstancePath();
     string GetBootstrapRefreshPath();
+    string GetDeviceActivatePath();
+    string GetDeviceActivateConfirmPath();
     string GetIdentityDeviceLoginPath();
     string GetHumanIdentityRefreshPath();
     string GetHumanSessionValidationPath();

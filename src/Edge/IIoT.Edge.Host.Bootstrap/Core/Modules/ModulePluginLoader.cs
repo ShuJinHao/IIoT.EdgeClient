@@ -84,12 +84,6 @@ public sealed class ModulePluginLoader : IModulePluginLoader
                 $"插件清单 ModuleId '{descriptor.ModuleId}' 与运行时入口 ModuleId '{module.ModuleId}' 不一致。");
         }
 
-        if (!string.Equals(module.ProcessType, descriptor.ProcessType, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new ModulePluginLoadException(
-                $"插件清单 ProcessType '{descriptor.ProcessType}' 与运行时入口 ProcessType '{module.ProcessType}' 不一致。");
-        }
-
         return module;
     }
 

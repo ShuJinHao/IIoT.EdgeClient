@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
-    [Parameter()]
-    [string]$BundleName = "all-official",
+    [Parameter(Mandatory = $true)]
+    [string]$BundleName,
 
     [Parameter()]
     [string]$Configuration = "Release",
@@ -13,11 +13,20 @@ param(
     [string]$OutputRoot = "",
 
     [Parameter()]
-    [string]$ShellProject = "src/Edge/IIoT.Edge.Shell/IIoT.Edge.Shell.csproj"
+    [string]$ShellProject = "src/Edge/IIoT.Edge.Shell/IIoT.Edge.Shell.csproj",
+
+    [Parameter()]
+    [switch]$LegacyCompatibilityOnly
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+if (-not $LegacyCompatibilityOnly) {
+    throw "PublishEdgeBundle.ps1 is a retired legacy compatibility tool. Official release, deployment, and download flows must use the signed dynamic plugin plan. Pass -LegacyCompatibilityOnly only for explicit historical evidence reproduction."
+}
+
+Write-Warning "Running retired legacy bundle tooling. Its output is not an official production release artifact."
 
 function Resolve-NormalizedPath {
     param([Parameter(Mandatory = $true)][string]$Path)

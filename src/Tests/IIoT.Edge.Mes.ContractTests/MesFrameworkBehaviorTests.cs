@@ -1,3 +1,4 @@
+using IIoT.Edge.Application.Common.Identity;
 using IIoT.Edge.Module.Contracts.Mes;
 using IIoT.Edge.Module.Contracts.Shared;
 ﻿using IIoT.Edge.Module.Contracts.Config;
@@ -16,6 +17,171 @@ namespace IIoT.Edge.Mes.ContractTests;
 
 public sealed class MesFrameworkBehaviorTests
 {
+    [Fact]
+    public async Task MesConsumer_WhenLegacyRetryReconstructionCarriesOnlyProcessType_ShouldContinueV2Upload()
+    {
+        var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
+        var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
+        var consumer = new MesConsumer(
+            CreateReadyMesGate(),
+            [uploader],
+            CreateMesRegistry(),
+            diagnosticsStore,
+            new FakeLogService());
+        var reconstructed = new CellCompletedRecord
+        {
+            ProcessType = TestProcessCellData.ProcessTypeKey,
+            CellData = new TestProcessCellData
+            {
+                Barcode = "MES-LEGACY-RETRY",
+                WorkOrderNo = "MES-WO-LEGACY-RETRY",
+                UploadTargets = DataPipelineUploadTargets.Mes
+            }
+        };
+
+        var success = await consumer.ProcessAsync(
+            reconstructed,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(success);
+        Assert.Equal(1, uploader.UploadCallCount);
+        Assert.Equal("Success", diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey)!.LastResult);
+    }
+
+    [Fact]
+    public async Task MesConsumer_WhenV3ExclusiveIdentityIsPartial_ShouldFailClosedBeforeUploader()
+    {
+        var uploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
+        var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
+        var consumer = new MesConsumer(
+            CreateReadyMesGate(),
+            [uploader],
+            CreateMesRegistry(),
+            diagnosticsStore,
+            new FakeLogService());
+        var partialV3 = new CellCompletedRecord
+        {
+            ClientCode = "CLIENT-MES",
+            ProcessType = TestProcessCellData.ProcessTypeKey,
+            CellData = new TestProcessCellData
+            {
+                Barcode = "MES-PARTIAL-V3",
+                WorkOrderNo = "MES-WO-PARTIAL-V3",
+                UploadTargets = DataPipelineUploadTargets.Mes
+            }
+        };
+
+        var success = await consumer.ProcessAsync(
+            partialV3,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(success);
+        Assert.Equal(0, uploader.UploadCallCount);
+        Assert.Equal(
+            "mes_v3_identity_incomplete",
+            diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey)!.LastFailureReason);
+    }
+
+    [Fact]
+    public async Task MesConsumer_V3_ShouldExposeOnlyNarrowPluginIdentity()
+    {
+        var uploader = new FakeMesUploaderV3(TestProcessCellData.ProcessTypeKey);
+        var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
+        var runtime = new StubDevicePluginRuntimeContext(new DevicePluginRuntimeIdentity(
+            3,
+            "generation-v3",
+            "CLIENT-MES-V3",
+            TestProcessCellData.ProcessTypeKey,
+            "TestModule",
+            "2.0.21",
+            new string('a', 64)));
+        var consumer = new MesConsumer(
+            CreateReadyMesGate(),
+            [uploader],
+            CreateMesRegistry(),
+            diagnosticsStore,
+            new FakeLogService(),
+            runtime);
+        var record = new CellCompletedRecord
+        {
+            ClientCode = "CLIENT-MES-V3",
+            CompletionId = "completion-v3",
+            TypeKey = "fixture-completion",
+            ProcessType = TestProcessCellData.ProcessTypeKey,
+            ModuleId = "TestModule",
+            CellData = new TestProcessCellData
+            {
+                Barcode = "MES-V3",
+                WorkOrderNo = "MES-WO-V3",
+                UploadTargets = DataPipelineUploadTargets.Mes
+            }
+        };
+
+        var success = await consumer.ProcessAsync(
+            record,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(success);
+        var context = Assert.IsType<DevicePluginUploadContext>(
+            uploader.LastUploadContext);
+        Assert.Equal("CLIENT-MES-V3", context.Identity.ClientCode);
+        Assert.Equal("TestModule", context.Identity.ModuleId);
+        Assert.Equal(TestProcessCellData.ProcessTypeKey, context.Identity.ProcessType);
+        Assert.Equal(
+            ["ClientCode", "ModuleId", "NormalizedClientCode", "ProcessType"],
+            context.Identity.GetType().GetProperties()
+                .Select(property => property.Name)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray());
+    }
+
+    [Fact]
+    public async Task MesConsumer_V3_ShouldNeverFallbackToLegacyOnlyUploader()
+    {
+        var legacyUploader = new FakeMesUploader(TestProcessCellData.ProcessTypeKey);
+        var diagnosticsStore = new FakeMesUploadDiagnosticsStore();
+        var runtime = new StubDevicePluginRuntimeContext(new DevicePluginRuntimeIdentity(
+            3,
+            "generation-v3",
+            "CLIENT-MES-V3",
+            TestProcessCellData.ProcessTypeKey,
+            "TestModule",
+            "2.0.21",
+            new string('b', 64)));
+        var consumer = new MesConsumer(
+            CreateReadyMesGate(),
+            Array.Empty<IProcessMesUploaderV3>(),
+            CreateMesRegistry(),
+            diagnosticsStore,
+            new FakeLogService(),
+            runtime,
+            [legacyUploader]);
+        var record = new CellCompletedRecord
+        {
+            ClientCode = "CLIENT-MES-V3",
+            CompletionId = "completion-v3",
+            TypeKey = "fixture-completion",
+            ProcessType = TestProcessCellData.ProcessTypeKey,
+            ModuleId = "TestModule",
+            CellData = new TestProcessCellData
+            {
+                Barcode = "MES-V3-LEGACY-ONLY",
+                WorkOrderNo = "MES-WO-V3-LEGACY-ONLY",
+                UploadTargets = DataPipelineUploadTargets.Mes
+            }
+        };
+
+        var success = await consumer.ProcessAsync(
+            record,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(success);
+        Assert.Equal(0, legacyUploader.UploadCallCount);
+        Assert.Equal(
+            "mes_v3_uploader_required",
+            diagnosticsStore.Get(TestProcessCellData.ProcessTypeKey)!.LastFailureReason);
+    }
+
     [Fact]
     public async Task MesConsumer_WhenNoUploaderIsRegistered_ShouldRecordFailureForRetry()
     {
@@ -98,7 +264,9 @@ public sealed class MesFrameworkBehaviorTests
 
         Assert.True(success);
         Assert.Equal(1, uploader.UploadCallCount);
+#pragma warning disable CS0618 // This assertion proves the retained v2 ABI path.
         var uploadContext = Assert.IsType<ProcessUploadContext>(uploader.LastUploadContext);
+#pragma warning restore CS0618
         Assert.Equal("PLC-RECORD-01", uploadContext.Device.DeviceName);
         Assert.Equal(Guid.Empty, uploadContext.Device.DeviceId);
         Assert.Equal(string.Empty, uploadContext.Device.ClientCode);
@@ -338,7 +506,9 @@ public sealed class MesFrameworkBehaviorTests
 
         Assert.True(success);
         Assert.Equal(1, uploader.UploadCallCount);
+#pragma warning disable CS0618 // This assertion proves the retained v2 ABI path.
         var uploadContext = Assert.IsType<ProcessUploadContext>(uploader.LastUploadContext);
+#pragma warning restore CS0618
         Assert.Equal("PLC-MES-BLOCKED", uploadContext.Device.DeviceName);
         Assert.Equal(Guid.Empty, uploadContext.Device.DeviceId);
         Assert.Equal(string.Empty, uploadContext.Device.ClientCode);
@@ -646,6 +816,12 @@ public sealed class MesFrameworkBehaviorTests
             {
                 ["X-Default"] = "default"
             };
+    }
+
+    private sealed class StubDevicePluginRuntimeContext(
+        DevicePluginRuntimeIdentity current) : IDevicePluginRuntimeContext
+    {
+        public DevicePluginRuntimeIdentity Current { get; } = current;
     }
 
     private sealed class FakeModuleParamRoleProvider(string? mesBaseUrl, string? mesHealthPath = "/heath") : IModuleParamRoleProvider

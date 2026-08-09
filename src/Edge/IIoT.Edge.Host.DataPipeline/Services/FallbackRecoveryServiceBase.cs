@@ -140,6 +140,9 @@ internal abstract class FallbackRecoveryServiceBase<TFallbackRecord> : RetryDead
         => new()
         {
             Id = fallback.Id,
+            ClientCode = fallback.ClientCode,
+            CompletionId = fallback.CompletionId,
+            TypeKey = fallback.TypeKey,
             ProcessType = fallback.ProcessType,
             CellDataJson = fallback.CellDataJson,
             FailedTarget = fallback.FailedTarget,

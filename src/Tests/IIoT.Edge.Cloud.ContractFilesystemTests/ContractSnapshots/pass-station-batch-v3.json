@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 3,
+  "contractId": "edge-pass-station-batch-v3",
+  "provider": "IIoT.CloudPlatform",
+  "consumer": "IIoT.EdgeClient",
+  "compatibility": {
+    "providerContinuesToAccept": [1, 2, 3],
+    "consumerUsesV3ForCapabilityBoundRecords": true,
+    "legacyV1AndV2RemainReadCompatibleUntilExplicitExit": true
+  },
+  "http": {
+    "method": "POST",
+    "routeTemplate": "/api/v1/edge/pass-stations/{typeKey}/batch"
+  },
+  "request": {
+    "required": ["deviceId", "clientCode", "items", "schemaVersion", "processType"],
+    "rules": {
+      "schemaVersion": 3,
+      "clientCodeMustMatchAuthenticatedDevice": true,
+      "processTypeMustMatchRegisteredDeviceProcess": true,
+      "routeTypeKeyMustBeDeclaredByInstalledPlugin": true,
+      "requestIdSameContentIsDuplicate": true,
+      "requestIdDifferentContentStatus": 409,
+      "requestIdDifferentContentCode": "cloud_write_conflict"
+    }
+  },
+  "item": {
+    "required": ["completionId", "clientCode", "typeKey", "barcode", "cellResult", "completedTime", "payload"],
+    "optional": ["plcCode"],
+    "rules": {
+      "completionIdUniqueWithinBatch": true,
+      "clientCodeMustMatchBatch": true,
+      "typeKeyMustMatchRoute": true,
+      "payloadMustMatchInstalledPluginSchema": true,
+      "cellResult": ["OK", "NG"],
+      "completedTimeUtc": true
+    }
+  },
+  "example": {
+    "routeTypeKey": "die-cutting-completion",
+    "deviceId": "22222222-2222-2222-2222-222222222222",
+    "clientCode": "DEVICE-P2-0001",
+    "requestId": "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF",
+    "schemaVersion": 3,
+    "processType": "diecut",
+    "items": [
+      {
+        "completionId": "completion-20260802-0001",
+        "clientCode": "DEVICE-P2-0001",
+        "typeKey": "die-cutting-completion",
+        "plcCode": "P2-PLC-01",
+        "barcode": "P2-CELL-001",
+        "cellResult": "OK",
+        "completedTime": "2026-08-02T01:30:00Z",
+        "payload": {
+          "plcCode": "P2-PLC-01",
+          "punchingQuantity": 120
+        }
+      }
+    ]
+  }
+}

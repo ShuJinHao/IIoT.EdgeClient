@@ -32,7 +32,9 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
                     IsConnected = true,
                     ConnectionState = PlcConnectionState.Connected,
                     LastReadAtUtc = observedAt
-                }));
+                }),
+            CreateIdentifiedDeviceService(),
+            new MemoryPlcConfigurationVersionStore());
 
         var items = await provider.GetCurrentAsync(TestContext.Current.CancellationToken);
 
@@ -74,7 +76,9 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
                     ConnectionState = connectionState,
                     IsConnected = isConnected,
                     LastError = lastError
-                }));
+                }),
+            CreateIdentifiedDeviceService(),
+            new MemoryPlcConfigurationVersionStore());
 
         var item = Assert.Single(await provider.GetCurrentAsync(TestContext.Current.CancellationToken));
 
@@ -90,7 +94,9 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
         plc.Rename("一号 PLC");
         var provider = new EdgeHostPlcRuntimeStateSnapshotProvider(
             new InMemoryRepository<NetworkDeviceEntity>(plc),
-            new FakePlcConnectionManager());
+            new FakePlcConnectionManager(),
+            CreateIdentifiedDeviceService(),
+            new MemoryPlcConfigurationVersionStore());
 
         var item = Assert.Single(await provider.GetCurrentAsync(TestContext.Current.CancellationToken));
 
@@ -112,7 +118,9 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
                     DeviceName = "重建前名称",
                     ConnectionState = PlcConnectionState.Connected,
                     IsConnected = true
-                }));
+                }),
+            CreateIdentifiedDeviceService(),
+            new MemoryPlcConfigurationVersionStore());
 
         var item = Assert.Single(await provider.GetCurrentAsync(TestContext.Current.CancellationToken));
 
@@ -135,7 +143,9 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
                     DeviceName = plc.DeviceName,
                     ConnectionState = PlcConnectionState.Connected,
                     IsConnected = true
-                }));
+                }),
+            CreateIdentifiedDeviceService(),
+            new MemoryPlcConfigurationVersionStore());
 
         var item = Assert.Single(await provider.GetCurrentAsync(TestContext.Current.CancellationToken));
 
@@ -155,11 +165,61 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
                     DeviceName = "STALE-PLC",
                     ConnectionState = PlcConnectionState.Connected,
                     IsConnected = true
-                }));
+                }),
+            CreateIdentifiedDeviceService(),
+            new MemoryPlcConfigurationVersionStore());
 
         var items = await provider.GetCurrentAsync(TestContext.Current.CancellationToken);
 
         Assert.Empty(items);
+    }
+
+    [Fact]
+    public async Task AuthoritativeSnapshot_AfterRestart_ShouldKeepPersistentMonotonicConfigurationVersion()
+    {
+        var baseDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "iiot-plc-version-tests",
+            Guid.NewGuid().ToString("N"),
+            "current");
+        Directory.CreateDirectory(baseDirectory);
+        try
+        {
+            var deviceService = CreateIdentifiedDeviceService();
+            var firstProvider = new EdgeHostPlcRuntimeStateSnapshotProvider(
+                new InMemoryRepository<NetworkDeviceEntity>(),
+                new FakePlcConnectionManager(),
+                deviceService,
+                new FilePlcConfigurationVersionStore(baseDirectory));
+            var first = await ((IAuthoritativePlcSnapshotProvider)firstProvider)
+                .GetCurrentAsync(TestContext.Current.CancellationToken);
+
+            firstProvider.Invalidate();
+            var changed = await ((IAuthoritativePlcSnapshotProvider)firstProvider)
+                .GetCurrentAsync(TestContext.Current.CancellationToken);
+
+            var restartedProvider = new EdgeHostPlcRuntimeStateSnapshotProvider(
+                new InMemoryRepository<NetworkDeviceEntity>(),
+                new FakePlcConnectionManager(),
+                deviceService,
+                new FilePlcConfigurationVersionStore(baseDirectory));
+            var afterRestart = await ((IAuthoritativePlcSnapshotProvider)restartedProvider)
+                .GetCurrentAsync(TestContext.Current.CancellationToken);
+
+            Assert.True(first.ClearProjection);
+            Assert.True(changed.ClearProjection);
+            Assert.True(changed.ConfigurationVersion > first.ConfigurationVersion);
+            Assert.Equal(changed.ConfigurationVersion, afterRestart.ConfigurationVersion);
+            Assert.True(afterRestart.ClearProjection);
+        }
+        finally
+        {
+            var root = Directory.GetParent(baseDirectory)?.FullName;
+            if (!string.IsNullOrWhiteSpace(root) && Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
     }
 
     [Fact]
@@ -276,6 +336,30 @@ public sealed class EdgeHostPlcRuntimeStateReportBehaviorTests
             .WithId(id);
         device.UpdateProtocolFrame(protocol);
         return device;
+    }
+
+    private static FakeDeviceService CreateIdentifiedDeviceService()
+    {
+        var service = new FakeDeviceService();
+        service.SetOnline(new DeviceSession
+        {
+            DeviceId = Guid.NewGuid(),
+            ClientCode = "PLC-SNAPSHOT-DEVICE",
+            DeviceName = "PLC snapshot test device",
+            ProcessId = Guid.NewGuid(),
+            UploadAccessToken = "token",
+            UploadAccessTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(5)
+        });
+        return service;
+    }
+
+    private sealed class MemoryPlcConfigurationVersionStore : IPlcConfigurationVersionStore
+    {
+        private long _value = 100;
+
+        public long ReadOrCreate(string clientCode) => Volatile.Read(ref _value);
+
+        public long Advance(string clientCode) => Interlocked.Increment(ref _value);
     }
 
     private sealed class StaticPlcRuntimeStateSnapshotProvider(

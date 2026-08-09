@@ -377,7 +377,6 @@ public sealed class PluginCatalogLifecycleContractTests
 
     [Theory]
     [InlineData("moduleId", "ManifestAlias", "ModuleId")]
-    [InlineData("supportedProcessType", "ManifestProcessAlias", "ProcessType")]
     public void CreateEnabledModules_WhenManifestIdentityDiffersFromRuntime_ShouldRejectActivation(
         string manifestProperty,
         string manifestValue,
@@ -433,6 +432,26 @@ public sealed class PluginCatalogLifecycleContractTests
         {
             ContractTestPathHelper.DeleteDirectory(pluginRoot);
         }
+    }
+
+    [Fact]
+    public void LegacyProcessBinding_WhenDeclaredRuntimeProcessDiffersFromManifest_ShouldRejectActivation()
+    {
+        var module = new StubProcessModule("TestPlugin", "RuntimeProcess");
+        var descriptor = CreateDescriptor("TestPlugin") with
+        {
+            ProcessType = "ManifestProcess"
+        };
+        var issues = new List<ModuleCatalogIssue>();
+
+        var resolved = IIoT.Edge.Host.Bootstrap.DependencyInjection
+            .BindLegacyProcessTypesFromManifests([module], [descriptor], issues);
+
+        Assert.Empty(resolved);
+        var issue = Assert.Single(issues);
+        Assert.Equal("LEGACY_PLUGIN_PROCESS_TYPE_MISMATCH", issue.Code);
+        Assert.Contains("ProcessType", issue.Message, StringComparison.Ordinal);
+        Assert.Contains("不一致", issue.Message, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -2,6 +2,7 @@ using IIoT.Edge.Infrastructure.Update.Profiles;
 using IIoT.Edge.Launcher.Models;
 using IIoT.Edge.Launcher.Services;
 using IIoT.Edge.SharedKernel.Configuration;
+using IIoT.Edge.SharedKernel.Security;
 using Xunit;
 
 namespace IIoT.Edge.Launcher.FilesystemTests;
@@ -67,20 +68,26 @@ public sealed class LauncherDeviceBindingImporterTests
                     }
                     """);
 
+                var credentialStore = new FakeCredentialStore();
                 var importer = new LauncherDeviceBindingImporter(
                     currentDirectory,
                     new FakeProfileCatalog(Profile(hostDirectory)),
                     new FileEdgeProfileModuleConfigurationStore(),
-                    new LauncherUpdateTargetFactory());
+                    new LauncherUpdateTargetFactory(),
+                    credentialStore: credentialStore);
 
                 importer.ApplyPendingBindings();
 
                 var externalConfig = File.ReadAllText(
-                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath("LineA", hostDirectory));
+                    EdgeClientProgramDataPaths.ResolveDevicePluginMachineConfigPath(
+                        "DEV-AAAAAAAAAA",
+                        currentDirectory));
                 Assert.Contains("\"Enabled\": true", externalConfig, StringComparison.Ordinal);
                 Assert.Contains("\"BaseUrl\": \"http://cloud.local:81\"", externalConfig, StringComparison.Ordinal);
                 Assert.Contains("\"ClientCode\": \"DEV-AAAAAAAAAA\"", externalConfig, StringComparison.Ordinal);
-                Assert.Contains("\"BootstrapSecret\": \"SEC-HOMOG-001\"", externalConfig, StringComparison.Ordinal);
+                Assert.DoesNotContain("BootstrapSecret", externalConfig, StringComparison.Ordinal);
+                Assert.Contains("BootstrapCredentialReference", externalConfig, StringComparison.Ordinal);
+                Assert.Equal("SEC-HOMOG-001", Assert.Single(credentialStore.Values).Value);
                 Assert.Contains("\"DeviceInstance\": \"/api/v1/bootstrap/device-instance\"", externalConfig, StringComparison.Ordinal);
                 Assert.Contains("\"ClientReleaseCatalogTemplate\": \"/api/v1/edge/client-releases/device/{deviceId}/catalog\"", externalConfig, StringComparison.Ordinal);
                 Assert.Contains("\"ClientVersionReport\": \"/api/v1/edge/client-releases/version-reports\"", externalConfig, StringComparison.Ordinal);
@@ -92,6 +99,9 @@ public sealed class LauncherDeviceBindingImporterTests
 
                 var appliedFiles = Directory.GetFiles(launcherDir, "iiot-binding.applied.*.json");
                 Assert.Single(appliedFiles);
+                var runtimeBinding = File.ReadAllText(
+                    EdgeClientProgramDataPaths.ResolveRuntimeBindingPath(currentDirectory));
+                Assert.DoesNotContain("SEC-HOMOG-001", runtimeBinding, StringComparison.Ordinal);
             });
         }
         finally
@@ -155,23 +165,25 @@ public sealed class LauncherDeviceBindingImporterTests
                     }
                     """);
 
+                var credentialStore = new FakeCredentialStore();
                 var importer = new LauncherDeviceBindingImporter(
                     hostDirectory,
                     new FakeProfileCatalog(
                         Profile(hostDirectory, "LineA"),
                         Profile(hostDirectory, "LineB")),
                     new FileEdgeProfileModuleConfigurationStore(),
-                    new LauncherUpdateTargetFactory());
+                    new LauncherUpdateTargetFactory(),
+                    credentialStore: credentialStore);
 
                 importer.ApplyPendingBindings();
 
                 var apConfig = File.ReadAllText(
-                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(
-                        "LineA",
+                    EdgeClientProgramDataPaths.ResolveDevicePluginMachineConfigPath(
+                        "DEV-AP",
                         hostDirectory));
                 var cpConfig = File.ReadAllText(
-                    EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(
-                        "LineB",
+                    EdgeClientProgramDataPaths.ResolveDevicePluginMachineConfigPath(
+                        "DEV-CP",
                         hostDirectory));
                 Assert.Contains("\"ClientCode\": \"DEV-AP\"", apConfig, StringComparison.Ordinal);
                 Assert.Contains("\"ClientCode\": \"DEV-CP\"", cpConfig, StringComparison.Ordinal);
@@ -187,6 +199,12 @@ public sealed class LauncherDeviceBindingImporterTests
                 Assert.Contains("DEV-CP", summary, StringComparison.Ordinal);
                 Assert.DoesNotContain("SECRET-AP", summary, StringComparison.Ordinal);
                 Assert.DoesNotContain("SECRET-CP", summary, StringComparison.Ordinal);
+                Assert.Contains(credentialStore.Values, pair =>
+                    pair.Key.EndsWith("/DEV-AP", StringComparison.Ordinal)
+                    && pair.Value == "SECRET-AP");
+                Assert.Contains(credentialStore.Values, pair =>
+                    pair.Key.EndsWith("/DEV-CP", StringComparison.Ordinal)
+                    && pair.Value == "SECRET-CP");
             });
         }
         finally
@@ -350,26 +368,27 @@ public sealed class LauncherDeviceBindingImporterTests
                     }
                     """);
 
+                var credentialStore = new FakeCredentialStore();
                 var importer = new LauncherDeviceBindingImporter(
                     currentDirectory,
                     new FakeProfileCatalog(Profile(hostDirectory)),
                     new FileEdgeProfileModuleConfigurationStore(),
-                    new LauncherUpdateTargetFactory());
+                    new LauncherUpdateTargetFactory(),
+                    credentialStore: credentialStore);
 
                 importer.ApplyPendingBindings();
 
                 var pending = File.ReadAllText(pendingPath);
-                Assert.DoesNotContain("DEV-AP", pending, StringComparison.Ordinal);
-                Assert.DoesNotContain("SECRET-AP", pending, StringComparison.Ordinal);
+                Assert.Contains("DEV-AP", pending, StringComparison.Ordinal);
+                Assert.Contains("SECRET-AP", pending, StringComparison.Ordinal);
                 Assert.Contains("DEV-CP", pending, StringComparison.Ordinal);
                 Assert.Contains("SECRET-CP", pending, StringComparison.Ordinal);
-
-                var appliedPath = Assert.Single(
-                    Directory.GetFiles(launcherDirectory, "iiot-binding.applied.*.json"));
-                var applied = File.ReadAllText(appliedPath);
-                Assert.Contains("DEV-AP", applied, StringComparison.Ordinal);
-                Assert.DoesNotContain("SECRET-AP", applied, StringComparison.Ordinal);
-                Assert.DoesNotContain("DEV-CP", applied, StringComparison.Ordinal);
+                Assert.Empty(Directory.GetFiles(launcherDirectory, "iiot-binding.applied.*.json"));
+                Assert.False(File.Exists(
+                    EdgeClientProgramDataPaths.ResolveDevicePluginMachineConfigPath(
+                        "DEV-AP",
+                        currentDirectory)));
+                Assert.Empty(credentialStore.Values);
             });
         }
         finally
@@ -702,6 +721,20 @@ public sealed class LauncherDeviceBindingImporterTests
         public FakeProfileCatalog(params LauncherProfileDefinition[] profiles) => _profiles = profiles;
 
         public IReadOnlyList<LauncherProfileDefinition> LoadProfiles() => _profiles;
+    }
+
+    private sealed class FakeCredentialStore : IEdgeCredentialStore
+    {
+        public Dictionary<string, string> Values { get; } = new(StringComparer.Ordinal);
+
+        public void Write(string reference, string secret) => Values[reference] = secret;
+
+        public string Read(string reference)
+            => Values.TryGetValue(reference, out var secret)
+                ? secret
+                : throw new KeyNotFoundException(reference);
+
+        public void Delete(string reference) => Values.Remove(reference);
     }
 
     private static LauncherProfileDefinition Profile(

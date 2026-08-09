@@ -12,6 +12,7 @@ using IIoT.Edge.Module.Contracts.Diagnostics;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Application.Common.Tasks;
 using IIoT.Edge.Host.Bootstrap;
+using IIoT.Edge.Infrastructure.Integration.Device;
 using IIoT.Edge.Presentation.Navigation.Features.Shell;
 using IIoT.Edge.Presentation.Panels.Features.Equipment;
 using IIoT.Edge.Presentation.Panels.Features.SysLog;
@@ -68,6 +69,7 @@ public partial class App : global::Avalonia.Application
     {
         var machineProfile = ResolveRequestedMachineProfile();
         IReadOnlyList<string> activeModuleIds = [];
+        var deviceFacts = DeviceLaunchFacts.Empty;
         try
         {
             _updatePresenceLease =
@@ -78,11 +80,11 @@ public partial class App : global::Avalonia.Application
                 ShowStartupError(
                     desktop,
                     "客户端更新正在进行，当前工序暂时不能启动。");
-                _ = EdgeClientUpdateCoordination.TrySignalShellLaunchFailure(
+                _ = TrySignalLaunchFailure(
                     machineProfile,
                     activeModuleIds,
                     "客户端更新正在进行，当前工序暂时不能启动。",
-                    AppDomain.CurrentDomain.BaseDirectory);
+                    deviceFacts);
                 return;
             }
 
@@ -96,6 +98,7 @@ public partial class App : global::Avalonia.Application
 
             var configurationResult = _configurationLoader.Load(AppDomain.CurrentDomain.BaseDirectory);
             var configuration = configurationResult.Configuration;
+            deviceFacts = DeviceLaunchFacts.FromConfiguration(configuration);
             machineProfile = string.IsNullOrWhiteSpace(configurationResult.MachineProfile)
                 ? machineProfile
                 : configurationResult.MachineProfile;
@@ -103,14 +106,38 @@ public partial class App : global::Avalonia.Application
                 AppDomain.CurrentDomain.BaseDirectory,
                 configuration);
             var runtimePaths = runtimePathResolution.RuntimePaths;
+            if (!runtimePathResolution.Success)
+            {
+                ConfigureCrashLogging(runtimePaths);
+                WriteBootstrapDiagnosticIssues(runtimePathResolution.Issues);
+                const string message = "设备插件运行目录配置无效，已阻止启动；请修复安装或绑定配置。";
+                ShowStartupError(desktop, message);
+                _ = TrySignalLaunchFailure(
+                    machineProfile,
+                    activeModuleIds,
+                    message,
+                    deviceFacts);
+                return;
+            }
+
             var runtimePathPreflight = EdgeRuntimePathPreflight.EnsureWritable(runtimePaths);
-            runtimePaths = runtimePathPreflight.RuntimePaths;
             var bootstrapDiagnosticIssues = configurationResult.Issues
                 .Concat(runtimePathResolution.Issues)
                 .Concat(runtimePathPreflight.Issues)
                 .ToArray();
             ConfigureCrashLogging(runtimePaths);
             WriteBootstrapDiagnosticIssues(bootstrapDiagnosticIssues);
+            if (!runtimePathPreflight.Success)
+            {
+                const string message = "设备插件运行目录不可用，已阻止启动；不会切换到备用目录。";
+                ShowStartupError(desktop, message);
+                _ = TrySignalLaunchFailure(
+                    machineProfile,
+                    activeModuleIds,
+                    message,
+                    deviceFacts);
+                return;
+            }
 
             if (!TryAcquireInstanceLock(configuration, desktop))
             {
@@ -132,11 +159,11 @@ public partial class App : global::Avalonia.Application
             {
                 const string message = "应用启动失败，详细信息已写入诊断日志。";
                 ShowStartupError(desktop, message);
-                _ = EdgeClientUpdateCoordination.TrySignalShellLaunchFailure(
+                _ = TrySignalLaunchFailure(
                     machineProfile,
                     activeModuleIds,
                     message,
-                    AppDomain.CurrentDomain.BaseDirectory);
+                    deviceFacts);
                 return;
             }
 
@@ -150,12 +177,40 @@ public partial class App : global::Avalonia.Application
                 activeModuleIds);
             if (!moduleReadiness.Success)
             {
-                _ = EdgeClientUpdateCoordination.TrySignalShellLaunchFailure(
+                _ = TrySignalLaunchFailure(
                     machineProfile,
                     activeModuleIds,
                     moduleReadiness.ErrorMessage!,
-                    AppDomain.CurrentDomain.BaseDirectory);
+                    deviceFacts);
                 return;
+            }
+
+            if (deviceFacts.SchemaVersion >= EdgeInstallerBindingCodec.CurrentSchemaVersion)
+            {
+                var activation = await _serviceProvider
+                    .GetRequiredService<IDeviceActivationCoordinator>()
+                    .EnsureActivatedAsync(
+                        new DeviceActivationReadyFacts(
+                            deviceFacts.GenerationId,
+                            deviceFacts.ClientCode,
+                            Environment.ProcessId,
+                            deviceFacts.ModuleId,
+                            deviceFacts.PluginVersion,
+                            deviceFacts.PackageSha256,
+                            DateTimeOffset.UtcNow),
+                        _appCts.Token)
+                    .ConfigureAwait(true);
+                if (!activation.Success)
+                {
+                    var message = $"设备插件激活失败：{activation.ErrorCode ?? "unknown"}。";
+                    _ = TrySignalLaunchFailure(
+                        machineProfile,
+                        activeModuleIds,
+                        message,
+                        deviceFacts);
+                    desktop.Shutdown(-1);
+                    return;
+                }
             }
 
             var launchDiagnostics = BuildShellLaunchDiagnostics(
@@ -171,23 +226,74 @@ public partial class App : global::Avalonia.Application
                     machineProfile,
                     activeModuleIds,
                     launchDiagnostics,
-                    AppDomain.CurrentDomain.BaseDirectory)
+                    AppDomain.CurrentDomain.BaseDirectory,
+                    deviceFacts.ClientCode,
+                    deviceFacts.ModuleId,
+                    deviceFacts.PluginVersion,
+                    deviceFacts.PackageSha256)
                 : EdgeClientUpdateCoordination.TrySignalShellLaunchReady(
                     machineProfile,
                     activeModuleIds,
-                    AppDomain.CurrentDomain.BaseDirectory);
+                    AppDomain.CurrentDomain.BaseDirectory,
+                    deviceFacts.ClientCode,
+                    deviceFacts.ModuleId,
+                    deviceFacts.PluginVersion,
+                    deviceFacts.PackageSha256);
         }
         catch (Exception ex)
         {
             TryWriteCrashLog("Shell 启动失败。", ex);
             const string message = "Shell 启动失败，详细信息已写入 crash.log。";
             ShowStartupError(desktop, message);
-            _ = EdgeClientUpdateCoordination.TrySignalShellLaunchFailure(
+            _ = TrySignalLaunchFailure(
                 machineProfile,
                 activeModuleIds,
                 message,
-                AppDomain.CurrentDomain.BaseDirectory);
+                deviceFacts);
         }
+    }
+
+    private static bool TrySignalLaunchFailure(
+        string machineProfile,
+        IReadOnlyList<string> activeModuleIds,
+        string message,
+        DeviceLaunchFacts facts)
+        => EdgeClientUpdateCoordination.TrySignalShellLaunchFailure(
+            machineProfile,
+            activeModuleIds,
+            message,
+            AppDomain.CurrentDomain.BaseDirectory,
+            facts.ClientCode,
+            facts.ModuleId,
+            facts.PluginVersion,
+            facts.PackageSha256);
+
+    private readonly record struct DeviceLaunchFacts(
+        int SchemaVersion,
+        string GenerationId,
+        string ClientCode,
+        string ModuleId,
+        string PluginVersion,
+        string PackageSha256)
+    {
+        public static DeviceLaunchFacts Empty { get; } = new(
+            2,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty);
+
+        public static DeviceLaunchFacts FromConfiguration(IConfiguration configuration)
+            => new(
+                configuration.GetValue<int?>("DevicePluginBinding:SchemaVersion") ?? 2,
+                configuration["DevicePluginBinding:GenerationId"]?.Trim() ?? string.Empty,
+                configuration["DevicePluginBinding:ClientCode"]?.Trim()
+                ?? configuration["CloudApi:ClientCode"]?.Trim()
+                ?? string.Empty,
+                configuration["DevicePluginBinding:ModuleId"]?.Trim() ?? string.Empty,
+                configuration["DevicePluginBinding:PluginVersion"]?.Trim() ?? string.Empty,
+                configuration["DevicePluginBinding:PackageSha256"]?.Trim() ?? string.Empty);
     }
 
     internal static IReadOnlyList<EdgeClientShellLaunchDiagnostic> BuildShellLaunchDiagnostics(
@@ -473,10 +579,14 @@ public partial class App : global::Avalonia.Application
         if (acquireResult == SingleInstanceMutexAcquireResult.Unavailable)
         {
             TryWriteCrashLog(
-                "单实例锁不可用，已按非阻断启动。",
+                "单实例锁不可用，已阻断启动。",
                 lockFailure,
                 $"实例 [{instanceId}] 无法创建或访问命名互斥量。");
-            return true;
+            ShowStartupError(
+                desktop,
+                "客户端无法建立设备唯一启动锁，为避免同一设备重复运行，本次启动已阻断。");
+            desktop.Shutdown(-1);
+            return false;
         }
 
         TryWriteCrashLog(

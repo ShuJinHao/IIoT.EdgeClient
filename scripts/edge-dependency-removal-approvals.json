@@ -3,7 +3,7 @@
   "referenceVersion": "2.0.8",
   "approvals": [
     {
-      "candidateVersion": "2.0.15",
+      "candidateVersion": "2.0.16",
       "manifest": "IIoT.Edge.Shell.deps.json",
       "removedLibraries": [
         "Microsoft.AspNetCore.Authentication.JwtBearer",

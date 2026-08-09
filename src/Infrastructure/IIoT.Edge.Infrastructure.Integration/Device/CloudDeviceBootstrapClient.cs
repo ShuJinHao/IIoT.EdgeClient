@@ -116,6 +116,10 @@ public sealed class CloudDeviceBootstrapClient : ICloudDeviceBootstrapClient
             EdgeCloudDeviceBootstrapResultKind.Success when result.Session is not null
                 => CloudDeviceBootstrapResult.Success(result.ClientCode, new DeviceSession
                 {
+                    SessionKind = result.Session.SessionKind,
+                    GenerationId = result.Session.GenerationId,
+                    ActivationAccessToken = result.Session.ActivationAccessToken,
+                    ActivationAccessTokenExpiresAtUtc = result.Session.ActivationAccessTokenExpiresAtUtc,
                     DeviceId = result.Session.DeviceId,
                     DeviceName = result.Session.DeviceName,
                     ClientCode = result.Session.ClientCode,

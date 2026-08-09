@@ -96,9 +96,6 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
             .GroupBy(static x => x.ModuleId, StringComparer.OrdinalIgnoreCase)
             .Where(static group => group.Count() == 1)
             .Select(static group => group.Single())
-            .GroupBy(static x => x.ProcessType, StringComparer.OrdinalIgnoreCase)
-            .Where(static group => group.Count() == 1)
-            .Select(static group => group.Single())
             .OrderBy(x => x.ModuleId, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
@@ -585,7 +582,6 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
     {
         var issues = new List<ModuleCatalogIssue>();
         var moduleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var processTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var descriptor in descriptors)
         {
@@ -594,17 +590,6 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
                 issues.Add(new ModuleCatalogIssue(
                     "PLUGIN_DISCOVERY_DUPLICATE_MODULE",
                     $"发现重复的模块标识：{descriptor.ModuleId}",
-                    descriptor.ModuleId,
-                    descriptor.ManifestPath,
-                    descriptor.EntryAssemblyPath,
-                    Path.GetFileName(descriptor.PluginDirectory)));
-            }
-
-            if (!processTypes.Add(descriptor.ProcessType))
-            {
-                issues.Add(new ModuleCatalogIssue(
-                    "PLUGIN_DISCOVERY_DUPLICATE_PROCESS",
-                    $"发现重复的工序类型：{descriptor.ProcessType}",
                     descriptor.ModuleId,
                     descriptor.ManifestPath,
                     descriptor.EntryAssemblyPath,

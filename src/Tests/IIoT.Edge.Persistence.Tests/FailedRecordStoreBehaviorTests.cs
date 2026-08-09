@@ -1,4 +1,5 @@
 using Dapper;
+using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Application.Common.Persistence;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
@@ -10,6 +11,67 @@ namespace IIoT.Edge.Persistence.Tests;
 
 public sealed class FailedRecordStoreBehaviorTests
 {
+    [Theory]
+    [InlineData("Cloud", "failed_cloud_records")]
+    [InlineData("MES", "failed_mes_records")]
+    public async Task SaveAsync_ShouldUseConfiguredRetryIntervalForEachChannel(
+        string channel,
+        string tableName)
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "edge-failed-store-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var connectionFactory = new SqliteConnectionFactory(tempDir);
+            var schedule = new DataPipelineRetryScheduleOptions { IntervalMinutes = 7 };
+            RetryRecordStoreBase store = channel switch
+            {
+                "Cloud" => new CloudRetryRecordStore(
+                    connectionFactory,
+                    new FakeLogService(),
+                    CreateCellDataJsonSerializer(),
+                    retryScheduleOptions: schedule),
+                "MES" => new MesRetryRecordStore(
+                    connectionFactory,
+                    new FakeLogService(),
+                    CreateCellDataJsonSerializer(),
+                    retryScheduleOptions: schedule),
+                _ => throw new InvalidOperationException($"Unsupported test channel: {channel}")
+            };
+
+            using (var connection = connectionFactory.Create(store.DbName))
+            {
+                await store.InitializeTableAsync(connection);
+            }
+
+            var before = DateTime.UtcNow;
+            await store.SaveAsync(
+                CreateRecord($"CONFIG-{channel}"),
+                channel,
+                "seed",
+                TestContext.Current.CancellationToken);
+
+            using var readConnection = connectionFactory.Create(store.DbName);
+            var nextRetryTime = DateTime.Parse(
+                await readConnection.QuerySingleAsync<string>($"SELECT NextRetryTime FROM {tableName}"),
+                null,
+                System.Globalization.DateTimeStyles.RoundtripKind);
+            Assert.InRange(
+                (nextRetryTime - before).TotalSeconds,
+                TimeSpan.FromMinutes(7).TotalSeconds - 2,
+                TimeSpan.FromMinutes(7).TotalSeconds + 2);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
     [Fact]
     public async Task GetPendingAsync_WhenDatabaseOpenFails_ShouldThrowPersistenceAccessException()
     {

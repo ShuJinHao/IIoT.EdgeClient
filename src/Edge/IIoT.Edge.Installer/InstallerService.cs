@@ -33,15 +33,18 @@ internal static class InstallerService
         }
 
         var installRoot = SelfExtractor.ResolveInstallRoot(options.InstallTo);
-        var stagingRoot = CreateStagingDirectory();
+        var stagingRoot = CreateStagingDirectory(installRoot);
 
         try
         {
             SelfExtractor.ExtractPayload(payload, stagingRoot);
+            using var transaction = InstallerPayloadTransaction.Prepare(stagingRoot, installRoot);
             var velopackSetup = SelfExtractor.FindVelopackSetup(stagingRoot);
             if (!string.IsNullOrWhiteSpace(velopackSetup))
             {
                 Console.WriteLine($"安装路径：{installRoot}");
+                transaction.CaptureCoreState();
+                transaction.Apply();
                 var exitCode = RunVelopackSetup(velopackSetup, installRoot, silent: true);
                 if (exitCode != 0)
                 {
@@ -49,15 +52,8 @@ internal static class InstallerService
                     return exitCode;
                 }
 
-                try
-                {
-                    SelfExtractor.CopyBootstrapFilesToVelopackDataRoot(stagingRoot, installRoot);
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    Console.Error.WriteLine($"首装绑定文件落位失败：{ex.Message}");
-                    return 3;
-                }
+                transaction.ValidateInstalledRuntime();
+                transaction.Commit();
 
                 Console.WriteLine("安装完成。");
                 TryCreateStandardShortcuts(
@@ -79,6 +75,11 @@ internal static class InstallerService
 
             Console.Error.WriteLine("安装包缺少 Velopack Setup.exe，已停止安装。请重新从云端客户端下载中心生成安装包。");
             return 4;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"安装失败：{ex.Message}");
+            return 3;
         }
         finally
         {
@@ -109,7 +110,7 @@ internal static class InstallerService
                 installRoot);
         }
 
-        var stagingRoot = CreateStagingDirectory();
+        var stagingRoot = CreateStagingDirectory(installRoot);
 
         try
         {
@@ -119,6 +120,7 @@ internal static class InstallerService
             await Task.Run(() => SelfExtractor.ExtractPayload(payload, stagingRoot), cancellationToken)
                 .ConfigureAwait(false);
 
+            using var transaction = InstallerPayloadTransaction.Prepare(stagingRoot, installRoot);
             var velopackSetup = SelfExtractor.FindVelopackSetup(stagingRoot);
             if (!string.IsNullOrWhiteSpace(velopackSetup))
             {
@@ -126,6 +128,8 @@ internal static class InstallerService
                     40,
                     t("Installer_Progress_InstallCore", "正在安装核心组件..."),
                     IsIndeterminate: true));
+                transaction.CaptureCoreState();
+                transaction.Apply();
                 var exitCode = await Task.Run(
                     () => RunVelopackSetup(velopackSetup, installRoot, silent: true),
                     cancellationToken).ConfigureAwait(false);
@@ -137,17 +141,9 @@ internal static class InstallerService
                         exitCode), installRoot);
                 }
 
-                progress?.Report(new InstallerProgress(75, t("Installer_Progress_WriteConfig", "正在写入配置文件...")));
-                try
-                {
-                    SelfExtractor.CopyBootstrapFilesToVelopackDataRoot(stagingRoot, installRoot);
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    return new InstallerResult(false, string.Format(
-                        t("Installer_Error_BootstrapCopyFormat", "首装绑定文件落位失败：{0}"),
-                        ex.Message), installRoot);
-                }
+                progress?.Report(new InstallerProgress(75, t("Installer_Progress_WriteConfig", "正在验证运行环境与脱敏配置...")));
+                transaction.ValidateInstalledRuntime();
+                transaction.Commit();
 
                 progress?.Report(new InstallerProgress(90, t("Installer_Progress_CreateShortcut", "正在创建快捷方式...")));
                 TryCreateStandardShortcuts(
@@ -219,8 +215,11 @@ internal static class InstallerService
         return Path.Combine(installRoot, "launcher", "IIoT.Edge.Launcher.exe");
     }
 
-    private static string CreateStagingDirectory()
-        => Path.Combine(Path.GetTempPath(), $"iiot-edge-installer-{Guid.NewGuid():N}");
+    private static string CreateStagingDirectory(string installRoot)
+        => Path.Combine(
+            SelfExtractor.ResolveInstallRoot(installRoot),
+            ".installer-staging",
+            Guid.NewGuid().ToString("N"));
 
     private static void CleanupStagingDirectory(string stagingRoot)
     {

@@ -1,513 +1,246 @@
-# Edge 客户端宿主插件分发契约
+# Edge 客户端宿主与设备插件分发契约
 
-本文是宿主/插件分发模型的长期契约参考，不是日常部署执行入口。日常发布、安装和更新验收以 `docs/客户端部署.md` 为准，三项目并行部署协调以 `../../docs/上传部署总览.md` 为准。
+> 状态：第 0～7 批候选代码保留；复审发现的问题尚未全部收口，当前不是生产部署基线。真实 Windows 验收、生产绑定迁移和部署仍未执行。本文档是当前活动技术契约，旧 `Phase 1/2/3`、`plugins/<ModuleId>`、“首装后再下载插件”和明文 `BootstrapSecret` 配置口径已由用户新结论取代。
 
-本文档定义 EdgeClient 从“按工序整包”升级为“通用宿主 + 外部插件目录 + 云端插件 catalog”的阶段契约。它约束后续 Edge 与 Cloud 的实现，避免下载中心、版本盘点和插件更新建立在错误的整包模型上。
+本契约继承 `BR-DOM-*`、`BR-EDGE-*`、`BR-PLUGIN-*`、`BR-DATA-*` 和已关闭的 `BR-OPEN-003`、`BR-OPEN-014`。业务定义以工作区 [`docs/业务规则.md`](../../docs/业务规则.md) 为准，本文只定义 Edge 分发和运行实现边界。
 
-## 1. 目标模型
+## 1. 核心模型
 
-Edge 现场安装由两层组成：
+- 一台具体现场设备对应一个独立设备插件、一个独立发布系列、一个 `ClientCode` 和一份独立业务文档。
+- `ClientCode` 是设备插件唯一跨端业务身份，也是卡片、进程、目录、数据库、日志、缓存和补传的隔离键。
+- `DeviceId` 仅是 Cloud 内部数据库键，不是 Edge 需要维护的第二业务身份。
+- `ModuleId` 仅用于定位插件包内入口；`ProcessType` 仅表示 Cloud 工序分类；`TypeKey` 仅表示插件声明的业务记录类别。三者不得互相等同。
+- 一台 Windows 电脑只有一个 Launcher，但可同时运行多个不同 `ClientCode` 的设备插件。
+- Launcher、Host/Shell、SDK、Installer、更新框架、日志框架和缓存框架可通用；通用稳定能力进入 SDK，经批准的无状态插件族公共源码可以共享。每个设备插件的最终包、版本、manifest、配置、数据库、状态和运行目录仍独立，运行时不得从另一个插件目录借 DLL。
 
-- 通用宿主：Launcher、Shell、共享运行时、Velopack 自更新能力。
-- 工序插件：按机器 profile 选择安装，可同时安装多个工序，独立声明版本和宿主兼容范围。
+## 2. 标准目录与存储边界
 
-开发机和现场机都遵守同一布局：宿主目录保持干净，插件只放在与宿主并列的 `plugins/`。现场机通过 `launcher.profiles.json`、`Shell__MachineProfile`、`Modules:PluginRoots` 和 `Modules:Enabled` 控制可见工序与启用范围。
-
-## 2. 不变量
-
-- `ClientCode` 与 `BootstrapSecret` 绝不进入公共安装包、插件包、catalog 或下载中心静态文件。
-- 插件不得安装到 Velopack 管理的程序目录；宿主更新或回滚不得删除外部插件目录。
-- 插件下载、安装、版本上报和 catalog 获取失败不得阻断 Launcher/Shell 启动。
-- 更新链路不得混入 Cloud/MES 上传、bootstrap、权限或生产数据补偿链路。
-- 插件包是远程代码载体。生产前必须启用 catalog 或包签名校验；MVP 阶段至少保留签名字段并执行 SHA256 完整性校验。
-
-## 3. 目录布局
-
-安装目录固定为单宿主布局：
+安装根的活动布局为：
 
 ```text
-install-root/
-  launcher/
-    launcher.profiles.json
+current/                         # Velopack 管理的 Launcher/Host 可执行文件
+data/IIoT/EdgeClient/
   host/
-    IIoT.Edge.Shell(.exe/.dll)
-    appsettings.json
-    appsettings.machine.<MachineProfile>.json
-  plugins/
-    <ModuleId>/
-      plugin.json
-      <module assemblies>
-      install.json
-  data/
+    host.db                      # 宿主公共可变数据
+  launcher/
+    iiot-binding.runtime.json    # 脱敏运行时 Binding
+    launcher.update.json
+  diagnostics/
+plugins/
+  <ClientCode>/
+    app/
+    config/
+    db/
+    logs/
+    cache/
+    context/
+    buffers/
+    data/
 ```
 
-`host/` 只能包含宿主及宿主配置，严禁出现 `Modules/` 或任何工序插件。Shell 默认从 `host/../plugins` 发现插件，也可以通过 `Modules:PluginRoots` 显式配置插件根路径。`Modules:Enabled` 为空时不自动加载全部插件，必须提示诊断问题。
-
-`launcher.profiles.json` 中所有工序的 `ExecutablePath` 必须指向同一份宿主：
-
-```json
-{
-  "ProfileId": "ExampleProcessLine",
-  "DisplayName": "示例工序",
-  "MachineProfile": "ExampleProcessLine",
-  "ExecutablePath": "../host/IIoT.Edge.Shell"
-}
-```
-
-安装素材清单使用 `schemaVersion=2`：
-
-```json
-{
-  "schemaVersion": 2,
-  "launcherDirectory": "launcher",
-  "hostDirectory": "host",
-  "pluginsRoot": "plugins",
-  "modules": [
-    {
-      "moduleId": "ExampleProcess",
-      "pluginDirectory": "ExampleProcess"
-    }
-  ]
-}
-```
-
-旧的 `layout.zip`、`runtimeDirectory`、`runtime/Modules`、每工序一份宿主目录模型全部废弃，不得在新代码、脚本或文档中继续作为生产契约。
-
-### 3.1 插件工程角色
-
-具体插件只存在于 `IIoT.Edge.Plugins.Private/src/IIoT.Edge.Module.<Process>`；Host 仓不得保留 `src/Modules` 业务源码。私有插件仓必须让工程角色从名称和项目属性上可见：
-
-- 插件入口工程：目录/工程名为 `IIoT.Edge.Module.<Process>` 或 `IIoT.Edge.Module.<Process><Variant>`，必须声明 `PluginModuleId`、`IsEdgePluginModule=true`、`IsPackable=true`，并携带 `plugin.json`。只有这类工程允许进入插件 catalog、独立插件包和 Launcher 工序卡片。
-- 每个具体插件必须独立构建、测试和打包，不得新增插件族 `*.Shared` 业务工程，也不得让一个具体插件入口引用另一具体插件。
-- 多个插件真正共用且与工序无关的能力，只能经评审进入 `IIoT.Edge.Module.Sdk` 或稳定通用 contract；具体点位、MES 字段、业务状态、页面和持久化实现不得伪装成 SDK 通用能力。
-- Host `src/Testing` 下带 `IsEdgePluginTestFixture=true` 的中性 fixture 只允许由测试项目显式 staging；生产 catalog、bundle、Launcher profile、impact mapping 和发布脚本只能从 Private Plugins 的真实 `src/IIoT.Edge.Module.<Process>/plugin.json` 解析，不得把 fixture 当发布模块。
-
-禁止再出现没有 `PluginModuleId` 但名称像插件入口的模块工程。此类工程会误导部署、Launcher、catalog 和人工排查，必须通过仓库卫生测试拦截。
-
-## 4. Catalog v2 契约
-
-云端客户端版本 catalog 使用 v2 JSON，返回“宿主组件 + 插件组件”的版本仓库视图。客户端基于 `versions[]` 和本机已安装版本计算当前版本、目标版本、可回退版本和兼容状态；云端不得再返回 v1 派生字段或扁平列表。
-
-根结构：
-
-```json
-{
-  "catalogSchemaVersion": 2,
-  "channel": "stable",
-  "targetRuntime": "win-x64",
-  "host": {
-    "componentKind": "Host",
-    "displayName": "Edge Host",
-    "versions": []
-  },
-  "plugins": [],
-  "generatedAtUtc": "2026-06-17T00:00:00Z",
-  "hostUpdateSource": "https://example.com/edge-updates/velopack/stable/"
-}
-```
-
-宿主版本条目：
-
-```json
-{
-  "version": "1.0.0",
-  "hostApiVersion": "1.0.0",
-  "targetRuntime": "win-x64",
-  "targetFramework": "net10.0",
-  "downloadUrl": "https://example.com/edge-updates/host/1.0.0/package.nupkg",
-  "sha256": "",
-  "packageSize": 0,
-  "status": "Published",
-  "releaseNotes": "",
-  "signature": "",
-  "publisher": "IIoT"
-}
-```
-
-插件组件与版本条目：
-
-```json
-{
-  "componentKind": "Plugin",
-  "moduleId": "ExampleProcess",
-  "displayName": "示例工序",
-  "description": "",
-  "iconKind": "Cog",
-  "accentColor": "#0F766E",
-  "versions": [
-    {
-      "version": "1.0.0",
-      "hostApiVersion": "1.0.0",
-      "minHostVersion": "1.0.0",
-      "maxHostVersion": "1.0.99",
-      "targetRuntime": "win-x64",
-      "targetFramework": "net10.0",
-      "downloadUrl": "https://example.com/edge-updates/plugins/ExampleProcess/1.0.0/package.zip",
-      "sha256": "",
-      "packageSize": 0,
-      "dependencies": [],
-      "status": "Published",
-      "releaseNotes": "",
-      "signature": "",
-      "publisher": "IIoT"
-    }
-  ]
-}
-```
-
-版本状态只允许：
-
-```text
-Draft | Published | Deprecated | Archived
-```
-
-- `Published`：进入 catalog，可安装、更新和回退。
-- `Deprecated`：进入 catalog，可下载，但 UI 必须显示降级/不推荐语义，默认不作为推荐目标。
-- `Archived`：不进入 Edge catalog，包文件允许被异步清理。
-- `Draft`：只允许 Human 管理端查看，不进入 Edge catalog。
+`host.db` 只能保存 Launcher 账号与锁定状态、语言和宿主设置、已安装设备插件注册表、不含秘密的 Binding 导入账本、更新状态/历史和宿主诊断索引。它不得保存 PLC、MES、生产事实或插件业务配置。
 
-发布保留上限由云端统一配置 `EdgeRelease:MaxVersionsPerComponent`，默认 3，并按 stable SemVer 排序取最新版本，不按目录时间判断。发布新版本后，云端对同一组件、同一 channel、同一 targetRuntime 执行保留策略：超过上限的老版本如果没有设备上报使用则归档；仍有设备使用则降级为 `Deprecated`，等待管理员处理。HTTP 快发成功后还会回收“已归档且无设备在用”的旧安装素材文件，避免服务器磁盘无限增长。
-
-客户端 Application 层输出给 UI 的版本计划结构必须表达多版本，不允许 UI 自己猜：
-
-```text
-EdgeComponentVersionPlan
-  ComponentKind: Host | Plugin
-  ModuleId
-  DisplayName
-  CurrentVersion
-  Versions: EdgeVersionOption[]
+以下证据必须独立于 `host.db`，以便数据库损坏时仍可恢复：
 
-EdgeVersionOption
-  Version
-  Status: NotInstalled | Current | Newer | Older | InstalledNewer | Incompatible | Deprecated
-  CanApply
-  CompatibilityIssue
-```
+- 签名发布 manifest 与插件 manifest；
+- 安装/更新事务恢复日志；
+- Windows Credential Manager 中的设备凭证；
+- 进程锁、启动信号和 ready 证据。
 
-所有安装、更新和回退都必须显式选择版本：
+## 3. 独立设备插件包
 
-```text
-CheckReleaseCatalogAsync(target)
-ApplyPluginVersionAsync(target, moduleId, version)
-ApplyHostVersionAsync(target, version)
-ApplyVersionCompositionAsync(target, selection)
-```
+每个包必须满足：
 
-旧的单版本接口、单版本计划和 v1 扁平 catalog 模型全部废弃，不得保留 wrapper。
+- 恰好一个插件入口、一个 Profile 模板和一个机器配置模板；
+- `plugin.json` 明确 `ModuleId`、版本、入口程序集、`ProcessType`、Host API 和 Host 兼容窗口；
+- `data-capabilities.json` 按当前插件版本声明一个或多个 `TypeKey`、显示名、Schema 版本、作用范围、字段、查询模式和可公开字段；
+- 插件自有托管 DLL、native DLL、资源、Schema、页面路由、入口和首次播种定义全部随包；
+- 不得从另一个插件目录借 DLL；
+- 不得使用手写 DLL 白名单或文件名前缀猜依赖归属。
 
-### 4.1 云端安装包载荷约束
+打包从真实 publish 输出生成两份受签名发布包保护的精确证据：
 
-Cloud 生成的 Windows 安装包是一个单文件安装器：安装器 stub 后追加 payload zip 和 trailer。payload zip 内统一携带本次安装所需的宿主、插件和绑定配置，不允许把配置文件散落成独立下载项。
+1. `file-manifest.json`：每个最终相对路径的大小、SHA-256、类型、组件和精确版本。
+2. `dependency-closure.json`：每个依赖的最终 `publishPath`、来源归属、大小、SHA-256 和版本。Host 公共依赖还必须引用精确 Host manifest、Host 版本和 manifest hash。
 
-payload 必须包含：
+同名文件、路径偏移、版本漂移、缺失、多出或 hash 变化均必须 fail-closed。
 
-```text
-launcher/
-  iiot-binding.json
-  iiot-enabled-plugins.json
-  launcher.update.json
-host/
-plugins/<ModuleId>/
-  plugin.json
-  <module assemblies and activation files>
-```
+## 4. Prepared Release 和完整离线环境
 
-安装器只负责解包、调用 Velopack Setup、复制引导文件和启动 Launcher。`launcher/iiot-binding.json` 是 payload 中唯一允许携带 `ClientCode`、`BootstrapSecret` 等启动密钥的绑定输入；`iiot-enabled-plugins.json`、`launcher.update.json` 和插件目录均不得携带密钥。Cloud 组包必须剔除基础包或插件中遗留的任何 `iiot-plugin-binding.json`，最终 payload 中该文件数量必须为零。绑定信息不写 UI、不写日志、不进入公共 catalog。
+Prepared Release 使用签名动态插件计划，逐项固定插件发布记录、版本、`ModuleId`、支持工序、包 hash、逐文件清单 hash 和 Host 兼容范围。目标插件集合只能来自该签名计划，不得写死 AP/CP 或固定数量。
 
-## 5. 兼容语义
+Cloud 生成的最终 Windows 安装包必须离线包含：
 
-宿主与插件保留两道门，但语义必须分清：
-
-- `hostApiVersion`：硬契约，必须精确匹配。只有宿主和插件之间的运行 API/ABI 契约变化才递增。
-- `minHostVersion` / `maxHostVersion`：运行兼容窗口，用于约束宿主功能版本或 bugfix 范围。
+- Installer stub 和 Velopack Setup；
+- Launcher 与 Host/Shell 的 EXE、`.deps.json`、`.runtimeconfig.json`、托管/native 依赖和 .NET 自包含运行时；
+- 本次选定的每个独立设备插件包；
+- SDK 公共契约、资源、语言文件、Schema、页面路由、入口和播种定义；
+- 安装载荷 Binding v3、插件选择清单和首装技术配置；
+- 覆盖全部载荷字节的签名 `payload-manifest.json`。
 
-禁止用 `maxHostVersion=99.0.0` 假装已经验证未来所有宿主版本。预发布验证环境可以暂时保留宽松范围，但进入生产 catalog 前必须收敛到已验证范围，不得把测试范围作为生产兼容证明。
+干净 Windows 不得要求预装 .NET，首次启动不得上网补 DLL 或 Runtime。缺少 Shell EXE 或自包含运行时时直接失败，禁止回退执行系统 `dotnet`。
 
-宿主回滚到旧 API 后，不兼容插件必须被拒载，并在 Launcher 或诊断页显示“因宿主版本不兼容已禁用”，不能静默丢失。
+Cloud 组包前、最终 EXE 生成后和 Windows 安装前均重新验证路径、大小、SHA-256、版本、类型和所属组件。
 
-## 6. 设备版本上报契约
+## 5. Binding v3 和凭证
 
-设备版本上报是非阻断链路。建议字段：
+必须区分两种 Binding：
 
-```json
-{
-  "deviceId": "00000000-0000-0000-0000-000000000000",
-  "clientCode": "EDGE-0001",
-  "machineProfile": "ExampleProcessLine",
-  "channel": "stable",
-  "hostVersion": "0.1.0",
-  "hostApiVersion": "1.0.0",
-  "installedPlugins": [
-    {
-      "moduleId": "ExampleProcess",
-      "version": "1.0.0",
-      "hostApiVersion": "1.0.0"
-    }
-  ],
-  "enabledPlugins": ["ExampleProcess"],
-  "reportedAtUtc": "2026-06-08T00:00:00Z"
-}
-```
+### 5.1 安装载荷 Binding
 
-上报失败只允许写日志、更新诊断或进入独立非阻断重试，不得阻断启动、PLC/MES/Cloud 生产链路。
+每个设备项包含：
 
-## 7. 签名策略
+- `ClientCode`、设备名称、工序；
+- 独有插件版本、包摘要、`ModuleId` 和入口；
+- `plugins/<ClientCode>/` 下全部独立目录；
+- `baseUrl` 以及下表唯一 `paths` 字段；
+- 每个 `ClientCode` 独立的短期 pending 凭证、生成记录和有效期。
 
-SHA256 只能证明下载文件未损坏，不能证明来源可信。生产前必须至少采用一种来源真实性校验：
+它只存在于受签名安装载荷和 staging，不得原样复制到正式运行目录。
 
-- catalog 签名：云端发布 `catalog.json` 与签名，客户端内置公钥验签，再按 catalog 中 SHA256 校验包。
-- 包签名：插件包或 DLL 进行签名，客户端安装前验证签名和发布者。
+Binding v3 的路径字段、运行配置键和 Cloud 路由固定为：
 
-MVP 阶段可以先实现 TLS + SHA256 + 签名字段占位，但必须保留拒绝未签名生产包的路线。
+| Binding `paths` 字段 | 运行配置唯一键 | 路由值 |
+|---|---|---|
+| `deviceInstance` | `CloudApi:Paths:DeviceInstance` | `/api/v1/edge/bootstrap/device-instance` |
+| `bootstrapRefresh` | `CloudApi:Paths:BootstrapRefresh` | `/api/v1/edge/bootstrap/edge-refresh` |
+| `activateDevice` | `CloudApi:Paths:ActivateDevice` | `/api/v1/edge/bootstrap/device-activate` |
+| `activateDeviceConfirm` | `CloudApi:Paths:ActivateDeviceConfirm` | `/api/v1/edge/bootstrap/device-activation-confirm` |
+| `identityDeviceLogin` | `CloudApi:Paths:IdentityDeviceLogin` | `/api/v1/human/identity/edge-login` |
+| `humanIdentityRefresh` | `CloudApi:Paths:HumanIdentityRefresh` | `/api/v1/human/identity/refresh` |
+| `humanSessionValidation` | `CloudApi:Paths:HumanSessionValidation` | `/api/v1/human/identity/session` |
+| `deviceLog` | `CloudApi:Paths:DeviceLog` | `/api/v1/edge/device-logs` |
+| `passStationBatchTemplate` | `CloudApi:Paths:PassStationBatchTemplate` | `/api/v1/edge/pass-stations/{typeKey}/batch` |
+| `capacityHourly` | `CloudApi:Paths:CapacityHourly` | `/api/v1/edge/capacity/hourly` |
+| `capacitySummary` | `CloudApi:Paths:CapacitySummary` | `/api/v1/edge/capacity/summary` |
+| `capacitySummaryRange` | `CloudApi:Paths:CapacitySummaryRange` | `/api/v1/edge/capacity/summary/range` |
+| `recipeByDeviceTemplate` | `CloudApi:Paths:RecipeByDeviceTemplate` | `/api/v1/edge/recipes/device/{deviceId}` |
+| `clientReleaseCatalogTemplate` | `CloudApi:Paths:ClientReleaseCatalogTemplate` | `/api/v1/edge/client-releases/device/{deviceId}/catalog` |
+| `clientVersionReport` | `CloudApi:Paths:ClientVersionReport` | `/api/v1/edge/client-releases/version-reports` |
+| `runtimeHeartbeat` | `CloudApi:Paths:RuntimeHeartbeat` | `/api/v1/edge/runtime-heartbeats` |
+| `edgeHostPlcRuntimeStates` | `CloudApi:Paths:EdgeHostPlcRuntimeStates` | `/api/v1/edge/edge-hosts/plc-runtime-states` |
 
-## 8. Phase 1 边界
+- `passStationBatchTemplate` 必须原样保留且只保留一个 `{typeKey}`；`recipeByDeviceTemplate`、`clientReleaseCatalogTemplate` 必须各原样保留且只保留一个 `{deviceId}`。
+- Binding v3 不接受 `plcSnapshot`、`passStationBatch`、`CloudApi:Paths:PlcSnapshot`、`CloudApi:Paths:PassStationBatch` 或少 `/edge` 段的 PLC 路由作为别名。Cloud 生成器、Installer v3 parser/materializer、Launcher 启动前置和 Host 运行消费者必须逐字段使用同一表，未知、缺失、重复或别名字段一律失败关闭；Launcher importer 不参与 v3 物化。
+- 安装校验必须针对“Cloud Binding 动态注入值覆盖 Host 包内默认值”后的最终合并配置执行，不能只校验 Binding JSON 或让默认值掩盖缺字段。上表 17 项必须全部非空、为以单个 `/` 开头且不含 scheme/host/`//` 的相对路由，模板占位逐字匹配；最终 `ICloudApiEndpointProvider` 对每一项的解析值必须与表中 Cloud 注入值逐字相同。任何未知字段、旧别名、未消费字段、默认值回退或最终值漂移都必须在开放登录和设备卡片前失败关闭。
 
-Phase 1 只完成 Edge 地基：
+### 5.2 运行时 Binding
 
-- 宿主版本来自真实程序集版本，`hostApiVersion` 保留为独立契约值。
-- Shell 从配置化 `Modules:PluginRoots` 发现插件，默认 `../plugins`。
-- Shell 加载所配置插件根中的 `*.module.json` 默认配置；后配置的插件根可以覆盖前配置的插件根，应用配置和外部机器配置仍然优先。
-- Host 发布脚本输出 `launcher/ + host/ + data/` 与 Velopack 素材，并生成 `installer-artifact.json` v2；安装根可创建外部 `plugins/`，但 Host artifact 不携带具体工序插件。
-- 增加测试覆盖单 host 布局、host 无 `Modules/`、配置化插件路径、真实宿主版本格式。
+运行时 Binding 保留相同的非秘密事实，但将原始 pending 凭证替换为 Windows Credential Manager 引用，并记录每台设备的激活状态和 `CredentialOwnerSid`。
 
-Cloud 下载中心、插件选择安装、设备盘点和版本上报属于后续阶段。
+- pending 引用：`IIoT.Edge/Pending/{GenerationId}/{ClientCode}`；
+- Refresh Token 引用：`IIoT.Edge/Session/{ClientCode}`；
+- Access Token 仅存进程内存；
+- 凭证必须写入实际运行 Launcher 的 Windows 账户，写入后立即回读；
+- Launcher 当前 Windows SID 必须与 `CredentialOwnerSid` 逐字一致；不一致时提示使用实际运行账户重新安装，不得跨账户复制凭证；
+- 账户不一致、Credential Manager 不可用或回读不一致时安装或启动失败，不回退明文。
 
-### 8.1 CI artifact 发布契约
+`EdgeBindingMaterializer` 是 Binding v3 从 wire JSON 到无秘密 runtime Binding 和 machine config 的唯一物化器，正式调用方只能是 Installer。Launcher importer 只保留 Binding v2 只读迁移；遇到 v3 不得二次导入、重写、补路由或从 Host `appsettings` 补齐。当前未发布的不完整 v3 候选字节直接拒绝，不新增 schema v4。
 
-EdgeClient 的交付物是 Windows 安装器、安装素材和 Velopack 更新包，不是 Docker 镜像。CI/CD 不允许推 Harbor、GHCR，也不允许从 GitHub hosted runner 通过 SSH/SCP 直连内网服务器。
+Binding Schema 版本化。新增必填字段或路由时，Cloud 生成器、Installer parser/materializer、Launcher 启动前置、v2 只读迁移器和 Host 运行消费者必须同批更新，未知版本或缺字段一律失败。
 
-`push main` 只跑受影响验证，不生成安装包。GitHub 离线打包只在显式 `workflow_dispatch` 执行并在 artifact 上传后停止。日常自动发布由工作区 `deploy/Deploy-Changed.ps1` 分别同步 Host、SDK、Private Plugins 三仓 clean `main`，读取 Cloud Host 基线与 SDK/Plugin 远端生产 baseline refs，按依赖闭包自动选择 EdgeHost 和具体 EdgePlugin；SDK runtime/API、Host runtime 或具体插件影响先运行 SDK 仓唯一兼容门。内部才允许 `Invoke-WorkspaceDeploy.ps1` 调度 `LocalPublishAndDeploy.ps1 -Transport http` 或插件传输实现。部署结果是服务器提供 Windows 安装器/Velopack/插件下载，不是远程安装 Windows，也不走 Harbor。正式发布要求三仓 clean + pushed HEAD，Host/Plugin 共用本地互斥锁，catalog/HTTP/HEAD 必须 fail-fast；失败后从统一入口用 `-ResumeReleaseRoot` 复用产物。更新内容必须显式填写。生产 `stable` 不允许 `rsync/scp` 绕过 Cloud DB、审计和保留策略。
-
-只改工序插件时仍由 `Deploy-Changed.ps1 -Targets Edge` 自动选择独立插件发布；下列命令只作为统一入口内部执行/显式恢复形式：
-
-```powershell
-pwsh ./deploy/Invoke-WorkspaceDeploy.ps1 `
-  -Target EdgePlugin `
-  -ModuleId <真实ModuleId> `
-  -ReleaseNotesPath ./release-notes.md
-```
-
-内部插件脚本显式接收 canonical `PluginRepositoryRoot`，调用 Private Plugins 唯一 `eng/PackEdgePlugin.ps1`，只上传 `IIoT.EdgePlugin.<ModuleId>-<version>-<runtime>.zip` 并写插件 release，不生成宿主 Velopack 版本。schema v2 metadata 与 release wrapper 的 `sourceCommit` 必须等于插件仓 clean/pushed HEAD。统一入口必须显式要求 `ModuleId`；脚本在打包前查 Cloud catalog，发现相同 `(moduleId, channel, version, targetRuntime)` 已存在时直接失败，要求提升插件 `plugin.json` 版本或使用显式恢复/对账。
-
-显式 GitHub workflow 只允许生成离线 artifact：
-
-```text
-windows-latest
--> PublishEdgeRuntime.ps1
--> PackEdgeClientVelopack.ps1
--> PublishEdgeClientInstallerArtifact.ps1
--> upload edge-runtime-package / edge-installer-artifact / edge-velopack-releases
--> stop
-```
-
-该 workflow 不得包含 self-hosted runner、Cloud 人员账号密码、短期 JWT、服务器目录写入或 `publish-edge-updates`。离线 artifact 不是生产发布证据；生产只能由工作区根 `Deploy-Changed.ps1` 在 Mac 本机重建受影响 Windows 产物，并经 Cloud Human API 完成落盘、DB、审计、保留策略和下载链验证。
-
-离线 artifact 版本由 `workflow_dispatch` 显式输入，但不产生生产版本。HTTP 本机宿主快发未传 `-Version` 时读取 Cloud Human catalog 最新 stable 版本并自动递增 patch，传入 `-Version` 时严格使用传入值。`PublishEdgeRuntime.ps1 -Version` 会同步设置 Launcher/Shell runtime 的 `AssemblyVersion`、`FileVersion` 和 `InformationalVersion`，Velopack 包验收以该版本为准。不要把 runtime 程序集版本固定回 `1.0.0.0` 后再发布 Velopack 包。正式 `win-x64` runtime、installer payload 和 Velopack full package 必须统一使用 self-contained 发布并携带 Launcher/Host 的 .NET runtime 文件；Cloud 下载包不得要求现场机另装 .NET。
-
-发布目录固定为：
-
-```text
-edge-updates/
-  installers/stable/<version>/installer-artifact.json
-  installers/stable/<version>/IIoT.Edge.Setup.exe
-  installers/stable/<version>/launcher/
-  installers/stable/<version>/host/
-  installers/stable/<version>/velopack/
-  velopack/stable/releases.stable.json
-  velopack/stable/assets.stable.json
-  plugins/stable/<ModuleId>/<version>/IIoT.EdgePlugin.<ModuleId>-<version>-<runtime>.zip
-```
-
-Cloud HttpApi 通过内网受控 HTTP 发布接口对 `edge-updates` 持有可写挂载，只允许写 staging 和发布目录；nginx 对同一目录保持只读静态下载。Cloud catalog、下载中心和首装版本集合只读取数据库 release 记录；文件系统只验证记录中已登记 artifact 的存在性、完整性与可下载性，不得扫描残留目录补出版本。Cloud HTTP 发布必须按 SemVer 控制为最新 3 个 stable 版本；已归档且无设备在用的插件 zip 才允许回收。
-
-`installer-artifact.json` 必须包含发布追溯字段：`sourceCommit`、`previousVersion`、`previousSourceCommit`、`releaseNotes` 和 `generatedAtUtc`。首次发布或旧 artifact 无 commit 记录时，`previousVersion` / `previousSourceCommit` 可为空，但 `sourceCommit` 和 `releaseNotes` 不得为空。
-
-## 9. Phase 2 Cloud 落地
-
-Phase 2 在云端建立 catalog、下载中心基础页和设备版本盘点能力。Cloud 负责“管版本、发 catalog、收上报、看差异”，不负责本阶段的 Launcher 插件安装。
-
-### 9.1 数据表
-
-Cloud 新增四类表，不改 `devices` 主表字段：
-
-- `edge_client_host_releases`：通用宿主发布记录。
-- `edge_client_plugin_releases`：工序插件发布记录。
-- `edge_device_client_version_snapshots`：设备最近一次客户端版本上报快照，按 `device_id` 唯一。
-- `edge_device_client_plugin_versions`：最近一次上报中的插件明细。
-
-发布记录状态统一为：
-
-```text
-Draft | Published | Deprecated | Archived
-```
-
-### 9.2 Human API
-
-后台管理 API：
-
-```text
-GET  /api/v1/human/client-releases/catalog?channel=stable&targetRuntime=win-x64&onlyPublished=false
-POST /api/v1/human/client-releases/host-releases
-POST /api/v1/human/client-releases/plugin-releases
-POST /api/v1/human/client-releases/plugin-packages
-GET  /api/v1/human/client-releases/device-inventory?channel=stable&targetRuntime=win-x64&keyword=
-```
-
-读接口使用 `Device.Read` 权限。写接口使用 `Device.Update` 并要求管理员，避免在 Phase 2 引入新的权限种子和角色迁移。
-
-`POST host-releases` 允许录入或更新同一 `(channel, version, targetRuntime)` 的宿主发布记录。`POST plugin-releases` 只用于人工补录已有文件的插件 release；正式插件发布必须走 `POST plugin-packages` 上传 wrapper zip。`plugin-packages` 会校验插件 zip、`plugin.json`、SHA256、size、release notes 和兼容窗口，把文件落到 `edge-updates/plugins/stable/<ModuleId>/<version>/`，并写 `edge_client_plugin_releases`。同一 `(moduleId, channel, version, targetRuntime)` 已存在时拒绝重复发布。
-
-### 9.3 Edge API
-
-Edge 已 bootstrap 后使用设备 token 调用：
-
-```text
-GET  /api/v1/edge/client-releases/device/{deviceId}/catalog?channel=stable&targetRuntime=win-x64
-POST /api/v1/edge/client-releases/version-reports
-```
-
-这两个接口都走 `RequireEdgeDeviceToken` 和现有 `DeviceBindingBehavior`。也就是说，请求中的 `DeviceId` 必须和 token 中的 `device_id` 一致。
-
-版本上报会额外校验 `DeviceId + ClientCode` 是否匹配云端设备身份，防止把 `ClientCode` 当成归档主键或跨设备混用。
-
-### 9.4 Catalog v2 返回
-
-```json
-{
-  "catalogSchemaVersion": 2,
-  "channel": "stable",
-  "targetRuntime": "win-x64",
-  "host": {
-    "componentKind": "Host",
-    "displayName": "Edge Host",
-    "versions": []
-  },
-  "plugins": [],
-  "generatedAtUtc": "2026-06-08T00:00:00Z"
-}
-```
-
-Edge catalog 返回 `Published` 和 `Deprecated` 发布记录，按组件分组并受 `EdgeRelease:MaxVersionsPerComponent` 保留策略限制。Human catalog 可通过 `includeArchived` 查看归档记录，但 Edge catalog 永远不返回 `Archived`。
-
-### 9.5 设备版本盘点
-
-设备盘点页基于最近一次版本上报和当前 catalog 计算：
-
-- 设备名称、客户端上报 IP、最近上报时间、安装状态、当前版本摘要和问题。
-- 主表不展示 Channel、宿主技术状态或插件数量；这些技术字段只放详情。
-- IP 优先使用客户端上报的本机 IPv4；没有时使用 Cloud 看到的请求来源 IP。
-- 宿主当前版本 vs 最新宿主版本。
-- 插件当前版本 vs 最新插件版本。
-- `hostApiVersion` 不匹配。
-- 宿主版本不在插件 `[minHostVersion, maxHostVersion]` 窗口。
-- 未上报、无发布、可更新、已最新、不兼容等状态。
-
-版本上报不代表设备在线，不写设备在线状态，不参与 Cloud/MES 上传链路。
-
-### 9.6 Phase 2 后续阶段项
-
-以下内容属于发布体系后续阶段，不是本轮客户端安全和 DataPipeline 总收口阻断项：
-
-- Launcher 拉取 catalog 并选择插件。
-- 插件下载、staging、校验、安装到布局级 `plugins/<ModuleId>/`。
-- 插件更新失败回滚和宿主回滚后的 UX。
-- catalog 或包签名的生产级验签。
-- Windows 首装实机下载和更新验收。
-
-## 10. Phase 3 Edge 闭环
-
-Phase 3 打通 Launcher 到 Cloud catalog 的客户端闭环。Cloud 仍沿用 Phase 2 的 Edge API；本阶段客户端不新增 Cloud 业务写链路。
-
-### 10.1 Launcher 配置来源
-
-Launcher 读取以下配置后才会启用云端插件 catalog：
-
-- `CloudApi:BaseUrl`
-- `CloudApi:ClientCode`
-- `CloudApi:BootstrapSecret`
-- `CloudApi:Paths:DeviceInstance`
-- `CloudApi:Paths:ClientReleaseCatalogTemplate`
-- `CloudApi:Paths:ClientVersionReport`
-- `launcher.update.json` 中的 `channel`、`targetRuntime`
-
-`ClientReleaseCatalogTemplate` 必须包含 `{deviceId}`，默认值为：
-
-```text
-/api/v1/edge/client-releases/device/{deviceId}/catalog
-```
-
-版本上报默认路径为：
-
-```text
-/api/v1/edge/client-releases/version-reports
-```
-
-配置缺失、Cloud 不通、bootstrap 失败、catalog 拉取失败或版本上报失败均为非阻断，只影响插件更新面板状态，不阻断 Launcher 或 Shell 启动。
-
-### 10.2 首次安装/选择插件流程
-
-Windows 首次安装由 Cloud 生成绑定安装包，payload 内包含 `launcher/`、一份 `host/` 和本次生成的绑定 JSON；具体工序插件不进入 Host artifact，由 Launcher 按真实 catalog 安装到外部 `plugins/<ModuleId>/`。操作员打开 Launcher 后：
-
-1. Launcher 使用 `ClientCode + BootstrapSecret` bootstrap 当前设备，获取设备 token 和 `deviceId`。
-2. Launcher 使用设备 token 拉取 catalog，并按 `channel`、`targetRuntime` 读取可用宿主和插件版本。
-3. Launcher 扫描布局级 `plugins/`，计算当前插件版本、云端最新版本和兼容状态。
-4. 操作员选择安装或更新某个工序插件。
-5. Launcher 连带解析 `dependencies[]`，下载目标插件和依赖插件包。
-6. 每个插件包先写入 staging，校验包 SHA256、zip 路径安全、`plugin.json` 与 catalog 一致、入口程序集存在、`hostApiVersion` 精确匹配、宿主版本落在 `[minHostVersion, maxHostVersion]`。
-7. 校验通过后替换布局级目录 `plugins/<ModuleId>/`，并保留安装摘要 `install.json`。
-8. Launcher 写外部机器配置 `Modules:Enabled`，启用已安装插件。
-9. Launcher 上报宿主版本、`HostApiVersion`、已安装插件版本和启用插件列表。
-
-Shell 正在运行时不得替换插件。Launcher 必须提示关闭 Shell 后再安装或更新插件。
-
-### 10.3 手动检查更新流程
-
-后续启动或手动点击“插件更新”时，Launcher 重新拉取 catalog 并显示两级差异：
-
-- 宿主：当前宿主版本、Cloud 最新宿主版本。
-- 插件：当前版本、Cloud 最新版本、包大小、安装/更新/已最新/不兼容状态。
-
-插件更新仍走 staging、SHA256/manifest/兼容校验和目录原子替换流程。宿主更新继续使用既有 Velopack 更新链路；Launcher 在替换宿主前必须按所有可用 profile 的真实 catalog 与本机已启用/已安装清单合并计算组合。目标宿主会使插件失效时，必须明确展示并确认所需插件版本，先完成插件包校验/安装再进入宿主替换；任一 profile catalog 不可用、插件版本冲突、缺包或 hash/兼容失败都必须阻止宿主应用。操作员可以保持旧组合，Shell 运行时不得替换插件。
-
-### 10.4 版本上报内容
-
-Phase 3 客户端实际上报：
-
-```json
-{
-  "deviceId": "00000000-0000-0000-0000-000000000000",
-  "clientCode": "EDGE-0001",
-  "machineProfile": "ExampleProcessLine",
-  "channel": "stable",
-  "hostVersion": "0.1.0",
-  "hostApiVersion": "1.0.0",
-  "installedPlugins": [
-    {
-      "moduleId": "ExampleProcess",
-      "processType": "example",
-      "version": "1.0.0",
-      "hostApiVersion": "1.0.0"
-    }
-  ],
-  "enabledPlugins": ["ExampleProcess"],
-  "reportedAtUtc": "2026-06-08T00:00:00Z"
-}
-```
-
-Launcher 登录后和 Shell 启动成功后可以触发后台上报，但必须捕获所有异常。上报失败不得影响登录、启动、PLC/MES/Cloud 生产链路。
-
-### 10.5 Phase 3 边界
-
-本阶段明确不做：
-
-- 正式 catalog 签名或包签名强制校验。
-- 复杂自动回滚策略。
-- MES、PLC、配方、工艺参数、生产上传或业务链路改动。
-- Cloud 发布记录管理页面的再设计。
-
-仍需后续阶段补齐：
-
-- 生产级签名验签和公钥轮换策略。
-- 宿主回滚导致插件不兼容时的更完整 UX。
-- Windows 真实云端首装、插件下载、插件更新和宿主更新联合验收。
+## 6. 安装事务
+
+新 Binding v3 只能由 Installer 物化，并在一个可恢复事务中按以下顺序执行：
+
+1. 解压到全新 staging。
+2. 验证发布签名、逐文件 hash、精确版本、全部依赖闭包及插件选择清单。
+3. 严格校验所有 `ClientCode`、独立目录和 Binding v3 17/17 路由。
+4. 将各设备 pending 凭证写入当前 Windows 账户 Credential Manager，立即回读对账并记录 Owner SID。
+5. 通过唯一物化器生成无原始凭证的 runtime Binding 和每个 `ClientCode` 的 machine config，再对“Cloud 动态注入覆盖 Host 默认值”后的最终值逐项对账。
+6. 离线自检 Installer、Launcher、Shell、Host 和全部插件。
+7. 将文件、runtime Binding、machine config 和凭证变更作为同一组原子切换，任一失败恢复切换前文件、配置和凭证。
+8. 全部成功后删除 staging 中含原始 pending 凭证的字节，写独立恢复证据并启动 Launcher。
+9. 用户之后分别启动设备卡片，各设备独立激活。
+
+文件安装是整组原子事务，凭证激活按设备独立。任一安装步骤失败必须恢复切换前文件、配置和凭证，不启动残缺 Launcher，不显示安装成功，并保留可读诊断。
+
+## 7. 设备独立激活
+
+- 生成安装包不得立即覆盖现场旧凭证。
+- pending 默认有效期 7 天，只能换取“仅允许激活”的临时会话，不能上传生产、日志、心跳或 PLC 状态。
+- 插件真实加载并 ready 后才能确认激活，然后签发正式 Access/Refresh 会话并撤销该 `ClientCode` 的旧 Refresh 会话。
+- 任一 `ClientCode` 的启动、失败或过期不得改变另一个 `ClientCode`。
+- pending 过期只拒绝新 bootstrap，不杀死已签发有效会话。
+- Ready 安装包在激活或过期前按 `GenerationId` 受控保存；下载中断重试返回同一字节，不得重新生成凭证。
+
+Credential Manager 只降低配置文件、备份和离线拷贝的泄漏风险，不能防御同一 Windows 账户下的恶意进程、Windows Local Administrators 组成员或内存窃取。
+
+## 8. Launcher 和更新
+
+- Velopack 生命周期 hook 必须是进程第一步；随后取得固定整机互斥量 `Global\IIoT.Edge.Launcher`。一台 Windows 电脑只能运行一个 Launcher。第二个 Launcher 必须在创建 UI、打开数据库或写共享文件前退出；互斥量创建、权限或取得失败一律失败关闭。取得遗弃锁后仍必须先执行恢复，不得跳过。
+- Launcher 为每个 `ClientCode` 生成一张设备卡片，显示 Cloud 注入的设备名称、工序、版本、运行状态和更新内容。
+- 每个 Shell 使用规范化 `ClientCode` 的独立互斥锁防重；Launcher 整机锁与 Shell 防重锁是两层不同边界，不得互相替代。
+- 锁创建失败、身份缺失、目录冲突或 ready 证据不完整时必须阻断，禁止 fail-open。
+- ready 同时核对 PID、`ClientCode`、`ModuleId`、插件版本、包摘要和真实加载结果。
+- 不同 `ClientCode` 可并发；同一 `ClientCode` 仅允许一个进程。
+- Profile/MachineProfile 只是从 `ClientCode` 确定性派生的隐藏兼容文件，不是身份。
+- 生产环境没有有效 `ClientCode`、运行时 Binding 或目标插件时必须在数据库、网络和插件加载前失败关闭并显示稳定原因码，禁止用 `EdgeHostDefault`、空 `Modules.Enabled`、静态 Default catalog 或其它默认 profile 启动空 Shell。显式开发 fixture 不得进入生产安装包、Launcher 发现或恢复链；生产包不得包含可启动的 `launcher.profiles.json` Default 卡。
+
+Launcher 启动顺序只允许以下一种表达，前一步未成功不得开放后一步：
+
+1. 执行 Velopack 生命周期 hook。
+2. 取得 `Global\IIoT.Edge.Launcher` 整机锁。
+3. 恢复未完成的安装/更新事务。
+4. 恢复并迁移 `host.db`。
+5. 以“只读盘点 → Credential Manager 写入/回读 → 脱敏 staging → 对账 → 原子切换”迁移旧明文 bootstrap/refresh；失败时原源和原运行配置原样保留。
+6. 校验 Binding v3、17/17 路由、最终 machine config、凭证引用及 `CredentialOwnerSid`。
+7. 逐 `ClientCode` 校验插件 manifest、逐文件 hash、包摘要和精确版本。
+8. 全部通过后才初始化可交互主窗口，开放登录、设备卡片和 Shell 启动。
+
+插件更新只能沿该设备已绑定发布系列进行。更新在 staging 验证完整包、精确依赖闭包、签名、Host 兼容性和 Binding 事实后，按 `ClientCode` 原子替换 `plugins/<ClientCode>/app`。更新不得覆盖该设备的现场 PLC、MES 或业务配置。
+
+## 9. 宿主库与旧目录迁移
+
+迁移顺序固定为：
+
+1. 先依据独立文件恢复日志完成未结束的更新恢复，或明确阻断共享写入。
+2. 只读盘点旧 Launcher JSON、更新状态和 Profile 目录。
+3. 保持原文件不变，在 staging 创建带 Schema 版本的 `host.db`，并单事务导入宿主公共状态。
+4. 按 `ClientCode` 迁移旧凭据到实际 Launcher 账户 Credential Manager，回读成功后写入脱敏引用；再迁移各插件目录。
+5. 对账 Binding、插件、数量、唯一约束、关键字段、数据库可读性和文件 hash。
+6. 将 Binding、凭据、`host.db` 和目录作为同一可恢复事务原子切换，并保留回退副本。
+7. 全部通过后才开放登录和设备卡片。
+
+任一步骤失败必须恢复原 Binding、原凭证、原宿主数据和原插件目录。无法从旧 Profile 唯一确认 `ClientCode` 时停止，不按设备名称、AP/CP、工序或 MES 编号猜测。
+
+本章的七个 Launcher 前置门和第 8 步交互开放是唯一启动顺序。插件进程不得各自写共享 `host.db`，主窗口不得在前置步骤全部完成前创建或开放交互。
+
+## 10. 首次初始化、PLC 快照和生产数据
+
+- 每个 `ClientCode` 的设备插件独立拥有自己的数据库 Schema、migration 历史、播种完成记录和事务边界；Host、Launcher、Cloud、SDK 与其它插件不得读取或写入其 PLC、IO、MES、任务、参数或生产业务表。
+- 每个 `ClientCode` 的新空插件数据库执行 EF Migration、插件自有播种和“初始化完成”标记，必须在该插件自己的同一数据库事务中提交。
+- 初始化失败整体回滚并在下次启动重试；成功后正常启动永不重播。插件升级只执行明确 migration，人员删除的 PLC 或配置不得复活。
+- PLC 稳定配置从插件独立数据库加载后缓存，实时状态来自采集内存。Dashboard、状态上报和 SDK 读取共用同一内存快照；监控 500ms 热循环不得查询 EF/SQLite，也不得按 PLC 形成任务绑定/IO/recovery N+1，配置变化只通过版本栅栏刷新快照。
+- 快照必须包含权威性、配置版本、采集时间、PLC 编码/名称/地址/协议/启用状态、运行状态、最后真实通信时间和错误。
+- 缓存或数据库不可用时返回 `Unavailable` 并跳过本轮上报，不得发送空数组。只有携带新权威清单版本和明确清空意图的零 PLC 快照才能清空 Cloud 投影。
+- `ClientCode + CompletionId + TypeKey` 标识的真实完成事实先写短期防断电交接记录，Cloud/MES 各自直传；失败只进入本 `ClientCode` 的对应通道 retry/fallback/deadletter。两条通道可以复用无业务语义框架，但凭据、会话、门控、状态和回执必须独立。
+- 完整 Cloud `DeviceSession` 及其 bootstrap/Access/Refresh/Activation Token 只留在 Host 出站层；插件和 MES uploader 只能获得不含秘密的设备身份视图。Cloud 的 `DeviceId`、Token、会话和门控不进入 MES，MES 的上位机编码、站号、签名 Token 和业务回执不进入 Cloud。
+- SDK `2.0.13` 的正式 v3 MES 契约固定为 `DevicePluginUploadContext(DevicePluginIdentity)` 和 `IProcessMesUploaderV3`；身份视图只包含 `ClientCode/ModuleId/ProcessType`，`CompletionId/TypeKey` 继续来自完成记录。`IProcessMesUploader/ProcessUploadContext` 只保留 v2 ABI 且标记废弃；正式 v3 插件只实现 legacy 接口时 Host 必须拒绝，不得回退。插件 DI 不得导出完整 `IDeviceService`。
+- 补传默认 30 分钟，链路恢复立即触发；成功确认后删除对应补传记录，第 20 次失败原子转入本通道死信。
+- 正常成功生产数据不得长期写客户端生产历史表或 Excel；Cloud 是历史查询真值。旧本地历史只读保留，未经另行授权不得自动删除。
+
+## 11. Catalog、上报与兼容退出
+
+- Cloud catalog 和下载计划以已绑定设备插件为单位，返回该设备独有插件系列的发布版本。
+- Host 版本、通道和架构由 Cloud 自动计算所有选定插件共同兼容的最高已批准 `stable/win-x64` 版本，页面只读展示。
+- 版本上报包含 `ClientCode`、Host 版本/API、插件 `ModuleId`、插件版本、包 hash 和启用状态。上报失败只进入诊断/独立重试，不得阻断 PLC/MES/Cloud 生产链。
+- 过渡期 Edge 可只读解析 Binding v2，但新安装只接受 v3。迁移不得将 ModuleId/Profile/MachineProfile 升格为业务身份。
+- 完成真实 Windows 与当前生产设备迁移验收后，下一独立版本才能删除 v2 写入、ModuleId 绑定、旧明文凭证和旧播种运行路径。
+- 本批源码候选版本分别为 SDK `2.0.13`、Host `2.0.16`、AP `2.0.21`、CP `2.0.21`，Host API 代际仍为 `2.0.0`。AP/CP 数值相同不表示共同版本链；两者必须分别保留发布记录和验收证据。SDK `2.0.12` 只保留旧候选证据，不得被 `2.0.13` 覆盖或倒写为已发布。
+
+## 12. 验收要求
+
+至少自动验证：
+
+- 任意 P3 设备插件不修改通用打包/部署框架即可发布；
+- 下载包中 ClientCode 集合、Binding、插件选择、实际目录和签名逐文件清单严格一致；
+- 删除、多出或篡改任意 DLL、native 文件、Runtime、Schema、路由或 manifest 都在组包或安装前失败；
+- 安装载荷可含短期 pending 凭证，正式运行目录和普通 JSON 不得含原始凭证；
+- 同一 `ClientCode` 重复启动被阻断，不同 `ClientCode` 并发成功；
+- `host.db` 和旧目录迁移在任一故障点可回滚，坏库不影响独立更新恢复日志；
+- 新数据库只播种一次，删除 PLC 后重启不复活；
+- PLC 快照预热后周期路径无 EF/SQLite 查询，异常不上传空数组；
+- Cloud/MES 直传、单通道失败、恢复立即补传、成功删除、20 次死信、ACK 丢失、断电重启和幂等分别有测试证据。
+
+未执行真实 Windows 安装、生产迁移或部署时，交付结论必须明确标记 `NOT-RUN`。

@@ -161,6 +161,7 @@ public sealed class HttpEdgeVersionReporter : IEdgeVersionReporter
                         hostApiVersion,
                         installedPlugins = installedPlugins.Select(plugin => new
                         {
+                            clientCode = plugin.ClientCode,
                             moduleId = plugin.ModuleId,
                             displayName = plugin.DisplayName,
                             version = plugin.Version,

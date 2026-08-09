@@ -21,7 +21,13 @@ public interface IEdgePluginCompositionTransaction
 
 public sealed record EdgePluginCompositionTarget(
     EdgeUpdateTarget Target,
-    IReadOnlyList<string> ModuleIds);
+    IReadOnlyList<string> ModuleIds)
+{
+    /// <summary>
+    /// Binding v3 设备插件身份。空值仅供 v2 兼容路径使用。
+    /// </summary>
+    public string ClientCode { get; init; } = string.Empty;
+}
 
 public sealed record EdgePluginCompositionRelease(
     EdgePluginVersionRelease Release,

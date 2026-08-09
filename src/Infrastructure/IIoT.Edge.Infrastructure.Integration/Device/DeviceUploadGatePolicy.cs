@@ -30,6 +30,12 @@ public sealed class DeviceUploadGatePolicy : IDeviceUploadGatePolicy
             return true;
         }
 
+        if (!string.Equals(session.SessionKind, "Active", StringComparison.OrdinalIgnoreCase))
+        {
+            reason = EdgeUploadBlockReason.MissingUploadToken;
+            return true;
+        }
+
         if (string.IsNullOrWhiteSpace(session.UploadAccessToken))
         {
             reason = EdgeUploadBlockReason.MissingUploadToken;

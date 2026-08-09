@@ -1,3 +1,4 @@
+using IIoT.Edge.Domain.Config.Aggregates;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Contracts.Modules;
@@ -5,10 +6,24 @@ using IIoT.Edge.SharedKernel.Repository;
 
 namespace IIoT.Edge.Application.Modules.Samples;
 
+public sealed record ModuleFirstInitializationApplyResult(
+    bool AlreadyInitialized,
+    bool ExistingDatabaseAdopted,
+    ModuleDevelopmentSeedResult SeedResult);
+
+public interface IModuleFirstInitializationStore
+{
+    Task<ModuleFirstInitializationApplyResult> ApplyAsync(
+        ModuleFirstInitializationRequest request,
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>
 /// 宿主侧正式 ModuleSeed 物化器。插件只提交 DTO，聚合创建、事务和持久化始终归宿主。
 /// </summary>
-public sealed class ModuleDevelopmentSeedWriter : IModuleDevelopmentSeedWriter
+public sealed class ModuleDevelopmentSeedWriter
+    : IModuleDevelopmentSeedWriter,
+      IModuleFirstInitializationStore
 {
     private readonly IEdgeUnitOfWorkFactory _unitOfWorkFactory;
 
@@ -30,6 +45,104 @@ public sealed class ModuleDevelopmentSeedWriter : IModuleDevelopmentSeedWriter
         ValidateStableIdentities(request);
 
         await using var unitOfWork = await _unitOfWorkFactory.BeginAsync(cancellationToken).ConfigureAwait(false);
+        var result = await ApplyWithinUnitOfWorkAsync(
+            unitOfWork,
+            request,
+            cancellationToken).ConfigureAwait(false);
+        await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async Task<ModuleFirstInitializationApplyResult> ApplyAsync(
+        ModuleFirstInitializationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.ClientCode);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.ModuleId);
+        ArgumentNullException.ThrowIfNull(request.Descriptor);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.Descriptor.InitializationMarkerKey);
+        if (request.Descriptor.SchemaVersion <= 0 || request.Descriptor.SeedVersion <= 0)
+        {
+            throw new InvalidOperationException("MODULE_FIRST_INITIALIZATION_VERSION_INVALID");
+        }
+
+        await using var unitOfWork = await _unitOfWorkFactory.BeginAsync(cancellationToken).ConfigureAwait(false);
+        var configs = unitOfWork.Repository<SystemConfigEntity>();
+        var markerKey = request.Descriptor.InitializationMarkerKey.Trim();
+        var existingMarker = await configs.GetAsync(
+            item => item.Key == markerKey,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (existingMarker is not null)
+        {
+            return new ModuleFirstInitializationApplyResult(
+                AlreadyInitialized: true,
+                ExistingDatabaseAdopted: false,
+                EmptySeedResult());
+        }
+
+        var existingDatabaseAdopted = request.Descriptor.RunOnlyForNewDatabase
+            && await HasExistingPluginDataAsync(unitOfWork, cancellationToken).ConfigureAwait(false);
+        var seedResult = existingDatabaseAdopted
+            ? EmptySeedResult()
+            : await ApplyWithinUnitOfWorkAsync(
+                unitOfWork,
+                new ModuleDevelopmentSeedRequest(
+                    request.ModuleId,
+                    ResetBeforeImport: false,
+                    Devices: request.Devices),
+                cancellationToken).ConfigureAwait(false);
+
+        configs.Add(SystemConfigEntity.Create(
+            markerKey,
+            $"schema={request.Descriptor.SchemaVersion};seed={request.Descriptor.SeedVersion};" +
+            $"client={request.ClientCode.Trim()};module={request.ModuleId.Trim()};" +
+            $"completed={DateTimeOffset.UtcNow:O}",
+            existingDatabaseAdopted
+                ? "Existing plugin database adopted without replaying initial seed."
+                : "Plugin first initialization completed atomically."));
+        await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return new ModuleFirstInitializationApplyResult(
+            AlreadyInitialized: false,
+            existingDatabaseAdopted,
+            seedResult);
+    }
+
+    private static async Task<bool> HasExistingPluginDataAsync(
+        IEdgeUnitOfWork unitOfWork,
+        CancellationToken cancellationToken)
+    {
+        if ((await unitOfWork.Repository<NetworkDeviceEntity>()
+                .GetListAsync(static _ => true, cancellationToken).ConfigureAwait(false)).Count > 0)
+        {
+            return true;
+        }
+
+        if ((await unitOfWork.Repository<IoMappingEntity>()
+                .GetListAsync(static _ => true, cancellationToken).ConfigureAwait(false)).Count > 0)
+        {
+            return true;
+        }
+
+        if ((await unitOfWork.Repository<PlcTaskBindingEntity>()
+                .GetListAsync(static _ => true, cancellationToken).ConfigureAwait(false)).Count > 0)
+        {
+            return true;
+        }
+
+        // 宿主或配置迁移可能在首次插件启动前先写入 SystemConfig。
+        // 任意通用配置不是“插件已播种”的证据，否则新库会永久跳过 PLC 初始化。
+        return false;
+    }
+
+    private static ModuleDevelopmentSeedResult EmptySeedResult()
+        => new(0, 0, 0, 0) { ImportedTaskBindingCount = 0 };
+
+    private static async Task<ModuleDevelopmentSeedResult> ApplyWithinUnitOfWorkAsync(
+        IEdgeUnitOfWork unitOfWork,
+        ModuleDevelopmentSeedRequest request,
+        CancellationToken cancellationToken)
+    {
         var devices = unitOfWork.Repository<NetworkDeviceEntity>();
         var mappings = unitOfWork.Repository<IoMappingEntity>();
         var taskBindings = unitOfWork.Repository<PlcTaskBindingEntity>();
@@ -97,8 +210,6 @@ public sealed class ModuleDevelopmentSeedWriter : IModuleDevelopmentSeedWriter
             importedTaskBindingCount += missingTaskBindings.Length;
         }
 
-        // 本请求唯一 durable commit；FlushAsync 只在同一事务中物化新设备 identity。
-        await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
         return new ModuleDevelopmentSeedResult(
             importedDeviceCount,
             importedMappingCount,

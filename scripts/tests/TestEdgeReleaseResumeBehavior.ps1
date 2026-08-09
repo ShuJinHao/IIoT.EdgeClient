@@ -204,6 +204,7 @@ try {
         $fixtureManifestRoot = Join-Path $pluginCloneRoot 'src/IIoT.Edge.Module.CP'
         New-Item -ItemType Directory -Force -Path (
             $fixtureManifestRoot,
+            (Join-Path $pluginCloneRoot 'docs'),
             (Join-Path $pluginCloneRoot 'eng')) | Out-Null
         @'
 {
@@ -218,16 +219,19 @@ try {
   "maxHostVersion": "2.0.0",
   "entryAssembly": "IIoT.Edge.Module.CP.dll",
   "entryType": "IIoT.Edge.Module.CP.DependencyInjection",
-  "supportedProcessType": "CP",
+  "supportedProcessType": "cutting",
+  "businessDocumentRef": "docs/CP.md",
   "dependencies": [],
   "ownedAssemblies": []
 }
 '@ | Set-Content -Encoding utf8NoBOM -LiteralPath (
             Join-Path $fixtureManifestRoot 'plugin.json')
+        '# CP release-resume fixture' | Set-Content -Encoding utf8NoBOM -LiteralPath (
+            Join-Path $pluginCloneRoot 'docs/CP.md')
         'artifacts/' | Set-Content -Encoding utf8NoBOM -LiteralPath (
             Join-Path $pluginCloneRoot '.gitignore')
         Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @(
-            'add', '.gitignore', 'src/IIoT.Edge.Module.CP/plugin.json')
+            'add', '.gitignore', 'docs/CP.md', 'src/IIoT.Edge.Module.CP/plugin.json')
         Invoke-GitChecked -Directory $pluginCloneRoot -Arguments @(
             'commit', '-q', '-m', 'seed isolated plugin release fixture')
     }
@@ -243,6 +247,94 @@ try {
     $pluginManifest = $pluginManifestJson | ConvertFrom-Json
     $pluginVersion = [string]$pluginManifest.version
     if ([string]::IsNullOrWhiteSpace($pluginVersion)) { throw 'CP plugin manifest version is required.' }
+    $pluginBusinessDocumentRef = [string]$pluginManifest.businessDocumentRef
+    if ([string]::IsNullOrWhiteSpace($pluginBusinessDocumentRef)) {
+        throw 'CP plugin manifest businessDocumentRef is required.'
+    }
+    $pluginBusinessDocumentPath = Join-Path $pluginCloneRoot $pluginBusinessDocumentRef
+    if (-not (Test-Path -LiteralPath $pluginBusinessDocumentPath -PathType Leaf)) {
+        throw "CP plugin business document was not found: $pluginBusinessDocumentPath"
+    }
+    $pluginBusinessDocumentHash = (
+        Get-FileHash -Algorithm SHA256 -LiteralPath $pluginBusinessDocumentPath).Hash.ToLowerInvariant()
+
+    $hostFileManifestPath = Join-Path $testRoot 'prepared-host-file-manifest.json'
+    [ordered]@{
+        schemaVersion = 1
+        component = 'Host'
+        version = '2.0.0'
+        files = @(
+            [ordered]@{
+                path = 'IIoT.Edge.Shell.exe'
+                size = 3
+                sha256 = ('a' * 64)
+                type = 'exe'
+                component = 'Host'
+                version = '2.0.0'
+            }
+        )
+    } | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8NoBOM -LiteralPath $hostFileManifestPath
+    $hostFileManifestSha256 = (
+        Get-FileHash -Algorithm SHA256 -LiteralPath $hostFileManifestPath).Hash.ToLowerInvariant()
+
+    $entryAssemblyBytes = [Text.Encoding]::ASCII.GetBytes('release-contract-fixture')
+    $entryAssemblySha256 = [Convert]::ToHexString(
+        [Security.Cryptography.SHA256]::HashData($entryAssemblyBytes)).ToLowerInvariant()
+    $pluginManifestSha256 = [Convert]::ToHexString(
+        [Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($pluginManifestJson))).ToLowerInvariant()
+    $pluginFileManifestJson = [ordered]@{
+        schemaVersion = 1
+        component = [string]$pluginManifest.moduleId
+        version = $pluginVersion
+        files = @(
+            [ordered]@{
+                path = 'plugin.json'
+                size = [Text.Encoding]::UTF8.GetByteCount($pluginManifestJson)
+                sha256 = $pluginManifestSha256
+                type = 'manifest'
+                component = [string]$pluginManifest.moduleId
+                version = $pluginVersion
+            },
+            [ordered]@{
+                path = [string]$pluginManifest.entryAssembly
+                size = $entryAssemblyBytes.Length
+                sha256 = $entryAssemblySha256
+                type = 'managed'
+                component = [string]$pluginManifest.moduleId
+                version = $pluginVersion
+            }
+        )
+    } | ConvertTo-Json -Depth 10
+    $pluginDataCapabilitiesJson = [ordered]@{
+        schemaVersion = 1
+        moduleId = [string]$pluginManifest.moduleId
+        version = $pluginVersion
+        capabilities = @()
+    } | ConvertTo-Json -Depth 10
+    $pluginDependencyClosureJson = [ordered]@{
+        schemaVersion = 2
+        moduleId = [string]$pluginManifest.moduleId
+        version = $pluginVersion
+        host = [ordered]@{
+            component = 'Host'
+            version = '2.0.0'
+            fileManifestSha256 = $hostFileManifestSha256
+        }
+        dependencies = @(
+            [ordered]@{
+                name = [string]$pluginManifest.entryAssembly
+                source = 'plugin'
+                version = $pluginVersion
+                sha256 = $entryAssemblySha256
+            }
+        )
+    } | ConvertTo-Json -Depth 10
+    $pluginFileManifestHash = [Convert]::ToHexString(
+        [Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($pluginFileManifestJson))).ToLowerInvariant()
+    $pluginDataCapabilitiesHash = [Convert]::ToHexString(
+        [Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($pluginDataCapabilitiesJson))).ToLowerInvariant()
+    $pluginDependencyClosureHash = [Convert]::ToHexString(
+        [Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($pluginDependencyClosureJson))).ToLowerInvariant()
     $pluginPackageMemory = [IO.MemoryStream]::new()
     $pluginPackageArchive = [IO.Compression.ZipArchive]::new(
         $pluginPackageMemory,
@@ -260,15 +352,21 @@ try {
         finally {
             $manifestWriter.Dispose()
         }
-        $assemblyEntry = $pluginPackageArchive.CreateEntry([string]$pluginManifest.entryAssembly)
-        $assemblyEntry.LastWriteTime = [DateTimeOffset]::Parse('2020-01-01T00:00:00Z')
-        $assemblyStream = $assemblyEntry.Open()
-        try {
-            $assemblyBytes = [Text.Encoding]::ASCII.GetBytes('release-contract-fixture')
-            $assemblyStream.Write($assemblyBytes, 0, $assemblyBytes.Length)
-        }
-        finally {
-            $assemblyStream.Dispose()
+        foreach ($fixtureEntry in @(
+            [pscustomobject]@{ Name = [string]$pluginManifest.entryAssembly; Bytes = $entryAssemblyBytes },
+            [pscustomobject]@{ Name = 'file-manifest.json'; Bytes = [Text.Encoding]::UTF8.GetBytes($pluginFileManifestJson) },
+            [pscustomobject]@{ Name = 'data-capabilities.json'; Bytes = [Text.Encoding]::UTF8.GetBytes($pluginDataCapabilitiesJson) },
+            [pscustomobject]@{ Name = 'dependency-closure.json'; Bytes = [Text.Encoding]::UTF8.GetBytes($pluginDependencyClosureJson) }
+        )) {
+            $entry = $pluginPackageArchive.CreateEntry($fixtureEntry.Name)
+            $entry.LastWriteTime = [DateTimeOffset]::Parse('2020-01-01T00:00:00Z')
+            $entryStream = $entry.Open()
+            try {
+                $entryStream.Write($fixtureEntry.Bytes, 0, $fixtureEntry.Bytes.Length)
+            }
+            finally {
+                $entryStream.Dispose()
+            }
         }
     }
     finally {
@@ -285,10 +383,14 @@ try {
     @'
 param(
     [Parameter(Mandatory = $true)][string]$ModuleId,
+    [Parameter(Mandatory = $true)][string]$SupportedProcessType,
     [string]$Configuration = 'Release',
     [string]$TargetRuntime = 'win-x64',
     [Parameter(Mandatory = $true)][string]$OutputRoot,
     [Parameter(Mandatory = $true)][string]$SourceCommit,
+    [Parameter(Mandatory = $true)][string]$HostFileManifestPath,
+    [Parameter(Mandatory = $true)][string]$HostVersion,
+    [Parameter(Mandatory = $true)][string]$HostFileManifestSha256,
     [switch]$CleanOutput
 )
 $ErrorActionPreference = 'Stop'
@@ -307,11 +409,39 @@ $packageBytes = [Convert]::FromBase64String((
 [IO.File]::WriteAllBytes($packagePath, $packageBytes)
 $package = Get-Item -LiteralPath $packagePath
 $packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagePath).Hash
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$archive = [IO.Compression.ZipFile]::OpenRead($packagePath)
+try {
+    function Get-FixtureEntrySha256 {
+        param([Parameter(Mandatory = $true)][string]$EntryName)
+        $entries = @($archive.Entries | Where-Object { $_.FullName -eq $EntryName })
+        if ($entries.Count -ne 1) { throw "Fixture package must contain exactly one '$EntryName'." }
+        $entryStream = $entries[0].Open()
+        try {
+            return [Convert]::ToHexString(
+                [Security.Cryptography.SHA256]::HashData($entryStream)).ToLowerInvariant()
+        }
+        finally {
+            $entryStream.Dispose()
+        }
+    }
+    $fileManifestSha256 = Get-FixtureEntrySha256 -EntryName 'file-manifest.json'
+    $dataCapabilitiesSha256 = Get-FixtureEntrySha256 -EntryName 'data-capabilities.json'
+    $dependencyClosureSha256 = Get-FixtureEntrySha256 -EntryName 'dependency-closure.json'
+}
+finally {
+    $archive.Dispose()
+}
+$businessDocumentRef = [string]$manifest.businessDocumentRef
+$businessDocumentPath = Join-Path $repoRoot $businessDocumentRef
+$businessDocumentSha256 = (
+    Get-FileHash -Algorithm SHA256 -LiteralPath $businessDocumentPath).Hash.ToLowerInvariant()
 @{
     packageSchemaVersion = 2
     moduleId = [string]$manifest.moduleId
-    processType = $ModuleId
-    displayName = $ModuleId
+    processType = $SupportedProcessType
+    displayName = [string]$manifest.displayName
     version = [string]$manifest.version
     hostApiVersion = '2.0.0'
     minHostVersion = '2.0.0'
@@ -325,6 +455,17 @@ $packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagePath).Hash
     signature = ''
     publisher = 'IIoT'
     sourceCommit = $SourceCommit
+    businessDocumentRef = $businessDocumentRef
+    businessDocumentSha256 = $businessDocumentSha256
+    fileManifestSha256 = $fileManifestSha256
+    fileManifestFileCount = 2
+    dataCapabilitiesFileName = 'data-capabilities.json'
+    dataCapabilitiesSha256 = $dataCapabilitiesSha256
+    dependencyClosureSha256 = $dependencyClosureSha256
+    dependencyCount = 1
+    dependencyHostComponent = 'Host'
+    dependencyHostVersion = $HostVersion
+    dependencyHostFileManifestSha256 = $HostFileManifestSha256.ToLowerInvariant()
 } | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8NoBOM -LiteralPath "$packagePath.json"
 '@ | Set-Content -Encoding utf8NoBOM -LiteralPath (
         Join-Path $pluginCloneRoot 'eng/PackEdgePlugin.ps1')
@@ -403,6 +544,17 @@ $packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagePath).Hash
         signature = ''
         publisher = 'IIoT'
         sourceCommit = $pluginHead
+        businessDocumentRef = $pluginBusinessDocumentRef
+        businessDocumentSha256 = $pluginBusinessDocumentHash
+        fileManifestSha256 = $pluginFileManifestHash
+        fileManifestFileCount = 2
+        dataCapabilitiesFileName = 'data-capabilities.json'
+        dataCapabilitiesSha256 = $pluginDataCapabilitiesHash
+        dependencyClosureSha256 = $pluginDependencyClosureHash
+        dependencyCount = 1
+        dependencyHostComponent = 'Host'
+        dependencyHostVersion = '2.0.0'
+        dependencyHostFileManifestSha256 = $hostFileManifestSha256
     } | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $pluginPackageRoot "$pluginFileName.json")
     'preserved plugin wrapper' | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $pluginReleaseRoot "edge-plugin-release-CP-$pluginVersion-win-x64.zip")
     $pluginInvocation = [Guid]::NewGuid().ToString('D')
@@ -424,9 +576,11 @@ $packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagePath).Hash
 
     Set-Dispatch -Target EdgePlugin -InvocationId $pluginInvocation
     & (Join-Path $cloneRoot 'scripts/PublishEdgePluginRelease.ps1') `
-        -ModuleId CP -PluginRepositoryRoot $pluginCloneRoot `
+        -ModuleId CP -SupportedProcessType cutting -PluginRepositoryRoot $pluginCloneRoot `
         -CloudApiBaseUrl "$baseUrl/api/v1" -ReleaseNotes 'fake plugin release notes' `
         -CloudToken 'fake-token' -ExpectedSha $pluginHead `
+        -HostFileManifestPath $hostFileManifestPath -HostVersion '2.0.0' `
+        -HostFileManifestSha256 $hostFileManifestSha256 `
         -ResumeReleaseRoot $pluginReleaseRoot -SkipPackageValidation
     Assert-State -ReleaseRoot $pluginReleaseRoot -Status succeeded
     $initialPostCount = Get-RequestCount -RequestLog $requestLog
@@ -440,9 +594,11 @@ $packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagePath).Hash
         -ResumeReleaseRoot $hostReleaseRoot -SkipVelopackValidation -SkipInstallerValidation
     Set-Dispatch -Target EdgePlugin -InvocationId $pluginInvocation
     & (Join-Path $cloneRoot 'scripts/PublishEdgePluginRelease.ps1') `
-        -ModuleId CP -PluginRepositoryRoot $pluginCloneRoot `
+        -ModuleId CP -SupportedProcessType cutting -PluginRepositoryRoot $pluginCloneRoot `
         -CloudApiBaseUrl "$baseUrl/existing/api/v1" -ReleaseNotes 'fake plugin release notes' `
         -CloudToken 'fake-token' -ExpectedSha $pluginHead `
+        -HostFileManifestPath $hostFileManifestPath -HostVersion '2.0.0' `
+        -HostFileManifestSha256 $hostFileManifestSha256 `
         -ResumeReleaseRoot $pluginReleaseRoot -SkipPackageValidation
     if ((Get-RequestCount -RequestLog $requestLog) -ne $initialPostCount) { throw 'Existing release reconciliation unexpectedly re-uploaded artifacts.' }
     $passed++
@@ -451,9 +607,11 @@ $packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagePath).Hash
     Set-Dispatch -Target EdgePlugin
     $reconcileInvocation = $env:IIOT_EDGE_WORKSPACE_INVOCATION_ID
     & (Join-Path $cloneRoot 'scripts/PublishEdgePluginRelease.ps1') `
-        -ModuleId CP -PluginRepositoryRoot $pluginCloneRoot `
+        -ModuleId CP -SupportedProcessType cutting -PluginRepositoryRoot $pluginCloneRoot `
         -CloudApiBaseUrl "$baseUrl/existing/api/v1" -ReleaseNotes 'from-zero reconciliation' `
         -CloudToken 'fake-token' -ExpectedSha $pluginHead `
+        -HostFileManifestPath $hostFileManifestPath -HostVersion '2.0.0' `
+        -HostFileManifestSha256 $hostFileManifestSha256 `
         -OutputRoot $reconcileOutputRoot -ReconcileExistingRelease -SkipPackageValidation
     $reconcileReleaseRoot = Join-Path $reconcileOutputRoot "stable/CP/reconcile-$reconcileInvocation"
     Assert-State -ReleaseRoot $reconcileReleaseRoot -Status succeeded
@@ -485,9 +643,11 @@ $packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagePath).Hash
     Set-Dispatch -Target EdgePlugin
     Assert-ThrowsContaining -Action {
         & (Join-Path $cloneRoot 'scripts/PublishEdgePluginRelease.ps1') `
-            -ModuleId CP -PluginRepositoryRoot $pluginCloneRoot `
+            -ModuleId CP -SupportedProcessType cutting -PluginRepositoryRoot $pluginCloneRoot `
             -CloudApiBaseUrl "$baseUrl/existing/api/v1" -ReleaseNotes 'new attempt' `
-            -CloudToken 'fake-token' -ExpectedSha $pluginHead
+            -CloudToken 'fake-token' -ExpectedSha $pluginHead `
+            -HostFileManifestPath $hostFileManifestPath -HostVersion '2.0.0' `
+            -HostFileManifestSha256 $hostFileManifestSha256
     } -Needles @('already exists', 'No package build was started')
 
     Set-Dispatch -Target EdgeHost -InvocationId $hostInvocation
@@ -515,9 +675,11 @@ $packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagePath).Hash
     Set-Dispatch -Target EdgePlugin -InvocationId $pluginInvocation
     Assert-ThrowsContaining -Action {
         & (Join-Path $cloneRoot 'scripts/PublishEdgePluginRelease.ps1') `
-            -ModuleId CP -PluginRepositoryRoot $pluginCloneRoot `
+            -ModuleId CP -SupportedProcessType cutting -PluginRepositoryRoot $pluginCloneRoot `
             -CloudApiBaseUrl "$baseUrl/catalog-error/api/v1" -ReleaseNotes 'fake plugin release notes' `
             -CloudToken 'fake-token' -ExpectedSha $pluginHead `
+            -HostFileManifestPath $hostFileManifestPath -HostVersion '2.0.0' `
+            -HostFileManifestSha256 $hostFileManifestSha256 `
             -ResumeReleaseRoot $pluginReleaseRoot -SkipPackageValidation
     } -Needles @('httpStatus=500', 'catalog_unavailable', 'injected failure')
 

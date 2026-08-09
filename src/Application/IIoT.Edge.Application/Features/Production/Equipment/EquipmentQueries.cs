@@ -43,7 +43,12 @@ public record CapacitySnapshot(
     int RecentHourOutput,
     int RecentHourOk,
     int RecentHourNg,
-    string RecentHourLabel);
+    string RecentHourLabel)
+{
+    public bool IsAvailable { get; init; } = true;
+
+    public string? UnavailableReason { get; init; }
+}
 
 public record GetHardwareStatusQuery() : IRequest<List<HardwareSnapshot>>;
 
@@ -159,6 +164,24 @@ public class GetCapacitySnapshotHandler(
                      StringComparer.OrdinalIgnoreCase))
         {
             summaries.Add(await source.QueryAsync(query, cancellationToken).ConfigureAwait(false));
+        }
+
+        if (summaries.Count == 0)
+        {
+            return new CapacitySnapshot(
+                0,
+                0,
+                0,
+                "--",
+                "--",
+                0,
+                0,
+                0,
+                BuildRecentHourLabel(businessNow))
+            {
+                IsAvailable = false,
+                UnavailableReason = "cloud_history_only"
+            };
         }
 
         var ok = summaries.Sum(static summary => summary.TodayOk);

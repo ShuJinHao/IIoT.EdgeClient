@@ -26,6 +26,9 @@ public sealed class DataPipelineDeadLetterWriter : IDataPipelineDeadLetterWriter
         {
             await saveAsync(new DeadLetterRecord
             {
+                ClientCode = sourceRecord?.ClientCode ?? string.Empty,
+                CompletionId = sourceRecord?.CompletionId ?? string.Empty,
+                TypeKey = sourceRecord?.TypeKey ?? string.Empty,
                 ProcessType = processType,
                 CellDataJson = cellDataJson,
                 FailedTarget = failedTarget,

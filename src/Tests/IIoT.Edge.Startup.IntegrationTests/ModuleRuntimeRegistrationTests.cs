@@ -769,7 +769,7 @@ public sealed class ModuleRuntimeRegistrationTests
             harness.StartupDiagnosticsStore.Current.Issues,
             issue => string.Equals(issue.Code, "CONFIG_INVALID", StringComparison.OrdinalIgnoreCase)
                      && issue.Message.Contains("CloudApi:Paths:DeviceInstance", StringComparison.Ordinal)
-                     && issue.Message.Contains("相对 API 路径", StringComparison.Ordinal));
+                     && issue.Message.Contains("Binding API path is invalid", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -787,7 +787,7 @@ public sealed class ModuleRuntimeRegistrationTests
             harness.StartupDiagnosticsStore.Current.Issues,
             issue => string.Equals(issue.Code, "CONFIG_INVALID", StringComparison.OrdinalIgnoreCase)
                      && issue.Message.Contains("CloudApi:Paths:DeviceInstance", StringComparison.Ordinal)
-                     && issue.Message.Contains("单个 /", StringComparison.Ordinal));
+                     && issue.Message.Contains("Binding API path is invalid", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1032,7 +1032,12 @@ public sealed class ModuleRuntimeRegistrationTests
             var activation = CreateShellModuleCatalog().CreateEnabledModules(
                 CreateConfiguration(["TestPlugin"]),
                 discovery.Modules);
-            var modules = activation.Modules;
+            var issues = activation.Issues.ToList();
+            var modules = IIoT.Edge.Host.Bootstrap.DependencyInjection
+                .BindLegacyProcessTypesFromManifests(
+                    activation.Modules,
+                    discovery.Modules,
+                    issues);
             var viewRegistry = new ViewRegistry();
             var cellDataRegistry = new CellDataRegistry(new CellDataTypeRegistry());
             var runtimeRegistry = new StationRuntimeRegistry();
@@ -1053,7 +1058,7 @@ public sealed class ModuleRuntimeRegistrationTests
                     moduleParamRegistry));
             }
 
-            Assert.Empty(activation.Issues);
+            Assert.Empty(issues);
             Assert.Single(modules);
             Assert.Single(cellDataRegistry.GetRegistrations());
             Assert.Single(runtimeRegistry.GetRegistrations());
@@ -1243,6 +1248,46 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
+    public void LegacyV2ProcessBinding_WhenPluginUsesUndeclaredAbiSlot_ShouldUseVerifiedManifest()
+    {
+        var module = new DiagnosticProcessModule(
+            "LegacyPlugin",
+            string.Empty,
+            requiresCloud: false,
+            requiresMes: false);
+        var descriptor = CreateLegacyDescriptor("LegacyPlugin", "DIE_CUTTING");
+        var issues = new List<ModuleCatalogIssue>();
+
+        var resolved = IIoT.Edge.Host.Bootstrap.DependencyInjection
+            .BindLegacyProcessTypesFromManifests([module], [descriptor], issues);
+
+        var bound = Assert.IsType<RuntimeBoundEdgeProcessModule>(Assert.Single(resolved));
+        Assert.Equal("DIE_CUTTING", bound.ProcessType);
+        Assert.Equal(module.GetType().Assembly, bound.ImplementationAssembly);
+        Assert.Empty(issues);
+    }
+
+    [Fact]
+    public void LegacyV2ProcessBinding_WhenVerifiedManifestIsMissing_ShouldFailClosedWithoutModuleIdFallback()
+    {
+        var module = new DiagnosticProcessModule(
+            "LegacyPlugin",
+            string.Empty,
+            requiresCloud: false,
+            requiresMes: false);
+        var issues = new List<ModuleCatalogIssue>();
+
+        var resolved = IIoT.Edge.Host.Bootstrap.DependencyInjection
+            .BindLegacyProcessTypesFromManifests([module], [], issues);
+
+        Assert.Empty(resolved);
+        var issue = Assert.Single(issues);
+        Assert.Equal("LEGACY_PLUGIN_PROCESS_TYPE_UNRESOLVED", issue.Code);
+        Assert.Equal("LegacyPlugin", issue.ModuleId);
+        Assert.Contains("禁止回退到 ModuleId", issue.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void HostBootstrap_WhenPluginConfigureFails_ShouldDiscardEveryRegistrationAndContinueOtherPlugins()
     {
         var services = new ServiceCollection();
@@ -1360,7 +1405,7 @@ public sealed class ModuleRuntimeRegistrationTests
     }
 
     [Fact]
-    public async Task AppStartupInitializer_WhenEfPragmaOrMigrationFails_ShouldContinueAndPublishDiagnostic()
+    public async Task AppStartupInitializer_WhenEfPragmaOrMigrationFails_ShouldFailClosedBeforeSeedAndDapper()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "edge-startup-ef-failure-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDirectory);
@@ -1380,17 +1425,17 @@ public sealed class ModuleRuntimeRegistrationTests
                 new NoopConfigSchemaReconciler(),
                 logger);
 
-            var issues = await initializer.InitializeAsync(TestContext.Current.CancellationToken);
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                initializer.InitializeAsync(TestContext.Current.CancellationToken));
 
-            Assert.Contains(issues, issue => issue.Code == "STARTUP_EF_MIGRATION_FAILED");
+            Assert.Contains("已阻断插件播种", exception.Message, StringComparison.Ordinal);
             Assert.Contains(
                 logger.Entries,
-                entry => entry.Level == "Warn"
+                entry => entry.Level == "Error"
                          && entry.Message.Contains("SQLite", StringComparison.Ordinal));
-            Assert.Contains(
+            Assert.DoesNotContain(
                 logger.Entries,
-                entry => entry.Level == "Info"
-                         && entry.Message.Contains("Dapper 表初始化完成", StringComparison.Ordinal));
+                entry => entry.Message.Contains("Dapper 表初始化完成", StringComparison.Ordinal));
             Assert.DoesNotContain(logger.Entries, entry => entry.Level == "Fatal");
         }
         finally
@@ -1827,6 +1872,13 @@ public sealed class ModuleRuntimeRegistrationTests
 
             var discovery = DiscoverTestPlugins(pluginRoot);
             var activation = CreateShellModuleCatalog().CreateEnabledModules(configuration, discovery.Modules);
+            var moduleCatalogIssues = new List<ModuleCatalogIssue>(
+                [.. discovery.Issues, .. activation.Issues]);
+            var modules = IIoT.Edge.Host.Bootstrap.DependencyInjection
+                .BindLegacyProcessTypesFromManifests(
+                    activation.Modules,
+                    discovery.Modules,
+                    moduleCatalogIssues);
             var moduleViewRegistry = new ViewRegistry();
             var cellDataRegistry = new CellDataRegistry(new CellDataTypeRegistry());
             var runtimeRegistry = new StationRuntimeRegistry();
@@ -1834,7 +1886,7 @@ public sealed class ModuleRuntimeRegistrationTests
             var moduleParamRegistry = new ModuleParamRegistry();
             services.AddSingleton<IStationRuntimeRegistry>(runtimeRegistry);
 
-            foreach (var module in activation.Modules)
+            foreach (var module in modules)
             {
                 services.AddSingleton<IEdgeProcessModule>(module);
                 module.Configure(new EdgeProcessModuleBuilder(
@@ -1894,10 +1946,10 @@ public sealed class ModuleRuntimeRegistrationTests
                 networkDevices,
                 new StartupPluginLifecycleSnapshotBuilder(),
                 discovery.Modules,
-                [.. discovery.Issues, .. activation.Issues],
+                moduleCatalogIssues,
                 [],
                 activation.EnabledModuleIds,
-                activation.Modules,
+                modules,
                 diagnosticHardwareProfiles,
                 syncValidators,
                 asyncValidators,
@@ -2516,6 +2568,24 @@ public sealed class ModuleRuntimeRegistrationTests
         {
         }
     }
+
+    private static ModulePluginDescriptor CreateLegacyDescriptor(
+        string moduleId,
+        string processType)
+        => new(
+            ModuleId: moduleId,
+            ProcessType: processType,
+            DisplayName: moduleId,
+            Version: "2.0.11",
+            HostApiVersion: "2.0.0",
+            MinHostVersion: "2.0.0",
+            MaxHostVersion: "2.0.999",
+            Dependencies: [],
+            AssemblyName: $"IIoT.Edge.Module.{moduleId}",
+            EntryTypeName: $"IIoT.Edge.Module.{moduleId}.DependencyInjection",
+            PluginDirectory: "/verified/plugins/" + moduleId,
+            ManifestPath: $"/verified/plugins/{moduleId}/plugin.json",
+            EntryAssemblyPath: $"/verified/plugins/{moduleId}/{moduleId}.dll");
 
     private sealed class ThrowingRegistrationModule : IEdgeProcessModule
     {

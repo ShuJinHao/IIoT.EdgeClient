@@ -51,7 +51,11 @@ public static class DependencyInjection
         services.AddSingleton<ICloudSystemSwitchMigration, CloudSystemSwitchMigration>();
         services.AddSingleton<ModuleParamValueSnapshotLoader>();
         services.AddSingleton<ModuleHardwareProfileResolver>();
-        services.AddSingleton<IModuleDevelopmentSeedWriter, ModuleDevelopmentSeedWriter>();
+        services.AddSingleton<ModuleDevelopmentSeedWriter>();
+        services.AddSingleton<IModuleDevelopmentSeedWriter>(sp =>
+            sp.GetRequiredService<ModuleDevelopmentSeedWriter>());
+        services.AddSingleton<IModuleFirstInitializationStore>(sp =>
+            sp.GetRequiredService<ModuleDevelopmentSeedWriter>());
         services.AddSingleton(typeof(IModuleParamProvider<,,>), typeof(ModuleParamProvider<,,>));
         services.AddSingleton<IModuleParamRoleProvider, ModuleParamRoleProvider>();
         services.AddSingleton<IConfigSchemaReconciler, ConfigSchemaReconciler>();

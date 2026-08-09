@@ -17,6 +17,7 @@ public interface ILauncherPluginActivationReconciler
 public sealed class LauncherPluginActivationReconciler : ILauncherPluginActivationReconciler
 {
     private readonly HashSet<string> _readyActivations = new(StringComparer.OrdinalIgnoreCase);
+    private readonly string _baseDirectory;
     private readonly LauncherHostRuntimeResolver _hostRuntimeResolver;
     private readonly ILauncherPluginActivationSource _activationSource;
     private readonly ILauncherStartupDiagnosticWriter? _diagnostics;
@@ -27,6 +28,7 @@ public sealed class LauncherPluginActivationReconciler : ILauncherPluginActivati
         ILauncherStartupDiagnosticWriter? diagnostics = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
+        _baseDirectory = baseDirectory;
         _activationSource = activationSource
             ?? throw new ArgumentNullException(nameof(activationSource));
         _diagnostics = diagnostics;
@@ -36,6 +38,17 @@ public sealed class LauncherPluginActivationReconciler : ILauncherPluginActivati
     public void Reconcile()
     {
         _readyActivations.Clear();
+        var runtimeBindingPath = EdgeClientProgramDataPaths.ResolveRuntimeBindingPath(_baseDirectory);
+        if (File.Exists(runtimeBindingPath)
+            && EdgeInstallerBindingCodec.ParseRuntime(File.ReadAllText(runtimeBindingPath)).SchemaVersion
+            == EdgeInstallerBindingCodec.CurrentSchemaVersion)
+        {
+            _diagnostics?.ReplaceArea(
+                LauncherStartupDiagnosticAreas.PluginActivationMaterialization,
+                []);
+            return;
+        }
+
         var reconciliationDiagnostics = new List<LauncherStartupDiagnostic>();
         foreach (var activation in _activationSource.LoadActivations())
         {

@@ -60,6 +60,10 @@ internal static class DataPipelineRetryChannelMetadata
     public static CellCompletedRecord CreateCompletedRecord(FailedCellRecord record, CellDataBase cellData)
         => new()
         {
+            ClientCode = record.ClientCode,
+            CompletionId = record.CompletionId,
+            TypeKey = record.TypeKey,
+            ProcessType = record.ProcessType,
             CellData = cellData,
             PlcCode = record.PlcCode,
             NetworkDeviceId = record.NetworkDeviceId,
@@ -85,7 +89,13 @@ internal static class DataPipelineRetryChannelMetadata
     }
 
     public static FailedRecordSourceKey CreateSourceKey(FailedCellRecord record)
-        => new((record.PlcCode ?? string.Empty).Trim());
+        => new(
+            (record.ClientCode ?? string.Empty).Trim().ToUpperInvariant(),
+            (record.TypeKey ?? string.Empty).Trim().ToLowerInvariant(),
+            (record.PlcCode ?? string.Empty).Trim().ToUpperInvariant());
 }
 
-internal readonly record struct FailedRecordSourceKey(string PlcCode);
+internal readonly record struct FailedRecordSourceKey(
+    string ClientCode,
+    string TypeKey,
+    string PlcCode);

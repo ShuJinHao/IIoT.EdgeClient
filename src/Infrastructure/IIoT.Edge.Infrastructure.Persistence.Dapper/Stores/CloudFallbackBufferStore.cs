@@ -5,6 +5,7 @@ using IIoT.Edge.Module.Contracts.DataPipeline;
 using IIoT.Edge.Module.Contracts.DataPipeline.CellData;
 
 using IIoT.Edge.Module.Contracts.Cloud;
+using IIoT.Edge.Application.Common.Identity;
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 
 public class CloudFallbackBufferStore : FallbackBufferStoreBase<CloudFallbackRecord>, ICloudFallbackBufferStore
@@ -31,8 +32,9 @@ public class CloudFallbackBufferStore : FallbackBufferStoreBase<CloudFallbackRec
     public CloudFallbackBufferStore(
         SqliteConnectionFactory connectionFactory,
         ILogService logger,
-        ICellDataJsonSerializer cellDataJsonSerializer)
-        : base(connectionFactory, logger, cellDataJsonSerializer)
+        ICellDataJsonSerializer cellDataJsonSerializer,
+        IDevicePluginRuntimeContext? runtimeContext = null)
+        : base(connectionFactory, logger, cellDataJsonSerializer, runtimeContext)
     {
     }
 }

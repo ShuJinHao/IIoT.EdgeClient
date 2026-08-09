@@ -1,5 +1,7 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Security;
+using System.Text.Json;
 using IIoT.Edge.Application.Features.Updates;
 using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.UI.Shared.Localization;
@@ -15,6 +17,14 @@ public interface ILauncherStartupCoordinator
     bool TryCompleteUpdateStartup();
 }
 
+public sealed class LauncherStartupBlockedException(
+    string reasonCode,
+    Exception? innerException = null)
+    : InvalidOperationException(reasonCode, innerException)
+{
+    public string ReasonCode { get; } = reasonCode;
+}
+
 public sealed class LauncherStartupCoordinator(
     IAppLanguageService languageService,
     ILauncherAccountCatalogInitializer accountCatalogInitializer,
@@ -23,7 +33,9 @@ public sealed class LauncherStartupCoordinator(
     IEdgeUpdateTransactionRecovery updateTransactionRecovery,
     ILauncherPluginActivationReconciler activationReconciler,
     ILauncherDeviceBindingImporter deviceBindingImporter,
-    ILauncherStartupDiagnosticWriter diagnostics)
+    ILauncherStartupDiagnosticWriter diagnostics,
+    ILauncherRuntimePreflight? runtimePreflight = null,
+    ILauncherLegacyCredentialMigrator? legacyCredentialMigrator = null)
     : ILauncherStartupCoordinator
 {
     public void PrepareLocalization()
@@ -35,17 +47,51 @@ public sealed class LauncherStartupCoordinator(
 
     public void Initialize()
     {
-        RunLocalStep(
+        if (!TryCompleteUpdateStartup())
+        {
+            throw new LauncherStartupBlockedException(
+                "LAUNCHER_UPDATE_RECOVERY_NOT_READY");
+        }
+
+        RunCriticalStep(
+            LauncherStartupDiagnosticAreas.DeviceBinding,
+            "LAUNCHER_PRODUCTION_IDENTITY_PREFLIGHT_FAILED",
+            LauncherStartupDiagnosticRepairTargets.DeviceBinding,
+            () => runtimePreflight?.ValidateIdentityBeforeWrites());
+        RunCriticalStep(
             LauncherStartupDiagnosticAreas.AccountCatalog,
             "LAUNCHER_ACCOUNT_CATALOG_INITIALIZATION_FAILED",
             LauncherStartupDiagnosticRepairTargets.LocalAccount,
             accountCatalogInitializer.EnsureCatalogExists);
-        RunLocalStep(
+        RunCriticalStep(
+            LauncherStartupDiagnosticAreas.PluginActivationMaterialization,
+            "LAUNCHER_LEGACY_PLUGIN_ACTIVATION_RECONCILIATION_FAILED",
+            LauncherStartupDiagnosticRepairTargets.PluginActivation,
+            activationReconciler.Reconcile,
+            clearOnSuccess: false);
+        RunCriticalStep(
+            LauncherStartupDiagnosticAreas.DeviceBinding,
+            "LAUNCHER_DEVICE_BINDING_IMPORT_FAILED",
+            LauncherStartupDiagnosticRepairTargets.DeviceBinding,
+            deviceBindingImporter.ApplyPendingBindingsOrThrow,
+            clearOnSuccess: false);
+        RunCriticalStep(
+            LauncherStartupDiagnosticAreas.DeviceBinding,
+            "LAUNCHER_LEGACY_CREDENTIAL_MIGRATION_FAILED",
+            LauncherStartupDiagnosticRepairTargets.DeviceBinding,
+            () => legacyCredentialMigrator?.Migrate(),
+            clearOnSuccess: false);
+        RunCriticalStep(
+            LauncherStartupDiagnosticAreas.DeviceBinding,
+            "LAUNCHER_BINDING_V3_PREFLIGHT_FAILED",
+            LauncherStartupDiagnosticRepairTargets.DeviceBinding,
+            () => runtimePreflight?.ValidateCompleteRuntime(),
+            clearOnSuccess: false);
+        RunCriticalStep(
             LauncherStartupDiagnosticAreas.UpdateConfiguration,
             "LAUNCHER_UPDATE_CONFIGURATION_INITIALIZATION_FAILED",
             LauncherStartupDiagnosticRepairTargets.LauncherConfiguration,
             updateConfigInitializer.EnsureConfigExists);
-        _ = TryCompleteUpdateStartup();
     }
 
     public bool TryCompleteUpdateStartup()
@@ -103,19 +149,33 @@ public sealed class LauncherStartupCoordinator(
             }
 
             diagnostics.ReplaceArea(LauncherStartupDiagnosticAreas.UpdateRecovery, []);
-            RunLocalStep(
-                LauncherStartupDiagnosticAreas.PluginActivationMaterialization,
-                "LAUNCHER_PLUGIN_ACTIVATION_RECONCILIATION_FAILED",
-                LauncherStartupDiagnosticRepairTargets.PluginActivation,
-                activationReconciler.Reconcile,
-                clearOnSuccess: false);
-            RunLocalStep(
-                LauncherStartupDiagnosticAreas.DeviceBinding,
-                "LAUNCHER_DEVICE_BINDING_IMPORT_FAILED",
-                LauncherStartupDiagnosticRepairTargets.DeviceBinding,
-                deviceBindingImporter.ApplyPendingBindings,
-                clearOnSuccess: false);
             return true;
+        }
+    }
+
+    private void RunCriticalStep(
+        string area,
+        string reasonCode,
+        string repairTarget,
+        Action action,
+        bool clearOnSuccess = true)
+    {
+        try
+        {
+            action();
+            if (clearOnSuccess)
+            {
+                diagnostics.ReplaceArea(area, []);
+            }
+        }
+        catch (LauncherStartupBlockedException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (IsRecoverableLocalFailure(ex))
+        {
+            ReplaceFailure(area, reasonCode, repairTarget, ex);
+            throw new LauncherStartupBlockedException(reasonCode, ex);
         }
     }
 
@@ -145,7 +205,12 @@ public sealed class LauncherStartupCoordinator(
             or NotSupportedException
             or IOException
             or UnauthorizedAccessException
-            or SecurityException;
+            or SecurityException
+            or InvalidDataException
+            or InvalidOperationException
+            or JsonException
+            or Win32Exception
+            or KeyNotFoundException;
 
     private void ReplaceFailure(
         string area,

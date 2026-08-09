@@ -22,6 +22,7 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
     private readonly CancellationTokenSource _disposeCts = new();
     private readonly object _syncRoot = new();
     private readonly List<TrackedShellProcess> _startedProcesses = [];
+    private readonly HashSet<string> _launchesInProgress = new(StringComparer.Ordinal);
 
     public ShellLaunchService(
         IProcessStarter processStarter,
@@ -76,14 +77,16 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
     public bool IsProfileRunning(LauncherProfileDefinition profile)
     {
         ArgumentNullException.ThrowIfNull(profile);
-        if (HasTrackedRunningShellProcess(profile.MachineProfile))
+        var clientCode = ResolveLaunchIdentity(profile);
+        if (HasTrackedRunningShellProcess(clientCode))
         {
             return true;
         }
 
         var instanceId = _instanceIdResolver.ResolveInstanceId(profile);
-        return !string.IsNullOrWhiteSpace(instanceId)
-               && _instanceProbe.IsInstanceRunning(instanceId);
+        return string.IsNullOrWhiteSpace(instanceId)
+            ? !string.IsNullOrWhiteSpace(profile.ClientCode)
+            : _instanceProbe.IsInstanceRunning(instanceId);
     }
 
     public async Task<ShellLaunchResult> LaunchAsync(
@@ -91,6 +94,10 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(profile);
+        var clientCode = ResolveLaunchIdentity(profile);
+        using var inProcessLease = TryAcquireInProcessLaunch(clientCode)
+            ?? throw new InvalidOperationException(
+                $"设备 {profile.DisplayName} 正在启动，请勿重复操作。");
 
         using var launchLease = _updateOperationGate.TryAcquire();
         if (launchLease is null)
@@ -99,6 +106,19 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
         }
 
         EnsureProfileIsSelected(profile);
+
+        var instanceId = _instanceIdResolver.ResolveInstanceId(profile);
+        if (string.IsNullOrWhiteSpace(instanceId))
+        {
+            throw new InvalidOperationException(
+                $"客户端启动已阻断：{profile.DisplayName} 的 ClientCode 运行配置缺失或冲突。");
+        }
+        if (HasTrackedRunningShellProcess(clientCode)
+            || _instanceProbe.IsInstanceRunning(instanceId))
+        {
+            throw new InvalidOperationException(
+                $"设备 {profile.DisplayName} 已在运行，同一 ClientCode 不允许重复启动。");
+        }
 
         if (_updateTransactionRecovery.IsProfileBlocked(profile.MachineProfile))
         {
@@ -118,7 +138,12 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
             startInfo.ArgumentList.Add(argument);
         }
 
-        startInfo.EnvironmentVariables["Shell__MachineProfile"] = profile.MachineProfile;
+        startInfo.EnvironmentVariables["Shell__MachineProfile"] = clientCode;
+        startInfo.EnvironmentVariables["Shell__ClientCode"] = clientCode;
+        if (!string.IsNullOrWhiteSpace(profile.MachineConfigPath))
+        {
+            startInfo.EnvironmentVariables["Shell__MachineConfigPath"] = profile.MachineConfigPath;
+        }
         var readyPath = _updateOperationGate.CreateShellLaunchReadyPath();
         if (string.IsNullOrWhiteSpace(readyPath))
         {
@@ -182,8 +207,8 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
 
             if (!string.Equals(
                     outcome.MachineProfile,
-                    profile.MachineProfile,
-                    StringComparison.OrdinalIgnoreCase))
+                    clientCode,
+                    StringComparison.Ordinal))
             {
                 TerminateIncompleteLaunch(process);
                 processHandled = true;
@@ -191,12 +216,24 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
                     $"客户端启动失败：{profile.DisplayName} 返回了不匹配的工序身份。");
             }
 
+            if (!string.IsNullOrWhiteSpace(profile.ClientCode)
+                && (!string.Equals(outcome.ClientCode, clientCode, StringComparison.Ordinal)
+                    || !string.Equals(outcome.ModuleId, profile.ActivationModuleId, StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(outcome.PluginVersion, profile.PluginVersion, StringComparison.Ordinal)
+                    || !string.Equals(outcome.PackageSha256, profile.PackageSha256, StringComparison.OrdinalIgnoreCase)))
+            {
+                TerminateIncompleteLaunch(process);
+                processHandled = true;
+                throw new InvalidOperationException(
+                    $"客户端启动失败：{profile.DisplayName} 返回的 ClientCode、插件版本或包摘要与安装 Binding 不一致。");
+            }
+
             if (string.Equals(
                     outcome.Status,
                     EdgeClientShellLaunchStatuses.Failed,
                     StringComparison.Ordinal))
             {
-                TrackProcessIfRunning(profile.MachineProfile, process);
+                TrackProcessIfRunning(clientCode, process);
                 processHandled = true;
                 throw new InvalidOperationException(
                     $"客户端启动失败：{profile.DisplayName} 报告了受控启动失败。");
@@ -225,7 +262,7 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
                     $"客户端启动失败：{profile.DisplayName} 在报告就绪后退出。");
             }
 
-            TrackProcess(profile.MachineProfile, process);
+            TrackProcess(clientCode, process);
             processHandled = true;
             return new ShellLaunchResult(
                 string.Equals(
@@ -258,6 +295,19 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
 
     private void EnsureProfileIsSelected(LauncherProfileDefinition profile)
     {
+        if (!string.IsNullOrWhiteSpace(profile.ClientCode))
+        {
+            if (string.IsNullOrWhiteSpace(profile.ActivationModuleId)
+                || string.IsNullOrWhiteSpace(profile.ActivationPluginDirectory)
+                || !Directory.Exists(profile.ActivationPluginDirectory))
+            {
+                throw new InvalidOperationException(
+                    $"客户端启动已阻断：{profile.DisplayName} 的设备插件目录或 ModuleId 不完整。");
+            }
+
+            return;
+        }
+
         if (_selectionSource is null)
         {
             return;
@@ -336,6 +386,30 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
         => new(
             $"客户端启动已阻断：{profile.DisplayName} 不在当前启用工序清单中。");
 
+    private IDisposable? TryAcquireInProcessLaunch(string clientCode)
+    {
+        lock (_syncRoot)
+        {
+            if (!_launchesInProgress.Add(clientCode))
+            {
+                return null;
+            }
+        }
+
+        return new DelegateLease(() =>
+        {
+            lock (_syncRoot)
+            {
+                _launchesInProgress.Remove(clientCode);
+            }
+        });
+    }
+
+    private static string ResolveLaunchIdentity(LauncherProfileDefinition profile)
+        => string.IsNullOrWhiteSpace(profile.ClientCode)
+            ? EdgeClientProgramDataPaths.SanitizePathSegment(profile.MachineProfile)
+            : EdgeClientIdentity.NormalizeClientCode(profile.ClientCode);
+
     public void Dispose()
     {
         _disposeCts.Cancel();
@@ -351,23 +425,23 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
     }
 
     private void TrackProcessIfRunning(
-        string machineProfile,
+        string clientCode,
         Process process)
     {
         if (IsRunning(process))
         {
-            TrackProcess(machineProfile, process);
+            TrackProcess(clientCode, process);
             return;
         }
 
         process.Dispose();
     }
 
-    private void TrackProcess(string machineProfile, Process process)
+    private void TrackProcess(string clientCode, Process process)
     {
         lock (_syncRoot)
         {
-            _startedProcesses.Add(new TrackedShellProcess(machineProfile, process));
+            _startedProcesses.Add(new TrackedShellProcess(clientCode, process));
         }
     }
 
@@ -378,9 +452,9 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
     }
 
     private bool HasTrackedRunningShellProcess()
-        => HasTrackedRunningShellProcess(machineProfile: null);
+        => HasTrackedRunningShellProcess(clientCode: null);
 
-    private bool HasTrackedRunningShellProcess(string? machineProfile)
+    private bool HasTrackedRunningShellProcess(string? clientCode)
     {
         lock (_syncRoot)
         {
@@ -391,8 +465,8 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
                 var process = tracked.Process;
                 if (IsRunning(process))
                 {
-                    if (string.IsNullOrWhiteSpace(machineProfile)
-                        || string.Equals(tracked.MachineProfile, machineProfile, StringComparison.OrdinalIgnoreCase))
+                    if (string.IsNullOrWhiteSpace(clientCode)
+                        || string.Equals(tracked.ClientCode, clientCode, StringComparison.Ordinal))
                     {
                         hasRunningProcess = true;
                     }
@@ -537,5 +611,12 @@ public sealed class ShellLaunchService : IShellLaunchService, IDisposable
             => _changed.TrySetResult();
     }
 
-    private sealed record TrackedShellProcess(string MachineProfile, Process Process);
+    private sealed record TrackedShellProcess(string ClientCode, Process Process);
+
+    private sealed class DelegateLease(Action release) : IDisposable
+    {
+        private Action? _release = release;
+
+        public void Dispose() => Interlocked.Exchange(ref _release, null)?.Invoke();
+    }
 }

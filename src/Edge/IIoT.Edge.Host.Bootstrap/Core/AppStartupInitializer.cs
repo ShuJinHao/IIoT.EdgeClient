@@ -48,11 +48,10 @@ public sealed class AppStartupInitializer : IAppStartupInitializer
         }
         catch (Exception ex)
         {
-            var message = $"EF Core 迁移或 SQLite 运行 pragma 初始化失败，已按非阻断处理：{ex.Message}";
-            issues.Add(StartupDiagnosticIssueFactory.Create(
-                "STARTUP_EF_MIGRATION_FAILED",
-                message));
-            _logger.Warn($"[生命周期] {message}");
+            const string message =
+                "EF Core 迁移或 SQLite 运行 pragma 初始化失败；已阻断插件播种和运行时启动，下次启动将安全重试。";
+            _logger.Error($"[生命周期] {message}");
+            throw new InvalidOperationException(message, ex);
         }
 
         var dapperFailures = await _serviceProvider

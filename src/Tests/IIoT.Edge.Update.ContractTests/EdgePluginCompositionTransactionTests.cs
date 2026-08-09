@@ -8,6 +8,7 @@ using IIoT.Edge.Infrastructure.Update.Profiles;
 using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.SharedKernel.Configuration;
 using IIoT.Edge.SharedKernel.Runtime;
+using IIoT.Edge.SharedKernel.Security;
 using Xunit;
 
 namespace IIoT.Edge.Update.ContractTests;
@@ -532,6 +533,73 @@ public sealed class EdgePluginCompositionTransactionTests
         Assert.True(transaction.IsProfileBlocked(fixture.Target.MachineProfile));
     }
 
+    [Fact]
+    public async Task InstallAsync_BindingV3_ShouldReplaceOnlyMatchingClientCodeAndUpdateBinding()
+    {
+        using var fixture = TransactionFixture.Create(["P1Module", "P2Module"]);
+        fixture.ConfigureBindingV3(
+            ("P1-DEVICE", "P1Module"),
+            ("P2-DEVICE", "P2Module"));
+        var p2Before = fixture.ComputeDevicePluginHash("P2-DEVICE");
+        var transaction = fixture.CreateTransaction();
+
+        var result = await transaction.InstallAsync(
+            [fixture.TargetForClient("P1-DEVICE", "P1Module")],
+            [fixture.Source(fixture.Release("P1Module"))],
+            "1.0.0",
+            EdgeClientHostRuntime.HostApiVersion,
+            pendingHostVersion: null,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.ErrorMessage);
+        fixture.AssertV3PluginVersion("P1-DEVICE", "2.0.0");
+        fixture.AssertV3PluginVersion("P2-DEVICE", "1.0.0");
+        Assert.Equal(p2Before, fixture.ComputeDevicePluginHash("P2-DEVICE"));
+        Assert.False(Directory.Exists(Path.Combine(fixture.PluginsRoot, "P1Module")));
+        var runtime = fixture.ReadRuntimeBinding();
+        var p1 = Assert.Single(runtime.Bindings, item => item.ClientCode == "P1-DEVICE");
+        var p2 = Assert.Single(runtime.Bindings, item => item.ClientCode == "P2-DEVICE");
+        Assert.Equal("2.0.0", p1.PluginVersion);
+        Assert.Equal(
+            TransactionFixture.ComputeSha256(fixture.PackagePath("P1Module")),
+            p1.PackageSha256,
+            ignoreCase: true);
+        Assert.Equal("1.0.0", p2.PluginVersion);
+    }
+
+    [Fact]
+    public async Task InstallAsync_BindingV3FailureAfterBindingWrite_ShouldRollbackPluginAndBinding()
+    {
+        using var fixture = TransactionFixture.Create(["P1Module", "P2Module"]);
+        fixture.ConfigureBindingV3(
+            ("P1-DEVICE", "P1Module"),
+            ("P2-DEVICE", "P2Module"));
+        var p1Before = fixture.ComputeDevicePluginHash("P1-DEVICE");
+        var p2Before = fixture.ComputeDevicePluginHash("P2-DEVICE");
+        var bindingBefore = File.ReadAllBytes(fixture.RuntimeBindingPath);
+        var transaction = fixture.CreateTransaction(stage =>
+        {
+            if (stage == EdgePluginTransactionStage.RuntimeBindingWritten)
+            {
+                throw new InvalidOperationException("stop after binding commit");
+            }
+        });
+
+        var result = await transaction.InstallAsync(
+            [fixture.TargetForClient("P1-DEVICE", "P1Module")],
+            [fixture.Source(fixture.Release("P1Module"))],
+            "1.0.0",
+            EdgeClientHostRuntime.HostApiVersion,
+            pendingHostVersion: null,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(p1Before, fixture.ComputeDevicePluginHash("P1-DEVICE"));
+        Assert.Equal(p2Before, fixture.ComputeDevicePluginHash("P2-DEVICE"));
+        Assert.Equal(bindingBefore, File.ReadAllBytes(fixture.RuntimeBindingPath));
+        Assert.False(File.Exists(fixture.JournalPath));
+    }
+
     private sealed class TransactionFixture : IDisposable
     {
         private const string NewVersion = "2.0.0";
@@ -601,6 +669,9 @@ public sealed class EdgePluginCompositionTransactionTests
         public string AccountsPath { get; }
 
         public string JournalPath { get; }
+
+        public string RuntimeBindingPath
+            => EdgeClientProgramDataPaths.ResolveRuntimeBindingPath(LauncherDirectory);
 
         public EdgeUpdateCloudApiOptions CloudOptions { get; }
 
@@ -714,6 +785,127 @@ public sealed class EdgePluginCompositionTransactionTests
         public EdgePluginCompositionTarget TargetForModules(
             IReadOnlyList<string> moduleIds)
             => new(Target, moduleIds);
+
+        public EdgePluginCompositionTarget TargetForClient(
+            string clientCode,
+            string moduleId)
+            => new(Target, [moduleId])
+            {
+                ClientCode = clientCode
+            };
+
+        public string PackagePath(string moduleId) => _packagePaths[moduleId];
+
+        public void ConfigureBindingV3(
+            params (string ClientCode, string ModuleId)[] devices)
+        {
+            const string oldSha256 = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+            var bindings = new List<EdgeRuntimeDeviceBinding>();
+            foreach (var device in devices)
+            {
+                var clientCode = EdgeClientIdentity.NormalizeClientCode(device.ClientCode);
+                var legacyDirectory = Path.Combine(PluginsRoot, device.ModuleId);
+                var appDirectory = EdgeClientProgramDataPaths.ResolveDevicePluginDirectory(
+                    clientCode,
+                    "app",
+                    HostDirectory);
+                Directory.CreateDirectory(Path.GetDirectoryName(appDirectory)!);
+                Directory.Move(legacyDirectory, appDirectory);
+                File.WriteAllText(
+                    Path.Combine(appDirectory, "plugin.json"),
+                    $$"""
+                    {"moduleId":"{{device.ModuleId}}","supportedProcessType":"DIECUT","version":"1.0.0"}
+                    """);
+                File.WriteAllText(
+                    Path.Combine(appDirectory, "install.json"),
+                    $$"""
+                    {"moduleId":"{{device.ModuleId}}","version":"1.0.0","packageSha256":"{{oldSha256}}"}
+                    """);
+                var root = $"plugins/{clientCode}";
+                bindings.Add(new EdgeRuntimeDeviceBinding(
+                    clientCode,
+                    $"{clientCode} device",
+                    Guid.NewGuid(),
+                    "DIECUT",
+                    device.ModuleId,
+                    "1.0.0",
+                    oldSha256,
+                    $"{root}/app",
+                    $"{root}/config",
+                    $"{root}/db",
+                    $"{root}/data",
+                    $"{root}/logs",
+                    $"{root}/cache",
+                    $"{root}/context",
+                    $"{root}/buffers",
+                    WindowsCredentialManagerStore.CreatePendingReference("GEN-001", clientCode),
+                    EdgeInstallerBindingCodec.RuntimePendingStatus,
+                    "S-1-5-21-1000"));
+            }
+
+            var envelope = new EdgeRuntimeBindingEnvelope(
+                EdgeInstallerBindingCodec.CurrentSchemaVersion,
+                "GEN-001",
+                DateTimeOffset.UtcNow.AddMinutes(-1),
+                DateTimeOffset.UtcNow.AddDays(1),
+                "https://cloud.example.test",
+                new EdgeInstallerBindingPaths(
+                    "/api/v1/edge/bootstrap/device-instance",
+                    "/api/v1/edge/bootstrap/edge-refresh",
+                    "/api/v1/edge/bootstrap/device-activate",
+                    "/api/v1/edge/bootstrap/device-activation-confirm",
+                    "/api/v1/human/identity/edge-login",
+                    "/api/v1/human/identity/refresh",
+                    "/api/v1/human/identity/session",
+                    "/api/v1/edge/device-logs",
+                    "/api/v1/edge/pass-stations/{typeKey}/batch",
+                    "/api/v1/edge/capacity/hourly",
+                    "/api/v1/edge/capacity/summary",
+                    "/api/v1/edge/capacity/summary/range",
+                    "/api/v1/edge/recipes/device/{deviceId}",
+                    "/api/v1/edge/client-releases/device/{deviceId}/catalog",
+                    "/api/v1/edge/client-releases/version-reports",
+                    "/api/v1/edge/runtime-heartbeats",
+                    "/api/v1/edge/edge-hosts/plc-runtime-states"),
+                bindings);
+            WriteText(
+                RuntimeBindingPath,
+                EdgeInstallerBindingCodec.SerializeRuntime(envelope));
+        }
+
+        public EdgeRuntimeBindingEnvelope ReadRuntimeBinding()
+            => EdgeInstallerBindingCodec.ParseRuntime(
+                File.ReadAllText(RuntimeBindingPath));
+
+        public string ComputeDevicePluginHash(string clientCode)
+        {
+            var directory = EdgeClientProgramDataPaths.ResolveDevicePluginDirectory(
+                clientCode,
+                "app",
+                HostDirectory);
+            using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            foreach (var path in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)
+                         .OrderBy(static path => path, StringComparer.Ordinal))
+            {
+                var relative = Path.GetRelativePath(directory, path).Replace('\\', '/');
+                var header = System.Text.Encoding.UTF8.GetBytes(relative + "\n");
+                sha.AppendData(header);
+                sha.AppendData(File.ReadAllBytes(path));
+            }
+
+            return Convert.ToHexString(sha.GetHashAndReset());
+        }
+
+        public void AssertV3PluginVersion(string clientCode, string expectedVersion)
+        {
+            var directory = EdgeClientProgramDataPaths.ResolveDevicePluginDirectory(
+                clientCode,
+                "app",
+                HostDirectory);
+            using var manifest = JsonDocument.Parse(
+                File.ReadAllText(Path.Combine(directory, "plugin.json")));
+            Assert.Equal(expectedVersion, manifest.RootElement.GetProperty("version").GetString());
+        }
 
         public EdgePluginVersionRelease Release(
             string moduleId,
@@ -961,7 +1153,7 @@ public sealed class EdgePluginCompositionTransactionTests
             writer.Write(content);
         }
 
-        private static string ComputeSha256(string path)
+        internal static string ComputeSha256(string path)
         {
             using var stream = File.OpenRead(path);
             return Convert.ToHexString(SHA256.HashData(stream));

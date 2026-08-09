@@ -1,6 +1,7 @@
 using System.Text.Json;
 using IIoT.Edge.Module.Contracts.Updates;
 using IIoT.Edge.SharedKernel.Configuration;
+using IIoT.Edge.SharedKernel.Security;
 
 namespace IIoT.Edge.Infrastructure.Update.Configuration;
 
@@ -9,11 +10,15 @@ public sealed class FileEdgeUpdateConfigurationProvider : IEdgeUpdateConfigurati
     private const string DefaultChannel = "stable";
     private const string DefaultTargetRuntime = "win-x64";
     private readonly string _baseDirectory;
+    private readonly IEdgeCredentialStore _credentialStore;
 
-    public FileEdgeUpdateConfigurationProvider(string baseDirectory)
+    public FileEdgeUpdateConfigurationProvider(
+        string baseDirectory,
+        IEdgeCredentialStore? credentialStore = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
         _baseDirectory = baseDirectory;
+        _credentialStore = credentialStore ?? new WindowsCredentialManagerStore();
     }
 
     public EdgeUpdateConfigurationResult Resolve(EdgeUpdateTarget target)
@@ -24,12 +29,51 @@ public sealed class FileEdgeUpdateConfigurationProvider : IEdgeUpdateConfigurati
         ApplyConfigurationFile(
             mutable,
             EdgeClientProgramDataPaths.ResolveMachineProfileConfigPath(target.MachineProfile, target.HostDirectory));
+        if (string.IsNullOrWhiteSpace(mutable.BootstrapSecret)
+            && !string.IsNullOrWhiteSpace(mutable.BootstrapCredentialReference))
+        {
+            try
+            {
+                mutable.BootstrapSecret = _credentialStore.Read(mutable.BootstrapCredentialReference);
+            }
+            catch (Exception ex) when (ex is IOException
+                                           or UnauthorizedAccessException
+                                           or InvalidDataException
+                                           or InvalidOperationException
+                                           or PlatformNotSupportedException
+                                           or System.ComponentModel.Win32Exception)
+            {
+                return EdgeUpdateConfigurationResult.Failed(
+                    $"CloudApi 启动凭证不可用: {ex.GetType().Name}");
+            }
+        }
 
         var missing = mutable.GetMissingKeys().ToArray();
         if (missing.Length > 0)
         {
             return EdgeUpdateConfigurationResult.Failed(
                 $"CloudApi 配置不完整: {string.Join(", ", missing)}");
+        }
+
+        try
+        {
+            mutable.DeviceInstancePath = EdgeBindingRouteCatalog.ValidateAndNormalize(
+                EdgeBindingRouteKey.DeviceInstance,
+                mutable.DeviceInstancePath!);
+            mutable.ClientReleaseCatalogTemplate = EdgeBindingRouteCatalog.ValidateAndNormalize(
+                EdgeBindingRouteKey.ClientReleaseCatalogTemplate,
+                mutable.ClientReleaseCatalogTemplate!);
+            mutable.ClientVersionReportPath = EdgeBindingRouteCatalog.ValidateAndNormalize(
+                EdgeBindingRouteKey.ClientVersionReport,
+                mutable.ClientVersionReportPath!);
+            mutable.RuntimeHeartbeatPath = EdgeBindingRouteCatalog.ValidateAndNormalize(
+                EdgeBindingRouteKey.RuntimeHeartbeat,
+                mutable.RuntimeHeartbeatPath!);
+        }
+        catch (InvalidDataException exception)
+        {
+            return EdgeUpdateConfigurationResult.Failed(
+                $"CloudApi Binding v3 路由无效: {exception.Message}");
         }
 
         return EdgeUpdateConfigurationResult.Succeeded(new EdgeUpdateCloudApiOptions(
@@ -81,6 +125,9 @@ public sealed class FileEdgeUpdateConfigurationProvider : IEdgeUpdateConfigurati
             target.BaseUrl = FirstNotWhiteSpace(ReadString(cloudApi, "BaseUrl"), target.BaseUrl);
             target.ClientCode = FirstNotWhiteSpace(ReadString(cloudApi, "ClientCode"), target.ClientCode);
             target.BootstrapSecret = FirstNotWhiteSpace(ReadString(cloudApi, "BootstrapSecret"), target.BootstrapSecret);
+            target.BootstrapCredentialReference = FirstNotWhiteSpace(
+                ReadString(cloudApi, "BootstrapCredentialReference"),
+                target.BootstrapCredentialReference);
             var timeout = ReadInt32(cloudApi, "TimeoutSecs");
             target.TimeoutSeconds = timeout ?? target.TimeoutSeconds;
 
@@ -149,6 +196,7 @@ public sealed class FileEdgeUpdateConfigurationProvider : IEdgeUpdateConfigurati
         public int? TimeoutSeconds { get; set; }
         public string? ClientCode { get; set; }
         public string? BootstrapSecret { get; set; }
+        public string? BootstrapCredentialReference { get; set; }
         public string? DeviceInstancePath { get; set; }
         public string? ClientReleaseCatalogTemplate { get; set; }
         public string? ClientVersionReportPath { get; set; }

@@ -68,7 +68,8 @@ public static class DependencyInjection
         services.AddSingleton<IMesRetryHousekeepingService, MesRetryHousekeepingService>();
         services.AddSingleton(sp => new DataPipelineService(
             sp.GetRequiredService<ILogService>(),
-            sp.GetRequiredService<IDataPipelineIngressStore>()));
+            sp.GetRequiredService<IDataPipelineIngressStore>(),
+            sp.GetRequiredService<IDevicePluginRuntimeContext>()));
         services.AddSingleton<IDataPipelineService>(sp => sp.GetRequiredService<DataPipelineService>());
 
         services.AddSingleton<ICellDataConsumer>(sp => sp.GetRequiredService<ICapacityConsumer>());

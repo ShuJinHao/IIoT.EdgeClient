@@ -21,6 +21,8 @@ public sealed class FakeCloudApiEndpointProvider : ICloudApiEndpointProvider
     public string GetBootstrapSecret() => "bootstrap-secret";
     public string GetDeviceInstancePath() => "/api/v1/bootstrap/device-instance";
     public string GetBootstrapRefreshPath() => "/api/v1/bootstrap/edge-refresh";
+    public string GetDeviceActivatePath() => "/api/v1/edge/bootstrap/device-activate";
+    public string GetDeviceActivateConfirmPath() => "/api/v1/edge/bootstrap/device-activation-confirm";
     public string GetIdentityDeviceLoginPath() => "/api/v1/bootstrap/edge-login";
     public string GetHumanIdentityRefreshPath() => "/api/v1/human/identity/refresh";
     public string GetHumanSessionValidationPath() => "/api/v1/human/identity/session";
