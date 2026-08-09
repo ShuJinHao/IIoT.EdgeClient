@@ -203,6 +203,7 @@ public sealed class StandardPassStationCloudUploaderContractTests
         var record = CreateRecord("BC-V3");
         record.CompletionId = "completion-001";
         record.ClientCode = "test-client";
+        record.ModuleId = "DieCutPlugin";
         record.ProcessType = "DieCut";
         record.TypeKey = "diecut.completed";
         record.PlcCode = "PLC-01";
