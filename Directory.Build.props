@@ -7,7 +7,7 @@
     <Version>2.0.16</Version>
     <AssemblyVersion>2.0.0.0</AssemblyVersion>
     <FileVersion>2.0.0.0</FileVersion>
-    <InformationalVersion>2.0.16-local-candidate</InformationalVersion>
+    <InformationalVersion>2.0.16</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <NeutralLanguage>zh-CN</NeutralLanguage>
 

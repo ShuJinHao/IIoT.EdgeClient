@@ -1,34 +1,82 @@
 {
   "schemaVersion": 1,
   "sdkRepository": "ShuJinHao/IIoT.Edge.Sdk",
-  "sdkSourceCommit": "fe8b4c46c48197eecbeaf74a8463cd347edf9129",
-  "candidateSourceState": "uncommitted-unified-review",
-  "formalizationRequirement": "Repack from the approved clean SDK commit before release.",
+  "sdkSourceCommit": "419d281026f0db4064c9af1049eae272e8ab33f4",
+  "candidateSourceState": "clean-merged-main",
   "version": "2.0.13",
+  "hostApiVersion": "2.0.0",
+  "fileListDigestAlgorithm": "sha256(path-tab-size-tab-entrySha256-lf)",
   "packages": [
     {
       "id": "IIoT.Edge.Module.Analyzers",
       "fileName": "IIoT.Edge.Module.Analyzers.2.0.13.nupkg",
-      "sha256": "b3e99c0e8d5106537571eeb945efc01f8c69b88ce77f4af98d10cc6b325e444d",
-      "size": 44470
+      "sha256": "7e3ccb6906b6b04b341bcfc52217487c5603c1ef6c2c39f380fa3b841a2347ce",
+      "size": 44475,
+      "fileListDigest": "c3737d8536b1baf04778451f0084952acbb63909d584e22f606b51e2da8c0e2c",
+      "dependencies": []
     },
     {
       "id": "IIoT.Edge.Module.Contracts",
       "fileName": "IIoT.Edge.Module.Contracts.2.0.13.nupkg",
-      "sha256": "d9358e571606da14e86451cc68771b8705c40d7ba7d13f4ba44345a5f8ba62d3",
-      "size": 144475
+      "sha256": "65d0f6b0aef82e7beaf16ac8f03053b3b54eaa63e07eaff044e4f0c64ad9697d",
+      "size": 144482,
+      "fileListDigest": "2cd272236d098cef46d8d92f8e017b8d53e5a45e985d69cf6377ea5be12f79d0",
+      "dependencies": [
+        {
+          "id": "MediatR",
+          "version": "14.1.0"
+        },
+        {
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.9"
+        },
+        {
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.9"
+        }
+      ]
     },
     {
       "id": "IIoT.Edge.Module.Sdk",
       "fileName": "IIoT.Edge.Module.Sdk.2.0.13.nupkg",
-      "sha256": "1e3beb77c8c6fb577fb824a6be7a57019fb92a6d4eab200c91a7bf1d6ef8545b",
-      "size": 50026
+      "sha256": "295e78c8312545829aa9dc69be425f5367252f87da9afb74b4eda6066d2658be",
+      "size": 50019,
+      "fileListDigest": "97f5736571b0141e69721291c41339eb006e39c06ed166f849cf046475daeec0",
+      "dependencies": [
+        {
+          "id": "IIoT.Edge.Module.Contracts",
+          "version": "2.0.13"
+        },
+        {
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.9"
+        },
+        {
+          "id": "Microsoft.Extensions.Configuration.Binder",
+          "version": "10.0.9"
+        }
+      ]
     },
     {
       "id": "IIoT.Edge.UI.Shared",
       "fileName": "IIoT.Edge.UI.Shared.2.0.13.nupkg",
-      "sha256": "543c466bd1b357487dcf6cb52c84fdda136fd61ffb19686995fdb296cefa5532",
-      "size": 127717
+      "sha256": "80bbe13c4f00d31958646c132e46300edb5ce49541b9c10ca0f6cecaace98c47",
+      "size": 127710,
+      "fileListDigest": "26cd4153f1fda60d9f92792ad7f6140bd68a8b75f942e2d619f04c3ee0288ce4",
+      "dependencies": [
+        {
+          "id": "Avalonia",
+          "version": "12.0.4"
+        },
+        {
+          "id": "Avalonia.Controls.DataGrid",
+          "version": "12.0.0"
+        },
+        {
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.9"
+        }
+      ]
     }
   ]
 }
