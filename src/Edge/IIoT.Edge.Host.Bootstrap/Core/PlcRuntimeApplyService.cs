@@ -1,14 +1,13 @@
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Application.Common.Plc;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
-using IIoT.Edge.SharedKernel.Repository;
 
 namespace IIoT.Edge.Shell.Core;
 
 public sealed class PlcRuntimeApplyService(
-    IReadRepository<NetworkDeviceEntity> networkDevices,
+    IDevicePluginConfigurationSnapshotAccessor snapshots,
     IPlcRuntimeTaskBinder runtimeTaskBinder,
     IPlcRuntimeDeviceReloader runtimeDeviceReloader,
     ILogService logger) : IPlcRuntimeApplyService
@@ -23,9 +22,8 @@ public sealed class PlcRuntimeApplyService(
             throw new ArgumentException("网络设备 Id 必须大于 0。", nameof(networkDeviceId));
         }
 
-        var device = await networkDevices
-            .GetByIdAsync(networkDeviceId, cancellationToken)
-            .ConfigureAwait(false)
+        cancellationToken.ThrowIfCancellationRequested();
+        var device = snapshots.GetPlcs().SingleOrDefault(item => item.Id == networkDeviceId)
             ?? throw new InvalidOperationException("未找到要应用运行配置的 PLC 设备。");
 
         await ApplyDeviceRuntimeCoreAsync(device, reason, cancellationToken)
@@ -41,7 +39,7 @@ public sealed class PlcRuntimeApplyService(
                 "按 DeviceName 应用 PLC 运行配置的入口已停用；必须使用稳定 NetworkDeviceId。"));
 
     private async Task ApplyDeviceRuntimeCoreAsync(
-        NetworkDeviceEntity device,
+        DevicePluginPlcSnapshot device,
         string reason,
         CancellationToken cancellationToken)
     {

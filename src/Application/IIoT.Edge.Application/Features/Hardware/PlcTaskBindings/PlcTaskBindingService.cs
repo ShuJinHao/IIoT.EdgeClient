@@ -1,9 +1,9 @@
 using IIoT.Edge.Module.Contracts.Modules;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Module.Contracts.Hardware;
+using IIoT.Edge.Module.Contracts.Plugins;
 using IIoT.Edge.Module.Sdk.Hardware;
-using IIoT.Edge.Domain.Hardware.Aggregates;
-using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Module.Contracts.Plc.Checkpoints;
 
@@ -11,17 +11,34 @@ namespace IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 
 public sealed class PlcTaskBindingService(
     IStationRuntimeRegistry runtimeRegistry,
-    IReadRepository<NetworkDeviceEntity> networkDevices,
-    IReadRepository<IoMappingEntity> ioMappings,
-    IReadRepository<PlcTaskBindingEntity> bindings,
-    IEdgeUnitOfWorkFactory unitOfWorkFactory,
+    IDevicePluginConfigurationSnapshotAccessor snapshots,
+    IEnumerable<IDevicePluginConfigurationStoreV1> stores,
     IPlcTaskRuntimeStatusReader? runtimeStatuses = null,
     IPlcTaskRecoveryApplicationService? taskRecovery = null)
     : IPlcTaskBindingService, IPlcTaskBindingPersistenceTransaction
 {
-    public async Task<IReadOnlyList<PlcTaskBindingDeviceDto>> GetModuleDeviceBindingsAsync(
+    private readonly IDevicePluginConfigurationStoreV1[] _stores = stores.ToArray();
+
+    public Task<IReadOnlyList<PlcTaskBindingDeviceDto>> GetModuleDeviceBindingsAsync(
         string moduleId,
         CancellationToken cancellationToken = default)
+        => GetModuleDeviceBindingsCoreAsync(
+            moduleId,
+            includeRecoveryDetails: true,
+            cancellationToken);
+
+    public Task<IReadOnlyList<PlcTaskBindingDeviceDto>> GetModuleDeviceBindingsFromMemoryAsync(
+        string moduleId,
+        CancellationToken cancellationToken = default)
+        => GetModuleDeviceBindingsCoreAsync(
+            moduleId,
+            includeRecoveryDetails: false,
+            cancellationToken);
+
+    private async Task<IReadOnlyList<PlcTaskBindingDeviceDto>> GetModuleDeviceBindingsCoreAsync(
+        string moduleId,
+        bool includeRecoveryDetails,
+        CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(moduleId);
 
@@ -32,21 +49,22 @@ public sealed class PlcTaskBindingService(
 
         var candidates = factory.GetTaskCandidates();
         var observedAtUtc = DateTimeOffset.UtcNow;
-        var devices = await networkDevices.GetListAsync(
-            x => x.DeviceType == DeviceType.PLC,
-            cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        var devices = snapshots.GetPlcs();
 
         var results = new List<PlcTaskBindingDeviceDto>(devices.Count);
         foreach (var device in devices.OrderBy(static x => x.DeviceName, StringComparer.OrdinalIgnoreCase))
         {
-            var rows = await bindings.GetListAsync(
-                x => x.NetworkDeviceId == device.Id,
-                cancellationToken).ConfigureAwait(false);
+            var rows = snapshots.GetTaskBindings()
+                .Where(row => row.NetworkDeviceId == device.Id)
+                .ToArray();
             var rowByKey = rows.ToDictionary(x => x.TaskKey, StringComparer.OrdinalIgnoreCase);
             var signalBindings = await LoadSignalBindingsAsync(device.Id, cancellationToken).ConfigureAwait(false);
             var recoveryByTaskKey = new Dictionary<string, PlcTaskRecoverySnapshot?>(
                 StringComparer.OrdinalIgnoreCase);
-            if (taskRecovery is not null && !string.IsNullOrWhiteSpace(device.PlcCode))
+            if (includeRecoveryDetails
+                && taskRecovery is not null
+                && !string.IsNullOrWhiteSpace(device.PlcCode))
             {
                 foreach (var candidate in candidates)
                 {
@@ -101,9 +119,10 @@ public sealed class PlcTaskBindingService(
         ArgumentNullException.ThrowIfNull(candidates);
         ArgumentNullException.ThrowIfNull(signalBindings);
 
-        var rows = await bindings.GetListAsync(
-            x => x.NetworkDeviceId == networkDeviceId,
-            cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        var rows = snapshots.GetTaskBindings()
+            .Where(row => row.NetworkDeviceId == networkDeviceId)
+            .ToArray();
         var rowByKey = rows.ToDictionary(x => x.TaskKey, StringComparer.OrdinalIgnoreCase);
         var enabledTaskKeys = candidates
             .Where(candidate => ResolveEnabled(candidate, rowByKey, signalBindings, deviceModel))
@@ -127,9 +146,10 @@ public sealed class PlcTaskBindingService(
         var candidateKeys = candidates
             .Select(static candidate => candidate.Key)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var rows = await bindings.GetListAsync(
-            x => x.NetworkDeviceId == networkDeviceId,
-            cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        var rows = snapshots.GetTaskBindings()
+            .Where(row => row.NetworkDeviceId == networkDeviceId)
+            .ToArray();
         return rows
             .Where(row => row.Enabled && candidateKeys.Contains(row.TaskKey))
             .Select(static row => row.TaskKey)
@@ -150,7 +170,8 @@ public sealed class PlcTaskBindingService(
         ArgumentException.ThrowIfNullOrWhiteSpace(moduleId);
         ArgumentNullException.ThrowIfNull(taskStates);
 
-        var device = await networkDevices.GetByIdAsync(networkDeviceId, cancellationToken).ConfigureAwait(false)
+        cancellationToken.ThrowIfCancellationRequested();
+        var device = snapshots.GetPlcs().SingleOrDefault(item => item.Id == networkDeviceId)
             ?? throw new InvalidOperationException("未找到要保存任务绑定的 PLC 设备。");
         if (device.DeviceType != DeviceType.PLC)
         {
@@ -183,9 +204,9 @@ public sealed class PlcTaskBindingService(
                 $"提交内容包含当前模块未声明的 TaskKey：{string.Join("、", unknownTaskKeys)}。已禁止部分保存。");
         }
 
-        var savedRows = await bindings.GetListAsync(
-            x => x.NetworkDeviceId == networkDeviceId,
-            cancellationToken).ConfigureAwait(false);
+        var savedRows = snapshots.GetTaskBindings()
+            .Where(row => row.NetworkDeviceId == networkDeviceId)
+            .ToArray();
         var savedByKey = savedRows.ToDictionary(static row => row.TaskKey, StringComparer.OrdinalIgnoreCase);
         var signalBindings = await LoadSignalBindingsAsync(networkDeviceId, cancellationToken).ConfigureAwait(false);
         var resolvedStates = candidates.ToDictionary(
@@ -266,75 +287,65 @@ public sealed class PlcTaskBindingService(
             throw new InvalidOperationException("PLC 任务绑定事务快照包含重复或不完整的 TaskKey。");
         }
 
-        await using var unitOfWork = await unitOfWorkFactory
-            .BeginAsync(cancellationToken)
-            .ConfigureAwait(false);
-        var repository = unitOfWork.Repository<PlcTaskBindingEntity>();
-        var deviceRows = await repository
-            .GetListAsync(
-                x => x.NetworkDeviceId == preparation.NetworkDeviceId,
-                cancellationToken)
-            .ConfigureAwait(false);
+        if (_stores.Length != 1)
+        {
+            throw new InvalidOperationException("PLUGIN_DATABASE_PORT_CARDINALITY_INVALID");
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        var snapshot = snapshots.GetRequiredSnapshot();
+        var deviceRows = snapshots.GetTaskBindings()
+            .Where(row => row.NetworkDeviceId == preparation.NetworkDeviceId)
+            .ToArray();
         var currentCandidateRows = deviceRows
             .Where(row => candidateTaskKeys.Contains(row.TaskKey))
             .ToArray();
-        var currentByKey = currentCandidateRows.ToDictionary(
-            static row => row.TaskKey,
-            StringComparer.OrdinalIgnoreCase);
+        IReadOnlyList<DevicePluginTaskBindingConfiguration> replacement;
 
         if (restoreOriginal)
         {
-            var originalByKey = preparation.OriginalRows.ToDictionary(
-                static row => row.TaskKey,
-                StringComparer.OrdinalIgnoreCase);
-            foreach (var current in currentCandidateRows)
-            {
-                if (!originalByKey.TryGetValue(current.TaskKey, out var original))
-                {
-                    repository.Delete(current);
-                    continue;
-                }
-
-                current.UpdateEnabled(original.Enabled, original.UpdatedAt);
-                repository.Update(current);
-            }
-
-            foreach (var original in preparation.OriginalRows)
-            {
-                if (currentByKey.ContainsKey(original.TaskKey))
-                {
-                    continue;
-                }
-
-                repository.Add(PlcTaskBindingEntity.Create(
-                    preparation.NetworkDeviceId,
-                    original.TaskKey,
-                    original.Enabled,
-                    original.UpdatedAt));
-            }
+            replacement = deviceRows
+                .Where(row => !candidateTaskKeys.Contains(row.TaskKey))
+                .Select(static row => row.Configuration)
+                .Concat(preparation.OriginalRows.Select(row =>
+                    new DevicePluginTaskBindingConfiguration(
+                        preparation.PlcCode,
+                        row.TaskKey,
+                        row.Enabled,
+                        row.UpdatedAt)))
+                .OrderBy(static row => row.TaskKey, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
         }
         else
         {
             EnsureOriginalRowsUnchanged(preparation, currentCandidateRows);
-            foreach (var taskKey in preparation.CandidateTaskKeys)
-            {
-                var enabled = preparation.ResolvedStates[taskKey];
-                if (currentByKey.TryGetValue(taskKey, out var current))
-                {
-                    current.UpdateEnabled(enabled, preparation.UpdatedAt);
-                    repository.Update(current);
-                    continue;
-                }
-
-                repository.Add(PlcTaskBindingEntity.Create(
-                    preparation.NetworkDeviceId,
-                    taskKey,
-                    enabled,
-                    preparation.UpdatedAt));
-            }
+            replacement = deviceRows
+                .Where(row => !candidateTaskKeys.Contains(row.TaskKey))
+                .Select(static row => row.Configuration)
+                .Concat(preparation.CandidateTaskKeys.Select(taskKey =>
+                    new DevicePluginTaskBindingConfiguration(
+                        preparation.PlcCode,
+                        taskKey,
+                        preparation.ResolvedStates[taskKey],
+                        preparation.UpdatedAt)))
+                .OrderBy(static row => row.TaskKey, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
         }
 
-        await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
+        var result = await _stores[0]
+            .ReplaceTaskBindingsAsync(
+                preparation.PlcCode,
+                replacement,
+                snapshot.ConfigurationVersion,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (!result.Succeeded)
+        {
+            throw new InvalidOperationException(
+                result.FailureReasonCode ?? "PLUGIN_TASK_BINDING_WRITE_REJECTED");
+        }
+
+        await snapshots.RefreshAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public PlcTaskBindingValidationResult ValidateEnabledTasks(
@@ -431,7 +442,7 @@ public sealed class PlcTaskBindingService(
 
     private PlcTaskBindingItemDto CreateItem(
         TaskCandidate candidate,
-        IReadOnlyDictionary<string, PlcTaskBindingEntity> rowByKey,
+        IReadOnlyDictionary<string, DevicePluginTaskBindingSnapshot> rowByKey,
         IReadOnlyCollection<ModuleIoSnapshot> signalBindings,
         string? deviceModel,
         string plcCode,
@@ -481,7 +492,7 @@ public sealed class PlcTaskBindingService(
         bool hasSavedBinding,
         bool isDeviceEnabled,
         bool configuredEnabled,
-        PlcTaskBindingEntity? configuredRow,
+        DevicePluginTaskBindingSnapshot? configuredRow,
         DateTimeOffset observedAtUtc)
     {
         if (hasSavedBinding
@@ -497,7 +508,7 @@ public sealed class PlcTaskBindingService(
 
     private static bool ResolveEnabled(
         TaskCandidate candidate,
-        IReadOnlyDictionary<string, PlcTaskBindingEntity> rowByKey,
+        IReadOnlyDictionary<string, DevicePluginTaskBindingSnapshot> rowByKey,
         IReadOnlyCollection<ModuleIoSnapshot> signalBindings,
         string? deviceModel)
         => rowByKey.TryGetValue(candidate.Key, out var row)
@@ -596,15 +607,16 @@ public sealed class PlcTaskBindingService(
             .ToArray();
     }
 
-    private async Task<IReadOnlyCollection<ModuleIoSnapshot>> LoadSignalBindingsAsync(
+    private Task<IReadOnlyCollection<ModuleIoSnapshot>> LoadSignalBindingsAsync(
         int networkDeviceId,
         CancellationToken cancellationToken)
     {
-        var rows = await ioMappings.GetListAsync(
-            x => x.NetworkDeviceId == networkDeviceId,
-            cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        var rows = snapshots.GetIoPoints()
+            .Where(row => row.NetworkDeviceId == networkDeviceId)
+            .ToArray();
 
-        return rows
+        IReadOnlyCollection<ModuleIoSnapshot> result = rows
             .Select(static row => new ModuleIoSnapshot(
                 row.SignalKey,
                 row.PlcAddress,
@@ -615,6 +627,7 @@ public sealed class PlcTaskBindingService(
                 row.Category,
                 row.BusinessGroup))
             .ToArray();
+        return Task.FromResult(result);
     }
 
     private static string BuildSaveValidationMessage(
@@ -631,7 +644,7 @@ public sealed class PlcTaskBindingService(
 
     private static void EnsureOriginalRowsUnchanged(
         PlcTaskBindingSavePreparation preparation,
-        IReadOnlyCollection<PlcTaskBindingEntity> currentRows)
+        IReadOnlyCollection<DevicePluginTaskBindingSnapshot> currentRows)
     {
         var originals = preparation.OriginalRows.ToDictionary(
             static row => row.TaskKey,

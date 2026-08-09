@@ -2,10 +2,12 @@ using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Module.Contracts.Plc.Store;
 using IIoT.Edge.Application.Common.Plc;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.Module.Sdk.Hardware;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Module.Contracts.Hardware;
+using IIoT.Edge.Module.Contracts.Plugins;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Infrastructure.DeviceComm.Barcode.Readers;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc;
@@ -181,8 +183,7 @@ public sealed class PlcIoScanTaskBehaviorTests
     {
         var plcService = new ScriptedPlcService();
         plcService.ConnectOutcomes.Enqueue(true);
-        var device = CreateDevice(11, "PLC-ENDPOINT");
-        device.UpdateEndpoint("10.1.2.3", 502, null, 4500);
+        var device = CreateDevice(11, "PLC-ENDPOINT", "10.1.2.3", 502, 4500);
 
         var interaction = new PlcIoScanTask(
             plcService,
@@ -205,8 +206,7 @@ public sealed class PlcIoScanTaskBehaviorTests
     {
         var timeProvider = new FakeTimeProvider();
         var plcService = new NeverCompletingConnectPlcService(timeProvider);
-        var device = CreateDevice(12, "PLC-HANG");
-        device.UpdateEndpoint("10.1.2.4", 502, null, 30);
+        var device = CreateDevice(12, "PLC-HANG", "10.1.2.4", 502, 30);
         var statusStore = new PlcConnectionStatusStore();
 
         var interaction = new PlcIoScanTask(
@@ -1431,15 +1431,28 @@ public sealed class PlcIoScanTaskBehaviorTests
         Assert.Equal(1, plcService.ConnectAsyncCallCount);
     }
 
-    private static NetworkDeviceEntity CreateDevice(int id, string deviceName)
-    {
-        var entity = NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, "127.0.0.1", 102);
-        entity.WithId(id);
-        entity.UpdateDeviceModel("S7");
-        return entity;
-    }
+    private static DevicePluginPlcSnapshot CreateDevice(
+        int id,
+        string deviceName,
+        string ipAddress = "127.0.0.1",
+        int port = 102,
+        int timeoutMilliseconds = 3000)
+        => new(
+            id,
+            new DevicePluginPlcConfiguration(
+                $"PLC-{id}",
+                deviceName,
+                "S7",
+                "S7",
+                null,
+                ipAddress,
+                port,
+                null,
+                timeoutMilliseconds,
+                true,
+                null));
 
-    private static IoMappingEntity CreateIoMapping(
+    private static DevicePluginIoPointSnapshot CreateIoMapping(
         int deviceId,
         string direction,
         string address,
@@ -1447,17 +1460,22 @@ public sealed class PlcIoScanTaskBehaviorTests
         string? category = null,
         int sortOrder = 1)
     {
-        var entity = IoMappingEntity.Create(
+        var plcCode = $"PLC-{deviceId}";
+        var signalKey = $"{direction}-{address}";
+        return new DevicePluginIoPointSnapshot(
+            DevicePluginProjectionIds.Io(plcCode, signalKey),
             deviceId,
-            $"{direction}-{address}",
-            address,
-            addressCount,
-            "UInt16",
-            direction,
-            category ?? IoMappingOptionCatalog.CategoryInteraction,
-            "测试信号交互");
-        entity.UpdateSortOrder(sortOrder);
-        return entity;
+            new DevicePluginIoPointConfiguration(
+                plcCode,
+                signalKey,
+                address,
+                addressCount,
+                "UInt16",
+                direction,
+                category ?? IoMappingOptionCatalog.CategoryInteraction,
+                "测试信号交互",
+                sortOrder,
+                null));
     }
 
     private static PlcIoScanMapping CreateScanMapping(

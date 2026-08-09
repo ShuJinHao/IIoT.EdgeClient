@@ -1,11 +1,8 @@
-using IIoT.Edge.Module.Contracts.Cache;
 using IIoT.Edge.Module.Contracts.Config;
-using IIoT.Edge.Application.Common.Config;
-using IIoT.Edge.Application.Features.Config;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Application.Features.Config.ModuleParameters;
-using IIoT.Edge.Domain.Config.Aggregates;
+using IIoT.Edge.Module.Contracts.Plugins;
 using IIoT.Edge.SharedKernel.Messaging;
-using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.SharedKernel.Result;
 
 namespace IIoT.Edge.Application.Features.Config.UseCases.ModuleParam;
@@ -25,46 +22,71 @@ public sealed record SaveModuleParamsCommand(
     List<ModuleParamDto> Params) : ICommand<Result>;
 
 public sealed class SaveModuleParamsHandler(
-    IEdgeUnitOfWorkFactory unitOfWorkFactory,
-    IEdgeCacheService cache,
+    IDevicePluginConfigurationSnapshotAccessor snapshots,
+    IEnumerable<IDevicePluginConfigurationStoreV1> stores,
     ILocalParameterConfigChangePublisher changePublisher)
     : ICommandHandler<SaveModuleParamsCommand, Result>
 {
+    private readonly IDevicePluginConfigurationStoreV1[] _stores = stores.ToArray();
+
     public async Task<Result> Handle(
         SaveModuleParamsCommand request,
         CancellationToken cancellationToken)
     {
-        var configsResult = SystemConfigParamSaveHelper.BuildDistinctConfigs(
-            request.Params,
-            static dto => dto.Key,
-            static (dto, key, index) =>
-            {
-                if (!ModuleParamKeys.IsModuleStorageKey(key))
-                {
-                    throw new ArgumentException("插件参数键必须以 Module: 开头。");
-                }
-
-                var entity = SystemConfigEntity.Create(key, dto.Value, dto.Description);
-                entity.UpdateSortOrder(index + 1);
-                return entity;
-            });
-        if (!configsResult.IsSuccess)
+        if (_stores.Length != 1)
         {
-            return Result.Failure(configsResult.ErrorMessage ?? "插件参数保存失败。");
+            return Result.Failure("PLUGIN_DATABASE_PORT_CARDINALITY_INVALID");
         }
 
-        await using var unitOfWork = await unitOfWorkFactory
-            .BeginAsync(cancellationToken)
-            .ConfigureAwait(false);
-        var repo = unitOfWork.Repository<SystemConfigEntity>();
-        await SystemConfigParamSaveHelper.ReplaceByKeysAsync(
-            repo,
-            configsResult.Value ?? [],
-            cancellationToken);
-        await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
+        var submitted = new Dictionary<string, ModuleParamDto>(StringComparer.OrdinalIgnoreCase);
+        foreach (var parameter in request.Params ?? [])
+        {
+            var key = parameter.Key?.Trim() ?? string.Empty;
+            if (!ModuleParamKeys.IsModuleStorageKey(key)
+                || parameter.Value is null
+                || !submitted.TryAdd(key, parameter with { Key = key }))
+            {
+                return Result.Failure("PLUGIN_MODULE_SETTINGS_INVALID");
+            }
+        }
 
-        cache.Remove(ParameterCacheKeys.SystemAll);
-        cache.RemoveByPrefix(ParameterCacheKeys.ModuleSnapshotPrefix);
+        if (submitted.Count == 0)
+        {
+            return Result.Success();
+        }
+
+        var snapshot = snapshots.GetRequiredSnapshot();
+        var existing = snapshot.ModuleSettings.ToDictionary(
+            static item => item.Key,
+            StringComparer.OrdinalIgnoreCase);
+        var next = snapshot.ModuleSettings
+            .Where(item => !submitted.ContainsKey(item.Key))
+            .ToList();
+        var nextSortOrder = next.Count == 0 ? 1 : next.Max(static item => item.SortOrder) + 1;
+        foreach (var parameter in submitted.Values)
+        {
+            existing.TryGetValue(parameter.Key, out var current);
+            next.Add(new DevicePluginModuleSetting(
+                parameter.Key,
+                parameter.Value,
+                parameter.Description ?? current?.DisplayName,
+                current?.Unit,
+                current?.SortOrder ?? nextSortOrder++));
+        }
+
+        var result = await _stores[0]
+            .UpdateModuleSettingsAsync(
+                next.OrderBy(static item => item.SortOrder).ToArray(),
+                snapshot.ConfigurationVersion,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (!result.Succeeded)
+        {
+            return Result.Failure(
+                result.FailureReasonCode ?? "PLUGIN_MODULE_SETTINGS_WRITE_REJECTED");
+        }
+
+        await snapshots.RefreshAsync(cancellationToken).ConfigureAwait(false);
         changePublisher.NotifyModuleChanged();
         return Result.Success();
     }

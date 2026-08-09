@@ -14,7 +14,8 @@ public sealed record ModulePluginDescriptor(
     string PluginDirectory,
     string ManifestPath,
     string EntryAssemblyPath,
-    ModulePluginConfigurationContract? ConfigurationContract = null);
+    ModulePluginConfigurationContract? ConfigurationContract = null,
+    ModulePluginPrivateDatabaseContract? PrivateDatabaseContract = null);
 
 public sealed record ModulePluginConfigurationContract(
     string SchemaRelativePath,
@@ -22,4 +23,12 @@ public sealed record ModulePluginConfigurationContract(
     int SeedSchemaVersion,
     int CurrentSeedVersion,
     IReadOnlyList<string> SupportedEnvironments,
+    bool RequiresProductionPlan);
+
+public sealed record ModulePluginPrivateDatabaseContract(
+    int SchemaVersion,
+    string LifecycleContractVersion,
+    string ConfigurationContractVersion,
+    string MigrationAssembly,
+    string EntryPoint,
     bool RequiresProductionPlan);

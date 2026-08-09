@@ -124,6 +124,11 @@ public class AppLifecycleManager : IAppLifecycleCoordinator
             _logger.Warn("[生命周期] 应用启动已取消。");
             throw;
         }
+        catch (DevicePluginDatabaseStartupException exception)
+        {
+            _logger.Error($"[生命周期] 插件数据库启动失败：{exception.ReasonCode}。");
+            return AppStartupResult.Failure(exception.ReasonCode);
+        }
         catch (Exception ex)
         {
             _logger.Error($"[生命周期] 启动失败（{ex.GetType().Name}）。");

@@ -1,7 +1,7 @@
 using System.Globalization;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 
 namespace IIoT.Edge.Application.Features.Production.Monitor;
 
@@ -11,7 +11,7 @@ internal sealed class MonitorStateMachineTaskProjection : IMonitorStateMachineTa
         new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
     public IReadOnlyList<MonitorStateMachineTaskSnapshot> BuildRows(
-        NetworkDeviceEntity? device,
+        DevicePluginPlcSnapshot? device,
         IReadOnlyDictionary<string, int> stepStates,
         IReadOnlyDictionary<int, PlcTaskBindingDeviceDto> taskBindingsByDevice)
     {

@@ -1,39 +1,38 @@
-using IIoT.Edge.Module.Contracts.Modules;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Application.Modules.Hardware;
-using IIoT.Edge.Module.Contracts.Hardware;
+using IIoT.Edge.Module.Contracts.Modules;
+using IIoT.Edge.Module.Contracts.Plugins;
 using IIoT.Edge.Module.Sdk.Hardware;
-using IIoT.Edge.Domain.Hardware.Aggregates;
-using IIoT.Edge.SharedKernel.Repository;
 
 namespace IIoT.Edge.Application.Features.Config.SchemaReconciliation;
 
 public sealed class IoMappingConfigValueStore(
-    IReadRepository<NetworkDeviceEntity> networkDevices,
-    IReadRepository<IoMappingEntity> ioMappings,
-    IEdgeUnitOfWorkFactory unitOfWorkFactory,
+    IDevicePluginConfigurationSnapshotAccessor snapshots,
+    IEnumerable<IDevicePluginConfigurationStoreV1> stores,
     ModuleHardwareProfileResolver hardwareProfileResolver) : IConfigValueStore, IRepairableConfigValueStore
 {
+    private readonly IDevicePluginConfigurationStoreV1[] _stores = stores.ToArray();
+
     public string SchemaId => IoMappingSchemaIds.Signals;
 
-    public async Task<IReadOnlyCollection<string>> GetExistingKeysAsync(
+    public Task<IReadOnlyCollection<string>> GetExistingKeysAsync(
         CancellationToken cancellationToken = default)
     {
-        var managedDeviceIds = await LoadManagedDeviceIdsAsync(cancellationToken).ConfigureAwait(false);
-        if (managedDeviceIds.Count == 0)
+        cancellationToken.ThrowIfCancellationRequested();
+        if (hardwareProfileResolver.Resolve() is null || !snapshots.IsInitialized)
         {
-            return [];
+            return Task.FromResult<IReadOnlyCollection<string>>([]);
         }
 
-        var deviceIds = managedDeviceIds.ToArray();
-        var mappings = await ioMappings
-            .GetListAsync(x => deviceIds.Contains(x.NetworkDeviceId), cancellationToken)
-            .ConfigureAwait(false);
-
-        return mappings
-            .Where(static x => !string.IsNullOrWhiteSpace(x.SignalKey)
-                               && !string.IsNullOrWhiteSpace(x.Direction))
-            .Select(static x => IoMappingSchemaKey.Create(x.NetworkDeviceId, x.Direction, x.SignalKey))
+        IReadOnlyCollection<string> keys = snapshots.GetIoPoints()
+            .Where(static item => !string.IsNullOrWhiteSpace(item.SignalKey)
+                                  && !string.IsNullOrWhiteSpace(item.Direction))
+            .Select(static item => IoMappingSchemaKey.Create(
+                item.NetworkDeviceId,
+                item.Direction,
+                item.SignalKey))
             .ToArray();
+        return Task.FromResult(keys);
     }
 
     public async Task InsertAsync(
@@ -41,31 +40,22 @@ public sealed class IoMappingConfigValueStore(
         CancellationToken cancellationToken = default)
     {
         var networkDeviceId = IoMappingSchemaMetadata.GetNetworkDeviceId(item);
-        var signalKey = IoMappingSchemaMetadata.GetSignalKey(item);
-        var addressCount = IoMappingSchemaMetadata.GetAddressCount(item);
-        var dataType = IoMappingSchemaMetadata.GetDataType(item);
-        var direction = IoMappingSchemaMetadata.GetDirection(item);
-        var category = IoMappingSchemaMetadata.GetCategory(item);
-        var businessGroup = IoMappingSchemaMetadata.GetBusinessGroup(item);
-        var sortOrder = IoMappingSchemaMetadata.GetSortOrder(item);
-        var remark = IoMappingSchemaMetadata.GetRemark(item);
-
-        var entity = IoMappingEntity.Create(
-            networkDeviceId,
-            signalKey,
+        var plc = snapshots.GetPlcs().SingleOrDefault(candidate => candidate.Id == networkDeviceId)
+                  ?? throw new InvalidOperationException("PLUGIN_PLC_NOT_FOUND");
+        var configuration = new DevicePluginIoPointConfiguration(
+            plc.PlcCode,
+            IoMappingSchemaMetadata.GetSignalKey(item),
             item.DefaultValue,
-            addressCount,
-            dataType,
-            direction,
-            category,
-            businessGroup);
-        entity.UpdateSortOrder(sortOrder);
-        entity.UpdateMetadata(signalKey, dataType, direction, category, businessGroup, remark);
-        await using var unitOfWork = await unitOfWorkFactory
-            .BeginAsync(cancellationToken)
-            .ConfigureAwait(false);
-        unitOfWork.Repository<IoMappingEntity>().Add(entity);
-        await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
+            IoMappingSchemaMetadata.GetAddressCount(item),
+            IoMappingSchemaMetadata.GetDataType(item),
+            IoMappingSchemaMetadata.GetDirection(item),
+            IoMappingSchemaMetadata.GetCategory(item),
+            IoMappingSchemaMetadata.GetBusinessGroup(item),
+            IoMappingSchemaMetadata.GetSortOrder(item),
+            IoMappingSchemaMetadata.GetRemark(item));
+        await WriteAsync(
+            (store, version, token) => store.UpsertIoPointAsync(configuration, version, token),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task DeleteAsync(string key, CancellationToken cancellationToken = default)
@@ -75,27 +65,26 @@ public sealed class IoMappingConfigValueStore(
             return;
         }
 
-        await using var unitOfWork = await unitOfWorkFactory
-            .BeginAsync(cancellationToken)
-            .ConfigureAwait(false);
-        var repository = unitOfWork.Repository<IoMappingEntity>();
-        var candidates = await repository
-            .GetListAsync(x => x.NetworkDeviceId == parsed.NetworkDeviceId, cancellationToken)
-            .ConfigureAwait(false);
-        var matches = candidates
-            .Where(x => parsed.Matches(x.Direction, x.SignalKey))
-            .ToArray();
-        if (matches.Length == 0)
+        var plc = snapshots.GetPlcs().SingleOrDefault(candidate => candidate.Id == parsed.NetworkDeviceId);
+        if (plc is null)
         {
             return;
         }
 
-        foreach (var mapping in matches)
+        var matches = snapshots.GetIoPoints()
+            .Where(item => item.NetworkDeviceId == parsed.NetworkDeviceId
+                           && parsed.Matches(item.Direction, item.SignalKey))
+            .ToArray();
+        foreach (var match in matches)
         {
-            repository.Delete(mapping);
+            await WriteAsync(
+                (store, version, token) => store.DeleteIoPointAsync(
+                    plc.PlcCode,
+                    match.SignalKey,
+                    version,
+                    token),
+                cancellationToken).ConfigureAwait(false);
         }
-
-        await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task RepairExistingAsync(
@@ -114,54 +103,41 @@ public sealed class IoMappingConfigValueStore(
             return;
         }
 
-        await using var unitOfWork = await unitOfWorkFactory
-            .BeginAsync(cancellationToken)
-            .ConfigureAwait(false);
-        var repository = unitOfWork.Repository<IoMappingEntity>();
-        var candidates = await repository
-            .GetListAsync(x => x.NetworkDeviceId == parsed.NetworkDeviceId, cancellationToken)
-            .ConfigureAwait(false);
-        var changed = false;
-        foreach (var mapping in candidates.Where(x => parsed.Matches(x.Direction, x.SignalKey)))
+        var matches = snapshots.GetIoPoints()
+            .Where(mapping => mapping.NetworkDeviceId == parsed.NetworkDeviceId
+                              && parsed.Matches(mapping.Direction, mapping.SignalKey)
+                              && mapping.Remark is not null
+                              && legacyRemarks.Contains(mapping.Remark, StringComparer.Ordinal))
+            .ToArray();
+        foreach (var match in matches)
         {
-            if (mapping.Remark is null
-                || !legacyRemarks.Contains(mapping.Remark, StringComparer.Ordinal))
-            {
-                continue;
-            }
-
-            mapping.UpdateMetadata(
-                mapping.SignalKey,
-                mapping.DataType,
-                mapping.Direction,
-                mapping.Category,
-                mapping.BusinessGroup,
-                desiredRemark);
-            repository.Update(mapping);
-            changed = true;
-        }
-
-        if (changed)
-        {
-            await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await WriteAsync(
+                (store, version, token) => store.UpsertIoPointAsync(
+                    match.Configuration with { Remark = desiredRemark },
+                    version,
+                    token),
+                cancellationToken).ConfigureAwait(false);
         }
     }
 
-    private async Task<IReadOnlyCollection<int>> LoadManagedDeviceIdsAsync(CancellationToken cancellationToken)
+    private async Task WriteAsync(
+        Func<IDevicePluginConfigurationStoreV1, long, CancellationToken,
+            Task<DevicePluginConfigurationWriteResult>> write,
+        CancellationToken cancellationToken)
     {
-        if (hardwareProfileResolver.Resolve() is null)
+        if (_stores.Length != 1)
         {
-            return [];
+            throw new InvalidOperationException("PLUGIN_DATABASE_PORT_CARDINALITY_INVALID");
         }
 
-        var devices = await networkDevices
-            .GetListAsync(static x => x.DeviceType == DeviceType.PLC, cancellationToken)
-            .ConfigureAwait(false);
+        var version = snapshots.GetRequiredSnapshot().ConfigurationVersion;
+        var result = await write(_stores[0], version, cancellationToken).ConfigureAwait(false);
+        if (!result.Succeeded)
+        {
+            throw new InvalidOperationException(
+                result.FailureReasonCode ?? "PLUGIN_CONFIGURATION_WRITE_REJECTED");
+        }
 
-        return devices
-            .Where(static x => x.Id > 0)
-            .Select(static x => x.Id)
-            .Distinct()
-            .ToArray();
+        await snapshots.RefreshAsync(cancellationToken).ConfigureAwait(false);
     }
 }

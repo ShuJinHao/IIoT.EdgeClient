@@ -2,19 +2,18 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Dapper;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Infrastructure.Persistence.Dapper.Connection;
 using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Production;
-using IIoT.Edge.SharedKernel.Repository;
 
 namespace IIoT.Edge.Infrastructure.Persistence.Dapper.Stores;
 
 public sealed partial class ModuleProductionRecordPersistence(
     SqliteConnectionFactory connectionFactory,
     ILogService logger,
-    IReadRepository<NetworkDeviceEntity>? networkDevices = null)
+    IDevicePluginConfigurationSnapshotAccessor? snapshots = null)
     : IModuleProductionRecordPersistence
 {
     private const string AllDevicesKey = "__all__";
@@ -434,14 +433,13 @@ public sealed partial class ModuleProductionRecordPersistence(
     {
         var normalized = NormalizeSelection(selectedDeviceKey);
         if (string.Equals(normalized, AllDevicesKey, StringComparison.Ordinal)
-            || networkDevices is null)
+            || snapshots is null)
         {
             return SelectionResolution.Success(normalized);
         }
 
-        var devices = await networkDevices.GetListAsync(
-            static device => device.DeviceType == DeviceType.PLC,
-            cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        var devices = snapshots.GetPlcs();
         var codeMatches = devices
             .Where(device => string.Equals(
                 device.PlcCode,

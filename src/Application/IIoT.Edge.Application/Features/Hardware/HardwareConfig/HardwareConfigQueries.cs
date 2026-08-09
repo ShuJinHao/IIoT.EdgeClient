@@ -1,17 +1,16 @@
-using IIoT.Edge.Module.Contracts.Auth;
-using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Application.Common.Crud;
 using IIoT.Edge.Application.Common.Plc;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Application.Features.Hardware.Queries;
 using IIoT.Edge.Application.Features.Hardware.UseCases.IoMapping.Commands;
 using IIoT.Edge.Application.Features.Hardware.UseCases.NetworkDevice.Commands;
 using IIoT.Edge.Application.Features.Hardware.UseCases.SerialDevice.Commands;
 using IIoT.Edge.Application.Modules.Hardware;
+using IIoT.Edge.Module.Contracts.Auth;
 using IIoT.Edge.Module.Contracts.Hardware;
+using IIoT.Edge.Module.Contracts.Plc;
+using IIoT.Edge.Module.Contracts.Plugins;
 using IIoT.Edge.Module.Sdk.Hardware;
-using IIoT.Edge.Domain.Hardware.Aggregates;
-using IIoT.Edge.SharedKernel.Repository;
-using IIoT.Edge.SharedKernel.Result;
 using MediatR;
 
 namespace IIoT.Edge.Application.Features.Hardware.HardwareConfigView;
@@ -41,106 +40,68 @@ public record SaveHardwareConfigCommand(
     int SelectedNetworkDeviceId,
     List<IoMappingDto> IoMappings) : IRequest<CrudOperationResult>;
 
-public class LoadHardwareConfigHandler(ISender sender)
+public sealed class LoadHardwareConfigHandler(
+    IDevicePluginConfigurationSnapshotAccessor snapshots)
     : IRequestHandler<LoadHardwareConfigQuery, HardwareConfigInitResult>
 {
-    public async Task<HardwareConfigInitResult> Handle(LoadHardwareConfigQuery request, CancellationToken ct)
+    public Task<HardwareConfigInitResult> Handle(
+        LoadHardwareConfigQuery request,
+        CancellationToken cancellationToken)
     {
-        var networkResult = await sender.Send(new GetAllNetworkDevicesQuery(), ct);
-        var networks = new List<NetworkDeviceDto>();
-        if (networkResult.IsSuccess && networkResult.Value != null)
-        {
-            foreach (var network in networkResult.Value)
-            {
-                networks.Add(MapNetworkDevice(network));
-            }
-        }
-
-        var serialResult = await sender.Send(new GetAllSerialDevicesQuery(), ct);
-        var serials = new List<SerialDeviceDto>();
-        if (serialResult.IsSuccess && serialResult.Value != null)
-        {
-            foreach (var serial in serialResult.Value)
-            {
-                serials.Add(MapSerialDevice(serial));
-            }
-        }
-
-        return new HardwareConfigInitResult(networks, serials);
+        cancellationToken.ThrowIfCancellationRequested();
+        var networks = snapshots.GetPlcs()
+            .Select(static item => new NetworkDeviceDto(
+                item.Id,
+                item.DeviceName,
+                item.DeviceType,
+                item.DeviceModel,
+                item.IpAddress,
+                item.Port1,
+                item.Port2,
+                item.SendCmd1,
+                item.SendCmd2,
+                item.ConnectTimeout,
+                item.IsEnabled,
+                item.Remark,
+                item.ProtocolFrame,
+                item.PlcCode))
+            .ToList();
+        return Task.FromResult(new HardwareConfigInitResult(networks, []));
     }
-
-    private static NetworkDeviceDto MapNetworkDevice(NetworkDeviceEntity entity)
-        => new(
-            entity.Id,
-            entity.DeviceName,
-            entity.DeviceType,
-            entity.DeviceModel,
-            entity.IpAddress,
-            entity.Port1,
-            entity.Port2,
-            entity.SendCmd1,
-            entity.SendCmd2,
-            entity.ConnectTimeout,
-            entity.IsEnabled,
-            entity.Remark,
-            entity.ProtocolFrame,
-            entity.PlcCode);
-
-    private static SerialDeviceDto MapSerialDevice(SerialDeviceEntity entity)
-        => new(
-            entity.Id,
-            entity.DeviceName,
-            entity.DeviceType,
-            entity.PortName,
-            entity.BaudRate,
-            entity.DataBits,
-            entity.StopBits,
-            entity.Parity,
-            entity.SendCmd1,
-            entity.SendCmd2,
-            entity.IsEnabled,
-            entity.Remark);
 }
 
-public class LoadIoMappingsHandler(ISender sender)
+public sealed class LoadIoMappingsHandler(
+    IDevicePluginConfigurationSnapshotAccessor snapshots)
     : IRequestHandler<LoadIoMappingsQuery, IoMappingPageResult>
 {
-    public async Task<IoMappingPageResult> Handle(LoadIoMappingsQuery request, CancellationToken ct)
+    public Task<IoMappingPageResult> Handle(
+        LoadIoMappingsQuery request,
+        CancellationToken cancellationToken)
     {
-        var result = await sender.Send(
-            new GetIoMappingsByDeviceQuery(request.NetworkDeviceId, 0, int.MaxValue),
-            ct);
-
-        if (!result.IsSuccess || result.Value is null)
-        {
-            return new IoMappingPageResult(new(), 0);
-        }
-
-        var items = result.Value.Items
-            .Select(MapIoMapping)
+        cancellationToken.ThrowIfCancellationRequested();
+        var items = snapshots.GetIoPoints()
+            .Where(item => item.NetworkDeviceId == request.NetworkDeviceId)
+            .OrderBy(static item => item.SortOrder)
+            .Select(static item => new IoMappingDto(
+                item.Id,
+                item.NetworkDeviceId,
+                item.SignalKey,
+                item.PlcAddress,
+                item.AddressCount,
+                item.DataType,
+                item.Direction,
+                item.Category,
+                item.BusinessGroup,
+                item.SortOrder,
+                item.Remark))
             .ToList();
-
-        return new IoMappingPageResult(items, items.Count);
+        return Task.FromResult(new IoMappingPageResult(items, items.Count));
     }
-
-    private static IoMappingDto MapIoMapping(IoMappingEntity entity)
-        => new(
-            entity.Id,
-            entity.NetworkDeviceId,
-            entity.SignalKey,
-            entity.PlcAddress,
-            entity.AddressCount,
-            entity.DataType,
-            entity.Direction,
-            entity.Category,
-            entity.BusinessGroup,
-            entity.SortOrder,
-            entity.Remark);
 }
 
-public class SaveHardwareConfigHandler(
-    ISender sender,
-    IEdgeUnitOfWorkFactory unitOfWorkFactory,
+public sealed class SaveHardwareConfigHandler(
+    IDevicePluginConfigurationSnapshotAccessor snapshots,
+    IEnumerable<IDevicePluginConfigurationStoreV1> stores,
     IClientPermissionService permissionService,
     IPlcConnectionManager plcConnectionManager,
     IPlcRuntimeApplyService plcRuntimeApplyService,
@@ -148,281 +109,158 @@ public class SaveHardwareConfigHandler(
     IPlcConfigurationSnapshotInvalidator? plcConfigurationSnapshotInvalidator = null)
     : IRequestHandler<SaveHardwareConfigCommand, CrudOperationResult>
 {
-    public async Task<CrudOperationResult> Handle(SaveHardwareConfigCommand request, CancellationToken ct)
+    private readonly IDevicePluginConfigurationStoreV1[] _stores = stores.ToArray();
+
+    public async Task<CrudOperationResult> Handle(
+        SaveHardwareConfigCommand request,
+        CancellationToken cancellationToken)
     {
         if (!permissionService.CanEditHardware)
         {
             return CrudOperationResult.Failure("当前用户没有硬件配置权限。");
         }
 
-        var discoveredNetworkDevicesResult = await LoadExistingNetworkDevicesAsync(ct);
-        if (!discoveredNetworkDevicesResult.IsSuccess
-            || discoveredNetworkDevicesResult.Value is null)
+        if (_stores.Length != 1)
         {
-            return CrudOperationResult.Failure(
-                discoveredNetworkDevicesResult.ErrorMessage
-                ?? "读取现有网络设备配置失败，已停止保存。");
+            return CrudOperationResult.Failure("PLUGIN_DATABASE_PORT_CARDINALITY_INVALID");
         }
 
-        var discoveredIoMappingsResult = await LoadExistingIoMappingsAsync(
-            request.SelectedNetworkDeviceId,
-            ct);
-        if (!discoveredIoMappingsResult.IsSuccess
-            || discoveredIoMappingsResult.Value is null)
+        if (request.SerialDevices.Count > 0)
         {
-            return CrudOperationResult.Failure(
-                discoveredIoMappingsResult.ErrorMessage
-                ?? "读取现有 IO 映射失败，已停止保存。");
+            return CrudOperationResult.Failure("PLUGIN_SERIAL_DEVICE_NOT_SUPPORTED");
         }
 
-        var affectedPlcDeviceIds = FindAffectedPlcDeviceIds(
-            discoveredNetworkDevicesResult.Value,
-            discoveredIoMappingsResult.Value,
-            request);
+        var validationError = ValidateSubmission(request);
+        if (validationError is not null)
+        {
+            return CrudOperationResult.Failure(validationError);
+        }
 
-        using var mutationScope = await EnterMutationGatesAsync(affectedPlcDeviceIds, ct)
+        var initial = snapshots.GetRequiredSnapshot();
+        var existingPlcs = snapshots.GetPlcs();
+        var existingIoPoints = snapshots.GetIoPoints();
+        var affectedIds = FindAffectedPlcDeviceIds(existingPlcs, existingIoPoints, request);
+        using var mutationScope = await EnterMutationGatesAsync(affectedIds, cancellationToken)
             .ConfigureAwait(false);
-        return await SaveWhileMutationGatesHeldAsync(
-                request,
-                affectedPlcDeviceIds,
-                ct)
-            .ConfigureAwait(false);
-    }
 
-    private async Task<CrudOperationResult> SaveWhileMutationGatesHeldAsync(
-        SaveHardwareConfigCommand request,
-        IReadOnlyCollection<int> lockedPlcDeviceIds,
-        CancellationToken ct)
-    {
-        var existingNetworkDevicesResult = await LoadExistingNetworkDevicesAsync(ct);
-        if (!existingNetworkDevicesResult.IsSuccess
-            || existingNetworkDevicesResult.Value is null)
+        if (snapshots.GetRequiredSnapshot().ConfigurationVersion != initial.ConfigurationVersion)
         {
-            return CrudOperationResult.Failure(
-                existingNetworkDevicesResult.ErrorMessage
-                ?? "重新读取现有网络设备配置失败，已停止保存。");
+            return CrudOperationResult.Failure("PLUGIN_CONFIGURATION_VERSION_CONFLICT");
         }
 
-        var existingIoMappingsResult = await LoadExistingIoMappingsAsync(
-            request.SelectedNetworkDeviceId,
-            ct);
-        if (!existingIoMappingsResult.IsSuccess
-            || existingIoMappingsResult.Value is null)
-        {
-            return CrudOperationResult.Failure(
-                existingIoMappingsResult.ErrorMessage
-                ?? "重新读取现有 IO 映射失败，已停止保存。");
-        }
-
-        var existingNetworkDevices = existingNetworkDevicesResult.Value;
-        var existingIoMappings = existingIoMappingsResult.Value;
-        var unlockedAffectedPlcDeviceIds = FindAffectedPlcDeviceIds(
-                existingNetworkDevices,
-                existingIoMappings,
-                request)
-            .Except(lockedPlcDeviceIds)
+        var expectedVersion = initial.ConfigurationVersion;
+        var existingByCode = existingPlcs.ToDictionary(
+            static item => item.PlcCode,
+            StringComparer.OrdinalIgnoreCase);
+        var submitted = request.NetworkDevices
+            .Select(ToPluginConfiguration)
             .ToArray();
-        if (unlockedAffectedPlcDeviceIds.Length > 0)
+        var submittedByCode = submitted.ToDictionary(
+            static item => item.PlcCode,
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var removed in existingByCode.Values
+                     .Where(item => !submittedByCode.ContainsKey(item.PlcCode))
+                     .OrderBy(static item => item.PlcCode, StringComparer.OrdinalIgnoreCase))
         {
-            return CrudOperationResult.Failure(
-                "PLC 配置在保存期间已发生并发变化，请重新加载后重试。");
-        }
-
-        var networkDeviceIdsToUpdate = FindChangedNetworkDeviceIds(
-            existingNetworkDevices,
-            request.NetworkDevices);
-        var networkDeviceIdsToDelete = FindDeletedNetworkDeviceIds(
-            existingNetworkDevices,
-            request.NetworkDevices);
-        var selectedDeviceStillExists = request.SelectedNetworkDeviceId != 0
-            && request.NetworkDevices.Any(x => x.Id == request.SelectedNetworkDeviceId);
-        var selectedIoMappingsChanged = selectedDeviceStillExists
-            && HasIoMappingsChanged(
-                existingIoMappings,
-                request.IoMappings,
-                request.SelectedNetworkDeviceId);
-
-        // First invalidation: readers must stop observing the pre-write snapshot before
-        // the database mutation starts. A failed transaction will simply reload the
-        // still-authoritative database contents on the next read.
-        plcConfigurationSnapshotInvalidator?.Invalidate();
-
-        await using var unitOfWork = await unitOfWorkFactory.BeginAsync(ct).ConfigureAwait(false);
-        var networkDeviceRepository = unitOfWork.Repository<NetworkDeviceEntity>();
-        var createdNetworkDevices = new List<NetworkDeviceEntity>();
-
-        var networkResult = await SaveNetworkDevicesHandler.ApplyPlannedAsync(
-            networkDeviceRepository,
-            new SaveNetworkDevicesCommand(request.NetworkDevices),
-            networkDeviceIdsToUpdate,
-            networkDeviceIdsToDelete,
-            createdNetworkDevices,
-            ct).ConfigureAwait(false);
-        if (!networkResult.IsSuccess)
-        {
-            return CrudOperationResult.Failure(networkResult.ErrorMessage ?? "网络设备保存失败。");
-        }
-
-        var serialResult = await SaveSerialDevicesHandler.ApplyAsync(
-            unitOfWork.Repository<SerialDeviceEntity>(),
-            new SaveSerialDevicesCommand(request.SerialDevices),
-            ct).ConfigureAwait(false);
-        if (!serialResult.IsSuccess)
-        {
-            return CrudOperationResult.Failure(serialResult.ErrorMessage ?? "串口设备保存失败。");
-        }
-
-        if (selectedDeviceStillExists && selectedIoMappingsChanged)
-        {
-            var ioDtos = request.IoMappings
-                .Select(dto => dto with { NetworkDeviceId = request.SelectedNetworkDeviceId })
-                .ToList();
-
-            var ioResult = await SaveIoMappingsHandler.ApplyAsync(
-                unitOfWork.Repository<IoMappingEntity>(),
-                new SaveIoMappingsCommand(request.SelectedNetworkDeviceId, ioDtos),
-                ct).ConfigureAwait(false);
-            if (!ioResult.IsSuccess)
+            var result = await _stores[0]
+                .DeletePlcAsync(removed.PlcCode, expectedVersion, cancellationToken)
+                .ConfigureAwait(false);
+            if (!result.Succeeded)
             {
-                return CrudOperationResult.Failure(ioResult.ErrorMessage ?? "IO 映射保存失败。");
+                return WriteFailure(result, "PLUGIN_PLC_DELETE_REJECTED");
             }
+
+            expectedVersion = result.ConfigurationVersion;
         }
 
-        await unitOfWork.FlushAsync(ct).ConfigureAwait(false);
-        var createdPlcDevices = createdNetworkDevices
-            .Where(static device => device.DeviceType == DeviceType.PLC)
-            .ToArray();
-        if (createdPlcDevices.Any(static device => device.Id <= 0))
+        foreach (var configuration in submitted.OrderBy(
+                     static item => item.PlcCode,
+                     StringComparer.OrdinalIgnoreCase))
         {
-            return CrudOperationResult.Failure(
-                "新建 PLC 未取得稳定数据库 Id，已回滚并停止运行态应用。");
-        }
-
-        var createdPlcDeviceIds = createdPlcDevices
-            .Select(static device => device.Id)
-            .Except(lockedPlcDeviceIds)
-            .OrderBy(static deviceId => deviceId)
-            .ToArray();
-        using var createdPlcMutationScope = await EnterMutationGatesAsync(
-                createdPlcDeviceIds,
-                ct)
-            .ConfigureAwait(false);
-        await unitOfWork.CommitAsync(ct).ConfigureAwait(false);
-
-        // Second invalidation: the committed database version is now authoritative.
-        // Versioned cache publication prevents an older concurrent load from restoring
-        // the stale pre-commit snapshot.
-        plcConfigurationSnapshotInvalidator?.Invalidate();
-
-        var stopFailures = new List<string>();
-        var reloadFailures = new List<string>();
-        var existingPlcById = existingNetworkDevices
-            .Where(x => x.DeviceType == DeviceType.PLC)
-            .ToDictionary(x => x.Id);
-        var submittedPlcDevices = request.NetworkDevices
-            .Where(x => x.DeviceType == DeviceType.PLC)
-            .ToList();
-        var submittedPlcById = submittedPlcDevices
-            .Where(x => x.Id > 0)
-            .ToDictionary(x => x.Id);
-
-        foreach (var existingPlc in existingPlcById.Values)
-        {
-            if (submittedPlcById.ContainsKey(existingPlc.Id))
+            if (existingByCode.TryGetValue(configuration.PlcCode, out var existing)
+                && existing.Configuration == configuration)
             {
                 continue;
             }
 
-            try
+            var result = await _stores[0]
+                .UpsertPlcAsync(configuration, expectedVersion, cancellationToken)
+                .ConfigureAwait(false);
+            if (!result.Succeeded)
             {
-                await plcConnectionManager.StopDeviceAsync(existingPlc.Id, ct);
+                return WriteFailure(result, "PLUGIN_PLC_UPSERT_REJECTED");
             }
-            catch (Exception ex)
-            {
-                stopFailures.Add($"{existingPlc.DeviceName}（{ex.Message}）");
-            }
+
+            expectedVersion = result.ConfigurationVersion;
         }
 
-        var ioMappingsChanged = request.SelectedNetworkDeviceId > 0
-            && selectedIoMappingsChanged
-            && existingPlcById.TryGetValue(request.SelectedNetworkDeviceId, out _)
-            && submittedPlcById.ContainsKey(request.SelectedNetworkDeviceId);
-
-        var reloadTargets = new List<(int DeviceId, string DeviceName)>();
-        var reloadTargetIds = new HashSet<int>();
-        foreach (var createdPlc in createdPlcDevices)
+        var selected = request.NetworkDevices.SingleOrDefault(
+            item => item.Id == request.SelectedNetworkDeviceId);
+        if (selected is not null)
         {
-            if (reloadTargetIds.Add(createdPlc.Id))
-            {
-                reloadTargets.Add((createdPlc.Id, createdPlc.DeviceName));
-            }
-        }
+            var plcCode = NormalizeRequired(selected.PlcCode);
+            var existingSelected = existingIoPoints
+                .Where(item => string.Equals(item.PlcCode, plcCode, StringComparison.OrdinalIgnoreCase))
+                .ToDictionary(static item => item.SignalKey, StringComparer.OrdinalIgnoreCase);
+            var incomingSelected = request.IoMappings
+                .Select(item => ToPluginConfiguration(plcCode, item))
+                .ToDictionary(static item => item.SignalKey, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var plcDevice in submittedPlcDevices.Where(static device => device.Id > 0))
-        {
-            var deviceName = plcDevice.DeviceName?.Trim();
-            if (string.IsNullOrWhiteSpace(deviceName))
+            foreach (var removed in existingSelected.Values
+                         .Where(item => !incomingSelected.ContainsKey(item.SignalKey))
+                         .OrderBy(static item => item.SignalKey, StringComparer.OrdinalIgnoreCase))
             {
-                continue;
-            }
-
-            if (!existingPlcById.TryGetValue(plcDevice.Id, out var existingPlc))
-            {
-                if (reloadTargetIds.Add(plcDevice.Id))
-                {
-                    reloadTargets.Add((plcDevice.Id, deviceName));
-                }
-
-                continue;
-            }
-
-            if (HasRuntimeRelevantNetworkChange(existingPlc, plcDevice)
-                || (ioMappingsChanged && request.SelectedNetworkDeviceId == plcDevice.Id))
-            {
-                if (reloadTargetIds.Add(plcDevice.Id))
-                {
-                    reloadTargets.Add((plcDevice.Id, deviceName));
-                }
-            }
-        }
-
-        foreach (var target in reloadTargets.OrderBy(static target => target.DeviceId))
-        {
-            try
-            {
-                await plcRuntimeApplyService
-                    .ApplyDeviceRuntimeAsync(
-                        target.DeviceId,
-                        PlcRuntimeApplyReasons.HardwareOrIoMappingSave,
-                        ct)
+                var result = await _stores[0]
+                    .DeleteIoPointAsync(plcCode, removed.SignalKey, expectedVersion, cancellationToken)
                     .ConfigureAwait(false);
+                if (!result.Succeeded)
+                {
+                    return WriteFailure(result, "PLUGIN_IO_DELETE_REJECTED");
+                }
+
+                expectedVersion = result.ConfigurationVersion;
             }
-            catch (Exception ex)
+
+            foreach (var configuration in incomingSelected.Values.OrderBy(
+                         static item => item.SortOrder))
             {
-                reloadFailures.Add($"{target.DeviceName}（{ex.Message}）");
+                if (existingSelected.TryGetValue(configuration.SignalKey, out var existing)
+                    && existing.Configuration == configuration)
+                {
+                    continue;
+                }
+
+                var result = await _stores[0]
+                    .UpsertIoPointAsync(configuration, expectedVersion, cancellationToken)
+                    .ConfigureAwait(false);
+                if (!result.Succeeded)
+                {
+                    return WriteFailure(result, "PLUGIN_IO_UPSERT_REJECTED");
+                }
+
+                expectedVersion = result.ConfigurationVersion;
             }
         }
 
-        var runtimeIssues = new List<string>();
-        if (stopFailures.Count > 0)
-        {
-            runtimeIssues.Add($"以下 PLC 已删除停机失败：{string.Join("；", stopFailures)}");
-        }
+        await snapshots.RefreshAsync(cancellationToken).ConfigureAwait(false);
+        plcConfigurationSnapshotInvalidator?.Invalidate();
 
-        if (reloadFailures.Count > 0)
-        {
-            runtimeIssues.Add($"以下 PLC 重载失败：{string.Join("；", reloadFailures)}");
-        }
-
+        var runtimeIssues = await ApplyRuntimeChangesAsync(
+            existingPlcs,
+            request,
+            affectedIds,
+            cancellationToken).ConfigureAwait(false);
         if (plcConfigurationSnapshotInvalidator is not null)
         {
             try
             {
-                await plcConfigurationSnapshotInvalidator.WarmAsync(ct).ConfigureAwait(false);
+                await plcConfigurationSnapshotInvalidator.WarmAsync(cancellationToken)
+                    .ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                runtimeIssues.Add($"PLC 权威配置缓存重建失败（{ex.Message}）");
+                runtimeIssues.Add($"PLC 权威配置缓存重建失败（{exception.Message}）");
             }
         }
 
@@ -431,19 +269,62 @@ public class SaveHardwareConfigHandler(
             : CrudOperationResult.Failure($"配置已保存，但 {string.Join("；", runtimeIssues)}");
     }
 
+    private async Task<List<string>> ApplyRuntimeChangesAsync(
+        IReadOnlyCollection<DevicePluginPlcSnapshot> existingPlcs,
+        SaveHardwareConfigCommand request,
+        IReadOnlyCollection<int> affectedIds,
+        CancellationToken cancellationToken)
+    {
+        var issues = new List<string>();
+        var submittedIds = request.NetworkDevices
+            .Select(static item => item.Id > 0
+                ? item.Id
+                : DevicePluginProjectionIds.Plc(item.PlcCode))
+            .ToHashSet();
+        foreach (var removed in existingPlcs.Where(item => !submittedIds.Contains(item.Id)))
+        {
+            try
+            {
+                await plcConnectionManager.StopDeviceAsync(removed.Id, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                issues.Add($"{removed.DeviceName} 停机失败（{exception.Message}）");
+            }
+        }
+
+        var currentById = snapshots.GetPlcs().ToDictionary(static item => item.Id);
+        foreach (var deviceId in affectedIds.Where(currentById.ContainsKey).OrderBy(static item => item))
+        {
+            try
+            {
+                await plcRuntimeApplyService.ApplyDeviceRuntimeAsync(
+                    deviceId,
+                    PlcRuntimeApplyReasons.HardwareOrIoMappingSave,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                issues.Add($"{currentById[deviceId].DeviceName} 重载失败（{exception.Message}）");
+            }
+        }
+
+        return issues;
+    }
+
     private async ValueTask<IDisposable> EnterMutationGatesAsync(
         IReadOnlyCollection<int> networkDeviceIds,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
         var leases = new List<IDisposable>(networkDeviceIds.Count);
         try
         {
-            foreach (var networkDeviceId in networkDeviceIds)
+            foreach (var networkDeviceId in networkDeviceIds.OrderBy(static item => item))
             {
-                leases.Add(
-                    await runtimeConfigurationMutationGate
-                        .EnterAsync(networkDeviceId, ct)
-                        .ConfigureAwait(false));
+                leases.Add(await runtimeConfigurationMutationGate
+                    .EnterAsync(networkDeviceId, cancellationToken)
+                    .ConfigureAwait(false));
             }
 
             return new CompositeMutationLease(leases);
@@ -456,81 +337,142 @@ public class SaveHardwareConfigHandler(
     }
 
     private static int[] FindAffectedPlcDeviceIds(
-        IReadOnlyCollection<NetworkDeviceEntity> existingNetworkDevices,
-        IReadOnlyCollection<IoMappingEntity> existingIoMappings,
+        IReadOnlyCollection<DevicePluginPlcSnapshot> existingPlcs,
+        IReadOnlyCollection<DevicePluginIoPointSnapshot> existingIoPoints,
         SaveHardwareConfigCommand request)
     {
-        var existingPlcById = existingNetworkDevices
-            .Where(static device => device.DeviceType == DeviceType.PLC && device.Id > 0)
-            .ToDictionary(static device => device.Id);
-        var submittedPlcById = request.NetworkDevices
-            .Where(static device => device.DeviceType == DeviceType.PLC && device.Id > 0)
-            .ToDictionary(static device => device.Id);
-        var affectedDeviceIds = new HashSet<int>();
-
-        foreach (var existingPlc in existingPlcById.Values)
+        var affected = new HashSet<int>();
+        var existingById = existingPlcs.ToDictionary(static item => item.Id);
+        var submittedById = request.NetworkDevices.ToDictionary(
+            static item => item.Id > 0 ? item.Id : DevicePluginProjectionIds.Plc(item.PlcCode));
+        foreach (var existing in existingPlcs)
         {
-            if (!submittedPlcById.TryGetValue(existingPlc.Id, out var submittedPlc)
-                || HasPersistedNetworkChange(existingPlc, submittedPlc))
+            if (!submittedById.TryGetValue(existing.Id, out var incoming)
+                || existing.Configuration != ToPluginConfiguration(incoming))
             {
-                affectedDeviceIds.Add(existingPlc.Id);
+                affected.Add(existing.Id);
             }
         }
 
-        foreach (var submittedPlc in submittedPlcById.Values)
+        foreach (var incoming in submittedById)
         {
-            if (!existingPlcById.ContainsKey(submittedPlc.Id))
+            if (!existingById.ContainsKey(incoming.Key))
             {
-                affectedDeviceIds.Add(submittedPlc.Id);
+                affected.Add(incoming.Key);
             }
         }
 
         if (request.SelectedNetworkDeviceId > 0
-            && existingPlcById.ContainsKey(request.SelectedNetworkDeviceId)
-            && submittedPlcById.ContainsKey(request.SelectedNetworkDeviceId)
-            && HasIoMappingsChanged(
-                existingIoMappings,
-                request.IoMappings,
-                request.SelectedNetworkDeviceId))
+            && submittedById.TryGetValue(request.SelectedNetworkDeviceId, out var selected))
         {
-            affectedDeviceIds.Add(request.SelectedNetworkDeviceId);
+            var plcCode = NormalizeRequired(selected.PlcCode);
+            var existing = existingIoPoints
+                .Where(item => string.Equals(item.PlcCode, plcCode, StringComparison.OrdinalIgnoreCase))
+                .Select(static item => item.Configuration)
+                .OrderBy(static item => item.SignalKey, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var incoming = request.IoMappings
+                .Select(item => ToPluginConfiguration(plcCode, item))
+                .OrderBy(static item => item.SignalKey, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (!existing.SequenceEqual(incoming))
+            {
+                affected.Add(request.SelectedNetworkDeviceId);
+            }
         }
 
-        return affectedDeviceIds
-            .OrderBy(static deviceId => deviceId)
-            .ToArray();
+        return affected.OrderBy(static item => item).ToArray();
     }
 
-    private static HashSet<int> FindChangedNetworkDeviceIds(
-        IReadOnlyCollection<NetworkDeviceEntity> existingNetworkDevices,
-        IReadOnlyCollection<NetworkDeviceDto> submittedNetworkDevices)
+    private static string? ValidateSubmission(SaveHardwareConfigCommand request)
     {
-        var existingById = existingNetworkDevices
-            .Where(static device => device.Id > 0)
-            .ToDictionary(static device => device.Id);
+        if (request.NetworkDevices.Any(static item => item.DeviceType != DeviceType.PLC))
+        {
+            return "PLUGIN_NETWORK_DEVICE_TYPE_NOT_SUPPORTED";
+        }
 
-        return submittedNetworkDevices
-            .Where(static device => device.Id > 0)
-            .Where(device => existingById.TryGetValue(device.Id, out var existing)
-                             && HasPersistedNetworkChange(existing, device))
-            .Select(static device => device.Id)
-            .ToHashSet();
+        var plcCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in request.NetworkDevices)
+        {
+            if (string.IsNullOrWhiteSpace(item.PlcCode)
+                || string.IsNullOrWhiteSpace(item.DeviceName)
+                || string.IsNullOrWhiteSpace(item.IpAddress)
+                || item.Port1 is < 1 or > 65535
+                || item.Port2 is < 1 or > 65535
+                || item.ConnectTimeout <= 0
+                || !plcCodes.Add(item.PlcCode.Trim()))
+            {
+                return "PLUGIN_PLC_CONFIGURATION_INVALID";
+            }
+
+            if (string.Equals(item.DeviceModel?.Trim(), PlcType.Mc.ToString(), StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(item.ProtocolFrame)
+                && !string.Equals(item.ProtocolFrame.Trim(), nameof(McPlcFrameType.E3), StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(item.ProtocolFrame.Trim(), nameof(McPlcFrameType.E4), StringComparison.OrdinalIgnoreCase))
+            {
+                return "PLUGIN_PLC_PROTOCOL_FRAME_INVALID";
+            }
+        }
+
+        var signalKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in request.IoMappings)
+        {
+            var typeWordLength = PlcIoTypeWordLengthValidator.Validate(item.DataType, item.AddressCount);
+            if (string.IsNullOrWhiteSpace(item.SignalKey)
+                || string.IsNullOrWhiteSpace(item.PlcAddress)
+                || string.IsNullOrWhiteSpace(item.DataType)
+                || string.IsNullOrWhiteSpace(item.Direction)
+                || item.SortOrder < 0
+                || !typeWordLength.IsValid
+                || !signalKeys.Add(item.SignalKey.Trim()))
+            {
+                return typeWordLength.IsValid
+                    ? "PLUGIN_IO_CONFIGURATION_INVALID"
+                    : typeWordLength.FailureCode;
+            }
+        }
+
+        return null;
     }
 
-    private static HashSet<int> FindDeletedNetworkDeviceIds(
-        IReadOnlyCollection<NetworkDeviceEntity> existingNetworkDevices,
-        IReadOnlyCollection<NetworkDeviceDto> submittedNetworkDevices)
-    {
-        var submittedIds = submittedNetworkDevices
-            .Where(static device => device.Id > 0)
-            .Select(static device => device.Id)
-            .ToHashSet();
+    private static DevicePluginPlcConfiguration ToPluginConfiguration(NetworkDeviceDto item)
+        => new(
+            NormalizeRequired(item.PlcCode),
+            item.DeviceName.Trim(),
+            item.DeviceType.ToString(),
+            NormalizeOptional(item.DeviceModel),
+            NormalizeOptional(item.ProtocolFrame)?.ToUpperInvariant(),
+            item.IpAddress.Trim(),
+            item.Port1,
+            item.Port2,
+            item.ConnectTimeout,
+            item.IsEnabled,
+            NormalizeOptional(item.Remark));
 
-        return existingNetworkDevices
-            .Where(device => device.Id > 0 && !submittedIds.Contains(device.Id))
-            .Select(static device => device.Id)
-            .ToHashSet();
-    }
+    private static DevicePluginIoPointConfiguration ToPluginConfiguration(
+        string plcCode,
+        IoMappingDto item)
+        => new(
+            plcCode,
+            item.SignalKey.Trim(),
+            item.PlcAddress.Trim(),
+            item.AddressCount,
+            item.DataType.Trim(),
+            item.Direction.Trim(),
+            string.IsNullOrWhiteSpace(item.Category) ? "单点读数据" : item.Category.Trim(),
+            item.BusinessGroup?.Trim() ?? string.Empty,
+            item.SortOrder,
+            NormalizeOptional(item.Remark));
+
+    private static CrudOperationResult WriteFailure(
+        DevicePluginConfigurationWriteResult result,
+        string fallback)
+        => CrudOperationResult.Failure(result.FailureReasonCode ?? fallback);
+
+    private static string NormalizeRequired(string value) => value.Trim().ToUpperInvariant();
+
+    private static string? NormalizeOptional(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static void DisposeLeasesInReverseOrder(IReadOnlyList<IDisposable> leases)
     {
@@ -540,8 +482,7 @@ public class SaveHardwareConfigHandler(
         }
     }
 
-    private sealed class CompositeMutationLease(IReadOnlyList<IDisposable> leases)
-        : IDisposable
+    private sealed class CompositeMutationLease(IReadOnlyList<IDisposable> leases) : IDisposable
     {
         private int _disposed;
 
@@ -553,172 +494,4 @@ public class SaveHardwareConfigHandler(
             }
         }
     }
-
-    private async Task<Result<List<NetworkDeviceEntity>>> LoadExistingNetworkDevicesAsync(
-        CancellationToken ct)
-    {
-        try
-        {
-            var result = await sender.Send(new GetAllNetworkDevicesQuery(), ct);
-            if (!result.IsSuccess || result.Value is null)
-            {
-                return Result.Failure(
-                    $"读取现有网络设备配置失败，已停止保存：{result.ErrorMessage ?? "查询未返回有效结果。"}");
-            }
-
-            return Result.Success(result.Value);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            return Result.Failure(
-                $"读取现有网络设备配置失败，已停止保存：{exception.Message}");
-        }
-    }
-
-    private async Task<Result<List<IoMappingEntity>>> LoadExistingIoMappingsAsync(
-        int networkDeviceId,
-        CancellationToken ct)
-    {
-        if (networkDeviceId <= 0)
-        {
-            return Result.Success(new List<IoMappingEntity>());
-        }
-
-        try
-        {
-            var result = await sender.Send(
-                new GetIoMappingsByDeviceQuery(networkDeviceId, 0, int.MaxValue),
-                ct);
-            if (!result.IsSuccess || result.Value is null)
-            {
-                return Result.Failure(
-                    $"读取 PLC（DeviceId={networkDeviceId}）现有 IO 映射失败，已停止保存：{result.ErrorMessage ?? "查询未返回有效结果。"}");
-            }
-
-            return Result.Success(result.Value.Items);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            return Result.Failure(
-                $"读取 PLC（DeviceId={networkDeviceId}）现有 IO 映射失败，已停止保存：{exception.Message}");
-        }
-    }
-
-    private static bool HasRuntimeRelevantNetworkChange(NetworkDeviceEntity existing, NetworkDeviceDto incoming)
-    {
-        return !string.Equals(existing.DeviceName?.Trim(), incoming.DeviceName?.Trim(), StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(existing.DeviceModel?.Trim(), incoming.DeviceModel?.Trim(), StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(existing.ProtocolFrame?.Trim(), incoming.ProtocolFrame?.Trim(), StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(existing.IpAddress?.Trim(), incoming.IpAddress?.Trim(), StringComparison.OrdinalIgnoreCase)
-            || existing.Port1 != incoming.Port1
-            || existing.Port2 != incoming.Port2
-            || !string.Equals(existing.SendCmd1?.Trim(), incoming.SendCmd1?.Trim(), StringComparison.Ordinal)
-            || !string.Equals(existing.SendCmd2?.Trim(), incoming.SendCmd2?.Trim(), StringComparison.Ordinal)
-            || existing.ConnectTimeout != incoming.ConnectTimeout
-            || existing.IsEnabled != incoming.IsEnabled;
-    }
-
-    private static bool HasPersistedNetworkChange(
-        NetworkDeviceEntity existing,
-        NetworkDeviceDto incoming)
-    {
-        return existing.DeviceType != incoming.DeviceType
-            || !string.Equals(
-                Normalize(existing.DeviceName),
-                Normalize(incoming.DeviceName),
-                StringComparison.Ordinal)
-            || !string.Equals(
-                NormalizeNullable(existing.DeviceModel),
-                NormalizeNullable(incoming.DeviceModel),
-                StringComparison.Ordinal)
-            || !string.Equals(
-                NormalizeNullable(existing.ProtocolFrame),
-                NormalizeNullable(incoming.ProtocolFrame),
-                StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(
-                Normalize(existing.IpAddress),
-                Normalize(incoming.IpAddress),
-                StringComparison.Ordinal)
-            || existing.Port1 != incoming.Port1
-            || existing.Port2 != incoming.Port2
-            || !string.Equals(
-                NormalizeNullable(existing.SendCmd1),
-                NormalizeNullable(incoming.SendCmd1),
-                StringComparison.Ordinal)
-            || !string.Equals(
-                NormalizeNullable(existing.SendCmd2),
-                NormalizeNullable(incoming.SendCmd2),
-                StringComparison.Ordinal)
-            || existing.ConnectTimeout != incoming.ConnectTimeout
-            || existing.IsEnabled != incoming.IsEnabled
-            || !string.Equals(
-                NormalizeNullable(existing.Remark),
-                NormalizeNullable(incoming.Remark),
-                StringComparison.Ordinal);
-    }
-
-    private static bool HasIoMappingsChanged(
-        IReadOnlyCollection<IoMappingEntity> existingMappings,
-        IReadOnlyCollection<IoMappingDto> incomingMappings,
-        int networkDeviceId)
-    {
-        var existing = existingMappings
-            .Where(x => x.NetworkDeviceId == networkDeviceId)
-            .Select(x => new IoMappingSnapshot(
-                Normalize(x.SignalKey),
-                Normalize(x.PlcAddress),
-                x.AddressCount,
-                Normalize(x.DataType),
-                Normalize(x.Direction),
-                x.SortOrder,
-                Normalize(x.Category),
-                NormalizeNullable(x.BusinessGroup),
-                NormalizeNullable(x.Remark)))
-            .OrderBy(x => x.SortOrder)
-            .ThenBy(x => x.SignalKey, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(x => x.PlcAddress, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        var incoming = incomingMappings
-            .Select(x => new IoMappingSnapshot(
-                Normalize(x.SignalKey),
-                Normalize(x.PlcAddress),
-                x.AddressCount,
-                Normalize(x.DataType),
-                Normalize(x.Direction),
-                x.SortOrder,
-                Normalize(x.Category),
-                NormalizeNullable(x.BusinessGroup),
-                NormalizeNullable(x.Remark)))
-            .OrderBy(x => x.SortOrder)
-            .ThenBy(x => x.SignalKey, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(x => x.PlcAddress, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        return !existing.SequenceEqual(incoming);
-    }
-
-    private static string Normalize(string value) => value?.Trim() ?? string.Empty;
-
-    private static string? NormalizeNullable(string? value)
-        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-
-    private readonly record struct IoMappingSnapshot(
-        string SignalKey,
-        string PlcAddress,
-        int AddressCount,
-        string DataType,
-        string Direction,
-        int SortOrder,
-        string Category,
-        string? BusinessGroup,
-        string? Remark);
 }

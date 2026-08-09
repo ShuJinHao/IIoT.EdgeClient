@@ -254,12 +254,13 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
                         descriptor.ModuleId));
                 }
 
-                var contract = descriptor.ConfigurationContract;
-                if (contract is null)
+                var legacyContract = descriptor.ConfigurationContract;
+                var privateDatabaseContract = descriptor.PrivateDatabaseContract;
+                if (legacyContract is null && privateDatabaseContract is null)
                 {
                     issues.Add(StartupDiagnosticIssueFactory.Create(
                         "PLUGIN_MODULE_CONFIGURATION_CONTRACT_MISSING",
-                        $"插件“{descriptor.ModuleId}”未声明正式 configurationSchema/moduleSeed，已继续启动但不加载任何插件默认配置。",
+                        $"插件“{descriptor.ModuleId}”未声明正式 privateDatabase 或 v2 moduleSeed，已继续启动但不加载任何插件默认配置。",
                         descriptor.ModuleId));
                     continue;
                 }
@@ -276,25 +277,29 @@ public sealed class ShellConfigurationLoader : IShellConfigurationLoader
                     continue;
                 }
 
-                var configuredVersion = configuration.GetValue<int?>(
-                    $"Modules:{descriptor.ModuleId}:ModuleSeed:Version");
-                var configuredEnvironment = configuration[
-                    $"Modules:{descriptor.ModuleId}:ModuleSeed:Environment"]?.Trim();
-                if (configuredVersion != contract.CurrentSeedVersion
-                    || string.IsNullOrWhiteSpace(configuredEnvironment)
-                    || !contract.SupportedEnvironments.Contains(
-                        configuredEnvironment,
-                        StringComparer.OrdinalIgnoreCase))
+                if (legacyContract is not null)
                 {
-                    issues.Add(StartupDiagnosticIssueFactory.Create(
-                        "PLUGIN_MODULE_SEED_SELECTION_INVALID",
-                        $"插件“{descriptor.ModuleId}”的 ModuleSeed 选择无效；要求 v{contract.CurrentSeedVersion}/" +
-                        $"{string.Join('|', contract.SupportedEnvironments)}。",
-                        descriptor.ModuleId));
+                    var configuredVersion = configuration.GetValue<int?>(
+                        $"Modules:{descriptor.ModuleId}:ModuleSeed:Version");
+                    var configuredEnvironment = configuration[
+                        $"Modules:{descriptor.ModuleId}:ModuleSeed:Environment"]?.Trim();
+                    if (configuredVersion != legacyContract.CurrentSeedVersion
+                        || string.IsNullOrWhiteSpace(configuredEnvironment)
+                        || !legacyContract.SupportedEnvironments.Contains(
+                            configuredEnvironment,
+                            StringComparer.OrdinalIgnoreCase))
+                    {
+                        issues.Add(StartupDiagnosticIssueFactory.Create(
+                            "PLUGIN_MODULE_SEED_SELECTION_INVALID",
+                            $"插件“{descriptor.ModuleId}”的 v2 ModuleSeed 选择无效；要求 v{legacyContract.CurrentSeedVersion}/" +
+                            $"{string.Join('|', legacyContract.SupportedEnvironments)}。",
+                            descriptor.ModuleId));
+                    }
                 }
 
                 result[$"Modules:{descriptor.ModuleId}:Capabilities:RequiresProductionPlan"] =
-                    contract.RequiresProductionPlan.ToString();
+                    (privateDatabaseContract?.RequiresProductionPlan
+                     ?? legacyContract!.RequiresProductionPlan).ToString();
             }
         }
 

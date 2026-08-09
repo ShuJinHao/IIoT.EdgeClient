@@ -1,10 +1,9 @@
 using IIoT.Edge.Module.Contracts.Config;
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Module.Contracts.Diagnostics;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Host.Bootstrap.Modules;
 using IIoT.Edge.Module.Contracts.Hardware;
-using IIoT.Edge.SharedKernel.Repository;
 
 namespace IIoT.Edge.Shell.Core;
 
@@ -19,7 +18,7 @@ public interface IStartupDiagnosticsReportBuilder
 
 public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportBuilder
 {
-    private readonly IReadRepository<NetworkDeviceEntity> _networkDevices;
+    private readonly IDevicePluginConfigurationSnapshotAccessor _snapshots;
     private readonly ILocalSystemRuntimeConfigService? _runtimeConfigService;
     private readonly IStartupPluginLifecycleSnapshotBuilder _pluginLifecycleSnapshotBuilder;
     private readonly IReadOnlyDictionary<string, IEdgeProcessModule> _modulesById;
@@ -36,7 +35,7 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
     private readonly IReadOnlyList<StartupDiagnosticIssue> _constructionDiagnosticIssues;
 
     public StartupDiagnosticsReportBuilder(
-        IReadRepository<NetworkDeviceEntity> networkDevices,
+        IDevicePluginConfigurationSnapshotAccessor snapshots,
         IStartupPluginLifecycleSnapshotBuilder pluginLifecycleSnapshotBuilder,
         IReadOnlyCollection<ModulePluginDescriptor> discoveredModules,
         IReadOnlyCollection<ModuleCatalogIssue> moduleCatalogIssues,
@@ -50,7 +49,7 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
         IStartupModuleRegistrationSnapshotBuilder moduleRegistrationSnapshotBuilder,
         ILocalSystemRuntimeConfigService? runtimeConfigService = null)
     {
-        _networkDevices = networkDevices;
+        _snapshots = snapshots;
         _runtimeConfigService = runtimeConfigService;
         _pluginLifecycleSnapshotBuilder = pluginLifecycleSnapshotBuilder;
         _modulesById = modules.ToDictionary(x => x.ModuleId, StringComparer.OrdinalIgnoreCase);
@@ -167,15 +166,17 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
             issues.AsReadOnly());
     }
 
-    private async Task<IReadOnlyCollection<NetworkDeviceEntity>> LoadPlcDevicesAsync(
+    private Task<IReadOnlyCollection<DevicePluginPlcSnapshot>> LoadPlcDevicesAsync(
         List<StartupDiagnosticIssue> issues,
         CancellationToken cancellationToken)
     {
         try
         {
-            return await _networkDevices.GetListAsync(
-                x => x.IsEnabled && x.DeviceType == DeviceType.PLC,
-                cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            IReadOnlyCollection<DevicePluginPlcSnapshot> devices = _snapshots.GetPlcs()
+                .Where(static item => item.IsEnabled)
+                .ToArray();
+            return Task.FromResult(devices);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -187,7 +188,7 @@ public sealed class StartupDiagnosticsReportBuilder : IStartupDiagnosticsReportB
                 issues,
                 "STARTUP_DEVICE_DIAGNOSTIC_FAILED",
                 "PLC 设备诊断读取失败，已跳过设备诊断项。");
-            return [];
+            return Task.FromResult<IReadOnlyCollection<DevicePluginPlcSnapshot>>([]);
         }
     }
 

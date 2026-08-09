@@ -1,5 +1,5 @@
 using IIoT.Edge.Module.Contracts.Plc;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Module.Contracts.Hardware;
 
 namespace IIoT.Edge.Infrastructure.DeviceComm.Plc;
@@ -10,7 +10,7 @@ namespace IIoT.Edge.Infrastructure.DeviceComm.Plc;
 public interface IPlcEndpointResolver
 {
     Task<PlcEndpoint> ResolveAsync(
-        NetworkDeviceEntity device,
+        DevicePluginPlcSnapshot device,
         PlcType plcType,
         CancellationToken cancellationToken = default);
 }

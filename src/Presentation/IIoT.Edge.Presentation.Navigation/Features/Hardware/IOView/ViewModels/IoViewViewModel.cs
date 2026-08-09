@@ -4,7 +4,7 @@ using Avalonia.Threading;
 using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Module.Contracts.Plc.Store;
 using IIoT.Edge.Application.Features.Hardware.IOView;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Presentation.Navigation.Localization;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.Module.Contracts.Hardware;
@@ -27,7 +27,7 @@ public class IoViewViewModel : NavigationViewModelBase
     private readonly IDeviceSelectionService _deviceSelectionService;
     private bool _isDeviceSelectionSubscribed;
 
-    public ObservableCollection<NetworkDeviceEntity> Devices { get; } = [];
+    public ObservableCollection<DevicePluginPlcSnapshot> Devices { get; } = [];
 
     public ObservableCollection<IoInteractionRowModel> InteractionRows { get; } = [];
 
@@ -55,8 +55,8 @@ public class IoViewViewModel : NavigationViewModelBase
 
     public bool HasNoSignals => !HasInteractionRows && !HasDataSections && SelectedDevice is not null;
 
-    private NetworkDeviceEntity? _selectedDevice;
-    public NetworkDeviceEntity? SelectedDevice
+    private DevicePluginPlcSnapshot? _selectedDevice;
+    public DevicePluginPlcSnapshot? SelectedDevice
     {
         get => _selectedDevice;
         set
@@ -355,10 +355,10 @@ public class IoViewViewModel : NavigationViewModelBase
         UpdateConnectionStatus();
     }
 
-    private static bool IsVisibleDevice(NetworkDeviceEntity device)
+    private static bool IsVisibleDevice(DevicePluginPlcSnapshot device)
         => device.DeviceType == DeviceType.PLC;
 
-    private NetworkDeviceEntity? ResolveDeviceFromSharedSelection()
+    private DevicePluginPlcSnapshot? ResolveDeviceFromSharedSelection()
     {
         var selectedKey = _deviceSelectionService.SelectedDeviceKey;
         if (string.Equals(
@@ -398,7 +398,7 @@ public class IoViewViewModel : NavigationViewModelBase
             ? deviceName
             : $"{plcCode} · {deviceName}";
 
-    private void ApplySelectedDeviceFromSharedSelection(NetworkDeviceEntity? device)
+    private void ApplySelectedDeviceFromSharedSelection(DevicePluginPlcSnapshot? device)
     {
         SelectedDevice = device;
     }

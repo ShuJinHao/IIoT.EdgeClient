@@ -19,7 +19,11 @@ using IIoT.Edge.Application.Common.Tasks;
 using IIoT.Edge.Application.Common.Time;
 using IIoT.Edge.Application.Common.Identity;
 using IIoT.Edge.Application.Common.DataPipeline;
+using IIoT.Edge.Application.Common.Caching.Memory;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Module.Contracts.Diagnostics;
+using IIoT.Edge.Module.Contracts.Cache;
+using IIoT.Edge.Module.Contracts.Plugins;
 using IIoT.Edge.Host.Bootstrap.Modules;
 using IIoT.Edge.Infrastructure.DeviceComm;
 using IIoT.Edge.Infrastructure.Integration;
@@ -27,7 +31,6 @@ using IIoT.Edge.Infrastructure.Integration.EdgeHost;
 using IIoT.Edge.Infrastructure.Integration.Mes;
 using IIoT.Edge.Infrastructure.Integration.Recipe;
 using IIoT.Edge.Infrastructure.Persistence.Dapper;
-using IIoT.Edge.Infrastructure.Persistence.EfCore;
 using IIoT.Edge.Infrastructure.Update;
 using IIoT.Edge.Presentation.Navigation;
 using IIoT.Edge.Presentation.Navigation.Features.DiagnosticsView;
@@ -77,6 +80,7 @@ public static class DependencyInjection
         var bootstrapDiagnosticIssueList = bootstrapDiagnosticIssues?.ToList() ?? [];
         var configuredEnabledModuleList = configuredEnabledModuleIds.ToArray();
         var devicePluginRuntimeContext = new ConfigurationDevicePluginRuntimeContext(configuration);
+        var isFormalV3 = devicePluginRuntimeContext.Current.IsV3;
         if (devicePluginRuntimeContext.Current.IsV3)
         {
             var binding = devicePluginRuntimeContext.Current;
@@ -95,7 +99,8 @@ public static class DependencyInjection
                 && string.Equals(
                     descriptors[0].ProcessType,
                     binding.ProcessType,
-                    StringComparison.OrdinalIgnoreCase);
+                    StringComparison.OrdinalIgnoreCase)
+                && descriptors[0].PrivateDatabaseContract is not null;
             var moduleMatches = enabledModules.Count == 1
                 && string.Equals(
                     enabledModules[0].ModuleId,
@@ -106,7 +111,7 @@ public static class DependencyInjection
             {
                 moduleCatalogIssueList.Add(new ModuleCatalogIssue(
                     "DEVICE_PLUGIN_BINDING_MISMATCH",
-                    "v3 Binding 的 ModuleId/ProcessType 与已签名插件清单或实际加载入口不一致，已拒绝注册。",
+                    "v3 Binding 的 ModuleId/ProcessType、私有数据库 Owner 与已签名插件清单或实际加载入口不一致，已拒绝注册。",
                     binding.ModuleId));
                 enabledModules = [];
             }
@@ -125,8 +130,6 @@ public static class DependencyInjection
                 discoveredModuleList,
                 moduleCatalogIssueList);
         }
-        var efDbPath = Path.Combine(runtimePaths.DatabaseDirectory, "edge.db");
-
         services.AddSingleton(configuration);
         services.AddSingleton(runtimePaths);
         services.AddSingleton<IDevicePluginRuntimeContext>(devicePluginRuntimeContext);
@@ -159,7 +162,6 @@ public static class DependencyInjection
         services.TryAddSingleton<IModulePluginLoader, ModulePluginLoader>();
         services.TryAddSingleton<IModulePluginCompatibilityPolicy, ModulePluginCompatibilityPolicy>();
         services.TryAddSingleton<IModuleCatalog, DirectoryModuleCatalog>();
-        services.AddSingleton<IModuleSeedInitializer, ModuleSeedInitializer>();
         services.AddSingleton<IStartupDiagnosticsStore, StartupDiagnosticsStore>();
         services.AddSingleton<ICloudUploadDiagnosticsStore, CloudUploadDiagnosticsStore>();
         services.AddSingleton<IMesUploadDiagnosticsStore, MesUploadDiagnosticsStore>();
@@ -179,7 +181,6 @@ public static class DependencyInjection
 
         services.AddEdgeApplication();
         services.AddEdgeUpdateInfrastructure(runtimePaths.BaseDirectory);
-        services.AddEfCorePersistenceInfrastructure(efDbPath);
         services.AddDapperPersistenceInfrastructure(runtimePaths.DatabaseDirectory);
         services.AddIntegrationInfrastructure(configuration, runtimePaths);
         services.AddDeviceCommInfrastructure();
@@ -200,6 +201,10 @@ public static class DependencyInjection
             enabledModules,
             cellDataTypeRegistry,
             moduleCatalogIssueList);
+        if (isFormalV3)
+        {
+            RegisterFormalV3PluginPersistence(services);
+        }
         var moduleAssemblies = enabledModules
             .Select(static module => module is RuntimeBoundEdgeProcessModule runtimeBound
                 ? runtimeBound.ImplementationAssembly
@@ -291,6 +296,16 @@ public static class DependencyInjection
             (AppLifecycleManager)sp.GetRequiredService<IAppLifecycleCoordinator>());
 
         return services;
+    }
+
+    private static void RegisterFormalV3PluginPersistence(IServiceCollection services)
+    {
+        services.AddSingleton<IEdgeCacheService, EdgeMemoryCacheService>();
+        services.AddSingleton<DevicePluginConfigurationSnapshotCache>();
+        services.AddSingleton<IDevicePluginConfigurationSnapshotAccessor>(sp =>
+            sp.GetRequiredService<DevicePluginConfigurationSnapshotCache>());
+        services.AddSingleton<IDevicePluginDatabaseStartup, DevicePluginDatabaseStartup>();
+
     }
 
     internal static List<IEdgeProcessModule> BindLegacyProcessTypesFromManifests(

@@ -336,64 +336,6 @@ public sealed class ConfigPermissionGuardBehaviorTests
         Assert.Equal(["PLC-A"], plcManager.ReloadedDeviceNames);
     }
 
-    [Fact]
-    public async Task SaveHardwareConfigHandler_WhenReloadFails_ShouldReturnFailureAfterSaving()
-    {
-        var sender = new CountingSender(request => request switch
-        {
-            GetAllNetworkDevicesQuery => Result.Success(new List<NetworkDeviceEntity>()),
-            GetIoMappingsByDeviceQuery => Result.Success(new IoMappingPagedDto(new List<IoMappingEntity>(), 0)),
-            _ => throw new NotSupportedException(request.GetType().FullName)
-        });
-        var plcManager = new FakePlcConnectionManager();
-        plcManager.ReloadFailures["PLC-B"] = new InvalidOperationException("reload boom");
-
-        var handler = new SaveHardwareConfigHandler(
-            sender,
-            new TestEdgeUnitOfWorkFactory(
-                new EmptyRepository<NetworkDeviceEntity>(),
-                new EmptyRepository<SerialDeviceEntity>(),
-                new EmptyRepository<IoMappingEntity>()),
-            new StubPermissionService { CanEditHardware = true },
-            plcManager,
-            new FakePlcRuntimeApplyService(
-                plcManager,
-                new Dictionary<int, string>
-                {
-                    [1] = "PLC-A",
-                    [2] = "PLC-B"
-                }),
-            new PlcRuntimeConfigurationMutationGate());
-
-        var result = await handler.Handle(
-            new SaveHardwareConfigCommand(
-                [
-                    CreateNetworkDeviceDto(1, "PLC-A"),
-                    CreateNetworkDeviceDto(2, "PLC-B", isEnabled: false),
-                    CreateNetworkDeviceDto(3, "Scanner-A", DeviceType.Scanner)
-                ],
-                [],
-                1,
-                [
-                    CreateIoMappingDto(10, 1, "Test.Signal")
-                ]),
-            TestContext.Current.CancellationToken);
-
-        Assert.False(result.IsSuccess);
-        Assert.Contains("PLC-B", result.Message);
-        Assert.Equal(
-            ["PLC-A", "PLC-B"],
-            plcManager.ReloadedDeviceNames);
-        Assert.Equal(
-            [
-                typeof(GetAllNetworkDevicesQuery),
-                typeof(GetIoMappingsByDeviceQuery),
-                typeof(GetAllNetworkDevicesQuery),
-                typeof(GetIoMappingsByDeviceQuery)
-            ],
-            sender.Requests.Select(x => x.GetType()).ToArray());
-    }
-
     private sealed class EmptyRepository<T> : IRepository<T>
         where T : class, IEntity, IAggregateRoot
     {

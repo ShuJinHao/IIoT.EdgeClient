@@ -216,7 +216,7 @@ Launcher 启动顺序只允许以下一种表达，前一步未成功不得开�
 - 缓存或数据库不可用时返回 `Unavailable` 并跳过本轮上报，不得发送空数组。只有携带新权威清单版本和明确清空意图的零 PLC 快照才能清空 Cloud 投影。
 - `ClientCode + CompletionId + TypeKey` 标识的真实完成事实先写短期防断电交接记录，Cloud/MES 各自直传；失败只进入本 `ClientCode` 的对应通道 retry/fallback/deadletter。两条通道可以复用无业务语义框架，但凭据、会话、门控、状态和回执必须独立。
 - 完整 Cloud `DeviceSession` 及其 bootstrap/Access/Refresh/Activation Token 只留在 Host 出站层；插件和 MES uploader 只能获得不含秘密的设备身份视图。Cloud 的 `DeviceId`、Token、会话和门控不进入 MES，MES 的上位机编码、站号、签名 Token 和业务回执不进入 Cloud。
-- SDK `2.0.13` 的正式 v3 MES 契约固定为 `DevicePluginUploadContext(DevicePluginIdentity)` 和 `IProcessMesUploaderV3`；身份视图只包含 `ClientCode/ModuleId/ProcessType`，`CompletionId/TypeKey` 继续来自完成记录。`IProcessMesUploader/ProcessUploadContext` 只保留 v2 ABI 且标记废弃；正式 v3 插件只实现 legacy 接口时 Host 必须拒绝，不得回退。插件 DI 不得导出完整 `IDeviceService`。
+- 自 SDK `2.0.13` 起，正式 v3 MES 契约固定为 `DevicePluginUploadContext(DevicePluginIdentity)` 和 `IProcessMesUploaderV3`；SDK `2.0.14` 保持该边界并增加私库 lifecycle/configuration v1。身份视图只包含 `ClientCode/ModuleId/ProcessType`，`CompletionId/TypeKey` 继续来自完成记录。`IProcessMesUploader/ProcessUploadContext` 只保留 v2 ABI 且标记废弃；正式 v3 插件只实现 legacy 接口时 Host 必须拒绝，不得回退。插件 DI 不得导出完整 `IDeviceService`。
 - 补传默认 30 分钟，链路恢复立即触发；成功确认后删除对应补传记录，第 20 次失败原子转入本通道死信。
 - 正常成功生产数据不得长期写客户端生产历史表或 Excel；Cloud 是历史查询真值。旧本地历史只读保留，未经另行授权不得自动删除。
 
@@ -227,7 +227,7 @@ Launcher 启动顺序只允许以下一种表达，前一步未成功不得开�
 - 版本上报包含 `ClientCode`、Host 版本/API、插件 `ModuleId`、插件版本、包 hash 和启用状态。上报失败只进入诊断/独立重试，不得阻断 PLC/MES/Cloud 生产链。
 - 过渡期 Edge 可只读解析 Binding v2，但新安装只接受 v3。迁移不得将 ModuleId/Profile/MachineProfile 升格为业务身份。
 - 完成真实 Windows 与当前生产设备迁移验收后，下一独立版本才能删除 v2 写入、ModuleId 绑定、旧明文凭证和旧播种运行路径。
-- 本批源码候选版本分别为 SDK `2.0.13`、Host `2.0.16`、AP `2.0.21`、CP `2.0.21`，Host API 代际仍为 `2.0.0`。AP/CP 数值相同不表示共同版本链；两者必须分别保留发布记录和验收证据。SDK `2.0.12` 只保留旧候选证据，不得被 `2.0.13` 覆盖或倒写为已发布。
+- 本批源码版本分别为 SDK `2.0.14`、Host `2.0.17`、AP `2.0.22`、CP `2.0.22`，Host API 代际仍为 `2.0.0`。AP/CP 数值相同不表示共同版本链；两者必须分别保留发布记录和验收证据。SDK `2.0.12/2.0.13` 与 Host/插件旧版本证据保持不变，不得覆盖或倒写为已发布；兼容状态以三仓 clean-main 精确 SHA 门为准。
 
 ## 12. 验收要求
 

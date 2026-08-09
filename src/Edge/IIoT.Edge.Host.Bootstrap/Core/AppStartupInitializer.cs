@@ -1,11 +1,9 @@
 using IIoT.Edge.Module.Contracts.Config;
 using IIoT.Edge.Module.Contracts.Logging;
-using IIoT.Edge.Application.Features.Config.CloudApi;
-using IIoT.Edge.Application.Features.Config.SchemaReconciliation;
 using IIoT.Edge.Application.Common.DataPipeline;
 using IIoT.Edge.Module.Contracts.Diagnostics;
 using IIoT.Edge.Infrastructure.Persistence.Dapper;
-using IIoT.Edge.Infrastructure.Persistence.EfCore;
+using IIoT.Edge.Application.Common.Identity;
 
 namespace IIoT.Edge.Shell.Core;
 
@@ -18,41 +16,43 @@ public interface IAppStartupInitializer
 public sealed class AppStartupInitializer : IAppStartupInitializer
 {
     private readonly IServiceProvider _serviceProvider;
-    private readonly IModuleSeedInitializer _moduleSeedInitializer;
-    private readonly ICloudSystemSwitchMigration _cloudSystemSwitchMigration;
-    private readonly IConfigSchemaReconciler _configSchemaReconciler;
     private readonly ILogService _logger;
+    private readonly IDevicePluginDatabaseStartup? _pluginDatabaseStartup;
+    private readonly IDevicePluginRuntimeContext? _runtimeContext;
 
     public AppStartupInitializer(
         IServiceProvider serviceProvider,
-        IModuleSeedInitializer moduleSeedInitializer,
-        ICloudSystemSwitchMigration cloudSystemSwitchMigration,
-        IConfigSchemaReconciler configSchemaReconciler,
-        ILogService logger)
+        ILogService logger,
+        IDevicePluginDatabaseStartup? pluginDatabaseStartup = null,
+        IDevicePluginRuntimeContext? runtimeContext = null)
     {
         _serviceProvider = serviceProvider;
-        _moduleSeedInitializer = moduleSeedInitializer;
-        _cloudSystemSwitchMigration = cloudSystemSwitchMigration;
-        _configSchemaReconciler = configSchemaReconciler;
         _logger = logger;
+        _pluginDatabaseStartup = pluginDatabaseStartup;
+        _runtimeContext = runtimeContext;
     }
 
     public async Task<IReadOnlyList<StartupDiagnosticIssue>> InitializeAsync(
         CancellationToken cancellationToken = default)
     {
         var issues = new List<StartupDiagnosticIssue>();
-        try
+        var isFormalV3 = _runtimeContext?.Current.IsV3 == true;
+        if (!isFormalV3)
         {
-            _serviceProvider.ApplyMigrations();
-            _logger.Info("[生命周期] EF Core 迁移完成。");
+            throw new DevicePluginDatabaseStartupException(
+                "PLUGIN_DATABASE_V3_REQUIRED");
         }
-        catch (Exception ex)
+
+        if (_pluginDatabaseStartup is null)
         {
-            const string message =
-                "EF Core 迁移或 SQLite 运行 pragma 初始化失败；已阻断插件播种和运行时启动，下次启动将安全重试。";
-            _logger.Error($"[生命周期] {message}");
-            throw new InvalidOperationException(message, ex);
+            throw new DevicePluginDatabaseStartupException(
+                "PLUGIN_DATABASE_STARTUP_PORT_MISSING");
         }
+
+        await _pluginDatabaseStartup
+            .InitializeAsync(cancellationToken)
+            .ConfigureAwait(false);
+        _logger.Info("[生命周期] 插件私有数据库迁移、接管和首次初始化完成。");
 
         var dapperFailures = await _serviceProvider
             .InitializeDapperTablesAsync(cancellationToken)
@@ -72,21 +72,7 @@ public sealed class AppStartupInitializer : IAppStartupInitializer
 
         await MigrateDataPipelineIdentityAsync(issues, cancellationToken).ConfigureAwait(false);
 
-        issues.AddRange(await _moduleSeedInitializer
-            .ApplyConfigurationAsync(cancellationToken)
-            .ConfigureAwait(false));
-
-        if (await TryMigrateCloudSystemSwitchAsync(cancellationToken).ConfigureAwait(false))
-        {
-            await RunNonBlockingInitializerStepAsync(
-                "配置枚举对账",
-                () => _configSchemaReconciler.ReconcileAsync(cancellationToken),
-                cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            _logger.Warn("[生命周期] Cloud 系统开关迁移未完成，本次跳过配置枚举对账，保留旧键供下次安全重试。");
-        }
+        _logger.Info("[生命周期] 正式 v3 已由插件私库拥有稳定配置，Host 不执行插件 migration、seed 或补写。");
 
         return issues;
     }
@@ -131,48 +117,4 @@ public sealed class AppStartupInitializer : IAppStartupInitializer
         }
     }
 
-    private async Task RunNonBlockingInitializerStepAsync(
-        string stepName,
-        Func<Task> action,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            await action().ConfigureAwait(false);
-            _logger.Info($"[生命周期] {stepName}完成。");
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.Warn($"[生命周期] {stepName}失败，已按非阻断处理：{ex.Message}");
-        }
-    }
-
-    private async Task<bool> TryMigrateCloudSystemSwitchAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            var migrated = await _cloudSystemSwitchMigration
-                .MigrateAsync(cancellationToken)
-                .ConfigureAwait(false);
-            if (migrated)
-            {
-                _logger.Info("[生命周期] Cloud 系统开关迁移完成。");
-            }
-
-            return migrated;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.Warn($"[生命周期] Cloud 系统开关迁移失败，已按非阻断处理：{ex.Message}");
-            return false;
-        }
-    }
 }

@@ -44,9 +44,7 @@ public static class CloudApiConfigParamSchema
     public static bool IsParamViewEditableKey(string key)
     {
         var normalizedKey = key?.Trim();
-        return IsCloudApiConfigKey(normalizedKey ?? string.Empty)
-               && !string.Equals(normalizedKey, ClientCode, StringComparison.OrdinalIgnoreCase)
-               && !string.Equals(normalizedKey, BootstrapSecret, StringComparison.OrdinalIgnoreCase);
+        return string.Equals(normalizedKey, Enabled, StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool IsCloudApiConfigPrefix(string key)

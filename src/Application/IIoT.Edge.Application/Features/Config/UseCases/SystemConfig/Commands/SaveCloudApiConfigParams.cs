@@ -1,10 +1,6 @@
-using IIoT.Edge.Module.Contracts.Cache;
 using IIoT.Edge.Module.Contracts.Config;
-using IIoT.Edge.Application.Common.Config;
 using IIoT.Edge.Application.Features.Config.CloudApi;
-using IIoT.Edge.Domain.Config.Aggregates;
 using IIoT.Edge.SharedKernel.Messaging;
-using IIoT.Edge.SharedKernel.Repository;
 using IIoT.Edge.SharedKernel.Result;
 
 namespace IIoT.Edge.Application.Features.Config.UseCases.SystemConfig.Commands;
@@ -18,8 +14,6 @@ public sealed record SaveCloudApiConfigParamsCommand(
     List<CloudApiConfigParamDto> Params) : ICommand<Result>;
 
 public sealed class SaveCloudApiConfigParamsHandler(
-    IEdgeUnitOfWorkFactory unitOfWorkFactory,
-    IEdgeCacheService cache,
     ILocalParameterConfigChangePublisher changePublisher,
     ILocalSystemRuntimeConfigService runtimeConfig,
     ICloudProfileSwitchProjectionWriter projectionWriter)
@@ -29,62 +23,57 @@ public sealed class SaveCloudApiConfigParamsHandler(
         SaveCloudApiConfigParamsCommand request,
         CancellationToken cancellationToken)
     {
-        bool? requestedCloudEnabled = null;
-        var enabledParam = request.Params.FirstOrDefault(static parameter =>
-            string.Equals(parameter.Key, CloudApiConfigParamSchema.Enabled, StringComparison.OrdinalIgnoreCase));
-        if (enabledParam is not null)
+        var parameters = request.Params ?? [];
+        if (parameters.Count == 0)
         {
-            if (!bool.TryParse(enabledParam.Value?.Trim(), out var parsedEnabled))
-            {
-                return Result.Failure("Cloud 系统开关必须为 true 或 false。");
-            }
-
-            requestedCloudEnabled = parsedEnabled;
+            return Result.Success();
         }
 
-        var configsResult = SystemConfigParamSaveHelper.BuildDistinctConfigs(
-            request.Params,
-            static dto => dto.Key,
-            static (dto, key, _) =>
-            {
-                var descriptor = CloudApiConfigParamSchema.Find(key)
-                                 ?? throw new ArgumentException("云端配置键不在 CloudApi 白名单内。");
-                var entity = SystemConfigEntity.Create(
-                    descriptor.Key,
-                    dto.Value,
-                    dto.Description);
-                entity.UpdateSortOrder(descriptor.SortOrder);
-                return entity;
-            });
-        if (!configsResult.IsSuccess)
+        if (parameters.Count != 1
+            || !string.Equals(
+                parameters[0].Key?.Trim(),
+                CloudApiConfigParamSchema.Enabled,
+                StringComparison.OrdinalIgnoreCase)
+            || !bool.TryParse(parameters[0].Value?.Trim(), out var requestedCloudEnabled))
         {
-            return Result.Failure(configsResult.ErrorMessage ?? "云端配置保存失败。");
+            return Result.Failure("BINDING_CLOUD_CONFIGURATION_READ_ONLY");
         }
 
-        if (requestedCloudEnabled == false
-            && !await TryWriteProjectionAsync(false, cancellationToken).ConfigureAwait(false))
+        if (!await TryWriteProjectionAsync(requestedCloudEnabled, cancellationToken).ConfigureAwait(false))
         {
             return Result.Failure("Cloud 系统开关投影写入失败，已保持原配置。");
         }
 
-        await using (var unitOfWork = await unitOfWorkFactory
-                         .BeginAsync(cancellationToken)
-                         .ConfigureAwait(false))
+        try
         {
-            await SystemConfigParamSaveHelper.ReplaceByKeysAsync(
-                unitOfWork.Repository<SystemConfigEntity>(),
-                configsResult.Value ?? [],
-                cancellationToken).ConfigureAwait(false);
-            await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await runtimeConfig.RefreshAsync(cancellationToken).ConfigureAwait(false);
         }
-
-        cache.Remove(ParameterCacheKeys.SystemAll);
-        await runtimeConfig.RefreshAsync(cancellationToken).ConfigureAwait(false);
-        if (requestedCloudEnabled == true
-            && !await TryWriteProjectionAsync(true, cancellationToken).ConfigureAwait(false))
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            await RollBackCloudEnableAsync(cancellationToken).ConfigureAwait(false);
-            return Result.Failure("Cloud 系统开关投影写入失败，已回滚为关闭。");
+            throw;
+        }
+        catch
+        {
+            if (requestedCloudEnabled)
+            {
+                _ = await TryWriteProjectionAsync(false, cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    await runtimeConfig.RefreshAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch
+                {
+                    // 投影已经按失败关闭写成 false；运行快照不会被提升为启用。
+                }
+
+                return Result.Failure("Cloud 系统开关刷新失败，已回滚为关闭。");
+            }
+
+            return Result.Failure("Cloud 系统开关已关闭，但运行快照刷新失败。");
         }
 
         changePublisher.NotifyModuleChanged();
@@ -110,26 +99,4 @@ public sealed class SaveCloudApiConfigParamsHandler(
         }
     }
 
-    private async Task RollBackCloudEnableAsync(CancellationToken cancellationToken)
-    {
-        var descriptor = CloudApiConfigParamSchema.Find(CloudApiConfigParamSchema.Enabled)
-                         ?? throw new InvalidOperationException("Cloud 系统开关描述缺失。");
-        var disabled = SystemConfigEntity.Create(
-            descriptor.Key,
-            "false",
-            "Cloud 系统开关投影写入失败，已自动回滚。");
-        disabled.UpdateSortOrder(descriptor.SortOrder);
-        await using (var unitOfWork = await unitOfWorkFactory
-                         .BeginAsync(cancellationToken)
-                         .ConfigureAwait(false))
-        {
-            await SystemConfigParamSaveHelper.ReplaceByKeysAsync(
-                unitOfWork.Repository<SystemConfigEntity>(),
-                [disabled],
-                cancellationToken).ConfigureAwait(false);
-            await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
-        }
-        cache.Remove(ParameterCacheKeys.SystemAll);
-        await runtimeConfig.RefreshAsync(cancellationToken).ConfigureAwait(false);
-    }
 }

@@ -1,6 +1,6 @@
-﻿using IIoT.Edge.SharedKernel.Messaging;
+using IIoT.Edge.Application.Common.Plugins;
+using IIoT.Edge.SharedKernel.Messaging;
 using IIoT.Edge.SharedKernel.Result;
-using IIoT.Edge.Domain.Hardware.Aggregates;
 
 namespace IIoT.Edge.Application.Features.Hardware.Queries;
 
@@ -8,7 +8,7 @@ namespace IIoT.Edge.Application.Features.Hardware.Queries;
 /// IO 映射分页结果。
 /// </summary>
 public record IoMappingPagedDto(
-    List<IoMappingEntity> Items,
+    List<DevicePluginIoPointSnapshot> Items,
     int TotalCount
 );
 

@@ -1,8 +1,7 @@
 using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Contracts.Logging;
 using IIoT.Edge.Module.Contracts.Plc;
-using IIoT.Edge.Domain.Hardware.Aggregates;
-using IIoT.Edge.SharedKernel.Repository;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Application.Common.Plc;
 using IIoT.Edge.Infrastructure.DeviceComm.Signals;
 
@@ -10,7 +9,7 @@ namespace IIoT.Edge.Infrastructure.DeviceComm.Plc;
 
 public sealed class PlcLifecycleCoordinator
 {
-    private readonly IReadRepository<NetworkDeviceEntity> _networkDevices;
+    private readonly IDevicePluginConfigurationSnapshotAccessor _snapshots;
     private readonly ILogService _logger;
     private readonly PlcRuntimeRegistry _runtimeRegistry;
     private readonly PlcDeviceRuntimeBuilder _runtimeBuilder;
@@ -22,14 +21,14 @@ public sealed class PlcLifecycleCoordinator
     private Task? _disposeTask;
 
     public PlcLifecycleCoordinator(
-        IReadRepository<NetworkDeviceEntity> networkDevices,
+        IDevicePluginConfigurationSnapshotAccessor snapshots,
         ILogService logger,
         PlcRuntimeRegistry runtimeRegistry,
         PlcDeviceRuntimeBuilder runtimeBuilder,
         PlcConnectionStatusStore statusStore,
         IPlcTaskRuntimeStatusWriter? taskStatusWriter = null)
     {
-        _networkDevices = networkDevices;
+        _snapshots = snapshots;
         _logger = logger;
         _runtimeRegistry = runtimeRegistry;
         _runtimeBuilder = runtimeBuilder;
@@ -44,9 +43,10 @@ public sealed class PlcLifecycleCoordinator
         {
             ThrowIfDisposed();
 
-            var devices = await _networkDevices.GetListAsync(
-                x => x.IsEnabled && x.DeviceType == DeviceType.PLC,
-                ct).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+            var devices = _snapshots.GetPlcs()
+                .Where(static item => item.IsEnabled)
+                .ToArray();
 
             var duplicateEndpointFaults = DiagnoseDuplicateEnabledTcpEndpoints(devices);
             ApplyDuplicateEndpointFaults(devices, duplicateEndpointFaults);
@@ -76,18 +76,18 @@ public sealed class PlcLifecycleCoordinator
         {
             ThrowIfDisposed();
 
-            var device = await _networkDevices
-                .GetByIdAsync(networkDeviceId, ct)
-                .ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+            var device = _snapshots.GetPlcs()
+                .SingleOrDefault(item => item.Id == networkDeviceId);
             if (device is null)
             {
                 _logger.Warn($"[{ResolveLogIdentity(networkDeviceId)}] 重载跳过：未找到设备。");
                 return;
             }
 
-            var enabledDevices = await _networkDevices.GetListAsync(
-                x => x.IsEnabled && x.DeviceType == DeviceType.PLC,
-                ct).ConfigureAwait(false);
+            var enabledDevices = _snapshots.GetPlcs()
+                .Where(static item => item.IsEnabled)
+                .ToArray();
             var duplicateEndpointFaults = DiagnoseDuplicateEnabledTcpEndpoints(enabledDevices);
             foreach (var duplicateDeviceId in duplicateEndpointFaults.Keys)
             {
@@ -230,7 +230,7 @@ public sealed class PlcLifecycleCoordinator
         }
     }
 
-    private async Task InitializeDeviceSafelyAsync(NetworkDeviceEntity device, CancellationToken ct)
+    private async Task InitializeDeviceSafelyAsync(DevicePluginPlcSnapshot device, CancellationToken ct)
     {
         try
         {
@@ -290,7 +290,7 @@ public sealed class PlcLifecycleCoordinator
         }
     }
 
-    private async Task InitializeDeviceAsync(NetworkDeviceEntity device, CancellationToken ct)
+    private async Task InitializeDeviceAsync(DevicePluginPlcSnapshot device, CancellationToken ct)
     {
         ThrowIfDisposed();
         using var mutation = await _runtimeRegistry
@@ -368,7 +368,7 @@ public sealed class PlcLifecycleCoordinator
         }
     }
 
-    private Dictionary<int, string> DiagnoseDuplicateEnabledTcpEndpoints(IReadOnlyCollection<NetworkDeviceEntity> devices)
+    private Dictionary<int, string> DiagnoseDuplicateEnabledTcpEndpoints(IReadOnlyCollection<DevicePluginPlcSnapshot> devices)
     {
         var faults = new Dictionary<int, string>();
         foreach (var group in devices
@@ -391,7 +391,7 @@ public sealed class PlcLifecycleCoordinator
     }
 
     private void ApplyDuplicateEndpointFaults(
-        IReadOnlyCollection<NetworkDeviceEntity> devices,
+        IReadOnlyCollection<DevicePluginPlcSnapshot> devices,
         IReadOnlyDictionary<int, string> faults)
     {
         if (faults.Count == 0)
@@ -436,16 +436,17 @@ public sealed class PlcLifecycleCoordinator
         return true;
     }
 
-    private async Task FinalizeStoppedDeviceStateAsync(
+    private Task FinalizeStoppedDeviceStateAsync(
         int deviceId,
         CancellationToken ct)
     {
-        var device = (await _networkDevices.GetListAsync(x => x.Id == deviceId, ct).ConfigureAwait(false)).FirstOrDefault();
+        ct.ThrowIfCancellationRequested();
+        var device = _snapshots.GetPlcs().SingleOrDefault(item => item.Id == deviceId);
         if (device is not null)
         {
             _statusStore.MarkDisconnected(device.Id, device.PlcCode, device.DeviceName);
             _taskStatusWriter?.RemoveAll(device.PlcCode);
-            return;
+            return Task.CompletedTask;
         }
 
         var deletedPlan = _runtimeRegistry.RemoveTaskPlan(deviceId);
@@ -453,6 +454,8 @@ public sealed class PlcLifecycleCoordinator
         {
             _taskStatusWriter?.RemoveAll(deletedPlan.PlcCode);
         }
+
+        return Task.CompletedTask;
     }
 
     private async Task<bool> CleanupRegisteredRuntimeAsync(PlcDeviceRuntimeHandle runtime)
@@ -621,7 +624,7 @@ public sealed class PlcLifecycleCoordinator
     }
 
     private void SetTaskPlanState(
-        NetworkDeviceEntity device,
+        DevicePluginPlcSnapshot device,
         PlcTaskRuntimeState state,
         string? errorCode = null,
         string? exceptionType = null)

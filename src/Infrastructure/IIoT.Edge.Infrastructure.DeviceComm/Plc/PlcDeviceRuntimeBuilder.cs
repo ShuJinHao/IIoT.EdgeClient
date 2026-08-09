@@ -7,12 +7,11 @@ using IIoT.Edge.Module.Contracts.Plc.Store;
 using IIoT.Edge.Application.Modules.Hardware;
 using IIoT.Edge.Module.Contracts.Hardware;
 using IIoT.Edge.Module.Sdk.Hardware;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Infrastructure.DeviceComm.Signals;
 using IIoT.Edge.Infrastructure.DeviceComm.Plc.Store;
 using IIoT.Edge.Module.Contracts.Runtime;
 using IIoT.Edge.Module.Contracts.Identity;
-using IIoT.Edge.SharedKernel.Repository;
 using System.Globalization;
 using IIoT.Edge.Application.Common.Plc;
 
@@ -20,7 +19,7 @@ namespace IIoT.Edge.Infrastructure.DeviceComm.Plc;
 
 public sealed class PlcDeviceRuntimeBuilder
 {
-    private readonly IReadRepository<IoMappingEntity> _ioMappings;
+    private readonly IDevicePluginConfigurationSnapshotAccessor _snapshots;
     private readonly IPlcDataStore _dataStore;
     private readonly IPlcServiceFactory _plcServiceFactory;
     private readonly IPlcProductionContextStore _contextStore;
@@ -33,7 +32,7 @@ public sealed class PlcDeviceRuntimeBuilder
     private readonly IPlcTaskRuntimeStatusWriter? _taskStatusWriter;
 
     public PlcDeviceRuntimeBuilder(
-        IReadRepository<IoMappingEntity> ioMappings,
+        IDevicePluginConfigurationSnapshotAccessor snapshots,
         IPlcDataStore dataStore,
         IPlcServiceFactory plcServiceFactory,
         IPlcProductionContextStore contextStore,
@@ -45,7 +44,7 @@ public sealed class PlcDeviceRuntimeBuilder
         IModuleParamRoleProvider? moduleParamRoleProvider = null,
         IPlcTaskRuntimeStatusWriter? taskStatusWriter = null)
     {
-        _ioMappings = ioMappings;
+        _snapshots = snapshots;
         _dataStore = dataStore;
         _plcServiceFactory = plcServiceFactory;
         _contextStore = contextStore;
@@ -59,7 +58,7 @@ public sealed class PlcDeviceRuntimeBuilder
     }
 
     public async Task<PlcDeviceRuntimeHandle> BuildAsync(
-        NetworkDeviceEntity device,
+        DevicePluginPlcSnapshot device,
         PlcRuntimeTaskPlan taskPlan,
         CancellationToken ct)
     {
@@ -72,7 +71,10 @@ public sealed class PlcDeviceRuntimeBuilder
                 + $"与待构建 PLC“{device.PlcCode}”(NetworkDeviceId={device.Id}, DeviceName={device.DeviceName}) 不一致。");
         }
 
-        var mappings = await _ioMappings.GetListAsync(x => x.NetworkDeviceId == device.Id, ct).ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested();
+        var mappings = _snapshots.GetIoPoints()
+            .Where(item => item.NetworkDeviceId == device.Id)
+            .ToArray();
         var mappingArray = mappings
             .Where(static x => !string.IsNullOrWhiteSpace(x.PlcAddress))
             .OrderBy(x => x.SortOrder)
@@ -251,7 +253,7 @@ public sealed class PlcDeviceRuntimeBuilder
     }
 
     private static IReadOnlyCollection<PlcBufferSignalBinding> BuildSignalBindings(
-        IReadOnlyCollection<IoMappingEntity> mappings)
+        IReadOnlyCollection<DevicePluginIoPointSnapshot> mappings)
     {
         var bindings = new List<PlcBufferSignalBinding>(mappings.Count);
         var readOffset = 0;
@@ -280,7 +282,7 @@ public sealed class PlcDeviceRuntimeBuilder
         return bindings;
     }
 
-    private bool IsValidRuntimeMapping(string plcCode, IoMappingEntity mapping)
+    private bool IsValidRuntimeMapping(string plcCode, DevicePluginIoPointSnapshot mapping)
     {
         var validation = PlcIoTypeWordLengthValidator.Validate(
             mapping.DataType,

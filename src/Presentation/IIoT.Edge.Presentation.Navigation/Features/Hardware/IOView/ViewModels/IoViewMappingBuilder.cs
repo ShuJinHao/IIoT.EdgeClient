@@ -1,17 +1,17 @@
 using IIoT.Edge.Application.Features.Hardware.IoMappings;
 using IIoT.Edge.Module.Sdk.Hardware;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 
 namespace IIoT.Edge.Presentation.Navigation.Features.Hardware.IOView;
 
 public interface IIoViewMappingBuilder
 {
-    IoViewMappingBuildResult Build(IEnumerable<IoMappingEntity> mappings);
+    IoViewMappingBuildResult Build(IEnumerable<DevicePluginIoPointSnapshot> mappings);
 }
 
 internal sealed class IoViewMappingBuilder : IIoViewMappingBuilder
 {
-    public IoViewMappingBuildResult Build(IEnumerable<IoMappingEntity> mappings)
+    public IoViewMappingBuildResult Build(IEnumerable<DevicePluginIoPointSnapshot> mappings)
     {
         var readIndex = 0;
         var writeIndex = 0;
@@ -88,7 +88,7 @@ internal sealed class IoViewMappingBuilder : IIoViewMappingBuilder
 
     private static IoInteractionRowModel GetOrCreateInteractionRow(
         IDictionary<string, IoInteractionRowModel> rows,
-        IoMappingEntity mapping)
+        DevicePluginIoPointSnapshot mapping)
     {
         var businessGroup = ResolveBusinessGroup(mapping, IoMappingDisplay.InteractionCategory);
         if (rows.TryGetValue(businessGroup, out var row))
@@ -107,7 +107,7 @@ internal sealed class IoViewMappingBuilder : IIoViewMappingBuilder
 
     private static IoDataSectionModel GetOrCreateDataSection(
         IDictionary<string, IoDataSectionModel> sections,
-        IoMappingEntity mapping,
+        DevicePluginIoPointSnapshot mapping,
         string category)
     {
         var businessGroup = ResolveBusinessGroup(mapping, category);
@@ -127,7 +127,7 @@ internal sealed class IoViewMappingBuilder : IIoViewMappingBuilder
         return section;
     }
 
-    private static IoSignalModel CreateSignal(IoMappingEntity mapping, int startIndex)
+    private static IoSignalModel CreateSignal(DevicePluginIoPointSnapshot mapping, int startIndex)
     {
         return new IoSignalModel
         {
@@ -142,7 +142,7 @@ internal sealed class IoViewMappingBuilder : IIoViewMappingBuilder
         };
     }
 
-    private static string ResolveCategory(IoMappingEntity mapping)
+    private static string ResolveCategory(DevicePluginIoPointSnapshot mapping)
     {
         var category = IoMappingDisplay.ResolveCategory(mapping.Category, mapping.AddressCount);
         if (IoMappingOptionCatalog.IsKnownCategory(category))
@@ -162,7 +162,7 @@ internal sealed class IoViewMappingBuilder : IIoViewMappingBuilder
             : IoMappingDisplay.SingleReadCategory;
     }
 
-    private static string ResolveBusinessGroup(IoMappingEntity mapping, string category)
+    private static string ResolveBusinessGroup(DevicePluginIoPointSnapshot mapping, string category)
         => IoMappingDisplay.ResolveBusinessGroup(mapping.BusinessGroup, category);
 
     private static IDictionary<string, IoDataSectionModel> ResolveSectionBucket(

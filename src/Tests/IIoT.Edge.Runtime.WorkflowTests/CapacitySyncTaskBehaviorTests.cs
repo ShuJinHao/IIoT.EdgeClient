@@ -6,11 +6,10 @@ using IIoT.Edge.Module.Contracts.Identity;
 using IIoT.Edge.Module.Contracts.Context;
 using IIoT.Edge.Module.Contracts.Runtime;
 using IIoT.Edge.Application.Common.Identity;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Domain.Hardware.Aggregates;
 using IIoT.Edge.Module.Contracts.Hardware;
-using IIoT.Edge.SharedKernel.Repository;
-using IIoT.Edge.SharedKernel.Specification;
-using System.Linq.Expressions;
+using IIoT.Edge.Module.Contracts.Plugins;
 using System.Text.Json;
 using DeviceSession = IIoT.Edge.Module.Contracts.Device.DeviceSession;
 using NetworkState = IIoT.Edge.Module.Contracts.Device.NetworkState;
@@ -399,7 +398,7 @@ public sealed class CapacitySyncTaskBehaviorTests
             new FakeLogService(),
             new FakeProductionContextStore(),
             new InMemoryPlcIdentityAliasRegistry(),
-            new FakeNetworkDeviceReadRepository([configuredPlc]));
+            new FakePluginConfiguration([configuredPlc]));
 
         var result = await task.RetryBufferAsync();
 
@@ -450,7 +449,7 @@ public sealed class CapacitySyncTaskBehaviorTests
             logger,
             new FakeProductionContextStore(),
             aliases,
-            new FakeNetworkDeviceReadRepository([configuredPlc]));
+            new FakePluginConfiguration([configuredPlc]));
 
         var result = await task.RetryBufferAsync();
 
@@ -706,7 +705,7 @@ public sealed class CapacitySyncTaskBehaviorTests
             new FakeLogService(),
             new FakeProductionContextStore(),
             new InMemoryPlcIdentityAliasRegistry(),
-            new FakeNetworkDeviceReadRepository(
+            new FakePluginConfiguration(
                 [],
                 new IOException("configured PLC read failed")));
 
@@ -788,7 +787,7 @@ public sealed class CapacitySyncTaskBehaviorTests
         FakeLogService logger,
         FakeProductionContextStore? contextStore = null,
         IPlcIdentityAliasRegistry? identityAliasRegistry = null,
-        IReadRepository<NetworkDeviceEntity>? networkDevices = null,
+        IDevicePluginConfigurationSnapshotAccessor? pluginConfiguration = null,
         IEnumerable<IProductionContextFactory>? contextFactories = null)
     {
         var seedContextsFromBuffer = contextStore is null;
@@ -824,7 +823,7 @@ public sealed class CapacitySyncTaskBehaviorTests
             },
             new FakeCloudDiagnosticsStore(),
             identityAliasRegistry,
-            networkDevices,
+            pluginConfiguration,
             contextFactories ?? [new TestProductionContextFactory("ap")]);
     }
 
@@ -860,59 +859,54 @@ public sealed class CapacitySyncTaskBehaviorTests
             => new() { DeviceName = deviceName };
     }
 
-    private sealed class FakeNetworkDeviceReadRepository(
+    private sealed class FakePluginConfiguration(
         IReadOnlyCollection<NetworkDeviceEntity> devices,
         Exception? listFailure = null)
-        : IReadRepository<NetworkDeviceEntity>
+        : IDevicePluginConfigurationSnapshotAccessor
     {
-        public Task<List<NetworkDeviceEntity>> GetListAsync(
-            Expression<Func<NetworkDeviceEntity, bool>> expression,
-            CancellationToken cancellationToken = default)
-            => listFailure is null
-                ? Task.FromResult(devices.Where(expression.Compile()).ToList())
-                : Task.FromException<List<NetworkDeviceEntity>>(listFailure);
+        public bool IsInitialized => true;
 
-        public Task<NetworkDeviceEntity?> GetByIdAsync<TKey>(
-            TKey id,
-            CancellationToken cancellationToken = default)
-            where TKey : notnull
-            => throw new NotSupportedException();
+        public DevicePluginConfigurationSnapshot GetRequiredSnapshot()
+            => new(
+                new DevicePluginIdentity("CLIENT-TEST", "AP", "AP"),
+                1,
+                GetPlcs().Select(static item => item.Configuration).ToArray(),
+                [],
+                [],
+                [],
+                DateTimeOffset.UtcNow);
 
-        public Task<NetworkDeviceEntity?> GetAsync(
-            Expression<Func<NetworkDeviceEntity, bool>> expression,
-            Expression<Func<NetworkDeviceEntity, object>>[]? includes = null,
-            CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
+        public IReadOnlyList<DevicePluginPlcSnapshot> GetPlcs()
+        {
+            if (listFailure is not null)
+            {
+                throw listFailure;
+            }
 
-        public Task<List<NetworkDeviceEntity>> GetListAsync(
-            Expression<Func<NetworkDeviceEntity, bool>> expression,
-            Expression<Func<NetworkDeviceEntity, object>>[]? includes = null,
-            CancellationToken cancellationToken = default)
-            => GetListAsync(expression, cancellationToken);
+            return devices.Select(device => new DevicePluginPlcSnapshot(
+                device.Id,
+                new DevicePluginPlcConfiguration(
+                    device.PlcCode,
+                    device.DeviceName,
+                    device.DeviceType.ToString(),
+                    device.DeviceModel,
+                    device.ProtocolFrame,
+                    device.IpAddress,
+                    device.Port1,
+                    device.Port2,
+                    device.ConnectTimeout,
+                    device.IsEnabled,
+                    device.Remark))).ToArray();
+        }
 
-        public Task<List<NetworkDeviceEntity>> GetListAsync(
-            ISpecification<NetworkDeviceEntity>? specification = null,
-            CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
+        public IReadOnlyList<DevicePluginIoPointSnapshot> GetIoPoints() => [];
 
-        public Task<NetworkDeviceEntity?> GetSingleOrDefaultAsync(
-            ISpecification<NetworkDeviceEntity>? specification = null,
-            CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
+        public IReadOnlyList<DevicePluginTaskBindingSnapshot> GetTaskBindings() => [];
 
-        public Task<int> GetCountAsync(
-            Expression<Func<NetworkDeviceEntity, bool>> expression,
-            CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<int> CountAsync(
-            ISpecification<NetworkDeviceEntity>? specification = null,
-            CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<bool> AnyAsync(
-            ISpecification<NetworkDeviceEntity>? specification = null,
-            CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
+        public Task RefreshAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.CompletedTask;
+        }
     }
 }

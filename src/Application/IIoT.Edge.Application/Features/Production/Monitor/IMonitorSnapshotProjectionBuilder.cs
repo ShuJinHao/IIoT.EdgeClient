@@ -1,7 +1,7 @@
 using IIoT.Edge.Module.Contracts.Modules;
 using IIoT.Edge.Module.Contracts.Plc;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Module.Contracts.Runtime;
 
 namespace IIoT.Edge.Application.Features.Production.Monitor;
@@ -14,18 +14,18 @@ public interface IMonitorSnapshotProjectionBuilder
     DeviceMonitorSnapshot BuildContextSnapshot(
         ProductionContext context,
         PlcConnectionRuntimeSnapshot? runtimeStatus,
-        NetworkDeviceEntity? configuredDevice,
+        DevicePluginPlcSnapshot? configuredDevice,
         EdgeSyncDiagnosticsSnapshot diagnostics,
         IReadOnlyDictionary<int, PlcTaskBindingDeviceDto> taskBindingsByDevice);
 
     DeviceMonitorSnapshot BuildRuntimeOnlySnapshot(
         PlcConnectionRuntimeSnapshot runtimeStatus,
-        NetworkDeviceEntity? configuredDevice,
+        DevicePluginPlcSnapshot? configuredDevice,
         EdgeSyncDiagnosticsSnapshot diagnostics,
         IReadOnlyDictionary<int, PlcTaskBindingDeviceDto> taskBindingsByDevice);
 
     DeviceMonitorSnapshot BuildConfiguredDeviceSnapshot(
-        NetworkDeviceEntity device,
+        DevicePluginPlcSnapshot device,
         EdgeSyncDiagnosticsSnapshot diagnostics,
         IReadOnlyDictionary<int, PlcTaskBindingDeviceDto> taskBindingsByDevice);
 }

@@ -157,7 +157,11 @@ public partial class App : global::Avalonia.Application
             var startupResult = await lifecycle.StartAsync(_appCts.Token).ConfigureAwait(true);
             if (!startupResult.Success)
             {
-                const string message = "应用启动失败，详细信息已写入诊断日志。";
+                var reasonCode = startupResult.Message?.Trim();
+                var message = !string.IsNullOrWhiteSpace(reasonCode)
+                              && reasonCode.StartsWith("PLUGIN_", StringComparison.Ordinal)
+                    ? $"设备插件初始化失败：{reasonCode}"
+                    : "应用启动失败，详细信息已写入诊断日志。";
                 ShowStartupError(desktop, message);
                 _ = TrySignalLaunchFailure(
                     machineProfile,

@@ -12,12 +12,13 @@ using IIoT.Edge.Module.Contracts.Runtime;
 using IIoT.Edge.Application.Features.Hardware.PlcTaskBindings;
 using IIoT.Edge.Application.Features.Production.Equipment;
 using IIoT.Edge.Application.Features.Production.Monitor;
-using IIoT.Edge.Domain.Hardware.Aggregates;
+using IIoT.Edge.Application.Common.Plugins;
 using IIoT.Edge.Presentation.Navigation.Features.Dashboard;
 using IIoT.Edge.Presentation.Navigation.Features.Shell;
 using IIoT.Edge.Presentation.Panels.Features.DeviceSelection;
 using IIoT.Edge.Presentation.Panels.Features.SysLog;
 using IIoT.Edge.Module.Contracts.Hardware;
+using IIoT.Edge.Module.Contracts.Plugins;
 using IIoT.Edge.UI.Shared.Avalonia.Controls;
 using Xunit;
 
@@ -369,24 +370,28 @@ public sealed class DashboardPreviewRuntimeViewModelTests
     private static void ApplyDiagnostics(
         DashboardPreviewRuntimeViewModel viewModel,
         IReadOnlyCollection<PlcConnectionRuntimeSnapshot> snapshots,
-        IReadOnlyCollection<NetworkDeviceEntity>? configuredPlcs = null)
+        IReadOnlyCollection<DevicePluginPlcSnapshot>? configuredPlcs = null)
     {
         typeof(DashboardPreviewRuntimeViewModel)
             .GetMethod("ApplyDiagnostics", BindingFlags.Instance | BindingFlags.NonPublic)!
             .Invoke(viewModel, [CreateDiagnostics(), snapshots, configuredPlcs ?? []]);
     }
 
-    private static NetworkDeviceEntity CreateConfiguredPlc(int id, string deviceName)
-    {
-        var entity = NetworkDeviceEntity.Create(deviceName, DeviceType.PLC, "127.0.0.1", 6000 + id);
-        entity.UpdateDeviceModel("Mc");
-        entity.UpdateProtocolFrame("E4");
-        typeof(NetworkDeviceEntity)
-            .BaseType!
-            .GetProperty("Id")!
-            .SetValue(entity, id);
-        return entity;
-    }
+    private static DevicePluginPlcSnapshot CreateConfiguredPlc(int id, string deviceName)
+        => new(
+            id,
+            new DevicePluginPlcConfiguration(
+                deviceName,
+                deviceName,
+                "PLC",
+                "Mc",
+                "E4",
+                "127.0.0.1",
+                6000 + id,
+                null,
+                3000,
+                true,
+                null));
 
     private static LogEntry CreateEntry(string level, string message, int second)
         => new()
@@ -507,11 +512,11 @@ public sealed class DashboardPreviewRuntimeViewModelTests
 
     private sealed class TestMonitorConfiguredDeviceLoader : IMonitorConfiguredDeviceLoader
     {
-        public Task<IReadOnlyList<NetworkDeviceEntity>> LoadConfiguredPlcDevicesAsync(CancellationToken ct)
-            => Task.FromResult<IReadOnlyList<NetworkDeviceEntity>>([]);
+        public Task<IReadOnlyList<DevicePluginPlcSnapshot>> LoadConfiguredPlcDevicesAsync(CancellationToken ct)
+            => Task.FromResult<IReadOnlyList<DevicePluginPlcSnapshot>>([]);
 
         public Task<IReadOnlyDictionary<int, PlcTaskBindingDeviceDto>> LoadTaskBindingsByDeviceAsync(
-            IReadOnlyCollection<NetworkDeviceEntity> configuredPlcs,
+            IReadOnlyCollection<DevicePluginPlcSnapshot> configuredPlcs,
             CancellationToken ct)
             => Task.FromResult<IReadOnlyDictionary<int, PlcTaskBindingDeviceDto>>(
                 new Dictionary<int, PlcTaskBindingDeviceDto>());

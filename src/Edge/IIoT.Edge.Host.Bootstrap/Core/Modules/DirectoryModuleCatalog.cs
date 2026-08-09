@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using IIoT.Edge.Module.Contracts.Plugins;
 using System.IO;
 using System.Text.Json;
 using IIoT.Edge.Module.Contracts.Modules;
@@ -335,6 +336,9 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
         var configurationContract = LoadModuleConfigurationContract(
             physicalPluginDirectory,
             manifest);
+        var privateDatabaseContract = LoadPrivateDatabaseContract(
+            physicalPluginDirectory,
+            manifest);
 
         var entryAssemblyPath = ResolveEntryAssemblyPath(physicalPluginDirectory, manifest.EntryAssembly, manifest.ModuleId);
         if (!File.Exists(entryAssemblyPath))
@@ -361,18 +365,21 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
             physicalPluginDirectory,
             physicalManifestPath,
             entryAssemblyPath,
-            configurationContract);
+            configurationContract,
+            privateDatabaseContract);
     }
 
     private static ModulePluginConfigurationContract? LoadModuleConfigurationContract(
         string pluginDirectory,
         ModulePluginManifest manifest)
     {
-        var hasFormalConfigurationContract =
-            !string.IsNullOrWhiteSpace(manifest.ConfigurationSchema)
-            || manifest.ModuleSeed is not null
-            || manifest.Capabilities is not null;
-        if (!hasFormalConfigurationContract)
+        if (manifest.PrivateDatabase is not null)
+        {
+            return null;
+        }
+
+        var hasLegacyConfigurationContract = manifest.ModuleSeed is not null;
+        if (!hasLegacyConfigurationContract)
         {
             return null;
         }
@@ -459,6 +466,113 @@ public sealed class DirectoryModuleCatalog : IModuleCatalog
             moduleSeed.SchemaVersion,
             moduleSeed.CurrentVersion,
             supportedEnvironments,
+            requiresProductionPlan);
+    }
+
+    private static ModulePluginPrivateDatabaseContract? LoadPrivateDatabaseContract(
+        string pluginDirectory,
+        ModulePluginManifest manifest)
+    {
+        var database = manifest.PrivateDatabase;
+        if (database is null)
+        {
+            return null;
+        }
+
+        if (manifest.ModuleSeed is not null)
+        {
+            throw new ModulePluginManifestException(
+                $"插件“{manifest.ModuleId}”的正式私有数据库清单不得保留 moduleSeed。" );
+        }
+
+        var expectedAssembly = Path.GetFileNameWithoutExtension(manifest.EntryAssembly);
+        var lifecycleContractVersion = database.LifecycleContractVersion?.Trim();
+        var configurationContractVersion = database.ConfigurationContractVersion?.Trim();
+        var migrationAssembly = database.MigrationAssembly?.Trim();
+        var entryPoint = database.EntryPoint?.Trim();
+        if (!database.OwnerEnabled
+            || database.SchemaVersion != 1
+            || !string.Equals(
+                lifecycleContractVersion,
+                DevicePluginDatabaseContractVersions.LifecycleV1,
+                StringComparison.Ordinal)
+            || !string.Equals(
+                configurationContractVersion,
+                DevicePluginDatabaseContractVersions.ConfigurationV1,
+                StringComparison.Ordinal)
+            || !string.Equals(
+                migrationAssembly,
+                expectedAssembly,
+                StringComparison.Ordinal)
+            || string.IsNullOrWhiteSpace(entryPoint)
+            || !entryPoint.StartsWith(
+                $"{expectedAssembly}.",
+                StringComparison.Ordinal))
+        {
+            throw new ModulePluginManifestException(
+                $"插件“{manifest.ModuleId}”的 privateDatabase 必须声明精确的 v1 Owner、Schema、migration assembly 和 entry point。" );
+        }
+
+        var expectedSchemaRelativePath =
+            $"Config/{manifest.ModuleId.ToLowerInvariant()}.module.schema.json";
+        if (!string.Equals(
+                manifest.ConfigurationSchema?.Trim(),
+                expectedSchemaRelativePath,
+                StringComparison.Ordinal))
+        {
+            throw new ModulePluginManifestException(
+                $"插件“{manifest.ModuleId}”的 configurationSchema 必须为“{expectedSchemaRelativePath}”。" );
+        }
+
+        var lexicalSchemaPath = Path.GetFullPath(
+            Path.Combine(pluginDirectory, expectedSchemaRelativePath));
+        if (!File.Exists(lexicalSchemaPath))
+        {
+            throw new ModulePluginManifestException(
+                $"插件“{manifest.ModuleId}”的 activation schema 不存在：{expectedSchemaRelativePath}。" );
+        }
+
+        var physicalSchemaPath = PluginPathBoundary.ResolveExistingPhysicalPath(lexicalSchemaPath);
+        if (!PluginPathBoundary.IsWithin(pluginDirectory, physicalSchemaPath))
+        {
+            throw new ModulePluginManifestException(
+                $"插件“{manifest.ModuleId}”的 activation schema 真实路径越出 staged 目录。" );
+        }
+
+        using var schemaDocument = JsonDocument.Parse(
+            File.ReadAllText(physicalSchemaPath),
+            SchemaJsonOptions);
+        var schema = schemaDocument.RootElement;
+        var hasEmptyProperties = schema.TryGetProperty("properties", out var properties)
+            && properties.ValueKind == JsonValueKind.Object
+            && !properties.EnumerateObject().Any();
+        var rejectsAdditionalProperties = schema.TryGetProperty(
+                "additionalProperties",
+                out var additionalProperties)
+            && additionalProperties.ValueKind == JsonValueKind.False;
+        var hasRequiredProperties = schema.TryGetProperty("required", out var required)
+            && required.ValueKind == JsonValueKind.Array
+            && required.GetArrayLength() > 0;
+        if (schema.ValueKind != JsonValueKind.Object
+            || !schema.TryGetProperty("x-moduleId", out var schemaModuleId)
+            || !string.Equals(schemaModuleId.GetString(), manifest.ModuleId, StringComparison.Ordinal)
+            || !hasEmptyProperties
+            || !rejectsAdditionalProperties
+            || hasRequiredProperties)
+        {
+            throw new ModulePluginManifestException(
+                $"插件“{manifest.ModuleId}”的正式 activation schema 必须为空对象；稳定配置只能由插件私有数据库拥有。" );
+        }
+
+        var requiresProductionPlan = manifest.Capabilities?.RequiresProductionPlan
+            ?? throw new ModulePluginManifestException(
+                $"插件“{manifest.ModuleId}”缺少 capabilities.requiresProductionPlan。" );
+        return new ModulePluginPrivateDatabaseContract(
+            database.SchemaVersion,
+            lifecycleContractVersion!,
+            configurationContractVersion!,
+            migrationAssembly!,
+            entryPoint!,
             requiresProductionPlan);
     }
 
