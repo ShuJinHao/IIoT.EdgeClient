@@ -1,6 +1,6 @@
 # Edge 架构边界契约
 
-> **状态：Host `2.0.17` 插件私库 Owner 源码闭环随本变更进入主线；尚未发布、部署或完成真实 Windows/现场迁移验收，仍不是生产基线。**
+> **状态：Host `2.0.17` 插件私库 Owner 源码已合并 `main`，SDK/Host/Private Plugins clean-main 兼容门已通过；真实 Windows、存量数据库接管、生产包安装、现场验收和生产部署均未执行，仍不是生产基线。**
 
 本文档是 `IIoT.EdgeClient` 的长期架构边界与测试归口契约。它以当前源码、MSBuild 评估图、EF model、真实写入路径、插件装载/打包路径和测试资产为依据，为 `EDGE-ARCH-001` 提供权威输入；Analyzer 不得按目录名、接口名或 EF navigation 自行猜测业务边界。
 
@@ -104,6 +104,7 @@ Edge 的 Host、SDK 与 Private Plugins 物理 owner 和依赖方向由当前项
 - Host 启动只调用 SDK lifecycle/configuration 窄端口；AP、CP 分别负责自己的 DbContext、实体、migration assembly、首次 seed、初始化标记、配置版本和事务，数值相同的版本号也不形成共同版本链。
 - 升级不得重新补回人员已删除的播种数据；只有新建空插件库才能执行首次 seed。
 - 旧 `edge.db` 只作为迁移前原字节不变的只读证据；正式 v3 正常运行只打开 `plugin.db`，不得暗中回退读取旧库。
+- 当前源码状态已闭环：AP/CP 私有 `plugin.db`、独立 migration/seed/marker/transaction、Host 业务 EF/SeedWriter 正式路径退出、监控 500ms 内存快照以及插件自带 EF/SQLite/native 运行依赖均已进入 `main`；真实 Windows 上的存量数据库接管和生产包装载仍未验收。
 
 ### 4.4 正式 v3 写事务与启动边界
 
@@ -236,6 +237,7 @@ AnalyzerTests 必须是 Pure/Architecture 测试，不得启动 Shell、SQLite�
 - 项目 metadata 与本次 selector 输出是当前分类和 owner 真值；`current-discovery.json` 只作为本次执行 artifact 记录当前提交实际发现结果，不提交全仓 roster 或历史数量下限。SDK 与 Private Plugins 使用各自 solution、owner tests 和 pack 输入，不把结果折回 Host 清单。
 - 拆仓前 `EDGE-SPLIT-LEDGER-001` 的 generator、schema、formal/authority 工具和两个 Architecture Fact 只属于冻结 Phase 0 worktree。产品 Host 活动树必须物理删除这些入口，不改写为跨仓源码扫描器，不重新生成 canonical ledger，也不把历史数量当作当前三仓证据。
 - 当前三仓边界由独立项目图、SDK nupkg、Private Plugin bundle、Host artifact、manifest/digest、Cloud catalog/download byte evidence和各仓 owner tests 共同证明；唯一跨仓运行时兼容入口是 SDK 仓 `eng/Verify-EdgeSdkCompatibility.ps1`。
+- 当前 clean-main 兼容门状态为 `passed`，精确绑定 SDK `17d322a2516dfd11a958a699e463187279a5cc35`、Private Plugins `3c48030512aef0773f8ab7d74b638fa4e556bc39`、EdgeClient `d46c0e060c491f65aecc7dd0d9eada980d4e884c`，回执 SHA-256 为 `7f774e2332a1d8a4db77ac9e45573ec49f2499c524b4af38ebbf133cd774e76b`。该结果只证明源码与包兼容，不证明 Windows 安装、存量数据库接管、现场运行或生产部署。
 - compatibility inventory 必须对 alias/adapter/wrapper/compat/legacy/shadow/obsolete/fallback/双写/影子生产候选逐项提供真实 consumer 证据与有期迁移窗口。每个 `MigrationWindow` symbol 绑定唯一 window ID、replacement/deletion/latest removal；缺绑定、零 consumer、过期、未分类或新增 consumer均 fail-closed。Quality 只治理生产兼容路径，不登记或要求具体 Business test 文件、方法或 committed discovery roster。
 - regression ledger 只治理已退役产品事实，不得接管当前三仓兼容证明。退役证据必须绑定冻结 source commit/tree、唯一旧声明、受控 token/path、非空 reason 与 current discovery 零回流；活动源码、项目、配置、CI 和发布输入不得恢复退役功能。
 - duplication ratchet 只治理 production exact/near；Business tests 与 test-support 不进入历史 duplication baseline。显式 Full coverage 只报告当前 Host owner 源码，迁入 SDK 的源码不得借跨仓 PDB/source fallback 伪装为 Host coverage。
